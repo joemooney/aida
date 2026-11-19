@@ -12,12 +12,12 @@ description: |
   2. With --fail-on-findings, it fails ONLY on (a) diverged, or (b) behind for longer than a configurable lag window (default 2x the bridge interval, i.e. 2h). Fast-forward lag within the window is reported as info.
   3. The finding names the next action per class: within the window, wait for the bridge; beyond the window, check the bridge cron or run `aida remote mirror-sync`; diverged, reconcile by hand (do not auto-heal).
   4. Tests cover in-sync, behind-within-window, behind-past-window, and diverged, using fixture remotes.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T07:28:47.139208281Z
+modified_at: 2026-11-19T10:57:37.795520075Z
 req_type: Bug
 tags:
 - alert-noise
@@ -231,6 +231,11 @@ comments:
   modified_at: 2026-11-19T07:28:47.139208281Z
   session_id: 01a1f2a7af75
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f374-7395-71d3-b808-2cd22c4d67cb
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2672 was In Progress when merge 2ebbc098111bb16e404197548ae68556eb2c30e2 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T10:57:37.685557161Z
+  modified_at: 2026-11-19T10:57:37.685557161Z
 history:
 - id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b
   author: joe
@@ -328,6 +333,23 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f374-7395-71d3-b808-2ce1f05013f6
+  author: aida-auto-bump
+  timestamp: 2026-11-19T10:57:37.685565130Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f374-7403-74f1-9bfb-6af497afb0d0
+  timestamp: 2026-11-19T10:57:37.795516825Z
+  agent: aida
+  commit_sha: 2ebbc098111bb16e404197548ae68556eb2c30e2
+  summary: 'ADVISOR RULING (advisor-119, 2026-11-19 01:00), mechanical test-only delta. The round-3 independent review APPROVED #4282 at 12ad00b; the only remaining CI failure was the Rust test portability ratchet on a fixture interpolating a path into a TOML basic string. The delta 12ad00b..8287cf6 is exactly that fixture switched to aida_core::toml_quote::toml_key (test-only, same rendered key), which the advisor verified directly. Approved.'
+  punted:
+  - 'punted: Full sweep of all nine files in the supplied 30,546-byte diff, protected base 0f96aefa9a0783823da16bc1f585a99b104bd882 and landed tree e869d9692dc7057a4621cbf331278dfe9776e662; reviewed original PR head ef678e7f9515ed47f5d7485680fa6b18fbf00926. Request changes for acceptance-policy gaps; retain the additional P2 transport follow-up. BUG-2672 resolves through its canonical origin ID BUG-b6b1278890774ef993d2ebc327862470-436 (the generated prompt did not resolve its display alias). Read the owning spec, comments and superseded BUG-2693. The latter explains intentional divergence grace/main drift policy, but does not remove the conflicting explicit owning acceptance criteria; it also conditions divergence grace on a configured bridge. Acceptance enumeration (reusing the supplied criterion IDs): BUG-b6b1278890774ef993d2ebc327862470-436.acf121d4 — The remote-drift check classifies each branch per remote pair as in-sync, behind fast-forward with commit count and oldest missing commit age, or diverged with unique commits on both sides: verified by source inspection of read_unique_histories/scan_remote_drift and the fixture assertions in cargo test -p aida-cli remote_drift_real_probe_classifies_fixture_hubs (command identified, not executed). BUG-b6b1278890774ef993d2ebc327862470-436.ac67bab1 — With --fail-on-findings, fail only on divergence or behind longer than a configurable lag window, default 2x bridge interval/2h; within-window fast-forward is info: unverified. Source and new fixture contradict the required divergence/main-fast-forward policy, and non-hourly defaults use interval+1h. See acceptance findings. BUG-b6b1278890774ef993d2ebc327862470-436.ac0491b3 — Next actions: within window wait for bridge; beyond window check cron or mirror-sync; divergence reconcile by hand without auto-heal: unverified. Fast-forward actions and safe_heal=false are present, but recent divergence gets wait-for-bridge even without a bridge, and recent main fast-forward gets overdue guidance. See findings. BUG-b6b1278890774ef993d2ebc327862470-436.ac846454 — Fixture-remotes tests cover in-sync, behind within window, behind past window, and diverged: verified by inspection of the bare origin/mirror and unfetched observer fixture in cargo test -p aida-cli remote_drift_real_probe_classifies_fixture_hubs (not executed). Tests were added for all four requested states, so the supplied previously-untraced list is addressed at test-source level; no claim of newly running those tests or criterion-level trace registration. Type protocol checklist: BUG-2672 (bug protocol): met — the diff changes task_1544_light_doctor_tests.rs and doctor_cmd_bug_1796_orphan_store_doctor_tests.rs. Existing exact-head GitHub evidence: FAST gates, FAST compilation, Build (ubuntu-latest), and merge-hold-gate passed; full test shards were skipped. The spec contains an implementer-reported earlier 148-test pass, not independently rerun. No Cargo/local test/build commands were run, per reviewer policy. The supplied CodeGraph executable is absent; rg confirmed call sites, and aida doctor check codegraph returned total 0 without diagnosing the missing executable. No findings depend on the intervening base change: comparison of original head to landed tree changes only scripts/check-ratchets.py and tests/test_ratchet_set.py. No branch changes, merge or completion actions performed.'
+  - 'punted: Reviewed all nine files in the complete 39,839-byte supplied diff against protected base cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0 and landed tree 069de0d1d05b052a8979b252e7aa2c286d6822f1; attest original PR head b6b19d859f46f5907f4802627e2cba937ece75d1. Read BUG-2672 via canonical origin BUG-b6b1278890774ef993d2ebc327862470-436, its acceptance criteria and authoritative round-2 comments. AC1 classification, immediate divergence refusal, main/store fast-forward handling, twice-cadence arithmetic, AC3 guidance and AC4 fixture coverage are present by source inspection; the explicit no-bridge condition remains unmet and blocks approval. Retain two additional P2 defects established by existing exact-head CI: missing scratch-writer inventory entries and direct executable-mode fixture setup. CI is failed, not awaited. No Cargo, build or local tests were run per reviewer policy. The supplied CodeGraph executable was absent; navigation used rg and direct source inspection. Reviewed the base changes to scripts/config-trust.toml in the synthetic landed tree; no finding depends on those changes. Parent must validate and record this draft; no merge or branch update performed.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 7ef65001d077418629c77e1db456aff97674ae25
@@ -338,3 +360,7 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T10:57:37.685562096Z
+  completion_sha: 2ebbc098111bb16e404197548ae68556eb2c30e2
