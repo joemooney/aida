@@ -11,12 +11,12 @@ description: |
   1. When a seat clone is created with `--base <branch>`, it fetches `<branch>` from origin first and starts the new branch at the fetched `origin/<branch>` tip. A test asserts the start SHA equals the remote tip after the remote has advanced.
   2. If the fetch fails, the pickup refuses and names the base and the fetch error. It never silently starts from a cached ref.
   3. The pickup output prints the base SHA it started from.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:53:28.582833597Z
-modified_at: 2026-11-19T08:06:29.669871565Z
+modified_at: 2026-11-19T08:08:19.846302093Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -185,6 +185,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f2d9-7486-7192-8e86-4d7f83b5cd66
+  author: lane-recovery
+  timestamp: 2026-11-19T08:08:19.846298322Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ecab72c3a163eb1361b1bd2c6f8b45133f015dd7
