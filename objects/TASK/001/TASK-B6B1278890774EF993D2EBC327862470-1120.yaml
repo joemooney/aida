@@ -1,0 +1,31 @@
+id: 01a1f38d-abf7-75c2-8436-9db64f237fe8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1120
+title: 'Review follow-up: [P3] Fix the two rustfmt differences that fail exact-head CI. CI (fast gates), job 1355203'
+description: |-
+  From BUG-2688
+  Reviewed sha: 872a1e9f0d62b203142579aa3f63aaaefdf96792
+
+  [P3] Fix the two rustfmt differences that fail exact-head CI. CI (fast gates), job 135520369426 at 872a1e9f0d62b203142579aa3f63aaaefdf96792, fails Check formatting: queue_cmd/mod.rs:202 must reorder/wrap the moved_seats_note import, and repair_journal.rs:340 must wrap the seats_for filter closure as shown in the job log. Apply rustfmt in implementation rework. Evidence: https://github.com/joemooney/aida/actions/runs/44512336372/job/135520369426 . This is nonblocking style under the project review policy, retained alongside the blocking defects; readiness still requires passing CI.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-19T11:25:10.519257299Z
+modified_at: 2026-11-19T11:25:10.519257299Z
+req_type: Task
+tags:
+- carried-from:BUG-2688
+- finding-hash:ca664aa0
+- from-review:BUG-2688
+relationships:
+- rel_type: References
+  target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  created_at: 2026-11-19T11:25:23.262405965Z
+filed_at:
+  code_sha: 872a1e9f0d62b203142579aa3f63aaaefdf96792
+  branch: pr-4306
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 12264ad1cb9
+  vendor: claude
+  session: 01a1f387db6d
