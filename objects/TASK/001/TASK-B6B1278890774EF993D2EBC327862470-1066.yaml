@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-19T13:38:51.414634276Z
+modified_at: 2026-11-19T14:05:17.345596910Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -119,6 +119,13 @@ comments:
     Reviewed the merge-base diff and native patch. A normalized line multiset leaves module imports, visibility, re-export, and source-test path adjustments. Cross-reference, format, multiplicity, and unusual-input inspection found no changed runtime logic. The authority helper retains its existing decision and the ship_and_train_tty_decisions_go_through_the_shared_helper test still asserts that decision is delegated. The pr_cmd directory split remains outside this extraction slice. The launcher fast gate is running as j20261119T133727773-2-0. Host publication and exact-head forge CI remain pending.
   created_at: 2026-11-19T13:38:51.414634276Z
   modified_at: 2026-11-19T13:38:51.414634276Z
+  session_id: 01a1f405f77e
+  harness_version: codex-cli 0.167.0
+- id: 01a1f420-4396-7a70-b117-55ea61d1565b
+  author: dirtlab
+  content: Implementer self-review validation update for HEAD 0dd4979ce04d09983ab1eb135e601d437e62481a plus the two-line working-tree relocation. Launcher job j20261119T133727773-2-0 ran make check-ci-fast and exited 0, including repository-wide formatting, compiled ratchet tests, CLI integration audit and manual verification. Native publication declaration recorded for the host.
+  created_at: 2026-11-19T14:05:17.345596910Z
+  modified_at: 2026-11-19T14:05:17.345596910Z
   session_id: 01a1f405f77e
   harness_version: codex-cli 0.167.0
 history:
