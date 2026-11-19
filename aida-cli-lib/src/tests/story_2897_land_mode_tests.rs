@@ -332,6 +332,74 @@ fn a_set_journals_the_attempt_and_outcome_with_the_grant_and_emits_the_event() {
     );
 }
 
+// trace:BUG-2691 | ai:codex
+#[test]
+fn outcome_append_failure_after_patch_reports_partial_success() {
+    for action in ["set", "reconcile"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let config = tmp.path().join(".aida/config.toml");
+        let mut journal = Journal::open(tmp.path()).unwrap();
+        let mut f = forge(vec![], vec![]);
+        let change = Change {
+            action,
+            config: (action == "set").then_some(config.as_path()),
+            ..set_change(&config)
+        };
+        let mut attempts = 0;
+        let err = apply_change_with_audit(
+            tmp.path(),
+            &mut f,
+            &actor(),
+            &change,
+            &store_for(tmp.path()),
+            &mut || Ok(()),
+            &mut |line| {
+                attempts += 1;
+                if line["phase"] == "outcome" {
+                    return Err(std::io::Error::from_raw_os_error(libc::ENOSPC))
+                        .context("injected audit append failure");
+                }
+                journal.record(line)
+            },
+        )
+        .unwrap_err();
+
+        assert_eq!(attempts, 2);
+        assert_eq!(f.writes.len(), 1);
+        assert_eq!(f.reads, 2);
+        assert_eq!(ctx(&f.now), names(REVIEW));
+        let lines = audit_lines(tmp.path());
+        assert_eq!(lines.len(), 1);
+        assert_eq!(lines[0]["phase"], "attempt");
+        let message = format!("{err:#}");
+        assert!(
+            message.contains("landing mode change partially succeeded"),
+            "{message}"
+        );
+        assert!(message.contains(AUDIT), "{message}");
+        assert!(
+            message.contains("injected audit append failure"),
+            "{message}"
+        );
+        let (_, json) = message.split_once('\n').unwrap();
+        let out: serde_json::Value = serde_json::from_str(json).unwrap();
+        assert_eq!(out["action"], action);
+        assert_eq!(out["outcome"], "applied");
+        assert_eq!(out["forge_before"], audit_checks(&any(CI)));
+        assert_eq!(out["forge_after"], audit_checks(&any(REVIEW)));
+        assert_eq!(out["read_back_ok"], true);
+        if action == "set" {
+            assert_eq!(out["config_written"], true);
+            assert!(std::fs::read_to_string(&config)
+                .unwrap()
+                .contains("mode = \"review-gated\""));
+        } else {
+            assert!(out["config_written"].is_null());
+            assert!(!config.exists());
+        }
+    }
+}
+
 /// Review P2: an audit or config that cannot be written refuses before the
 /// forge is touched.
 #[test]

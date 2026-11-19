@@ -829,10 +829,20 @@ pub(crate) struct RotationRun {
 }
 
 impl RotationRun {
+    #[cfg(test)]
+    pub(crate) fn bind(project_root: &Path, handle: &str) -> Result<Self> {
+        Self::bind_for_role(project_root, handle, None)
+    }
+
     /// Bind `handle` as a relay run owned by this process. The launch's own
     /// unbound reservation of `handle` is released first, so the run takes
     /// the label over.
-    pub(crate) fn bind(project_root: &Path, handle: &str) -> Result<Self> {
+    // trace:BUG-2638 | ai:codex
+    pub(crate) fn bind_for_role(
+        project_root: &Path,
+        handle: &str,
+        role: Option<&str>,
+    ) -> Result<Self> {
         use fs2::FileExt;
         // trace:BUG-2639 | ai:codex
         crate::agent_registry::maintain_allocation_records(project_root)?;
@@ -851,12 +861,14 @@ impl RotationRun {
         {
             crate::agent_handle::release_unbound(project_root, &own)?;
         }
-        let outcome = crate::relay_mail::bind(
+        let outcome = crate::relay_mail::bind_reusing(
             project_root,
             handle,
             pid,
             &lock_path,
             crate::relay_mail::PROTOCOL,
+            None,
+            role,
         )
         .with_context(|| format!("holding handle {handle} for rotation"))?;
         Ok(Self {

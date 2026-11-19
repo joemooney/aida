@@ -440,6 +440,7 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let store = Storage::new(&store_path)
         .load()
         .with_context(|| format!("loading AIDA store at {}", store_path.display()))?;
+    let mut remote_drift_info = Vec::new();
     let mut landing_health_unknown = Vec::new();
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
     // The tolerant loader leaves bad objects out; report each one separately
@@ -623,13 +624,12 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.extend(crate::rustc_cache::scan(&build_root));
     }
 
-    // TASK-1095: remote-drift scan — do the shared branches (trunk + store) hold
-    // the same tip on every configured remote? Uses cheap `ls-remote` (refs
-    // only, no object transfer), so it is kept OUT of the hot
-    // `collect_doctor_findings` path and appended here. Honours the same
-    // `--category` filter. trace:TASK-1095 | ai:claude
+    // Compare advertised hub tips outside the hot status findings path.
+    // trace:TASK-1095 BUG-2672 | ai:codex
     if doctor_category_selected(opts.category.as_deref(), "remote-drift")? {
-        findings.extend(scan_remote_drift(&project_root));
+        let drift = scan_remote_drift(&project_root);
+        findings.extend(drift.findings);
+        remote_drift_info = drift.info;
         findings.extend(scan_store_mirror_fanout_failures(&project_root));
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
@@ -959,6 +959,7 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         }
     }
     report.landing_health_unknown = landing_health_unknown;
+    report.remote_drift_info = remote_drift_info;
     report.performance_audits = performance_audits;
     report.runaway_seats = runaway_seats;
     report.hidden_completed_without_commit = hidden_completed_without_commit;
@@ -1462,13 +1463,15 @@ fn remote_drift_light_report(project_root: &std::path::Path) -> DoctorReport {
 
 fn remote_drift_light_report_with(
     project_root: &std::path::Path,
-    drift: impl Fn(&std::path::Path) -> Vec<DoctorFinding>,
+    drift: impl Fn(&std::path::Path) -> RemoteDriftScan,
     fanout: impl Fn(&std::path::Path) -> Vec<DoctorFinding>,
 ) -> DoctorReport {
-    let mut findings = drift(project_root);
+    let RemoteDriftScan { mut findings, info } = drift(project_root);
     findings.extend(fanout(project_root));
     findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
-    DoctorReport::from_findings(findings)
+    let mut report = DoctorReport::from_findings(findings);
+    report.remote_drift_info = info;
+    report
 }
 
 #[cfg(test)]

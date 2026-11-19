@@ -144,7 +144,7 @@ fn inspect_with_sessions(
                 "waiting for operator input (cross-session status)",
                 prompt,
             )
-        } else if role == "advisor" {
+        } else if crate::advisor_handshake::is_advisor_session(entry) {
             let Some(since) = failed_since else {
                 continue;
             };
@@ -171,7 +171,23 @@ fn inspect_with_sessions(
     }
     // A stopped relay has no live child: inspect durable faults independently.
     // trace:BUG-2639 | ai:codex
-    match crate::relay_mail::list_runs(root) {
+    let runs = crate::relay_mail::list_runs(root);
+    if census.presence() == crate::advisor_handshake::AdvisorPresence::Unknown {
+        let outage = crate::advisor_handshake::advisor_outage(root, &live, now, &runs);
+        if let Some((key, since)) = outage.rotation_exit {
+            blocks.insert(
+                key,
+                Block {
+                    since,
+                    description: format!(
+                        "No advisor running after rotation. {} Relaunch the advisor rotate relay.",
+                        outage.detail
+                    ),
+                },
+            );
+        }
+    }
+    match runs {
         Ok(runs) => {
             for run in runs {
                 if let Some(detail) = crate::relay_mail::unresolved_fault(&run) {
@@ -237,7 +253,10 @@ fn reconcile(
         if ledger.get(id).is_some_and(|alert| alert.recovered) {
             ledger.remove(id);
         }
-        if !ledger.contains_key(id) && now - block.since < threshold {
+        if !id.starts_with("rotation:advisor-")
+            && !ledger.contains_key(id)
+            && now - block.since < threshold
+        {
             continue;
         }
         let alert = ledger.entry(id.clone()).or_default();
@@ -759,6 +778,158 @@ mod tests {
 #[cfg(test)]
 mod rotation_fault_tests {
     use super::*;
+    // trace:BUG-2638 | ai:codex
+    #[test]
+    fn bug_2638_rotation_without_relay_alerts_once_and_relay_suppresses_it() {
+        use crate::agent_registry::{register_spawned_agent_with_row, write_entry, SpawnedRow};
+        use crate::seat_rotation::{write_handoff_by, HandoffWriter};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let handle = "claude-advisor-2638";
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        let entry = register_spawned_agent_with_row(
+            root,
+            "claude",
+            child.id(),
+            SpawnedRow {
+                role: Some("advisor".into()),
+                current_spec: None,
+                worktree_path: root.into(),
+                binary: None,
+                name: Some(handle.into()),
+                native_session_id: Some("advisor-session-2638".into()),
+                resumed_from: None,
+                description: None,
+                delegate_seats: Vec::new(),
+                seat: Some("advisor".into()),
+            },
+        );
+        let presence = crate::advisor_handshake::Census::load(root).presence();
+        child.kill().unwrap();
+        child.wait().unwrap();
+        let mut entry = entry.unwrap();
+        assert_eq!(
+            presence,
+            crate::advisor_handshake::AdvisorPresence::Registered
+        );
+        let now = entry.started_at + Duration::seconds(4);
+        assert!(inspect(root, now).is_empty());
+
+        let writer = HandoffWriter {
+            handle: Some(handle.into()),
+            native_session_id: entry.native_session_id.clone(),
+            ..Default::default()
+        };
+        for (timestamp, other_writer) in [
+            (
+                now - Duration::seconds(3),
+                HandoffWriter {
+                    native_session_id: Some("previous-session".into()),
+                    ..writer.clone()
+                },
+            ),
+            (
+                now - Duration::seconds(2),
+                HandoffWriter {
+                    final_: true,
+                    ..writer.clone()
+                },
+            ),
+        ] {
+            write_handoff_by(
+                root,
+                "advisor",
+                "previous handoff",
+                timestamp,
+                &other_writer,
+            )
+            .unwrap();
+            assert!(inspect(root, now).is_empty());
+        }
+
+        write_handoff_by(
+            root,
+            "advisor",
+            "ready for rotation",
+            now - Duration::seconds(1),
+            &writer,
+        )
+        .unwrap();
+        let without_receipt = inspect(root, now);
+        assert_eq!(without_receipt.len(), 1, "{without_receipt:?}");
+        assert!(without_receipt
+            .values()
+            .next()
+            .unwrap()
+            .description
+            .contains("exit time unknown"));
+        entry.ended_at = Some(entry.last_active_at);
+        write_entry(root, &entry).unwrap();
+        assert_eq!(
+            inspect(root, now).keys().collect::<Vec<_>>(),
+            without_receipt.keys().collect::<Vec<_>>()
+        );
+        entry.ended_at = Some(now);
+        write_entry(root, &entry).unwrap();
+        let mut unrelated = crate::agent_rotation::RotationRun::bind_for_role(
+            root,
+            "product-relay",
+            Some("product"),
+        )
+        .unwrap();
+        let blocks = inspect(root, now);
+        assert_eq!(
+            blocks.keys().collect::<Vec<_>>(),
+            without_receipt.keys().collect::<Vec<_>>()
+        );
+        let report = || {
+            let census = crate::advisor_handshake::Census::load(root);
+            crate::advisor_handshake::report_findings(&census, &[], false)
+        };
+        assert!(report().iter().any(|row| {
+            row.summary.starts_with("no advisor running.")
+                && row.summary.contains(handle)
+                && row.summary.contains(&now.to_rfc3339())
+                && row.summary.contains("no advisor rotate relay running")
+        }));
+        let mut ledger = Ledger::new();
+        let mut sent = Vec::new();
+        for at in [now, now + Duration::seconds(1)] {
+            reconcile(
+                &mut ledger,
+                &blocks,
+                at,
+                Duration::minutes(15),
+                |_, body| {
+                    sent.push(body.to_owned());
+                    Ok(true)
+                },
+            )
+            .unwrap();
+        }
+        assert_eq!(sent.len(), 1);
+        assert!(sent[0].contains(handle));
+        assert!(sent[0].contains(&now.to_rfc3339()));
+        assert!(sent[0].contains("no advisor rotate relay running"));
+
+        let mut relay = crate::agent_rotation::RotationRun::bind_for_role(
+            root,
+            "new-advisor-handle",
+            Some("advisor"),
+        )
+        .unwrap();
+        assert!(inspect(root, now).is_empty());
+        assert!(report()
+            .iter()
+            .any(|row| row.summary.contains("; advisor rotate relay running")));
+        relay.end(crate::relay_mail::TerminalReason::Exit);
+        unrelated.end(crate::relay_mail::TerminalReason::Exit);
+    }
+
     // trace:BUG-2639 | ai:codex
     #[test]
     fn bug_2639_stopped_relay_alert_delivery_backoff_and_recovery() {

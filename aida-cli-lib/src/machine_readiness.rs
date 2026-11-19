@@ -102,17 +102,24 @@ pub(crate) fn lane_disk_preflight(main: &Path) -> Result<()> {
 }
 
 // trace:BUG-2651 | ai:codex
-fn require_lane_space(path: &Path, available: u64, floor_gib: u64) -> Result<()> {
-    anyhow::ensure!(
-        available >= floor_gib.saturating_mul(GIB),
-        "lane launch refused: {} has {} free, below the {} GiB floor \
-         ([doctor.disk_headroom] min_free_gib); inspect `aida worktree gc` and \
-         reclaim ended overlays with `aida worktree gc --apply` before retrying",
-        path.display(),
-        human_bytes(available),
-        floor_gib
-    );
-    Ok(())
+// trace:BUG-2684 | ai:claude
+pub(crate) fn require_lane_space(path: &Path, available: u64, floor_gib: u64) -> Result<()> {
+    if available >= floor_gib.saturating_mul(GIB) {
+        return Ok(());
+    }
+    Err(anyhow::Error::new(
+        crate::lane_disk_deferral::LaneSpaceRefused {
+            at: chrono::Utc::now(),
+            message: format!(
+                "lane launch refused: {} has {} free, below the {} GiB floor \
+             ([doctor.disk_headroom] min_free_gib); inspect `aida worktree gc` and \
+             reclaim ended overlays with `aida worktree gc --apply` before retrying",
+                path.display(),
+                human_bytes(available),
+                floor_gib
+            ),
+        },
+    ))
 }
 
 fn containing_disk<'a>(disks: &'a Disks, path: &Path) -> Option<&'a sysinfo::Disk> {

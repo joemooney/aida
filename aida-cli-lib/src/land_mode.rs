@@ -673,7 +673,7 @@ pub(crate) struct Change<'a> {
 /// journaled before the forge is written and its observed outcome after,
 /// failures and rollbacks included; a `LandModeChanged` event follows any
 /// forge or config change. A partial success (forge changed, config not
-/// written) fails with the recovery steps.
+/// written, or the audit outcome could not be appended) fails with recovery details.
 // trace:STORY-2897 | ai:claude
 pub(crate) fn apply_change(
     root: &Path,
@@ -684,6 +684,21 @@ pub(crate) fn apply_change(
     authority: &mut dyn FnMut() -> Result<()>,
 ) -> Result<Reconciled> {
     let mut journal = Journal::open(root)?;
+    apply_change_with_audit(root, forge, actor, change, store, authority, &mut |line| {
+        journal.record(line)
+    })
+}
+
+// trace:BUG-2691 | ai:codex
+fn apply_change_with_audit(
+    root: &Path,
+    forge: &mut dyn Protection,
+    actor: &Actor,
+    change: &Change<'_>,
+    store: &crate::land_bindings::BindingStore,
+    authority: &mut dyn FnMut() -> Result<()>,
+    record: &mut dyn FnMut(&serde_json::Value) -> Result<()>,
+) -> Result<Reconciled> {
     if let Some(path) = change.config {
         preflight_config(path)?;
     }
@@ -708,12 +723,12 @@ pub(crate) fn apply_change(
         }
         line
     };
-    journal.record(&entry("attempt", serde_json::json!({})))?;
+    record(&entry("attempt", serde_json::json!({})))?;
     let mut done = match reconcile(forge, &change.want, store, authority) {
         Ok(done) => done,
         Err(e) => {
             let refused = e.downcast_ref::<crate::gate::ship::ShipFailure>().is_some();
-            let _ = journal.record(&entry(
+            let _ = record(&entry(
                 "outcome",
                 serde_json::json!({
                     "outcome": if refused { "refused" } else { "unread" },
@@ -779,7 +794,7 @@ pub(crate) fn apply_change(
                 .map(|e| format!("{e:#}")),
         }),
     );
-    let journaled = journal.record(&outcome_line);
+    let journaled = record(&outcome_line);
     let touched = !matches!(
         done.outcome,
         Outcome::Unchanged | Outcome::NotApplied { .. }
@@ -802,32 +817,45 @@ pub(crate) fn apply_change(
         event.seat = crate::events::active_seat();
         crate::events::emit(root, &event);
     }
-    if let Err(e) = journaled {
-        // Never silent: the record goes to stderr when the journal fails.
-        eprintln!("the audit record could not be written ({e:#}); it was:\n{outcome_line}");
-    }
-    if let Some(e) = lapsed {
-        return Err(match done.failure() {
-            // The forge change was undone (or could not be): say so.
-            Some(why) => crate::gate::ship::ShipRefusal::Review.error(why),
-            None => e,
-        });
-    }
-    if let Some(why) = done.failure() {
-        bail!("{why}");
-    }
-    if let Some(Err(e)) = config_written {
-        bail!(
-            "the forge now requires [{}], but `[landing] mode` was not written: {e:#}. The forge \
-             change is in the audit ({AUDIT}). To return the forge to the default branch's mode, \
-             run `aida land mode reconcile`; or fix the file and run `aida land mode set {}` again.",
-            done.after
+    let finish = || {
+        if let Some(e) = lapsed {
+            return Err(match done.failure() {
+                // The forge change was undone (or could not be): say so.
+                Some(why) => crate::gate::ship::ShipRefusal::Review.error(why),
+                None => e,
+            });
+        }
+        if let Some(why) = done.failure() {
+            bail!("{why}");
+        }
+        if let Some(Err(e)) = config_written {
+            let checks = done
+                .after
                 .as_ref()
-                .map_or_else(|| change.want.join(", "), Required::shown),
-            change.to.as_str()
-        );
+                .map_or_else(|| change.want.join(", "), Required::shown);
+            let mode = change.to.as_str();
+            bail!(
+                "the forge now requires [{checks}], but `[landing] mode` was not written: {e:#}. \
+                 To return the forge to the default branch's mode, run `aida land mode reconcile`. \
+                 Or fix the file and run `aida land mode set {mode}` again."
+            );
+        }
+        Ok(done)
+    };
+    match journaled {
+        Ok(()) => finish(),
+        Err(e) => {
+            let audit = format!(
+                "the audit outcome could not be appended to {AUDIT} ({e:#}). Preserve this \
+                 outcome for recovery and check the recorded state before retrying:\n{outcome_line}"
+            );
+            match finish() {
+                Ok(_) if touched => bail!("landing mode change partially succeeded: {audit}"),
+                Ok(_) => bail!("{audit}"),
+                Err(original) => Err(original.context(audit)),
+            }
+        }
     }
-    Ok(done)
 }
 
 fn print_change(done: &Reconciled) {

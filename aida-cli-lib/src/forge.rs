@@ -3357,17 +3357,9 @@ impl Forge for GitLabForge {
                     let Some(end) = job["finished_at"].as_str() else {
                         continue;
                     };
-                    let id = job["id"].as_u64().context("missing pipeline job id")?;
                     let name = job["name"].as_str().context("missing pipeline job name")?;
-                    let out = self.glab_api_get(&format!("projects/:id/jobs/{id}/trace"), &[])?;
-                    let log = String::from_utf8_lossy(&out.stdout);
-                    let error = if out.status.success() {
-                        crate::landing_health::error_line(&log, "")
-                    } else {
-                        "unknown (job trace unavailable)".into()
-                    };
                     // GitLab exposes a job script as one unit, not individual script timings.
-                    steps.push(crate::landing_health::Step {
+                    let mut step = crate::landing_health::Step {
                         check: name.into(),
                         name: "script".into(),
                         workflow: ".gitlab-ci.yml".into(),
@@ -3377,8 +3369,24 @@ impl Forge for GitLabForge {
                         failed: true,
                         successful: false,
                         required: true,
-                        error,
+                        error: "unknown (job trace unavailable)".into(),
+                    };
+                    // trace:BUG-2685 | ai:codex — trace output only enriches job evidence.
+                    let trace = job["id"].as_u64().and_then(|id| {
+                        crate::forge_lookup::with_forge_lookup_deadline(
+                            std::time::Duration::from_secs(10),
+                            || self.glab_api_get(&format!("projects/:id/jobs/{id}/trace"), &[]),
+                        )
+                        .ok()
+                        .filter(|out| out.status.success())
                     });
+                    if let Some(out) = trace {
+                        step.error = crate::landing_health::error_line(
+                            &String::from_utf8_lossy(&out.stdout),
+                            "",
+                        );
+                    }
+                    steps.push(step);
                 }
                 if done {
                     break;
