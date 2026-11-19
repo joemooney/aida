@@ -11,7 +11,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-15T20:49:45.418798146Z
+modified_at: 2026-11-19T11:29:39.581881158Z
 req_type: Story
 comments:
 - id: 01a1e0f9-1fca-7592-b5ab-3c860f2aaddc
@@ -21,6 +21,13 @@ comments:
   modified_at: 2026-11-15T20:49:45.418798146Z
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1f391-fa11-7dd0-93ad-fe64b1323010
+  author: joe
+  content: 'Advisor 04:33 overnight blessing (codex): implement only slice 1, the Claude/Codex hook heartbeat writing a typed activity event, plus aida ps reading it for the LOCAL host. Multi-host aggregation is a later slice. No new store writer outside the mediated path (check-store-writers.py). Run check-ci-fast.'
+  created_at: 2026-11-19T11:29:39.581881158Z
+  modified_at: 2026-11-19T11:29:39.581881158Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e0f9-061c-7070-b6d4-eefd63f30ba6
   author: joe
