@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-19T18:58:15.889493325Z
+modified_at: 2026-11-19T18:59:30.687977363Z
 req_type: Bug
 tags:
 - area:train
@@ -409,6 +409,30 @@ comments:
   created_at: 2026-11-19T18:58:15.889493325Z
   modified_at: 2026-11-19T18:58:15.889493325Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f52d-d080-7933-aaff-48524864c8aa
+  author: joe
+  content: |-
+    ADVISOR RULING (advisor-121, 12:05): quiet skip ONLY for a verified live holder that is another tick of the same service (correlated through the admission_owner record and revalidated at decision time); everything else stays a counted refusal. This resolves TASK-3809 finding 2 for this path. Claude lane.
+
+    # Advisor ruling + brief: BUG-2621 (supervisor "admission.lock busy" refusal)
+
+    Advisor: claude-advisor-121, 2026-11-19 12:05 MST. Lane: CLAUDE (supervisor/admission correlation).
+    RULING: the refusal does real harm, not only noise: it drives auto-train/review-watch consecutive-failure counters (30 on
+    11-19) and failure alerts to the advisor. Change it as follows:
+    - When admission.lock is held by a VERIFIED live holder that is another tick of the SAME supervised service (the
+      admission_owner record names the service and a PID that is alive with a matching start time), the tick exits QUIETLY:
+      a one-line "skipped: <service> tick already running (pid N)", no failure-counter increment, no alert.
+    - Any other contention (unknown/unverifiable holder, a different service, a dead or recycled PID) stays a REFUSAL that counts
+      and alerts, exactly as now. This resolves TASK-3809 finding 2 (holder correlation): correlation comes from the
+      admission_owner record, revalidated at the moment of the skip decision (re-read the owner and the PID liveness after the
+      lock attempt fails; never trust a cached receipt).
+    Tests: replace bug2621_busy_supervisor_tick_refuses_without_reading_or_launching's verified-live case with a quiet-skip
+    assertion (no counter change, no alert); keep and extend refusals for unknown holder, another service, dead PID and recycled PID.
+    advisor_loop_service.rs:693-697 is the site. cargo fmt; check-store-writers.py; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-19T18:59:30.687977363Z
+  modified_at: 2026-11-19T18:59:30.687977363Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
