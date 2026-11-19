@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:39:43.972253713Z
-modified_at: 2026-11-19T18:52:10.680659356Z
+modified_at: 2026-11-19T18:52:34.968819307Z
 req_type: Bug
 tags:
 - follow-up
@@ -73,6 +73,25 @@ comments:
   created_at: 2026-11-19T18:44:18.779566022Z
   modified_at: 2026-11-19T18:44:18.779566022Z
   session_id: 01a1f4f4497a
+- id: 01a1f527-785d-7b61-aa9d-df718e88befa
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 11:55): one test-gap finding at 29991da (no negative coverage reaches is_parent_expired; the is_in mutation would cause an endless retry on a revoked parent). Test-only round, Claude lane.
+
+    # Rework brief: BUG-2653 / PR #4325, round 2 of 4 (test-only)
+
+    Advisor: claude-advisor-121, 2026-11-19 11:55 MST. Head reviewed: 29991da. Lane: CLAUDE (gate/seat_authority.rs). Test-only.
+    F1 [p2 untested-path; gate/seat_authority.rs:2621]: ChildGrantRefused::is_parent_expired has no negative coverage that reaches it.
+    The supervisor regression's negative case corrupts agents.toml and returns before child-grant issuance.
+    Add, through the real supervisor/relaunch path: (a) a typed ChildGrantRefused whose cause is NOT expiry (e.g. a revoked
+    parent) is returned as a refusal and does NOT pass the relaunch gate (no retry loop: assert a bounded number of issuance
+    attempts, ideally exactly one); (b) a non-expiry LaunchParentRefused likewise. The test must fail if is_parent_expired is
+    replaced by ChildGrantRefused::is_in (state that mutation in the test comment). No production changes.
+    cargo fmt; one targeted cargo run; make check-ci-fast. Push. A test-only delta gets a light re-review.
+  created_at: 2026-11-19T18:52:34.968819307Z
+  modified_at: 2026-11-19T18:52:34.968819307Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e8e1-1e5c-79f0-9988-ca8a393a131f
   author: joe
