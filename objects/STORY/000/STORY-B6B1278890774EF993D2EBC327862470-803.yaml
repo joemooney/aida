@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T17:27:51.048483284Z
+modified_at: 2026-11-19T19:02:08.868119625Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -167,6 +167,46 @@ comments:
   content: 'advisor-121 10:28: #4308 S1t-b MERGED into integration as a68a4acc3b (approved r3 at 92a90e2; full tier green; squash pinned with --match-head-commit). Next: promotion 23 (S1c + S1t) to main, merged by the advisor when the integration seat reports ready.'
   created_at: 2026-11-19T17:27:51.048483284Z
   modified_at: 2026-11-19T17:27:51.048483284Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f530-3fa9-7f70-978d-b37b78b6bc46
+  author: joe
+  content: |-
+    AUTHORITATIVE PROMOTION-23 ROUND-2 BRIEF (advisor-121, 12:15): promotion #4324 CR at f152396. F1-F3 (P1 authority) and F4-F6 (unmet ACs) are in scope; F7-F13 are DISMISSED (unrelated historical specs pulled in by the launcher). Brief: .aida/tmp/brief-promotion23-r2.md
+
+    # Rework brief: promotion 23 / PR #4324 (integration S1c + S1t), round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 12:15 MST. Head reviewed: f152396. Owner: integration seat (Claude).
+    Fix on INTEGRATION via normal integration PRs (or directly on promote/integration-23 if that is your flow), then re-cut.
+
+    IN SCOPE (blocking):
+    F1 [P1] landing_merge.rs:118-131 + forge.rs:2091-2141: the landing recheck (policy, floor, advisor authority, base freshness)
+       runs once before Forge::merge_change; retries inside merge_change_impl re-enforce only for verified trains. Move the shared
+       recheck into the per-attempt pre-transport callback for EVERY caller (Ship/Drain/Burndown/Release/Train) and re-run it after
+       every wait/retry. Regression: authority or base changes after attempt 1, so no second merge.
+    F2 [P1] landing_merge.rs:326-355: non-train C2 (caller_may_merge via ship_approval_policy) treats a missing/unreadable/malformed
+       authorship ledger as "no authors". FAIL CLOSED like train_recheck (:393-401): one centralized checked author read for all C2
+       callers. Regressions: missing ledger and malformed row, each with a valid advisor grant and a released author lease, refuse.
+    F3 [P1] the new authority/freshness/claim decisions (landing_merge.rs, merge_claim.rs) are outside the protected floor.
+       PREFERRED: move the decision code into src/gate/ (e.g. gate/landing_merge.rs, gate/merge_claim.rs; thin callers stay
+       outside), so the existing prefix floor covers it. Do NOT shrink or weaken the floor. Regression: a stale change to each new
+       gate path refuses. (This makes the promotion touch src/gate/; it then needs the operator or a protected-path mandate to merge.
+       Note that in the "ready" report.)
+    F4 [P2, unmet STORY-2903 AC2] land_run.rs:1364-1366: resolve the effective trusted landing mode on EACH pass, not once.
+       Controller fixture covering ci-gated->review-gated and back without restart.
+    F5 [P2] landing_merge.rs:449-455: a failed fetch_ship_refs must not fall back to the cached policy for an automatic train.
+       Propagate the error, report not-running, release admission. Regression: stale cache plus a failing fetch, so no boarding.
+    F6 [P2, STORY-2905 C2 claim] add a production merge_verified fixture: two cars, the second authored by the granted advisor,
+       so zero forge merges; plus an independent-advisor positive control and a Refs-only/full-subject contributor case.
+
+    OUT OF SCOPE (advisor-dismissed): F7-F13 are acceptance-evidence gaps for unrelated, already-landed specs (BUG-2588, BUG-2603,
+    BUG-2579, BUG-2583, STORY-2775, STORY-2771, TASK-3448) pulled in by the review launcher through main merges. This promotion
+    claims STORY-2897/2903/2905 only. Do not work on them; I will note the launcher scoping bug separately.
+
+    cargo fmt; check-store-writers.py --regenerate (review it); ratchets; targeted cargo runs; make check-ci-fast; then re-cut the
+    promotion and report ready with ci:full green.
+  created_at: 2026-11-19T19:02:08.868119625Z
+  modified_at: 2026-11-19T19:02:08.868119625Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
