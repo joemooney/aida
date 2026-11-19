@@ -3654,18 +3654,22 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
                 "preserve me\n"
             );
             if behind_head {
+                // A clean new seat behind origin fast-forwards to the PR head.
+                // trace:BUG-2688 | ai:claude
                 std::fs::remove_file(tree.join("pending")).unwrap();
-                let message = format!(
-                    "{:#}",
-                    prepare_leased_rework_merge(&fx.main, &tree, "feat", false, 3398, "test-lane")
-                        .unwrap_err()
-                );
-                assert!(
-                    message.contains("retry pickup with its current head"),
-                    "{message}"
-                );
-                assert!(!message.contains("--commit-pending"), "{message}");
-                assert!(!message.contains("add -A"), "{message}");
+                let remote_head = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
+                assert!(prepare_leased_rework_merge(
+                    &fx.main,
+                    &tree,
+                    "feat",
+                    false,
+                    3398,
+                    "test-lane"
+                )
+                .unwrap()
+                .is_empty());
+                assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), remote_head);
+                assert!(git_ok(&tree, &["status", "--porcelain"]).is_empty());
             }
         }
     }
@@ -3713,6 +3717,19 @@ fn bug_2504_rework_preflight_has_no_commit_recovery() {
         assert!(!message.contains("add -A"), "{message}");
         assert!(!message.contains("commit-pending"), "{message}");
         assert!(!message.contains(". ."), "{message}");
+        // The refusal names the missing evidence and its one recovery path.
+        // trace:BUG-2688 | ai:claude
+        if branch == "feat" {
+            for needle in [
+                "cannot resume: no host repair journal entry binds it",
+                "origin/feat is unverified",
+                "host repair journal: no unreleased entry for this seat or head",
+                "fetch origin feat` succeeds, retry `aida queue work SPEC-ID --fresh`",
+            ] {
+                assert!(message.contains(needle), "missing {needle:?} in {message}");
+            }
+            assert!(!message.contains("diagnose"), "{message}");
+        }
     }
     assert!(git_ok(&tree, &["status", "--porcelain"]).contains("UU README.md"));
     assert_eq!(

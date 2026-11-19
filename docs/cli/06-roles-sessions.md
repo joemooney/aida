@@ -847,9 +847,36 @@ SessionStart and statusline warnings remain available. See
 For a single-spec pickup with an open PR, `queue work` selects that PR's
 head branch even when the spec is Approved and has no Rework hold. Each such
 pickup performs a forge PR lookup unless an explicit branch was selected. Before
-launching an implementer, the host fetches `origin/main` and attempts its
-merge into the seated PR branch. A clean merge is committed with the host's
-identity and pushed to the trusted host's `origin` before the vendor starts.
+launching an implementer, the host fetches the PR head and base from `origin`
+and attempts the base merge in the seat. If a previous seat is gone and its
+repair journal is absent, the new seat starts at the fetched PR head and
+recreates the conflict. A new seat only fast-forwards a clean tree to the
+fetched head and refuses to discard local commits. Only a verified orphan
+adoption resumes an existing tree's unfinished merge, whichever conversation
+is launched.
+
+A seat that retains an unfinished merge, or a repair reservation the pickup
+does not own, refuses with the seat, branch, fetched head, local commit and
+pending path counts, the reserving lane and the one recovery command for that
+state. `aida queue work <SPEC> --fresh` never resets or cleans a retained seat
+in place. Before the new seat is created it renames each unleased seat clone
+of the scope that has the PR branch checked out (and any seat a reservation of
+that PR names) to `<seat>.retained-<UTC time>` in the same directory, moving
+its base pin with it. Nothing in the moved seat is modified or deleted: its
+commits, staged and unstaged edits, untracked and ignored files and any
+unfinished merge stay there, and the new lane's prompt names the moved path.
+`aida worktree dismiss <moved path>` removes it once it is no longer needed.
+The new seat is a fresh checkout of the PR branch at the original path. The
+pickup then releases reservations whose lanes have ended and restarts the
+conflict merge from the fetched PR head. A leased seat is kept, and a seat in
+use by a live process or one that cannot be renamed refuses the pickup with
+nothing changed. A reserving lane that is live or cannot be proven dead also
+refuses (`aida session show <lane>`, then `aida session end <lane>` after it
+exits).
+<!-- trace:BUG-2688 | ai:claude -->
+
+A clean merge is committed with the host's identity and pushed to the trusted
+host's `origin` before the vendor starts.
 Clone commits are imported through the sandboxed bundle boundary; clone Git
 runs inside AIDA's sandbox with hooks disabled. Pre-launch publication requires
 that the seat started at the fetched PR head and produced a new merge whose

@@ -3204,9 +3204,45 @@ pub(crate) fn prepare_rework_merge_fixture(
     pr: u64,
     lane_id: &str,
 ) -> Result<Vec<String>> {
-    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
+    let seat = if resume {
+        ReworkSeat::Adopted
+    } else {
+        ReworkSeat::New
+    };
+    prepare_rework_merge_fixture_seat(main, tree, branch, seat, pr, lane_id, "SPEC-ID")
+}
+
+// trace:BUG-2688 | ai:claude
+#[cfg(test)]
+pub(crate) fn prepare_rework_merge_fixture_seat(
+    main: &Path,
+    tree: &Path,
+    branch: &str,
+    seat: ReworkSeat,
+    pr: u64,
+    lane_id: &str,
+    scope: &str,
+) -> Result<Vec<String>> {
+    prepare_rework_merge_with_base(main, tree, branch, seat, pr, lane_id, scope, || {
         rework_base_from_metadata(branch, fixture_rework_metadata(branch, "main"))
     })
+}
+
+/// How `queue work` seated a rework tree; decides what preparation may carry
+/// forward. Only verified orphan adoption keeps working-tree state. An
+/// explicit `--fresh` never resets a seat in place: retained seats were moved
+/// aside intact before this one was created ([`move_aside_retained_rework_seats`]),
+/// and preparation releases reservations of lanes proven dead.
+// trace:BUG-2688 | ai:claude
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ReworkSeat {
+    /// Re-entered the verified orphan's tree: resume its pending work.
+    Adopted,
+    /// A newly provisioned seat: fast-forward a clean tree to the PR head.
+    New,
+    /// A new seat under explicit `--fresh`: release dead lanes' reservations,
+    /// then start like [`ReworkSeat::New`].
+    Fresh,
 }
 
 // trace:BUG-2603 | ai:codex
@@ -3257,11 +3293,16 @@ fn fetch_rework_heads(main: &Path, base: &str, branch: &str) -> Result<(String, 
         ])
         .env("GIT_TERMINAL_PROMPT", "0")
         .stdin(std::process::Stdio::null());
-    anyhow::ensure!(
-        crate::command_output_with_timeout(fetch, std::time::Duration::from_secs(20))
-            .is_some_and(|out| out.status.success()),
-        "could not fetch origin/{base} for rework"
-    );
+    // Name the failing fetch: refusals cite it as the missing evidence.
+    // trace:BUG-2688 | ai:claude
+    match crate::command_output_with_timeout_detail(fetch, std::time::Duration::from_secs(20)) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => {}
+        crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+            "could not fetch rework heads origin/{base} and origin/{branch}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        _ => anyhow::bail!("could not complete fetch of origin/{base} and origin/{branch}"),
+    }
     let resolve = |name: &str| -> Result<String> {
         let mut cmd = git(main);
         cmd.args([
@@ -3282,11 +3323,12 @@ pub(crate) fn prepare_rework_merge(
     main: &Path,
     tree: &Path,
     branch: &str,
-    resume: bool,
+    seat: ReworkSeat,
     pr: u64,
     lane_id: &str,
+    scope: &str,
 ) -> Result<Vec<String>> {
-    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
+    prepare_rework_merge_with_base(main, tree, branch, seat, pr, lane_id, scope, || {
         rework_base_branch(main, pr, branch)
     })
 }
@@ -3294,16 +3336,19 @@ pub(crate) fn prepare_rework_merge(
 // Inject the forge observation at the boundary; all Git and repair preparation
 // below this point is shared by production and local-origin fixtures.
 // trace:BUG-2603 | ai:codex
+#[allow(clippy::too_many_arguments)]
 fn prepare_rework_merge_with_base(
     main: &Path,
     tree: &Path,
     branch: &str,
-    resume: bool,
+    seat: ReworkSeat,
     pr: u64,
     lane_id: &str,
+    scope: &str,
     discover_base: impl FnOnce() -> Result<String>,
 ) -> Result<Vec<String>> {
     use std::ffi::{OsStr, OsString};
+    let resume = seat == ReworkSeat::Adopted;
     let execution_environment = aida_core::exec_context::Environment::capture();
     let clone = host_recorded_clone(main, tree);
     let pinned = dir_identity(tree)?;
@@ -3372,18 +3417,71 @@ fn prepare_rework_merge_with_base(
         "rework seat {} is not on the PR head branch {branch}; inspect `aida session leases --all` and restore the recorded branch through the appropriate seat recovery path before retrying",
         tree.display()
     );
-    if let Ok(base) = execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]) {
+    // Pin the remote heads first: every retained-state decision and refusal
+    // below names the verified origin head. Fetching mutates no seat state.
+    // trace:BUG-2603 trace:BUG-2688 | ai:claude
+    let retained = RetainedRework {
+        main,
+        tree,
+        branch,
+        pr,
+        lane_id,
+        scope,
+        clone: clone.is_some(),
+    };
+    let fetched_heads = (|| {
+        let base = discover_base()?;
+        fetch_rework_heads(main, &base, branch)
+    })();
+    if let Ok(merge) = execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]) {
+        // A retained merge continues only for the adopted lane its journal
+        // entry names, at the fetched head. Everything else refuses with the
+        // state and the one command that recovers it. trace:BUG-2688 | ai:claude
         let head = execute(&["rev-parse", "HEAD"])?;
-        let journal = crate::repair_journal::RepairGuard::lock(main)?;
-        journal
-            .for_tree(tree, branch, &head, &base)
-            .context("unfinished merge lacks host repair evidence; preserve it for recovery")?;
+        let guard = crate::repair_journal::RepairGuard::lock(main)?;
+        let pr_head = fetched_heads.as_ref().map(|heads| heads.1.as_str());
+        let reason = match guard.for_tree(tree, branch, &head, &merge) {
+            Err(_) => Some("no host repair journal entry binds it".to_owned()),
+            Ok(e) if e.lane_id != lane_id => Some(format!(
+                "its host repair journal entry belongs to lane {}",
+                e.lane_id
+            )),
+            Ok(_) if !resume => Some("only a verified orphan adoption resumes it".into()),
+            Ok(_) => match pr_head {
+                Ok(pr_head) if pr_head == head => None,
+                Ok(pr_head) => Some(format!("origin/{branch} moved to {pr_head}")),
+                Err(_) => Some(format!("origin/{branch} could not be verified")),
+            },
+        };
+        let entries = guard.retained_for(tree, branch, pr, pr_head.unwrap_or(&head));
+        drop(guard);
+        if let Some(reason) = reason {
+            anyhow::bail!(retained.refusal(
+                &execute,
+                pr_head,
+                &entries,
+                &format!(
+                    "seat retains an unfinished merge (HEAD {head}, MERGE_HEAD {merge}) that lane {lane_id} cannot resume: {reason}"
+                ),
+            ));
+        }
+    }
+    let failed = || {
+        format!(
+            "rework preparation failed for seat {} on branch {branch}",
+            tree.display()
+        )
+    };
+    let heads = fetched_heads.with_context(failed)?;
+    if seat == ReworkSeat::Fresh {
+        retained.release_for_fresh(&execute, &heads.1)?;
     }
     // Recovery depends on the host's recorded tree kind, never seat configuration.
     // trace:BUG-2504 | ai:codex
     let pending_resume = resume
         && execute(&["status", "--porcelain", "--untracked-files=all"])
             .is_ok_and(|status| !status.is_empty());
+    let fetched = heads.clone();
     prepare_host_repair_with(
         main, tree, pr, lane_id,
         &execute,
@@ -3391,13 +3489,19 @@ fn prepare_rework_merge_with_base(
         resume,
         |tip| publish_rework_merge(main, tree, branch, tip),
         |base, restore_only| regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only),
-        || {
-            // trace:BUG-2603 | ai:codex
-            let base = discover_base()?;
-            fetch_rework_heads(main, &base, branch)
-        },
+        move || Ok(fetched),
     )
     .map_err(|error| {
+        // A live or unproven reservation of this head names its holder.
+        // trace:BUG-2688 | ai:claude
+        if let Some(crate::repair_journal::HeadReserved(entry)) = error.downcast_ref() {
+            return anyhow::anyhow!(retained.refusal(
+                &execute,
+                Ok(&heads.1),
+                std::slice::from_ref(entry),
+                &format!("{error}"),
+            ));
+        }
         let recovery = if pending_resume {
             if clone.is_some() {
                 format!(
@@ -3426,14 +3530,391 @@ fn prepare_rework_merge_with_base(
         } else {
             format!(" {recovery}.")
         };
-        error.context(format!(
-            "rework preparation for seat {} on branch {branch}; inspect its scope with \
-             `aida session leases --all` before recovery.{recovery} \
-             If a probe failed without reporting conflicts, diagnose that failure before retrying; \
-             retained conflicts require their host journal evidence before a resume",
-            tree.display()
-        ))
+        error.context(format!("{}.{recovery}", failed()))
     })
+}
+
+/// Retained rework state a pickup must name in its refusal or release under
+/// `--fresh`: unfinished merges, unreleased repair reservations, local
+/// commits and edits. Nothing here resets, cleans or deletes seat files.
+// trace:BUG-2688 | ai:claude
+struct RetainedRework<'a> {
+    main: &'a Path,
+    tree: &'a Path,
+    branch: &'a str,
+    pr: u64,
+    lane_id: &'a str,
+    scope: &'a str,
+    clone: bool,
+}
+
+/// The seat as observed against the verified remote PR head.
+// trace:BUG-2688 | ai:claude
+struct ReworkSeatState {
+    head: String,
+    merge: Option<String>,
+    ahead: usize,
+    pending: usize,
+}
+
+impl ReworkSeatState {
+    fn observe(execute: &dyn Fn(&[&str]) -> Result<String>, pr_head: &str) -> Result<Self> {
+        let head = execute(&["rev-parse", "HEAD"])?;
+        let merge = execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).ok();
+        let ahead = execute(&["rev-list", "--count", &format!("{pr_head}..HEAD")])?
+            .parse()
+            .context("invalid local commit count")?;
+        let pending = execute(&["status", "--porcelain", "--untracked-files=all"])?
+            .lines()
+            .filter(|line| !line.is_empty())
+            .count();
+        Ok(Self {
+            head,
+            merge,
+            ahead,
+            pending,
+        })
+    }
+    fn describe(&self) -> String {
+        format!(
+            "HEAD {}; {} local commit(s) not on origin; {} pending path(s); {}",
+            self.head,
+            self.ahead,
+            self.pending,
+            self.merge
+                .as_deref()
+                .map_or("no unfinished merge".into(), |m| format!(
+                    "unfinished merge of {m}"
+                ))
+        )
+    }
+}
+
+impl RetainedRework<'_> {
+    /// Ok(proof) when the reservation's lane is provably gone; Err(why) when
+    /// it is live or unknown and must keep its reservation.
+    fn owner(
+        &self,
+        entry: &crate::repair_journal::RepairEntry,
+    ) -> std::result::Result<String, String> {
+        if entry.lane_id == self.lane_id {
+            return Err("it is this pickup's own lane".into());
+        }
+        if entry.tree_path != self.tree && entry.tree_path.symlink_metadata().is_ok() {
+            return Err(format!(
+                "its seat {} still exists",
+                entry.tree_path.display()
+            ));
+        }
+        match crate::leases::read_exact_lease(self.main, &entry.lane_id) {
+            Ok(None) => Ok("its lease has ended".into()),
+            Ok(Some(lease))
+                if crate::leases::lease_recorded_owner(&lease)
+                    == aida_core::liveness::RecordedLeaseOwner::Dead =>
+            {
+                Ok("its recorded owner process has exited".into())
+            }
+            Ok(Some(_)) => Err("its lease is live or its owner cannot be proven dead".into()),
+            Err(why) => Err(format!("its lease cannot be read: {why:#}")),
+        }
+    }
+
+    /// The refusal for retained state: what is retained, by whom, what local
+    /// work exists, and the one supported command for this state.
+    fn refusal(
+        &self,
+        execute: &dyn Fn(&[&str]) -> Result<String>,
+        pr_head: std::result::Result<&str, &anyhow::Error>,
+        entries: &[crate::repair_journal::RepairEntry],
+        what: &str,
+    ) -> String {
+        let (branch, scope, tree) = (self.branch, self.scope, self.tree.display());
+        let state = match pr_head {
+            Ok(pr_head) => ReworkSeatState::observe(execute, pr_head),
+            Err(why) => Err(anyhow::anyhow!("origin/{branch} is unverified: {why:#}")),
+        };
+        let seat = match &state {
+            Ok(state) => state.describe(),
+            Err(why) => format!("seat state unavailable ({why:#}); treat its work as unpublished"),
+        };
+        let journal = if entries.is_empty() {
+            "host repair journal: no unreleased entry for this seat or head".to_owned()
+        } else {
+            entries
+                .iter()
+                .map(|e| {
+                    let owner = match self.owner(e) {
+                        Ok(proof) => format!("releasable: {proof}"),
+                        Err(why) => format!("retained: {why}"),
+                    };
+                    format!(
+                        "host repair journal: lane {} reserves head {} (seat {}, branch {}, spawn {:?}; {owner})",
+                        e.lane_id,
+                        e.key.original_head,
+                        e.tree_path.display(),
+                        e.branch,
+                        e.spawn
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
+        let held = entries
+            .iter()
+            .find_map(|e| self.owner(e).err().map(|why| (e, why)));
+        let recovery = match (&state, held) {
+            (Ok(state), _) if state.ahead > 0 => {
+                let publish = if self.clone {
+                    format!("`aida ship --from-seat {tree}`")
+                } else {
+                    format!("`git -C {tree} push origin HEAD:refs/heads/{branch}`")
+                };
+                format!(
+                    "{publish} publishes its {} local commit(s) to origin/{branch}; then retry `aida queue work {scope} --fresh`",
+                    state.ahead
+                )
+            }
+            (Err(_), _) => format!(
+                "the seat cannot be compared with origin/{branch}, so its work counts as unpublished; once `git -C {} fetch origin {branch}` succeeds, retry `aida queue work {scope} --fresh`",
+                self.main.display()
+            ),
+            (Ok(_), Some((entry, why))) => format!(
+                "lane {0} keeps its reservation because {why}; `aida session show {0}` reports its liveness. After that lane exits, `aida session end {0}` releases it; then retry `aida queue work {scope} --fresh`",
+                entry.lane_id
+            ),
+            (Ok(_), None) => format!(
+                "`aida queue work {scope} --fresh` moves an unleased retained seat of {branch} aside intact (to `<seat>{RETAINED_SEAT_INFIX}<UTC time>`; nothing in it is modified or deleted), releases reservations of lanes proven dead, and restarts the conflict merge in a new seat from origin/{branch} at {}",
+                pr_head.unwrap_or_default()
+            ),
+        };
+        format!(
+            "rework preparation refused for seat {tree} on branch {branch} (PR-{}): {what}. Seat: {seat}. {journal}. Recovery: {recovery}",
+            self.pr
+        )
+    }
+
+    /// Explicit `--fresh` in a newly provisioned seat: log the retained
+    /// reservations of this branch and PR head, refuse while any lane holding
+    /// one is live or unproven, then release those whose lanes are proven
+    /// dead. Seat files are never touched: retained seats were moved aside
+    /// intact before this seat was created.
+    fn release_for_fresh(
+        &self,
+        execute: &dyn Fn(&[&str]) -> Result<String>,
+        pr_head: &str,
+    ) -> Result<()> {
+        use crate::repair_journal::RepairGuard;
+        let entries =
+            RepairGuard::lock(self.main)?.retained_for(self.tree, self.branch, self.pr, pr_head);
+        eprintln!(
+            "  fresh rework: origin/{} verified at {pr_head}; {} retained repair reservation(s)",
+            self.branch,
+            entries.len()
+        );
+        let mut proofs = Vec::new();
+        for entry in &entries {
+            let owner = self.owner(entry);
+            eprintln!(
+                "  fresh rework: retained repair reservation of lane {} at head {} (seat {}; {})",
+                entry.lane_id,
+                entry.key.original_head,
+                entry.tree_path.display(),
+                match &owner {
+                    Ok(proof) => format!("releasable: {proof}"),
+                    Err(why) => format!("retained: {why}"),
+                }
+            );
+            proofs.push(owner);
+        }
+        if proofs.iter().any(|proof| proof.is_err()) {
+            anyhow::bail!(self.refusal(
+                execute,
+                Ok(pr_head),
+                &entries,
+                "a fresh restart would take over a reservation whose lane is not proven dead"
+            ));
+        }
+        let mut guard = RepairGuard::lock(self.main)?;
+        for (entry, proof) in entries.iter().zip(proofs) {
+            guard.mark_proven_dead(&entry.key, &entry.lane_id)?;
+            eprintln!(
+                "  fresh rework: released repair reservation of lane {} ({})",
+                entry.lane_id,
+                proof.unwrap_or_default()
+            );
+        }
+        Ok(())
+    }
+}
+
+/// The infix of a retained seat moved aside by `queue work --fresh`:
+/// `<seat>.retained-<UTC time>`.
+// trace:BUG-2688 | ai:claude
+pub(crate) const RETAINED_SEAT_INFIX: &str = ".retained-";
+
+/// A retained seat `--fresh` moved aside intact.
+// trace:BUG-2688 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct MovedSeat {
+    pub(crate) from: PathBuf,
+    pub(crate) to: PathBuf,
+}
+
+/// `queue work --fresh` on a rework: move every unleased seat clone of this
+/// scope that has `branch` checked out (and every seat an unreleased repair
+/// reservation of this PR or branch names) aside INTACT, renaming it to
+/// `<seat>.retained-<UTC time>` in the same directory, so the new seat is a
+/// fresh checkout at the original path. Nothing in a moved seat is modified
+/// or deleted, and host Git never runs in it: only its directory entry is
+/// renamed (no-replace) and its base pin in `main` follows it. Any seat that
+/// cannot be moved refuses the whole pickup before anything changes; a
+/// failure after an earlier move names every completed move.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn move_aside_retained_rework_seats(
+    main: &Path,
+    slug: &str,
+    branch: &str,
+    pr: u64,
+) -> Result<Vec<MovedSeat>> {
+    let project = main
+        .file_name()
+        .and_then(|s| s.to_str())
+        .filter(|s| !s.is_empty())
+        .unwrap_or("project");
+    let parent = crate::worktree_gc::worktree_pool_config_worktree_parent(main);
+    let mut candidates: Vec<PathBuf> = (1..=50)
+        .map(|n| {
+            let name = if n == 1 {
+                format!("{CLONE_DIR_PREFIX}{project}-{slug}")
+            } else {
+                format!("{CLONE_DIR_PREFIX}{project}-{slug}-{n}")
+            };
+            aida_core::worktree_pool::worktree_placement_path(main, &name, parent.as_deref())
+        })
+        .collect();
+    if let Ok(journal) = crate::repair_journal::RepairGuard::lock(main) {
+        candidates.extend(journal.seats_for(branch, pr));
+    }
+    let leases = crate::list_leases(main);
+    let mut seen = std::collections::BTreeSet::new();
+    let mut retained = Vec::new();
+    for path in candidates {
+        // Only a real directory (never a symlink) at a seat-clone location,
+        // whose own `.git` has this PR branch checked out, is this rework's.
+        if !std::fs::symlink_metadata(&path).is_ok_and(|m| m.file_type().is_dir()) {
+            continue;
+        }
+        let Ok(canonical) = path.canonicalize() else {
+            continue;
+        };
+        if !is_seat_clone_location(main, &path)
+            || seat_clone_root(&path).as_ref() != Some(&canonical)
+            || checked_out_branch(&path).as_deref() != Some(branch)
+        {
+            continue;
+        }
+        if !seen.insert(canonical.clone()) {
+            continue;
+        }
+        if let Some(lease) = leases
+            .iter()
+            .find(|l| l.worktree_path.canonicalize().ok().as_deref() == Some(canonical.as_path()))
+        {
+            eprintln!(
+                "  fresh rework: kept seat {}: lease {} records it (resume it with `aida queue work --resume`, or end it with `aida session end {}`)",
+                path.display(),
+                lease.id,
+                lease.id
+            );
+            continue;
+        }
+        if let Err(in_use) = aida_core::worktree_holders::check_worktree_removal(&path) {
+            anyhow::bail!(
+                "fresh rework refused: retained seat {} of branch {branch} is in use ({in_use}); nothing was moved or changed. Stop that process, then retry with --fresh",
+                path.display()
+            );
+        }
+        let pin = pin_ref(&path).context("retained seat name cannot carry a pin")?;
+        let mut read = git(main);
+        read.args(["rev-parse", "-q", "--verify", &pin]);
+        let pinned = run(read, &format!("read {pin}"))
+            .ok()
+            .filter(|v| !v.is_empty());
+        retained.push((path, pinned));
+    }
+    let stamp = chrono::Utc::now().format("%Y%m%dT%H%M%S%.6fZ").to_string();
+    let mut moved: Vec<MovedSeat> = Vec::new();
+    let done = |moved: &[MovedSeat]| -> String {
+        if moved.is_empty() {
+            "nothing was moved or changed".into()
+        } else {
+            format!(
+                "already moved aside intact: {}",
+                moved
+                    .iter()
+                    .map(|m| format!("{} -> {}", m.from.display(), m.to.display()))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+    };
+    for (from, pinned) in retained {
+        let name = from
+            .file_name()
+            .and_then(|n| n.to_str())
+            .context("retained seat has no UTF-8 name")?;
+        let to = from.with_file_name(format!("{name}{RETAINED_SEAT_INFIX}{stamp}"));
+        let new_pin = pin_ref(&to).context("moved seat name cannot carry a pin")?;
+        // The base pin follows the directory so reap keeps the moved clone's
+        // objects and reports it as an unleased clone kept for the operator.
+        if let Some(oid) = &pinned {
+            let mut cmd = git(main);
+            cmd.args(["update-ref", &new_pin, oid, ""]);
+            if let Err(why) = run(cmd, &format!("pin {new_pin}")) {
+                anyhow::bail!(
+                    "fresh rework refused: could not pin the moved seat {} ({why:#}); {}",
+                    to.display(),
+                    done(&moved)
+                );
+            }
+        }
+        if let Err(why) = aida_core::mailbox_lifecycle::rename_noreplace(&from, &to) {
+            if let Some(oid) = &pinned {
+                let mut cmd = git(main);
+                cmd.args(["update-ref", "-d", &new_pin, oid]);
+                let _ = run(cmd, &format!("unpin {new_pin}"));
+            }
+            anyhow::bail!(
+                "fresh rework refused: could not move retained seat {} aside to {} ({why}); it is unchanged and {}",
+                from.display(),
+                to.display(),
+                done(&moved)
+            );
+        }
+        eprintln!(
+            "  fresh rework: moved retained seat {} aside intact to {} (its commits, edits and conflicts are kept there; `aida worktree dismiss {}` removes it once nothing in it is needed)",
+            from.display(),
+            to.display(),
+            to.display()
+        );
+        moved.push(MovedSeat {
+            from: from.clone(),
+            to: to.clone(),
+        });
+        if let Some(oid) = &pinned {
+            let old_pin = pin_ref(&from).unwrap_or_default();
+            let mut cmd = git(main);
+            cmd.args(["update-ref", "-d", &old_pin, oid]);
+            if let Err(why) = run(cmd, &format!("release {old_pin}")) {
+                anyhow::bail!(
+                    "fresh rework refused: {} could not be released after its seat moved ({why:#}); {}",
+                    old_pin,
+                    done(&moved)
+                );
+            }
+        }
+    }
+    Ok(moved)
 }
 
 /// Publish the prepared tip using only the trusted host origin. Clone objects
@@ -3911,11 +4392,36 @@ fn prepare_host_repair_with(
         resume || !dirty,
         "rework seat has pending changes; merge refused"
     );
-    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if resume && dirty {
-        "seated rework branch is behind the PR head; edits preserved"
+    // A newly seated branch can lag origin if the PR moves during setup, or
+    // when it was seated from a stale local branch. Align only by fast-forward
+    // so new pickups start at the remote head and never drop local commits.
+    // trace:BUG-2688 | ai:claude
+    if resume {
+        execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if dirty {
+            "seated rework branch is behind the PR head; edits preserved"
+        } else {
+            "seated rework branch is behind the PR head; retry pickup with its current head"
+        })?;
     } else {
-        "seated rework branch is behind the PR head; retry pickup with its current head"
-    })?;
+        let head = execute(&["rev-parse", "HEAD"])?;
+        if head != pr_head {
+            execute(&["merge-base", "--is-ancestor", &head, &pr_head])
+                .context("cannot fast-forward to the fetched PR head; local commits preserved")?;
+            execute(&[
+                "merge",
+                "--ff-only",
+                "--no-overwrite-ignore",
+                "--no-verify",
+                &pr_head,
+            ])
+            .context("could not fast-forward the clean seat to the fetched PR head")?;
+        }
+        anyhow::ensure!(
+            execute(&["rev-parse", "HEAD"])? == pr_head,
+            "seated rework branch changed while aligning to the fetched PR head"
+        );
+        eprintln!("  rework: preparing merge from origin/{branch} at {pr_head}");
+    }
     if dirty {
         execute(&["merge-tree", "--write-tree", "HEAD", &base])
             .context("could not prove clean merge for dirty resume; edits preserved")?;
@@ -3967,8 +4473,9 @@ fn prepare_host_repair_with(
                 anyhow::bail!("conflict observation changed; reservation retained for recovery")
             }
             Err(why) => {
-                execute(&["rev-parse", "--verify", "MERGE_HEAD"])
-                    .context("merge failed without retained MERGE_HEAD")?;
+                execute(&["rev-parse", "--verify", "MERGE_HEAD"]).with_context(|| {
+                    format!("merge failed without retained MERGE_HEAD: {why:#}")
+                })?;
                 let paths = execute(&["diff", "--name-only", "--diff-filter=U", "-z"])?;
                 let paths: Vec<String> = paths
                     .split('\0')
@@ -4131,9 +4638,10 @@ mod rework_merge_tests {
             &fx.main,
             &fx.main,
             "rework",
-            false,
+            ReworkSeat::New,
             2603,
             "integration-lane",
+            "SPEC-ID",
             || {
                 rework_base_from_metadata(
                     "rework",
@@ -4156,9 +4664,10 @@ mod rework_merge_tests {
             &fx.main,
             &fx.main,
             "rework",
-            false,
+            ReworkSeat::New,
             2603,
             "integration-lane",
+            "SPEC-ID",
             || {
                 rework_base_from_metadata(
                     "rework",
@@ -6254,6 +6763,11 @@ mod retention_tests;
 #[cfg(test)]
 #[path = "tests/bug_031_seat_clone_mailbox_tests.rs"]
 mod seat_clone_mailbox_tests;
+
+// trace:BUG-2688 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2688_fresh_rework_tests.rs"]
+mod bug_2688_fresh_rework_tests;
 
 // trace:BUG-HOME-038 | ai:claude
 #[cfg(test)]

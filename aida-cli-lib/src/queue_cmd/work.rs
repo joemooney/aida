@@ -4413,6 +4413,41 @@ pub(crate) fn scope_conflict_resume_hint(
     }
 }
 
+/// The rework preparation mode for a seated pickup. The conversation choice
+/// (resume vs. a new one) never decides it: a resumed conversation can get a
+/// replacement seat, and adoption can start a new conversation. Only verified
+/// orphan adoption carries working-tree state forward; an explicit `--fresh`
+/// starts a new seat from the verified remote head.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn rework_seat_for(
+    adopt_orphan: Option<&SessionLease>,
+    explicit_fresh: bool,
+) -> crate::seat_clone::ReworkSeat {
+    use crate::seat_clone::ReworkSeat;
+    match (adopt_orphan, explicit_fresh) {
+        (Some(_), _) => ReworkSeat::Adopted,
+        (None, true) => ReworkSeat::Fresh,
+        (None, false) => ReworkSeat::New,
+    }
+}
+
+/// The lane-prompt record of retained seats `--fresh` moved aside intact.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn moved_seats_note(moved: &[crate::seat_clone::MovedSeat]) -> String {
+    moved
+        .iter()
+        .map(|m| {
+            format!(
+                "\n\nNote: `--fresh` moved the retained seat {} aside intact to {} before this \
+                 fresh checkout. Its commits, edits and conflicts are kept there unchanged; this \
+                 seat starts from the PR branch's remote head.",
+                m.from.display(),
+                m.to.display()
+            )
+        })
+        .collect()
+}
+
 // trace:STORY-2325 | ai:codex
 pub(crate) fn refuse_retired_steal(steal: bool) -> Result<()> {
     anyhow::ensure!(!steal, "`--steal` is retired: ownership decides reclaim automatically; live or unknown owners retain their lane. Ask the owner to use `aida session end <id>` for voluntary handoff");
@@ -6144,6 +6179,32 @@ pub(crate) fn handle_queue_work(
             );
         }
 
+        // BUG-2688: an explicit `--fresh` rework never resets a retained seat
+        // in place. Unleased seats of this PR branch move aside intact first,
+        // so session start makes a fresh checkout at the original path; a
+        // seat that cannot be moved refuses the pickup before anything else.
+        // trace:BUG-2688 | ai:claude
+        let moved_seats = match rework_pr.as_ref() {
+            Some((pr, branch))
+                if fresh
+                    && adopt_orphan.is_none()
+                    && !no_launch
+                    && !dry_run
+                    && !plan_only
+                    && !guided
+                    && !list_sessions
+                    && role == "implementer" =>
+            {
+                crate::seat_clone::move_aside_retained_rework_seats(
+                    &project_root,
+                    &crate::slugify(&plan.scope),
+                    branch,
+                    *pr,
+                )?
+            }
+            _ => Vec::new(),
+        };
+
         // session_start handles worktree creation, lease persistence, env
         // shim, conflict detection. We always pass launch=false so we can
         // (a) write the cluster manifest from the new lease and (b) emit
@@ -6245,10 +6306,15 @@ pub(crate) fn handle_queue_work(
                         &project_root,
                         &lease.worktree_path,
                         branch,
-                        matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                        // trace:BUG-2688 | ai:claude
+                        rework_seat_for(adopt_orphan.as_ref(), fresh),
                         *pr,
                         &lease.id,
+                        &plan.scope,
                     );
+                    // The lane learns where its predecessor's work was kept.
+                    // trace:BUG-2688 | ai:claude
+                    prompt.push_str(&moved_seats_note(&moved_seats));
                     launch_vendor = apply_rework_conflict_route(
                         &project_root,
                         files,
