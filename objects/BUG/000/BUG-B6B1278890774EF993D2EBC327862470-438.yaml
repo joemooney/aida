@@ -10,12 +10,12 @@ description: |
   Hypotheses: (a) a pass aborts on a refusal for a closed PR before reaching open ones; (b) the worker isn't logging, or isn't running passes, despite its status; (c) a stale reservation or lock in .aida/review-watch/ (hundreds of PR-*.lock files from closed PRs).
 
   Acceptance: (1) review-watch dispatches up to max_concurrent reviews for open PRs whose current head has no conclusive verdict, within one pass interval. (2) A refusal on any single PR, especially a closed one, never aborts the pass for the others. (3) service.log records each pass with a timestamp and the number of dispatches. (4) Loop status reports 'running but idle N min with eligible work' as degraded, not healthy.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T07:24:28.894266121Z
+modified_at: 2026-11-19T08:02:56.379317823Z
 req_type: Bug
 tags:
 - landing
@@ -180,6 +180,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f2d4-84fb-7542-9e55-c5bf3322ce42
+  author: aida-orchestrator
+  timestamp: 2026-11-19T08:02:56.379453285Z
+  session_id: 01a1f2d04f2a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 444867815903588c91b36614a56eeffa671fc548
   branch: main
@@ -189,3 +197,26 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Reviewed the entire pinned landed diff against main 447a116ad003a5cd41c71330608a277592599f3f, landed tree e79b3795f0975056935fef37bdb5300ac2f6fb38, attesting original head 64a68c24a6180c827bf42553c6486de04b6dd37f. Request changes for unmet health and per-pass logging acceptance criteria. Four actionable findings, including the capped refusal count follow-up. No finding depends on the documentation changes added by the protected base; the three-commit stale-base condition was considered.
+
+    Full acceptance sweep, BUG-2674:
+    AC1: Dispatch up to max_concurrent reviews for open heads lacking conclusive verdicts within one interval: unverified end to end. Source evidence: run_with_program iterates discovery in one pass; select_with_coverage applies the capacity limit under the admission lock. No live timing observation was available.
+    AC2: A single PR refusal, especially a closed PR, never aborts processing the others: verified by watch_changes source and assertions in the added bug2674_refused_change_never_blocks_the_next_and_degrades_status fixture. Tagged whole-state/authority failures correctly remain fatal.
+    AC3: service.log records each pass with timestamp and dispatch count: unverified; controller_pass_report suppresses quiet pass lines for 300 seconds (finding 3).
+    AC4: Running but idle N minutes with eligible work is degraded: unverified; pass_degradation has neither eligible-work nor last-dispatch evidence and treats every recent error-free pass as healthy (finding 1). Absent pass evidence is also indefinitely healthy (finding 2).
+    Authoritative brief item 1: Discovery is open/non-draft only; closed/merged entries are pruned while preserving history and necessary live-attempt ownership: verified by parse_change, Store::prune and existing bug2640 closed-change fixtures. This behavior predates this PR.
+    Authoritative brief item 2: Record per-PR refusals/setup failures and continue: verified by watch_changes/record_skip source and the added continuation fixture, apart from transient busy admission being excluded from the report as described in finding 1. This continuation behavior predates this PR.
+    Authoritative brief item 3: Degrade last-pass per-PR errors and name them: verified by controller_pass_report, pass_degradation, pass_status and the added fixture for available reports; absence/stall coverage remains incomplete (finding 2).
+    Required regression: refused first change followed by eligible open change is admitted in the same pass and status names the error: verified by assertions in the added fixture; execution evidence is the implementer's reported 61 passing focused tests, not a reviewer execution.
+    Validation requested in brief: targeted review_watch tests and check-store-writers.py: verified by reported lane evidence in PR/spec comment. check-ci-fast: verified by successful exact-head CI fast gates, fast compile and Build (ubuntu-latest), run 44475205530. Full test shard was skipped under FAST policy. No local tests, Cargo or builds run by reviewer.
+    Type protocol BUG-2674 (bug protocol), touches at least one test file: met; advisor_loop_service.rs contains three new unit tests.
+
+    Navigation limitation: supplied absolute host codegraph client was absent; aida doctor check codegraph also reported a stale index. Source searches were used instead. No independent external evidence is needed to judge the source defects. Findings are structured JSON strings for the canonical recorder; all four are retained.
+  recovery_hint: address the review findings, move BUG-2674 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T08:02:56.379317823Z
