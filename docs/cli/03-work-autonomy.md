@@ -64,6 +64,9 @@ Three cross-cutting truths the tree assumes:
 **Pickup checks before setup.** Role precedence is `--role`, queue routing, then scope default; a conflicting shell role is reported with the chosen source before acting. Interactive pickup checks branch occupancy and validates child-seat delegation before persisting an implicit queue row, calibration, lease, worktree, or status change. An occupied branch can be retired manually only when its checkout is idle, clean, unlocked, and unleased; pickup never removes it automatically. If setup succeeds but launch fails, the error prints `aida worktree enter <ID>` and the guided continuation `claude "/aida-guided-implement <ID>"` (ordinary pickup uses `/aida-pickup`).
 <!-- trace:TASK-1337 | ai:codex -->
 
+To continue a **Done** spec on its existing PR or MR, run `aida queue work <SPEC> --role implementer`. Pickup requires one verified open change on an origin branch and applies the regular rework holds and lease checks. It can restore the queue row after preflight if completion removed it. Use `aida queue rework <SPEC>` to route the spec without launching a session. If that command times out looking up the open change, it exits before changing the spec or queue. <!-- trace:STORY-2690 | ai:codex -->
+
+
 **A standalone reviewer receives recording attribution before launch.**
 `queue work PR-N --role reviewer` sets the selected vendor's
 `AIDA_AGENT_TYPE` and a vendor/reviewer `AIDA_AGENT_NAME` in the child, for
@@ -112,6 +115,7 @@ branches on the exit code:
 | 32 | `implementer: punted reason=<summary>` | The implementer ran `aida punt`; read the spec's comments. |
 | 33 | `implementer: held branch=<branch>` | The branch is pushed and the PR is held (`aida pr hold`). |
 | 34 | (none) | Refused before any setup: the concurrency cap is reached. |
+| 36 | `implementer: refused-before-start ... reason=disk-deferred ...` | Deferred: the host is below its free-space floor. The setup was rolled back and the spec stays queued with the note `deferred: disk below floor at <time>`. Retry once space is free. |
 | 35 | `implementer: empty-rework pr=<n> head=<sha> action=requeued` | An unchanged GitHub rework head still has blocking findings, failed required checks, or conflicts. One retry was queued with a brief naming the blockers. |
 | 32 | `implementer: empty-rework pr=<n> head=<sha> action=punted` | The retry at that head was also empty; automatic implementer rows were removed and the advisor received request mail. |
 
@@ -605,6 +609,13 @@ command = "notify check"
 when = "mail.oldest_unread_age > 15m"  # predicate; fires once per episode
 enabled = true
 ```
+
+<!-- trace:STORY-2856 | ai:codex -->
+`aida notify check` also monitors required GitHub workflows for consecutive
+zero-job startup failures. Auto-train runs the same monitor each discovery pass.
+See the [startup failure runbook](../advanced/ci-startup-failure.md) for thresholds,
+push transport configuration, backoff and recovery notices.
+
 
 `when` is a small typed grammar: `field op value`, joined by `&&` / `||` (`&&` binds tighter; parentheses allowed), durations like `90s` / `15m` / `2h`. A condition job fires **once when its predicate turns true and not again until it has been false** (once-until-cleared; the ledger records the episode). `while` takes the same grammar but is a gate, not a trigger: a job with `every` and `while` runs on its cadence only while the predicate holds, re-checked on every tick, and `while` alone never fires a job (`every` is required). The default `dispatch-tick` job uses it (`every = "2m"`, `while = "mandate.dispatch_active == true && dispatch.pending > 0"`), so it never runs without a dispatch mandate. A `while`-gated job is left out of `aida schedule emit-cron` and of the overdue-job doctor check. The field set is fixed: `mail.unread`, `mail.oldest_unread_age`, `drain.lock_free`, `queue.drain_mode_ready`, `queue.depth` (the existing seat meter), `queue.project_work_idle` (a strict flag for docs sweeps: all users’ local unrouted/implementer/reviewer work plus global implementer/reviewer work for this project; unreadable or corrupt evidence refuses the gate), `sessions.finished_unreaped`, `ci.red_prs` (0 without network), `findings.open`, `escalations.open`, `mandate.drive_active` (a flag: an unexpired, unstopped drive mandate exists), `mandate.dispatch_active` (a flag: an unexpired, unstopped mandate covering `dispatch` exists), `dispatch.pending` (validated `Pending` dispatch requests, plus one per `needs-recovery` record and one when the dispatch inventory is unreadable, so unknown state is never counted as zero). `on` accepts the event names the drain emits (`PrMerged`, `SpecShelved`, `QueueDrained`, `AdvisorEscalated`, `PuntFiled`, `CiTerminal`, `UnshippedWorkDetected`, `MailReceived`, …). `CronJobFailed` and `CronJobFired` may name their source job after a colon — `on = ["CronJobFailed:disk-headroom-guard"]` fires only when that job fails, and the due item shows that job's failure (a run killed at the 120 s scheduler timeout is labelled as a timeout, not a finding). A bare `CronJobFailed` still matches **every** job's failure, as before, so always bind a guard's route to its guard. A typo in an event name, or a malformed binding, is refused at config-load time. A binding that names a job missing from the registry disables only that job: `aida schedule status` shows it as `invalid` with the reason, the tick reports it as skipped, and every other job keeps running. `aida doctor` flags an enabled `*-route` job that still uses a bare `CronJobFailed`, and an enabled route disabled by an unknown bound job.
 

@@ -2637,6 +2637,14 @@ aida show <SPEC-ID>
             // Subagent harness worktree lease hooks (SubagentStart/SubagentStop).
             // trace:TASK-702 | ai:claude
             for (path, body, description) in [
+                // trace:STORY-2748 | ai:codex
+                (
+                    PathBuf::from(".claude/hooks/aida-activity-heartbeat.sh"),
+                    include_str!("../../templates/hooks/aida-activity-heartbeat.sh")
+                        .trim_end()
+                        .to_string(),
+                    "Claude Code local activity heartbeat hook".to_string(),
+                ),
                 // trace:STORY-2662 | ai:codex
                 (
                     PathBuf::from(".claude/hooks/aida-precompact-handoff.sh"),

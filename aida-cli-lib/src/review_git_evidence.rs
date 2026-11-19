@@ -236,6 +236,254 @@ pub(crate) fn resolve_log_range(
     (base, remote_head)
 }
 
+/// Exclude an integration prefix whose exact tree already landed through a
+/// squash on the base. Only base commits outside the shared ancestry qualify;
+/// ordinary shared/empty trees must not erase new completion declarations.
+// trace:BUG-2632 | ai:codex
+pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -> Result<String> {
+    // Git's two-dot syntax defaults either omitted endpoint to HEAD.
+    // Pass the same endpoints to commands that take revisions separately.
+    let base = if base.is_empty() { "HEAD" } else { base };
+    let head = if head.is_empty() { "HEAD" } else { head };
+    let trees = |range: &str, reverse: bool| -> Result<Vec<(String, String)>> {
+        let mut cmd = aida_core::git_ops::host_git_command(repo);
+        cmd.args(["log", "--first-parent", "--format=%H %T"]);
+        if reverse {
+            cmd.arg("--reverse");
+        }
+        let out = cmd
+            .args([git_arg_guard::END_OF_OPTIONS, range, "--"])
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "cannot inspect completion range {range}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Ok(String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|line| {
+                line.split_once(' ')
+                    .map(|(sha, tree)| (sha.to_string(), tree.to_string()))
+            })
+            .collect())
+    };
+    let range = format!("{base}..{head}");
+    let landed = trees(&format!("{head}..{base}"), false)?;
+    if landed.is_empty() {
+        return Ok(range);
+    }
+    // A shared unchanged tree is not evidence of a squash landing: unrelated
+    // empty commits on both branches must retain their new declarations.
+    let common = aida_core::git_ops::host_git_command(repo)
+        .args(["merge-base", base, head])
+        .output()?;
+    // trace:BUG-2632 | ai:codex
+    // Shallow PR checkouts (and unrelated histories) may have no visible
+    // common ancestor. Without that evidence, retain every declaration.
+    if common.status.code() == Some(1) {
+        return Ok(range);
+    }
+    anyhow::ensure!(
+        common.status.success(),
+        "cannot resolve completion range ancestry: {}",
+        String::from_utf8_lossy(&common.stderr).trim()
+    );
+    let common_sha = String::from_utf8_lossy(&common.stdout).trim().to_string();
+    let common_tree = aida_core::git_ops::host_git_command(repo)
+        .args(["show", "-s", "--format=%T", &common_sha])
+        .output()?;
+    anyhow::ensure!(
+        common_tree.status.success(),
+        "cannot read completion range ancestor tree"
+    );
+    let common_tree = String::from_utf8_lossy(&common_tree.stdout)
+        .trim()
+        .to_string();
+    let mut candidates = std::collections::HashMap::new();
+    for (sha, tree) in trees(&range, true)? {
+        // Preserve declarations made later without changing the landed tree.
+        candidates.entry(tree).or_insert(sha);
+    }
+    for (_, tree) in landed {
+        if tree == common_tree {
+            continue;
+        }
+        if let Some(sha) = candidates.get(&tree) {
+            return Ok(format!("{sha}..{head}"));
+        }
+    }
+    Ok(range)
+}
+
+/// Read first-parent constituent merges down to the preceding promotion.
+// trace:BUG-2660 | ai:codex
+pub(crate) fn promotion_merge_subjects(
+    repo: &std::path::Path,
+    base: &str,
+    branch: &str,
+    head: &str,
+) -> Result<Vec<String>> {
+    // Read local, fully qualified refs only. Prefer remote-tracking evidence
+    // because the promotion may have been opened from a different checkout.
+    let resolve = |branch: &str| -> Result<String> {
+        for namespace in ["refs/remotes/origin", "refs/heads"] {
+            let rev = format!("{namespace}/{branch}^{{commit}}");
+            let out = aida_core::git_ops::host_git_command(repo)
+                .args([
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    git_arg_guard::END_OF_OPTIONS,
+                    &rev,
+                ])
+                .output()?;
+            if out.status.success() {
+                return Ok(String::from_utf8(out.stdout)?.trim().to_owned());
+            }
+        }
+        anyhow::bail!("missing local ref for `{branch}`; fetch origin and retry")
+    };
+    let first_promotion = branch == "promote/integration-1";
+    let base = resolve(base)?;
+    anyhow::ensure!(
+        crate::forge::is_full_commit_sha(head),
+        "invalid promotion head"
+    );
+    // Refuse partial history: a shallow boundary can hide the previous
+    // promotion or truncate a run of equal trees.
+    let shallow = aida_core::git_ops::host_git_command(repo)
+        .args(["rev-parse", "--is-shallow-repository"])
+        .output()?;
+    anyhow::ensure!(
+        shallow.status.success() && shallow.stdout.trim_ascii_end() == b"false",
+        "complete local promotion history is required"
+    );
+    const LIMIT: usize = 500;
+    let limit = format!("--max-count={}", LIMIT + 1);
+    let log = |range: &str, format: &str| -> Result<String> {
+        let mut cmd = aida_core::git_ops::host_git_command(repo);
+        cmd.args([
+            "log",
+            "--first-parent",
+            &limit,
+            format,
+            git_arg_guard::END_OF_OPTIONS,
+            range,
+            "--",
+        ]);
+        let cap = 1024 * 1024;
+        let crate::BoundedCommandOutput::Completed(out) =
+            crate::command_output_with_timeout_capped(cmd, std::time::Duration::from_secs(3), cap)
+        else {
+            anyhow::bail!("promotion history lookup did not finish");
+        };
+        anyhow::ensure!(
+            out.stdout.len() as u64 <= cap && out.stderr.len() as u64 <= cap,
+            "promotion history exceeded the output limit"
+        );
+        anyhow::ensure!(
+            out.status.success(),
+            "cannot read promotion history: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+
+    // A train squash can contain concurrent main changes, so its tree may
+    // differ from the original promotion head. Its member trailer pins that
+    // original head. Plain squash landings can still match by tree.
+    let landed = log(
+        &base,
+        "--format=%T%x1f%s%x1f%(trailers:key=Aida-Train-Member,valueonly,separator=%x1e,unfold=true)",
+    )?;
+    let mut landed_trees = std::collections::HashSet::new();
+    let mut landed_heads = std::collections::HashSet::new();
+    for row in landed.lines().take(LIMIT) {
+        let Some((tree, rest)) = row.split_once('\x1f') else {
+            anyhow::bail!("malformed base promotion history");
+        };
+        let Some((subject, receipts)) = rest.rsplit_once('\x1f') else {
+            anyhow::bail!("malformed base promotion history");
+        };
+        // An unrelated main commit can share a tree (for example, a revert).
+        // Only the established promotion suffix identifies a plain landing.
+        let promotion_subject = subject
+            .rsplit_once(" [promotion ")
+            .is_some_and(|(_, tail)| {
+                tail.split_once(']').is_some_and(|(number, after)| {
+                    !number.is_empty()
+                        && number.bytes().all(|b| b.is_ascii_digit())
+                        && (after.is_empty()
+                            || crate::pr_lookup::extract_pr_number_from_commit_subject(after)
+                                .is_some())
+                })
+            });
+        if receipts.is_empty() && promotion_subject {
+            landed_trees.insert(tree);
+        }
+        for receipt in receipts.split('\x1e') {
+            if let Some((number, sha)) = receipt.trim().split_once(" at ") {
+                if number
+                    .strip_prefix('#')
+                    .is_some_and(|n| n.parse::<u64>().is_ok())
+                    && crate::forge::is_full_commit_sha(sha)
+                {
+                    landed_heads.insert(sha.to_ascii_lowercase());
+                }
+            }
+        }
+    }
+
+    let history = log(&format!("{base}..{head}"), "--format=%H%x1f%T%x1f%P%x1f%s")?;
+    let mut subjects = Vec::new();
+    let mut tree_cut = None;
+    let mut ambiguous_tree = false;
+    for (index, row) in history.lines().enumerate() {
+        let mut fields = row.splitn(4, '\x1f');
+        let (Some(sha), Some(tree), Some(parents), Some(subject)) =
+            (fields.next(), fields.next(), fields.next(), fields.next())
+        else {
+            anyhow::bail!("malformed promotion history");
+        };
+        if let Some((cut_tree, _)) = tree_cut {
+            if tree != cut_tree {
+                break;
+            }
+        }
+        anyhow::ensure!(index < LIMIT, "promotion history exceeded {LIMIT} commits");
+        if landed_heads.contains(sha) {
+            return Ok(subjects);
+        }
+        let constituent = parents.split_whitespace().count() == 2
+            && crate::integration_cmd::review::merged_pr(subject).is_some();
+        if landed_trees.contains(tree) {
+            // An exact receipt can resolve a run of equal trees. A tree match
+            // alone cannot tell which merges in that run were promoted.
+            if let Some((_, len)) = tree_cut {
+                ambiguous_tree |= subjects.len() != len || constituent;
+            } else {
+                tree_cut = Some((tree, subjects.len()));
+            }
+        }
+        if constituent {
+            subjects.push(subject.to_owned());
+        }
+    }
+    if let Some((_, len)) = tree_cut {
+        anyhow::ensure!(
+            !ambiguous_tree,
+            "equal-tree commits obscure the promotion boundary"
+        );
+        subjects.truncate(len);
+        return Ok(subjects);
+    }
+    anyhow::ensure!(
+        history.is_empty() || first_promotion && history.lines().count() <= LIMIT,
+        "promotion boundary could not be established within {LIMIT} commits"
+    );
+    Ok(subjects)
+}
+
 /// Run `git log <base>..<head> --pretty=format:%B%n--END--`. Returns
 /// each commit message as a separate string. A head branch that exists only
 /// on origin is resolved via [`resolve_log_range`]. trace:STORY-67 | ai:claude
@@ -245,7 +493,8 @@ pub(crate) fn git_log_messages(
     head: &str,
 ) -> Result<Vec<String>> {
     let (base, head) = resolve_log_range(project_root, base, head);
-    let range = format!("{}..{}", base, head);
+    let range = completion_range(project_root, &base, &head)
+        .with_context(|| format!("cannot read commits {base}..{head}"))?;
     let out = std::process::Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -273,4 +522,337 @@ pub(crate) fn git_log_messages(
         .filter(|s| !s.is_empty())
         .collect();
     Ok(messages)
+}
+
+#[cfg(test)]
+mod bug_2632_tests {
+    use super::*;
+
+    // trace:BUG-2632 | ai:codex
+    #[test]
+    fn shallow_pr_checkout_retains_completion_declarations() {
+        let source = tempfile::tempdir().unwrap();
+        let checkout = tempfile::tempdir().unwrap();
+        let git = |repo: &std::path::Path, args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(repo)
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {out:?}");
+        };
+        git(source.path(), &["init", "-b", "main"]);
+        git(source.path(), &["commit", "--allow-empty", "-m", "base"]);
+        git(source.path(), &["checkout", "-b", "topic"]);
+        git(
+            source.path(),
+            &["commit", "--allow-empty", "-m", "claim (BUG-4)"],
+        );
+        git(source.path(), &["checkout", "main"]);
+        git(
+            source.path(),
+            &["commit", "--allow-empty", "-m", "main work"],
+        );
+        let url = format!("file://{}", source.path().display());
+        git(
+            checkout.path(),
+            &["clone", "--depth=1", "--branch=topic", &url, "."],
+        );
+        // Match CI: fetch main as FETCH_HEAD and a new remote branch ref,
+        // without deepening the PR head's ancestry.
+        git(
+            checkout.path(),
+            &[
+                "fetch",
+                "--depth=1",
+                "origin",
+                "main:refs/remotes/origin/main",
+            ],
+        );
+        assert_eq!(
+            completion_range(checkout.path(), "origin/main", "HEAD").unwrap(),
+            "origin/main..HEAD"
+        );
+        let commits = crate::read_commits_in_range(checkout.path(), "origin/main..HEAD").unwrap();
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].1, "claim (BUG-4)");
+        // Missing ancestry is conservative; an invalid ref must still refuse
+        // rather than silently discard the completion inspection error.
+        let error = completion_range(checkout.path(), "refs/heads/missing", "HEAD").unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("cannot inspect completion range"));
+    }
+
+    // trace:BUG-2632 | ai:codex
+    #[test]
+    fn unrelated_empty_commits_do_not_establish_a_landed_prefix() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(repo)
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {out:?}");
+        };
+        git(&["init", "-b", "main"]);
+        git(&["commit", "--allow-empty", "-m", "base"]);
+        git(&["checkout", "-b", "topic"]);
+        git(&["commit", "--allow-empty", "-m", "claim (BUG-4)"]);
+        git(&["checkout", "main"]);
+        git(&["commit", "--allow-empty", "-m", "unrelated"]);
+        let messages = crate::git_log_messages(repo, "main", "topic").unwrap();
+        assert_eq!(
+            crate::review_coverage_from_commits(&messages).delivered,
+            ["BUG-4"]
+        );
+    }
+
+    // trace:BUG-2660 | ai:codex
+    #[test]
+    fn bug_2660_reads_only_new_promotion_merge_subjects() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(repo)
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {out:?}");
+            String::from_utf8(out.stdout).unwrap().trim().to_owned()
+        };
+        git(&["init", "-b", "main"]);
+        git(&["commit", "--allow-empty", "-m", "base"]);
+        git(&["switch", "-c", "integration"]);
+        git(&["switch", "-c", "old-work"]);
+        std::fs::write(repo.join("old"), "old").unwrap();
+        git(&["add", "old"]);
+        git(&["commit", "-m", "old work (BUG-1)"]);
+        git(&["switch", "integration"]);
+        git(&["merge", "--no-ff", "-m", "merge PR #1 (BUG-1)", "old-work"]);
+        git(&["switch", "-c", "old-slice"]);
+        std::fs::write(repo.join("old-slice"), "old slice").unwrap();
+        git(&["add", "old-slice"]);
+        git(&["commit", "-m", "old slice implementation"]);
+        git(&["switch", "integration"]);
+        git(&[
+            "merge",
+            "--no-ff",
+            "-m",
+            "merge PR #10 (Refs STORY-1)",
+            "old-slice",
+        ]);
+        let prior = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "main"]);
+        git(&["merge", "--squash", "integration"]);
+        git(&["commit", "-m", "promotion 1 (BUG-1) [promotion 1] (#1)"]);
+        git(&["switch", "integration"]);
+        git(&["switch", "-c", "new-work"]);
+        std::fs::write(repo.join("new"), "new").unwrap();
+        git(&["add", "new"]);
+        git(&["commit", "-m", "implementation detail (BUG-99)"]);
+        git(&["switch", "-c", "promote/integration-2", &prior]);
+        git(&["merge", "--no-ff", "-m", "merge PR #2 (BUG-2)", "new-work"]);
+        git(&["switch", "-c", "slice-work"]);
+        std::fs::write(repo.join("slice"), "slice").unwrap();
+        git(&["add", "slice"]);
+        git(&["commit", "-m", "slice implementation"]);
+        git(&["switch", "promote/integration-2"]);
+        git(&[
+            "merge",
+            "--no-ff",
+            "-m",
+            "merge PR #3 (Refs STORY-3)",
+            "slice-work",
+        ]);
+        git(&["merge", "--no-ff", "-m", "merge main (STORY-2737)", "main"]);
+        let coverage = |title| {
+            crate::review_gates::auto_queue_coverage(
+                repo,
+                "promote/integration-2",
+                title,
+                "main",
+                &git(&["rev-parse", "promote/integration-2"]),
+            )
+            .unwrap()
+        };
+        let inferred = coverage("promotion");
+        assert_eq!(inferred.delivered, ["BUG-2"]);
+        assert_eq!(inferred.slice_refs, ["STORY-3"]);
+
+        let titled = coverage("promotion (BUG-2)");
+        assert_eq!(titled.delivered, ["BUG-2"]);
+        assert_eq!(titled.slice_refs, ["STORY-3"]);
+        assert_eq!(
+            crate::review_gates::review_story_links(&titled.delivered, &titled.slice_refs)
+                .map(|(id, kind)| (id.as_str(), kind))
+                .collect::<Vec<_>>(),
+            [("BUG-2", "implements"), ("STORY-3", "covers")]
+        );
+
+        let mixed =
+            coverage("promotion mentions BUG-99 (BUG-4 Refs STORY-3 STORY-4) [promotion 2]");
+        assert_eq!(mixed.delivered, ["BUG-4"]);
+        assert_eq!(mixed.slice_refs, ["STORY-3", "STORY-4"]);
+        assert_eq!(
+            crate::review_gates::review_story_links(&mixed.delivered, &mixed.slice_refs)
+                .map(|(id, kind)| (id.as_str(), kind))
+                .collect::<Vec<_>>(),
+            [
+                ("BUG-4", "implements"),
+                ("STORY-3", "covers"),
+                ("STORY-4", "covers")
+            ]
+        );
+        // Work landed by the prior promotion (BUG-1, Refs STORY-1) never
+        // re-enters coverage, whichever path the title takes.
+        for cov in [&inferred, &titled, &mixed] {
+            let all: Vec<_> = cov
+                .delivered
+                .iter()
+                .chain(&cov.slice_refs)
+                .chain(&cov.referenced)
+                .collect();
+            assert!(
+                !all.iter().any(|id| *id == "BUG-1" || *id == "STORY-1"),
+                "{all:?}"
+            );
+        }
+        let overlap = coverage("promotion (BUG-2 STORY-3)");
+        assert_eq!(overlap.delivered, ["BUG-2", "STORY-3"]);
+        assert!(overlap.slice_refs.is_empty());
+
+        // A promotion ref can advance after the forge observation. The
+        // pinned head still produces the original constituent set.
+        let branch = "promote/integration-2";
+        let head = git(&["rev-parse", branch]);
+        git(&[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "later local commit (BUG-99)",
+        ]);
+        assert_eq!(
+            promotion_merge_subjects(repo, "main", branch, &head).unwrap(),
+            ["merge PR #3 (Refs STORY-3)", "merge PR #2 (BUG-2)"]
+        );
+
+        // Equal trees cannot establish whether a no-op merge was promoted.
+        git(&["switch", "-c", "promote/ambiguous", &prior]);
+        git(&[
+            "merge",
+            "-s",
+            "ours",
+            "--no-ff",
+            "-m",
+            "merge PR #3 (BUG-3)",
+            "new-work",
+        ]);
+        let ambiguous = git(&["rev-parse", "HEAD"]);
+        assert!(
+            promotion_merge_subjects(repo, "main", "promote/ambiguous", &ambiguous)
+                .unwrap_err()
+                .to_string()
+                .contains("equal-tree")
+        );
+
+        // Simulate a train squash that includes concurrent main changes.
+        // Its tree is different, but the receipt still identifies the cut.
+        git(&["switch", "main"]);
+        std::fs::write(repo.join("train"), "concurrent").unwrap();
+        git(&["add", "train"]);
+        git(&[
+            "commit",
+            "--amend",
+            "-m",
+            "promotion 1 (#1)",
+            "-m",
+            &format!("Aida-Train-Member: #1 at {prior}"),
+        ]);
+        assert_eq!(coverage("promotion").delivered, ["BUG-2"]);
+        git(&["commit", "--amend", "-m", "promotion without a receipt"]);
+        let branch = "promote/integration-2";
+        let head = git(&["rev-parse", branch]);
+        assert!(promotion_merge_subjects(repo, "main", branch, &head).is_err());
+        assert!(crate::review_gates::auto_queue_coverage(
+            repo,
+            branch,
+            "promotion (BUG-2)",
+            "main",
+            &head
+        )
+        .is_err());
+        assert!(promotion_merge_subjects(repo, "missing", branch, &head).is_err());
+        assert!(promotion_merge_subjects(repo, "main", branch, &"0".repeat(head.len())).is_err());
+    }
+
+    // trace:BUG-2632 | ai:codex
+    #[test]
+    fn second_promotion_only_covers_new_constituents() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(repo)
+                .args(["-c", "user.name=test", "-c", "user.email=test@example.com"])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "{args:?}: {out:?}");
+        };
+        git(&["init", "-b", "main"]);
+        std::fs::write(repo.join("file"), "base").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-m", "base"]);
+        git(&["checkout", "-b", "promote/integration-1"]);
+        std::fs::write(repo.join("file"), "first").unwrap();
+        git(&["commit", "-am", "first (BUG-1)"]);
+        let first = crate::git_log_messages(repo, "main", "HEAD").unwrap();
+        assert_eq!(
+            crate::review_coverage_from_commits(&first).delivered,
+            ["BUG-1"]
+        );
+        git(&["checkout", "main"]);
+        git(&["merge", "--squash", "promote/integration-1"]);
+        git(&["commit", "-m", "promotion one (BUG-1)"]);
+        // Later main-only work must not hide the historical squash boundary.
+        std::fs::write(repo.join("main-only"), "unrelated").unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-m", "unrelated main work"]);
+        git(&[
+            "checkout",
+            "-b",
+            "promote/integration-2",
+            "promote/integration-1",
+        ]);
+        std::fs::write(repo.join("file"), "second").unwrap();
+        git(&["commit", "-am", "second (BUG-2)"]);
+        let messages = crate::git_log_messages(repo, "main", "HEAD").unwrap();
+        assert_eq!(
+            crate::review_coverage_from_commits(&messages).delivered,
+            ["BUG-2"]
+        );
+        let commits = crate::read_commits_in_range(repo, "main..HEAD").unwrap();
+        assert_eq!(commits.len(), 1);
+        assert_eq!(commits[0].1, "second (BUG-2)");
+        let implicit_head = crate::read_commits_in_range(repo, "main..").unwrap();
+        assert_eq!(implicit_head, commits);
+        git(&["checkout", "main"]);
+        let implicit_base = crate::read_commits_in_range(repo, "..promote/integration-2").unwrap();
+        assert_eq!(implicit_base, commits);
+        git(&["checkout", "promote/integration-2"]);
+        // Explicit new declarations with no tree change still belong to this PR.
+        git(&["commit", "--allow-empty", "-m", "new claim (BUG-3)"]);
+        let messages = crate::git_log_messages(repo, "main", "HEAD").unwrap();
+        assert_eq!(
+            crate::review_coverage_from_commits(&messages).delivered,
+            ["BUG-3", "BUG-2"]
+        );
+    }
 }

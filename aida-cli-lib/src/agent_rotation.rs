@@ -550,6 +550,10 @@ impl TurnMonitor {
         spawned_at: DateTime<Utc>,
         child_pid: u32,
         expected_session: Option<String>,
+        // The seat the relay mints for each generation, when it mints one:
+        // its grant's life is watched while the generation runs.
+        // trace:BUG-2585 | ai:claude
+        granted_seat: Option<String>,
     ) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let stopped = Arc::clone(&stop);
@@ -566,7 +570,18 @@ impl TurnMonitor {
             let Some(path) = turn_path(&root, &seat, &handle, generation) else {
                 return;
             };
+            // trace:BUG-2585 | ai:claude
+            let mut hold_announced = false;
+            let mut last_grant_check: Option<std::time::Instant> = None;
             while !stopped.load(Ordering::SeqCst) {
+                // Mail ahead of the relay grant's expiry, once a minute at most.
+                if let Some(granted) = granted_seat
+                    .as_deref()
+                    .filter(|_| last_grant_check.is_none_or(|at| at.elapsed().as_secs() >= 60))
+                {
+                    last_grant_check = Some(std::time::Instant::now());
+                    crate::relay_grant::warn_ahead(&root, &handle, granted, Utc::now());
+                }
                 if let Some(state) = read_turn(&path).filter(|state| {
                     state.notice >= spawned_at && state.boundary.is_some_and(|b| b > state.notice)
                 }) {
@@ -596,6 +611,26 @@ impl TurnMonitor {
                             )
                             .is_ok()
                             {
+                                // An expired relay grant cannot mint the next
+                                // generation: keep this session and say how
+                                // to renew, then look again.
+                                // trace:BUG-2585 | ai:claude
+                                if granted_seat.as_deref().is_some_and(|granted| {
+                                    crate::relay_grant::hold_before_end(
+                                        &root,
+                                        &handle,
+                                        granted,
+                                        &mut hold_announced,
+                                    )
+                                }) {
+                                    for _ in 0..100 {
+                                        if stopped.load(Ordering::SeqCst) {
+                                            return;
+                                        }
+                                        std::thread::sleep(std::time::Duration::from_millis(50));
+                                    }
+                                    continue;
+                                }
                                 eprintln!("rotation: fresh handoff at turn boundary; ending {handle} #{generation}");
                                 unsafe {
                                     libc::syscall(
@@ -794,10 +829,20 @@ pub(crate) struct RotationRun {
 }
 
 impl RotationRun {
+    #[cfg(test)]
+    pub(crate) fn bind(project_root: &Path, handle: &str) -> Result<Self> {
+        Self::bind_for_role(project_root, handle, None)
+    }
+
     /// Bind `handle` as a relay run owned by this process. The launch's own
     /// unbound reservation of `handle` is released first, so the run takes
     /// the label over.
-    pub(crate) fn bind(project_root: &Path, handle: &str) -> Result<Self> {
+    // trace:BUG-2638 | ai:codex
+    pub(crate) fn bind_for_role(
+        project_root: &Path,
+        handle: &str,
+        role: Option<&str>,
+    ) -> Result<Self> {
         use fs2::FileExt;
         // trace:BUG-2639 | ai:codex
         crate::agent_registry::maintain_allocation_records(project_root)?;
@@ -816,12 +861,14 @@ impl RotationRun {
         {
             crate::agent_handle::release_unbound(project_root, &own)?;
         }
-        let outcome = crate::relay_mail::bind(
+        let outcome = crate::relay_mail::bind_reusing(
             project_root,
             handle,
             pid,
             &lock_path,
             crate::relay_mail::PROTOCOL,
+            None,
+            role,
         )
         .with_context(|| format!("holding handle {handle} for rotation"))?;
         Ok(Self {

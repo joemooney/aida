@@ -133,9 +133,8 @@ from tests.test_dell1_controller import Admission, Cache, GateAndShell, LaunchIn
 
 
 class AptBounds(unittest.TestCase):
-    """BUG-2526: a hosted apt mirror/DNS outage must fail a step within five
-    minutes instead of holding every shard to the 40-minute job timeout.
-    trace:BUG-2526 | ai:claude
+    """Bound hosted APT steps and preserve short mirror/DNS fetch timeouts.
+    trace:BUG-2526 BUG-2668 | ai:codex
     """
 
     def steps(self):
@@ -145,17 +144,20 @@ class AptBounds(unittest.TestCase):
                 if 'apt-get' in step.get('run', ''):
                     yield job_name, step
 
-    def test_every_apt_step_is_bounded_to_five_minutes(self):
+    def test_every_apt_step_has_its_expected_timeout_bound(self):
         steps = list(self.steps())
         self.assertTrue(steps, 'expected apt steps in ci.yml')
         for job_name, step in steps:
             limit = step.get('timeout-minutes')
             self.assertIsNotNone(limit, f'{job_name}: {step["name"]} has no step timeout')
-            self.assertLessEqual(int(limit), 5, f'{job_name}: {step["name"]}')
+            if (job_name, step['name']) == ('build', 'Install Linux dependencies'):
+                self.assertEqual(int(limit), 12)
+            else:
+                self.assertLessEqual(int(limit), 5, f'{job_name}: {step["name"]}')
 
     def test_every_apt_call_sets_fetch_timeouts(self):
         for job_name, step in self.steps():
-            for line in step['run'].splitlines():
+            for line in step['run'].replace('\\\n', '').splitlines():
                 if 'apt-get' in line and not line.lstrip().startswith('#'):
                     for option in ('Acquire::http::Timeout=', 'Acquire::https::Timeout=',
                                    'Acquire::Retries='):

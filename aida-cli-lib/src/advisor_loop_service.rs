@@ -85,6 +85,11 @@ struct Service {
     checked_at: Option<DateTime<Utc>>,
     retry_after: DateTime<Utc>,
     last_exit: Option<i32>,
+    /// The live worker runs a superseded image; its exit is an orderly
+    /// promotion handoff, replaced without failure backoff.
+    // trace:BUG-2645 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    image_handoff: bool,
 }
 
 fn directory(root: &Path, create: bool) -> Result<Option<Directory>> {
@@ -177,6 +182,7 @@ pub(crate) fn rebind(root: &Path, deputy: &str, grant: &SeatGrant) -> Result<()>
             checked_at: None,
             retry_after: Utc::now(),
             last_exit: None,
+            image_handoff: false,
         },
     };
     write(&dir, &state)
@@ -195,6 +201,8 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 print_status("not-configured", None, &[], *json)?;
                 return Ok(());
             };
+            let started = state.worker.as_ref().and_then(|w| w.recorded_at);
+            let (report, degraded) = pass_health(&dir, started, Utc::now());
             let status = if let Some(status) = host_refusal(&state) {
                 status
             } else if state.binding.validate(&root).is_err() {
@@ -206,9 +214,22 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
             } else {
                 "waiting-for-supervisor"
             };
+            let status = pass_status(status, &degraded);
             let mut blockers = review_blockers(&dir)?;
             blockers.extend(retry_blockers(&root, &dir)?);
-            print_status(status, Some(&state), &blockers, *json)?;
+            let degraded = if status == "degraded" {
+                degraded
+            } else {
+                Vec::new()
+            };
+            print_status_with_pass(
+                status,
+                Some(&state),
+                &blockers,
+                report.as_ref(),
+                &degraded,
+                *json,
+            )?;
             Ok(())
         }
         AdvisorLoopsCommand::Rebind { deputy } => {
@@ -242,10 +263,31 @@ fn print_status(
     blockers: &[String],
     json: bool,
 ) -> Result<()> {
+    print_status_with_pass(status, state, blockers, None, &[], json)
+}
+
+// trace:STORY-2571 | ai:codex
+// trace:BUG-2674 | ai:claude
+fn print_status_with_pass(
+    status: &str,
+    state: Option<&Service>,
+    blockers: &[String],
+    pass: Option<&PassReport>,
+    degraded: &[String],
+    json: bool,
+) -> Result<()> {
     let root = forge::main_root(&std::env::current_dir()?)?;
     let failure = failure_state(&root)?;
+    let binary = binary_status(
+        state,
+        &crate::dev_build::default_live_dir()?.join("aida"),
+        crate::dev_build::binary_sha_label,
+    );
     let value = serde_json::json!({
         "service": NAME, "status": status,
+        "worker_binary_sha": binary["worker_binary_sha"],
+        "live_binary_sha": binary["live_binary_sha"],
+        "binary_stale": binary["binary_stale"],
         "consecutive_failures": failure.count, "alert": failure.alert,
         "deputy": state.map(|s| &s.deputy),
         "binding_issued_at": state.map(|s| s.binding.issued_at),
@@ -253,6 +295,8 @@ fn print_status(
         "last_exit": state.and_then(|s| s.last_exit),
         "retired_controllers": state.map(|s| s.retired_grants.len()).unwrap_or(0),
         "review_blockers": blockers,
+        "last_pass": pass,
+        "degraded_reasons": degraded,
         "recovery": "docs/cli/06-roles-sessions.md#review-watch-service-recovery",
     });
     if json || crate::output_format_is_json() {
@@ -274,11 +318,71 @@ fn print_status(
             );
         }
     } else {
+        println!("{}", binary_line(&value));
         println!("{NAME}: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}; consecutive failures {}; alert {}",
             value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]);
+        // trace:BUG-2674 | ai:claude
+        if let Some(pass) = pass {
+            println!(
+                "last pass: {}; {} open change(s); {} dispatched; {} not admitted; {} busy; {} refused",
+                pass.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                pass.changes,
+                pass.dispatched,
+                pass.unadmitted,
+                pass.busy,
+                pass.refused
+            );
+        }
+        for reason in degraded {
+            println!("degraded: {reason}");
+        }
     }
     Ok(())
 }
+
+// Read the kernel-held worker image, not the path that may have been
+// replaced. A missing live image or worker reports null, never "current".
+// trace:BUG-2645 | ai:codex
+fn binary_status(
+    state: Option<&Service>,
+    live: &Path,
+    sha: impl Fn(&Path) -> Option<String>,
+) -> serde_json::Value {
+    let worker_image = state
+        .and_then(|s| s.worker.as_ref())
+        .filter(|w| w.alive())
+        .map(|w| std::path::PathBuf::from(format!("/proc/{}/exe", w.pid)));
+    let stale = worker_image
+        .as_deref()
+        .and_then(|image| crate::launch::control::service_image_is_live(image, live).ok())
+        .map(|same| !same);
+    serde_json::json!({
+        "worker_binary_sha": worker_image.as_deref().and_then(&sha),
+        "live_binary_sha": sha(live),
+        "binary_stale": stale,
+    })
+}
+
+// trace:BUG-2645 | ai:claude
+fn binary_line(value: &serde_json::Value) -> String {
+    format!(
+        "binary: worker {}; live {}; stale {}",
+        value["worker_binary_sha"], value["live_binary_sha"], value["binary_stale"]
+    )
+}
+
+// A promotion is an orderly retirement, not a failed dispatch episode.
+// trace:BUG-2645 | ai:codex
+#[derive(Debug)]
+pub(super) struct ImageSuperseded;
+impl std::fmt::Display for ImageSuperseded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("advisor loop binary superseded by live promotion")
+    }
+}
+impl std::error::Error for ImageSuperseded {}
+
+thread_local! { static LIVE_IMAGE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) }; }
 
 thread_local! { static CONTROLLER: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) }; }
 
@@ -310,8 +414,34 @@ pub(super) fn check_controller_locked(root: &Path, dir: &Directory) -> Result<()
     CONTROLLER
         .with(|id| {
             let id = id.borrow();
-            let Some(id) = id.as_ref() else { return Ok(()) };
-            let state = read(dir)?.context("advisor loop service state disappeared")?;
+            let Some(id) = id.as_ref() else {
+                return Ok(());
+            };
+            // trace:BUG-2645 | ai:codex
+            let mut state = read(dir)?.context("advisor loop service state disappeared")?;
+            // Only a confirmed image mismatch retires the worker. An installation
+            // without a live image can run the current executable.
+            if LIVE_IMAGE.with(|enabled| enabled.get())
+                && crate::dev_build::default_live_dir().is_ok_and(|live| {
+                    crate::launch::control::service_image_is_live(
+                        Path::new("/proc/self/exe"),
+                        &live.join("aida"),
+                    )
+                    .is_ok_and(|same| !same)
+                })
+            {
+                // Only the recorded worker may classify its exit for the reaper.
+                anyhow::ensure!(
+                    state.child_grant.as_ref() == Some(id)
+                        && state.worker.as_ref() == Some(&Identity::current()?),
+                    "advisor loop controller receipt superseded"
+                );
+                if !state.image_handoff {
+                    state.image_handoff = true;
+                    write(dir, &state)?;
+                }
+                return Err(ImageSuperseded.into());
+            }
             anyhow::ensure!(
                 host_fresh(&state),
                 "advisor loop deputy authority ended or its heartbeat is stale"
@@ -364,11 +494,19 @@ fn worker(root: &Path) -> Result<()> {
         );
         std::thread::sleep(std::time::Duration::from_millis(50));
     }
+    LIVE_IMAGE.with(|enabled| enabled.set(true));
     CONTROLLER.with(|id| *id.borrow_mut() = Some(child.id));
-    if TRAIN {
-        return super::train::run(root);
+    let result = if TRAIN {
+        super::train::run(root)
+    } else {
+        run_with_program(&worker_review_watch_args(), root, None).map(|_| ())
+    };
+    LIVE_IMAGE.with(|enabled| enabled.set(false));
+    CONTROLLER.with(|id| *id.borrow_mut() = None);
+    match result {
+        Err(error) if error.is::<ImageSuperseded>() => Ok(()),
+        result => result,
     }
-    run_with_program(&worker_review_watch_args(), root, None).map(|_| ())
 }
 
 // Let the watcher resolve project configuration, including its default of two.
@@ -386,7 +524,7 @@ fn worker_review_watch_args() -> ReviewWatchArgs {
 }
 
 /// The operator-started deputy owns this thread. Controllers always execute
-/// the running AIDA image's fixed worker verb.
+/// the promoted live AIDA image's fixed worker verb.
 // trace:STORY-2571 | ai:codex
 pub(crate) struct Supervisor {
     host: HostAuthority,
@@ -479,6 +617,9 @@ fn host_fresh(state: &Service) -> bool {
 }
 
 fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) -> Result<()> {
+    // Obsolete-image detection and handoff run under the admission lock in
+    // tick_with_launcher, so production and fixture launchers share them.
+    // trace:BUG-2645 | ai:codex
     tick_with_launcher(root, deputy, host_valid, child, |root, parent, reuse| {
         if let Some(grant) = reuse {
             return Ok((
@@ -488,6 +629,53 @@ fn tick(root: &Path, deputy: &str, host_valid: bool, child: &mut Option<Child>) 
         }
         crate::launch::review_watch_controller(root, &parent.id, &parent.subject)
     })
+}
+
+// A missing or unreadable live image never retires a controller.
+// trace:BUG-2645 | ai:claude
+fn worker_image_obsolete(worker: &Identity) -> bool {
+    let Some(live) = live_image() else {
+        return false;
+    };
+    crate::launch::control::service_image_is_live(
+        Path::new(&format!("/proc/{}/exe", worker.pid)),
+        &live,
+    )
+    .is_ok_and(|same| !same)
+}
+
+#[cfg(not(test))]
+fn live_image() -> Option<PathBuf> {
+    crate::dev_build::default_live_dir()
+        .ok()
+        .map(|dir| dir.join("aida"))
+}
+
+// Tests opt in per thread, so a developer's or runner's installed live build
+// can never retire fixture controllers.
+// trace:BUG-2645 | ai:claude
+#[cfg(test)]
+thread_local! { static TEST_LIVE_IMAGE: std::cell::RefCell<Option<PathBuf>> = const { std::cell::RefCell::new(None) }; }
+#[cfg(test)]
+fn live_image() -> Option<PathBuf> {
+    TEST_LIVE_IMAGE.with(|image| image.borrow().clone())
+}
+
+/// Idle between passes in one-second slices, so a supervised controller sees
+/// a withdrawn heartbeat (promotion, rotation, stop) within one supervision
+/// cycle. Ordinary watchers only sleep: check_controller is a no-op for them.
+// trace:BUG-2645 | ai:claude
+pub(super) fn idle(root: &Path, seconds: u64) -> Result<()> {
+    for _ in 0..seconds {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        // A briefly busy admission lock is not a withdrawal; the next slice
+        // or the pass's own check enforces it.
+        match check_controller(root) {
+            Err(error) if !is_busy(&error) => return Err(error),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 // Keep the supervision/spawn boundary testable without running a CLI worker
@@ -503,6 +691,10 @@ fn tick_with_launcher(
     let Some(dir) = directory(root, false)? else {
         return Ok(());
     };
+    // Until the incident holder is identified and the approved holder receipt
+    // is implemented, contention must remain a reported service failure.
+    // WouldBlock alone does not establish a verified live controller.
+    // trace:BUG-2621 | ai:codex
     let _lock = dir.lock("admission.lock")?;
     let Some(mut state) = read(&dir)? else {
         return Ok(());
@@ -511,15 +703,6 @@ fn tick_with_launcher(
         return Ok(());
     }
     let before = serde_json::to_vec(&state)?;
-    state.host_active = host_valid;
-    if host_valid
-        && state
-            .checked_at
-            .is_none_or(|at| Utc::now() - at >= chrono::Duration::seconds(2))
-    {
-        state.host = Some(Identity::current()?);
-        state.checked_at = Some(Utc::now());
-    }
     let exited = if let Some(process) = child.as_mut() {
         // Capture the exit before dropping the reaped handle. Retain the
         // persisted identity and grant while reviews may still descend from it.
@@ -535,6 +718,30 @@ fn tick_with_launcher(
             matches!(worker.verdict(), aida_core::proc_identity::Verdict::Dead(_))
         })
     };
+    // A live worker on a superseded image loses the heartbeat, so it yields
+    // at its next idle check or admission boundary (an active train or review
+    // dispatch first finishes). Never signal it or its review descendants.
+    // Its exit is then replaced in the reaping tick, without failure backoff.
+    // trace:BUG-2645 | ai:claude
+    let obsolete = !exited
+        && state
+            .worker
+            .as_ref()
+            .filter(|worker| worker.alive())
+            .is_some_and(worker_image_obsolete);
+    if obsolete {
+        state.image_handoff = true;
+    }
+    let host_valid = host_valid && !obsolete;
+    state.host_active = host_valid;
+    if host_valid
+        && state
+            .checked_at
+            .is_none_or(|at| Utc::now() - at >= chrono::Duration::seconds(2))
+    {
+        state.host = Some(Identity::current()?);
+        state.checked_at = Some(Utc::now());
+    }
     // Restart and grant revocation are independent: supersede progress may
     // require a live controller. Unclaimed reservations can also hide
     // a dispatcher spawned before its identity was persisted. Neither may
@@ -547,14 +754,20 @@ fn tick_with_launcher(
             .as_ref()
             .and_then(|id| seat_authority::read_grant(id).ok())
             .is_some_and(|child| child.parent_grant_id.as_ref() != Some(&state.binding.grant));
-        if !rotated && state.last_exit != Some(0) {
+        // trace:BUG-2645 | ai:claude
+        let handoff = std::mem::take(&mut state.image_handoff);
+        if !rotated && !handoff && state.last_exit != Some(0) {
             record_failure(root, Some("controller exited before successful dispatch"))?;
         }
         if let Some(grant) = state.child_grant.take() {
             state.retired_grants.push(grant);
         }
         state.worker = None;
-        state.retry_after = Utc::now() + chrono::Duration::seconds(10);
+        state.retry_after = if handoff {
+            Utc::now()
+        } else {
+            Utc::now() + chrono::Duration::seconds(10)
+        };
     }
     // Persist retirement before cleanup or spawn, including across failures.
     if before != serde_json::to_vec(&state)? {
@@ -644,6 +857,7 @@ fn tick_with_launcher(
             // turn a fast-exiting worker into an ambiguous capture.
             *child = Some(process);
             state.worker = Some(Identity::child(child.as_ref().unwrap())?);
+            state.image_handoff = false; // trace:BUG-2645 | ai:claude
             write(&dir, &state)
         }
         Err(error) => {
@@ -770,6 +984,7 @@ fn reconcile_reviews(root: &Path, dir: &Directory) -> Result<()> {
             handle: dir.handle.try_clone()?,
         },
         repository: state.repository.clone(),
+        max_rounds: resolve_max_rounds(root)?,
         root: root.into(),
     };
     let mut state = store.load()?;
@@ -1011,6 +1226,58 @@ fn failure_escalation_threshold(root: &Path) -> Result<u32> {
 #[cfg(test)]
 mod loop_tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
+
+    // trace:BUG-2621 | ai:codex
+    #[test]
+    fn bug2621_busy_supervisor_tick_refuses_without_reading_or_launching() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        let lock = dir.lock("admission.lock").unwrap();
+        // Unexplained contention must refuse before inspecting service state.
+        dir.write(SERVICE, b"invalid receipt").unwrap();
+        let mut child = None;
+        let error = tick_with_launcher(temp.path(), "fixture", true, &mut child, |_, _, _| {
+            panic!("busy supervisor must not launch")
+        })
+        .unwrap_err();
+        assert!(format!("{error:#}").contains("review-watch lock busy: admission.lock"));
+        assert_eq!(
+            error.downcast_ref::<std::io::Error>().unwrap().kind(),
+            std::io::ErrorKind::WouldBlock
+        );
+        assert_eq!(dir.read(SERVICE).unwrap().unwrap(), b"invalid receipt");
+        // The rollback must preserve failure accounting and its diagnostic;
+        // contention cannot silently reset the episode or suppress its alert.
+        let reason = format!("{error:#}");
+        for count in 1..=3 {
+            record_failure(temp.path(), Some(&reason)).unwrap();
+            assert_eq!(failure_state(temp.path()).unwrap().count, count);
+        }
+        let alert = failure_state(temp.path()).unwrap().alert.unwrap();
+        assert!(alert.sent);
+        assert!(alert.message.body.contains("admission.lock"));
+        assert!(alert.message.body.contains("lock busy"));
+        drop(lock);
+        // A stale, unlocked lock file cannot hide a real receipt refusal.
+        let error = tick(temp.path(), "fixture", true, &mut child).unwrap_err();
+        assert!(format!("{error:#}").contains("invalid advisor loop service receipt"));
+    }
+
+    // trace:BUG-2621 | ai:codex
+    #[test]
+    fn bug2621_unsafe_admission_lock_remains_a_refusal() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        dir.file("admission.lock", true).unwrap();
+        std::fs::set_permissions(
+            dir.path().join("admission.lock"),
+            std::fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        let error = tick(temp.path(), "fixture", true, &mut None).unwrap_err();
+        assert!(format!("{error:#}").contains("unsafe review-watch file admission.lock"));
+    }
 
     // trace:BUG-2640 | ai:codex
     #[test]
@@ -1088,6 +1355,559 @@ mod loop_tests {
         .unwrap();
     }
 
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    fn bug2645_promotion_refuses_controller_admission() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        env.set_key("AIDA_DEV_LIVE_DIR", root);
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let child =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.child_grant = Some(child.id.clone());
+        write(&dir, &state).unwrap();
+        std::fs::write(root.join("aida"), "new image").unwrap();
+        CONTROLLER.with(|id| *id.borrow_mut() = Some(child.id.clone()));
+        LIVE_IMAGE.with(|enabled| enabled.set(true));
+        let stale = check_controller(root).unwrap_err();
+        assert!(
+            format!("{stale:#}").contains("controller receipt superseded"),
+            "{stale:#}"
+        );
+        assert!(!read(&dir).unwrap().unwrap().image_handoff);
+        state.worker = Some(Identity::current().unwrap());
+        write(&dir, &state).unwrap();
+        let result = check_controller(root);
+        LIVE_IMAGE.with(|enabled| enabled.set(false));
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+        let error = result.unwrap_err();
+        assert!(format!("{error:#}").contains("binary superseded"));
+        assert!(stops_watcher(&error));
+        assert!(error.is::<ImageSuperseded>());
+        assert!(seat_authority::read_grant(&child.id).is_ok());
+        let state = read(&dir).unwrap().unwrap();
+        assert!(state.image_handoff);
+        assert!(state.retired_grants.is_empty());
+    }
+
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    fn bug2645_supervisor_withdraws_obsolete_worker_heartbeat() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let _live = LiveImage::set(&root.join("aida"));
+        std::fs::write(root.join("aida"), "promoted image").unwrap();
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let grant =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let mut process = Command::new("/bin/sleep").arg("5").spawn().unwrap();
+        let worker = Identity::child(&process).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(worker.clone());
+        state.child_grant = Some(grant.id.clone());
+        write(&dir, &state).unwrap();
+        let result = tick(root, "default", true, &mut None);
+        let after = read(&dir).unwrap().unwrap();
+        // Reaping belongs to the owner; staleness must not kill a train.
+        let alive = process.try_wait().unwrap().is_none();
+        let _ = process.kill();
+        let _ = process.wait();
+        result.unwrap();
+        assert!(alive);
+        assert!(!after.host_active);
+        assert!(after.image_handoff);
+        assert_eq!(after.worker, Some(worker));
+        assert_eq!(after.child_grant, Some(grant.id.clone()));
+        assert!(seat_authority::read_grant(&grant.id).is_ok());
+    }
+
+    /// Point supervision at a fixture live image for this test thread only.
+    // trace:BUG-2645 | ai:claude
+    pub(super) struct LiveImage;
+    impl LiveImage {
+        pub(super) fn set(image: &Path) -> Self {
+            TEST_LIVE_IMAGE.with(|live| *live.borrow_mut() = Some(image.to_path_buf()));
+            Self
+        }
+    }
+    impl Drop for LiveImage {
+        fn drop(&mut self) {
+            TEST_LIVE_IMAGE.with(|live| *live.borrow_mut() = None);
+        }
+    }
+
+    /// Promote `source` to `dest` the way `aida dev build` does: a fresh inode
+    /// renamed over the live path.
+    // trace:BUG-2645 | ai:claude
+    #[cfg(target_os = "linux")]
+    pub(super) fn promote_image(source: &str, dest: &Path) {
+        use std::os::unix::fs::PermissionsExt;
+        let incoming = dest.with_extension("incoming");
+        std::fs::copy(source, &incoming).unwrap();
+        std::fs::set_permissions(&incoming, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::rename(&incoming, dest).unwrap();
+    }
+
+    /// A controller stand-in executed from `image` (a copied shell), so its
+    /// /proc/<pid>/exe is that image. Retries ETXTBSY from concurrent forks.
+    // trace:BUG-2645 | ai:claude
+    #[cfg(target_os = "linux")]
+    pub(super) fn image_command(image: &Path) -> Command {
+        let mut command = Command::new(image);
+        command.args(["-c", "while :; do sleep 0.1; done"]);
+        command
+    }
+    #[cfg(target_os = "linux")]
+    pub(super) fn spawn_retrying(command: &mut Command) -> Child {
+        loop {
+            match command.spawn() {
+                Err(error) if error.raw_os_error() == Some(libc::ETXTBSY) => {
+                    std::thread::sleep(std::time::Duration::from_millis(10))
+                }
+                result => return result.unwrap(),
+            }
+        }
+    }
+    #[cfg(target_os = "linux")]
+    pub(super) fn image_launcher(
+        image: PathBuf,
+    ) -> impl Fn(&Path, &SeatGrant, Option<&SeatGrant>) -> Result<(SeatGrant, Command)> {
+        move |root, parent, reuse| {
+            let grant = match reuse {
+                Some(grant) => grant.clone(),
+                None => {
+                    seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject)?
+                }
+            };
+            Ok((grant, image_command(&image)))
+        }
+    }
+    #[cfg(target_os = "linux")]
+    fn stop(controller: &mut Option<Child>) {
+        if let Some(process) = controller.as_mut() {
+            let _ = process.kill();
+            let _ = process.wait();
+        }
+    }
+
+    // This module is included by both fixed worker services.
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    fn bug2645_worker_checks_controller_without_live_dir() {
+        use std::io::{Read, Write};
+
+        const FIXTURE_GRANT: &str = "AIDA_TEST_BUG2645_FALLBACK_GRANT";
+        let environment = aida_core::exec_context::Environment::capture();
+        if let Ok(id) = environment.var(FIXTURE_GRANT) {
+            std::io::stdin().read_exact(&mut [0]).unwrap();
+            let root = std::env::current_dir().unwrap();
+            assert!(!crate::dev_build::default_live_dir().unwrap().exists());
+            CONTROLLER.with(|controller| *controller.borrow_mut() = Some(id.to_owned()));
+            LIVE_IMAGE.with(|enabled| enabled.set(true));
+            check_controller(&root).unwrap();
+            let dir = directory(&root, false).unwrap().unwrap();
+            let mut state = read(&dir).unwrap().unwrap();
+            assert!(!state.image_handoff);
+            state.host_active = false;
+            write(&dir, &state).unwrap();
+            let error = check_controller(&root).unwrap_err();
+            assert!(
+                format!("{error:#}").contains("heartbeat is stale"),
+                "{error:#}"
+            );
+            return;
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let live = root.join("missing-live");
+        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        env.set_key("AIDA_DEV_LIVE_DIR", &live);
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let grant =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let mut command = crate::launch::review_watch_controller_command(&grant).unwrap();
+        assert_eq!(
+            command.get_program(),
+            crate::aida_bin::current_executable_path()
+                .unwrap()
+                .as_os_str()
+        );
+        let thread = std::thread::current();
+        let mut slot = Some(
+            command
+                .args(["--exact", thread.name().unwrap()])
+                .current_dir(root)
+                .env(FIXTURE_GRANT, &grant.id)
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let reap = Reap(&mut slot);
+        let process = reap.0.as_mut().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(Identity::child(process).unwrap());
+        state.child_grant = Some(grant.id);
+        state.host = Some(Identity::current().unwrap());
+        state.host_active = true;
+        state.checked_at = Some(Utc::now());
+        write(&dir, &state).unwrap();
+        process.stdin.take().unwrap().write_all(b"go").unwrap();
+        assert!(process.wait().unwrap().success());
+    }
+
+    // Run the actual admission check in the recorded worker process, with
+    // the supervisor paused from promotion through orderly worker exit.
+    // trace:BUG-2645 | ai:codex
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn bug2645_worker_first_handoff_replaces_in_reaping_tick() {
+        use std::io::{Read, Write};
+
+        const FIXTURE_GRANT: &str = "AIDA_TEST_BUG2645_WORKER_GRANT";
+        let environment = aida_core::exec_context::Environment::capture();
+        if let Ok(id) = environment.var(FIXTURE_GRANT) {
+            std::io::stdin().read_exact(&mut [0]).unwrap();
+            let root = std::env::current_dir().unwrap();
+            CONTROLLER.with(|controller| *controller.borrow_mut() = Some(id.to_owned()));
+            LIVE_IMAGE.with(|enabled| enabled.set(true));
+            let result = if TRAIN {
+                check_controller(&root)
+            } else {
+                let store = Store::open(&root, "github:github.com/owner/repo").unwrap();
+                let change = forge::Change {
+                    id: 1,
+                    head: format!("{:040x}", 1),
+                    base: "main".into(),
+                    author: "writer".into(),
+                    gitlab: false,
+                    overlap: Some(false),
+                    conflict: None,
+                    behind: Some(0),
+                    head_branch: None,
+                };
+                super::super::watch_changes(&store, vec![change], |change| {
+                    let result =
+                        super::super::select_with_coverage(&store, &change, None, 2, || None)
+                            .map(|_| ());
+                    super::super::observe_dispatch_result(&root, result)
+                })
+                .map(|_| ())
+            };
+            assert!(result.unwrap_err().is::<ImageSuperseded>());
+            return;
+        }
+
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let live = root.join("aida");
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let grant =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        if !TRAIN {
+            for _ in 0..2 {
+                record_failure(root, Some("prior failure")).unwrap();
+            }
+        }
+        let failures = dir.read("failures.json").unwrap();
+
+        let thread = std::thread::current();
+        let mut slot = Some(
+            Command::new("/proc/self/exe")
+                .args(["--exact", thread.name().unwrap()])
+                .current_dir(root)
+                .env(FIXTURE_GRANT, &grant.id)
+                .env("AIDA_DEV_LIVE_DIR", root)
+                .stdin(Stdio::piped())
+                .spawn()
+                .unwrap(),
+        );
+        let reap = Reap(&mut slot);
+        let controller = &mut *reap.0;
+        let process = controller.as_mut().unwrap();
+        let old_worker = Identity::child(process).unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(old_worker.clone());
+        state.child_grant = Some(grant.id);
+        write(&dir, &state).unwrap();
+        let old_image = PathBuf::from(format!("/proc/{}/exe", old_worker.pid));
+        std::os::unix::fs::symlink(&old_image, &live).unwrap();
+        assert!(crate::launch::control::service_image_is_live(&old_image, &live).unwrap());
+        promote_image("/bin/sh", &live);
+        process.stdin.take().unwrap().write_all(b"go").unwrap();
+        assert!(process.wait().unwrap().success());
+        assert!(read(&dir).unwrap().unwrap().image_handoff);
+        assert_eq!(dir.read("failures.json").unwrap(), failures);
+
+        tick_with_launcher(root, "default", true, controller, image_launcher(live)).unwrap();
+        let state = read(&dir).unwrap().unwrap();
+        assert_eq!(state.last_exit, Some(0));
+        assert_ne!(
+            state.worker.expect("replacement launched").pid,
+            old_worker.pid
+        );
+        assert!(!state.image_handoff);
+        assert!(state.retry_after <= Utc::now());
+        assert_eq!(dir.read("failures.json").unwrap(), failures);
+    }
+
+    /// Kill a fixture controller even when an assertion fails first.
+    #[cfg(target_os = "linux")]
+    struct Reap<'a>(&'a mut Option<Child>);
+    #[cfg(target_os = "linux")]
+    impl Drop for Reap<'_> {
+        fn drop(&mut self) {
+            stop(self.0);
+        }
+    }
+
+    // Follow a promotion end to end for each fixed service: detection keeps
+    // the controller and its descendants' authority intact, the controller's
+    // exit is an orderly handoff, and the reaping tick launches the
+    // replacement from the promoted image with no failure backoff.
+    // trace:BUG-2645 | ai:claude
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn bug2645_promotion_handoff_replaces_controller_in_reaping_tick() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let _live = LiveImage::set(&root.join("aida"));
+        let live = root.join("aida");
+        promote_image("/bin/sh", &live);
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let launch = image_launcher(live.clone());
+        let mut slot = None;
+        let reap = Reap(&mut slot);
+        let controller = &mut *reap.0;
+        tick_with_launcher(root, "default", true, controller, &launch).unwrap();
+        let first = read(&dir).unwrap().unwrap();
+        let old_worker = first.worker.clone().expect("controller launched");
+        let old_grant = first.child_grant.clone().unwrap();
+        let exe = |pid: u32| PathBuf::from(format!("/proc/{pid}/exe"));
+        assert!(
+            crate::launch::control::service_image_is_live(&exe(old_worker.pid), &live).unwrap()
+        );
+        let reviewer = seat_authority::issue_child_from(
+            seat_authority::read_grant(&old_grant).unwrap(),
+            "reviewer",
+            "surviving-reviewer",
+            false,
+        )
+        .unwrap();
+
+        promote_image("/bin/sh", &live);
+        tick_with_launcher(root, "default", true, controller, |_, _, _| {
+            panic!("must not spawn over the live obsolete controller")
+        })
+        .unwrap();
+        let handoff = read(&dir).unwrap().unwrap();
+        assert!(handoff.image_handoff);
+        assert!(!handoff.host_active, "heartbeat withdrawn");
+        assert_eq!(handoff.worker.as_ref(), Some(&old_worker));
+        assert_eq!(handoff.child_grant.as_ref(), Some(&old_grant));
+        assert!(controller.as_mut().unwrap().try_wait().unwrap().is_none());
+        assert!(seat_authority::read_grant(&old_grant)
+            .unwrap()
+            .revoked_at
+            .is_none());
+        assert!(seat_authority::read_grant(&reviewer.id)
+            .unwrap()
+            .revoked_at
+            .is_none());
+
+        // The controller yields at its boundary (exit status is irrelevant to
+        // an orderly handoff). One supervision tick reaps and replaces it.
+        stop(controller);
+        tick_with_launcher(root, "default", true, controller, &launch).unwrap();
+        let after = read(&dir).unwrap().unwrap();
+        {
+            let new_worker = after.worker.clone().expect("replacement launched");
+            assert_ne!(new_worker.pid, old_worker.pid);
+            assert!(after.retry_after <= Utc::now());
+            assert!(!after.image_handoff);
+            assert!(after.host_active);
+            assert_eq!(failure_state(root).unwrap().count, 0);
+            assert!(
+                crate::launch::control::service_image_is_live(&exe(new_worker.pid), &live).unwrap()
+            );
+            let new_grant =
+                seat_authority::read_grant(after.child_grant.as_ref().unwrap()).unwrap();
+            assert_ne!(new_grant.id, old_grant);
+            assert_eq!(new_grant.parent_grant_id.as_ref(), Some(&parent.id));
+            // With no unresolved review descendants the retired controller
+            // authority is released; retention with blockers is covered by
+            // the review service's handoff regression.
+            assert!(after.retired_grants.is_empty());
+        }
+        assert!(controller.is_some());
+    }
+
+    // An idle controller must notice a withdrawn heartbeat within one
+    // supervision cycle rather than after a full discovery interval.
+    // trace:BUG-2645 | ai:claude
+    #[test]
+    fn bug2645_idle_controller_yields_within_one_supervision_cycle() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let child =
+            seat_authority::issue_review_watch_child(root, &parent.id, &parent.subject).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.child_grant = Some(child.id.clone());
+        state.worker = Some(Identity::current().unwrap());
+        state.host = Some(Identity::current().unwrap());
+        state.checked_at = Some(Utc::now());
+        state.host_active = false;
+        write(&dir, &state).unwrap();
+        env.set_key(seat_authority::GRANT_ENV, &child.id);
+        env.set_key("AIDA_USER", &child.subject);
+        env.set_key("AIDA_AGENT_NAME", &child.subject);
+        CONTROLLER.with(|id| *id.borrow_mut() = Some(child.id.clone()));
+        let started = std::time::Instant::now();
+        let result = idle(root, 30);
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+        assert!(result.is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(3));
+        // Ordinary watchers keep plain interval sleeps.
+        assert!(idle(root, 0).is_ok());
+    }
+
+    // Status reports the kernel-held worker image against the live image for
+    // both services: matching, promoted, deleted, and unavailable.
+    // trace:BUG-2645 | ai:claude
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn bug2645_status_reports_worker_and_live_binary() {
+        use sha2::Digest;
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let sha = |path: &Path| {
+            std::fs::read(path)
+                .ok()
+                .map(|bytes| format!("{:x}", sha2::Sha256::digest(bytes))[..12].to_string())
+        };
+        let digest = |path: &str| sha(Path::new(path)).unwrap();
+        let live = root.join("aida");
+        let image = root.join("worker-image");
+
+        // No worker: worker fields are null even with a live image.
+        promote_image("/bin/sh", &live);
+        let state = read(&dir).unwrap().unwrap();
+        let value = binary_status(Some(&state), &live, sha);
+        assert_eq!(value["worker_binary_sha"], serde_json::Value::Null);
+        assert_eq!(value["live_binary_sha"], digest("/bin/sh"));
+        assert_eq!(value["binary_stale"], serde_json::Value::Null);
+        assert_eq!(
+            binary_line(&value),
+            format!(
+                "binary: worker null; live \"{}\"; stale null",
+                digest("/bin/sh")
+            )
+        );
+        assert_eq!(
+            binary_status(None, &live, sha)["worker_binary_sha"],
+            serde_json::Value::Null
+        );
+
+        // Matching: the worker runs the live inode.
+        std::fs::hard_link(&live, &image).unwrap();
+        let mut slot = Some(spawn_retrying(&mut image_command(&image)));
+        let reap = Reap(&mut slot);
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(Identity::child(reap.0.as_ref().unwrap()).unwrap());
+        write(&dir, &state).unwrap();
+        {
+            let value = binary_status(Some(&state), &live, sha);
+            assert_eq!(value["worker_binary_sha"], digest("/bin/sh"));
+            assert_eq!(value["live_binary_sha"], digest("/bin/sh"));
+            assert_eq!(value["binary_stale"], false);
+            assert!(binary_line(&value).ends_with("stale false"));
+
+            // Promoted: a different live image; the worker keeps its own.
+            promote_image("/bin/true", &live);
+            let value = binary_status(Some(&state), &live, sha);
+            assert_eq!(value["worker_binary_sha"], digest("/bin/sh"));
+            assert_eq!(value["live_binary_sha"], digest("/bin/true"));
+            assert_eq!(value["binary_stale"], true);
+            assert_eq!(
+                binary_line(&value),
+                format!(
+                    "binary: worker \"{}\"; live \"{}\"; stale true",
+                    digest("/bin/sh"),
+                    digest("/bin/true")
+                )
+            );
+
+            // Deleted worker image: still read through the kernel-held link.
+            std::fs::remove_file(&image).unwrap();
+            let value = binary_status(Some(&state), &live, sha);
+            assert_eq!(value["worker_binary_sha"], digest("/bin/sh"));
+            assert_eq!(value["binary_stale"], true);
+
+            // Live image unavailable: never reported as current.
+            std::fs::remove_file(&live).unwrap();
+            let value = binary_status(Some(&state), &live, sha);
+            assert_eq!(value["live_binary_sha"], serde_json::Value::Null);
+            assert_eq!(value["binary_stale"], serde_json::Value::Null);
+            assert_eq!(value["worker_binary_sha"], digest("/bin/sh"));
+        }
+        drop(reap);
+        // Exited worker: no image to report.
+        let value = binary_status(Some(&state), &live, sha);
+        assert_eq!(value["worker_binary_sha"], serde_json::Value::Null);
+        assert_eq!(value["binary_stale"], serde_json::Value::Null);
+    }
+
     // trace:BUG-2644 | ai:codex
     #[test]
     fn bug2644_supervised_watcher_honors_project_concurrency() {
@@ -1113,6 +1933,412 @@ mod loop_tests {
             resolve_max_concurrent(root, args.max_concurrent).unwrap(),
             2
         );
+    }
+
+    // A change refused mid-pass (here one that closed after discovery) is
+    // recorded and skipped; the open change after it is admitted in the same
+    // pass, and status then reports the running worker as degraded, naming it.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_refused_change_never_blocks_the_next_and_degrades_status() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        let change = |id: u64| forge::Change {
+            id,
+            head: format!("{id:040x}"),
+            base: "main".into(),
+            author: "writer".into(),
+            gitlab: false,
+            overlap: Some(false),
+            conflict: None,
+            behind: Some(0),
+            head_branch: None,
+        };
+        let mut admitted = Vec::new();
+        let changes = vec![change(1), change(3), change(2)];
+        let watched = super::super::watch_changes(&store, changes, |c| match c.id {
+            1 => anyhow::bail!("change is closed or draft; no review started"),
+            3 => Err(std::io::Error::from(std::io::ErrorKind::WouldBlock).into()),
+            _ => {
+                let action = super::super::select(&store, &c, None, 2)?;
+                assert!(matches!(action, super::super::Action::Dispatch(_)));
+                admitted.push(c.key());
+                Ok(())
+            }
+        })
+        .unwrap();
+        assert_eq!(admitted, ["PR-2"]);
+        assert_eq!(watched.busy, 1);
+        assert_eq!(watched.refused.len(), 1);
+        assert!(watched.refused[0].starts_with("PR-1: refused: change is closed"));
+        let counts = PassCounts {
+            changes: 3,
+            dispatched: 1,
+            unadmitted: Vec::new(),
+            busy: watched.busy,
+        };
+
+        // Without a controller (a manual watcher) nothing is recorded.
+        assert!(controller_pass_report(root, &counts, &watched.refused)
+            .unwrap()
+            .is_none());
+        let dir = directory(root, true).unwrap().unwrap();
+        assert!(pass_report(&dir).unwrap().is_none());
+
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        controller_pass_report(root, &counts, &watched.refused).unwrap();
+        let report = pass_report(&dir);
+        let pass = report.clone().unwrap().unwrap();
+        assert_eq!(
+            (pass.changes, pass.dispatched, pass.busy, pass.refused),
+            (3, 1, 1, 1)
+        );
+        // It dispatched, so it is not part of a stuck run.
+        assert_eq!(pass.stuck_since, None);
+        let degraded = pass_degradation(&report, Some(pass.at), Utc::now());
+        assert_eq!(degraded.len(), 1);
+        assert!(degraded[0].contains("PR-1"), "{degraded:?}");
+        assert_eq!(pass_status("running", &degraded), "degraded");
+        // Only a live worker is downgraded; other states keep their meaning.
+        assert_eq!(
+            pass_status("blocked-authority", &degraded),
+            "blocked-authority"
+        );
+
+        // A clean pass restores health.
+        let clean = PassCounts {
+            changes: 1,
+            ..Default::default()
+        };
+        controller_pass_report(root, &clean, &[]).unwrap();
+        let report = pass_report(&dir);
+        assert!(pass_degradation(&report, None, Utc::now()).is_empty());
+        assert_eq!(pass_status("running", &[]), "running");
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+    }
+
+    // Every pass, quiet or not, writes its own timestamped service.log line
+    // with the dispatch count. trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_every_quiet_pass_logs_its_dispatch_count() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let quiet = PassCounts {
+            changes: 10,
+            ..Default::default()
+        };
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        let lines: Vec<String> = (0..3)
+            .map(|_| controller_pass_report(root, &quiet, &[]).unwrap().unwrap())
+            .collect();
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+        for line in &lines {
+            let (at, rest) = line.split_once(' ').unwrap();
+            assert!(DateTime::parse_from_rfc3339(at).is_ok(), "{line}");
+            assert!(
+                rest.contains("pass: 10 open change(s), 0 dispatched"),
+                "{line}"
+            );
+        }
+    }
+
+    // More refusals than the diagnostic sample keeps: the total survives and
+    // the omission is named. trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_refusal_total_survives_the_capped_sample() {
+        let errors: Vec<String> = (1..=20).map(|n| format!("PR-{n}: refused: x")).collect();
+        let report = next_pass_report(
+            None,
+            &PassCounts {
+                changes: 20,
+                ..Default::default()
+            },
+            &errors,
+            Utc::now(),
+        );
+        assert_eq!(report.refused, 20);
+        assert_eq!(report.errors.len(), PASS_REPORT_ERRORS);
+        assert!(pass_log_line(&report).ends_with("20 refused"));
+        let degraded = pass_degradation(&Ok(Some(report)), None, Utc::now());
+        assert!(
+            degraded
+                .iter()
+                .any(|r| r.contains("4 more refusal(s) not shown (20 in total)")),
+            "{degraded:?}"
+        );
+    }
+
+    // Fresh passes that keep finding eligible work and dispatch nothing are a
+    // stall even though each pass completes; capacity waits and settled heads
+    // are not eligible work, and one dispatch ends the run.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_repeated_zero_dispatch_passes_with_eligible_work_degrade() {
+        let start = Utc::now() - chrono::Duration::minutes(PASS_STALE_MINUTES + 5);
+        let blocked = PassCounts {
+            changes: 10,
+            busy: 2,
+            ..Default::default()
+        };
+        // One pass every ten seconds, each fresh and error-free.
+        let mut report: Option<PassReport> = None;
+        let mut at = start;
+        while at < Utc::now() {
+            report = Some(next_pass_report(report.as_ref(), &blocked, &[], at));
+            at += chrono::Duration::seconds(10);
+        }
+        let report = report.unwrap();
+        assert_eq!(report.stuck_since, Some(start));
+        let now = report.at;
+        let degraded = pass_degradation(&Ok(Some(report.clone())), Some(start), now);
+        assert_eq!(degraded.len(), 1, "{degraded:?}");
+        assert!(
+            degraded[0].starts_with("idle ") && degraded[0].contains("min with eligible work"),
+            "{degraded:?}"
+        );
+        assert_eq!(pass_status("running", &degraded), "degraded");
+        // Within the threshold the same run is not yet degraded.
+        let young = next_pass_report(None, &blocked, &[], now);
+        assert!(pass_degradation(&Ok(Some(young)), Some(start), now).is_empty());
+
+        // A pass that waits on capacity or finds every head settled has no
+        // eligible work, and ends the run; so does a pass that dispatches.
+        let waiting = PassCounts {
+            changes: 10,
+            ..Default::default()
+        };
+        let next = next_pass_report(Some(&report), &waiting, &[], now);
+        assert_eq!(next.stuck_since, None);
+        assert!(pass_degradation(&Ok(Some(next)), Some(start), now).is_empty());
+        let progressed = PassCounts {
+            dispatched: 1,
+            ..blocked.clone()
+        };
+        let next = next_pass_report(Some(&report), &progressed, &[], now);
+        assert_eq!(next.stuck_since, None);
+    }
+
+    // A live worker with no valid report of its own is degraded once its
+    // start deadline passes; a fresh one gets a grace period. A predecessor's
+    // report does not vouch for it, and an unreadable report is surfaced.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_worker_without_a_pass_report_degrades_after_its_grace() {
+        let now = Utc::now();
+        let old = now - chrono::Duration::minutes(PASS_STALE_MINUTES + 5);
+        let fresh = now - chrono::Duration::minutes(1);
+        let degraded = pass_degradation(&Ok(None), Some(old), now);
+        assert_eq!(degraded.len(), 1, "{degraded:?}");
+        assert!(
+            degraded[0].starts_with("no discovery pass since the worker started"),
+            "{degraded:?}"
+        );
+        assert_eq!(pass_status("running", &degraded), "degraded");
+        assert!(pass_degradation(&Ok(None), Some(fresh), now).is_empty());
+        assert_eq!(pass_degradation(&Ok(None), None, now).len(), 1);
+
+        // A clean report from before this worker started does not count.
+        let predecessor = next_pass_report(None, &PassCounts::default(), &[], old);
+        let report = Ok(Some(predecessor));
+        assert!(pass_degradation(&report, Some(fresh), now).is_empty());
+        let started = old + chrono::Duration::seconds(1);
+        let degraded = pass_degradation(&report, Some(started), now);
+        assert!(
+            degraded[0].starts_with("no discovery pass since the worker started"),
+            "{degraded:?}"
+        );
+
+        // A stalled worker whose own last pass is old is degraded too.
+        let degraded = pass_degradation(&report, Some(old), now);
+        assert!(
+            degraded
+                .iter()
+                .any(|r| r.starts_with("no discovery pass for")),
+            "{degraded:?}"
+        );
+
+        // Unreadable or malformed evidence is a reason, not silence.
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        dir.write(PASS_REPORT, b"{not json").unwrap();
+        let report = pass_report(&dir);
+        assert!(report.is_err());
+        let degraded = pass_degradation(&report, Some(fresh), now);
+        assert!(degraded[0].contains("unreadable"), "{degraded:?}");
+    }
+
+    // The admission hub refuses a head once; reserve_dispatch then persists
+    // RemoteHeld, and every later pass reaches the head through
+    // probe_unneeded. Each of those passes must still report the head as
+    // unadmitted, keep its first-seen time, and, once the hold outlasts a
+    // review, degrade status naming the PR and cause. A recorded review or a
+    // carried approval settles it.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_remote_hold_stays_unadmitted_across_passes_and_degrades() {
+        use super::super::{probe_unneeded, probe_unneeded_with_coverage, skipped_admission};
+        let temp = tempfile::tempdir().unwrap();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        let change = forge::Change {
+            id: 3793,
+            head: format!("{:040x}", 7),
+            base: "main".into(),
+            author: "writer".into(),
+            gitlab: false,
+            overlap: Some(false),
+            conflict: None,
+            behind: Some(0),
+            head_branch: None,
+        };
+        let super::super::Action::Dispatch(attempt) =
+            super::super::select(&store, &change, None, 2).unwrap()
+        else {
+            panic!("an unreviewed head is dispatched");
+        };
+        // What reserve_dispatch records when the hub refuses the claim.
+        store
+            .transaction(&change.key(), |state| {
+                super::super::attempt_mut(state, &change.key(), &attempt.token)
+                    .unwrap()
+                    .phase = super::super::Phase::RemoteHeld;
+                Ok(())
+            })
+            .unwrap();
+
+        let start = Utc::now() - chrono::Duration::minutes(HELD_STALE_MINUTES + 5);
+        let mut report: Option<PassReport> = None;
+        let mut at = start;
+        while at < Utc::now() {
+            // The production selection each pass runs for this head.
+            let reason = probe_unneeded(&store, &change).unwrap().unwrap();
+            let super::super::Admission::Unadmitted(cause) = skipped_admission(&reason) else {
+                panic!("an unresolved remote hold is not settled: {reason}");
+            };
+            let counts = PassCounts {
+                changes: 1,
+                unadmitted: vec![Unadmitted {
+                    key: change.key(),
+                    head: change.head.clone(),
+                    cause,
+                }],
+                ..Default::default()
+            };
+            report = Some(next_pass_report(report.as_ref(), &counts, &[], at));
+            at += chrono::Duration::minutes(1);
+        }
+        let report = report.unwrap();
+        assert_eq!(report.unadmitted, 1);
+        assert_eq!(report.held.len(), 1);
+        assert_eq!(report.held[0].since, start);
+        let now = report.at;
+        let degraded = pass_degradation(&Ok(Some(report.clone())), Some(start), now);
+        assert_eq!(degraded.len(), 1, "{degraded:?}");
+        assert!(
+            degraded[0].starts_with("PR-3793 head 000000000000 unadmitted for")
+                && degraded[0].contains("held at the admission hub"),
+            "{degraded:?}"
+        );
+        assert_eq!(pass_status("running", &degraded), "degraded");
+
+        // Within the grace a hold may be a remote review in progress.
+        let young = next_pass_report(
+            None,
+            &PassCounts {
+                unadmitted: report
+                    .held
+                    .iter()
+                    .map(|h| Unadmitted {
+                        key: h.key.clone(),
+                        head: h.head.clone(),
+                        cause: h.cause.clone(),
+                    })
+                    .collect(),
+                ..Default::default()
+            },
+            &[],
+            now,
+        );
+        assert!(pass_degradation(&Ok(Some(young)), Some(start), now).is_empty());
+
+        // A new head for the change starts its own hold.
+        let pushed = PassCounts {
+            unadmitted: vec![Unadmitted {
+                key: change.key(),
+                head: format!("{:040x}", 8),
+                cause: "held".into(),
+            }],
+            ..Default::default()
+        };
+        assert_eq!(
+            next_pass_report(Some(&report), &pushed, &[], now).held[0].since,
+            now
+        );
+
+        // Coverage settles the same RemoteHeld head; it then drops out.
+        let covered = probe_unneeded_with_coverage(&store, &change, || {
+            Some("carried approval covers this head".into())
+        })
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            skipped_admission(&covered),
+            super::super::Admission::Settled
+        );
+        let settled = next_pass_report(Some(&report), &PassCounts::default(), &[], now);
+        assert!(settled.held.is_empty());
+        assert!(pass_degradation(&Ok(Some(settled)), Some(start), now).is_empty());
+    }
+
+    // The auto-train worker records no discovery passes; a long-lived healthy
+    // one must not be degraded for lacking them. The review watcher is.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_long_lived_worker_pass_health_is_review_watch_only() {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        let now = Utc::now();
+        let started = now - chrono::Duration::hours(6);
+        let (report, degraded) = pass_health(&dir, Some(started), now);
+        assert!(report.is_none());
+        if TRAIN {
+            assert!(degraded.is_empty(), "{degraded:?}");
+            assert_eq!(pass_status("running", &degraded), "running");
+        } else {
+            assert!(
+                degraded[0].starts_with("no discovery pass since the worker started"),
+                "{degraded:?}"
+            );
+        }
+    }
+
+    // A whole-watcher stop names itself, not a refusal of the change it hit.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_watcher_stop_is_not_reported_as_one_change_refusal() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        let change = forge::Change {
+            id: 3793,
+            head: format!("{:040x}", 1),
+            base: "main".into(),
+            author: "writer".into(),
+            gitlab: false,
+            overlap: Some(false),
+            conflict: None,
+            behind: Some(0),
+            head_branch: None,
+        };
+        let error = super::super::watch_changes(&store, vec![change], |_| {
+            Err(anyhow::anyhow!("advisor loop controller binding superseded").context(GlobalState))
+        })
+        .unwrap_err();
+        let text = format!("{error:#}");
+        assert!(
+            text.contains("review-watch pass stopped while processing PR-3793"),
+            "{text}"
+        );
+        assert!(!text.contains("review watch refused"), "{text}");
     }
 
     // trace:STORY-2691 | ai:codex
@@ -1568,6 +2794,280 @@ mod loop_tests {
         })
         .unwrap();
         assert!(seat_authority::read_grant(&child.id).is_ok());
+    }
+}
+
+/// What one review-watch pass did with the open changes it considered.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct PassCounts {
+    pub(super) changes: usize,
+    pub(super) dispatched: usize,
+    /// Heads local state found eligible that the admission hub holds for
+    /// another node, with no recorded verdict yet.
+    pub(super) unadmitted: Vec<Unadmitted>,
+    /// Changes that found watcher admission busy.
+    pub(super) busy: usize,
+}
+
+/// One eligible head a pass could not admit, and why.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, PartialEq)]
+pub(super) struct Unadmitted {
+    pub(super) key: String,
+    pub(super) head: String,
+    pub(super) cause: String,
+}
+
+/// An unadmitted head as the pass report keeps it: `since` is the first pass
+/// that found this exact head held, carried while every later pass still
+/// does, so a hold that never resolves ages instead of resetting.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct Held {
+    key: String,
+    head: String,
+    cause: String,
+    since: DateTime<Utc>,
+}
+
+/// The controller's latest completed (or stopped) discovery pass. Status uses
+/// it to report a running worker as degraded rather than healthy.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PassReport {
+    at: DateTime<Utc>,
+    changes: usize,
+    dispatched: usize,
+    #[serde(default)]
+    unadmitted: usize,
+    #[serde(default)]
+    busy: usize,
+    /// Every refusal or stop in the pass; `errors` keeps a bounded sample.
+    #[serde(default)]
+    refused: usize,
+    /// Start of the current run of passes that left eligible work refused,
+    /// busy or stopped and dispatched nothing. A pass that dispatches, or
+    /// finds nothing eligible, ends the run; a capacity wait or a settled
+    /// head is not eligible work. A remote hold ages separately in `held`,
+    /// since another node may be reviewing that head.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stuck_since: Option<DateTime<Utc>>,
+    /// Every head this pass found held at the admission hub, with when it
+    /// was first found held.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    held: Vec<Held>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    errors: Vec<String>,
+}
+const PASS_REPORT: &str = "last-pass.json";
+const PASS_REPORT_ERRORS: usize = 16;
+// The worker polls every ten seconds; this long without a pass, or with
+// eligible work left unadmitted and nothing dispatched, is a stall.
+const PASS_STALE_MINUTES: i64 = 15;
+// A head held for another node with no verdict this long is lost work, not a
+// remote review in progress. Longer than a review normally takes.
+// trace:BUG-2674 | ai:claude
+const HELD_STALE_MINUTES: i64 = 60;
+
+// trace:BUG-2674 | ai:claude
+fn next_pass_report(
+    previous: Option<&PassReport>,
+    counts: &PassCounts,
+    errors: &[String],
+    now: DateTime<Utc>,
+) -> PassReport {
+    let stuck = counts.busy + errors.len() > 0;
+    let stuck_since = if counts.dispatched > 0 || !stuck {
+        None
+    } else {
+        Some(previous.and_then(|p| p.stuck_since).unwrap_or(now))
+    };
+    // A held head keeps its first-seen time only while the same head stays
+    // held; a new head, or a pass that no longer finds it held, restarts it.
+    let held = counts
+        .unadmitted
+        .iter()
+        .map(|u| Held {
+            key: u.key.clone(),
+            head: u.head.clone(),
+            cause: bounded_diagnostic(&u.cause),
+            since: previous
+                .and_then(|p| p.held.iter().find(|h| h.key == u.key && h.head == u.head))
+                .map_or(now, |h| h.since),
+        })
+        .collect();
+    PassReport {
+        at: now,
+        changes: counts.changes,
+        dispatched: counts.dispatched,
+        unadmitted: counts.unadmitted.len(),
+        busy: counts.busy,
+        refused: errors.len(),
+        stuck_since,
+        held,
+        errors: errors
+            .iter()
+            .take(PASS_REPORT_ERRORS)
+            .map(|e| bounded_diagnostic(e))
+            .collect(),
+    }
+}
+
+/// The one bounded `service.log` line every pass writes.
+// trace:BUG-2674 | ai:claude
+fn pass_log_line(report: &PassReport) -> String {
+    format!(
+        "{} {NAME} pass: {} open change(s), {} dispatched, {} not admitted, {} busy, {} refused",
+        report.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        report.changes,
+        report.dispatched,
+        report.unadmitted,
+        report.busy,
+        report.refused
+    )
+}
+
+/// Records a controller pass: one timestamped `service.log` line (stderr is
+/// the service log) and `last-pass.json`. Returns the logged line; a manual
+/// watcher (no controller) records nothing.
+// trace:BUG-2674 | ai:claude
+pub(super) fn controller_pass_report(
+    root: &Path,
+    counts: &PassCounts,
+    errors: &[String],
+) -> Result<Option<String>> {
+    if CONTROLLER.with(|id| id.borrow().is_none()) {
+        return Ok(None);
+    }
+    let dir = directory(root, true)?.context("service directory missing")?;
+    // An unreadable previous report only loses the stuck-run start.
+    let previous = pass_report(&dir).ok().flatten();
+    let report = next_pass_report(previous.as_ref(), counts, errors, Utc::now());
+    let line = pass_log_line(&report);
+    eprintln!("{line}");
+    dir.write(PASS_REPORT, &serde_json::to_vec_pretty(&report)?)?;
+    Ok(Some(line))
+}
+
+/// A report is diagnostics: failing to write it must not stop dispatch.
+// trace:BUG-2674 | ai:claude
+pub(super) fn record_pass(root: &Path, counts: &PassCounts, errors: &[String]) {
+    if let Err(error) = controller_pass_report(root, counts, errors) {
+        eprintln!("{NAME}: could not record the pass report: {error:#}");
+    }
+}
+
+/// The last pass report; `Err` names why an existing one cannot be read.
+// trace:BUG-2674 | ai:claude
+fn pass_report(dir: &Directory) -> std::result::Result<Option<PassReport>, String> {
+    let Some(bytes) = dir
+        .read(PASS_REPORT)
+        .map_err(|e| bounded_diagnostic(&format!("{e:#}")))?
+    else {
+        return Ok(None);
+    };
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|e| bounded_diagnostic(&e.to_string()))
+}
+
+/// Why a running worker is degraded: its pass report is unreadable; its last
+/// pass refused changes or stopped; it has left eligible work unadmitted with
+/// nothing dispatched for a sustained run; or it has not completed a pass
+/// within the deadline counted from its last pass or, before any pass of its
+/// own, from its start (a grace period for a fresh worker).
+// trace:BUG-2674 | ai:claude
+fn pass_degradation(
+    report: &std::result::Result<Option<PassReport>, String>,
+    worker_started: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Vec<String> {
+    let report = match report {
+        Ok(report) => report.as_ref(),
+        Err(error) => {
+            return vec![format!(
+                "pass report .aida/{NAME}/{PASS_REPORT} unreadable: {error}"
+            )]
+        }
+    };
+    let minutes = |since: DateTime<Utc>| now.signed_duration_since(since).num_minutes();
+    // A report older than this worker belongs to its predecessor.
+    let current = report.filter(|r| worker_started.is_none_or(|start| r.at >= start));
+    let Some(report) = current else {
+        return match worker_started {
+            Some(start) if minutes(start) >= PASS_STALE_MINUTES => vec![format!(
+                "no discovery pass since the worker started {} min ago",
+                minutes(start)
+            )],
+            Some(_) => Vec::new(),
+            None => vec!["no discovery pass recorded and the worker start time is unknown".into()],
+        };
+    };
+    let mut reasons: Vec<String> = report
+        .errors
+        .iter()
+        .map(|e| format!("last pass: {e}"))
+        .collect();
+    let omitted = report.refused.saturating_sub(report.errors.len());
+    if omitted > 0 {
+        reasons.push(format!(
+            "last pass: {omitted} more refusal(s) not shown ({} in total)",
+            report.refused
+        ));
+    }
+    if let Some(since) = report.stuck_since {
+        if minutes(since) >= PASS_STALE_MINUTES {
+            reasons.push(format!(
+                "idle {} min with eligible work: no review dispatched while {} change(s) found admission busy and {} were refused",
+                minutes(since),
+                report.busy,
+                report.refused
+            ));
+        }
+    }
+    // trace:BUG-2674 | ai:claude
+    for held in &report.held {
+        if minutes(held.since) >= HELD_STALE_MINUTES {
+            reasons.push(format!(
+                "{} head {} unadmitted for {} min: {}",
+                held.key,
+                held.head.get(..12).unwrap_or(&held.head),
+                minutes(held.since),
+                held.cause
+            ));
+        }
+    }
+    if minutes(report.at) >= PASS_STALE_MINUTES {
+        reasons.push(format!("no discovery pass for {} min", minutes(report.at)));
+    }
+    reasons
+}
+
+/// The pass evidence status reports, and why it degrades a live worker. Only
+/// the review watcher records discovery passes; the auto-train worker runs
+/// train passes with no such report, so its status is not held to one.
+// trace:BUG-2674 | ai:claude
+fn pass_health(
+    dir: &Directory,
+    worker_started: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> (Option<PassReport>, Vec<String>) {
+    if TRAIN {
+        return (None, Vec::new());
+    }
+    let report = pass_report(dir);
+    let degraded = pass_degradation(&report, worker_started, now);
+    (report.ok().flatten(), degraded)
+}
+
+/// A live worker is healthy only while its passes complete without refusals.
+// trace:BUG-2674 | ai:claude
+fn pass_status(status: &'static str, degraded: &[String]) -> &'static str {
+    if status == "running" && !degraded.is_empty() {
+        "degraded"
+    } else {
+        status
     }
 }
 

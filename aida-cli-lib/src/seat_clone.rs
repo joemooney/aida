@@ -301,6 +301,69 @@ fn refusal(dest: &Path, error: anyhow::Error) -> anyhow::Error {
     )
 }
 
+/// Fetch the explicit base before allocating a seat. Resolve our own ref so
+/// concurrent fetches cannot replace the selected commit via a tracking ref
+/// or FETCH_HEAD.
+// trace:BUG-2673 | ai:codex
+pub(crate) fn fetch_explicit_base(main: &Path, branch: &str) -> Result<String> {
+    crate::git_arg_guard::reject_option_like("--base", branch)?;
+    let source = format!("refs/heads/{branch}");
+    let mut validate = git(main);
+    validate.args(["check-ref-format", &source]);
+    run(validate, &format!("validate --base branch `{branch}`"))?;
+
+    let target = format!("refs/aida/seat-base-fetch/{}", uuid::Uuid::new_v4());
+    let mut fetch = aida_core::git_ops::host_remote_git_command(main, "origin");
+    fetch
+        .env(ACCESSOR_ENV, "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env(
+            "GIT_SSH_COMMAND",
+            crate::forge::batch_mode_ssh_command(main),
+        )
+        .stdin(std::process::Stdio::null())
+        .args([
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "--no-write-fetch-head",
+            "origin",
+        ])
+        .arg(format!("{source}:{target}"));
+    const CAP: u64 = 1024 * 1024;
+    let result = (|| {
+        match crate::command_output_with_timeout_capped(
+            fetch,
+            std::time::Duration::from_secs(30),
+            CAP,
+        ) {
+            crate::BoundedCommandOutput::Completed(out)
+                if out.stdout.len() as u64 > CAP || out.stderr.len() as u64 > CAP =>
+            {
+                anyhow::bail!("output exceeded the capture limit")
+            }
+            crate::BoundedCommandOutput::Completed(out) if out.status.success() => {}
+            crate::BoundedCommandOutput::Completed(out) => {
+                anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim())
+            }
+            crate::BoundedCommandOutput::TimedOut => anyhow::bail!("git fetch timed out"),
+            crate::BoundedCommandOutput::SpawnFailed => anyhow::bail!("could not start git fetch"),
+        }
+        let mut resolve = git(main);
+        resolve.args(["rev-parse", "--verify", &format!("{target}^{{commit}}")]);
+        run(resolve, "resolve the fetched commit")
+    })();
+    let mut cleanup = git(main);
+    cleanup.args(["update-ref", "-d", &target]);
+    let cleaned = run(cleanup, "remove the temporary seat base ref");
+    let sha = result.map_err(|error| {
+        anyhow::anyhow!("could not fetch --base `{branch}` from origin: {error:#}")
+    })?;
+    cleaned?;
+    Ok(sha)
+}
+
 /// Create the private clone for a contained seat. Runs HOST side, before any
 /// sandbox exists:
 ///
@@ -1537,6 +1600,53 @@ git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=all
         Some(std::time::Instant::now() + std::time::Duration::from_secs(5)),
     )
     .map_err(|error| anyhow::anyhow!("{error}"))
+}
+
+/// Read the merge pseudoref by path. Porcelain can be empty when the
+/// staged resolution matches HEAD, and normal refs can also be named MERGE_HEAD.
+// trace:BUG-2679 | ai:codex
+pub(crate) fn has_pending_merge(main: &Path, tree: &Path) -> Result<bool> {
+    let timeout = std::time::Duration::from_secs(5);
+    if let Some(seat) = host_recorded_clone(main, tree) {
+        let script = r#"set -eu
+merge=$(git rev-parse --git-path MERGE_HEAD)
+test -x "$(dirname -- "$merge")"
+if [ -e "$merge" ] || [ -L "$merge" ]; then printf pending; fi"#;
+        let out = run_sandboxed_until(
+            &seat.root,
+            &seat.main,
+            "sh",
+            &["-c".as_ref(), script.as_ref()],
+            PROBE_OUTPUT_CAP,
+            Some(std::time::Instant::now() + timeout),
+        )
+        .map_err(|why| anyhow::anyhow!("could not inspect seat merge state: {why}"))?;
+        return Ok(!out.is_empty());
+    }
+    let mut cmd = aida_core::git_ops::host_git_command(tree);
+    cmd.args([
+        "rev-parse",
+        "--path-format=absolute",
+        "--git-path",
+        "MERGE_HEAD",
+    ]);
+    let path = match crate::command_output_with_timeout_detail(cmd, timeout) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => out.stdout,
+        crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+            "could not inspect merge state: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        _ => anyhow::bail!("could not inspect merge state within the Git probe budget"),
+    };
+    use std::os::unix::ffi::OsStrExt;
+    let path = path.strip_suffix(b"\n").context("missing merge path")?;
+    let path = Path::new(std::ffi::OsStr::from_bytes(path));
+    anyhow::ensure!(path.is_absolute(), "invalid merge path");
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error).context("could not inspect merge state"),
+    }
 }
 
 /// Read only HEAD reachability for final lane reporting, inside the clone sandbox.
@@ -3330,6 +3440,7 @@ fn prepare_rework_merge_with_base(
 /// cross the existing sandboxed bundle boundary; seat hooks never run.
 // trace:BUG-2456 | ai:codex
 fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Result<()> {
+    crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
     let imported = host_recorded_clone(main, tree)
         .map(|seat| crate::ship_from_seat::import_seat_branch(&seat, branch))
         .transpose()?;
@@ -3342,6 +3453,9 @@ fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Re
                 "rework branch changed before publication"
             );
         }
+        crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
+        // trace:BUG-2618 | ai:codex — queue rework is a head publication too.
+        crate::pr_head_guard::check_branch(main, branch)?;
         let mut push = aida_core::git_ops::host_remote_git_command(main, "origin");
         push.args([
             "-c",
@@ -3466,6 +3580,7 @@ fn regenerate_repair_outputs(
         base,
         "--",
         "scripts/exec-context-legacy.json",
+        "aida-cli-lib/src/tests/golden/cli_help_snapshot.txt", // trace:TASK-3803 | ai:codex
         ".claude/skills",
         ".claude/commands",
         ".claude/hooks",
@@ -4032,6 +4147,11 @@ mod rework_merge_tests {
         assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
         assert!(execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
         assert!(!fx.main.join(".aida/repair-journal.json").exists());
+        // Publication requires host ownership evidence; main is the seat here,
+        // so keep the lease file from reading as pending work.
+        // trace:BUG-2633 | ai:claude
+        record_test_publication_lease(&fx.main, &fx.main, "rework");
+        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/sessions/\n").unwrap();
         prepare_rework_merge_with_base(
             &fx.main,
             &fx.main,
@@ -4729,6 +4849,26 @@ mod rework_merge_tests {
         }
     }
 
+    // trace:BUG-2618 | ai:codex
+    #[test]
+    fn bug2618_rework_publication_refuses_unreadable_policy_before_push() {
+        let fx = tests::fixture();
+        let tip = tests::git_ok(&fx.main, &["rev-parse", "HEAD"]);
+        let config = crate::config_path_for_project(&fx.main);
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::write(&config, "[pr-head]\nprotect = 'invalid'\n").unwrap();
+        // Own the branch so the BUG-2633 ownership check passes and the
+        // refusal under test is the policy read, not a missing lease.
+        record_test_publication_lease(&fx.main, &fx.main, "protected");
+        let err = publish_rework_merge(&fx.main, &fx.main, "protected", &tip).unwrap_err();
+        assert!(
+            format!("{err:#}").contains("pr-head.protect must be a boolean"),
+            "{err:#}"
+        );
+        let remote = tests::git_ok(&fx.main, &["ls-remote", "origin", "refs/heads/protected"]);
+        assert!(remote.is_empty(), "guard refusal published {remote}");
+    }
+
     // No bwrap dependency: move the real remote after fetch, then exercise
     // the production push and prove refusal stops the launch continuation.
     // trace:BUG-2456 | ai:codex
@@ -4748,6 +4888,10 @@ mod rework_merge_tests {
         g(&["commit", "--allow-empty", "-qm", "concurrent PR work"]);
         let raced = g(&["rev-parse", "HEAD"]);
         g(&["checkout", "rework"]);
+        record_test_publication_lease(&fx.main, &fx.main, "rework");
+        // This fixture uses main itself as the seat. Host coordination files
+        // must not turn the otherwise clean source checkout into pending work.
+        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/sessions/\n").unwrap();
         let execute = |args: &[&str]| -> Result<String> {
             if args == ["rev-parse", "-q", "--verify", "MERGE_HEAD"] {
                 anyhow::bail!("absent");
@@ -6102,6 +6246,12 @@ mod lane_worktree_reentry_tests;
 #[path = "tests/task_2807_pickup_launch_rollback_tests.rs"]
 mod pickup_launch_rollback_tests;
 
+// The lane disk deferral against a real setup and a git-canonical queue.
+// trace:BUG-2684 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2684_disk_deferral_tests.rs"]
+mod disk_deferral_tests;
+
 #[cfg(test)]
 #[path = "tests/story_1843_c2_seat_clone_retention_tests.rs"]
 mod retention_tests;
@@ -6114,7 +6264,7 @@ mod seat_clone_mailbox_tests;
 // trace:BUG-HOME-038 | ai:claude
 #[cfg(test)]
 #[path = "tests/bug_home_038_seat_publish_tests.rs"]
-mod seat_publish_tests;
+pub(crate) mod seat_publish_tests;
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
 #[cfg(test)]
@@ -6133,3 +6283,26 @@ mod pickup_entry_tests;
 #[cfg(test)]
 #[path = "tests/bug_2457_review_repickup_tests.rs"]
 mod review_repickup_tests;
+
+// Rework fixtures must carry the same host ownership evidence as queue pickup.
+// trace:BUG-2633 | ai:codex
+#[cfg(test)]
+pub(crate) fn record_test_publication_lease(main: &Path, tree: &Path, branch: &str) {
+    let tree = tree.canonicalize().unwrap();
+    if crate::list_leases(main).iter().any(|lease| {
+        lease
+            .worktree_path
+            .canonicalize()
+            .is_ok_and(|path| path == tree)
+    }) {
+        return;
+    }
+    let id = uuid::Uuid::new_v4().simple().to_string();
+    let path = crate::lease_path(main, &id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(path, format!(
+        "id = {id:?}\nscope = \"BUG-2633\"\nslug = \"bug-2633\"\nowner = \"test\"\nworktree_path = {}\nbranch = {}\nstarted_at = \"2026-11-16T00:00:00Z\"\nhostname = \"h\"\nrole = \"implementer\"\n",
+        aida_core::toml_quote::toml_string(&tree.display().to_string()),
+        aida_core::toml_quote::toml_string(branch),
+    )).unwrap();
+}

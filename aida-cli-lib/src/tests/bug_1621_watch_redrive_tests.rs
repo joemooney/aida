@@ -101,6 +101,7 @@ fn ctx(dry_run: bool) -> TickCtx {
         state_error: None,
         log_path: PathBuf::new(),
         clock: None,
+        phase_trace: false,
     }
 }
 

@@ -2,8 +2,8 @@
 """Host-compiled repair regeneration program, executed only in the seat sandbox.
 
 This file is embedded in the host binary; the seat's copy is never executed.
-The closed table mirrors make sync-templates, including its symlinks, portable
-pack, discipline copies and hooks. It deliberately excludes local extensions.
+The closed table covers the exec-context ledger, template mirrors and CLI help
+golden. It deliberately excludes local extensions.
 trace:STORY-2710 | ai:codex
 """
 import ctypes
@@ -17,17 +17,27 @@ import subprocess
 import sys
 import time
 
+EXEC_CONTEXT_LEDGER = "scripts/exec-context-legacy.json"
+CLI_HELP_GOLDEN = "aida-cli-lib/src/tests/golden/cli_help_snapshot.txt"
+
 # The registry is host-owned. Mirror additions are enumerated from resolved
 # staged masters before generation, never from generator-created sources.
 REGISTRY = (
-    ("exec-context", ("scripts/exec-context-legacy.json",),
+    ("exec-context", (EXEC_CONTEXT_LEDGER,),
      ("**/*.rs", "tests/**/*.py", "Cargo.toml", "scripts/check-exec-context.py"),
      ("python3", "scripts/check-exec-context.py", "--write-ledger")),
     ("templates", (".claude/skills/", ".claude/commands/", ".claude/hooks/",
                    ".agents/skills/aida-", ".aida/discipline/"),
      ("aida-core/templates/", "aida-core/src/", "Makefile", "scripts/check-template-hooks.py"),
      ("make", "sync-templates")),
+    # Reuse the default-feature renderer exercised by CI. trace:TASK-3803 | ai:codex
+    ("cli-help", (CLI_HELP_GOLDEN,),
+     ("aida-cli-lib/src/", "Cargo.toml", "Cargo.lock"),
+     ("env", "AIDA_UPDATE_SNAPSHOTS=1", "cargo", "test", "--locked",
+      "--profile", "agent", "-p", "aida-cli-lib", "--lib", "--",
+      "--exact", "command_registry::story_1728_command_registry_tests::help_surface_matches_golden_snapshot")),
 )
+FIXED_OUTPUTS = {path for name, paths, _, _ in REGISTRY if name != "templates" for path in paths}
 PACK = ".agents/skills/"
 TEMPLATES = "aida-core/templates/"
 
@@ -37,7 +47,9 @@ def git(*args):
 
 
 def registered(path, mode, masters=None):
-    if path == "scripts/exec-context-legacy.json":
+    if path == CLI_HELP_GOLDEN:
+        return mode == "100644"
+    if path in FIXED_OUTPUTS:
         return True
     # Only tracked mirror files with a corresponding master. The ignored
     # portable pack is governed by pack_change_allowed below.
@@ -277,19 +289,26 @@ def main(base, phase, pack_outputs=(), budget=100.0):
     # Masters authorize new mirror paths. Require mirrors already tracked in
     # either tree only while their master survives; retired paths may disappear.
     allowed_outputs = outputs | resolved_outputs
-    outputs = (resolved_outputs & (set(pinned) | set(staged))) | (
-        outputs & {"scripts/exec-context-legacy.json"})
+    fixed_outputs = outputs & FIXED_OUTPUTS
+    outputs = (resolved_outputs & (set(pinned) | set(staged))) | fixed_outputs
     has_pack = has_pack or any(p.startswith(TEMPLATES + "skills/") for p in staged)
     pack_outputs = expected_pack_outputs(set(staged), pack_outputs)
     contents = {}
     before = snapshot(contents)
     deadline = time.monotonic() + budget
     try:
-        for name, _, _, argv in REGISTRY:
-            if name == "exec-context" and "scripts/exec-context-legacy.json" not in outputs:
+        for name, products, _, argv in REGISTRY:
+            if name == "templates":
+                if not has_pack and allowed_outputs <= FIXED_OUTPUTS:
+                    continue
+            elif fixed_outputs.isdisjoint(products):
                 continue
-            if name == "templates" and not has_pack and allowed_outputs <= {"scripts/exec-context-legacy.json"}:
-                continue
+            if name == "cli-help":
+                golden = Path(CLI_HELP_GOLDEN)
+                if any(p.is_symlink() for p in (golden, *golden.parents)) or (
+                    golden.exists() and not golden.is_file()
+                ):
+                    raise RuntimeError("CLI help golden must be a regular file: " + str(golden))
             # Stay inside the host's bound so a slow generator is rolled back here.
             run_generator(argv, max(0.01, deadline - time.monotonic()))
         after = snapshot()
@@ -302,8 +321,10 @@ def main(base, phase, pack_outputs=(), budget=100.0):
         for path in outputs:
             if path not in after:
                 raise RuntimeError("generator removed declared output: " + repr(path))
+        if CLI_HELP_GOLDEN in outputs and not isinstance(after[CLI_HELP_GOLDEN][0], int):
+            raise RuntimeError("generator produced an invalid CLI help golden")
         # Ratchet regeneration may reduce allowances, never enlarge main's ceiling.
-        if "scripts/exec-context-legacy.json" in outputs:
+        if EXEC_CONTEXT_LEDGER in outputs:
             run_generator(("python3", "scripts/check-exec-context.py", "--base", base),
                           max(0.01, deadline - time.monotonic()))
     except BaseException as error:

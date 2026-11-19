@@ -562,9 +562,9 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // obtains only the validated current grant; it creates no authority.
     (
         "launch/spawn.rs",
-        4,
+        5,
         Finalization::NotACodexLaunch(
-            "launch::assign_seat, the seat writer every converted site calls",
+            "shared seat writer and delivery fallback to exec_agent; vendor callers finalize before handoff",
         ),
     ),
     // PR-C moves the shared advisor seat assignment here; intake/questions
@@ -603,7 +603,11 @@ const LAUNCH_INVENTORY: &[(&str, usize, Finalization)] = &[
     // two direct grant writes.
     // Test-only seat-env inspection is excluded from the production count.
     // trace:TASK-3797 | ai:codex
-    ("session.rs", 26, Finalization::PrepareLaunch(7)),
+    // TASK-3787 split session.rs by concern; the 26 sites and 7
+    // finalizations are unchanged, only distributed across the split files.
+    // trace:TASK-3787 | ai:claude
+    ("session/headless.rs", 7, Finalization::PrepareLaunch(4)),
+    ("session/interactive.rs", 20, Finalization::PrepareLaunch(3)),
     // trace:BUG-2416 | ai:claude — the guided `aida do` session.
     ("zen_drive_root.rs", 2, Finalization::PrepareLaunch(1)),
 ];
@@ -731,6 +735,7 @@ fn launcher_calls(raw: &str) -> usize {
         "assign_seat",
         "spawn_agent",
         "exec_agent",
+        "exec_agent_with_delivery",
         "assign_advisor_child",
     ]
     .iter()
@@ -1091,7 +1096,13 @@ fn bug_2398_final_spawn_boundary_ratchet() {
     }
     // The coordinator spawn finalizes BEFORE stdio and spawn: finalization
     // rebuilds the Command and would drop stdio configured earlier.
-    let session = include_str!("../session.rs");
+    let session = concat!(
+        include_str!("../session/list.rs"),
+        include_str!("../session/interactive.rs"),
+        include_str!("../session/headless.rs"),
+        include_str!("../session/containment.rs"),
+        include_str!("../session/lease_lock.rs"),
+    );
     let finalize = session
         .split("fn finalize_coordinator_launch(")
         .nth(1)
@@ -1115,8 +1126,30 @@ fn bug_2398_final_spawn_boundary_ratchet() {
     assert!(at("cmd.stdout(stdout)") < at("spawn_retrying_etxtbsy()"));
     let queue = include_str!("../queue_cmd/work.rs");
     assert!(queue.contains("session::exec_codex_session("));
+    // The shared delivery helper can either exec or spawn the prepared command.
+    // trace:BUG-2699 | ai:codex
+    let interactive = include_str!("../session/interactive.rs")
+        .split_once("pub fn exec_codex_session(")
+        .unwrap()
+        .1
+        .split("\n}\n")
+        .next()
+        .unwrap();
+    let finalization = interactive
+        .find("crate::vendors::profile::finalize_codex(&mut cmd)?")
+        .unwrap();
+    let handoff = interactive
+        .find("crate::launch::spawn::exec_agent_with_delivery(&mut cmd, on_delivery)")
+        .unwrap();
+    assert!(finalization < handoff);
     // Pure composers stay pure; caller-side customization precedes finalization.
-    let session = include_str!("../session.rs");
+    let session = concat!(
+        include_str!("../session/list.rs"),
+        include_str!("../session/interactive.rs"),
+        include_str!("../session/headless.rs"),
+        include_str!("../session/containment.rs"),
+        include_str!("../session/lease_lock.rs"),
+    );
     let run = session
         .split("fn run_vendor_headless_child(")
         .nth(1)
@@ -2019,8 +2052,9 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
              `aida agent new codex --bg`, which finalizes in agent_codex_background.rs",
         ),
     ),
-    // The two `.env(ROLE_ENV, ..)` writes of assign_seat (Child, Lane).
-    ("launch/spawn.rs", 2, RoleRoute::SeatWriter),
+    // The two role writes of assign_seat and the delivery helper's exec fallback.
+    // trace:BUG-2699 | ai:codex
+    ("launch/spawn.rs", 3, RoleRoute::SeatWriter),
     // Shared advisor builder only; callers finalize via coordinator spawn.
     ("launch/grant.rs", 2, RoleRoute::SeatWriter),
     ("phase_driver.rs", 2, RoleRoute::LaunchInventory),
@@ -2028,7 +2062,7 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     (
         "queue_cmd/work.rs",
         4,
-        RoleRoute::AidaChild("Claude exec seats; Codex finalizes in session.rs"),
+        RoleRoute::AidaChild("Claude exec seats; Codex finalizes in session/"),
     ),
     // BUG-2386 adds two: `finalize_codex_resume` (interactive resume, seat
     // from the delegated grant) and `spawn_vendor_headless_resume_granted`
@@ -2037,7 +2071,10 @@ const ROLE_LAUNCH_SITES: &[(&str, usize, RoleRoute)] = &[
     // STORY-2326: the headless forking and reviewer writes moved into
     // launch::assign_seat; 6 literal writes plus 16 launcher calls (8
     // spawn_agent, 8 assign_seat). trace:STORY-2326 | ai:codex
-    ("session.rs", 25, RoleRoute::LaunchInventory),
+    // TASK-3787: the same 25 sites, distributed across the session split.
+    // trace:TASK-3787 | ai:claude
+    ("session/headless.rs", 7, RoleRoute::LaunchInventory),
+    ("session/interactive.rs", 19, RoleRoute::LaunchInventory),
     ("zen_drive_root.rs", 2, RoleRoute::LaunchInventory),
 ];
 
@@ -2189,7 +2226,9 @@ fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
         .env("AIDA_CONTAINMENT_POSTURE", "none")
         .env_remove("AIDA_SESSION_PURPOSE")
         .env_remove("AIDA_STANDALONE_IMPLEMENTER")
-        .env_remove("AIDA_HEADLESS_LANE");
+        .env_remove("AIDA_HEADLESS_LANE")
+        // trace:BUG-2682 | ai:claude — the spawn boundary drops the override.
+        .env_remove(crate::lane_admission::OVERRIDE_ENV);
     prepare_launch(&mut expected).unwrap();
     let args = |c: &Command| c.get_args().map(|a| a.to_owned()).collect::<Vec<_>>();
     let envs = |c: &Command| {

@@ -666,8 +666,12 @@ fn native_inner(
     clean: bool,
     mut repair: impl FnMut(&str) -> Result<bool>,
 ) -> Result<bool> {
-    if veto(main, spec) {
+    if crate::ship_from_seat::report_publication_veto(main, tree, spec)? {
         return Ok(true);
+    }
+    if !clean {
+        eprintln!("PUBLISH SKIPPED: implementer failed; seat retained");
+        return Ok(false);
     }
     if crate::session::bwrap_availability() != crate::session::BwrapAvailability::Ok {
         skip_native_without_sandbox(main, branch, lease)?;
@@ -679,7 +683,12 @@ fn native_inner(
         main,
         branch,
         || {
-            if veto(main, spec) {
+            if crate::ship_from_seat::report_publication_veto(main, tree, spec)? {
+                return Ok(None);
+            }
+            if !clean_exit.get() {
+                eprintln!("PUBLISH SKIPPED: implementer failed; seat retained");
+                publishable.set(false);
                 return Ok(None);
             }
             if !commit(main, tree, spec, lease, clean_exit.get())? {
@@ -820,6 +829,7 @@ fn pushed_inner(
     if veto(main, spec) || marker(main, branch) == "skipped(branch)" {
         return Ok(false);
     }
+    crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
     let published_head = crate::standalone_implementer::lookup_pr(main, branch)
         .filter(|(id, _)| *id == pr)
         .and_then(|(_, head)| head)
@@ -852,7 +862,7 @@ fn pushed_inner(
         branch,
         &head,
         &result,
-        || annotate(main, pr, &head, &result),
+        || annotate(main, pr, branch, &head, &result),
         || {
             let storage = crate::Storage::new(
                 crate::detect_distributed_store_from(main)
@@ -1088,6 +1098,64 @@ pub(crate) fn check_import(main: &Path, branch: &str, tip: &str, automatic: bool
 mod tests {
     // trace:STORY-2640 | ai:codex
     // trace:STORY-2640 | ai:codex
+    // trace:BUG-2648 | ai:codex
+    #[test]
+    fn bug_2648_native_punt_and_crash_veto_never_reach_commit() {
+        for clean in [false, true] {
+            let main = tempfile::tempdir().unwrap();
+            let tree = tempfile::tempdir().unwrap();
+            std::fs::write(tree.path().join("pending"), "keep me").unwrap();
+            crate::punt::write_signal(
+                &crate::punt::signal_path(tree.path(), "BUG-2648"),
+                &crate::punt::PuntSignal {
+                    spec: "BUG-2648".into(),
+                    category: aida_core::PuntCategory::DesignFork,
+                    detail: "needs advisor".into(),
+                    lean: None,
+                },
+            )
+            .unwrap();
+            assert!(native_inner(
+                main.path(),
+                tree.path(),
+                "BUG-2648",
+                "lane",
+                "branch",
+                clean,
+                |_| panic!("veto must precede all gate effects")
+            )
+            .unwrap());
+            assert_eq!(
+                std::fs::read_to_string(tree.path().join("pending")).unwrap(),
+                "keep me"
+            );
+            assert!(!tree.path().join(".git").exists());
+        }
+    }
+
+    // trace:BUG-2648 | ai:codex
+    #[test]
+    fn bug_2648_failed_native_exit_leaves_pending_work_untouched() {
+        let main = tempfile::tempdir().unwrap();
+        let tree = tempfile::tempdir().unwrap();
+        std::fs::write(tree.path().join("pending"), "keep me").unwrap();
+        assert!(!native_inner(
+            main.path(),
+            tree.path(),
+            "BUG-2648",
+            "lane",
+            "branch",
+            false,
+            |_| panic!("failed exit must not start repair or publication")
+        )
+        .unwrap());
+        assert_eq!(
+            std::fs::read_to_string(tree.path().join("pending")).unwrap(),
+            "keep me"
+        );
+        assert_eq!(std::fs::read_dir(tree.path()).unwrap().count(), 1);
+    }
+
     #[test]
     fn fast_gate_repair_prompt_bounds_multibyte_output_below_argv_limit() {
         let output = "é".repeat(1024 * 1024) + "trailing failure";

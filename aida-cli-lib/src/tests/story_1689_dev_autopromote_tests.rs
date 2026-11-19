@@ -47,6 +47,7 @@ fn set_live(f: &Fixture, sha: &str, repo: Option<String>) {
         allow_dirty: false,
         promoted_at: "2026-10-22T00:00:00Z".into(),
         repo,
+        ci_comparison: None,
     };
     fs::write(
         f.layout.live_dir.join(PROMOTED_FILE),
@@ -911,6 +912,61 @@ fn a_checkout_moved_during_the_build_is_a_refusal_not_a_failure() {
         "{:?}",
         fake.calls
     );
+}
+
+// trace:BUG-2628 | ai:codex
+#[test]
+fn concurrent_live_promotion_settles_the_child_or_retries_the_same_sha() {
+    for concurrent_sha in [TARGET, LIVE_SHA] {
+        let f = fixture();
+        put_state(
+            &f,
+            Phase::Running,
+            None,
+            false,
+            &chrono::Utc::now().to_rfc3339(),
+        );
+        let held = crate::dev_build::lock_live_dir(&f.layout).unwrap();
+        let mut build = FakeBuild::at(TARGET, false);
+        let mut output = Vec::new();
+        let result = std::thread::scope(|scope| {
+            let concurrent = scope.spawn(|| {
+                std::thread::sleep(Duration::from_secs(1));
+                set_live(&f, concurrent_sha, Some(canonical(&f.layout.repo)));
+                drop(held);
+            });
+            let result = run_child(&f.layout, TARGET, 99, &mut build, &mut output);
+            concurrent.join().unwrap();
+            result
+        });
+
+        assert!(build.built);
+        assert_eq!(
+            read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+            concurrent_sha
+        );
+        let phase = read_state(&f.layout.live_dir).unwrap().phase;
+        let mut tick_steps = Fake::green();
+        if concurrent_sha == TARGET {
+            assert_eq!(result.unwrap(), BuildOutcome::AlreadyPromoted);
+            assert!(String::from_utf8(output)
+                .unwrap()
+                .contains("already promoted by a concurrent build"));
+            assert_eq!(phase, Phase::Promoted);
+            assert!(matches!(
+                tick(&f, &mut tick_steps),
+                TickOutcome::Skipped(Skip::Unchanged)
+            ));
+        } else {
+            assert!(is_refusal(result.as_ref().unwrap_err()));
+            child_exit(result.map(|_| ())).unwrap();
+            assert_eq!(phase, Phase::Refused);
+            assert!(matches!(
+                tick(&f, &mut tick_steps),
+                TickOutcome::Launched { sha, .. } if sha == TARGET
+            ));
+        }
+    }
 }
 
 // trace:STORY-1689 | ai:claude

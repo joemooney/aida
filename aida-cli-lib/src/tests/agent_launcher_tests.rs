@@ -2246,6 +2246,7 @@ fn launcher_view(
         started_at: now,
         last_active_at: now,
         role: role.map(str::to_string),
+        seat: None,
         current_spec: spec.map(str::to_string),
         worktree_path: std::path::PathBuf::from(format!("/tmp/{id}")),
         source: "registry".to_string(),

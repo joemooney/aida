@@ -1191,10 +1191,18 @@ fn an_explicit_clone_refuses_review_reentry_and_a_non_seat_path() {
 
 /// A contained `session start` owning `owns`, optionally at `path`.
 fn contained_start(owns: &str, path: Option<&str>) -> anyhow::Result<()> {
-    crate::session_start::session_start(
+    contained_start_with_base(owns, path, None)
+}
+
+fn contained_start_with_base(
+    owns: &str,
+    path: Option<&str>,
+    base: Option<crate::session_start::SessionBase<'_>>,
+) -> anyhow::Result<()> {
+    crate::session_start::session_start_with_receipt(
         owns,
         None,
-        None,
+        base,
         false,
         path,
         None,
@@ -1211,13 +1219,161 @@ fn contained_start(owns: &str, path: Option<&str>) -> anyhow::Result<()> {
         /* self_claim */ true,
         /* review_coexistence */ None,
         /* contained_seat */ true,
+        false,
+        crate::session_start::PathReentry::None,
+        None,
+        /* done_rework_admitted */ false,
     )
+    .map(|mut receipt| receipt.disarm())
+}
+
+// trace:BUG-2673 | ai:codex
+#[test]
+fn bug_2673_explicit_clone_base_uses_fetched_tip_and_records_fork_point() {
+    if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let tip = stdout
+            .lines()
+            .find_map(|line| {
+                line.split_once("Expected upstream tip: ")
+                    .map(|(_, tip)| tip)
+            })
+            .expect("child reported the upstream tip");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.lines().any(|line| {
+                line.contains("private clone for this contained seat:")
+                    && line.ends_with(&format!(" at {tip}"))
+            }),
+            "{stderr}"
+        );
+        return;
+    }
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    git_ok(&fx.main, &["branch", "integration"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "integration"]);
+    let cached = git_ok(&fx.main, &["rev-parse", "origin/integration"]);
+
+    let upstream = fx.root.join("upstream");
+    git_ok(
+        &fx.root,
+        &[
+            "clone",
+            "-q",
+            "-b",
+            "integration",
+            fx.origin.to_str().unwrap(),
+            upstream.to_str().unwrap(),
+        ],
+    );
+    git_ok(
+        &upstream,
+        &[
+            "-c",
+            "user.email=test@example.com",
+            "-c",
+            "user.name=AIDA Test",
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "advance integration",
+        ],
+    );
+    git_ok(&upstream, &["push", "-q", "origin", "integration"]);
+    let tip = git_ok(&upstream, &["rev-parse", "HEAD"]);
+    assert_ne!(tip, cached);
+    std::println!("Expected upstream tip: {tip}");
+    assert_eq!(
+        git_ok(&fx.main, &["rev-parse", "origin/integration"]),
+        cached
+    );
+
+    contained_start_with_base(
+        "TASK-2169",
+        None,
+        Some(crate::session_start::SessionBase::Explicit(
+            "origin/integration",
+        )),
+    )
+    .unwrap();
+
+    let leases = crate::list_leases(&fx.main);
+    let lease = leases
+        .iter()
+        .find(|lease| lease.scope == "TASK-2169")
+        .unwrap();
+    assert_eq!(lease.tree_kind, TreeKind::Clone);
+    assert_eq!(git_ok(&lease.worktree_path, &["rev-parse", "HEAD"]), tip);
+    assert_eq!(
+        git_ok(&lease.worktree_path, &["rev-parse", "origin/integration"]),
+        tip
+    );
+    assert_eq!(
+        pinned_base(&fx.main, &lease.worktree_path).as_deref(),
+        Some(tip.as_str())
+    );
+    assert_eq!(lease.parent_branch.as_deref(), Some("integration"));
+    assert_eq!(lease.parent_branch_sha.as_deref(), Some(tip.as_str()));
+    assert_eq!(git_ok(&fx.main, &["rev-parse", "integration"]), cached);
+    assert!(git_ok(&fx.main, &["for-each-ref", "refs/aida/seat-base-fetch"]).is_empty());
+}
+
+// trace:BUG-2673 | ai:codex
+#[test]
+fn bug_2673_failed_explicit_base_fetch_refuses_with_a_cached_ref() {
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    git_ok(&fx.main, &["branch", "integration"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "integration"]);
+    git_ok(&fx.origin, &["branch", "-D", "integration"]);
+    assert!(ref_exists(&fx.main, "origin/integration"));
+
+    git_ok(&fx.main, &["branch", "-D", "integration"]);
+    let base = crate::session_start::resolve_stack_base(
+        &fx.main,
+        &fx.main,
+        false,
+        Some("integration"),
+        true,
+        true,
+    )
+    .unwrap();
+    let error = contained_start_with_base(
+        "TASK-2169",
+        None,
+        base.as_deref()
+            .map(crate::session_start::SessionBase::QueueBranch),
+    )
+    .unwrap_err();
+    let message = format!("{error:#}");
+    assert!(
+        message.contains("could not fetch --base `integration` from origin"),
+        "{message}"
+    );
+    assert!(
+        message.contains("couldn't find remote ref refs/heads/integration"),
+        "{message}"
+    );
+    assert!(crate::list_leases(&fx.main).is_empty());
+    assert!(git_ok(
+        &fx.main,
+        &["for-each-ref", PIN_PREFIX, "refs/aida/seat-base-fetch"]
+    )
+    .is_empty());
 }
 
 /// A failure after the clone exists but before the lease is written removes
 /// the clone and releases its pin, so the next launch can reuse the name.
 #[test]
 fn a_failure_after_create_removes_the_clone_and_releases_the_pin() {
+    // Session startup changes cwd; keep it out of sibling test processes.
+    // trace:BUG-2623 | ai:codex
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    // Exercise rollback, independently of host mail-writer admission.
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let seats = fx.root.join("seats");
     std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
@@ -1422,6 +1578,11 @@ fn control_filter_fires(dir: &Path, filter: &Path) {
 /// itself (`core.bare = false`, `core.worktree = <root>`).
 #[test]
 fn a_root_laid_out_as_a_gitdir_is_still_refused() {
+    // Git inherits cwd and PATH, which sibling tests can change.
+    // trace:BUG-2623 | ai:codex
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
     let fx = fixture();
     let clone = fx.root.join("seats").join("aida-seat-aida-flat");
     create(&fx.main, &clone, "feat", "origin/main").unwrap();

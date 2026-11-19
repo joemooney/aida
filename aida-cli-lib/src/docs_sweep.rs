@@ -1811,6 +1811,9 @@ pub(crate) fn open_or_extend_pr(
                 .join("\n")
         );
         git(&dir, &["commit", "--quiet", "-m", &message])?;
+        // trace:BUG-2618 | ai:codex — check even when the earlier PR lookup
+        // found none: the sweep branch can acquire an open PR before pushing.
+        crate::pr_head_guard::check_branch(project_root, SWEEP_BRANCH)?;
         let url = match &existing {
             Some(pr) => {
                 git_origin(&dir, &["push", "--quiet", "origin", SWEEP_BRANCH])?;

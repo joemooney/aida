@@ -218,6 +218,7 @@ fn bug_2517_inherited_findings_use_the_same_change_as_the_builder() {
     let head = crate::test_git::commit_fixture(root);
     let _ambient =
         crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+    let policy = crate::gate::kernel_deps::review_blocking::effective(root);
     let own = rv::verdict_path(root, "PR-3764");
     let prior = json!({"verdict":"request-changes", "reviewed_sha":head,
         "findings":["own actionable defect"], "recorded_at":"2026-11-09T00:00:00Z"});
@@ -227,11 +228,11 @@ fn bug_2517_inherited_findings_use_the_same_change_as_the_builder() {
     let clean = json!({"verdict":"approved", "reviewed_sha":head, "findings":[]});
     rv::write_verdict_object(&other, clean.as_object().unwrap()).unwrap();
     assert_eq!(
-        crate::review_record_kind(&own, "approved", &[]).unwrap(),
+        crate::review_record_kind(&policy, &own, "approved", &[]).unwrap(),
         rv::VerdictKind::RequestChanges
     );
     assert_eq!(
-        crate::review_record_kind(&other, "approved", &[]).unwrap(),
+        crate::review_record_kind(&policy, &other, "approved", &[]).unwrap(),
         rv::VerdictKind::Approved
     );
     assert_eq!(rv::current_verdict_body_at(&own).unwrap(), before);
@@ -239,7 +240,7 @@ fn bug_2517_inherited_findings_use_the_same_change_as_the_builder() {
     rv::write_verdict_object(&own, clean.as_object().unwrap()).unwrap();
     rv::write_verdict_object(&other, prior.as_object().unwrap()).unwrap();
     assert_eq!(
-        crate::review_record_kind(&own, "approved", &[]).unwrap(),
+        crate::review_record_kind(&policy, &own, "approved", &[]).unwrap(),
         rv::VerdictKind::Approved
     );
 }

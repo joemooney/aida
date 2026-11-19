@@ -7,3 +7,31 @@ Run `aida doctor --lane-host` on the target machine. Apply safe user-level permi
 - Log in with the selected vendor CLI, for example `codex login`. Credential-source presence does not verify token validity; unsupported auth probes remain advisory.
 - Run any system-level install/userns/AppArmor commands printed by `aida doctor --fix-sandbox` yourself.
 - Fetch dependencies on the host before starting lanes. The doctor requires a configured executable Cargo wrapper and runs a lane-job sandbox probe that starts a private sccache server, queries its transport, and writes/reads a temporary cache file. Sandbox, transport or write failures produce a required finding with a fix hint.
+
+## Lane wrapper publication
+
+Use `bash scripts/lane-run.sh SPEC` from the primary checkout (additional
+`aida queue work` flags pass through). Replace host-local `lane-run.sh` and
+`auto-publish.sh` chains with this entry point. It delegates the entire lane
+lifecycle to AIDA, including its clean-exit publication checks. It never follows
+a punt, admission refusal or crash with a separate `ship --commit-pending`.
+Direct host seat publication also refuses persisted host or seat punt/hold
+signals before committing or pushing. A missing terminal outcome is not evidence
+that an external wrapper may publish retained work.
+
+Before starting the lane, the wrapper runs `aida dev check-fresh` and refuses
+when the host's binary is more than 10 merged changes or 6 hours behind
+`origin/main`. Rebuild with `aida dev build` from a clean `main`, or set
+`AIDA_LANE_ALLOW_STALE=1` to launch anyway. A host launcher's own `--check`
+mode can call `aida dev check-fresh --fetch` to report the same verdict before
+it starts anything. A host autobuild that fast-forwards `main` must account
+for a skip-worktree override of `.aida/config.toml`: `git merge --ff-only`
+refuses whenever an incoming commit changes that file, so the binary silently
+stops being promoted. After the fast-forward it must run `aida dev build`
+inside that checkout, so the build is the checkout's own new `HEAD`; it never
+builds an older ref or a different clone.
+<!-- trace:TASK-3812 | ai:claude -->
+
+Host rollout still requires locating and replacing each local wrapper; updating
+this repository does not modify scripts in host home directories.
+<!-- trace:BUG-2648 | ai:codex -->

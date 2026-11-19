@@ -19,6 +19,12 @@ pub(crate) mod land_args;
 #[path = "land_run.rs"]
 pub(crate) mod run;
 
+#[path = "land_ci_base.rs"]
+mod ci_base;
+
+#[path = "land_metrics.rs"]
+pub(crate) mod metrics;
+
 use crate::cmdkit::{CmdPolicy, CommandReg, Handler};
 use crate::gate::review_verdict::VerdictKind;
 use crate::stakeholder_role::StakeholderAction;
@@ -64,6 +70,7 @@ pub(crate) enum Ci {
     None,
     Pending,
     Green,
+    StaleBase(String),
     /// The failed checks, named.
     Red(String),
 }
@@ -74,6 +81,7 @@ impl Ci {
             Ci::None => "none".into(),
             Ci::Pending => "pending".into(),
             Ci::Green => "green".into(),
+            Ci::StaleBase(_) => "stale-base".into(),
             Ci::Red(names) => format!("red: {names}"),
         }
     }
@@ -96,6 +104,7 @@ pub(crate) enum State {
     Reviewing,
     /// A check failed on the head: the head is about to change.
     CiFailed,
+    StaleCiBase,
     Ready,
     /// Approved, with a hold whose release passes every check except the
     /// mandate's cover, which only the release itself judges. Not READY.
@@ -111,6 +120,7 @@ impl State {
     pub(crate) fn label(&self) -> &'static str {
         match self {
             State::CiFailed => "CI-FAILED",
+            State::StaleCiBase => "STALE-CI-BASE",
             State::Landing => "LANDING",
             State::Conflict => "CONFLICT",
             State::Reviewing => "REVIEWING",
@@ -131,6 +141,7 @@ pub(crate) enum Action {
     /// Nothing to do this pass.
     Wait,
     DispatchRework,
+    UpdateBranch,
     LaunchReview,
     /// Release a hold whose release condition is met; the next pass lands
     /// the change. The release decides again for itself.
@@ -148,6 +159,7 @@ impl Action {
         match self {
             Action::Wait => "-",
             Action::DispatchRework
+            | Action::UpdateBranch
             | Action::LaunchReview
             | Action::Train
             | Action::ClearHoldAndLand => "reconciler",
@@ -160,6 +172,7 @@ impl Action {
         match self {
             Action::Wait => "wait",
             Action::DispatchRework => "dispatch rework",
+            Action::UpdateBranch => "update branch from base",
             Action::LaunchReview => "launch reviewer",
             Action::ClearHoldAndLand => "release the met hold, then land",
             Action::Train => "add to next train",
@@ -218,6 +231,13 @@ pub(crate) trait Evidence {
     fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String>;
     /// CI on the head.
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String>;
+    /// Whether red CI on the head blocks landing: true in `ci-gated` mode;
+    /// in `review-gated` mode pre-merge CI is informational and red CI
+    /// never turns an approved head into rework on its own.
+    // trace:STORY-2897 | ai:claude
+    fn ci_gates_landing(&self) -> bool {
+        true
+    }
     /// Whether an approval covers the head's content. `Err` only when the
     /// evidence could not be read: a refusal is `Ok`.
     fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String>;
@@ -370,7 +390,23 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
         Err(why) => return unknown("CI", why),
     };
     *ci_read.borrow_mut() = Some(ci.label());
-    if let Ci::Red(failed) = &ci {
+    // trace:BUG-2690 | ai:codex
+    if let Ci::StaleBase(base) = &ci {
+        let update = !promotion
+            && matches!(evidence.lane(pr), Ok(None))
+            && matches!(evidence.hold(pr), Ok(None));
+        return row(
+            State::StaleCiBase,
+            if update {
+                Action::UpdateBranch
+            } else {
+                Action::Wait
+            },
+            None,
+            format!("{base}. Refresh CI with a clean update-branch"),
+        );
+    }
+    if let (Ci::Red(failed), true) = (&ci, evidence.ci_gates_landing()) {
         return rework(
             State::CiFailed,
             None,
@@ -768,6 +804,8 @@ struct Live {
     pins: std::result::Result<Pins, String>,
     /// The forge keys its changes `MR-N`.
     gitlab: bool,
+    repo: crate::review_watch::forge::Repository,
+    github_checks: GitHubChecks,
     leases: std::cell::OnceCell<std::result::Result<Vec<crate::leases::SessionLease>, String>>,
     /// Live claims from other clones and hosts, read once per pass from the
     /// synced store: never a process probe of another machine.
@@ -926,6 +964,10 @@ pub(crate) fn hold_of(root: &Path, pr: &Pr) -> std::result::Result<Option<Hold>,
 }
 
 impl Evidence for Live {
+    // trace:STORY-2897 | ai:claude
+    fn ci_gates_landing(&self) -> bool {
+        crate::landing_policy::load(&self.root).waits_for_ci()
+    }
     fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
         let (head, base) = self.pinned(pr)?;
         let out = git(
@@ -983,6 +1025,10 @@ impl Evidence for Live {
     }
 
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
+        if let Some(rollup) = self.github_checks.get(&pr.id) {
+            let (_, base) = self.pinned(pr)?;
+            return ci_base::observe(&self.root, &self.repo, rollup, pr, base);
+        }
         pr.ci
             .clone()
             .ok_or_else(|| "discovery did not report checks".to_string())
@@ -1149,47 +1195,25 @@ fn short(sha: &str) -> &str {
 }
 
 /// CI summed over a GitHub `statusCheckRollup`.
-pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
-    let Some(checks) = rollup.as_array().filter(|checks| !checks.is_empty()) else {
+#[cfg(test)]
+fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
+    ci_of_checks(rollup.as_array().into_iter().flatten())
+}
+
+fn ci_of_checks<'a>(checks: impl IntoIterator<Item = &'a serde_json::Value>) -> Ci {
+    let newest = newest_checks(checks);
+    if newest.is_empty() {
         return Ci::None;
-    };
-    let text = |check: &serde_json::Value, key: &str| {
-        check
-            .get(key)
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_ascii_uppercase()
-    };
-    let name_of = |check: &serde_json::Value| {
-        check
-            .get("name")
-            .or_else(|| check.get("context"))
-            .and_then(|v| v.as_str())
-            .unwrap_or("check")
-            .to_string()
-    };
-    // A check that ran more than once at this head counts once, by its
-    // newest run: a cancelled run that a later run replaced says nothing.
-    let mut newest: BTreeMap<(String, String), &serde_json::Value> = BTreeMap::new();
-    for check in checks {
-        let key = (text(check, "workflowName"), name_of(check));
-        let started = |check: &serde_json::Value| text(check, "startedAt");
-        match newest.get(&key) {
-            Some(kept) if started(kept) > started(check) => {}
-            _ => {
-                newest.insert(key, check);
-            }
-        }
     }
     let mut failed: Vec<String> = Vec::new();
     let mut pending = false;
-    for check in newest.values() {
-        let name = name_of(check);
+    for check in newest {
+        let name = check_name(check);
         // A check run reports `status` + `conclusion`; a commit status
         // reports `state`.
-        let outcome = match text(check, "conclusion") {
+        let outcome = match check_text(check, "conclusion") {
             done if !done.is_empty() => done,
-            _ => text(check, "state"),
+            _ => check_text(check, "state"),
         };
         match outcome.as_str() {
             "SUCCESS" | "NEUTRAL" | "SKIPPED" => {}
@@ -1212,6 +1236,90 @@ pub(crate) fn ci_of_rollup(rollup: &serde_json::Value) -> Ci {
     }
 }
 
+fn check_text(check: &serde_json::Value, key: &str) -> String {
+    check
+        .get(key)
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_ascii_uppercase()
+}
+
+fn check_name(check: &serde_json::Value) -> String {
+    check
+        .get("name")
+        .or_else(|| check.get("context"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("check")
+        .to_string()
+}
+
+fn newest_checks<'a>(
+    checks: impl IntoIterator<Item = &'a serde_json::Value>,
+) -> Vec<&'a serde_json::Value> {
+    // A check that ran more than once at this head counts once, by its
+    // newest run: a cancelled run that a later run replaced says nothing.
+    let mut newest: BTreeMap<(String, String), &serde_json::Value> = BTreeMap::new();
+    for check in checks {
+        let key = (check_text(check, "workflowName"), check_name(check));
+        let started = |check: &serde_json::Value| check_text(check, "startedAt");
+        match newest.get(&key) {
+            Some(kept) if started(kept) > started(check) => {}
+            _ => {
+                newest.insert(key, check);
+            }
+        }
+    }
+    newest.into_values().collect()
+}
+
+// trace:BUG-2692 | ai:codex
+#[cfg(test)]
+fn ci_of_github_rollup(
+    rollup: &serde_json::Value,
+    head: &str,
+    metadata: impl FnMut(u64) -> Result<serde_json::Value>,
+) -> Ci {
+    summarize_github_rollup(rollup, head, metadata).0
+}
+
+fn summarize_github_rollup<'a>(
+    rollup: &'a serde_json::Value,
+    head: &str,
+    metadata: impl FnMut(u64) -> Result<serde_json::Value>,
+) -> (Ci, Vec<&'a serde_json::Value>) {
+    let Some(rows) = rollup.as_array() else {
+        return (Ci::None, Vec::new());
+    };
+    let run_id = |row: &serde_json::Value| {
+        crate::ci_gate::run_id_from_check_link(row["detailsUrl"].as_str()?)
+    };
+    let candidates: Vec<_> = rows
+        .iter()
+        .filter_map(|row| Some((row["name"].as_str()?, run_id(row)?)))
+        .collect();
+    let replaced = crate::forge::replaced_fast_runs(
+        candidates.iter().map(|(name, id)| (*name, id.as_str())),
+        Some(head),
+        metadata,
+    );
+    let kept: Vec<_> = rows
+        .iter()
+        .filter(|row| !crate::forge::is_replaced_run(&replaced, run_id(row).as_deref()))
+        .collect();
+    let aggregate_passed = replaced.values().all(|replacement| {
+        kept.iter().any(|row| {
+            row["name"] == crate::forge::CI_AGGREGATOR_CHECK
+                && row["conclusion"] == "SUCCESS"
+                && run_id(row).and_then(|id| id.parse::<u64>().ok()) == Some(*replacement)
+        })
+    });
+    let mut ci = ci_of_checks(kept.iter().copied());
+    if ci == Ci::Green && !aggregate_passed {
+        ci = Ci::Pending;
+    }
+    (ci, kept)
+}
+
 /// A change from the watcher's discovery, which reports no checks. That is
 /// "no check has reported", the same as a GitHub change with an empty
 /// rollup: unknown CI would make every change on such a forge UNKNOWN.
@@ -1231,10 +1339,12 @@ pub(crate) fn plain_change(change: crate::review_watch::forge::Change, title: St
 /// One forge read for every open change, with its title, labels and checks.
 /// `None` on a forge without it (GitLab): the caller falls back to the
 /// watcher's discovery and reads the rest per change.
+type GitHubChecks = BTreeMap<u64, serde_json::Value>;
+
 fn discover_rich(
     root: &Path,
     repo: &crate::review_watch::forge::Repository,
-) -> Result<Option<Vec<Pr>>> {
+) -> Result<Option<(Vec<Pr>, GitHubChecks)>> {
     let Some(slug) = repo.github_slug() else {
         return Ok(None);
     };
@@ -1247,25 +1357,27 @@ fn discover_rich(
             .map(str::to_string)
             .with_context(|| format!("forge listing row has no `{key}`"))
     };
+    let mut checks = BTreeMap::new();
     let mut changes = Vec::new();
-    for row in &rows {
+    for mut row in rows {
         if row.get("isDraft").and_then(|v| v.as_bool()) == Some(true) {
             continue;
         }
-        let head = text(row, "headRefOid")?;
+        let head = text(&row, "headRefOid")?;
         anyhow::ensure!(
             head.len() == 40 && head.bytes().all(|c| c.is_ascii_hexdigit()),
             "forge listing row has an invalid head"
         );
+        let id = row["number"]
+            .as_u64()
+            .context("forge listing row has no number")?;
+        checks.insert(id, row["statusCheckRollup"].take());
         changes.push(Pr {
-            id: row
-                .get("number")
-                .and_then(|v| v.as_u64())
-                .context("forge listing row has no number")?,
+            id,
             head,
-            base: text(row, "baseRefName")?,
-            branch: Some(text(row, "headRefName")?),
-            title: text(row, "title")?,
+            base: text(&row, "baseRefName")?,
+            branch: Some(text(&row, "headRefName")?),
+            title: text(&row, "title")?,
             updated_at: row
                 .get("updatedAt")
                 .and_then(|v| v.as_str())
@@ -1280,13 +1392,10 @@ fn discover_rich(
                         })
                     }),
             ),
-            ci: Some(ci_of_rollup(
-                row.get("statusCheckRollup")
-                    .unwrap_or(&serde_json::Value::Null),
-            )),
+            ci: None,
         });
     }
-    Ok(Some(changes))
+    Ok(Some((changes, checks)))
 }
 
 /// Everything one pass derived, with the facts the snapshot is built from.
@@ -1325,7 +1434,7 @@ pub(crate) fn open_change_count(start: &Path) -> Result<usize> {
     let root = crate::review_watch::forge::main_root(start)?;
     let repo = crate::review_watch::forge::Repository::load(&root)?;
     Ok(match discover_rich(&root, &repo)? {
-        Some(changes) => changes.len(),
+        Some((changes, _)) => changes.len(),
         None => repo.discover(&root)?.len(),
     })
 }
@@ -1341,13 +1450,14 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
     let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
     let root = crate::review_watch::forge::main_root(start)?;
     let repo = crate::review_watch::forge::Repository::load(&root)?;
-    let changes: Vec<Pr> = match discover_rich(&root, &repo)? {
-        Some(changes) => changes,
+    let (changes, github_checks) = match discover_rich(&root, &repo)? {
+        Some(discovered) => discovered,
         None => {
             // The watcher's discovery carries no title; the specs a change
             // ships are read from it, so each is asked for.
             let forge = crate::forge::forge_for(&root);
-            repo.discover(&root)?
+            let changes = repo
+                .discover(&root)?
                 .into_iter()
                 .map(|change| {
                     let title = forge
@@ -1356,7 +1466,8 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
                         .unwrap_or_default();
                     plain_change(change, title)
                 })
-                .collect()
+                .collect();
+            (changes, BTreeMap::new())
         }
     };
     let gitlab = repo.github_slug().is_none();
@@ -1378,12 +1489,16 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         merge_trees: Default::default(),
         pins: fetch(&root, &repo, &changes, gitlab).map_err(|e| format!("{e:#}")),
         gitlab,
+        repo,
+        github_checks,
         root: root.clone(),
         leases: std::cell::OnceCell::new(),
         claims,
         review_after_merge: crate::integration_cmd::review::Reader::new(&root),
     };
     let rows = pass(&changes, &live);
+    // trace:TASK-3813 | ai:codex
+    metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
     // Lanes that could not be read are said to be missing, never shown as
     // "no lanes".
     let (local_lanes, warnings) = match live.local_leases() {
@@ -1435,7 +1550,55 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
             }
             Ok(())
         }
+        land_args::LandCommand::Metrics { since, until, json } => metrics::run(
+            &crate::find_project_root()?,
+            &since,
+            until.as_deref(),
+            json || ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json),
+        ),
         land_args::LandCommand::Run(args) => run::run(&crate::find_project_root()?, &args),
+        // trace:STORY-2897 | ai:claude
+        land_args::LandCommand::Mode { action } => {
+            let root = crate::find_project_root()?;
+            match action {
+                land_args::ModeCommand::Status => crate::land_mode::status(&root),
+                land_args::ModeCommand::Set { mode } => crate::land_mode::set(
+                    &root,
+                    crate::landing_policy::LandingMode::parse(&mode).map_err(anyhow::Error::msg)?,
+                ),
+                land_args::ModeCommand::Reconcile => crate::land_mode::reconcile_effective(&root),
+            }
+        }
+    }
+}
+
+/// `land mode set|reconcile` change branch protection and config: writes.
+/// Every other verb reads. An unparseable invocation is a write (fail
+/// closed). trace:STORY-2897 | ai:claude
+fn land_policy(matches: &clap::ArgMatches) -> CmdPolicy {
+    let action = <LandArgs as clap::FromArgMatches>::from_arg_matches(matches)
+        .ok()
+        .map(|args| args.action);
+    let read = matches!(
+        action,
+        Some(
+            land_args::LandCommand::Status
+                | land_args::LandCommand::Metrics { .. }
+                | land_args::LandCommand::Run(_)
+                | land_args::LandCommand::Mode {
+                    action: land_args::ModeCommand::Status
+                }
+        )
+    );
+    CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
     }
 }
 
@@ -1444,12 +1607,7 @@ pub(crate) static LAND: CommandReg = CommandReg {
     name: "land",
     help_after: "lane",
     command: <LandArgs as clap::CommandFactory>::command,
-    policy: |_| CmdPolicy {
-        stakeholder: StakeholderAction::Read,
-        per_write_auto_push: false,
-        skip_role_restore_prompt: true,
-        team_identity_write: false,
-    },
+    policy: land_policy,
     run: Handler::Early(run),
 };
 

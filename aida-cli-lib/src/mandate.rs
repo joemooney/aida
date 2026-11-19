@@ -1240,31 +1240,36 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             if let Some(kept) = kept_gate_paths_line(&m, &renewal) {
                 println!("{kept}");
             }
+            // trace:TASK-3820 | ai:claude — the mandate is renewed first; then
+            // every covered grant is extended up to its new expiry.
+            let grants = renew_covered_grants(&m, audit_root.as_deref());
+            let mut audit = renewal.clone();
+            audit.changes.extend(grant_audit_lines(&grants));
             // trace:STORY-2346 | ai:claude
-            if let Some(old_id) = revived_from {
+            if let Some(old_id) = &revived_from {
                 if let Some(root) = &audit_root {
-                    emit_revived(root, &m, &old_id, &renewal);
+                    emit_revived(root, &m, old_id, &audit);
                 }
-                println!("{}", revived_message(&old_id, &m, &renewal));
-                return Ok(());
+                println!("{}", revived_message(old_id, &m, &renewal));
+            } else {
+                if let Some(root) = &audit_root {
+                    emit_renewed(root, &m, &audit);
+                }
+                println!(
+                    "Mandate {} renewed until {} (was {}); {}; protected paths: {} (renewal {}).",
+                    m.id,
+                    renewal.expires_at.to_rfc3339(),
+                    renewal.previous_expires_at.to_rfc3339(),
+                    if renewal.changes.is_empty() {
+                        "scope, supervised flag and reason retained"
+                    } else {
+                        "everything else retained"
+                    },
+                    m.include_gate_paths,
+                    m.renewals.len()
+                );
             }
-            if let Some(root) = &audit_root {
-                emit_renewed(root, &m, &renewal);
-            }
-            println!(
-                "Mandate {} renewed until {} (was {}); {}; protected paths: {} (renewal {}).",
-                m.id,
-                renewal.expires_at.to_rfc3339(),
-                renewal.previous_expires_at.to_rfc3339(),
-                if renewal.changes.is_empty() {
-                    "scope, supervised flag and reason retained"
-                } else {
-                    "everything else retained"
-                },
-                m.include_gate_paths,
-                m.renewals.len()
-            );
-            Ok(())
+            grants_outcome(&grants)
         }
         crate::cli::MandateAction::Stop => {
             let stopped = stop_as_human(
@@ -1301,12 +1306,135 @@ pub(crate) fn handle_mandate(action: &crate::cli::MandateAction) -> Result<()> {
             for w in &warnings {
                 eprintln!("warning: {w}");
             }
+            let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
             print!(
                 "{}",
-                status_report(&state, now, audit_root.as_deref(), *json)
+                operator_status_report(&state, now, audit_root.as_deref(), &cwd, *json, &warnings)?
             );
             Ok(())
         }
+    }
+}
+
+/// TASK-3820: extend the operator's covered grants up to the renewed
+/// mandate's expiry, with the seat cap `aida role enter` enforces where the
+/// command runs. `Err` when the grant store could not be reached at all.
+// trace:TASK-3820 | ai:claude
+fn renew_covered_grants(
+    m: &Mandate,
+    audit_root: Option<&Path>,
+) -> Result<crate::gate::seat_authority::GrantExtensionReport> {
+    // Grants are checked against the project's roster: outside a project
+    // nothing can be extended, and saying so beats a silent success.
+    let Some(root) = audit_root else {
+        bail!("run `aida mandate renew` inside the project checkout to extend its session grants");
+    };
+    let cwd = std::env::current_dir().unwrap_or_else(|_| ".".into());
+    let policy_root = crate::statusline_project_root_from_with_roots(
+        &cwd,
+        &aida_core::store_locate::real_temp_roots(),
+    );
+    crate::gate::seat_authority::extend_operator_grants_as_human(root, &policy_root, m.expires_at)
+}
+
+/// The renewal's audit lines for each grant it extended or refused.
+// trace:TASK-3820 | ai:claude
+fn grant_audit_lines(
+    grants: &Result<crate::gate::seat_authority::GrantExtensionReport>,
+) -> Vec<String> {
+    use crate::gate::seat_authority::ExtensionOutcome;
+    let report = match grants {
+        Ok(report) => report,
+        Err(e) => return vec![format!("grants: not extended: {e:#}")],
+    };
+    report
+        .grants
+        .iter()
+        .filter_map(|g| match g.outcome {
+            ExtensionOutcome::Extended => Some(format!(
+                "grant {} ({}): {} -> {}",
+                g.id,
+                g.role,
+                g.previous_expires_at.to_rfc3339(),
+                g.expires_at.to_rfc3339()
+            )),
+            ExtensionOutcome::Refused => Some(format!(
+                "grant {} ({}): refused: {}",
+                g.id,
+                g.role,
+                g.reason.as_deref().unwrap_or("unknown")
+            )),
+            ExtensionOutcome::Kept | ExtensionOutcome::Skipped => None,
+        })
+        .collect()
+}
+
+/// Print the grant table; fail naming every covered grant that was refused.
+// trace:TASK-3820 | ai:claude
+fn grants_outcome(
+    grants: &Result<crate::gate::seat_authority::GrantExtensionReport>,
+) -> Result<()> {
+    let report = match grants {
+        Ok(report) => report,
+        Err(e) => bail!("the mandate was renewed, but no session grant was extended: {e:#}"),
+    };
+    print!("{}", report.text());
+    let refused = report.refused();
+    if refused.is_empty() {
+        return Ok(());
+    }
+    let named: Vec<String> = refused
+        .iter()
+        .map(|g| format!("{} ({})", g.id, g.role))
+        .collect();
+    bail!(
+        "the mandate was renewed, but {} covered session grant(s) could not be extended: {}; re-enter those seats at a terminal (`aida role enter <role>`) or relaunch the agents that hold them",
+        refused.len(),
+        named.join(", ")
+    )
+}
+
+// trace:TASK-3816 | ai:codex
+/// `invoking_dir` is where the operator ran the command: role enter enforces
+/// `[seat] max_grant_hours` from the project root found walking up from it
+/// (a worktree's own config), not from the main checkout `audit_root`.
+fn operator_status_report(
+    state: &MandateState,
+    now: DateTime<Utc>,
+    audit_root: Option<&Path>,
+    invoking_dir: &Path,
+    json: bool,
+    warnings: &[String],
+) -> Result<String> {
+    let root = audit_root.unwrap_or_else(|| Path::new("."));
+    // trace:TASK-3816 | ai:claude — same resolution as `aida role enter`.
+    let policy_root = crate::statusline_project_root_from_with_roots(
+        invoking_dir,
+        &aida_core::store_locate::real_temp_roots(),
+    );
+    let inventory = crate::gate::seat_authority::operator_grant_inventory(root, &policy_root, now);
+    let cap = crate::gate::mandate::max_ttl();
+    let report = status_report(state, now, audit_root, json);
+    if json {
+        let mut out: serde_json::Value = serde_json::from_str(&report)?;
+        out["grant_inventory"] = serde_json::to_value(&inventory)?;
+        out["mandate_diagnostics"] = serde_json::json!({
+            "effective_cap_hours": cap.hours,
+            "config_origin": cap.origin(crate::gate::seat_authority::MANDATE_MAX_TTL_KEY),
+            "rejected_records": warnings,
+        });
+        Ok(format!("{out}\n"))
+    } else {
+        let mut out = format!(
+            "{report}{}Mandate cap: {}h ({})\n",
+            inventory.text(),
+            cap.hours,
+            cap.origin(crate::gate::seat_authority::MANDATE_MAX_TTL_KEY)
+        );
+        for warning in warnings {
+            out.push_str(&format!("  rejected record: {warning}\n"));
+        }
+        Ok(out)
     }
 }
 
@@ -1380,3 +1508,200 @@ pub(crate) static MANDATE: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg
     },
     run: crate::cmdkit::Handler::Early(run_mandate),
 };
+
+#[cfg(test)]
+mod task_3816_tests {
+    use super::*;
+    use crate::gate::seat_authority::{CapSource, HourCap};
+
+    struct ResetCap;
+    impl Drop for ResetCap {
+        fn drop(&mut self) {
+            TEST_MAX_TTL.with(|c| c.set(None));
+        }
+    }
+
+    // trace:TASK-3816 | ai:codex
+    #[test]
+    fn task_3816_status_reports_rejected_mandate_and_cap_in_both_formats() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _env = crate::gate::test_support::AmbientGuard::hermetic(tmp.path(), None);
+        let _reset = ResetCap;
+        let principal = crate::gate::mandate::operator_principal();
+        TEST_MAX_TTL.with(|c| {
+            c.set(Some(HourCap {
+                hours: 72,
+                source: CapSource::Global,
+            }))
+        });
+        let now = Utc::now();
+        let dir = tmp.path().join("mandates");
+        let m = start(
+            &dir,
+            &|| Ok(()),
+            &principal,
+            chrono::Duration::hours(72),
+            None,
+            false,
+            now,
+        )
+        .unwrap();
+        TEST_MAX_TTL.with(|c| {
+            c.set(Some(HourCap {
+                hours: 24,
+                source: CapSource::Project,
+            }))
+        });
+        let (valid, warnings) = load_valid(&dir, &principal, now);
+        assert!(valid.is_empty());
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains(&m.id));
+        let state = state_at(&valid, now);
+        let json: serde_json::Value = serde_json::from_str(
+            &operator_status_report(&state, now, Some(tmp.path()), tmp.path(), true, &warnings)
+                .unwrap(),
+        )
+        .unwrap();
+        let text =
+            operator_status_report(&state, now, Some(tmp.path()), tmp.path(), false, &warnings)
+                .unwrap();
+        assert_eq!(json["status"], "none");
+        assert_eq!(json["mandate_diagnostics"]["effective_cap_hours"], 24);
+        let origin = json["mandate_diagnostics"]["config_origin"]
+            .as_str()
+            .unwrap();
+        assert!(origin.contains("project"));
+        assert!(text.contains(origin));
+        assert!(text.contains("Mandate cap: 24h"));
+        assert_eq!(
+            json["mandate_diagnostics"]["rejected_records"],
+            serde_json::json!(warnings)
+        );
+        assert!(text.contains(&warnings[0]));
+        assert!(json["grant_inventory"]["grants"].is_array());
+    }
+
+    /// A worktree lowering `[seat] max_grant_hours` below the main checkout's
+    /// must be what the inventory reports when invoked from a subdirectory of
+    /// that worktree, the cap `aida role enter` enforces there.
+    // trace:TASK-3816 | ai:claude
+    #[test]
+    fn task_3816_inventory_cap_follows_invoking_worktree_not_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        let main = tmp.path().join("main");
+        std::fs::create_dir_all(main.join(".aida")).unwrap();
+        let _env = crate::gate::test_support::AmbientGuard::hermetic_with_seat_and(
+            &main,
+            "advisor",
+            &[],
+            &[],
+        );
+        std::fs::write(
+            main.join(".aida/config.toml"),
+            "store_path = \".aida-store\"\n[seat]\nmax_grant_hours = 20\n",
+        )
+        .unwrap();
+        let worktree = tmp.path().join("wt");
+        let sub = worktree.join("src").join("deep");
+        std::fs::create_dir_all(worktree.join(".aida")).unwrap();
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(
+            worktree.join(".aida/config.toml"),
+            "[seat]\nmax_grant_hours = 12\n",
+        )
+        .unwrap();
+        let now = Utc::now();
+        let state = state_at(&[], now);
+        let caps = |invoking: &Path| -> Vec<(u64, String)> {
+            let out =
+                operator_status_report(&state, now, Some(&main), invoking, true, &[]).unwrap();
+            let json: serde_json::Value = serde_json::from_str(&out).unwrap();
+            json["grant_inventory"]["grants"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|g| {
+                    (
+                        g["effective_cap_hours"].as_u64().unwrap(),
+                        g["config_origin"].as_str().unwrap().to_string(),
+                    )
+                })
+                .collect()
+        };
+        let from_worktree = caps(&sub);
+        assert!(!from_worktree.is_empty(), "the operator's grant is listed");
+        for (hours, origin) in &from_worktree {
+            assert_eq!(*hours, 12, "worktree cap, not main's");
+            assert!(origin.contains("project"), "{origin}");
+        }
+        assert!(caps(&main).iter().all(|(hours, _)| *hours == 20));
+    }
+}
+
+#[cfg(test)]
+mod task_3820_tests {
+    use super::*;
+    use crate::gate::seat_authority::{ExtensionOutcome, GrantExtension, GrantExtensionReport};
+
+    fn grant(id: &str, outcome: ExtensionOutcome, reason: Option<&str>) -> GrantExtension {
+        let at = Utc::now();
+        GrantExtension {
+            id: id.into(),
+            role: "advisor".into(),
+            parent: None,
+            holders: Vec::new(),
+            previous_expires_at: at,
+            expires_at: at + chrono::Duration::hours(8),
+            outcome,
+            reason: reason.map(str::to_string),
+            key_note: None,
+        }
+    }
+
+    fn report(grants: Vec<GrantExtension>) -> Result<GrantExtensionReport> {
+        Ok(GrantExtensionReport {
+            target_expires_at: Utc::now(),
+            effective_cap_hours: 24,
+            config_origin: "the default".into(),
+            grants,
+            diagnostics: Vec::new(),
+        })
+    }
+
+    /// The renew command exits non-zero naming every refused covered grant,
+    /// and zero when only kept, skipped or extended grants remain.
+    // trace:TASK-3820 | ai:claude
+    #[test]
+    fn task_3820_renew_fails_naming_refused_grants_and_audits_them() {
+        let ok = report(vec![
+            grant("a", ExtensionOutcome::Extended, None),
+            grant("b", ExtensionOutcome::Kept, Some("already lasts")),
+            grant("c", ExtensionOutcome::Skipped, Some("relay")),
+        ]);
+        assert!(grants_outcome(&ok).is_ok());
+        let lines = grant_audit_lines(&ok);
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].starts_with("grant a (advisor): "));
+        let bad = report(vec![
+            grant("a", ExtensionOutcome::Extended, None),
+            grant(
+                "r1",
+                ExtensionOutcome::Refused,
+                Some("revoked while renewing"),
+            ),
+            grant("r2", ExtensionOutcome::Refused, Some("unbound")),
+        ]);
+        let err = grants_outcome(&bad).unwrap_err().to_string();
+        assert!(err.contains("2 covered session grant(s)"), "{err}");
+        assert!(
+            err.contains("r1 (advisor)") && err.contains("r2 (advisor)"),
+            "{err}"
+        );
+        assert!(grant_audit_lines(&bad)
+            .iter()
+            .any(|l| l == "grant r1 (advisor): refused: revoked while renewing"));
+        let unreachable: Result<GrantExtensionReport> = Err(anyhow::anyhow!("no TTY"));
+        assert!(grants_outcome(&unreachable).is_err());
+        assert_eq!(grant_audit_lines(&unreachable).len(), 1);
+    }
+}

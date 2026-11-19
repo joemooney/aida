@@ -402,6 +402,7 @@ fn rollup_check_row(check: &serde_json::Value) -> crate::ci_gate::CheckRow {
         workflow: field("workflowName"),
         bucket: bucket.to_string(),
         run_id: None,
+        job_id: None,
     }
 }
 

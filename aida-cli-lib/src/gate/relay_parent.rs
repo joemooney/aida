@@ -1,8 +1,9 @@
 //! Mandate-derived relay parent replacement. Same-uid authority trust as mandates.
 // trace:TASK-3119 | ai:codex
+// trace:TASK-3139 | ai:codex
 // mandate-gate
 use super::{mandate, seat_authority as seat};
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -33,30 +34,79 @@ pub(crate) enum RefusalCode {
     HandoffExists,
     EvidenceUnreadable,
     AuditFailed,
+    GrantWriteFailed,
+    HandoffWriteFailed,
 }
-pub(crate) fn refusal_code(error: &anyhow::Error) -> RefusalCode {
-    use RefusalCode::*;
-    let text = error.to_string();
-    match text.as_str() {
-        "knob-off" => KnobOff,
-        "invalid-policy" => InvalidPolicy,
-        "invalid-duration" => InvalidDuration,
-        "authority-busy" | "parent-busy" => AuthorityBusy,
-        "missing-parent" => MissingParent,
-        "not-renewable-parent" => InvalidParent,
-        "identity-mismatch" => IdentityMismatch,
-        "presenter-not-bound" => PresenterNotBound,
-        "parent-not-expiring" => ParentNotExpiring,
-        "parent-superseded" => ParentSuperseded,
-        "no-active-mandate" => NoActiveMandate,
-        "mandate-out-of-scope" | "missing-renewal-authorization" => MandateOutOfScope,
-        "insufficient-lifetime" => InsufficientLifetime,
-        "unsafe-run-dir" => UnsafeRunDir,
-        "handoff-exists" => HandoffExists,
-        "audit-failed" => AuditFailed,
-        _ => EvidenceUnreadable,
+impl RefusalCode {
+    pub(crate) fn refuse(self) -> Refusal {
+        Refusal {
+            code: self,
+            source: None,
+        }
+    }
+
+    pub(crate) fn caused_by(self, error: impl Into<anyhow::Error>) -> Refusal {
+        Refusal {
+            code: self,
+            source: Some(error.into()),
+        }
+    }
+
+    fn detail(self) -> &'static str {
+        match self {
+            Self::KnobOff => "relay parent renewal is disabled",
+            Self::InvalidPolicy => "cannot read the relay parent renewal policy",
+            Self::InvalidDuration => {
+                "renewal and rotation durations must be positive and representable"
+            }
+            Self::AuthorityBusy => "cannot acquire the relay renewal authority locks",
+            Self::MissingParent => "no parent grant is exported",
+            Self::InvalidParent => "the exported grant is not an eligible relay parent",
+            Self::IdentityMismatch => {
+                "the parent grant does not belong to this operator and subject"
+            }
+            Self::PresenterNotBound => {
+                "this process has no live process binding to the parent grant"
+            }
+            Self::ParentNotExpiring => {
+                "the parent grant still has enough time for the next rotation"
+            }
+            Self::ParentSuperseded => "the parent grant already has a recorded successor",
+            Self::NoActiveMandate => "the relay renewal mandate is inactive, expired, or stopped",
+            Self::MandateOutOfScope => "the mandate does not authorize this relay parent grant",
+            Self::InsufficientLifetime => {
+                "the replacement lifetime is shorter than the rotation minimum"
+            }
+            Self::UnsafeRunDir => "cannot use the relay run directory safely",
+            Self::HandoffExists => "relay.grant already exists",
+            Self::EvidenceUnreadable => "cannot validate the relay renewal evidence",
+            Self::AuditFailed => "cannot record the relay renewal audit receipt",
+            Self::GrantWriteFailed => "cannot persist the replacement grant",
+            Self::HandoffWriteFailed => "cannot write relay.grant",
+        }
     }
 }
+
+#[derive(Debug)]
+pub(crate) struct Refusal {
+    pub(crate) code: RefusalCode,
+    source: Option<anyhow::Error>,
+}
+
+impl std::fmt::Display for Refusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.code.detail())?;
+        // Keep low-level diagnostics out of controller JSON and durable receipts.
+        if f.alternate() {
+            if let Some(source) = &self.source {
+                write!(f, ": {source:#}")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl std::error::Error for Refusal {}
 
 const ORIGIN: &str = "mandate-relay-renewal:";
 const LIMIT: u64 = 65536;
@@ -215,20 +265,19 @@ pub(crate) fn read_relay_grant(run_dir: &Path) -> Result<RelayGrant> {
     Ok(record)
 }
 
-fn write_handoff(dir: &Path, r: &RelayGrant) -> Result<()> {
+fn write_handoff(dir: &Path, r: &RelayGrant) -> Result<(), Refusal> {
+    use RefusalCode::*;
     let path = dir.join("relay.grant");
     // Never overwrite stale success, a link or an unreadable record on refusal.
-    anyhow::ensure!(
-        std::fs::symlink_metadata(&path).is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound),
-        "handoff-exists"
-    );
+    check_handoff_absent(&path)?;
     let tmp = dir.join(format!(".relay.grant.{}", Uuid::new_v4()));
     let result = (|| {
         let mut f = std::fs::OpenOptions::new()
             .create_new(true)
             .write(true)
             .mode(0o600)
-            .open(&tmp)?;
+            .open(&tmp)
+            .map_err(|e| HandoffWriteFailed.caused_by(e))?;
         write!(
             f,
             "version=1\ngrant={}\nexpires_at={}\nmandate={}\nsupersedes={}\n",
@@ -236,14 +285,29 @@ fn write_handoff(dir: &Path, r: &RelayGrant) -> Result<()> {
             r.expires_at.to_rfc3339(),
             r.mandate,
             r.supersedes
-        )?;
-        f.sync_all()?;
+        )
+        .map_err(|e| HandoffWriteFailed.caused_by(e))?;
+        f.sync_all().map_err(|e| HandoffWriteFailed.caused_by(e))?;
         // link is atomic and cannot replace a concurrent handoff.
-        std::fs::hard_link(&tmp, &path)?;
+        std::fs::hard_link(&tmp, &path).map_err(|e| {
+            if e.kind() == std::io::ErrorKind::AlreadyExists {
+                HandoffExists.caused_by(e)
+            } else {
+                HandoffWriteFailed.caused_by(e)
+            }
+        })?;
         Ok(())
     })();
     let _ = std::fs::remove_file(tmp);
     result
+}
+
+fn check_handoff_absent(path: &Path) -> Result<(), Refusal> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Err(RefusalCode::HandoffExists.refuse()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(RefusalCode::UnsafeRunDir.caused_by(e)),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -307,25 +371,30 @@ pub(crate) fn validate_origin(
     root: &Path,
     grant: &seat::SeatGrant,
     now: DateTime<Utc>,
-) -> Result<()> {
+) -> Result<(), Refusal> {
+    use RefusalCode::*;
     let Some(id) = grant.origin.as_deref().and_then(|s| s.strip_prefix(ORIGIN)) else {
         return Ok(());
     };
-    Uuid::parse_str(id)?;
-    let r: Receipt =
-        serde_json::from_slice(&private_bytes(&receipt_dir()?.join(format!("{id}.json")))?)?;
-    anyhow::ensure!(
-        r.version == 1 && r.outcome == "success" && r.grant.as_deref() == Some(&grant.id),
-        "missing successful renewal receipt"
-    );
+    let r = (|| -> Result<Receipt> {
+        Uuid::parse_str(id)?;
+        Ok(serde_json::from_slice(&private_bytes(
+            &receipt_dir()?.join(format!("{id}.json")),
+        )?)?)
+    })()
+    .map_err(|e| EvidenceUnreadable.caused_by(e))?;
+    if r.version != 1 || r.outcome != "success" || r.grant.as_deref() != Some(&grant.id) {
+        return Err(EvidenceUnreadable.refuse());
+    }
     // Validate today's complete lineage, then project only temporal evidence
     // back to the recorded instant. Later issues must not shadow this mandate;
     // later renewals and stops must not invalidate an earlier approval.
     let mut valid = checked_mandates(
-        &mandate::mandate_dir()?,
+        &mandate::mandate_dir().map_err(|e| EvidenceUnreadable.caused_by(e))?,
         &grant.principal,
         Utc::now().max(now),
-    )?;
+    )
+    .map_err(|e| EvidenceUnreadable.caused_by(e))?;
     valid.retain(|m| m.issued_at <= now);
     for m in &mut valid {
         if let Some(next) = m.renewals.iter().find(|r| r.renewed_at > now) {
@@ -336,36 +405,39 @@ pub(crate) fn validate_origin(
         }
     }
     let mandate::MandateState::Active(m) = mandate::state_at(&valid, now) else {
-        bail!("mandate inactive");
+        return Err(NoActiveMandate.refuse());
     };
-    anyhow::ensure!(
-        Some(m.id.as_str()) == r.mandate.as_deref(),
-        "mandate inactive"
-    );
-    let auth = r.authorization.as_ref().context("missing authorization")?;
-    anyhow::ensure!(
-        m.covers(mandate::Scope::RelayParentRenewal)
-            && m.relay_parent.as_ref() == Some(auth)
-            && auth.version == 1
-            && auth.project
-                == seat::roster_store(root)
-                    .map_err(|e| anyhow::anyhow!(e.to_string()))?
-                    .canonicalize()?
-            && grant.expires_at <= m.expires_at
-            && auth.seats.contains(&grant.seat)
-            && grant.delegable_seats.iter().all(|s| auth.seats.contains(s)),
-        "mandate scope changed"
-    );
-    let effective = r.effective.context("missing effective grant")?;
-    anyhow::ensure!(
-        effective.principal == grant.principal
-            && effective.subject == grant.subject
-            && effective.seat == grant.seat
-            && effective.delegable_seats == grant.delegable_seats
-            && effective.expires_at == grant.expires_at
-            && effective.binding == grant.binding,
-        "grant differs from receipt"
-    );
+    if Some(m.id.as_str()) != r.mandate.as_deref() {
+        return Err(NoActiveMandate.refuse());
+    }
+    let auth = r
+        .authorization
+        .as_ref()
+        .ok_or_else(|| EvidenceUnreadable.refuse())?;
+    if !(m.covers(mandate::Scope::RelayParentRenewal)
+        && m.relay_parent.as_ref() == Some(auth)
+        && auth.version == 1
+        && auth.project
+            == seat::roster_store(root)
+                .map_err(|e| EvidenceUnreadable.caused_by(anyhow::Error::msg(e)))?
+                .canonicalize()
+                .map_err(|e| EvidenceUnreadable.caused_by(e))?
+        && grant.expires_at <= m.expires_at
+        && auth.seats.contains(&grant.seat)
+        && grant.delegable_seats.iter().all(|s| auth.seats.contains(s)))
+    {
+        return Err(MandateOutOfScope.refuse());
+    }
+    let effective = r.effective.ok_or_else(|| EvidenceUnreadable.refuse())?;
+    if !(effective.principal == grant.principal
+        && effective.subject == grant.subject
+        && effective.seat == grant.seat
+        && effective.delegable_seats == grant.delegable_seats
+        && effective.expires_at == grant.expires_at
+        && effective.binding == grant.binding)
+    {
+        return Err(EvidenceUnreadable.refuse());
+    }
     Ok(())
 }
 
@@ -374,8 +446,11 @@ pub(crate) fn renew(
     run_dir: &Path,
     requested: Duration,
     rotation: Duration,
-) -> Result<RelayGrant> {
-    anyhow::ensure!(enabled().context("invalid-policy")?, "knob-off");
+) -> Result<RelayGrant, Refusal> {
+    use RefusalCode::*;
+    if !enabled().map_err(|e| InvalidPolicy.caused_by(e))? {
+        return Err(KnobOff.refuse());
+    }
     let mut receipt = Receipt {
         version: 1,
         id: Uuid::new_v4().to_string(),
@@ -394,85 +469,90 @@ pub(crate) fn renew(
         previous_expires_at: None,
         clamps: Vec::new(),
     };
-    let result = (|| {
-        anyhow::ensure!(
-            requested > Duration::zero() && rotation > Duration::zero(),
-            "invalid-duration"
-        );
+    let result = (|| -> Result<RelayGrant, Refusal> {
+        if requested <= Duration::zero() || rotation <= Duration::zero() {
+            return Err(InvalidDuration.refuse());
+        }
         // Pin the owned directory; neither a rename nor a symlink swap can
         // redirect the eventual handoff to a different directory.
         let run_handle = std::fs::OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_NONBLOCK)
-            .open(run_dir)?;
-        let meta = run_handle.metadata()?;
-        anyhow::ensure!(
-            meta.uid() == unsafe { libc::geteuid() } && meta.mode() & 0o022 == 0,
-            "unsafe-run-dir"
-        );
+            .open(run_dir)
+            .map_err(|e| UnsafeRunDir.caused_by(e))?;
+        let meta = run_handle
+            .metadata()
+            .map_err(|e| UnsafeRunDir.caused_by(e))?;
+        if meta.uid() != unsafe { libc::geteuid() } || meta.mode() & 0o022 != 0 {
+            return Err(UnsafeRunDir.refuse());
+        }
         use std::os::fd::AsRawFd;
         let pinned_run = PathBuf::from(format!("/proc/self/fd/{}", run_handle.as_raw_fd()));
         let run_dir = pinned_run.as_path();
-        anyhow::ensure!(
-            std::fs::symlink_metadata(run_dir.join("relay.grant"))
-                .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound),
-            "handoff-exists"
-        );
-        let dir = mandate::mandate_dir()?;
-        let _lock = authority_lock(&dir)?;
-        let old_id = receipt.supersedes.as_deref().context("missing-parent")?;
+        check_handoff_absent(&run_dir.join("relay.grant"))?;
+        let dir = mandate::mandate_dir().map_err(|e| EvidenceUnreadable.caused_by(e))?;
+        let _lock = authority_lock(&dir).map_err(|e| AuthorityBusy.caused_by(e))?;
+        let old_id = receipt
+            .supersedes
+            .as_deref()
+            .ok_or_else(|| MissingParent.refuse())?;
         let _parent_lock = seat::lock_parent(old_id)?;
         let old = seat::renewable_parent(root, old_id, rotation)?;
-        let entries = match std::fs::read_dir(receipt_dir()?) {
-            Ok(entries) => Some(entries),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-            Err(e) => return Err(e.into()),
-        };
+        let entries =
+            match std::fs::read_dir(receipt_dir().map_err(|e| EvidenceUnreadable.caused_by(e))?) {
+                Ok(entries) => Some(entries),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                Err(e) => return Err(EvidenceUnreadable.caused_by(e)),
+            };
         if let Some(entries) = entries {
             for entry in entries {
-                let path = entry?.path();
+                let path = entry.map_err(|e| EvidenceUnreadable.caused_by(e))?.path();
                 if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    let previous: Receipt = serde_json::from_slice(&private_bytes(&path)?)?;
-                    anyhow::ensure!(
-                        previous.outcome != "success"
-                            || previous.supersedes.as_deref() != Some(old_id),
-                        "parent-superseded"
-                    );
+                    let previous: Receipt = serde_json::from_slice(
+                        &private_bytes(&path).map_err(|e| EvidenceUnreadable.caused_by(e))?,
+                    )
+                    .map_err(|e| EvidenceUnreadable.caused_by(e))?;
+                    if !(previous.outcome != "success"
+                        || previous.supersedes.as_deref() != Some(old_id))
+                    {
+                        return Err(ParentSuperseded.refuse());
+                    }
                 }
             }
         }
         let now = Utc::now();
-        let valid = checked_mandates(&dir, &old.principal, now)?;
+        let valid = checked_mandates(&dir, &old.principal, now)
+            .map_err(|e| EvidenceUnreadable.caused_by(e))?;
         let mandate::MandateState::Active(m) = mandate::state_at(&valid, now) else {
-            bail!("no-active-mandate");
+            return Err(NoActiveMandate.refuse());
         };
         receipt.mandate = Some(m.id.clone());
         let auth = m
             .relay_parent
             .as_ref()
-            .context("missing-renewal-authorization")?;
-        anyhow::ensure!(
-            m.covers(mandate::Scope::RelayParentRenewal)
-                && auth.version == 1
-                && auth.project
-                    == seat::roster_store(root)
-                        .map_err(|e| anyhow::anyhow!(e.to_string()))?
-                        .canonicalize()?
-                && auth.seats.contains(&old.seat),
-            "mandate-out-of-scope"
-        );
+            .ok_or_else(|| MandateOutOfScope.refuse())?;
+        if !(m.covers(mandate::Scope::RelayParentRenewal)
+            && auth.version == 1
+            && auth.project
+                == seat::roster_store(root)
+                    .map_err(|e| EvidenceUnreadable.caused_by(anyhow::Error::msg(e)))?
+                    .canonicalize()
+                    .map_err(|e| EvidenceUnreadable.caused_by(e))?
+            && auth.seats.contains(&old.seat))
+        {
+            return Err(MandateOutOfScope.refuse());
+        }
         receipt.previous_expires_at = Some(old.expires_at);
         receipt.requested_expires_at = now
             .checked_add_signed(requested)
-            .context("invalid-duration")?;
+            .ok_or_else(|| InvalidDuration.refuse())?;
         let expires = receipt
             .requested_expires_at
             .min(m.expires_at)
             .min(now + Duration::hours(seat::resolve_max_grant_hours(root) as i64));
-        anyhow::ensure!(
-            expires > now && expires - now >= rotation,
-            "insufficient-lifetime"
-        );
+        if expires <= now || expires - now < rotation {
+            return Err(InsufficientLifetime.refuse());
+        }
         if expires == m.expires_at && expires < receipt.requested_expires_at {
             receipt.clamps.push("mandate-end".into());
         }
@@ -491,8 +571,8 @@ pub(crate) fn renew(
         receipt.grant = Some(new.id.clone());
         receipt.authorization = Some(auth.clone());
         receipt.effective = Some(new.clone());
-        save(&receipt)?; // durable receipt precedes activation
-        seat::persist_replacement(&new)?;
+        save(&receipt).map_err(|e| AuditFailed.caused_by(e))?; // durable receipt precedes activation
+        persist_relay_grant(&new)?;
         let handoff = RelayGrant {
             version: 1,
             grant: new.id.clone(),
@@ -509,19 +589,23 @@ pub(crate) fn renew(
     if let Err(ref err) = result {
         receipt.outcome = "refused".into();
         receipt.reason = Some(err.to_string());
-        receipt.refusal_code = Some(refusal_code(err));
-        save(&receipt).context("audit-failed")?;
+        receipt.refusal_code = Some(err.code);
+        save(&receipt).map_err(|e| AuditFailed.caused_by(e))?;
     }
     // The canonical receipt is mandatory; the event feed remains a mirror.
     let event = crate::events::Event::new(
         None,
         "",
         crate::events::EventKind::RelayParentGrantRenewal {
-            receipt: serde_json::to_value(&receipt)?,
+            receipt: serde_json::to_value(&receipt).map_err(|e| AuditFailed.caused_by(e))?,
         },
     );
     crate::events::emit(root, &event);
     result
+}
+
+fn persist_relay_grant(grant: &seat::SeatGrant) -> Result<(), Refusal> {
+    seat::persist_replacement(grant).map_err(|e| RefusalCode::GrantWriteFailed.caused_by(e))
 }
 
 pub(crate) fn summary(mandate_id: &str) -> serde_json::Value {
@@ -539,6 +623,39 @@ pub(crate) fn summary(mandate_id: &str) -> serde_json::Value {
     }
     receipts.sort_by_key(|r| r.at);
     serde_json::json!({"count": receipts.iter().filter(|r| r.outcome == "success").count(), "refusal_count": receipts.iter().filter(|r| r.outcome != "success").count(), "last": receipts.last()})
+}
+
+/// TASK-3820: a replacement this module minted. Its lifetime is pinned to its
+/// receipt ([`validate_origin`]) and only [`renew`] may give it a successor.
+// trace:TASK-3820 | ai:claude
+pub(crate) fn is_replacement(grant: &seat::SeatGrant) -> bool {
+    grant
+        .origin
+        .as_deref()
+        .is_some_and(|o| o.starts_with(ORIGIN))
+}
+
+/// TASK-3820: the replacement minted from predecessor `id`, if a successful
+/// receipt records one. A receipt that cannot be read is an error, never
+/// "not superseded": the caller then cannot rule out a double extension.
+// trace:TASK-3820 | ai:claude
+pub(crate) fn superseded_by(id: &str) -> Result<Option<String>> {
+    let entries = match std::fs::read_dir(receipt_dir()?) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        let r: Receipt = serde_json::from_slice(&private_bytes(&path)?)?;
+        if r.outcome == "success" && r.supersedes.as_deref() == Some(id) {
+            return Ok(Some(r.grant.unwrap_or_default()));
+        }
+    }
+    Ok(None)
 }
 
 #[cfg(test)]
@@ -689,7 +806,7 @@ mod task_3119_tests {
             )
             .unwrap();
         }
-        fn renew(&self) -> Result<RelayGrant> {
+        fn renew(&self) -> Result<RelayGrant, Refusal> {
             renew(
                 &self.root,
                 &self.run,
@@ -708,7 +825,7 @@ mod task_3119_tests {
         let events_path = f.root.join(".aida/events.jsonl");
         let events_before = std::fs::read(&events_path).ok();
         let disabled = || {
-            assert_eq!(refusal_code(&f.renew().unwrap_err()), RefusalCode::KnobOff);
+            assert_eq!(f.renew().unwrap_err().code, RefusalCode::KnobOff);
             assert!(!f.run.join("relay.grant").exists());
             assert!(!receipt_dir().unwrap().exists());
             assert_eq!(std::fs::read(&events_path).ok(), events_before);
@@ -801,12 +918,161 @@ mod task_3119_tests {
             seat::grant_check_for(&f.root, &child.id, "relay-test"),
             seat::GrantCheck::Valid(_)
         ));
+        // trace:TASK-3816 | ai:codex — rotation roots and descendants stay in both formats.
+        let assert_inventory = |valid| {
+            let report = seat::operator_grant_inventory(&f.root, &f.root, Utc::now());
+            let json = serde_json::to_value(&report).unwrap();
+            let rows = json["grants"].as_array().unwrap();
+            let text = report.text();
+            for (id, parent) in [
+                (handoff.grant.as_str(), None),
+                (child.id.as_str(), Some(handoff.grant.as_str())),
+            ] {
+                let row = rows.iter().find(|row| row["id"] == id).unwrap();
+                assert_eq!(row["parent"], serde_json::json!(parent));
+                assert_eq!(row["valid"], valid);
+                let line = text
+                    .lines()
+                    .find(|line| line.trim_start().starts_with(&format!("{id} ")))
+                    .unwrap();
+                let status = if valid {
+                    "valid"
+                } else {
+                    row["rejection"].as_str().unwrap()
+                };
+                assert!(line.ends_with(&format!("status={status}")));
+            }
+        };
+        assert_inventory(true);
         let summary = summary(&f.mandate.id);
         assert_eq!(summary["count"], 1);
         assert_eq!(summary["last"]["outcome"], "success");
         mandate::stop(&f.dir, &|| Ok(()), "relay-test", Utc::now()).unwrap();
-        assert!(!matches!(
-            seat::grant_check_for(&f.root, &child.id, "relay-test"),
+        for (id, delegated) in [(handoff.grant.as_str(), false), (child.id.as_str(), true)] {
+            let seat::GrantCheck::Rejected { reason, .. } =
+                seat::grant_check_for(&f.root, id, "relay-test")
+            else {
+                panic!("stopped mandate must refuse grant {id}");
+            };
+            assert!(reason.to_string().contains("relay renewal mandate"));
+            let mandate_refusal = seat::GrantRejection::MandateRefused;
+            assert_eq!(
+                reason,
+                if delegated {
+                    seat::GrantRejection::Parent(Box::new(mandate_refusal))
+                } else {
+                    mandate_refusal
+                }
+            );
+        }
+        assert_inventory(false);
+    }
+    /// TASK-3820 regression (advisor-119): `aida mandate renew` must not
+    /// double-extend a relay's parent. The replacement, the predecessor it
+    /// superseded (still live here) and the replacement's descendants all stay
+    /// byte-for-byte as they were, the replacement still validates against its
+    /// receipt, and none counts as a refusal.
+    // trace:TASK-3820 | ai:claude
+    #[test]
+    fn task_3820_ancestor_superseded_before_the_locked_write_refuses_its_descendant() {
+        let f = Fixture::new();
+        f.knob("[seat]\nmandate_relay_parent_renewal=true\n");
+        // A live role-enter root with an ordinary child: both are covered.
+        let mut parent = f.parent.clone();
+        parent.expires_at = Utc::now() + Duration::hours(1);
+        seat::persist_replacement(&parent).unwrap();
+        let mut child = parent.clone();
+        child.id = Uuid::new_v4().to_string();
+        child.parent_grant_id = Some(parent.id.clone());
+        child.seat = "reviewer".into();
+        child.delegable_seats.clear();
+        seat::persist_replacement(&child).unwrap();
+        let now = Utc::now();
+        // The root is extended first; the relay supersedes it before the
+        // child's locked write.
+        let report = {
+            let (root, run) = (f.root.clone(), f.run.clone());
+            let _relay =
+                seat::task_3820_grant_renewal_tests::LockedRenewalHook::on(&child.id, move || {
+                    renew(&root, &run, Duration::hours(24), Duration::hours(2))
+                        .map(|_| ())
+                        .context("the relay renewal did not land")
+                });
+            seat::extend_grants_for_test(&f.root, "relay-test", now + Duration::minutes(90), now)
+        };
+        let row = |id: &str| report.grants.iter().find(|g| g.id == id).unwrap().clone();
+        assert_eq!(
+            row(&parent.id).outcome,
+            seat::ExtensionOutcome::Extended,
+            "{}",
+            report.text()
+        );
+        assert!(superseded_by(&parent.id).unwrap().is_some());
+        let r = row(&child.id);
+        assert_eq!(
+            r.outcome,
+            seat::ExtensionOutcome::Refused,
+            "{}",
+            report.text()
+        );
+        assert!(
+            r.reason.as_deref().unwrap().contains("superseded"),
+            "{:?}",
+            r.reason
+        );
+        assert_eq!(
+            seat::read_grant(&child.id).unwrap().expires_at,
+            child.expires_at
+        );
+    }
+    #[test]
+    fn task_3820_mandate_renew_leaves_relay_parent_grants_to_the_relay() {
+        let f = Fixture::new();
+        f.knob("[seat]\nmandate_relay_parent_renewal=true\n");
+        let handoff = f.renew().unwrap();
+        let mut predecessor = seat::read_grant(&f.parent.id).unwrap();
+        predecessor.expires_at = Utc::now() + Duration::minutes(30);
+        seat::persist_replacement(&predecessor).unwrap();
+        let mut child = seat::read_grant(&handoff.grant).unwrap();
+        child.id = Uuid::new_v4().to_string();
+        child.parent_grant_id = Some(handoff.grant.clone());
+        child.origin = None;
+        child.seat = "reviewer".into();
+        child.delegable_seats.clear();
+        seat::persist_replacement(&child).unwrap();
+        let path = |id: &str| seat::grant_dir().unwrap().join(format!("{id}.json"));
+        let ids = [f.parent.id.clone(), handoff.grant.clone(), child.id.clone()];
+        let before: Vec<_> = ids
+            .iter()
+            .map(|id| std::fs::read(path(id)).unwrap())
+            .collect();
+        let now = Utc::now();
+        let report =
+            seat::extend_grants_for_test(&f.root, "relay-test", now + Duration::hours(24), now);
+        for (id, was) in ids.iter().zip(before) {
+            let row = report.grants.iter().find(|g| &g.id == id).unwrap();
+            assert_eq!(
+                row.outcome,
+                seat::ExtensionOutcome::Skipped,
+                "{}",
+                report.text()
+            );
+            assert_eq!(std::fs::read(path(id)).unwrap(), was, "{id} was rewritten");
+        }
+        let reason = |id: &str| {
+            report
+                .grants
+                .iter()
+                .find(|g| g.id == id)
+                .and_then(|g| g.reason.clone())
+                .unwrap()
+        };
+        assert!(reason(&f.parent.id).contains("superseded"));
+        assert!(reason(&handoff.grant).contains("relay parent replacement"));
+        assert!(reason(&child.id).contains(&handoff.grant));
+        assert!(report.refused().is_empty());
+        assert!(matches!(
+            seat::grant_check_for(&f.root, &handoff.grant, "relay-test"),
             seat::GrantCheck::Valid(_)
         ));
     }
@@ -992,24 +1258,112 @@ mod task_3119_tests {
         mandate::stop(&f.dir, &|| Ok(()), "relay-test", Utc::now()).unwrap();
         f.refuses();
     }
-}
 
-#[cfg(test)]
-mod task_3119_extra_tests {
-    use super::*;
+    // trace:TASK-3139 | ai:codex
     #[test]
-    fn task_3119_refusal_codes_are_closed_json_values() {
-        for (reason, expected) in [
-            ("knob-off", "knob-off"),
-            ("parent-superseded", "parent-superseded"),
-            ("authority-busy", "authority-busy"),
-            ("missing-renewal-authorization", "mandate-out-of-scope"),
-            ("unrecognized error", "evidence-unreadable"),
+    fn task_3139_renewal_refusals_report_code_and_detail() {
+        for (code, detail) in [
+            ("knob-off", "renewal is disabled"),
+            (
+                "invalid-policy",
+                "cannot read the relay parent renewal policy",
+            ),
+            ("invalid-duration", "durations must be positive"),
+            (
+                "authority-busy",
+                "cannot acquire the relay renewal authority locks",
+            ),
+            ("missing-parent", "no parent grant is exported"),
+            ("invalid-parent", "not an eligible relay parent"),
+            (
+                "identity-mismatch",
+                "does not belong to this operator and subject",
+            ),
+            ("presenter-not-bound", "no live process binding"),
+            ("parent-not-expiring", "still has enough time"),
+            ("parent-superseded", "already has a recorded successor"),
+            (
+                "no-active-mandate",
+                "mandate is inactive, expired, or stopped",
+            ),
+            ("mandate-out-of-scope", "mandate does not authorize"),
+            ("insufficient-lifetime", "shorter than the rotation minimum"),
+            (
+                "unsafe-run-dir",
+                "cannot use the relay run directory safely",
+            ),
+            ("handoff-exists", "relay.grant already exists"),
+            (
+                "evidence-unreadable",
+                "cannot validate the relay renewal evidence",
+            ),
+            (
+                "audit-failed",
+                "cannot record the relay renewal audit receipt",
+            ),
         ] {
-            assert_eq!(
-                serde_json::to_value(refusal_code(&anyhow::anyhow!(reason))).unwrap(),
-                expected
-            );
+            let mut f = Fixture::new();
+            f.knob("[seat]\nmandate_relay_parent_renewal=true\n");
+            let mut requested = Duration::hours(24);
+            let mut lock = None;
+            match code {
+                "knob-off" => f.knob("[seat]\nmandate_relay_parent_renewal=false\n"),
+                "invalid-policy" => f.knob("[seat]\nmandate_relay_parent_renewal='yes'\n"),
+                "invalid-duration" => requested = Duration::zero(),
+                "authority-busy" => lock = Some(seat::lock_parent(&f.parent.id).unwrap()),
+                "missing-parent" => f._env.set_key(seat::GRANT_ENV, ""),
+                "invalid-parent" => f._env.set_key(seat::GRANT_ENV, "invalid-uuid"),
+                "identity-mismatch" => f.parent.subject = "other-subject".into(),
+                "presenter-not-bound" => f.parent.binding.clear(),
+                "parent-not-expiring" => f.parent.expires_at = Utc::now() + Duration::hours(3),
+                "parent-superseded" => {
+                    f.renew().unwrap();
+                    std::fs::remove_file(f.run.join("relay.grant")).unwrap();
+                }
+                "no-active-mandate" => {
+                    mandate::stop(&f.dir, &|| Ok(()), "relay-test", Utc::now()).unwrap();
+                }
+                "mandate-out-of-scope" => {
+                    f.mandate.relay_parent = None;
+                    f.save();
+                }
+                "insufficient-lifetime" => requested = Duration::minutes(1),
+                "unsafe-run-dir" => std::fs::remove_dir(&f.run).unwrap(),
+                "handoff-exists" => symlink("missing", f.run.join("relay.grant")).unwrap(),
+                "evidence-unreadable" => {
+                    std::fs::write(f.dir.join(format!("{}.json", f.mandate.id)), "{").unwrap()
+                }
+                "audit-failed" => std::fs::write(receipt_dir().unwrap(), "").unwrap(),
+                _ => unreachable!(),
+            }
+            seat::persist_replacement(&f.parent).unwrap();
+            let error = renew(&f.root, &f.run, requested, Duration::hours(2)).unwrap_err();
+            drop(lock);
+            assert_refusal(error, code, detail);
+            if code != "handoff-exists" {
+                assert!(std::fs::symlink_metadata(f.run.join("relay.grant")).is_err());
+            }
         }
+    }
+
+    #[test]
+    fn task_3139_publication_write_failures_report_code_and_detail() {
+        let mut f = Fixture::new();
+        f.parent.id = "not-a-grant-id".into();
+        assert_refusal(
+            persist_relay_grant(&f.parent).unwrap_err(),
+            "grant-write-failed",
+            "cannot persist the replacement grant",
+        );
+        assert_refusal(
+            write_handoff(&f.run.join("missing"), &handoff()).unwrap_err(),
+            "handoff-write-failed",
+            "cannot write relay.grant",
+        );
+    }
+
+    fn assert_refusal(error: Refusal, code: &str, detail: &str) {
+        assert_eq!(serde_json::to_value(error.code).unwrap(), code, "{error}");
+        assert!(error.to_string().contains(detail), "{code}: {error}");
     }
 }

@@ -325,6 +325,7 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
             "relay-parent-grant-renewal",
             format!("relay parent renewal: {}", receipt["outcome"]),
         ),
+        EventKind::ActivityHeartbeat { summary, .. } => ("activity-heartbeat", summary.clone()),
         EventKind::RunStarted => ("run-started", "orchestration run started".to_string()),
         EventKind::PhaseEntered { idx, slug, .. } => {
             ("phase-entered", format!("phase {} ({})", idx, slug))
@@ -447,6 +448,24 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
         } => (
             "mandate-drive-due",
             format!("drive routed {action} for {subject} to the advisor"),
+        ),
+        // trace:STORY-2897 | ai:claude
+        EventKind::LandModeChanged {
+            action,
+            to,
+            outcome,
+            forge_before,
+            forge_after,
+            ..
+        } => (
+            "land-mode-changed",
+            format!(
+                "land mode {action} to {to}: {outcome}; forge [{}] -> [{}]",
+                forge_before.join(", "),
+                forge_after
+                    .as_ref()
+                    .map_or_else(|| "unread".to_string(), |a| a.join(", "))
+            ),
         ),
         // trace:TASK-1945 | ai:claude
         EventKind::ReviewWatchReady {

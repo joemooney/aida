@@ -472,14 +472,32 @@ pub(crate) fn pickup_pr_branch(
         return Ok(None);
     }
     let mut changes = forge.open_changes_for_spec(spec)?;
+    // trace:BUG-2656 | ai:codex
+    if changes.len() > 1 {
+        if let Some(branch) = explicit {
+            changes.retain(|change| change.branch == branch);
+            if changes.len() != 1 {
+                anyhow::bail!("--branch `{branch}` must select exactly one open change for {spec}");
+            }
+        }
+    }
     if changes.len() > 1 {
         anyhow::bail!(
-            "{spec} has multiple open changes: {}; resolve duplicates before pickup",
+            "{spec} has multiple open changes: {}; select a rework branch:\n{}",
             changes
                 .iter()
                 .map(|c| format!("#{} on `{}`", c.id, c.branch))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            changes
+                .iter()
+                .map(|c| format!(
+                    "  #{}: aida queue work {spec} --role implementer --branch {} --force-claim",
+                    c.id,
+                    crate::cast_recording::shell_quote(&c.branch)
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
         );
     }
     let Some(change) = changes.pop() else {
@@ -688,7 +706,8 @@ pub(crate) fn align_reused_pr_branch_with_status(
 /// the freshest by `started_at`. Returns an error if nothing qualifies.
 ///
 /// With `--base BRANCH`: validates the branch exists locally or on
-/// origin via `branch_exists_anywhere`. Unless `force` is set, checks
+/// origin via `branch_exists_anywhere`, unless contained session setup will
+/// validate the branch. Unless `force` is set, checks
 /// `detect_merged_pr_for_branch` and refuses if the PR has merged
 /// (which means the branch is about to be / has been deleted on origin
 /// — branching from it now would create commits doomed to be stranded).
@@ -702,12 +721,13 @@ pub(crate) fn resolve_stack_base(
     stack: bool,
     base: Option<&str>,
     force: bool,
+    defer_explicit_lookup: bool,
 ) -> anyhow::Result<Option<String>> {
     if !stack && base.is_none() {
         return Ok(None);
     }
     if let Some(b) = base {
-        if !branch_exists_anywhere(project_root, b) {
+        if !defer_explicit_lookup && !branch_exists_anywhere(project_root, b) {
             anyhow::bail!(
                 "--base `{}` does not exist locally or on origin — \
                  verify the branch name (and that origin has it)",
@@ -1193,6 +1213,23 @@ pub(crate) fn preflight_spec_status_review_aware(
         return PreflightDecision::Allow;
     }
     preflight_spec_status(owns, status, force_claim)
+}
+
+/// Session-start status gate: [`preflight_spec_status_review_aware`], plus a
+/// Done-only allowance for an implementer continuing an open change that queue
+/// work verified. Completed, Rejected and every other refusal still stand.
+/// trace:STORY-2690 | ai:claude
+pub(crate) fn preflight_spec_status_for_session(
+    owns: &str,
+    status: Option<&RequirementStatus>,
+    force_claim: bool,
+    is_review: bool,
+    done_rework_change_verified: bool,
+) -> PreflightDecision {
+    if done_rework_change_verified && !is_review && status == Some(&RequirementStatus::Done) {
+        return PreflightDecision::Allow;
+    }
+    preflight_spec_status_review_aware(owns, status, force_claim, is_review)
 }
 
 // BUG-882: reviewer-scoped queue work can reach `session_start` with `owns`
@@ -2028,7 +2065,7 @@ pub(crate) fn session_start(
     session_start_with_receipt(
         owns,
         branch,
-        base,
+        base.map(SessionBase::Explicit),
         reuse_branch,
         explicit_path,
         forge_override,
@@ -2048,8 +2085,20 @@ pub(crate) fn session_start(
         false,
         PathReentry::None,
         None,
+        false,
     )
     .map(|mut receipt| receipt.disarm())
+}
+
+// trace:BUG-2673 | ai:codex
+#[derive(Clone, Copy)]
+pub(crate) enum SessionBase<'a> {
+    /// An explicit --base, with no deferred queue validation.
+    Explicit(&'a str),
+    /// A contained queue pickup with an explicit --base.
+    QueueBranch(&'a str),
+    /// Auto-selected stack parents or launcher-supplied revisions.
+    Local(&'a str),
 }
 
 // trace:BUG-2188 | ai:codex
@@ -2058,7 +2107,7 @@ pub(crate) fn session_start(
 pub(crate) fn session_start_with_receipt(
     owns: &str,
     branch: Option<&str>,
-    base: Option<&str>,
+    session_base: Option<SessionBase<'_>>,
     reuse_branch: bool,
     explicit_path: Option<&str>,
     forge_override: Option<&str>,
@@ -2094,7 +2143,28 @@ pub(crate) fn session_start_with_receipt(
     path_reentry: PathReentry,
     // Some(None) is a confirmed negative from a single-spec queue pickup.
     resolved_pr: Option<Option<(u64, String)>>,
+    // Queue work proved this Done spec's open origin change and its rework
+    // policy; only that exact change may lift the Done refusal.
+    // trace:STORY-2690 | ai:claude
+    done_rework_admitted: bool,
 ) -> Result<SessionStartReceipt> {
+    let base = session_base.map(|base| match base {
+        SessionBase::Explicit(branch)
+        | SessionBase::QueueBranch(branch)
+        | SessionBase::Local(branch) => branch,
+    });
+    let explicit_origin_base = match session_base {
+        // Direct session starts also accept origin-qualified branch names.
+        Some(SessionBase::Explicit(branch)) => Some(
+            branch
+                .strip_prefix("refs/remotes/origin/")
+                .or_else(|| branch.strip_prefix("refs/heads/"))
+                .or_else(|| branch.strip_prefix("origin/"))
+                .unwrap_or(branch),
+        ),
+        Some(SessionBase::QueueBranch(branch)) => Some(branch),
+        _ => None,
+    };
     let adopt_orphan = path_reentry == PathReentry::AdoptOrphan;
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -2200,6 +2270,7 @@ pub(crate) fn session_start_with_receipt(
     // the scope slug. Confirmed merged residue also permits a dated name.
     // trace:STORY-65 | ai:claude
     // trace:BUG-2451 | ai:codex — agent-new and direct session starts share queue policy.
+    let verified_pickup_pr = resolved_pr.clone().flatten();
     let existing_pr = if review_target.is_none() && !is_review_session {
         if let Some(resolved) = resolved_pr {
             resolved
@@ -2321,7 +2392,9 @@ pub(crate) fn session_start_with_receipt(
                 reentry: reuse_existing_worktree_path,
                 path_not_seat_location: explicit_path.is_some()
                     && !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path),
-                has_origin: aida_core::git_ops::has_remote(&project_root, "origin"),
+                // Let the explicit-base fetch diagnose an unavailable origin.
+                has_origin: explicit_origin_base.is_some()
+                    || aida_core::git_ops::has_remote(&project_root, "origin"),
             },
         )? {
             (kind, Some(note)) => {
@@ -2614,11 +2687,17 @@ pub(crate) fn session_start_with_receipt(
     // trace:BUG-2223 | ai:claude
     let adoption_lifts_status =
         adopted_orphan.is_some() && matches!(preflight_status, Some(RequirementStatus::InProgress));
-    match preflight_spec_status_review_aware(
+    // STORY-2690: a Done spec whose open change queue work verified stays
+    // pickable for rework on exactly that change's branch.
+    // trace:STORY-2690 | ai:claude
+    let done_rework_change_verified =
+        done_rework_admitted && verified_pickup_pr.is_some() && verified_pickup_pr == existing_pr;
+    match preflight_spec_status_for_session(
         owns,
         preflight_status.as_ref(),
         force_claim_effective || adoption_lifts_status,
         is_review_session,
+        done_rework_change_verified,
     ) {
         PreflightDecision::Refuse(msg) => anyhow::bail!("{}", msg),
         PreflightDecision::AllowWithWarning(msg) => {
@@ -2708,6 +2787,21 @@ pub(crate) fn session_start_with_receipt(
     let branch_preexists = branch_exists_anywhere(&project_root, &branch_name);
     let reuse_existing = should_reuse_branch(reuse_branch, branch.is_some(), branch_preexists);
 
+    // A fresh clone validates its explicit base through the fetch itself.
+    // Keep the queue's branch check for linked worktrees and reused branches.
+    // trace:BUG-2673 | ai:codex
+    let fetch_base = explicit_origin_base.filter(|_| {
+        tree_kind == crate::seat_clone::TreeKind::Clone && !clone_reentry && !reuse_existing
+    });
+    if let Some(SessionBase::QueueBranch(branch)) = session_base {
+        if fetch_base.is_none() && !branch_exists_anywhere(&project_root, branch) {
+            anyhow::bail!(
+                "--base `{branch}` does not exist locally or on origin — verify the branch name (and that origin has it)"
+            );
+        }
+    }
+    let mut cloned_base_sha = None;
+
     // BUG-2169: owns a just-made seat clone until the lease is written; any
     // error in between removes the clone and releases its pin.
     // trace:BUG-2169 | ai:claude
@@ -2758,11 +2852,15 @@ pub(crate) fn session_start_with_receipt(
                 worktree_path.display()
             );
         }
+        let base_ref = match fetch_base {
+            Some(branch) => crate::seat_clone::fetch_explicit_base(&project_root, branch)?,
+            None => base_ref,
+        };
         match crate::seat_clone::create(&project_root, &worktree_path, &branch_name, &base_ref) {
             Ok(created) => Some(created),
             Err(error) => {
                 let Some(note) = crate::seat_clone::origin_failure_fallback(
-                    crate::seat_clone::seat_tree_is_explicit(&project_root),
+                    fetch_base.is_some() || crate::seat_clone::seat_tree_is_explicit(&project_root),
                     &error,
                 ) else {
                     return Err(error);
@@ -2794,8 +2892,9 @@ pub(crate) fn session_start_with_receipt(
             crate::glyph(crate::glyphs::Glyph::Check).green(),
             created.path.display(),
             branch_name,
-            &created.base_sha[..created.base_sha.len().min(10)],
+            created.base_sha,
         );
+        cloned_base_sha = Some(created.base_sha.clone());
         clone_cleanup = Some(crate::seat_clone::CloneCleanupGuard::new(
             &project_root,
             &created,
@@ -3354,10 +3453,17 @@ pub(crate) fn session_start_with_receipt(
     // trace:STORY-248 | ai:claude
     let stack_parent_branch: Option<String> = base
         .filter(|_| review_target.is_none() && !reuse_existing)
-        .map(|s| s.strip_prefix("origin/").unwrap_or(s).to_string());
+        .map(|s| {
+            fetch_base
+                .unwrap_or_else(|| s.strip_prefix("origin/").unwrap_or(s))
+                .to_string()
+        });
     let stack_parent_sha: Option<String> = base
         .filter(|_| review_target.is_none() && !reuse_existing)
         .and_then(|b| {
+            if let Some(sha) = cloned_base_sha {
+                return Some(sha);
+            }
             let out = std::process::Command::new("git")
                 .arg("-C")
                 .arg(&project_root)

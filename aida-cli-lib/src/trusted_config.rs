@@ -63,7 +63,7 @@ pub fn trusted_default_branch_sha(project_root: &Path) -> Option<String> {
 
 /// `git rev-parse --verify --quiet <refname>^{commit}` → the resolved SHA, or
 /// `None` if the ref doesn't exist / doesn't point at a commit.
-fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
+pub(crate) fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(project_root)
@@ -116,6 +116,16 @@ pub(crate) fn local_trusted_default_branch_sha(project_root: &Path) -> Option<St
     rev_parse_commit(project_root, &branch_ref)
 }
 
+/// The default branch's name as the local trusted-config read resolves it
+/// (`origin/HEAD`, else the first of origin/main, origin/master, main,
+/// master), without the `origin/` prefix: the branch a caller fetches so
+/// that read sees the remote's current tip.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn local_default_branch_name(project_root: &Path) -> Option<String> {
+    local_default_branch_ref(project_root)
+        .map(|r| r.strip_prefix("origin/").map(str::to_string).unwrap_or(r))
+}
+
 fn local_default_branch_ref(project_root: &Path) -> Option<String> {
     let symbolic = Command::new("git")
         .arg("-C")
@@ -151,6 +161,21 @@ pub(crate) fn read_config_at_sha(project_root: &Path, sha: &str) -> Option<Strin
     } else {
         None
     }
+}
+
+/// Whether the commit `sha` has a `.aida/config.toml` entry: `Some(false)`
+/// when the tree has none, `None` when git cannot say. Lets a caller tell an
+/// absent config from one that exists but could not be read.
+// trace:STORY-2913 | ai:claude
+pub(crate) fn config_present_at_sha(project_root: &Path, sha: &str) -> Option<bool> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(project_root)
+        .args(["ls-tree", "--name-only", sha, "--", CONFIG_RELPATH])
+        .output()
+        .ok()
+        .filter(|out| out.status.success())?;
+    Some(!out.stdout.iter().all(u8::is_ascii_whitespace))
 }
 
 #[cfg(test)]

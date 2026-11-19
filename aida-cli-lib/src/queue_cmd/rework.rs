@@ -590,20 +590,7 @@ pub(crate) fn handle_queue_rework(
     // BUG-1427: retain every matching identity. Rework promises a move, so a
     // stale duplicate in a third queue must not survive merely because it was
     // not the first match returned by queue_users(). trace:BUG-1427 | ai:codex
-    let existing_entries_elsewhere: Vec<(String, aida_core::QueueEntry)> = storage
-        .queue_users()?
-        .into_iter()
-        .map(|candidate_user| {
-            let entry = storage
-                .queue_list(&candidate_user, true)?
-                .into_iter()
-                .find(|entry| entry.requirement_id == req_id);
-            Ok(entry.map(|entry| (candidate_user, entry)))
-        })
-        .collect::<Result<Vec<_>>>()?
-        .into_iter()
-        .flatten()
-        .collect();
+    let existing_entries_elsewhere = storage.queue_entries_for_requirement(&req_id)?;
 
     // Route resolution: --for wins; otherwise rework preserves the existing
     // queue route so reviewer-requested fixups stay visible to the intended
@@ -620,14 +607,6 @@ pub(crate) fn handle_queue_rework(
             .or_else(|| Some("implementer".to_string())),
     };
 
-    // trace:BUG-2500 | ai:codex — refuse before status, comments or queue writes.
-    if for_role_resolved.as_deref() != Some("reviewer") {
-        if let Ok(root) = find_project_root() {
-            let open = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
-            refuse_waiting_review(&root, &display_id, &spec_id, open.as_deref())
-                .map_err(|why| anyhow::anyhow!(why))?;
-        }
-    }
     let title = req.title.clone();
     let current_status = req.status.clone();
 
@@ -775,15 +754,38 @@ pub(crate) fn handle_queue_rework(
     if let Ok(root) = find_project_root() {
         // BUG-2430: a review keyed by the spec's open PR counts too.
         // trace:BUG-2430 | ai:claude
-        let open_change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
-        let findings = match resolve_rework_findings(
+        let open_change = crate::forge_lookup::with_forge_lookup_deadline(
+            std::time::Duration::from_secs(15),
+            || {
+                let change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+                anyhow::ensure!(
+                    crate::forge_lookup::forge_lookup_deadline()
+                        .is_some_and(|deadline| std::time::Instant::now() < deadline),
+                    "{display_id}: open-change lookup timed out; retry queue rework"
+                );
+                Ok::<_, anyhow::Error>(change)
+            },
+        )?;
+        // Use the same selected evidence for waiting and findings. A second
+        // scan can be expensive and can disagree if a review arrives mid-command.
+        // trace:STORY-2690 BUG-2500 | ai:codex
+        let findings = match super::work::resolve_rework_review(
             &root,
             &display_id,
             &spec_id,
             open_change.as_deref(),
         ) {
-            Ok(block) => block,
-            Err(why) => {
+            Ok(crate::rework_direction::ReviewResult::Available(block)) => Some(block),
+            Ok(_) => None,
+            Err(super::work::ReworkReviewError::Waiting(why))
+                if for_role_resolved.as_deref() != Some("reviewer") =>
+            {
+                anyhow::bail!(why);
+            }
+            Err(
+                super::work::ReworkReviewError::Waiting(why)
+                | super::work::ReworkReviewError::Unavailable(why),
+            ) => {
                 // trace:BUG-2507 | ai:codex
                 eprintln!("warning: no review findings imported for {display_id}: {why}. Read the review comment before starting rework.");
                 None
@@ -1184,6 +1186,7 @@ pub(crate) fn handle_queue_rework(
             /* dry_run */ false,
             /* model_override */ None,
             /* over_wip */ false,
+            None,
         )?;
     } else {
         println!(

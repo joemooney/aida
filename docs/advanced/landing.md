@@ -9,6 +9,32 @@ describes the CI a pull request must pass before a train admits it. The train
 itself is described in the
 [git lifecycle reference](../cli/04-git-lifecycle.md).
 
+## Landing modes
+
+<!-- trace:STORY-2897 trace:TASK-3818 | ai:claude -->
+
+`[landing] mode` in `.aida/config.toml` chooses what a merge into the default branch waits for: `ci-gated` (the default) or `review-gated`. AIDA reads it from the default branch only, so a pull request cannot relax it with its own copy. A value it does not recognise falls back to `ci-gated`, with a warning.
+
+In `ci-gated` mode, which is the rest of this page, `aida pr ship` waits for CI on the head, and the train admits only a green full-tier head.
+
+In `review-gated` mode, `aida pr ship` merges as soon as the change has an independent approval at its exact head and no hold. It does not wait for CI, and CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the merge itself must also come from a session that authored none of the change.
+
+`aida pr train` and `aida land run` do not follow the mode yet: a change behind its base is routed to the train exactly as before.
+
+### Changing the mode
+
+`aida land mode status` prints the mode, the checks it requires, the checks the forge requires, and any drift between them. It also shows the last few changes, which are recorded in `.aida/land/landing-audit.jsonl`.
+
+`aida land mode set <mode>` changes the mode:
+
+1. It replaces the default branch's required status checks with the list for that mode.
+2. It reads the checks back. If the forge reports something else, it restores the previous list and fails.
+3. It records the new mode in `.aida/config.toml`. Landing reads the default branch's copy, so the edit takes effect once it lands in a reviewed pull request.
+
+`aida land mode reconcile` re-applies the current mode's list.
+
+Both `set` and `reconcile` change branch protection, so each needs either the operator at a terminal or the advisor seat under a mandate that includes protected paths. Both work on GitHub only.
+
 ## Two CI tiers on a pull request
 
 | Tier | Runs when | What it runs |
@@ -98,3 +124,40 @@ The check applies to a repository whose workflow files under
 `.github/workflows/` define a `ci-tier:` job. In such a repository a head with
 no `ci-tier: full` run is left out, whatever other checks it carries. A
 repository whose CI has a single tier is admitted as before.
+
+
+## Landing metrics
+
+<!-- trace:TASK-3813 | ai:codex -->
+
+`aida land metrics --since 7d` reports hourly merges from local `main`'s
+first-parent history, each READY hour's merge activity, READY-to-merge waits,
+waits exceeding two hours, and mean/median requested-change rounds before the
+last approval for landed PRs. Use `--format json` for the same report with
+source labels. Windows accept hours or days; boundary hours are clipped to the
+requested window. Update local main before reporting if fresh merge data is
+needed. Only commits identifying a PR (`(#N)` or `Merge pull request #N`) count.
+
+Every status/run pass, including a dry run, now appends readiness changes to
+`.aida/land/readiness.jsonl`. An initial marker records when observation began,
+even with no open PRs. The log records observed state, not the unobserved time
+between passes. A changed head begins a new observation; a disappeared PR ends
+its observed interval. A permanent nonblocking lock serializes recorders; a
+busy recorder refuses the pass. The adjacent cursor is a disposable incremental
+index and can be removed for recovery; keep the event log.
+
+Before recording began, approvals supply an estimate labelled **approx (no
+READY record)**. Consecutive approvals preserve the estimate's start; a
+blocking verdict (including WAITING or REJECTED) ends it. READY-hour entries
+keep their exact or approximate source labels. A continuous wait crossing the
+recording boundary has its full duration reported under **mixed (approval
+estimate + READY event log)**, including the estimated prefix for the two-hour
+threshold. Other exact observations and estimates have separate wait summaries.
+Legacy archives, current verdicts and ledger acts contribute to review history;
+only REQUEST CHANGES counts as a requested-change round.
+Missing approval records are listed rather than counted as zero review rounds.
+Review acts copied under several specs are counted once. Groups use the
+approving reviewer's vendor and the covered spec-ID types. A mixed change
+contributes once to each type it covers; missing metadata is `unknown`. The generated recorder suffix
+supplies vendor metadata for older verdicts. These observations grant no landing,
+review or completion authority.

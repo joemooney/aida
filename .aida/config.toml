@@ -528,6 +528,12 @@ block_primary_commits = true
 # of a stale but mergeable head is still worth having: refuse only a head the
 # base no longer merges into cleanly. "warn" never refuses.
 [review]
+# trace:TASK-3814 | ai:codex
+# trace:STORY-2913 | ai:claude — operator ruling 2026-11-18: only these block;
+# change with `aida review blocking-tiers set` (operator or mandate authority).
+blocking_tiers = ["p1", "data-loss", "security-authority-bypass", "unmet-claimed-ac"]
+# trace:TASK-3808 | ai:codex
+max_rounds = 4
 # trace:TASK-3815 | ai:codex
 implementer_self_review = true
 stale_base = "refuse-on-conflict"
@@ -601,6 +607,33 @@ enabled = true
 format = "cargo fmt --all -- --check"
 test = "make test-touched"
 fast_check = "make check-ci-fast"
+
+# Refuse AIDA head moves after approval or train reservation. trace:BUG-2618
+[pr-head]
+protect = true
+
+# trace:STORY-2849 | ai:codex
+[landing_health]
+enabled = true
+landing_gap_minutes = 90
+shared_failure_min_prs = 3
+step_headroom_ratio = 0.8
+# Shared-failure and successful-duration lookback.
+window_minutes = 1440
+
+[[schedule.jobs]]
+name = "landing-health-guard"
+command = "doctor check landing-health --fail-on-findings"
+every = "15m"
+enabled = true
+
+[[schedule.jobs]]
+name = "landing-health-guard-route"
+# The scheduler chooses advisor when live, product otherwise.
+seats = ["advisor"]
+on = ["CronJobFailed:landing-health-guard"]
+prompt = "Diagnose the shared CI cause first (finding 2): several PRs failing the same check and step probably share infrastructure or base breakage. Run `aida doctor check landing-health` to re-run the checks and read the routed trip evidence. Repair or route that shared cause before treating PRs individually, then address the landing gap and step timeout headroom. Escalate human-only blockers to the operator. Finish with `aida schedule done landing-health-guard-route`."
+enabled = true
 
 # Blocked seats must reach the operator without waiting for another model turn.
 # trace:BUG-2631 | ai:codex
