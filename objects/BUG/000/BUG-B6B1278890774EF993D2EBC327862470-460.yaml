@@ -23,8 +23,14 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T01:46:36.196060766Z
+modified_at: 2026-11-19T01:49:05.455020731Z
 req_type: Bug
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f17e-20d5-7bb0-8ca3-c3893f6a1126
+  created_at: 2026-11-19T01:49:05.454946224Z
+  created_by: dirtlab
 comments:
 - id: 01a1f155-00ab-7070-b1c1-46617cc9458f
   author: joe
@@ -48,6 +54,34 @@ comments:
   modified_at: 2026-11-19T01:46:36.196060766Z
   session_id: 01a1f15ca89a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f17d-7c6f-7473-b347-d2e2a9056335
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 23555f14df (git diff origin/main...HEAD).
+
+    Acceptance evidence:
+    - AC1 (revised, completes_spec=true sets Done incl. rework): [behavioral-test] publication_completion::tests::bug_2696_completing_push_sets_done_on_first_and_rework_rounds (Approved after rework -> push -> Done); end-to-end via run_from in task_2902_declared_subject_survives_host_commit_and_pr_title (complete -> Done; Refs / --partial-slice / failed exit -> status unchanged). Hooks: ship_from_seat::run_from_with_reconciliation after finish_published; pr_cmd::run_human_finish_ceremony after push.
+    - AC2 (Done completes on (SPEC) and (Refs SPEC)): [behavioral-test] auto_bump_done_tests::bug_2696_done_spec_completes_on_completing_and_refs_landings.
+    - AC3 (Refs on non-Done stays open + note): [behavioral-test] bug_2696_refs_landing_on_open_spec_stays_open_with_one_note (one note across a replayed scan).
+    - AC4 (punt never sets Done): [behavioral-test] seat_publish_tests::bug_2696_punted_publication_never_sets_done.
+    - AC5 (pushed to shared store): [manual-inspection] auto_bump_done_to_completed_with compares store HEAD before/after the scan and calls auto_push_store_best_effort when it moved; mark_done_after_push_in pushes after its write. No remote in unit fixtures, so the push itself is not exercised by a test.
+    - AC6 (sliced spec first slice stays open): [behavioral-test] bug_2696_sliced_spec_first_slice_landing_stays_open; publication_completion::tests::bug_2696_outstanding_slice_plan_withholds_completion.
+
+    Probe findings / fixes:
+    - The orchestrator's ensure_spec_done_after_pr set Done after any PR open; with D4 that would let a partial slice's Refs landing complete the spec. Fixed: it now skips Refs tips and outstanding slice plans.
+    - An existing TASK-1765 assertion (Refs squash on a Done spec stays Done) contradicted D4/AC2; updated. The aida: no-complete body marker and [k/N] slice subjects still withhold.
+    - The host re-checks the slice plan when it reads a declaration, so a seat that edits completes_spec=true cannot complete a sliced spec.
+
+    Residual risks:
+    - 'Slice plan' means non-terminal child specs (outgoing Parent edges). A plan written only in comment prose is not detected; lanes still declare --partial-slice.
+    - A hand-written (Refs ID) still means partial (fail-closed), with a note pointing at --partial-slice, so codex Refs drift now shows up as an AC3 note instead of a silently open spec.
+    - task_2902_launch_paths_preserve_signals_on_refused_spawn fails locally because of the lane-launch disk-headroom floor (31 GiB free < 60 GiB). Environmental, and it fails the same way without this change.
+    - make check-ci-fast takes longer than the 60s tool cap here. Ran instead: rustfmt --check, store-writer ratchet (regenerated), glyph lint, structural guards, check-templates, help golden regenerated.
+  created_at: 2026-11-19T01:48:15.343349606Z
+  modified_at: 2026-11-19T01:48:15.343349606Z
+  session_id: 01a1f15ca89a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
@@ -65,6 +99,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f17e-4da7-7d51-9061-abfb6782a129
+  author: dirtlab
+  timestamp: 2026-11-19T01:49:08.904008844Z
+  session_id: 01a1f15ca89a
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
   branch: main

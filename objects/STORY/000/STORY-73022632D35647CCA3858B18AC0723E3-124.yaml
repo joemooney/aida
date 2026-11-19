@@ -1,0 +1,64 @@
+id: 01a1f17e-20d5-7bb0-8ca3-c3893f6a1126
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-124
+title: 'Review PR-4274: [AI:claude] fix(lifecycle): key Done and landing completion on declared completeness, not the title trailer (BUG-2696)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f15c`) for branch `bug-b6b1278890774ef993d2ebc327862470-460`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4274>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-460` → `main`
+
+  ## Covers
+
+  - BUG-2696
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2631
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4274` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T01:48:57.429612095Z
+modified_at: 2026-11-19T01:49:11.133819163Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1f153-9dae-7782-85b1-8041df21cece
+  created_at: 2026-11-19T01:49:01.396762160Z
+  created_by: dirtlab
+- rel_type:
+    custom: covers
+  target_id: 01a1e461-489e-7b12-acd9-58fd403fbb2d
+  created_at: 2026-11-19T01:49:11.133753471Z
+  created_by: dirtlab
+history:
+- id: 01a1f17e-379d-78b3-bf1f-a449eba9ef74
+  author: dirtlab
+  timestamp: 2026-11-19T01:49:03.261468603Z
+  session_id: 01a1f15ca89a
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f17e-6583-77a0-a4ad-683e24bd6922
+  author: dirtlab
+  timestamp: 2026-11-19T01:49:15.011505906Z
+  session_id: 01a1f15ca89a
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: ee4106336f0bb55af0265197ec766df5c02eba31
+  branch: bug-b6b1278890774ef993d2ebc327862470-460
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  vendor: claude
+  session: 01a1f15ca89a
+  harness_version: 2.1.319 (Claude Code)
