@@ -992,6 +992,15 @@ same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.
 `aida init` prints local checks without a live store-network probe or blocking setup.
 
+From the operator checkout, use `aida doctor --lane-binaries HOST` with one
+flag per SSH alias to report the launcher's binary SHA and build age for each
+host against the locally recorded `origin/main`. Fetch first to refresh that
+reference. `--json` includes the pinned SHA and per-host results, with
+`unknown` for unavailable evidence. See the
+[lane host checklist](../advanced/lane-host-checklist.md#scheduled-autobuild)
+for installing and verifying scheduled builds.
+<!-- trace:TASK-3812 | ai:codex -->
+
 <!-- trace:BUG-2682 | ai:codex -->
 <!-- trace:BUG-2682 | ai:claude -->
 Managed headless implementer launches, including fresh reworks and drain
