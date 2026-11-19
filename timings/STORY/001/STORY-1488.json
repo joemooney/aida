@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-1488",
+  "publishes": [
+    {
+      "at": "2026-11-19T04:35:41.638757594Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-10-06T02:16:57.092602092Z",
+      "spec": "STORY-1488",
+      "seat": "product",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 2429
+      }
+    },
+    {
+      "ts": "2026-10-06T02:17:06.041092674Z",
+      "spec": "STORY-1488",
+      "seat": "product",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:19:25.739921479Z",
+      "spec": "STORY-1488",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:42:12.227323866Z",
+      "spec": "STORY-1488",
+      "seat": "implementer",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T02:42:52.977372590Z",
+      "spec": "STORY-1488",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:15:28.693931577Z",
+      "spec": "STORY-1488",
+      "seat": "implementer",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:16:17.717293706Z",
+      "spec": "STORY-1488",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:16:24.594412401Z",
+      "spec": "STORY-1488",
+      "seat": "implementer",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T03:59:28.226427887Z",
+      "spec": "STORY-1488",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:04:59.056897865Z",
+      "spec": "STORY-1488",
+      "seat": "implementer",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:23:15.530723105Z",
+      "spec": "STORY-1488",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-10-06T04:24:33.301589844Z",
+      "spec": "STORY-1488",
+      "seat": "advisor",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "closure-hold",
+        "reason": "merged (2dc90ca) but completion held at Done — closure criteria unmet: \"tag `closure:pending` is set\"",
+        "actor": "joe"
+      }
+    },
+    {
+      "ts": "2026-10-06T13:31:28.346014650Z",
+      "spec": "STORY-1488",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:35:18.483277532Z",
+      "spec": "STORY-1488",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:35:18.502487668Z",
+      "spec": "STORY-1488",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
