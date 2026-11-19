@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T19:53:13.290669664Z
+modified_at: 2026-11-19T20:02:45.295158481Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -414,6 +414,13 @@ comments:
   modified_at: 2026-11-19T19:53:13.290669664Z
   session_id: 01a1f54122a1
   harness_version: codex-cli 0.167.0
+- id: 01a1f567-c29f-70b3-a293-ad88da121b95
+  author: joe
+  content: 'advisor-121 13:05: the CR at c7e04ab is a PREMATURE review of a merge-only head (the s2 r2 lane merged main fa5ac3d at 12:21 and is still running). It repeats the r1 finding. NOT a spent round; the lane''s real push gets the round-2 review.'
+  created_at: 2026-11-19T20:02:45.295158481Z
+  modified_at: 2026-11-19T20:02:45.295158481Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
