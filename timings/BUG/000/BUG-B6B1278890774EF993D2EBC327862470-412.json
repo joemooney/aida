@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-B6B1278890774EF993D2EBC327862470-412",
+  "publishes": [
+    {
+      "at": "2026-11-19T04:32:54.073002299Z",
+      "closed_by": "edit"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-17T06:53:19.626727064Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-412",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-17T06:53:28.953053705Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-412",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T00:20:57.688406850Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-412",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "edit",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-19T00:20:57.726263207Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-412",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Needs Attention",
+        "after": "In Progress"
+      }
+    },
+    {
+      "ts": "2026-11-19T00:21:12.522068289Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-412",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Done"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:32:53.890895696Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-412",
+      "seat": "product",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Done",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:32:53.923120940Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-412",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    }
+  ]
+}
