@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:37:42.546765006Z
-modified_at: 2026-11-19T01:34:26.594232686Z
+modified_at: 2026-11-19T04:30:34.616282151Z
 req_type: Bug
 tags:
 - area:mailbox
@@ -153,6 +153,13 @@ comments:
   created_at: 2026-11-19T01:34:26.594232686Z
   modified_at: 2026-11-19T01:34:26.594232686Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f212-4c46-7d00-a892-1b2a0aef3239
+  author: joe
+  content: 'Product 21:30: Done -> Completed. The work is on main (or, for TASK-3819, a host deployment the advisor accepted), and no open PR remains. Done was never bumped because the landing commits were Refs-titled (BUG-2696).'
+  created_at: 2026-11-19T04:30:34.616282151Z
+  modified_at: 2026-11-19T04:30:34.616282151Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e21d-b5ee-70d3-87ff-a936e6c2d8f5
