@@ -5,11 +5,45 @@
     {
       "at": "2026-11-19T18:34:51.804307013Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-19T18:37:56.845402933Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
     {
+      "ts": "2026-11-19T16:37:14.888666289Z",
+      "spec": "BUG-2608",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4315,
+        "verdict": "APPROVED",
+        "reviewed_sha": "f8446fd75d7288c5dc6c32f1621e86e674963e3a"
+      }
+    },
+    {
+      "ts": "2026-11-19T18:00:22.786970774Z",
+      "spec": "BUG-2608",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4315
+      }
+    },
+    {
       "ts": "2026-11-19T18:34:51.546518039Z",
+      "spec": "BUG-2608",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "bd8d20479cb93a41e5f9b6e58c5112016e9ed9aa",
+        "pr": 4315,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-19T18:37:56.646361919Z",
       "spec": "BUG-2608",
       "kind": {
         "event": "SpecCompleted",
