@@ -17,12 +17,12 @@ description: |
   2. The operator is named only when `aida pr train --check` / the mandate cover check actually refuses with an operator-only gate. A missing or stale approval routes to a reviewer.
   3. `aida session handoff --write` warns when a note lists operator-waiting PRs that (1) does not attribute to the operator, and shows the corrected actor.
   4. A test covers each actor classification, including "mandate active + eligible → seat lands, not operator".
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T18:56:15.829220977Z
+modified_at: 2026-11-19T19:09:53.827963129Z
 req_type: Story
 tags:
 - landing
@@ -363,6 +363,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f537-2323-7dc0-a2d4-129f0a49b808
+  author: aida-session-start
+  timestamp: 2026-11-19T19:09:53.827961916Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: f002dd61d9ba42202e6fc33222757459349db47d
