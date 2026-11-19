@@ -1250,6 +1250,9 @@ fn queue_work_reclaim_attempt_keeps_lease_when_session_end_refuses() {
 /// its first push, with HEAD already covered by origin/main.
 #[test]
 fn queue_work_reclaims_dead_clean_lane_without_an_origin_branch() {
+    // Supply writer admission for the fixture mailbox independently of host processes.
+    // trace:TASK-3133 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
         &fx.main,

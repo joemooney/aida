@@ -114,6 +114,28 @@ pub(crate) fn last_status_author(r: &Requirement) -> &str {
         .expect("a status history entry")
 }
 
+/// Make `root` a git repository whose `branch` tip has `subject` (empty
+/// commits, so the nested store is never added). No `origin`: the PR
+/// attribution gate falls back to the branch's own commits.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn branch_with_tip(root: &Path, branch: &str, subject: &str) {
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&["config", "user.email", "fixture@localhost"]);
+    git(&["config", "user.name", "fixture"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "chore: base"]);
+    git(&["checkout", "-q", "-b", branch]);
+    git(&["commit", "-q", "--allow-empty", "-m", subject]);
+}
+
 // ---------------------------------------------------------------------------
 // 1. The race seam, through the writers themselves.
 // ---------------------------------------------------------------------------
@@ -150,10 +172,10 @@ fn bug_1638_lease_take_bump_keeps_an_edit_made_between_read_and_write() {
 #[test]
 fn bug_1638_pr_open_done_refuses_a_spec_completed_between_read_and_write() {
     let (_dir, root, store_root, _) = project_with(RequirementStatus::InProgress);
+    // BUG-2696 F9: the write needs a readable tip that completes the spec.
+    branch_with_tip(&root, "task-9638-work", &format!("fix: work ({SPEC})"));
     let fired = arm_race(|s| concurrently_set(s, RequirementStatus::Completed));
 
-    // `root` is not a git repo, so the PR attribution gate has no default
-    // branch to compare against and lets the write through.
     crate::ensure_spec_done_after_pr(&root, &root, "task-9638-work", SPEC, 42, true);
     assert!(fired.get(), "the race seam fired");
     assert_eq!(
@@ -166,6 +188,7 @@ fn bug_1638_pr_open_done_refuses_a_spec_completed_between_read_and_write() {
 #[test]
 fn bug_1638_pr_open_done_keeps_an_edit_made_between_read_and_write() {
     let (_dir, root, store_root, _) = project_with(RequirementStatus::InProgress);
+    branch_with_tip(&root, "task-9638-work", &format!("fix: work ({SPEC})"));
     let fired = arm_race(concurrently_redescribe);
 
     crate::ensure_spec_done_after_pr(&root, &root, "task-9638-work", SPEC, 42, true);
@@ -401,4 +424,119 @@ fn bug_1638_findings_promote_of_a_deleted_finding_fails_without_writing() {
     .expect_err("auto-completing a deleted finding must fail");
     assert!(err.to_string().contains("no longer exists"), "{err}");
     assert!(on_disk(&store_root).is_none());
+}
+
+// ---------------------------------------------------------------------------
+// BUG-2696: the PR-open Done write fails closed.
+// ---------------------------------------------------------------------------
+
+/// F9: attribution passes (no default branch to compare against), but the
+/// separate tip read fails because `root` is not a repository. That failure
+/// must retain the spec, not authorize Done; so must a readable Refs tip.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_pr_open_done_fails_closed_on_unreadable_or_partial_tip() {
+    let (_dir, root, store_root, _) = project_with(RequirementStatus::InProgress);
+    let fired = arm_race(|_| {});
+    crate::ensure_spec_done_after_pr(&root, &root, "task-9638-work", SPEC, 42, true);
+    assert!(!fired.get(), "no write may be attempted on an unread tip");
+    assert_eq!(
+        on_disk(&store_root).unwrap().status,
+        RequirementStatus::InProgress
+    );
+
+    // A readable tip that names the spec only as a reference is partial.
+    // (The still-armed no-op hook may fire; it changes nothing.)
+    branch_with_tip(
+        &root,
+        "task-9638-work",
+        &format!("fix: slice (Refs {SPEC})"),
+    );
+    crate::ensure_spec_done_after_pr(&root, &root, "task-9638-work", SPEC, 42, true);
+    assert_eq!(
+        on_disk(&store_root).unwrap().status,
+        RequirementStatus::InProgress
+    );
+}
+
+/// F4: an advisor adds an outstanding child slice between the unlocked
+/// completion check and the locked write. The locked copy carries the new
+/// edge, so the writer refuses Done.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_pr_open_done_refuses_a_slice_added_between_read_and_write() {
+    let (_dir, root, store_root, _) = project_with(RequirementStatus::InProgress);
+    branch_with_tip(&root, "task-9638-work", &format!("fix: work ({SPEC})"));
+    let backend = open_backend(&store_root);
+    let mut child = Requirement::new("Later slice".into(), String::new());
+    child.spec_id = Some("TASK-9639".into());
+    let child = backend.add_requirement(child).unwrap();
+    let child_id = child.id;
+    let fired = arm_race(move |s| {
+        concurrently_edit(s, |r| {
+            r.relationships.push(aida_core::Relationship {
+                rel_type: aida_core::RelationshipType::Parent,
+                target_id: child_id,
+                created_at: None,
+                created_by: None,
+            });
+        })
+    });
+    crate::ensure_spec_done_after_pr(&root, &root, "task-9638-work", SPEC, 42, true);
+    assert!(fired.get(), "the race seam fired");
+    let after = on_disk(&store_root).unwrap();
+    assert_eq!(after.status, RequirementStatus::InProgress);
+    assert!(after.relationships.iter().any(|r| r.target_id == child_id));
+}
+
+/// F4 round 3: the parent's edges never change, but an already-linked child
+/// that was Completed is reopened (or an archived open child is unarchived)
+/// between the unlocked completion check and the locked write. The writer
+/// re-reads every child under the store lock and refuses Done.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_pr_open_done_refuses_a_child_reopened_between_read_and_write() {
+    for unarchive in [false, true] {
+        let (_dir, root, store_root, _) = project_with(RequirementStatus::InProgress);
+        branch_with_tip(&root, "task-9638-work", &format!("fix: work ({SPEC})"));
+        let backend = open_backend(&store_root);
+        let mut child = Requirement::new("Earlier slice".into(), String::new());
+        child.spec_id = Some("TASK-9639".into());
+        let mut child = backend.add_requirement(child).unwrap();
+        if unarchive {
+            child.archived = true;
+        } else {
+            child.status = RequirementStatus::Completed;
+        }
+        backend.update_requirement(&child).unwrap();
+        let child_id = child.id;
+        concurrently_edit(&store_root, |r| {
+            r.relationships.push(aida_core::Relationship {
+                rel_type: aida_core::RelationshipType::Parent,
+                target_id: child_id,
+                created_at: None,
+                created_by: None,
+            });
+        });
+        let fired = arm_race(move |s| {
+            let backend = open_backend(s);
+            let mut c = backend
+                .get_requirement_by_spec_id("TASK-9639")
+                .unwrap()
+                .unwrap();
+            if unarchive {
+                c.archived = false;
+            } else {
+                c.status = RequirementStatus::Approved;
+            }
+            backend.update_requirement(&c).unwrap();
+        });
+        crate::ensure_spec_done_after_pr(&root, &root, "task-9638-work", SPEC, 42, true);
+        assert!(fired.get(), "the race seam fired (unarchive={unarchive})");
+        assert_eq!(
+            on_disk(&store_root).unwrap().status,
+            RequirementStatus::InProgress,
+            "unarchive={unarchive}"
+        );
+    }
 }
