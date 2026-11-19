@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T01:57:36.298846174Z
+modified_at: 2026-11-19T02:04:04.590256506Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -119,6 +119,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f18c-4188-7833-b859-2215203b9179
+  author: joe
+  timestamp: 2026-11-19T02:04:23.304320107Z
+  session_id: 01a1f186d06a
+  changes: []
 filed_at:
   code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
   branch: main
@@ -128,3 +133,24 @@ filed_at:
   vendor: claude
   session: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Request changes after a full sweep of all 16 files in the supplied 78,671-byte landed-tree diff against protected main 9f2f93cc432277dadb7781e7ddefe397bdc65b81. This review attests only original PR head ee4106336f0bb55af0265197ec766df5c02eba31. Covered spec: BUG-2696 (origin BUG-b6b1278890774ef993d2ebc327862470-460), including advisor-119's revised AC1 and added AC6. Findings below are the complete actionable list from this review.
+
+    Criterion checklist (test references mean inspected test source, not a locally executed passing result):
+    BUG-b6b1278890774ef993d2ebc327862470-460.ac78da20 / revised AC1: Every completes_spec=true implementer push, first and rework rounds, sets Done — unverified. bug_2696_completing_push_sets_done_on_first_and_rework_rounds covers the helper after a simulated reset to Approved; task_2902_declared_subject_survives_host_commit_and_pr_title covers ordinary publication. Reconciliation loses the declared completeness (finding 2).
+    BUG-b6b1278890774ef993d2ebc327862470-460.ac539ee3 / AC2: A Done spec becomes Completed on default-branch landing with either (SPEC) or (Refs SPEC), with tests for both — verified by inspected bug_2696_done_spec_completes_on_completing_and_refs_landings and the new refs_landed candidate path in db_reconcile.rs; existing freshness/open-PR/closure guards remain in that path.
+    BUG-b6b1278890774ef993d2ebc327862470-460.aca46268 / AC3: Refs landing on a non-Done spec leaves it open and records a visible triage note, with a test — unverified. bug_2696_refs_landing_on_open_spec_stays_open_with_one_note covers the ordinary case, but numbered partials and explicit no-complete landings are excluded from the note path (finding 5).
+    BUG-b6b1278890774ef993d2ebc327862470-460.acce12f9 / AC4: Explicit punt or refused-before-start never sets Done, with a test — unverified. bug_2696_punted_publication_never_sets_done verifies the punt case in source; the changed diff supplies no refused-before-start status regression (finding 7).
+    BUG-b6b1278890774ef993d2ebc327862470-460.acd91338 / AC5: Landing completion is pushed to the shared store so other hosts see it before admission, with test or documented evidence — unverified. The code adds a best-effort push attempt and documentation asserts immediate propagation, but failed pushes can remain local without a retry (finding 6); no remote-store propagation test or successful host evidence is supplied.
+    Advisor-added AC6: A spec with a recorded slice plan stays open when its first slice lands — unverified. bug_2696_outstanding_slice_plan_withholds_completion and bug_2696_sliced_spec_first_slice_landing_stays_open cover only outgoing Parent-edge fixtures. The legacy-declaration bypass, stale graph check and unsupported prose plans leave gaps (findings 3, 4 and 8).
+    Process-policy sketch requirement — verified by advisor-119's recorded architecture sketch and implementation sign-off on BUG-2696.
+    Type protocol BUG-2696 (bug protocol): met — the PR changes auto_bump_done_tests.rs and bug_home_038_seat_publish_tests.rs.
+
+    Existing exact-head CI evidence: CI run 44439715080, jobs 135277253290 and 135277253231 fail task_2143_no_new_raw_git_where_a_lease_tree_is_read: pr_cmd.rs has 48 raw Git builders against the allowed 47. This is a concrete introduced defect, not a reason to wait for CI. No Cargo, local test or build commands were run. The supplied host codegraph client is absent; aida doctor check codegraph reports the index unreachable, so navigation used source searches.
+  recovery_hint: address the review findings, move BUG-2696 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T02:04:04.590256506Z
