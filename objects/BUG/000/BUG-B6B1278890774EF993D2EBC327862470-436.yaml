@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T05:59:27.344592281Z
+modified_at: 2026-11-19T06:00:06.035852756Z
 req_type: Bug
 tags:
 - alert-noise
@@ -80,6 +80,13 @@ comments:
   created_at: 2026-11-19T05:34:49.949548619Z
   modified_at: 2026-11-19T05:34:49.949548619Z
   session_id: 01a1f2021484
+- id: 01a1f264-432b-77d3-99a9-9c8223cd24c0
+  author: joe
+  content: 'Advisor 23:10: #4282 r1 CR: 3 AC misses (divergence must always fail; FF grace for main too; window = 2x interval) routed in .aida/tmp/brief-BUG-2672-r2.md. P2 noted here as a follow-up rather than a new spec (Joe 21:18): the scratch --git-dir fetch at remote.rs:454-470 drops repo-local transport settings (core.sshCommand, credential.helper); carry them, or fetch via the original repo.'
+  created_at: 2026-11-19T06:00:06.035852756Z
+  modified_at: 2026-11-19T06:00:06.035852756Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b
   author: joe
