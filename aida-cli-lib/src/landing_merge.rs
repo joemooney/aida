@@ -259,41 +259,48 @@ pub(crate) fn review_gated_behind_base(
     }
 }
 
-/// Why this session may not merge `change` under `policy` (`None`: it
-/// may): the advisor-merger rule, and C2 (the merging session authored none
-/// of the change) whenever the advisor merges. `floor` is the operator's
-/// authority at a terminal, the explicit exception to both. `aida land run`
-/// asks this before it ships; the merge boundary asks it again at the merge.
+/// Whether this session may merge `change` under `policy`: the gate's
+/// [`crate::gate::ship::merge_authority_refusal`] over this session's seat,
+/// the operator's `floor` authority, and the change's authors. `aida land
+/// run` asks this before it ships; the merge boundary asks it again at the
+/// merge.
 // trace:STORY-2903 | ai:claude
-pub(crate) fn authority_refusal(
+pub(crate) fn caller_may_merge(
     project_root: &std::path::Path,
     change: &ChangeRef,
     spec_ids: &[String],
     policy: &crate::landing_policy::LandingPolicy,
     floor: bool,
-) -> Option<String> {
-    let subject = format!("PR-{}", change.id);
-    if let Some(why) = crate::gate::ship::advisor_merge_refusal(
+) -> Result<(), String> {
+    match crate::gate::ship::merge_authority_refusal(
         policy.advisor_merges(),
         crate::gate::seat_authority::current_seat(project_root).as_deref(),
         floor,
-        &subject,
+        || merge_authors(project_root, change, spec_ids),
+        &format!("PR-{}", change.id),
     ) {
-        return Some(why);
+        Some(why) => Err(why),
+        None => Ok(()),
     }
-    if policy.advisor_merges() && !floor {
-        let branch = Some(change.branch.as_str()).filter(|b| !b.trim().is_empty());
-        let (author_ids, author_branch) =
-            crate::pr_cmd::ship_author_ids(project_root, change.id, spec_ids, branch);
-        let authors = crate::gate::approval::ship_approval_policy(
-            project_root,
-            &author_ids,
-            author_branch.as_deref(),
-            &[],
-        );
-        return crate::gate::ship::shipper_author_refusal(&authors, &subject);
-    }
-    None
+}
+
+/// The author sessions of `change` (the full authorship subject: its specs,
+/// `(Refs X)` contributors and its head branch), as the approval policy
+/// resolves them.
+fn merge_authors(
+    project_root: &std::path::Path,
+    change: &ChangeRef,
+    spec_ids: &[String],
+) -> crate::gate::ship::ShipApprovalPolicy {
+    let branch = Some(change.branch.as_str()).filter(|b| !b.trim().is_empty());
+    let (author_ids, author_branch) =
+        crate::pr_cmd::ship_author_ids(project_root, change.id, spec_ids, branch);
+    crate::gate::approval::ship_approval_policy(
+        project_root,
+        &author_ids,
+        author_branch.as_deref(),
+        &[],
+    )
 }
 
 /// Whether the repository at `root` has an `origin` remote.
@@ -370,7 +377,7 @@ pub(crate) fn recheck(
     if let Some(why) = crate::gate::ship::floor_lapse_refusal(floor_at_entry, floor, &subject) {
         return Err((ShipRefusal::Review, why));
     }
-    if let Some(why) = authority_refusal(project_root, change, spec_ids, &policy, floor) {
+    if let Err(why) = caller_may_merge(project_root, change, spec_ids, &policy, floor) {
         return Err((ShipRefusal::Review, why));
     }
     Ok(())

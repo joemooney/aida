@@ -96,9 +96,9 @@ impl Acts for Fake {
             ..child(Kind::Train, 0, 0)
         })
     }
-    fn merge_refusal(&mut self, pr: &Pr) -> Option<String> {
+    fn may_merge(&mut self, pr: &Pr) -> std::result::Result<(), String> {
         self.calls.push(format!("may-merge? {}", pr.id));
-        self.merge_refusal.clone()
+        self.merge_refusal.clone().map_or(Ok(()), Err)
     }
     fn ship(&mut self, pr: &Pr) -> Result<String> {
         self.calls.push(format!("ship {}", pr.id));

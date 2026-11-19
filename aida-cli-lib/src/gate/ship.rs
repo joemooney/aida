@@ -1343,6 +1343,29 @@ mod story2897_advisor_merge_tests {
     }
 }
 
+/// `Some(refusal)` when this session may not perform the merge: the
+/// advisor-merger rule ([`advisor_merge_refusal`]), then, whenever the
+/// advisor merges and the operator's floor authority does not hold, the
+/// author rule C2 ([`shipper_author_refusal`]) over `authors` (resolved only
+/// when it is needed). One decision for the merge boundary and for `aida
+/// land run`'s choice to ship.
+// trace:STORY-2903 | ai:claude
+pub(crate) fn merge_authority_refusal(
+    advisor_merges: bool,
+    grant_seat: Option<&str>,
+    floor_authority: bool,
+    authors: impl FnOnce() -> ShipApprovalPolicy,
+    subject: &str,
+) -> Option<String> {
+    if let Some(why) = advisor_merge_refusal(advisor_merges, grant_seat, floor_authority, subject) {
+        return Some(why);
+    }
+    if advisor_merges && !floor_authority {
+        return shipper_author_refusal(&authors(), subject);
+    }
+    None
+}
+
 /// `Some(refusal)` when the integrity-floor authority (the operator at a
 /// terminal, or a deputy job its TTY policy authorized) held when a ship
 /// began has lapsed by the merge: a deputy marker can expire or be revoked
@@ -1515,5 +1538,67 @@ mod story2897_landing_mode_authority_tests {
             let why = landing_mode_change_refusal(false, mandate, grant).expect("refused");
             assert!(why.contains(needle), "{why}");
         }
+    }
+}
+
+// trace:STORY-2903 | ai:claude
+#[cfg(test)]
+mod story2903_merge_authority_tests {
+    use super::{merge_authority_refusal, AuthorSession, ShipApprovalPolicy};
+
+    fn authored_by(shipper: &str) -> ShipApprovalPolicy {
+        ShipApprovalPolicy {
+            author_sessions: vec![AuthorSession {
+                label: "implementer lease on story-1".into(),
+                tokens: vec!["session:author".into()],
+            }],
+            shipper: vec![shipper.into()],
+            ..ShipApprovalPolicy::default()
+        }
+    }
+
+    #[test]
+    fn the_advisor_merges_only_a_change_it_authored_none_of() {
+        // Not the advisor: refused before authorship is even resolved.
+        let why = merge_authority_refusal(
+            true,
+            Some("implementer"),
+            false,
+            || panic!("authors are not resolved for a non-advisor"),
+            "PR-7",
+        )
+        .expect("refused");
+        assert!(why.contains("has the advisor perform"), "{why}");
+        // The advisor, as the change's author: refused (C2).
+        let why = merge_authority_refusal(
+            true,
+            Some("advisor"),
+            false,
+            || authored_by("session:author"),
+            "PR-7",
+        )
+        .expect("refused");
+        assert!(why.contains("this session authored the change"), "{why}");
+        // The advisor, authoring none of it: merges.
+        assert_eq!(
+            merge_authority_refusal(
+                true,
+                Some("advisor"),
+                false,
+                || authored_by("session:advisor"),
+                "PR-7"
+            ),
+            None
+        );
+        // The operator at a terminal, and a project where any non-author
+        // merges: no author resolution needed.
+        assert_eq!(
+            merge_authority_refusal(true, None, true, || panic!("floor"), "PR-7"),
+            None
+        );
+        assert_eq!(
+            merge_authority_refusal(false, Some("implementer"), false, || panic!("off"), "PR-7"),
+            None
+        );
     }
 }

@@ -386,9 +386,9 @@ pub(crate) trait Acts {
     /// Release `pr`'s hold. The release decides for itself whether it may.
     fn release_hold(&mut self, pr: &Pr) -> Result<String>;
     fn train(&mut self, prs: &[u64]) -> Result<Child>;
-    /// Why this caller may not merge `pr` (`None`: it may).
+    /// Whether this caller may merge `pr` (`Err`: why not).
     // trace:STORY-2903 | ai:claude
-    fn merge_refusal(&mut self, pr: &Pr) -> Option<String>;
+    fn may_merge(&mut self, pr: &Pr) -> std::result::Result<(), String>;
     /// Run the ordinary gated `aida pr ship` of `pr` once, to its end.
     // trace:STORY-2903 | ai:claude
     fn ship(&mut self, pr: &Pr) -> Result<String>;
@@ -644,7 +644,7 @@ pub(crate) fn act(
                 // merge boundary checks again); any other caller reports it.
                 // trace:STORY-2903 | ai:claude
                 if limits.review_gated {
-                    if let Some(why) = acts.merge_refusal(pr) {
+                    if let Err(why) = acts.may_merge(pr) {
                         notes.push(format!(
                             "#{id}: ready to merge; not merged by this run: {}",
                             one_line(&why, 300)
@@ -1126,7 +1126,7 @@ impl Acts for Live {
             .map(|outcome| outcome.line(pr.id))
     }
 
-    fn merge_refusal(&mut self, pr: &Pr) -> Option<String> {
+    fn may_merge(&mut self, pr: &Pr) -> std::result::Result<(), String> {
         let change = crate::forge::ChangeRef {
             id: pr.id,
             url: String::new(),
@@ -1134,7 +1134,7 @@ impl Acts for Live {
             base: pr.base.clone(),
             title: Some(pr.title.clone()),
         };
-        crate::landing_merge::authority_refusal(
+        crate::landing_merge::caller_may_merge(
             &self.root,
             &change,
             &specs_of(pr),
