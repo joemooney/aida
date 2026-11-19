@@ -20,7 +20,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T13:10:53.959470973Z
-modified_at: 2026-11-19T15:55:06.420136312Z
+modified_at: 2026-11-19T15:56:13.427750414Z
 req_type: Bug
 tags:
 - flake
@@ -47,6 +47,13 @@ comments:
   created_at: 2026-11-19T15:55:06.420136312Z
   modified_at: 2026-11-19T15:55:06.420136312Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f486-0e92-7373-ba4c-538624e6f665
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 09:00): COMPLETE. Root cause (launcher stamps the lease after the test reads it) is fixed by the bounded PID wait in e603027b08 (BUG-2649); the standalone_implementer filter passed 59/59 in a dell1 lane. The 50/50-under-load AC is evidence-only and no lane can produce it; it is replaced by a recurrence watch. If story_1662''s punt test fails in any CI run on a base containing e603027b08, reopen this spec with the run link instead of filing a new one.'
+  created_at: 2026-11-19T15:56:13.427750414Z
+  modified_at: 2026-11-19T15:56:13.427750414Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd9-6b75-7210-bb09-af30a102cd06
