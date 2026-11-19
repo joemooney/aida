@@ -1100,17 +1100,24 @@ Rework and stale-review release remain separate slices.
 
 <!-- trace:STORY-2691 | ai:codex -->
 
-Each review-watch pass writes `review-watch/last-pass.json`: its time, the
-open changes considered, reviews dispatched, and changes refused. A pass that
-dispatches or refuses something logs a timestamped line to `service.log`;
-quiet passes log one line every five minutes. One change's refusal is
-recorded on that change, and the pass continues with the rest. Only an
-unusable watcher state, or lost or superseded controller authority, stops the
-pass. Its message reads "review-watch pass stopped while processing PR-N",
-naming where the stop happened, not a refusal of that PR. `loops status`
-reports a live controller as `degraded` instead of `running` when its last
-pass refused changes or stopped, or when it has not completed a pass for 15
-minutes. `degraded_reasons` names each cause, and `last_pass` shows the report.
+Each review-watch pass writes `review-watch/last-pass.json` and logs one
+timestamped line to `service.log`, quiet passes included: the open changes
+considered, reviews dispatched, eligible heads the admission hub did not
+admit, changes that found admission busy, and the total refused. The report
+keeps at most 16 refusal messages; the total is always kept. One change's
+refusal is recorded on that change, and the pass continues with the rest.
+Only an unusable watcher state, or lost or superseded controller authority,
+stops the pass. Its message reads "review-watch pass stopped while processing
+PR-N", naming where the stop happened, not a refusal of that PR. Failed
+synchronization or discovery is recorded as a pass too.
+
+`loops status` reports a live controller as `degraded` instead of `running`
+when its last pass refused changes or stopped; when it has left eligible work
+unadmitted and dispatched nothing for 15 minutes; when it has not completed a
+pass for 15 minutes (counted from its start until it reports its first pass);
+or when the report cannot be read. Waiting for reviewer capacity, an author,
+a gate or a retry backoff is not eligible work. `degraded_reasons` names each
+cause, and `last_pass` shows the report.
 <!-- trace:BUG-2674 | ai:claude -->
 
 ### Review-watch service recovery

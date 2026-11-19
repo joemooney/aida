@@ -202,7 +202,9 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 return Ok(());
             };
             let report = pass_report(&dir);
-            let degraded = pass_degradation(report.as_ref(), Utc::now());
+            let started = state.worker.as_ref().and_then(|w| w.recorded_at);
+            let degraded = pass_degradation(&report, started, Utc::now());
+            let report = report.ok().flatten();
             let status = if let Some(status) = host_refusal(&state) {
                 status
             } else if state.binding.validate(&root).is_err() {
@@ -324,11 +326,13 @@ fn print_status_with_pass(
         // trace:BUG-2674 | ai:claude
         if let Some(pass) = pass {
             println!(
-                "last pass: {}; {} open change(s); {} dispatched; {} refused",
+                "last pass: {}; {} open change(s); {} dispatched; {} not admitted; {} busy; {} refused",
                 pass.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
                 pass.changes,
                 pass.dispatched,
-                pass.errors.len()
+                pass.unadmitted,
+                pass.busy,
+                pass.refused
             );
         }
         for reason in degraded {
@@ -1953,30 +1957,47 @@ mod loop_tests {
             head_branch: None,
         };
         let mut admitted = Vec::new();
-        let refused = super::super::watch_changes(&store, vec![change(1), change(2)], |c| {
-            if c.id == 1 {
-                anyhow::bail!("change is closed or draft; no review started");
+        let changes = vec![change(1), change(3), change(2)];
+        let watched = super::super::watch_changes(&store, changes, |c| match c.id {
+            1 => anyhow::bail!("change is closed or draft; no review started"),
+            3 => Err(std::io::Error::from(std::io::ErrorKind::WouldBlock).into()),
+            _ => {
+                let action = super::super::select(&store, &c, None, 2)?;
+                assert!(matches!(action, super::super::Action::Dispatch(_)));
+                admitted.push(c.key());
+                Ok(())
             }
-            let action = super::super::select(&store, &c, None, 2)?;
-            assert!(matches!(action, super::super::Action::Dispatch(_)));
-            admitted.push(c.key());
-            Ok(())
         })
         .unwrap();
         assert_eq!(admitted, ["PR-2"]);
-        assert_eq!(refused.len(), 1);
-        assert!(refused[0].starts_with("PR-1: refused: change is closed"));
+        assert_eq!(watched.busy, 1);
+        assert_eq!(watched.refused.len(), 1);
+        assert!(watched.refused[0].starts_with("PR-1: refused: change is closed"));
+        let counts = PassCounts {
+            changes: 3,
+            dispatched: 1,
+            unadmitted: 0,
+            busy: watched.busy,
+        };
 
         // Without a controller (a manual watcher) nothing is recorded.
-        controller_pass_report(root, 2, 1, &refused).unwrap();
+        assert!(controller_pass_report(root, &counts, &watched.refused)
+            .unwrap()
+            .is_none());
         let dir = directory(root, true).unwrap().unwrap();
-        assert!(pass_report(&dir).is_none());
+        assert!(pass_report(&dir).unwrap().is_none());
 
         CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
-        controller_pass_report(root, 2, 1, &refused).unwrap();
-        let report = pass_report(&dir).unwrap();
-        assert_eq!((report.changes, report.dispatched), (2, 1));
-        let degraded = pass_degradation(Some(&report), Utc::now());
+        controller_pass_report(root, &counts, &watched.refused).unwrap();
+        let report = pass_report(&dir);
+        let pass = report.clone().unwrap().unwrap();
+        assert_eq!(
+            (pass.changes, pass.dispatched, pass.busy, pass.refused),
+            (3, 1, 1, 1)
+        );
+        // It dispatched, so it is not part of a stuck run.
+        assert_eq!(pass.stuck_since, None);
+        let degraded = pass_degradation(&report, Some(pass.at), Utc::now());
         assert_eq!(degraded.len(), 1);
         assert!(degraded[0].contains("PR-1"), "{degraded:?}");
         assert_eq!(pass_status("running", &degraded), "degraded");
@@ -1987,32 +2008,166 @@ mod loop_tests {
         );
 
         // A clean pass restores health.
-        controller_pass_report(root, 1, 0, &[]).unwrap();
-        let report = pass_report(&dir).unwrap();
-        assert!(pass_degradation(Some(&report), Utc::now()).is_empty());
+        let clean = PassCounts {
+            changes: 1,
+            ..Default::default()
+        };
+        controller_pass_report(root, &clean, &[]).unwrap();
+        let report = pass_report(&dir);
+        assert!(pass_degradation(&report, None, Utc::now()).is_empty());
         assert_eq!(pass_status("running", &[]), "running");
         CONTROLLER.with(|id| *id.borrow_mut() = None);
     }
 
-    // A worker that is alive but no longer completes passes is not healthy.
+    // Every pass, quiet or not, writes its own timestamped service.log line
+    // with the dispatch count. trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_every_quiet_pass_logs_its_dispatch_count() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let quiet = PassCounts {
+            changes: 10,
+            ..Default::default()
+        };
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        let lines: Vec<String> = (0..3)
+            .map(|_| controller_pass_report(root, &quiet, &[]).unwrap().unwrap())
+            .collect();
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+        for line in &lines {
+            let (at, rest) = line.split_once(' ').unwrap();
+            assert!(DateTime::parse_from_rfc3339(at).is_ok(), "{line}");
+            assert!(
+                rest.contains("pass: 10 open change(s), 0 dispatched"),
+                "{line}"
+            );
+        }
+    }
+
+    // More refusals than the diagnostic sample keeps: the total survives and
+    // the omission is named. trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_refusal_total_survives_the_capped_sample() {
+        let errors: Vec<String> = (1..=20).map(|n| format!("PR-{n}: refused: x")).collect();
+        let report = next_pass_report(
+            None,
+            &PassCounts {
+                changes: 20,
+                ..Default::default()
+            },
+            &errors,
+            Utc::now(),
+        );
+        assert_eq!(report.refused, 20);
+        assert_eq!(report.errors.len(), PASS_REPORT_ERRORS);
+        assert!(pass_log_line(&report).ends_with("20 refused"));
+        let degraded = pass_degradation(&Ok(Some(report)), None, Utc::now());
+        assert!(
+            degraded
+                .iter()
+                .any(|r| r.contains("4 more refusal(s) not shown (20 in total)")),
+            "{degraded:?}"
+        );
+    }
+
+    // Fresh passes that keep finding eligible work and dispatch nothing are a
+    // stall even though each pass completes; capacity waits and settled heads
+    // are not eligible work, and one dispatch ends the run.
     // trace:BUG-2674 | ai:claude
     #[test]
-    fn bug2674_stalled_passes_degrade_a_running_worker() {
-        let report = PassReport {
-            at: Utc::now() - chrono::Duration::minutes(PASS_STALE_MINUTES + 5),
+    fn bug2674_repeated_zero_dispatch_passes_with_eligible_work_degrade() {
+        let start = Utc::now() - chrono::Duration::minutes(PASS_STALE_MINUTES + 5);
+        let blocked = PassCounts {
             changes: 10,
-            dispatched: 0,
-            errors: Vec::new(),
+            busy: 2,
+            unadmitted: 1,
+            ..Default::default()
         };
-        let degraded = pass_degradation(Some(&report), Utc::now());
-        assert_eq!(degraded.len(), 1);
+        // One pass every ten seconds, each fresh and error-free.
+        let mut report: Option<PassReport> = None;
+        let mut at = start;
+        while at < Utc::now() {
+            report = Some(next_pass_report(report.as_ref(), &blocked, &[], at));
+            at += chrono::Duration::seconds(10);
+        }
+        let report = report.unwrap();
+        assert_eq!(report.stuck_since, Some(start));
+        let now = report.at;
+        let degraded = pass_degradation(&Ok(Some(report.clone())), Some(start), now);
+        assert_eq!(degraded.len(), 1, "{degraded:?}");
         assert!(
-            degraded[0].starts_with("no discovery pass for"),
+            degraded[0].starts_with("idle ") && degraded[0].contains("min with eligible work"),
             "{degraded:?}"
         );
         assert_eq!(pass_status("running", &degraded), "degraded");
-        // A fresh worker that has not yet reported is not condemned.
-        assert!(pass_degradation(None, Utc::now()).is_empty());
+        // Within the threshold the same run is not yet degraded.
+        let young = next_pass_report(None, &blocked, &[], now);
+        assert!(pass_degradation(&Ok(Some(young)), Some(start), now).is_empty());
+
+        // A pass that waits on capacity or finds every head settled has no
+        // eligible work, and ends the run; so does a pass that dispatches.
+        let waiting = PassCounts {
+            changes: 10,
+            ..Default::default()
+        };
+        let next = next_pass_report(Some(&report), &waiting, &[], now);
+        assert_eq!(next.stuck_since, None);
+        assert!(pass_degradation(&Ok(Some(next)), Some(start), now).is_empty());
+        let progressed = PassCounts {
+            dispatched: 1,
+            ..blocked.clone()
+        };
+        let next = next_pass_report(Some(&report), &progressed, &[], now);
+        assert_eq!(next.stuck_since, None);
+    }
+
+    // A live worker with no valid report of its own is degraded once its
+    // start deadline passes; a fresh one gets a grace period. A predecessor's
+    // report does not vouch for it, and an unreadable report is surfaced.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_worker_without_a_pass_report_degrades_after_its_grace() {
+        let now = Utc::now();
+        let old = now - chrono::Duration::minutes(PASS_STALE_MINUTES + 5);
+        let fresh = now - chrono::Duration::minutes(1);
+        let degraded = pass_degradation(&Ok(None), Some(old), now);
+        assert_eq!(degraded.len(), 1, "{degraded:?}");
+        assert!(
+            degraded[0].starts_with("no discovery pass since the worker started"),
+            "{degraded:?}"
+        );
+        assert_eq!(pass_status("running", &degraded), "degraded");
+        assert!(pass_degradation(&Ok(None), Some(fresh), now).is_empty());
+        assert_eq!(pass_degradation(&Ok(None), None, now).len(), 1);
+
+        // A clean report from before this worker started does not count.
+        let predecessor = next_pass_report(None, &PassCounts::default(), &[], old);
+        let report = Ok(Some(predecessor));
+        assert!(pass_degradation(&report, Some(fresh), now).is_empty());
+        let started = old + chrono::Duration::seconds(1);
+        let degraded = pass_degradation(&report, Some(started), now);
+        assert!(
+            degraded[0].starts_with("no discovery pass since the worker started"),
+            "{degraded:?}"
+        );
+
+        // A stalled worker whose own last pass is old is degraded too.
+        let degraded = pass_degradation(&report, Some(old), now);
+        assert!(
+            degraded
+                .iter()
+                .any(|r| r.starts_with("no discovery pass for")),
+            "{degraded:?}"
+        );
+
+        // Unreadable or malformed evidence is a reason, not silence.
+        let temp = tempfile::tempdir().unwrap();
+        let dir = directory(temp.path(), true).unwrap().unwrap();
+        dir.write(PASS_REPORT, b"{not json").unwrap();
+        let report = pass_report(&dir);
+        assert!(report.is_err());
+        let degraded = pass_degradation(&report, Some(fresh), now);
+        assert!(degraded[0].contains("unreadable"), "{degraded:?}");
     }
 
     // A whole-watcher stop names itself, not a refusal of the change it hit.
@@ -2500,6 +2655,18 @@ mod loop_tests {
     }
 }
 
+/// What one review-watch pass did with the open changes it considered.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(super) struct PassCounts {
+    pub(super) changes: usize,
+    pub(super) dispatched: usize,
+    /// Heads local state found eligible that the admission hub refused.
+    pub(super) unadmitted: usize,
+    /// Changes that found watcher admission busy.
+    pub(super) busy: usize,
+}
+
 /// The controller's latest completed (or stopped) discovery pass. Status uses
 /// it to report a running worker as degraded rather than healthy.
 // trace:BUG-2674 | ai:claude
@@ -2508,80 +2675,172 @@ struct PassReport {
     at: DateTime<Utc>,
     changes: usize,
     dispatched: usize,
+    #[serde(default)]
+    unadmitted: usize,
+    #[serde(default)]
+    busy: usize,
+    /// Every refusal or stop in the pass; `errors` keeps a bounded sample.
+    #[serde(default)]
+    refused: usize,
+    /// Start of the current run of passes that left eligible work unadmitted
+    /// (refused, busy, hub-refused or stopped) and dispatched nothing. A pass
+    /// that dispatches, or finds nothing eligible, ends the run; a capacity
+    /// wait or a settled head is not eligible work.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    stuck_since: Option<DateTime<Utc>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     errors: Vec<String>,
 }
 const PASS_REPORT: &str = "last-pass.json";
 const PASS_REPORT_ERRORS: usize = 16;
-// The worker polls every ten seconds; this long without a pass is a stall.
+// The worker polls every ten seconds; this long without a pass, or with
+// eligible work left unadmitted and nothing dispatched, is a stall.
 const PASS_STALE_MINUTES: i64 = 15;
-// A quiet pass is logged at most this often; any dispatch or error always is.
-const PASS_LOG_QUIET_SECONDS: u64 = 300;
-thread_local! {
-    static PASS_LOGGED: std::cell::Cell<Option<std::time::Instant>> =
-        const { std::cell::Cell::new(None) };
-}
 
 // trace:BUG-2674 | ai:claude
-pub(super) fn controller_pass_report(
-    root: &Path,
-    changes: usize,
-    dispatched: usize,
+fn next_pass_report(
+    previous: Option<&PassReport>,
+    counts: &PassCounts,
     errors: &[String],
-) -> Result<()> {
-    if CONTROLLER.with(|id| id.borrow().is_none()) {
-        return Ok(());
-    }
-    let report = PassReport {
-        at: Utc::now(),
-        changes,
-        dispatched,
+    now: DateTime<Utc>,
+) -> PassReport {
+    let stuck = counts.unadmitted + counts.busy + errors.len() > 0;
+    let stuck_since = if counts.dispatched > 0 || !stuck {
+        None
+    } else {
+        Some(previous.and_then(|p| p.stuck_since).unwrap_or(now))
+    };
+    PassReport {
+        at: now,
+        changes: counts.changes,
+        dispatched: counts.dispatched,
+        unadmitted: counts.unadmitted,
+        busy: counts.busy,
+        refused: errors.len(),
+        stuck_since,
         errors: errors
             .iter()
             .take(PASS_REPORT_ERRORS)
             .map(|e| bounded_diagnostic(e))
             .collect(),
-    };
-    // stderr is the service log. Bound quiet passes to a heartbeat line.
-    let quiet = dispatched == 0 && errors.is_empty();
-    let due = PASS_LOGGED.with(|last| {
-        last.get()
-            .is_none_or(|at| at.elapsed() >= std::time::Duration::from_secs(PASS_LOG_QUIET_SECONDS))
-    });
-    if !quiet || due {
-        PASS_LOGGED.with(|last| last.set(Some(std::time::Instant::now())));
-        eprintln!(
-            "{} {NAME} pass: {changes} open change(s), {dispatched} dispatched, {} refused",
-            report.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-            errors.len()
-        );
+    }
+}
+
+/// The one bounded `service.log` line every pass writes.
+// trace:BUG-2674 | ai:claude
+fn pass_log_line(report: &PassReport) -> String {
+    format!(
+        "{} {NAME} pass: {} open change(s), {} dispatched, {} not admitted, {} busy, {} refused",
+        report.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+        report.changes,
+        report.dispatched,
+        report.unadmitted,
+        report.busy,
+        report.refused
+    )
+}
+
+/// Records a controller pass: one timestamped `service.log` line (stderr is
+/// the service log) and `last-pass.json`. Returns the logged line; a manual
+/// watcher (no controller) records nothing.
+// trace:BUG-2674 | ai:claude
+pub(super) fn controller_pass_report(
+    root: &Path,
+    counts: &PassCounts,
+    errors: &[String],
+) -> Result<Option<String>> {
+    if CONTROLLER.with(|id| id.borrow().is_none()) {
+        return Ok(None);
     }
     let dir = directory(root, true)?.context("service directory missing")?;
-    dir.write(PASS_REPORT, &serde_json::to_vec_pretty(&report)?)
+    // An unreadable previous report only loses the stuck-run start.
+    let previous = pass_report(&dir).ok().flatten();
+    let report = next_pass_report(previous.as_ref(), counts, errors, Utc::now());
+    let line = pass_log_line(&report);
+    eprintln!("{line}");
+    dir.write(PASS_REPORT, &serde_json::to_vec_pretty(&report)?)?;
+    Ok(Some(line))
 }
 
-fn pass_report(dir: &Directory) -> Option<PassReport> {
-    dir.read(PASS_REPORT)
-        .ok()
-        .flatten()
-        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-}
-
-/// Why a running worker is degraded: its last pass refused changes or
-/// stopped, or it has not completed a pass recently.
+/// A report is diagnostics: failing to write it must not stop dispatch.
 // trace:BUG-2674 | ai:claude
-fn pass_degradation(report: Option<&PassReport>, now: DateTime<Utc>) -> Vec<String> {
-    let Some(report) = report else {
-        return Vec::new();
+pub(super) fn record_pass(root: &Path, counts: &PassCounts, errors: &[String]) {
+    if let Err(error) = controller_pass_report(root, counts, errors) {
+        eprintln!("{NAME}: could not record the pass report: {error:#}");
+    }
+}
+
+/// The last pass report; `Err` names why an existing one cannot be read.
+// trace:BUG-2674 | ai:claude
+fn pass_report(dir: &Directory) -> std::result::Result<Option<PassReport>, String> {
+    let Some(bytes) = dir
+        .read(PASS_REPORT)
+        .map_err(|e| bounded_diagnostic(&format!("{e:#}")))?
+    else {
+        return Ok(None);
+    };
+    serde_json::from_slice(&bytes)
+        .map(Some)
+        .map_err(|e| bounded_diagnostic(&e.to_string()))
+}
+
+/// Why a running worker is degraded: its pass report is unreadable; its last
+/// pass refused changes or stopped; it has left eligible work unadmitted with
+/// nothing dispatched for a sustained run; or it has not completed a pass
+/// within the deadline counted from its last pass or, before any pass of its
+/// own, from its start (a grace period for a fresh worker).
+// trace:BUG-2674 | ai:claude
+fn pass_degradation(
+    report: &std::result::Result<Option<PassReport>, String>,
+    worker_started: Option<DateTime<Utc>>,
+    now: DateTime<Utc>,
+) -> Vec<String> {
+    let report = match report {
+        Ok(report) => report.as_ref(),
+        Err(error) => {
+            return vec![format!(
+                "pass report .aida/{NAME}/{PASS_REPORT} unreadable: {error}"
+            )]
+        }
+    };
+    let minutes = |since: DateTime<Utc>| now.signed_duration_since(since).num_minutes();
+    // A report older than this worker belongs to its predecessor.
+    let current = report.filter(|r| worker_started.is_none_or(|start| r.at >= start));
+    let Some(report) = current else {
+        return match worker_started {
+            Some(start) if minutes(start) >= PASS_STALE_MINUTES => vec![format!(
+                "no discovery pass since the worker started {} min ago",
+                minutes(start)
+            )],
+            Some(_) => Vec::new(),
+            None => vec!["no discovery pass recorded and the worker start time is unknown".into()],
+        };
     };
     let mut reasons: Vec<String> = report
         .errors
         .iter()
         .map(|e| format!("last pass: {e}"))
         .collect();
-    let idle = now.signed_duration_since(report.at).num_minutes();
-    if idle >= PASS_STALE_MINUTES {
-        reasons.push(format!("no discovery pass for {idle} min"));
+    let omitted = report.refused.saturating_sub(report.errors.len());
+    if omitted > 0 {
+        reasons.push(format!(
+            "last pass: {omitted} more refusal(s) not shown ({} in total)",
+            report.refused
+        ));
+    }
+    if let Some(since) = report.stuck_since {
+        if minutes(since) >= PASS_STALE_MINUTES {
+            reasons.push(format!(
+                "idle {} min with eligible work: no review dispatched while {} change(s) went unadmitted, {} found admission busy and {} were refused",
+                minutes(since),
+                report.unadmitted,
+                report.busy,
+                report.refused
+            ));
+        }
+    }
+    if minutes(report.at) >= PASS_STALE_MINUTES {
+        reasons.push(format!("no discovery pass for {} min", minutes(report.at)));
     }
     reasons
 }

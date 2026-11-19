@@ -2820,6 +2820,13 @@ pub(crate) fn run_with_program(
             Ok(changes) => changes,
             Err(error) if !args.once => {
                 eprintln!("review-watch discovery refused: {error:#}");
+                // A worker that never gets past discovery still reports it.
+                // trace:BUG-2674 | ai:claude
+                service::record_pass(
+                    &root,
+                    &service::PassCounts::default(),
+                    &[format!("discovery refused: {error:#}")],
+                );
                 service::idle(&root, args.interval)?;
                 continue;
             }
@@ -2850,9 +2857,11 @@ pub(crate) fn run_with_program(
         // trace:BUG-2442 | ai:codex
         let authors = update::AuthorLiveness::default();
         let reviewable = reviewable_changes(changes, &mut reported_trains);
-        let considered = reviewable.len();
         // trace:BUG-2674 | ai:claude
-        let mut dispatched = 0usize;
+        let mut pass = service::PassCounts {
+            changes: reviewable.len(),
+            ..Default::default()
+        };
         let watched = watch_changes(&store, reviewable, |change| {
             // A pass can contain many bounded forge probes. Reap between
             // changes as well as between passes so finished children do not
@@ -2861,8 +2870,7 @@ pub(crate) fn run_with_program(
             for outcome in reap_dispatchers(&store, &mut children) {
                 service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
             }
-            let before = children.len();
-            let result = watch_change(
+            let result = admit_change(
                 &root,
                 &repo,
                 &store,
@@ -2872,7 +2880,18 @@ pub(crate) fn run_with_program(
                 change,
                 program,
             );
-            dispatched += children.len().saturating_sub(before);
+            let result = match result {
+                Ok(Admission::Admitted) => {
+                    pass.dispatched += 1;
+                    Ok(())
+                }
+                Ok(Admission::Unadmitted) => {
+                    pass.unadmitted += 1;
+                    Ok(())
+                }
+                Ok(Admission::Settled) => Ok(()),
+                Err(error) => Err(error),
+            };
             observe_dispatch_result(&root, result)
         });
         // Every pass leaves a timestamped report, including one stopped by a
@@ -2880,25 +2899,18 @@ pub(crate) fn run_with_program(
         // from one that refuses work or no longer completes passes.
         // trace:BUG-2674 | ai:claude
         let refused = match watched {
-            Ok(refused) => refused,
+            Ok(watched) => {
+                pass.busy = watched.busy;
+                watched.refused
+            }
             Err(error) => {
                 if !error.is::<service::ImageSuperseded>() {
-                    let stop = [format!("{error:#}")];
-                    if let Err(report) =
-                        service::controller_pass_report(&root, considered, dispatched, &stop)
-                    {
-                        eprintln!("review-watch: could not record the pass report: {report:#}");
-                    }
+                    service::record_pass(&root, &pass, &[format!("{error:#}")]);
                 }
                 return Err(error);
             }
         };
-        // A report is diagnostics: failing to write it must not stop dispatch.
-        if let Err(report) =
-            service::controller_pass_report(&root, considered, dispatched, &refused)
-        {
-            eprintln!("review-watch: could not record the pass report: {report:#}");
-        }
+        service::record_pass(&root, &pass, &refused);
         // Synchronous setup/spawn errors are dispatch failures too: an idle
         // discovery pass must not clear them before a dispatch succeeds.
         // trace:STORY-2691 | ai:codex
@@ -3002,6 +3014,12 @@ fn sync_pass(root: &Path, once: bool) -> Result<bool> {
         Err(error) if once => Err(error),
         Err(error) => {
             eprintln!("review-watch synchronization refused for this pass: {error:#}");
+            // trace:BUG-2674 | ai:claude
+            service::record_pass(
+                root,
+                &service::PassCounts::default(),
+                &[format!("synchronization refused: {error:#}")],
+            );
             Ok(false)
         }
     }
@@ -3011,22 +3029,36 @@ pub(crate) fn fixture_sync_pass(root: &Path, once: bool) -> Result<bool> {
     sync_pass(root, once)
 }
 
+/// What one pass's change loop could not settle: every refused change as
+/// `KEY: reason`, and how many changes found watcher admission busy.
+// trace:BUG-2674 | ai:claude
+#[derive(Debug, Default)]
+pub(crate) struct Watched {
+    pub(crate) refused: Vec<String>,
+    pub(crate) busy: usize,
+}
+
 /// Per-change refusals are durable diagnostics, never a reason to abandon the
 /// remaining changes in this pass (including `--once`). Returns each refused
-/// change as `KEY: reason`, so the pass report can surface them.
+/// change as `KEY: reason`, and the busy count, so the pass report can
+/// surface them.
 // trace:BUG-2471 | ai:codex
 // trace:BUG-2674 | ai:claude
 fn watch_changes(
     store: &Store,
     changes: Vec<forge::Change>,
     mut watch: impl FnMut(forge::Change) -> Result<()>,
-) -> Result<Vec<String>> {
+) -> Result<Watched> {
     let mut refused = Vec::new();
+    let mut busy = 0usize;
     for change in changes {
         let key = change.key();
         match watch(change.clone()) {
             Ok(()) => {}
-            Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
+            Err(error) if is_busy(&error) => {
+                busy += 1;
+                eprintln!("{key}: watcher admission is busy")
+            }
             // Whole-watcher failure (unusable state, controller authority
             // ended or superseded). Name it as a watcher stop: it is not a
             // refusal of this one change. trace:BUG-2674 | ai:claude
@@ -3052,7 +3084,7 @@ fn watch_changes(
             }
         }
     }
-    Ok(refused)
+    Ok(Watched { refused, busy })
 }
 
 /// Only whole-state failure stops the watcher; one change's refusal must not
@@ -3141,8 +3173,40 @@ fn is_busy(error: &anyhow::Error) -> bool {
     })
 }
 
+/// How one change ended in a pass. `Unadmitted` is a head that local state
+/// found eligible for review but that the pass still could not admit; the
+/// pass report tracks a sustained run of those with nothing dispatched.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Admission {
+    /// Settled for now: reviewed, reserved, waiting on capacity, an author,
+    /// a gate or a backoff.
+    Settled,
+    Admitted,
+    Unadmitted,
+}
+
+// The pass loop uses `admit_change`; tests drive one change through this.
 // trace:TASK-1993 | ai:claude
+#[cfg(test)]
+#[allow(clippy::too_many_arguments)]
 fn watch_change(
+    root: &Path,
+    repo: &forge::Repository,
+    store: &Store,
+    args: &ReviewWatchArgs,
+    children: &mut Vec<Dispatcher>,
+    authors: &update::AuthorLiveness,
+    change: forge::Change,
+    program: Option<&Path>,
+) -> Result<()> {
+    admit_change(root, repo, store, args, children, authors, change, program).map(|_| ())
+}
+
+// trace:TASK-1993 | ai:claude
+// trace:BUG-2674 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn admit_change(
     root: &Path,
     repo: &forge::Repository,
     store: &Store,
@@ -3151,7 +3215,7 @@ fn watch_change(
     authors: &update::AuthorLiveness,
     mut change: forge::Change,
     program: Option<&Path>,
-) -> Result<()> {
+) -> Result<Admission> {
     service::check_controller(root)?;
     service::validate_controller_delegation(root)?;
     let key = change.key();
@@ -3159,14 +3223,14 @@ fn watch_change(
     // the new head is stale or overlapping. trace:TASK-1945 | ai:claude
     if let Some(reason) = supersede(store, &change, || Ok(repo.change(root, change.id)?.head))? {
         eprintln!("{key}: {reason}");
-        return Ok(());
+        return Ok(Admission::Settled);
     }
     // trace:STORY-2705 | ai:codex
     if let Some(reason) = crate::review_implementer_gate::deferred(root, change.id, change.gitlab)?
     {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
-        return Ok(());
+        return Ok(Admission::Settled);
     }
     // trace:STORY-2640 | ai:codex — reserve before the seat can open its PR.
     if let Some(branch) = change.head_branch.as_deref() {
@@ -3176,7 +3240,7 @@ fn watch_change(
             // Replace a former live-lane diagnostic after that lease ends.
             // trace:STORY-2705 | ai:codex
             record_skip(store, &change, Some(reason))?;
-            return Ok(());
+            return Ok(Admission::Settled);
         }
     }
     // Fast reviews need no branch update. Probe a synthetic merge and route
@@ -3189,7 +3253,8 @@ fn watch_change(
         if let Some(reason) = probe_unneeded(store, &change)? {
             eprintln!("{key}: {reason}");
             record_skip(store, &change, Some(&reason))?;
-            return report(root, store, &change, &ready::Live { root, repo });
+            return report(root, store, &change, &ready::Live { root, repo })
+                .map(|_| Admission::Settled);
         }
         if crate::gate::review_freshness::decision_exists(
             root,
@@ -3202,7 +3267,7 @@ fn watch_change(
                 &change,
                 Some("textual conflict routed to implementer rework"),
             )?;
-            return Ok(());
+            return Ok(Admission::Settled);
         }
         // The shared base probe below supplies the synthetic-merge evidence.
         // A fast change skips the branch update, so a conflict is still
@@ -3230,13 +3295,13 @@ fn watch_change(
     if let Some(reason) = follow_up(&change, false)? {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live);
+        return report(root, store, &change, &live).map(|_| Admission::Settled);
     }
     // trace:TASK-1955 | ai:claude (TASK-2064, TASK-1-411)
     if let Some(reason) = probe_unneeded(store, &change)? {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live);
+        return report(root, store, &change, &live).map(|_| Admission::Settled);
     }
     repo.probe(root, &mut change)
         .context("base evidence refused")?;
@@ -3250,12 +3315,12 @@ fn watch_change(
             &change,
             Some("textual conflict routed to implementer rework"),
         )?;
-        return Ok(());
+        return Ok(Admission::Settled);
     }
     if let Some(reason) = follow_up(&change, true)? {
         eprintln!("{key}: {reason}");
         record_skip(store, &change, Some(&reason))?;
-        return report(root, store, &change, &live);
+        return report(root, store, &change, &live).map(|_| Admission::Settled);
     }
     crate::gate::seat_authority::validate_child_delegation(root, "reviewer")?;
     let action = select(
@@ -3308,7 +3373,7 @@ fn watch_change(
             // trace:STORY-2492 | ai:codex
             if !reserve_dispatch(root, store, &key, &mut attempt)? {
                 eprintln!("{key}: head/change already reserved or reviewed at admission hub");
-                return Ok(());
+                return Ok(Admission::Unadmitted);
             }
             use std::os::unix::process::CommandExt;
             let spawned = (|| {
@@ -3378,6 +3443,7 @@ fn watch_change(
                         })?,
                     }
                     eprintln!("{key}: review admitted for {}", change.head);
+                    return Ok(Admission::Admitted);
                 }
                 Err(error) => {
                     cancel_spawn_failure(root, store, &key, &attempt, &error.to_string())?;
@@ -3386,7 +3452,7 @@ fn watch_change(
             }
         }
     }
-    Ok(())
+    Ok(Admission::Settled)
 }
 
 // A hub failure must not prevent recording a proven local pre-spawn failure.
