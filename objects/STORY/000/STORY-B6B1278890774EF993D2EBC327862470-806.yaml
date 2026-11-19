@@ -17,9 +17,10 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205938Z
-modified_at: 2026-11-18T23:56:45.483395724Z
+modified_at: 2026-11-19T00:13:24.374573743Z
 req_type: Story
 tags:
+- docs:impacted
 - operator-ask
 - process-knob
 - product-intake
@@ -77,6 +78,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f126-a616-7bd0-88ed-c42a68eeef93
+  author: dirtlab
+  timestamp: 2026-11-19T00:13:24.374569238Z
+  session_id: 01a1f1174143
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: tags
+    old_value: operator-ask, process-knob, product-intake, review, throughput
+    new_value: docs:impacted, operator-ask, process-knob, product-intake, review, throughput
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
