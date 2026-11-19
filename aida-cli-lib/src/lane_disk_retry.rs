@@ -92,9 +92,12 @@ pub(crate) fn record(
     reason: &str,
 ) -> Result<()> {
     anyhow::ensure!(valid_spec(spec), "unrecordable spec id {spec:?}");
-    let first_refused_at = std::env::var(RETRY_SINCE_ENV)
+    // Read through the ExecContext capture boundary, not a raw env site.
+    // trace:BUG-2684 | ai:claude
+    let first_refused_at = aida_core::exec_context::Environment::capture()
+        .var(RETRY_SINCE_ENV)
         .ok()
-        .and_then(|since| chrono::DateTime::parse_from_rfc3339(&since).ok())
+        .and_then(|since| chrono::DateTime::parse_from_rfc3339(since).ok())
         .map_or_else(chrono::Utc::now, |since| since.with_timezone(&chrono::Utc));
     let row = Refused {
         spec: spec.to_owned(),
