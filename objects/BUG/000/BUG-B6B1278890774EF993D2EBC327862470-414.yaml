@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768Z
-modified_at: 2026-11-19T20:06:00.686766685Z
+modified_at: 2026-11-19T20:29:01.287949009Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -484,6 +484,20 @@ comments:
   created_at: 2026-11-19T20:06:00.686763632Z
   modified_at: 2026-11-19T20:06:00.686763632Z
   session_id: 01a1f53a2646
+- id: 01a1f57f-93e7-7c20-80ac-1ba4e7946fe8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0efea63320 (PR #4320, round 2, test-only).
+    Acceptance evidence: [evidence: behavioral-test] task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_heads now presents VALID implementer and reviewer grants (asserted GrantCheck::Valid with matching seat) through the real control path (run_with_program). Pause is refused ('requires an advisor grant') with no pause.json written; with an active advisor pause, resume is refused, the journal is byte-identical and check_launch still reports paused. Existing invalid-grant and valid-advisor cases unchanged.
+    Mutation: deleting the grant.seat == "advisor" guard makes the implementer pause succeed; test fails at the refusal assertion (verified, then reverted).
+    Checks: targeted test ok; 115 ratchet/bug2650/task_2143/exec_context tests ok; aida-ci-guards lib ok; check-store-writers clean (no new sites); cargo fmt. make check-ci-fast stops on the Python containment conformance suite, which cannot run in this sandbox (hard-coded /tmp tempdir, network namespace). Unrelated to this test-only change.
+    Residual: the refusal text names the required seat (advisor) but not the presenting seat. The brief asked for the seat to be named, but also ruled out production changes, so the message was left as is.
+    No production changes.
+  created_at: 2026-11-19T20:29:01.287949009Z
+  modified_at: 2026-11-19T20:29:01.287949009Z
+  session_id: 01a1f56c3ae1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
