@@ -105,18 +105,18 @@
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
 - user_id: dirtlab
-  requirement_id: 01a1f533-4dd2-7c60-87e8-579611449928
-  position: 862000
-  added_by: dirtlab
-  note: auto-queued by `aida pr` (01a1f4fa); covers 0 specs
-  added_at: 2026-11-19T19:06:10.689819663Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
-- user_id: dirtlab
   requirement_id: 01a1f51e-ca95-7a82-92f4-5a4cc664a489
   position: 863000
   added_by: dirtlab
   note: auto-queue retry reused canonical review story; covers 1 spec
   added_at: 2026-11-19T19:35:44.017211348Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
+- user_id: dirtlab
+  requirement_id: 01a1f533-4dd2-7c60-87e8-579611449928
+  position: 864000
+  added_by: dirtlab
+  note: auto-queue retry reused canonical review story; covers 0 specs
+  added_at: 2026-11-19T20:16:23.366014493Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
