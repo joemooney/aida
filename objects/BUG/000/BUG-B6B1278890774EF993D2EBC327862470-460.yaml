@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T10:09:01.457512174Z
+modified_at: 2026-11-19T10:09:25.223624932Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -508,6 +508,13 @@ comments:
     link #4274 and state that the rounds 1-4 logic was reviewed there. Close #4274 as superseded once the new PR is open.
   created_at: 2026-11-19T10:09:01.457512174Z
   modified_at: 2026-11-19T10:09:01.457512174Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f348-8549-7181-b777-0a9a179d8f75
+  author: joe
+  content: 'Product 03:09: fresh-PR lane queued on dell1 (claude, STRICT), branch bug-2696-fresh. Scope = the AUTHORITATIVE FRESH-PR BRIEF in the previous comment. It opens a NEW PR that supersedes the parked one.'
+  created_at: 2026-11-19T10:09:25.223624932Z
+  modified_at: 2026-11-19T10:09:25.223624932Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
