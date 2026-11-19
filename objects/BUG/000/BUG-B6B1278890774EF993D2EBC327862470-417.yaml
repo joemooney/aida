@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:39:43.972253713Z
-modified_at: 2026-11-19T18:53:16.864672842Z
+modified_at: 2026-11-19T18:53:46.974005250Z
 req_type: Bug
 tags:
 - follow-up
@@ -98,6 +98,27 @@ comments:
   created_at: 2026-11-19T18:53:16.864670456Z
   modified_at: 2026-11-19T18:53:16.864670456Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f528-94e3-76f3-91e7-521cda94bd9c
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 11:53):
+    # Rework brief: BUG-2653 / PR #4325, round 2 of 4 (test-only)
+
+    Advisor: claude-advisor-121, 2026-11-19 11:55 MST. Head reviewed: 29991da. Lane: CLAUDE (gate/seat_authority.rs). Test-only.
+    F1 [p2 untested-path; gate/seat_authority.rs:2621]: ChildGrantRefused::is_parent_expired has no negative coverage that reaches it.
+    The supervisor regression's negative case corrupts agents.toml and returns before child-grant issuance.
+    Add, through the real supervisor/relaunch path: (a) a typed ChildGrantRefused whose cause is NOT expiry (e.g. a revoked
+    parent) is returned as a refusal and does NOT pass the relaunch gate (no retry loop: assert a bounded number of issuance
+    attempts, ideally exactly one); (b) a non-expiry LaunchParentRefused likewise. The test must fail if is_parent_expired is
+    replaced by ChildGrantRefused::is_in (state that mutation in the test comment). No production changes.
+    cargo fmt; one targeted cargo run; make check-ci-fast. Push. A test-only delta gets a light re-review.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-19T18:53:46.974005250Z
+  modified_at: 2026-11-19T18:53:46.974005250Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e8e1-1e5c-79f0-9988-ca8a393a131f
