@@ -708,6 +708,25 @@ comments:
   created_at: 2026-11-19T14:02:43.137233170Z
   modified_at: 2026-11-19T14:02:43.137233170Z
   session_id: 01a1f3f1495c
+- id: 01a1f44c-8280-7cb2-b1a8-4dc833ee0ae4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a5b4a5e435 (round 8, PR #4305).
+
+    Finding addressed (P1, db_reconcile.rs Git-canonical landing): each landing flip now runs in one GitBackend::update_atomically transaction. Parent resolution, slice_plan_outstanding over the locked store's children, and apply_auto_bump_flip all happen under the writer lock (complete_flip_under_lock, shared with the legacy path). The commit is still a targeted 'update SPEC-ID'.
+
+    Acceptance evidence: [evidence: behavioral-test] three new Git-canonical regressions go through the scan-to-write race seam: bug_2696_canonical_landing_child_reopened_after_scan_keeps_parent_open, bug_2696_canonical_landing_slice_added_after_scan_keeps_parent_open, and the positive control bug_2696_canonical_landing_unchanged_graph_completes_parent. All pass, as do auto_bump_git_canonical_store_writes_targeted_commits_per_spec and reconcile_status_flips_node_aware_spec_by_agreed_id.
+
+    Probe fix: the helper first used an exact spec_id/agreed_id match. Probe 1 showed this diverges from the scan's resolver (case, padding, node-alias), so it now uses RequirementsStore::get_requirement_by_spec_id.
+
+    Checks: make check-ci-fast exit 0; check-store-writers.py ok. Ratchets were not touched.
+
+    Residual risks: one full-store load per flip under the lock, a cost for passes with many flips. Pre-existing lane failure: bug_2696_r4_failing_store_probe_never_reports_propagation panics at auto_bump_done_tests.rs:6493 (head_sha after corrupting the store config). It fails identically with this change stashed, so it is environment-dependent and not caused here; defer to CI.
+  created_at: 2026-11-19T14:53:37.280482572Z
+  modified_at: 2026-11-19T14:53:37.280482572Z
+  session_id: 01a1f421618d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
