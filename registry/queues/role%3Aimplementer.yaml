@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1f199-2c4e-7bb3-819b-f28446dcf702
+  position: -848000
+  added_by: role:implementer
+  note: 'Round 2 for PR #4280. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3820-r2.md: an explicit recorded cap (no inference), a locked re-read of the child, and the whole ancestor chain re-validated under the lock. CLAUDE lane, STRICT.'
+  added_at: 2026-11-19T04:11:42.605597736Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
   position: -847000
   added_by: role:implementer
