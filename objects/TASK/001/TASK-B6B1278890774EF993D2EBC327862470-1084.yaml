@@ -11,12 +11,12 @@ description: |
   1. The BUG-2529 deputy timeout regression test is committed under aida-cli-lib tests and passes in CI. It asserts that a job exceeding its timeout is killed and reported terminal with a timeout result.
   2. When a deputy's runner process is dead, `aida awaiting` shows that deputy as dead (name, last runner pid, since when) and lists its queued jobs as stranded, not as waiting.
   3. A test starts a runner, kills it, and asserts the `aida awaiting` output for both a queued and an in-flight job.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T17:19:41.890568940Z
+modified_at: 2026-11-19T17:29:55.523593869Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -336,6 +336,14 @@ history:
   timestamp: 2026-11-19T17:19:08.351525138Z
   session_id: 01a1f485d729
   changes: []
+- id: 01a1f4db-9c43-7353-b3e6-83f2c5361567
+  author: aida-orchestrator
+  timestamp: 2026-11-19T17:29:55.523726272Z
+  session_id: 01a1f4d85fe3
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
@@ -346,3 +354,16 @@ filed_at:
   vendor: claude
   session: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Reviewed the complete supplied protected-base-to-landed-tree diff for original PR head 768640005c55bef865e331d70f2a1e0be1058617 against main b82066836029b7ef323861eb91d1dbd4967a3096. Covered spec: TASK-3801, origin TASK-b6b1278890774ef993d2ebc327862470-1084.
+    Acceptance criterion TASK-b6b1278890774ef993d2ebc327862470-1084.ac4ba88d: unverified. The committed a_timeout_leaves_the_runner_alive_to_execute_the_next_job test asserts terminal Done/124/timeout, positive descendant-death evidence, and same-runner continuation. Spec comments report 54 deputy tests passed in lane job j20261119T160243598-2-0. Hosted CI does not yet supply a behavioral-test pass: fast gates passed, fast compile is pending, and full test shards are skipped under FAST. CI pending at review time; pending CI alone is not the reason for this verdict.
+    Acceptance criterion TASK-b6b1278890774ef993d2ebc327862470-1084.ac3ffd94: unverified. Native runner.json deaths and queued/running jobs are collected and rendered, but a dead legacy bash runner recorded only in runner.pid is silently excluded. The acceptance criterion has no native-only exception.
+    Acceptance criterion TASK-b6b1278890774ef993d2ebc327862470-1084.ac772309: verified by committed awaiting_reports_jobs_stranded_by_a_killed_script_deputy source and the reported passing lane suite. It starts and kills a real runner and checks queued/in-flight rows, PID and timestamps across human, TOON and JSON renderers, plus live/hidden/session controls. No local builds or tests were run for this review.
+    Request changes for the unmet dead-runner acceptance criterion; also retain the project-scoping reporting defect as a follow-up. Protected-base sensitivity: main adds BUG-2625 legacy fate/recovery helpers and related tests; those helpers make the legacy omission especially visible in the landed tree, but the original PR head already recognizes legacy runners and still excludes their deaths. The project-filtering finding is present in both the original head and landed tree. No other actionable defects found in the full diff.
+  recovery_hint: address the review findings, move TASK-3801 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T17:29:55.523593869Z
