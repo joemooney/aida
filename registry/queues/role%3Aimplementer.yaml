@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e944-7b60-71d1-a8ec-a30b7e4c5f90
+  position: -872000
+  added_by: role:implementer
+  note: 'Advisor 02:07 re-dispatch: the previous lane exited with no changes (branch at main). Implement the measurement in full: review rounds per landed PR, 7 days before vs after TASK-3815 enablement (11-17), as a report command/output plus a spec comment with the numbers. Codex lane.'
+  added_at: 2026-11-19T09:03:39.194163157Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ebf2-d884-7621-9a80-25344ab14aab
   position: -871000
   added_by: role:implementer
