@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T09:42:37.074620482Z
+modified_at: 2026-11-19T09:44:20.937798414Z
 req_type: Bug
 tags:
 - landing
@@ -285,6 +285,13 @@ comments:
   modified_at: 2026-11-19T09:17:38.184440408Z
   session_id: 01a1f30af236
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f331-8bcd-7e61-9c08-47a0a7d7ac5a
+  author: joe
+  content: 'Advisor 02:45 follow-up note (no new spec): when watch_changes aborts a pass on a global error (review_watch.rs:3072-3075, 3088), keep the accumulated refused and busy values in the pass record (run_with_program:2913-2917) instead of recording only the stop.'
+  created_at: 2026-11-19T09:44:20.937798414Z
+  modified_at: 2026-11-19T09:44:20.937798414Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1eccf-fa1f-7360-9e3a-efaef5e27947
   author: joe
