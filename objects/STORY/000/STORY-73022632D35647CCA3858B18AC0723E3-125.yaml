@@ -1,0 +1,32 @@
+id: 01a1f188-3466-77b1-8fa0-0cdf20701710
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-125
+title: 'Review PR-4275: [AI:codex] fix(rework): rebuild conflicts from origin after seat removal (BUG-2688)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f168`) for branch `bug-b6b1278890774ef993d2ebc327862470-452`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4275>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-452` → `main`
+
+  ## Covers
+
+  - BUG-2688
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4275` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T01:59:57.798946900Z
+modified_at: 2026-11-19T01:59:57.798946900Z
+req_type: Story
+filed_at:
+  code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  session: 01a1f168627d
