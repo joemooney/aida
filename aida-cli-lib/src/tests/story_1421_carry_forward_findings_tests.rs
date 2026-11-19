@@ -528,6 +528,8 @@ fn task_3814_tier_policy_files_each_followup_and_keeps_p1_blocking() {
         "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
     );
     std::fs::write(config, text).unwrap();
+    // trace:STORY-2913 | ai:claude — the policy is read from the default branch.
+    crate::review_blocking::commit_config_for_test(&root);
     let findings: Vec<String> = [("p2", "first followup"), ("p3", "second followup")]
         .iter()
         .map(|(tier, text)| {
@@ -645,6 +647,8 @@ fn task_3814_agreed_id_review_files_followups_and_aliases_deduplicate() {
         "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
     );
     std::fs::write(config, text).unwrap();
+    // trace:STORY-2913 | ai:claude — the policy is read from the default branch.
+    crate::review_blocking::commit_config_for_test(&root);
     let findings: Vec<String> = [("p2", "agreed followup one"), ("p3", "agreed followup two")]
         .iter()
         .map(|(tier, text)| {
@@ -783,6 +787,8 @@ fn task_3814_positional_finding_class_blocks_gate_untested_path_end_to_end() {
             "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
         );
         std::fs::write(&config, text).unwrap();
+        // trace:STORY-2913 | ai:claude — the policy is read from the default branch.
+        crate::review_blocking::commit_config_for_test(tmp.path());
         (tmp, head)
     };
     for class in [
@@ -873,6 +879,8 @@ fn task_3814_positional_security_outranks_embedded_path_scoped_class_end_to_end(
             "\n[review]\nblocking_tiers = [\"p1\", \"data-loss\", \"security\", \"acceptance\"]\n",
         );
         std::fs::write(&config, text).unwrap();
+        // trace:STORY-2913 | ai:claude — the policy is read from the default branch.
+        crate::review_blocking::commit_config_for_test(tmp.path());
         (tmp, head)
     };
     for embedded in ["untested-path", "mutation-kill"] {
@@ -913,4 +921,85 @@ fn task_3814_positional_security_outranks_embedded_path_scoped_class_end_to_end(
             );
         }
     }
+}
+
+// trace:STORY-2913 | ai:claude — AC3/AC6: under a custom list the findings
+// outside it are approved and auto-filed as linked follow-ups, deduplicated
+// by finding hash across retries; a listed class still refuses.
+// trace:STORY-2913.ac0add0e | ai:claude
+#[test]
+fn story_2913_custom_list_auto_files_followups() {
+    use crate::gate::{ledger, review_verdict as rv};
+    use aida_core::db::DatabaseBackend;
+    let (_tmp, root, store) = init_git_canonical_test_store();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
+    let backend = crate::test_env::home_fixture_backend(&store)
+        .unwrap()
+        .with_dispenser(load_dispenser(&store).unwrap());
+    let mut parent = aida_core::Requirement::new("reviewed spec".into(), String::new());
+    parent.spec_id = Some("TASK-9822".into());
+    let parent_id = parent.id;
+    backend.add_requirement(parent).unwrap();
+    let source = backend
+        .get_requirement(&parent_id)
+        .unwrap()
+        .unwrap()
+        .spec_id
+        .unwrap();
+    let config = root.join(".aida/config.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap();
+    text.push_str("\n[review]\nblocking_tiers = [\"p1\", \"style\"]\n");
+    std::fs::write(&config, text).unwrap();
+    crate::review_blocking::commit_config_for_test(&root);
+    // p2 and a p3 test gap on ordinary code are outside the list.
+    let findings = vec![
+        serde_json::json!({"text":"slow loop","blocking_tier":"p2"}).to_string(),
+        serde_json::json!({"text":"no regression test","blocking_tier":"p3","class":"test-gap",
+            "file":"aida-cli-lib/src/report.rs"})
+        .to_string(),
+    ];
+    let path = rv::verdict_path(&root, &source);
+    let record = rv::build_verdict_object(
+        &root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &findings,
+        "reviewer",
+    )
+    .unwrap();
+    assert_eq!(record["verdict"], "approved");
+    ledger::record_verdict_at(&path, &record, None).unwrap();
+    ledger::record_verdict_at(&path, &record, None).unwrap();
+    let rows = backend.list_requirements(true).unwrap();
+    let followups: Vec<_> = rows.iter().filter(|r| r.id != parent_id).collect();
+    assert_eq!(followups.len(), 2, "one per finding, retry deduplicated");
+    for task in &followups {
+        assert!(task.tags.iter().any(|t| t.starts_with("finding-hash:")));
+        assert!(task
+            .relationships
+            .iter()
+            .any(|r| r.target_id == parent_id
+                && r.rel_type == aida_core::RelationshipType::References));
+    }
+    // A listed class (style) blocks under the same list.
+    let styled = vec![
+        serde_json::json!({"text":"inconsistent naming","blocking_tier":"p3","class":"style"})
+            .to_string(),
+    ];
+    let record = rv::build_verdict_object(
+        &root,
+        &path,
+        Some("request-changes"),
+        None,
+        None,
+        None,
+        &styled,
+        "reviewer",
+    )
+    .unwrap();
+    assert_eq!(record["verdict"], "request-changes");
 }

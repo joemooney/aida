@@ -280,6 +280,42 @@ pub enum ReviewCommand {
         #[clap(subcommand)]
         mode: ReviewModeCommand,
     },
+
+    /// Show or change which review finding classes block a merge.
+    ///
+    /// Reviews read the list from the default branch's `.aida/config.toml`,
+    /// so an edit takes effect only once it lands there. Unset or invalid,
+    /// every finding blocks. Findings outside the list are approved and
+    /// filed as linked follow-up specs.
+    // trace:STORY-2913 | ai:claude
+    BlockingTiers {
+        #[clap(subcommand)]
+        action: BlockingTiersCommand,
+    },
+}
+
+/// What `aida review blocking-tiers` does.
+// trace:STORY-2913 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum BlockingTiersCommand {
+    /// Show the active list, where it came from, and the class registry.
+    Show {
+        /// Emit the policy as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Write a new list to the main checkout's `.aida/config.toml`.
+    ///
+    /// Needs a human at a terminal, or the advisor seat under a mandate
+    /// that covers `review-policy`. Records who changed it, when, and under
+    /// what authority next to the list. Commit the edit and land it through
+    /// a human merge for reviews to use it.
+    Set {
+        /// Classes that block: p1, p2, p3, data-loss,
+        /// security-authority-bypass, unmet-claimed-ac, test-gap, style.
+        #[clap(required = true, num_args = 1.., value_name = "CLASS")]
+        classes: Vec<String>,
+    },
 }
 
 /// The temporary review modes `aida review mode` switches.

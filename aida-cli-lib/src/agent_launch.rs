@@ -5190,6 +5190,7 @@ fn prepare_agent_launch_attempt_inner(
                         crate::session_start::PathReentry::None
                     },
                     None,
+                    /* done_rework_admitted */ false,
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);

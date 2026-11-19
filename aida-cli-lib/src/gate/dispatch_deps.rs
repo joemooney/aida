@@ -537,6 +537,20 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
         "crate::trusted_config::read_trusted_config_toml_local",
         "trusted local config for the solo-review challenge",
     ),
+    // trace:STORY-2913 | ai:claude — the review blocking-class policy is read
+    // only from the trusted default-branch copy; each read failure fails closed.
+    (
+        "crate::trusted_config::local_trusted_default_branch_sha",
+        "trusted default-branch SHA for the review blocking-class policy; absent fails closed to all-block",
+    ),
+    (
+        "crate::trusted_config::read_config_at_sha",
+        "trusted default-branch config text for the review blocking-class policy; unreadable fails closed",
+    ),
+    (
+        "crate::trusted_config::config_present_at_sha",
+        "distinguishes an absent default-branch config (unset) from an unreadable one (fails closed)",
+    ),
     (
         "crate::worktree_gc::find_main_worktree_root",
         "main worktree lookup for the orchestrator probe",
