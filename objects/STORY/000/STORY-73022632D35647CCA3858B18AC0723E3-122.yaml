@@ -1,5 +1,6 @@
 id: 01a1f134-8794-7651-9ec3-ad17e8c45373
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-122
+agreed_id: STORY-2924
 title: 'Review PR-4270: [AI:codex] fix(promotion): accept proven zero-test rest reports (BUG-2695)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f11a`) for branch `bug-b6b1278890774ef993d2ebc327862470-459`.
@@ -52,6 +53,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1f15e-a909-7e53-82c2-cf668a1cdf78
+  author: joe
+  timestamp: 2026-11-19T01:14:35.145223362Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main

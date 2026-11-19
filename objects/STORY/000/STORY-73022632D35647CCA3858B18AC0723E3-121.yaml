@@ -1,5 +1,6 @@
 id: 01a1f131-ea31-7a90-9c3c-58a2823d427d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-121
+agreed_id: STORY-2926
 title: 'Review PR-4269: [AI:claude] feat(review): configurable blocking-tier class list with operator/mandate authority (STORY-2913)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f117`) for branch `story-b6b1278890774ef993d2ebc327862470-806`.
@@ -35,6 +36,12 @@ history:
   timestamp: 2026-11-19T00:25:48.129086177Z
   session_id: 01a1f1174143
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f15f-0673-7e43-a1b4-0300e2f81690
+  author: joe
+  timestamp: 2026-11-19T01:14:59.059108503Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: a9832d7d44dcce5b20aae7301b3a606a26e0a8e1

@@ -1,5 +1,6 @@
 id: 01a1f144-ddea-79a3-b1f2-a47c490a0fb1
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-123
+agreed_id: STORY-2925
 title: 'Review PR-4272: [AI:codex] fix(seat-health): reset backoff after confirmed recovery (Refs BUG-2631)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f121`) for branch `bug-b6b1278890774ef993d2ebc327862470-395`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T00:46:31.628412450Z
   session_id: 01a1f1210f13
+  changes: []
+- id: 01a1f15e-d7ab-77e3-bfb5-d9e88cc9a22c
+  author: joe
+  timestamp: 2026-11-19T01:14:47.083955847Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
