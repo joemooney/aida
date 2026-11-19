@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T11:27:13.717411931Z
+modified_at: 2026-11-19T11:27:25.105901111Z
 req_type: Bug
 tags:
 - conflicts
@@ -520,6 +520,31 @@ comments:
   created_at: 2026-11-19T11:27:09.207879913Z
   modified_at: 2026-11-19T11:27:09.207879913Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f38f-eb0b-7631-8038-21f9e6904554
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 04:27):
+    # Rework brief: BUG-2688 / PR #4306 (redesign), round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 04:30 MST. Head reviewed: 872a1e9. Lane: Claude. STRICT (data loss).
+    All of the following are blocking (P1 data loss, plus unmet claimed ACs):
+    1. P1 (TOCTOU): in move_aside_retained_rework_seats, take the seat lock shared with seat creation/adoption, re-validate the source
+       (same dev/inode identity, still unleased, no process holders, same branch) INSIDE that lock, immediately before the rename.
+       Regression: a concurrent second pickup cannot move a seat the first one just adopted or replaced.
+    2. P1 (fail closed): don't use crate::list_leases for the unleased check; it drops unreadable or malformed lease files. Use a strict
+       reader: any unreadable or malformed lease record under the seat means REFUSE the move with recovery text. Regression with a
+       malformed lease TOML.
+    3. P2, AC acc34a6d: --fresh must also cover a retained LINKED WORKTREE on the PR branch. Make inspect_queue_work_branch let --fresh
+       through for an unleased, idle retained worktree, and route it to the same move-aside (git worktree move, or rename plus
+       `git worktree repair`). Test through handle_queue_work.
+    4. P2, AC aca42931: every preparation failure (fetch/head discovery with no MERGE_HEAD, and the later map_err) must carry the concrete
+       recovery command (seat path, exact resume/--fresh command). No empty recovery string. Tests per failure path.
+    5. P3: run cargo fmt (queue_cmd/mod.rs:202, repair_journal.rs:340).
+    Run seat_clone, queue_cmd and repair_journal tests, python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T11:27:25.105901111Z
+  modified_at: 2026-11-19T11:27:25.105901111Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
