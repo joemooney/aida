@@ -2291,7 +2291,11 @@ fn submit_without_a_live_runner_says_to_start_one_and_names_the_sandbox_opt_in()
     assert!(err.contains("is running"), "{err}");
     // The sandboxed-client error names the one opt-in.
     assert!(socket::SANDBOX_OPT_IN.contains("excludedCommands"));
-    assert!(socket::SANDBOX_OPT_IN.contains("aida deputy shell submit"));
+    assert!(socket::SANDBOX_OPT_IN.contains("`aida deputy shell submit *`"));
+    assert!(socket::SANDBOX_OPT_IN.contains("`aida deputy shell cancel *`"));
+    assert!(socket::SANDBOX_OPT_IN
+        .contains("If this call was piped, redirected or chained, run it bare."));
+    assert!(socket::SANDBOX_OPT_IN.contains("Restart the session after editing the settings."));
 }
 
 // trace:STORY-2343 | ai:claude
