@@ -45,9 +45,18 @@ fn add_creates_worktree_with_focus_then_is_idempotent() {
     let home = tempfile::tempdir().unwrap();
     init_main_repo(repo.path());
 
+    // A fresh worktree uses the remote base without setting an upstream.
+    // trace:BUG-2211 | ai:codex
+    git(repo.path(), &["remote", "add", "origin", "."]);
+    git(repo.path(), &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    git(repo.path(), &["config", "branch.autoSetupMerge", "always"]);
+    let config_path = repo.path().join(".git/config");
+    let before = std::fs::read(&config_path).unwrap();
+
     // First add: creates the worktree, branch, and focus marker.
     let out = ensure_epic_worktree_core(repo.path(), home.path(), "EPIC-54", None, None)
         .expect("first add succeeds");
+    assert_eq!(std::fs::read(config_path).unwrap(), before);
     assert!(out.created, "first add reports created");
     assert_eq!(out.branch, "epic-54-work");
     assert_eq!(out.focus, "EPIC-54");

@@ -1791,6 +1791,9 @@ pub(crate) fn ensure_epic_worktree_core(
         args.push(path_str.clone());
         args.push(branch.clone());
     } else {
+        // A remote base supplies the commit without writing upstream config.
+        // trace:BUG-2211 | ai:codex
+        args.push("--no-track".into());
         args.push("-b".into());
         args.push(branch.clone());
         args.push("--".into());

@@ -763,7 +763,7 @@ Do implementation work in a sibling worktree:
 
 ```bash
 git fetch origin main:refs/remotes/origin/main
-git worktree add /home/joe/ai/aida-<spec> -b <branch> origin/main
+git worktree add --no-track /home/joe/ai/aida-<spec> -b <branch> origin/main
 cd /home/joe/ai/aida-<spec>
 ```
 
