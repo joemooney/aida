@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T06:06:20.211273012Z
+modified_at: 2026-11-19T06:19:13.488633452Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -191,6 +191,13 @@ comments:
   created_at: 2026-11-19T06:06:20.211271485Z
   modified_at: 2026-11-19T06:06:20.211271485Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f275-bebc-7d11-8f34-58f6d733f7c2
+  author: joe
+  content: 'Product 23:19: retriaged by the advisor and re-dispatched ONCE on a fresh CLAUDE lane (no branch exists on origin; the failed 22:45 codex lane never published). That lane failed ''fast gate failed after its repair round; publication refused''. Before pushing, run python3 scripts/check-store-writers.py and make check-ci-fast through the lane job runner and fix what they report. If this attempt fails, the advisor parks the spec.'
+  created_at: 2026-11-19T06:19:13.488633452Z
+  modified_at: 2026-11-19T06:19:13.488633452Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e0fb-44fe-7d43-b093-79c5cabd700d
