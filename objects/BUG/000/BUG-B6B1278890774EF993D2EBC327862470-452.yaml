@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T02:01:31.530393545Z
+modified_at: 2026-11-19T02:10:44.189452790Z
 req_type: Bug
 tags:
 - conflicts
@@ -94,6 +94,14 @@ history:
   timestamp: 2026-11-19T02:00:33.073535034Z
   session_id: 01a1f168627d
   changes: []
+- id: 01a1f192-115d-7b71-8436-ce67d44b382d
+  author: aida-orchestrator
+  timestamp: 2026-11-19T02:10:44.189593981Z
+  session_id: 01a1f18eba82
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
@@ -103,3 +111,19 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Full sweep completed: read all four files of the supplied 12402-byte landed diff against protected main 9f2f93cc432277dadb7781e7ddefe397bdc65b81, landed tree b7379ae09e29b5fdd369758852c8cfc8a6533390; attest original PR head 5338a8ef54fd07254b6bcb1c57e0341d7dce0394. Covered spec BUG-b6b1278890774ef993d2ebc327862470-452 (display BUG-2688) read through AIDA; generated review prompt could not resolve the display alias, so canonical spec was consulted directly.
+    Acceptance checklist (test evidence means inspected source assertions, not reviewer execution):
+    BUG-b6b1278890774ef993d2ebc327862470-452.aca42931: Rework preparation creates a seat and prepares conflicts, or refuses naming exact missing evidence and ONE command to provide/clear it — unverified; conflict path has behavioral coverage, but refusal recovery remains incomplete (finding 1).
+    BUG-b6b1278890774ef993d2ebc327862470-452.ac153421: Seat gone and journal missing permits fresh preparation after remote-head verification — verified by source assertions in bug_2688_deleted_seat_restarts_conflict_from_origin_without_journal, including deletion, absent journal, fetched HEAD, MERGE_HEAD and UU README.md. Queue wiring coverage gap separately noted in finding 3.
+    BUG-b6b1278890774ef993d2ebc327862470-452.acc34a6d: --fresh always starts from remote head and ignores retained-conflict state after logging — unverified; fresh conversation selection does not implement retained-state handling (finding 2).
+    BUG-b6b1278890774ef993d2ebc327862470-452.Tests: conflict rework from clean remote branch; deleted seat plus missing journal restarts; genuinely retained journal-backed conflict resumes — verified by source assertions in bug_2688_deleted_seat_restarts_conflict_from_origin_without_journal, including preservation of manual resolution text on resume. bug_2504_recovery_matches_recorded_tree_kind additionally covers clean fast-forward for linked and cloned seats.
+    Type protocol checklist BUG-2688 (bug protocol: PR touches at least one test file): met; aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs changed.
+    No Cargo or local tests/builds run, per reviewer policy. Existing exact-head GitHub CI fast gates passed; fast compile pending at review time. Implementer reports nine targeted tests passed; this is attributed evidence, not independently executed. Missing host CodeGraph executable at the supplied absolute path; attempted query failed, rg confirmed callers and relevant paths; aida doctor check codegraph returned no codegraph checks. Original head is one commit behind pinned base; intervening base changes affect seat_health.rs and its documentation, not these findings. No finding depends on that intervening change. Request changes for acceptance misses and untested seat routing, independently of pending CI.
+  recovery_hint: address the review findings, move BUG-2688 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T02:10:44.189452790Z
