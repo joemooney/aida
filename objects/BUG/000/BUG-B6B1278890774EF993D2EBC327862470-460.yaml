@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T17:47:01.756766459Z
+modified_at: 2026-11-19T17:51:01.359408507Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -937,6 +937,19 @@ comments:
   modified_at: 2026-11-19T17:44:26.004527219Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4ee-ecef-7932-9fc1-da2d749d35b3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 268d46bd3d (conflict-only merge of origin/main b820668 / #4309, per advisor-121 brief; no review round).
+    - Only conflict: scripts/store-writers.toml (generated). Took main's side, ran check-store-writers.py --regenerate. I checked the result against both parents: it keeps this branch's rows (db_reconcile auto_bump_scan/note_refs, publication_completion, push_store_confirmed) plus main's pr_cmd->pr_service moves. The other changes are canonical reordering. No other edits.
+    - check-store-writers.py: OK (3785 sinks). tests/test_store_writer_inventory.py: 58 OK. cargo fmt --check: clean.
+    - make check-ci-fast: the containment conformance step errored only on the lane sandbox's read-only /tmp (Errno 30). The merge touched no files there. check-ratchets needs a cold compile, which exceeds the lane's 60s call cap, so it is deferred to CI at 268d46b.
+    - Residual risk: none beyond CI confirming the full ratchet set.
+  created_at: 2026-11-19T17:51:01.359408507Z
+  modified_at: 2026-11-19T17:51:01.359408507Z
+  session_id: 01a1f4eb150d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
