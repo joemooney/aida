@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T04:13:37.042086067Z
+modified_at: 2026-11-19T04:43:26.203291915Z
 req_type: Bug
 tags:
 - alert-noise
@@ -44,6 +44,22 @@ comments:
   modified_at: 2026-11-19T03:52:29.591726368Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f21d-e028-7832-91c9-94d0e20544aa
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 697f85f2fff7d766cd736db2a56b705ed281ee10. The origin/main merge-base diff is empty. Reviewed the native lane's uncommitted diff against HEAD and checked for untracked files.
+
+    - AC1: [evidence: behavioral-test] remote_drift_real_probe_classifies_fixture_hubs checks equal tips, directional fast-forward counts and two-sided divergence using bare fixture remotes (aida-cli-lib/src/tests/task_1544_light_doctor_tests.rs:111). The fixture distinguishes the oldest missing commit from the newer tip by changing the configured age window.
+    - AC2: [evidence: behavioral-test] The same fixture checks that recent store fast-forwards and the recent two-sided store drift from the BUG-2693 brief are informational. Overdue store drift and main drift are findings. The exit path uses only findings (aida-cli-lib/src/doctor_cmd.rs:1394).
+    - AC3: [evidence: behavioral-test] The fixture checks the wait-for-bridge, mirror-sync, and manual-reconciliation guidance. The doctor guide documents the grace window and the TOML override (docs/advanced/multi-hub-sync.md:252).
+    - AC4: [evidence: behavioral-test] Lane job j20261119T043702875-2-0 ran the doctor_tests filter, with 148 passed and 0 failed. rustfmt --check, git diff --check, and the config-trust TOML policy entry check passed.
+
+    Deep pass covered exact ref/SHA handling and credential transport, TOML inline comments and cadence overflow, pair multiplicity and stable finding IDs, and missing objects, shallow history, moving tips and scratch isolation. Fixed cadence overflow and corrected the fixture to assess overdue fast-forward before introducing divergence. The check performs no healing or remote writes. Unverifiable history for advertised differing tips still yields a finding. Commit timestamps proxy the age of hub drift. Forge CI evidence is pending host publication. The supplied host CodeGraph client was absent, so navigation used rg.
+  created_at: 2026-11-19T04:43:26.203291915Z
+  modified_at: 2026-11-19T04:43:26.203291915Z
+  session_id: 01a1f2021484
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b
   author: joe
