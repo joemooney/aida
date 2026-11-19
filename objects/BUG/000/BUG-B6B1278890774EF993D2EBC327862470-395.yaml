@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-19T00:49:25.687633744Z
+modified_at: 2026-11-19T00:49:51.932273966Z
 req_type: Bug
 tags:
 - advisor
@@ -136,6 +136,13 @@ comments:
   content: 'PR #4272 conflict-only rework: merge origin/main, keep both sides, targeted seat_health tests via the lane job runner, push. CLAUDE lane.'
   created_at: 2026-11-19T00:49:04.145357428Z
   modified_at: 2026-11-19T00:49:04.145357428Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f148-06b0-7942-bd29-331c7970e6da
+  author: joe
+  content: 'PR #4272 conflict-only rework'
+  created_at: 2026-11-19T00:49:51.792016593Z
+  modified_at: 2026-11-19T00:49:51.792016593Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
