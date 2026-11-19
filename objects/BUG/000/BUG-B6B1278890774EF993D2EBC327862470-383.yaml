@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:30:30.438085355Z
-modified_at: 2026-11-19T06:06:35.174587112Z
+modified_at: 2026-11-19T06:47:12.548949826Z
 req_type: Bug
 tags:
 - area:agent-launch
@@ -38,6 +38,19 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-383` at head `0f96aefa9a0783823da16bc1f585a99b104bd882`.'
   created_at: 2026-11-19T06:03:50.357707527Z
   modified_at: 2026-11-19T06:03:50.357707527Z
+- id: 01a1f28f-3192-75a2-a956-6b85e8fcac87
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: edbcfef98e60b4863afdd698f495c295e85bb129. The origin/main merge-base diff was empty. Reviewed the native lane working-tree diff and checked for untracked additions.
+
+    - Acceptance [evidence: behavioral-test] aida-cli-lib/src/agent_launch.rs:1622 and :1765 keep the recorded cwd on a direct match and recover a unique transcript-backed project worktree when the registry points at main. The regression at aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs:276 exercises latest resume through a fake Claude process and checks the child cwd, session ID, missing-transcript error, and folder names for duplicate and unrelated results. Lane job j20261119T064030284-2-0 executed one test and passed.
+    - Deep pass checked exact session ID and encoded path matching, invalid path-bearing IDs, zero/one/multiple matches, symlink handling on fallback, and authority. Linked worktree inventory or host-verified clone registration supplies the cwd. The fallback refuses contained rehoming. The test verifies that a resolvable transcript with no parent grant still refuses before the child starts. No existing tests were weakened.
+    - Fixture fixes added a scratch delegated grant and wrote the fake process receipt beside its executable so it survives the launch environment filtering. Formatting and git diff --check passed. Recovery needs an extant worktree in the project inventory and uses the existing Claude directory encoding. Private-clone recovery was inspected and linked-worktree recovery was exercised. check_ci_fast=deferred(host).
+  created_at: 2026-11-19T06:47:12.548949826Z
+  modified_at: 2026-11-19T06:47:12.548949826Z
+  session_id: 01a1f2699b8d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebdb-5b2f-75b1-b139-4b780444efea
   author: joe
