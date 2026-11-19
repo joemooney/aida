@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T18:37:21.636715185Z
+modified_at: 2026-11-19T18:42:58.428062864Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -329,6 +329,17 @@ comments:
     Final launcher tests passed: doctor behavior 3/3 (j20261119T182428030-2-0), regenerated help snapshot (j20261119T181739416-2-0), and snapshot comparison 1/1 (j20261119T183659242-2-0). The runner reported a stale seed overlay after the jobs and returned exit 0 with executed tests.
   created_at: 2026-11-19T18:37:21.636715185Z
   modified_at: 2026-11-19T18:37:21.636715185Z
+  session_id: 01a1f4fa3d81
+  harness_version: codex-cli 0.167.0
+- id: 01a1f51e-7e24-7140-bd0a-99f6518dd965
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: d787ca853d1c697356a7719d71ed100a8a7d4ebd, git diff origin/main...HEAD, and the uncommitted fast-gate fix.
+
+    AC1: [evidence: behavioral-test] The fast-gate fix is limited to tests/test_lane_autobuild.py:22. The fixture now runs with a fixed system PATH, locale, temporary HOME and explicit Git settings. It no longer reads the process environment, so inherited repository selectors and shell startup settings cannot affect the fixture. The tracked-file ExecContext ratchet passed all 19 tests, the autobuild fixture passed all 11 tests, the Git maintenance ratchet passed, and the store-writer inventory reconciled. The host fast-check retry and on-host dell1 promotion verification remain pending.
+  created_at: 2026-11-19T18:42:58.428062864Z
+  modified_at: 2026-11-19T18:42:58.428062864Z
   session_id: 01a1f4fa3d81
   harness_version: codex-cli 0.167.0
 history:
