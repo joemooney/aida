@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T06:42:39.029751705Z
+modified_at: 2026-11-19T07:05:23.083112747Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -113,6 +113,21 @@ comments:
   modified_at: 2026-11-19T06:17:34.242667753Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f29f-d38b-7333-acd7-b8802c900233
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b7a7c45659 (round 2).
+    - F1 [evidence: behavioral-test]: pickup_brief_filename_matches accepts exactly -r<1..3 digits> after an identity that already matches; BUG-26990(-r2), -rework and -r12345 stay excluded. Test: bug_2699_round_suffixed_brief_without_frontmatter_is_delivered (plain-text BUG-2699-r2-2026-11-19T023229Z.md, no frontmatter).
+    - F2 [evidence: behavioral-test]: consume_pickup_briefs now atomically claims the pending generation (rename_noreplace to a hidden non-.md claim name), validates the claimed body, then publishes .acked. A mismatch is restored pending; if a newer file has taken the slot, the claim is preserved and its path is named in the warning. Test: bug_2699_replacement_at_ack_boundary_stays_pending (deterministic hook at the boundary).
+    - F3 [evidence: behavioral-test]: native headless on_delivery now runs after holder_capture.finish + stamp_lease_holder_at succeed. Test: the refused-holder run in bug_2699_codex_child_receives_and_acknowledges_pending_briefs (missing lease -> holder-generation error, briefs still pending).
+    Probe fix: replaced the round[..1] slice (could panic on a multibyte char) with strip_prefix.
+    Checks: aida lane job cargo test -p aida-cli-lib --lib bug_2699 -> 4 passed. No new store-writer sinks (rename_noreplace is not a scanned API; tests live in *_tests.rs). The python3 check-store-writers.py full run exceeds the 60s tool cap here, so CI is the evidence for it. make check-ci-fast was not run (longer than the 60s cap).
+    Residual risk: a writer that already holds an fd on the claimed inode and edits it in place can still race; replacement by atomic rename (the reviewed case) is covered.
+  created_at: 2026-11-19T07:05:23.083112747Z
+  modified_at: 2026-11-19T07:05:23.083112747Z
+  session_id: 01a1f28a9cee
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f1ce-b18e-73c2-ab3b-eb509a4e5413
   author: joe
