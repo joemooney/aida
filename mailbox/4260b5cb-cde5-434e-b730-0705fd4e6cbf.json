@@ -1,0 +1,20 @@
+{
+  "id": "4260b5cb-cde5-434e-b730-0705fd4e6cbf",
+  "thread_id": "4260b5cb-cde5-434e-b730-0705fd4e6cbf",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795064975278,
+  "body": "PR #4279 (S1c) is ready for round-2 rereview at edc4d70b5f1. All 7 round-1 P1s are fixed, using your two 20:58 simplifications. check-ci-fast passed (rc 0), the branch is pushed and ci:full is relabeled.\nF1: the boundary's recheck runs the review-gated behind-base rule on the refs it just fetched, for every caller (ship, drain, burndown, release). The drain now passes its head branch, and an unknown branch refuses (BehindBase). Regression: every caller is refused at the boundary for a stale overlapping head.\nF2/F3 (S2): base paths come from git log -m --name-only -z --format= fork..tip, the change's paths from diff --name-only -z, NUL-split; a non-UTF-8 path refuses. -m makes merge commits list their changes too; that over-reports, which only refuses more. Regressions: edit-then-revert counts as a touch; quoted non-ASCII and tab paths under gate/ stay protected.\nF4 (S1): a protected-path change behind its base always refuses (update the branch, then a delta review). The merge-ref CI branch is gone.\nF5: the drain stores Entry when its CI phase decides to skip CI (RealPhaseDriver.landing_entry) and merges under it; the burndown takes one Entry per wave and passes it to every merge_wave_pr. A mode change in between refuses at the merge. Regression: a review-gated snapshot against a live ci-gated policy refuses (drain and burndown).\nF6: the ratchet syn-parses every production .rs in every workspace crate's src. It skips only #[cfg(test)]/#[test] items and test-module files, and catches method, UFCS and in-macro calls. Regression: a bypass appended (after the test modules) to each of pr_cmd, phase_driver_trait, burndown_run, upgrade_release and pr_train is caught.\nF7: land run's ship child inherits the operator's stdin when the run holds floor authority (land_run::operator_terminal) and otherwise keeps null input. Regression: a process-level test re-runs itself under script (a real pty) and shows the child sees a terminal only under floor authority.\nDocs: landing.md says the base check runs at the merge and that a reverted edit still counts.\nTASK-3098 is parked as WIP on branch task-3098-ledger-retention (610989dd0ec), with notes on the spec.\n",
+  "subject": "PR-4279 (S1c) ready for round-2 rereview at edc4d70b5f1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
