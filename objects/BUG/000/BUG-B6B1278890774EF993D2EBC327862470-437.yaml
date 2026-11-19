@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:53:28.582833597Z
-modified_at: 2026-11-19T07:19:12.224393855Z
+modified_at: 2026-11-19T07:19:23.352763625Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -80,6 +80,21 @@ comments:
   created_at: 2026-11-19T07:19:12.065521025Z
   modified_at: 2026-11-19T07:19:12.065521025Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2ac-d967-7483-975f-1b31485aa7a6
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 00:19):
+    # Rework brief: BUG-2673 / PR #4287, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 00:22 MST. Head reviewed: 639fa2e. Lane: Claude.
+    ONE P1 (compile against current main): aida-cli-lib/src/tests/bug_2169_seat_clone_tests.rs:1202-1225, contained_start_with_base
+    calls session_start_with_receipt without its new final `done_rework_admitted` argument (added on main by #4278 / STORY-2690).
+    Merge origin/main, pass `false` (this test is not a Done-spec rework), and make sure it compiles. Nothing else.
+    Run the targeted bug_2169 tests, python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T07:19:23.352763625Z
+  modified_at: 2026-11-19T07:19:23.352763625Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ecbd-9669-71b0-bc78-1573465302ba
