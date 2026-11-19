@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:01.812287350Z
-modified_at: 2026-11-19T04:38:33.229416349Z
+modified_at: 2026-11-19T04:53:09.539728866Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -42,6 +42,21 @@ comments:
   modified_at: 2026-11-18T00:43:38.039915219Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f226-c6fa-7fd3-985b-15a0a12682d4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 697f85f2fff7d766cd736db2a56b705ed281ee10. The origin/main merge-base diff was empty. Reviewed the native working-tree diff and checked for untracked additions.
+
+    AC1: [evidence: behavioral-test] The registry lists the exact help golden path (scripts/repair-generated.py:34), and host discovery includes it (aida-cli-lib/src/seat_clone.rs:3520).
+    AC2: [evidence: behavioral-test] The Git fixture restores a genuine help snapshot conflict and one generation pass rewrites both the golden and the ledger (tests/test_repair_generated.py:96).
+    AC3: [evidence: behavioral-test] The fixture verifies registry membership and clean Git status after generation (tests/test_repair_generated.py:50,83). Lane jobs j20261119T043946929-2-0 and j20261119T044128166-2-0 each executed the real Rust snapshot test and passed. The golden SHA-256 stayed d02e21b071393c9ede84a6388d6b993f94a5daf7e4c34f07221d889aec144a37 after the rewrite.
+
+    The deep pass compared exact path and Rust test names, checked literal Git path handling and the zero-output, golden-plus-ledger, and template selection cases, and exercised symlink refusal (tests/test_repair_generated.py:87). Generation uses the existing offline sandbox and rollback path. The test fixture now uses a fixed PATH, and the ExecContext check passed with zero new sites. All 20 repair tests passed. The Git fixture substitutes cargo and the real renderer ran separately through the lane runner. The full host repair with real cargo was not timed end to end. The seeded standalone Rust compile took 12m42s under the shared 900s regeneration ceiling. No PR-head CI evidence is available in the native lane.
+  created_at: 2026-11-19T04:53:09.539728866Z
+  modified_at: 2026-11-19T04:53:09.539728866Z
+  session_id: 01a1f21913d5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0fc-8e71-7023-8d0a-0e8207ec7ca3
   author: joe
