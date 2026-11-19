@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T19:58:20.067897541Z
+modified_at: 2026-11-19T19:58:38.246736551Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -254,6 +254,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes after full sweep of all 13 files in the pinned landed diff. Reviewed original PR head 64254a089e358f954886f3a2459f4f8ce3a4214f against protected main 4f2d07f88b8f89f20d72ac49e8fc155655e1d211, using landed tree bbf026c434024d83a0c06c1f9836128844fa71ac. Four actionable findings retained below. None depends on code changed by the one newer protected-base commit; its ownership-reader addition does not alter the confirmation path identified here. TASK-3792 was retrieved directly from AIDA after the generated checklist incorrectly reported it missing. It has no separately enumerated acceptance section; complete criterion inventory from its description and authoritative round-2 brief follows.. No triage reason was given.'
   created_at: 2026-11-19T19:58:20.067893617Z
   modified_at: 2026-11-19T19:58:20.067893617Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f563-c1fd-71d1-bf3f-fa31fcafd0e7
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3792):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 64254a089e35
+    Recorded: 2026-11-19T19:56:39.004920594+00:00
+    Findings:
+    1. Bound pipe collection by the same deadline and kill descendants after leader exit. aida-cli-lib/src/forge_lookup.rs:96 and gate/kernel_deps.rs:468 delegate to run_bounded, whose child.try_wait() success branch stops deadline monitoring. If a Git/gh wrapper forks a child holding stdout/stderr and exits immediately, bounded_process.rs:279-287 waits up to 30 seconds per pipe, and never kills that surviving process group. A one-second train check can therefore wait roughly 60 seconds and leave its descendant running. The added fixture keeps the leader in wait, so it misses this case. Preserve deadline monitoring until both streams finish, terminate outstanding group members at expiry, and add an exited-leader/inherited-pipes regression. This leaves TASK-3792's deadline and child-termination criteria unmet.
+    2. Propagate the deadline through local discovery and remote-command preparation too. aida-cli-lib/src/pr_train_check.rs:297-300 scopes a deadline but calls main_worktree_root_from, which executes unbounded git worktree list --porcelain. peek_forge_kind can likewise execute unbounded git remote get-url, and both remote Git builders run configure_remote_credentials, whose configured_remote_urls uses unbounded git config before entering the bounded runner. A stalled Git wrapper or local read can therefore prevent a nonzero --timeout from ever returning rows or terminating its child. Passing a deadline only to the eventual remote command does not cover these subprocesses. Add deadline-aware existing entry points and offline stalls for worktree/origin/credential reads; do not grow the frozen gate inventory. This leaves TASK-3792's discovery/subprocess criterion unmet.
+    3. Apply the shared deadline to ownership-confirmation Git reads. At aida-cli-lib/src/pr_train_check.rs:383, an existing Training ownership record invokes ownership_rider_refusal -> forge_confirmation::metadata_for. When the owning train is CLOSED or MERGED, independent ground-truth confirmation reaches forge_confirmation::base_tip and its remote fetch. forge_confirmation::git discards the Option<Instant> returned by before_train_forge_call and still uses a fresh fixed 30-second timeout, including when the shared budget is already exhausted. Subsequent confirmation reads can add further waits. A one-second member check can thus spend 30 seconds in this network fetch. Carry the remaining shared deadline through this existing confirmation runner, fail closed at expiry, and add a terminal-owning-train fixture exercising the stalled confirmation fetch. This leaves TASK-3792's member-subprocess criterion unmet.
+    4. Add behavioral coverage for the changed approval-timestamp fetch path. aida-cli-lib/src/gate/approval.rs:604-614 now gets a deadline from the train checkpoint and executes through kernel_deps::output_before, but the added train-check fixture's fetch case stalls the initial member-head fetch and exits before approval_pin. Other cases stop earlier still; none constructs an approval referencing a missing commit or verifies that a timed-out approval timestamp cannot supply evidence. Add an offline missing-review-object test that reaches this fetch, proves deadline/descendant termination and unknown timestamp behavior, and includes a successful-fetch control. This changed authority-evidence path remains untested under ADR-76.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T19:58:38.077558830Z
+  modified_at: 2026-11-19T19:58:38.077558830Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
