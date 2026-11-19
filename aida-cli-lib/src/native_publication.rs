@@ -21,6 +21,12 @@ struct Declaration {
     // trace:BUG-2493 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     body: Option<String>,
+    /// D1: whether this publication completes its spec. Absent or null
+    /// reads as NOT completing (A2), and the host re-checks the slice plan
+    /// whatever it says.
+    // trace:BUG-2696 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    completes_spec: Option<bool>,
 }
 
 // Never let a seat-written FIFO, link or oversized file stall the host.
@@ -210,10 +216,15 @@ pub(crate) fn join_message(subject: &str, body: Option<&str>) -> String {
 }
 
 /// Authoring surface for native `aida ship -m`: declaration only.
+/// `partial` is the lane's explicit partial-slice declaration
+/// (`--partial-slice`); the trailer the commit and PR title carry is derived
+/// from the resulting `completes_spec`, never chosen by hand.
+// trace:BUG-2696 | ai:claude
 pub(crate) fn declare(
     tree: &Path,
     explicit: Option<&str>,
     subject: &str,
+    partial: bool,
     dry_run: bool,
 ) -> Result<()> {
     let main = crate::main_worktree_root_from(tree);
@@ -234,10 +245,27 @@ pub(crate) fn declare(
         !body.unwrap_or("").contains('\0'),
         "commit body contains NUL"
     );
+    // A hand-written `(Refs ID)` is the legacy partial-slice declaration:
+    // honor it (never complete against the author's stated intent), and
+    // point at the explicit flag. trace:BUG-2696 | ai:claude
+    let hand_refs =
+        !crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject).is_empty();
+    if hand_refs && !partial {
+        eprintln!(
+            "note: a hand-written `(Refs ID)` trailer is read as a partial-slice declaration. \
+             Write `(ID)` and pass --partial-slice instead; the trailer is derived from the \
+             declaration."
+        );
+    }
+    let store = crate::load_store_for_lookup(&main);
+    let completes =
+        crate::publication_completion::completes_spec(store.as_ref(), &spec, partial || hand_refs);
+    let derived = crate::publication_completion::derive_trailer(subject, &spec, completes)?;
     let declaration = Declaration {
         binding: binding(&main, &lease)?,
         subject: subject.to_string(),
         body: body.map(str::to_string),
+        completes_spec: Some(completes),
     };
     let bytes = serde_json::to_vec(&declaration)?;
     anyhow::ensure!(bytes.len() <= 16384, "native publication file too large");
@@ -250,7 +278,7 @@ pub(crate) fn declare(
         file.persist(&path).map_err(|e| e.error)?;
     }
     println!(
-        "{}native publication declaration: {subject}",
+        "{}native publication declaration (completes_spec={completes}): {derived}",
         if dry_run {
             "Would record "
         } else {
@@ -287,7 +315,18 @@ pub(crate) fn read(main: &Path, tree: &Path, spec: &str) -> Result<Option<String
     );
     validate_subject(main, spec, &d.subject)?;
     // Persist canonical display IDs even when the author used an origin ID.
-    let completing = !crate::pr_ship::extract_trailing_spec_ids_from_subject(&d.subject).is_empty();
+    // D2: the trailer derives from the declared completeness. A2: the host
+    // decides, failing closed. It completes only when the seat positively
+    // declared `completes_spec: true` with a completing subject AND the host,
+    // reading the store itself, finds no outstanding child slice. A missing
+    // or null field, a Refs subject or an unreadable store means partial; the
+    // seat owns this file, so nothing in it can lift the host's veto.
+    // trace:BUG-2696 | ai:claude
+    let store = crate::load_store_for_lookup(main);
+    let completing = d.completes_spec == Some(true)
+        && crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(&d.subject).is_empty()
+        && !crate::pr_ship::extract_trailing_spec_ids_from_subject(&d.subject).is_empty()
+        && crate::publication_completion::completes_spec(store.as_ref(), spec, false);
     let prefix = d
         .subject
         .rsplit_once('(')

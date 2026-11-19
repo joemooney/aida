@@ -22,12 +22,12 @@ Follow the workflow in `.claude/skills/aida-pickup/SKILL.md`:
    In a native sandbox (`AIDA_CONTAINMENT_POSTURE=native`), Git metadata is read-only:
    leave edits uncommitted, write a final handoff with changed files, validation results and
    any blockers, then exit. The host launcher commits, pushes and opens the PR after exit;
-   it preserves a Refs PR's non-completing trailer.
-   For an approved partial slice, first record its subject with
-   `aida ship -m '[AI:codex] type(scope): subject (Refs ID)'`. This only records
-   a lease-bound declaration; failed exits always retain Refs.
-   For a completing lane, declare
-   `aida ship -m '[AI:codex] type(scope): subject (ID)'`.
+   Declare the subject with `aida ship -m '[AI:codex] type(scope): subject (ID)'`
+   and add `--partial-slice` for an approved partial slice. Always write `(ID)`:
+   the trailer is derived from the declaration (`(Refs ID)` when partial or when
+   child slices are outstanding), and a completing push marks the spec Done.
+   This only records a lease-bound declaration; failed exits always retain Refs.
+   <!-- trace:BUG-2696 | ai:claude -->
    Omit `--commit-body-file <UTF-8-file>` when no body trailers are needed.
    <!-- trace:TASK-3735 | ai:codex -->
    For required commit-body trailers such as `Help-Golden: unchanged`, add
