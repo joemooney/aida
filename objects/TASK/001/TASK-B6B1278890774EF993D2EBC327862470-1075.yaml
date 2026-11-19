@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T19:10:13.702309224Z
+modified_at: 2026-11-19T19:42:47.486082160Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -209,6 +209,19 @@ comments:
   modified_at: 2026-11-19T19:00:49.488105627Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f555-40be-7fd0-b84c-b96e5623448b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 64254a089e (PR #4330). Round-2 rework on the codex branch, cut from 19 files to 13.
+    Acceptance evidence: [behavioral-test] task_3792_train_check_bounds_discovery_and_member_subprocesses (story_2824_train_check_tests.rs) covers base/trains/shared/member/labels/fetch/all-open stalls with no network, a zero budget that never spawns, and a killed background descendant. The gate inventory tests (gate_orchestrators_reach_outside_only_through_their_frozen_inventory, gate_kernels_reach_outside_only_through_listed_leaves) pass. Lane run: 69 passed.
+    Design: gate code gets the deadline from the already-frozen pr_train::before_train_forge_call (now returns Option<Instant>) and runs through kernel_deps::output_before over the existing command_output_with_timeout_capped facade leaf. No new outside edges and no inventory edits.
+    Probe findings and fixes: open-PR listing used a flat 15s ceiling and overran the budget, so it now takes min(15s, remaining). Fail-open check: every timeout path yields unavailable or refused evidence; none grants anything.
+    Residual risks: local-only git (rev-parse/merge-base/log/worktree list) is still unbounded by design. If a stalled child exits while a grandchild holds the pipe, reading output can still wait up to run_bounded's read_wait. make check-ci-fast stopped on a sandbox AF_UNIX PermissionError in the containment conformance step, which is environmental; check-ratchets was not run locally because it cold-compiles past the 60s per-call cap. CI is the evidence for both.
+  created_at: 2026-11-19T19:42:47.486082160Z
+  modified_at: 2026-11-19T19:42:47.486082160Z
+  session_id: 01a1f53730de
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
