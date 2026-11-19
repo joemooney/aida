@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T01:39:51.287374331Z
+modified_at: 2026-11-19T01:40:05.296578987Z
 req_type: Story
 tags:
 - docs:impacted
@@ -199,6 +199,41 @@ comments:
   created_at: 2026-11-19T01:39:51.127468739Z
   modified_at: 2026-11-19T01:39:51.127468739Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f176-2e8a-70f3-8bde-917cec539d0a
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 18:40):
+    # Rework brief: STORY-2913 / PR #4269, round 3 of 4
+
+    Advisor: claude-advisor-119, 2026-11-18 18:42 MST. Head under review: 8e62a25. Lane: Claude. STRICT.
+    Authoritative scope (BUG-2603: do not rely on the comment trail). The round-2 fixes passed; keep them.
+
+    ## Fix exactly these two
+
+    ### 1. P1: inherited findings bypass the active policy
+    `aida-cli-lib/src/gate/kernel_deps.rs:1084-1102` (the fail-closed branch) rewrites only the INCOMING
+    findings slice. With no new `--finding` values, `review_commands::review_record_kind`
+    (review_commands.rs:2850-2863) reads the existing record and trusts its STORED dispositions, so a
+    previously "deferred" finding stays deferred under an all-block or invalid policy, or after the list
+    changed. Rule: every time a verdict is recorded, the active policy is re-applied to the FULL finding
+    set (incoming plus inherited) before the approve/request-changes decision. Regression (write it first and
+    watch it fail at 8e62a25): an existing record holding a deferred P2 untested-path finding, then
+    `aida review record --verdict approved` with NO new findings under an invalid list (all-block), must
+    give request-changes. Add the same case for a list that no longer contains the stored class.
+
+    ### 2. P2 (CI red): gate-floor inventory
+    `kernel_deps.rs:802-810` now calls `trusted_config::local_trusted_default_branch_sha`,
+    `read_config_at_sha` and `config_present_at_sha`, but `gate::dispatch_deps::FACADE_EXTERNAL_LEAVES` lists
+    none of them, so `gate::mandate_gates::story_1888_gate_paths_tests::gate_kernels_reac...` fails (CI job
+    135261137246). Declare the three leaves in the inventory; do not loosen the test.
+
+    ## Validation
+    The targeted kernel_deps, review_commands and story_1888 gate-path tests plus `make check-ci-fast`,
+    run through the lane job runner (never inline). Push. Nothing else.
+  created_at: 2026-11-19T01:40:05.296578987Z
+  modified_at: 2026-11-19T01:40:05.296578987Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
