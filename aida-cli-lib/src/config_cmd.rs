@@ -856,39 +856,14 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         },
     },
     // --- [landing]: the landing policy, read from the default branch only.
-    // trace:STORY-2897 | ai:claude ---
+    // `mode` is the one user setting (operator direction 2026-11-18); the
+    // merger, promotion and required-check controls stay internal.
+    // trace:STORY-2897 trace:TASK-3818 | ai:claude ---
     KnobSpec {
         section: "landing",
         key: "mode",
         doc: "What a merge into the default branch waits for: `ci-gated` (CI on the head) or `review-gated` (an independent approval at the exact head and no hold; CI runs after the merge).",
         default: "ci-gated",
-        edit: EditSafety::ReadOnly {
-            reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
-        },
-    },
-    KnobSpec {
-        section: "landing",
-        key: "merger",
-        doc: "Who performs the merge: `any-non-author` (anyone who passes the gates; in `review-gated` mode, never a session that authored the change) or `advisor` (the advisor seat or the operator; others report the change ready).",
-        default: "any-non-author",
-        edit: EditSafety::ReadOnly {
-            reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
-        },
-    },
-    KnobSpec {
-        section: "landing",
-        key: "promote_live_binary_from",
-        doc: "Which main commits `aida dev build` promotes the live binary from: `clean-main`, `green-main` (every CI-gated check green on that exact commit), or `no-new-failures` (every test or check failing on that commit also fails on the promoted commit; missing CI evidence refuses).",
-        default: "clean-main",
-        edit: EditSafety::ReadOnly {
-            reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
-        },
-    },
-    KnobSpec {
-        section: "landing",
-        key: "required_checks",
-        doc: "The forge's required checks per mode (`ci_gated`, `review_gated` lists); each must contain `merge-hold-gate`.",
-        default: "ci_gated = [merge-hold-gate, Build (ubuntu-latest)]; review_gated = [merge-hold-gate]",
         edit: EditSafety::ReadOnly {
             reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
         },
@@ -3336,25 +3311,7 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         let policy = crate::landing_policy::load_reporting(project_root);
         let row = |key: &'static str, value: String| {
             use crate::landing_policy::Origin;
-            let origin = if key == "required_checks" {
-                if policy
-                    .invalid
-                    .iter()
-                    .any(|k| k.starts_with("required_checks"))
-                {
-                    Origin::Invalid
-                } else if policy
-                    .explicit
-                    .iter()
-                    .any(|k| k.starts_with("required_checks"))
-                {
-                    Origin::Explicit
-                } else {
-                    Origin::Default
-                }
-            } else {
-                policy.origin(key)
-            };
+            let origin = policy.origin(key);
             PolicyRow {
                 key,
                 value: match origin {
@@ -3368,25 +3325,12 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                 },
             }
         };
+        // Only the user setting is shown; the internal landing controls are
+        // not (TASK-3818). trace:TASK-3818 | ai:claude
         PolicySection {
             section: "landing",
             header: "[landing]".to_string(),
-            rows: vec![
-                row("mode", policy.mode.as_str().to_string()),
-                row("merger", policy.merger.as_str().to_string()),
-                row(
-                    "promote_live_binary_from",
-                    policy.promote_from.as_str().to_string(),
-                ),
-                row(
-                    "required_checks",
-                    format!(
-                        "ci_gated = [{}]; review_gated = [{}]",
-                        policy.ci_gated_checks.join(", "),
-                        policy.review_gated_checks.join(", ")
-                    ),
-                ),
-            ],
+            rows: vec![row("mode", policy.mode.as_str().to_string())],
         }
     });
 

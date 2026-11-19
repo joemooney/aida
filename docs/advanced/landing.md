@@ -11,29 +11,29 @@ itself is described in the
 
 ## Landing modes
 
-<!-- trace:STORY-2897 | ai:claude -->
+<!-- trace:STORY-2897 trace:TASK-3818 | ai:claude -->
 
-`[landing]` in `.aida/config.toml` chooses what a merge into the default branch waits for. AIDA reads it from the default branch only, so a pull request cannot relax it with its own copy. A value it does not recognise falls back to the stricter default, with a warning.
-
-| Setting | Values | Default |
-|---|---|---|
-| `mode` | `ci-gated`, `review-gated` | `ci-gated` |
-| `merger` | `any-non-author`, `advisor` | `any-non-author` |
-| `promote_live_binary_from` | `clean-main`, `green-main`, `no-new-failures` | `clean-main` |
-| `required_checks.ci_gated` | check names | `merge-hold-gate`, `Build (ubuntu-latest)` |
-| `required_checks.review_gated` | check names | `merge-hold-gate` |
+`[landing] mode` in `.aida/config.toml` chooses what a merge into the default branch waits for: `ci-gated` (the default) or `review-gated`. AIDA reads it from the default branch only, so a pull request cannot relax it with its own copy. A value it does not recognise falls back to `ci-gated`, with a warning.
 
 In `ci-gated` mode, which is the rest of this page, `aida pr ship` waits for CI on the head, and the train admits only a green full-tier head.
 
 In `review-gated` mode, `aida pr ship` merges as soon as the change has an independent approval at its exact head and no hold. It does not wait for CI, and CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the merge itself must also come from a session that authored none of the change.
 
-`merger = "advisor"` lets only the advisor seat (or the operator at a terminal) merge with `aida pr ship`. Other seats report the change as ready. `aida pr train` and `aida land run` do not follow `[landing]` yet: a change behind its base is routed to the train exactly as before, and a `use_train` setting is refused with a warning.
+`aida pr train` and `aida land run` do not follow the mode yet: a change behind its base is routed to the train exactly as before.
 
-`promote_live_binary_from = "green-main"` lets `aida dev build` promote the live binary from `main` only when every `required_checks.ci_gated` check is green on that exact commit. `merge-hold-gate` runs on pull requests only, so it is not required of a `main` commit. On refusal, the build names the newest green commit, and the live binary stays where it is.
+### Changing the mode
 
-`promote_live_binary_from = "no-new-failures"` lets `aida dev build` promote a commit whose CI is red, but only when every failure there also fails at the commit the live binary was promoted from. A green commit promotes as under `green-main`. Failing tests are compared by name, from the evidence each red test shard uploads: its test log and one JUnit report per test run, doctests included. That evidence must be complete at both commits: every expected test run present, every report present and in agreement with the log, and every doctest run finished. The shard's only failed step must also be its test run. A red check outside the CI lanes must also be red at the promoted commit. A red CI lane that uploads no per-test evidence, such as `CI (gates)` or `CI (contracts)`, refuses, because its individual failures cannot be compared. Any failure that is new at the commit being promoted refuses the promotion and is named. The promotion is also refused when CI is still running, a required check is missing, the promoted commit has no CI run, or evidence is missing or incomplete; the refusal says which evidence. The decision is kept with the promotion record. `aida dev status` shows both commits, both failing sets and the verdict, including the last refusal.
+`aida land mode status` prints the mode, the checks it requires, the checks the forge requires, and any drift between them. It also shows the last few changes, which are recorded in `.aida/land/landing-audit.jsonl`.
 
-Every required-check list must contain `merge-hold-gate`.
+`aida land mode set <mode>` changes the mode:
+
+1. It replaces the default branch's required status checks with the list for that mode.
+2. It reads the checks back. If the forge reports something else, it restores the previous list and fails.
+3. It records the new mode in `.aida/config.toml`. Landing reads the default branch's copy, so the edit takes effect once it lands in a reviewed pull request.
+
+`aida land mode reconcile` re-applies the current mode's list.
+
+Both `set` and `reconcile` change branch protection, so each needs either the operator at a terminal or the advisor seat under a mandate that includes protected paths. Both work on GitHub only.
 
 ## Two CI tiers on a pull request
 

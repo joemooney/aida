@@ -1457,6 +1457,48 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
             json || ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json),
         ),
         land_args::LandCommand::Run(args) => run::run(&crate::find_project_root()?, &args),
+        // trace:STORY-2897 | ai:claude
+        land_args::LandCommand::Mode { action } => {
+            let root = crate::find_project_root()?;
+            match action {
+                land_args::ModeCommand::Status => crate::land_mode::status(&root),
+                land_args::ModeCommand::Set { mode } => crate::land_mode::set(
+                    &root,
+                    crate::landing_policy::LandingMode::parse(&mode).map_err(anyhow::Error::msg)?,
+                ),
+                land_args::ModeCommand::Reconcile => crate::land_mode::reconcile_effective(&root),
+            }
+        }
+    }
+}
+
+/// `land mode set|reconcile` change branch protection and config: writes.
+/// Every other verb reads. An unparseable invocation is a write (fail
+/// closed). trace:STORY-2897 | ai:claude
+fn land_policy(matches: &clap::ArgMatches) -> CmdPolicy {
+    let action = <LandArgs as clap::FromArgMatches>::from_arg_matches(matches)
+        .ok()
+        .map(|args| args.action);
+    let read = matches!(
+        action,
+        Some(
+            land_args::LandCommand::Status
+                | land_args::LandCommand::Metrics { .. }
+                | land_args::LandCommand::Run(_)
+                | land_args::LandCommand::Mode {
+                    action: land_args::ModeCommand::Status
+                }
+        )
+    );
+    CmdPolicy {
+        stakeholder: if read {
+            StakeholderAction::Read
+        } else {
+            StakeholderAction::Write
+        },
+        per_write_auto_push: false,
+        skip_role_restore_prompt: true,
+        team_identity_write: false,
     }
 }
 
@@ -1465,12 +1507,7 @@ pub(crate) static LAND: CommandReg = CommandReg {
     name: "land",
     help_after: "lane",
     command: <LandArgs as clap::CommandFactory>::command,
-    policy: |_| CmdPolicy {
-        stakeholder: StakeholderAction::Read,
-        per_write_auto_push: false,
-        skip_role_restore_prompt: true,
-        team_identity_write: false,
-    },
+    policy: land_policy,
     run: Handler::Early(run),
 };
 

@@ -354,6 +354,13 @@ sites = 3
 channels = ["worktree", "write"]
 sites = 1
 
+# land_mode::set writes [landing] mode/mode_set_by/mode_set_at into the
+# checkout's config (the landing policy itself is read from the default
+# branch by landing_policy). trace:STORY-2897 | ai:claude
+[readers."aida-cli-lib/src/land_mode.rs"]
+channels = ["write"]
+sites = 1
+
 # Ordinary and staged MCP profile reads select only a closed policy tier.
 # trace:TASK-3223 | ai:codex
 [readers."aida-mcp/src/mcp.rs"]
@@ -593,6 +600,11 @@ park = "policy"
 route = "policy"
 comment = "policy"
 ask = "policy"
+
+# `aida land mode status` shows this checkout's declared [landing] mode next to
+# the default branch's effective one; display only. trace:STORY-2897 | ai:claude
+[keys.worktree.landing]
+mode = "policy"
 
 [keys.worktree.mailbox]
 unread_warn_after = "policy"
