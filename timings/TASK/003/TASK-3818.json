@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3818",
+  "publishes": [
+    {
+      "at": "2026-11-19T01:19:06.043763980Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-18T22:07:26.973589548Z",
+      "spec": "TASK-3818",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4267,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "421f481b429c9f51b5bbb1e5794e86908aedcfb3"
+      }
+    },
+    {
+      "ts": "2026-11-18T22:07:30.618353018Z",
+      "spec": "TASK-3818",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 1 full sweep complete on original head 421f481b429c9f51b5bbb1e5794e86908aedcfb3, evaluated as landed on pinned main 85ec93018bc1b0fc61e0597c7267a59c3e2f9341. Request changes for one branch-protection authority defect: required-check provider identities are discarded, so verified rollback can restore names while changing the authorized GitHub App. All 26 changed files were inspected. TASK-3818 passes source review: internal landing controls are removed from the public registry/show and requested guides/generated showcase, with internal runtime behavior retained. S2 implementation and tests match its approved constituent; no lost S2 content was found in the sync. The per-criterion sweep was written before this decision: STORY-2897 AC2 and reconciliation coverage remain unverified because of F1; AC5 and applicable authority, freshness, audit/event, stakeholder and status evidence were inspected; S1/S1b/S1c/S1t/S3 acceptance was explicitly scoped out per recorded slicing. Each launcher-supplied historical untraced criterion was individually marked not applicable to this net promotion, whose body disclaims those completion claims. FULL CI was pending at review time with six successful test shards; the failed FAST aggregate reflects cancelled prerequisite jobs after FULL selection, not a reported test failure. No local build or tests were run. The fixed host codegraph client was absent and doctor reported a stale index; source searches supplied navigation. F1 is independent of subsequent base changes. Findings contains the complete actionable defect list.",
+        "recovery_hint": "address the review findings, move TASK-3818 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T00:55:57.900362405Z",
+      "spec": "TASK-3818",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4271,
+        "verdict": "APPROVED",
+        "reviewed_sha": "a4663cadb1d9bc0b688c80ca091b1c999005d256"
+      }
+    },
+    {
+      "ts": "2026-11-19T01:19:05.852654403Z",
+      "spec": "TASK-3818",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c55e14a7eaa8059ff213eceeb02a49e536f1baec",
+        "pr": 4271,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
