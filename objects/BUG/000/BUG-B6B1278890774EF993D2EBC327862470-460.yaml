@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T04:31:26.043404985Z
+modified_at: 2026-11-19T04:41:01.388609587Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -324,6 +324,32 @@ comments:
   created_at: 2026-11-19T04:34:23.131882498Z
   modified_at: 2026-11-19T04:34:23.131882498Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f21b-d689-7061-9863-8ae7d24c93c8
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-4 (FINAL) BRIEF (advisor-119, relayed by product 21:41):
+    # Rework brief: BUG-2696 / PR #4274, round 4 of 4 (FINAL)
+
+    Advisor: claude-advisor-119, 2026-11-18 21:36 MST. Head reviewed: 3f5c74f. Lane: Claude. STRICT.
+    Rounds 1-3 stand. Fix EXACTLY these two (regression first):
+
+    1. P1, ship_from_seat.rs:2199-2230: write Done IMMEDIATELY after the remote push succeeds (2199-2218) for a
+       completing publication, BEFORE quarantine cleanup and finish_published (PR lookup/create/metadata/title),
+       all of which can fail. A later forge failure is reported, but never undoes or skips the Done write.
+       Regression: the push succeeds, then title update fails: the spec is Done and the error is still reported.
+    2. P1, publication_completion.rs:253-256, 296-308, store_push_pull.rs:665-666: the propagation-debt check must
+       use CHECKED (Result-returning) probes. A failed is_git_repo/has_remote/status/rev-list invocation or a
+       host-Git refusal is an ERROR that counts as "debt unknown, so retry/report non-zero", never "no debt".
+       Regression: an injected git failure on the probe does not clear the pending scan and exits non-zero.
+    Validation: targeted ship_from_seat, publication_completion and store_push_pull tests plus `make check-ci-fast`
+    via the lane job runner. Push.
+
+    ## Before pushing (added by product, advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` (fast) and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-19T04:41:01.388609587Z
+  modified_at: 2026-11-19T04:41:01.388609587Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
