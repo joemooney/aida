@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T19:09:53.827963129Z
+modified_at: 2026-11-19T19:17:47.505274752Z
 req_type: Story
 tags:
 - landing
@@ -293,6 +293,15 @@ comments:
   modified_at: 2026-11-19T18:56:15.829220977Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f53e-5d71-79f2-89e2-76d8a9c16819
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f30f3d8e98. Round-3 CI fix only: deleted off-floor verdict_approval_authorized (protected-floor ratchet failure); handle_review_verdict_show now passes gate::review_approval::independent_approval_authorized(root, [spec], reviewed_branch, v) straight through, with no local authority logic. Closed and non-Approved verdicts were already filtered by add_verdict_next_actor before the closure, so the visible behavior does not change. The r2 tests use the same gate call through a test-local wrapper. cargo fmt --check is clean; check-store-writers is OK. Residual: the targeted test job (j20261119T191238521-3-0) was still queued in the lane launcher when I pushed, and make check-ci-fast exceeds the 60s tool cap, so I did not run it locally. CI at f30f3d8e98 is the evidence.
+  created_at: 2026-11-19T19:17:47.505274752Z
+  modified_at: 2026-11-19T19:17:47.505274752Z
+  session_id: 01a1f536ee89
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
   author: joe
