@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-878
 agreed_id: TASK-3219
 title: Claude interactive, --bg, coordinator and resume launches on the shared contained wrapper
 description: 'Follow-up slice of TASK-2708 AC(1), after PR #3449. Under [contained.vendors] claude = "aida", interactive agent new, claude --bg, coordinators and resume currently refuse with CLAUDE_WRAPPER_UNWIRED (session.rs claude_contained_flags_for_roots). Acceptance: (1) each of those launch paths runs through the signed common wrapper with the same grants, CLI/MCP surfaces and floors as the headless path. (2) CLAUDE_WRAPPER_UNWIRED is removed. (3) With the opt-in unset, Claude stays native byte-for-byte. (4) The TASK-2708 accepted deltas (WAIT_KILLABLE_RECV signal deferral, a fail-closed 5.19+ floor, refusal of ancillary credentials and sendmmsg) apply unchanged. No new deviations without an advisor ruling. Tests: one targeted test per launch path plus the required-live bwrap count.'
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321Z
-modified_at: 2026-11-19T03:03:38.706137626Z
+modified_at: 2026-11-19T03:04:15.494449936Z
 req_type: Task
 tags:
 - architecture
@@ -899,6 +899,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f1c3-1261-7422-809e-4509d89a541c
+  author: dirtlab
+  timestamp: 2026-11-19T03:04:15.713582868Z
+  session_id: 01a1f1c24a3e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
   branch: main
@@ -907,3 +916,8 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
+attention_reason:
+  category: blocked-dependency
+  detail: 'The latest triage calls for S4 explicit Claude resume from current main. PR #3628 is already merged as 48e3865999. Current origin/main 697f85f2ff contains S1-S3 and still refuses resume in session/containment.rs. Native seat was provisioned on stale HEAD 65630e9bef, 381 commits behind origin/main with 4 lane-only commits, before S2/S3 and the session module split. Git metadata is read-only. Host must create a fresh native lane from current main with the TASK-3219 lease. Codegraph doctor reports the reviewed client missing; please supply its absolute host-deployed path. No source changes or tests.'
+  raised_by: implementer
+  raised_at: 2026-11-19T03:04:15.494449936Z
