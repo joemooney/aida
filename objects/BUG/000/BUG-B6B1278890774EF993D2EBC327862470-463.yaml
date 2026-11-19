@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T08:33:51.968469772Z
+modified_at: 2026-11-19T08:41:48.068938609Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -192,6 +192,11 @@ comments:
   modified_at: 2026-11-19T08:33:51.968469772Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2f8-1924-7853-b116-027bc3662e7a
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-463` at head `b7a7c456597a4e22b46eb00ad2a09a477ef8277f`.'
+  created_at: 2026-11-19T08:41:48.068927681Z
+  modified_at: 2026-11-19T08:41:48.068927681Z
 history:
 - id: 01a1f1ce-b18e-73c2-ab3b-eb509a4e5413
   author: joe
