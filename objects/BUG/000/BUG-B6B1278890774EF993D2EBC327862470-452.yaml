@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T03:04:41.425923983Z
+modified_at: 2026-11-19T03:05:45.344400739Z
 req_type: Bug
 tags:
 - conflicts
@@ -157,6 +157,13 @@ comments:
   created_at: 2026-11-19T02:55:07.943301464Z
   modified_at: 2026-11-19T02:55:07.943301464Z
   session_id: 01a1f1abb8ab
+- id: 01a1f1c4-7080-70c1-8b22-d2f6ab1cf834
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Read all four files of the supplied 12402-byte landed diff against protected main 697f85f2fff7d766cd736db2a56b705ed281ee10, landed tree c3da08bc011c40d689fd8c18f066f07a943d8c8e; attest original PR head 33ff8775e964a4cfb8f88f8e024c014ec6200b37. Read BUG-2688 and its authoritative round-2 brief through AIDA. Deleted-seat/no-journal fast-forward and journal-backed helper resume are implemented, with trace comments and regression source. However, actionable refusal recovery, explicit --fresh retained-state handling, and production queue routing coverage remain missing. The latest implementer comment describes changes absent from the named head: its git history is the original fix plus a base merge. All three prior blockers remain. None depends on code changed by the one newer protected-base commit (which changes forge/landing files). Existing exact-head FAST gates, compile and Build checks succeeded; merge-hold-gate was pending. No local tests or builds run per operator policy. Codegraph client was absent and doctor reported the index unreachable; source searches confirmed call sites. Generated review checklist could not resolve the display alias, so the full canonical spec and comments were consulted directly.. It was punted on: design-fork: Round 2 findings aca42931 and acc34a6d remain open for a retained same-seat merge without recoverable evidence. The supplied advisor request names the original journal binding or verified lane death and retirement proof, but it does not itself restore or clear that evidence. A legacy MERGE_HEAD and conflict-path list do not distinguish pristine markers from unstaged or staged resolution work. Automatic same-seat restart could erase that work. The draft supports verified clean replacement and guarded retirement, with passing queue-routing regressions for finding 3.. Triage reason: ROUND 3 of 4 for PR #4275. Round 2 IGNORED the brief: the same three findings repeat. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-r3.md, items 1-3 exactly. The retained MERGE_HEAD/journal early return (seat_clone.rs:3315-3320) runs before the fast-forward block, so --fresh must reach it. CLAUDE lane.'
+  created_at: 2026-11-19T03:05:45.344399028Z
+  modified_at: 2026-11-19T03:05:45.344399028Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -217,6 +224,15 @@ history:
   timestamp: 2026-11-19T03:04:58.560447963Z
   session_id: 01a1f1c10b40
   changes: []
+- id: 01a1f1c4-7080-70c1-8b22-d2ed2553992b
+  author: joe
+  timestamp: 2026-11-19T03:05:45.344364669Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
@@ -226,17 +242,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-attention_reason:
-  category: design-fork
-  detail: Round 2 findings aca42931 and acc34a6d remain open for a retained same-seat merge without recoverable evidence. The supplied advisor request names the original journal binding or verified lane death and retirement proof, but it does not itself restore or clear that evidence. A legacy MERGE_HEAD and conflict-path list do not distinguish pristine markers from unstaged or staged resolution work. Automatic same-seat restart could erase that work. The draft supports verified clean replacement and guarded retirement, with passing queue-routing regressions for finding 3.
-  lean: Keep the refusal until the host can restore the exact binding or provide a verified snapshot and ownership-safe archival recovery path.
-  raised_by: implementer
-  raised_at: 2026-11-19T02:52:20.232017679Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Read all four files of the supplied 12402-byte landed diff against protected main 697f85f2fff7d766cd736db2a56b705ed281ee10, landed tree c3da08bc011c40d689fd8c18f066f07a943d8c8e; attest original PR head 33ff8775e964a4cfb8f88f8e024c014ec6200b37. Read BUG-2688 and its authoritative round-2 brief through AIDA. Deleted-seat/no-journal fast-forward and journal-backed helper resume are implemented, with trace comments and regression source. However, actionable refusal recovery, explicit --fresh retained-state handling, and production queue routing coverage remain missing. The latest implementer comment describes changes absent from the named head: its git history is the original fix plus a base merge. All three prior blockers remain. None depends on code changed by the one newer protected-base commit (which changes forge/landing files). Existing exact-head FAST gates, compile and Build checks succeeded; merge-hold-gate was pending. No local tests or builds run per operator policy. Codegraph client was absent and doctor reported the index unreachable; source searches confirmed call sites. Generated review checklist could not resolve the display alias, so the full canonical spec and comments were consulted directly.'
-  recovery_hint: address the review findings, move BUG-2688 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T03:04:41.425923983Z
