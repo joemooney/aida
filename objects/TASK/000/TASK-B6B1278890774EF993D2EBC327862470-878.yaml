@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-878
 agreed_id: TASK-3219
 title: Claude interactive, --bg, coordinator and resume launches on the shared contained wrapper
 description: 'Follow-up slice of TASK-2708 AC(1), after PR #3449. Under [contained.vendors] claude = "aida", interactive agent new, claude --bg, coordinators and resume currently refuse with CLAUDE_WRAPPER_UNWIRED (session.rs claude_contained_flags_for_roots). Acceptance: (1) each of those launch paths runs through the signed common wrapper with the same grants, CLI/MCP surfaces and floors as the headless path. (2) CLAUDE_WRAPPER_UNWIRED is removed. (3) With the opt-in unset, Claude stays native byte-for-byte. (4) The TASK-2708 accepted deltas (WAIT_KILLABLE_RECV signal deferral, a fail-closed 5.19+ floor, refusal of ancillary credentials and sendmmsg) apply unchanged. No new deviations without an advisor ruling. Tests: one targeted test per launch path plus the required-live bwrap count.'
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-06T13:28:15.158321Z
-modified_at: 2026-11-13T03:35:04.854660320Z
+modified_at: 2026-11-19T01:45:56.843108539Z
 req_type: Task
 tags:
 - architecture
@@ -532,6 +532,13 @@ comments:
   modified_at: 2026-11-13T02:58:39.454770061Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
+- id: 01a1f17b-5f6b-7300-af44-04f5bf801dde
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S3 supervised contained Claude --bg matches the signed sketch on wrapper, grant and teardown, but head 5c4cbfe only merges main, so the required claude attach refusal still inspects argv[0] only and misses every reachable composed argv. CI at this head is still queued.. It was punted on: missing-context: Round 7 PR #3628 findings 1 (composed attach refusal) and 2 (RegistryEnd disarm) are not disputed, but this native read-only-Git seat is on 65630e9bef, without agent_claude_background.rs or the reviewed attach check. Reviewed 08d8ee6c9daa is on origin/task-3219-s3-d1410, whose local tip is 66986faaa0 (fix(launch): refuse composed Claude attach and end registry once). That branch differs across 495 files; importing it by file copying would be unsafe. Host must prepare this lane on the intended PR baseline and clarify whether 66986faaa0 is the previous round already excluded by this request. Finding 3 remains unverified: no new tests or CI confirmation from this seat. Codegraph doctor also reports missing host client; operator absolute path was not supplied.. Triage reason: Advisor 18:46 hygiene re-dispatch (stale needs-attention note): resume the concrete remaining work per the 2026-11-18 Refs-landed sweep (.aida/tmp/refs-sweep-2026-11-18.md, group D) from current main. Lane: codex unless STRICT.'
+  created_at: 2026-11-19T01:45:56.843103395Z
+  modified_at: 2026-11-19T01:45:56.843103395Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1b10b-ebd9-7db3-bc79-b89eb0de54f2
   author: joe
@@ -856,6 +863,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f17b-5f6b-7300-af44-04ec51e8f516
+  author: joe
+  timestamp: 2026-11-19T01:45:56.843081527Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 50ce509da3f7edbd12ff6636fe996c9c3a65c68f
   branch: main
@@ -864,17 +880,3 @@ filed_at:
   aida_build_sha: dd852f74c3b
   vendor: claude
   session: b0a84e34-277c-4df6-b53c-43f4bbe2e84d
-attention_reason:
-  category: missing-context
-  detail: 'Round 7 PR #3628 findings 1 (composed attach refusal) and 2 (RegistryEnd disarm) are not disputed, but this native read-only-Git seat is on 65630e9bef, without agent_claude_background.rs or the reviewed attach check. Reviewed 08d8ee6c9daa is on origin/task-3219-s3-d1410, whose local tip is 66986faaa0 (fix(launch): refuse composed Claude attach and end registry once). That branch differs across 495 files; importing it by file copying would be unsafe. Host must prepare this lane on the intended PR baseline and clarify whether 66986faaa0 is the previous round already excluded by this request. Finding 3 remains unverified: no new tests or CI confirmation from this seat. Codegraph doctor also reports missing host client; operator absolute path was not supplied.'
-  lean: Prepare the correct PR baseline on the host, then rerun Round 7; preserve supervised merge hold.
-  raised_by: implementer
-  raised_at: 2026-11-13T03:35:04.854660320Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: S3 supervised contained Claude --bg matches the signed sketch on wrapper, grant and teardown, but head 5c4cbfe only merges main, so the required claude attach refusal still inspects argv[0] only and misses every reachable composed argv. CI at this head is still queued.
-  recovery_hint: address the review findings, move TASK-3219 back to In Progress, and clear the PR hold only after approval
-  shelved_by: reviewer
-  shelved_at: 2026-11-08T12:46:00.453213Z
