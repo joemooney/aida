@@ -12,12 +12,12 @@ description: |
   ## Acceptance
   - The retry arm in run_rotating_agent fires only for a child-grant refusal caused by an expired relay grant. Other generation-launch errors propagate unchanged.
   - A regression covers the arm both ways: an expiry refusal holds, then relaunches the same generation; an unrelated error ends the relay.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T09:39:43.972253713Z
-modified_at: 2026-11-19T18:54:10.980586840Z
+modified_at: 2026-11-19T18:56:50.233030704Z
 req_type: Bug
 tags:
 - follow-up
@@ -193,6 +193,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f52b-2e39-78b1-8abd-9411b657afbd
+  author: aida-session-start
+  timestamp: 2026-11-19T18:56:50.233028879Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 3b4313757e4ef21ff5042596980c6a7afa9e985b
