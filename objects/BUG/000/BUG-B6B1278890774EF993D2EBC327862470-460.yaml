@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T16:27:09.512615168Z
+modified_at: 2026-11-19T16:39:36.436081069Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -892,6 +892,15 @@ comments:
   modified_at: 2026-11-19T16:23:16.475578956Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4ad-8af4-7022-956f-4d72cf414348
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c778a0e587 + uncommitted r4 gate fix. Change: the bug_2696_plan_followup_child_is_not_an_outstanding_slice test tag value 'docs/plans/p.md' -> 'plan-fixture.md' (publication_completion.rs:546). Followup detection is prefix-only (publication_completion.rs:58 starts_with FOLLOWUP_SRC_TAG_PREFIX), so test meaning is unchanged. Evidence: Documentation audience coverage step bodies pass locally (check-doc-paths: 0 invalid references); rustfmt --check clean; check-store-writers.py reconciled, no new sites. No logic change; residual risk none beyond the already-reviewed r4 delta.
+  created_at: 2026-11-19T16:39:36.436081069Z
+  modified_at: 2026-11-19T16:39:36.436081069Z
+  session_id: 01a1f4a1dfdb
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe

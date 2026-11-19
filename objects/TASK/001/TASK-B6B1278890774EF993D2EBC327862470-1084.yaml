@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T15:56:32.495102919Z
+modified_at: 2026-11-19T16:36:17.593583321Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -206,6 +206,23 @@ comments:
   modified_at: 2026-11-19T15:52:50.440388669Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4aa-8559-7333-a52d-dd1bec6f2b08
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 915184fdf703cd7a603fc57671ca97036b965186. Read the merge-base diff, the uncommitted native-seat edits, and the untracked-file list (empty).
+
+    AC1 [evidence: behavioral-test] — aida-cli-lib/src/deputy_shell/tests.rs:1542 checks for terminal rc 124, positive evidence that the TERM-ignoring child died, and a successful next job on the same runner.
+    AC2 [evidence: behavioral-test] — aida-cli-lib/src/deputy_shell/mod.rs:876 and aida-cli-lib/src/status_awaiting.rs:1284 collect native dead-runner evidence and stranded jobs. aida-cli-lib/src/awaiting_you.rs:2492 renders the last runner PID, record time and dead observation time. Actual time of death remains unavailable.
+    AC3 [evidence: behavioral-test] — aida-cli-lib/src/deputy_shell/tests.rs:1589 starts and kills a real runner with a job in flight, queues a second job and checks the report in human, TOON and JSON formats.
+
+    Deep pass checked consistent state names and timestamp encoding, zero/one/multiple jobs, PID reuse and hidden PID views, and queue changes during observation. The new observation uses the shared ProcIdentity reader and the test re-execs its own Linux test image. The production report is read-only and excludes uncertain and hidden process observations. Existing submit refusals and orphan recovery remain in place. The related BUG-2625 change on origin/main merges cleanly with this branch in git merge-tree.
+
+    The store-writer check, formatting and whitespace checks passed. Full make check-ci-fast job j20261119T160201532-2-0 passed against the corrected files, including both previously failing guards (51 structural tests passed). Deputy behavioral execution is still queued in j20261119T160243598-2-0. Hosted CI is pending host publication.
+  created_at: 2026-11-19T16:36:17.593583321Z
+  modified_at: 2026-11-19T16:36:17.593583321Z
+  session_id: 01a1f485d729
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0fb-44fe-7d43-b093-79c5cabd700d
   author: joe
