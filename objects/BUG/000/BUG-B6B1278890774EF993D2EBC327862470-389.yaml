@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:30:16.564025916Z
-modified_at: 2026-11-19T09:00:35.710222251Z
+modified_at: 2026-11-19T09:18:13.481429182Z
 req_type: Bug
 comments:
 - id: 01a1e30f-f933-7641-bb95-5486cb88aa40
@@ -119,6 +119,26 @@ comments:
   modified_at: 2026-11-19T08:57:53.482626812Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f319-71e9-7ea0-b322-e4624a73395b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 188170e752 (round 2, PR #4294). Finding 1 addressed: AC3 for the legacy Bash deputy jobs.
+
+    - AC3: [evidence: behavioral-test] PASS for the code paths, with residual risk on the record format (see below). The new module aida-cli-lib/src/deputy_shell/legacy.rs reads jobs/<id>/meta.json for non-UUID ids. It moves a running record (status or state key) to abandoned with reason orphaned, rc 130, finished_at and runner_pid, and keeps every other field. It acts only on positive death evidence: the runner.pid process is absent, or the pid now belongs to a process that is not aida-deputy-shell. A live runner, a missing or invalid runner.pid, an unrecognised aida-deputy-shell command line, or an isolated PID namespace leaves the job untouched. Recovery runs at native runner start (deputy_shell/runner.rs, under the runner lock), on status <legacy-id>, and on list. The script is never re-run.
+    - Tests in deputy_shell/tests.rs:
+      - bug_2625_legacy_meta_needs_positive_death_evidence_before_it_is_abandoned covers no runner.pid, a live runner, an unrecognised command, a sandbox, an invalid pid, dead, and a reused pid. It also checks field preservation, idempotence with a single audit event, an empty awaiting feed and the status output.
+      - bug_2625_status_leaves_a_live_or_unknown_legacy_runner_job_running covers the status path.
+      - bug_2625_next_start_abandons_a_killed_legacy_runners_job starts a real bash aida-deputy-shell run t process, checks that a native start leaves its job alone while it lives, kills it, and checks that the next native start abandons the job with the dead pid.
+    - Validation: lane job j20261119T090612210-5-0 passed 63 deputy_shell tests. aida-ci-guards passed 51/51 and story_1888_gate_paths 52/52. check-store-writers was regenerated and passes (2 rows added). cargo fmt --check and git diff --check are clean. make check-ci-fast cannot finish inside this lane's 60s call cap: it was killed during the containment conformance tests, and the gates before that passed.
+    - Residual risks:
+      - The legacy script and a real meta.json were not available on this host (no ~/bin/aida-deputy-shell, no ~/.aida/deputy-shell). The fixture is representative, not captured, and the reader tolerates status or state, case and whitespace.
+      - If a new legacy runner restarts after a crash, runner.pid names a live runner, so the old jobs stay running. This is conservative by design.
+      - Abandoned legacy jobs are not listed as awaiting failures, because they carry no submitter, project or ack identity. Awaiting never listed them as in flight.
+  created_at: 2026-11-19T09:18:13.481429182Z
+  modified_at: 2026-11-19T09:18:13.481429182Z
+  session_id: 01a1f308fbf5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e30f-465b-72b1-a759-08d9bbc65626
   author: joe
