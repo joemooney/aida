@@ -59,6 +59,7 @@ pub(crate) fn handle_dev_command(cmd: &DevCommand) -> Result<()> {
             install_links: *install_links,
             yes: *yes,
             after_wave: *after_wave,
+            autopromote_target: None,
         }),
         DevCommand::Rollback { after_wave, force } => {
             crate::dev_build::handle_dev_rollback(*after_wave, *force)

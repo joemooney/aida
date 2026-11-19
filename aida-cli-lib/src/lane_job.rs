@@ -1199,9 +1199,13 @@ impl Runner {
     /// record cannot be written the runner still starts, but the seat cannot
     /// find it and the lane reports `untested=true`.
     // trace:BUG-2383 | ai:claude
-    pub(crate) fn start_published(lane: LaneJobs, main_root: &Path) -> Self {
+    pub(crate) fn start_published(
+        lane: LaneJobs,
+        main_root: &Path,
+        startup: Option<crate::lane_admission::Release>,
+    ) -> Self {
         let lease_id = lane.lease_id.clone();
-        let mut runner = Self::start(lane);
+        let mut runner = Self::start_with_admission(lane, startup);
         match publish(main_root, &lease_id) {
             Ok(record) => {
                 runner.heartbeat = start_heartbeat(&runner.results, record, runner.stop.clone());
@@ -1216,7 +1220,15 @@ impl Runner {
     }
 
     /// Start the runner for `lane` on its own thread, unpublished.
+    #[cfg(test)]
     pub(crate) fn start(lane: LaneJobs) -> Self {
+        Self::start_with_admission(lane, None)
+    }
+
+    fn start_with_admission(
+        lane: LaneJobs,
+        startup: Option<crate::lane_admission::Release>,
+    ) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let tally = Arc::new(Tally::default());
         let results = lane.results.clone();
@@ -1225,7 +1237,7 @@ impl Runner {
             let tally = tally.clone();
             std::thread::Builder::new()
                 .name("lane-job-runner".into())
-                .spawn(move || run_loop(&lane, &stop, &tally))
+                .spawn(move || run_loop(&lane, &stop, &tally, startup))
                 .ok()
         };
         Self {
@@ -1370,7 +1382,12 @@ impl Drop for Runner {
 const POLL: Duration = Duration::from_millis(500);
 
 #[cfg(unix)]
-fn run_loop(lane: &LaneJobs, stop: &AtomicBool, tally: &Tally) {
+fn run_loop(
+    lane: &LaneJobs,
+    stop: &AtomicBool,
+    tally: &Tally,
+    mut startup: Option<crate::lane_admission::Release>,
+) {
     let mut seen: HashSet<String> = HashSet::new();
     let mut seed_note: Option<SeedNote> = None;
     let mut warned = false;
@@ -1392,7 +1409,15 @@ fn run_loop(lane: &LaneJobs, stop: &AtomicBool, tally: &Tally) {
         match next_job(lane, &inbox, &mut seen) {
             Some((id, job)) => {
                 let note = seed_note.get_or_insert_with(|| seed_lane_target(lane));
-                run_one(lane, &id, job, stop, tally, note);
+                // Only a job whose cargo actually built ends the cold start:
+                // a `--help` run or a refusal leaves the lane cold.
+                // trace:BUG-2682 | ai:claude
+                if run_one(lane, &id, job, stop, tally, note) {
+                    if let Some(startup) = startup.take() {
+                        lane.log("first build finished: host cold-start slot released");
+                        startup.first_build_finished();
+                    }
+                }
             }
             None => std::thread::sleep(POLL),
         }
@@ -1400,7 +1425,13 @@ fn run_loop(lane: &LaneJobs, stop: &AtomicBool, tally: &Tally) {
 }
 
 #[cfg(not(unix))]
-fn run_loop(_lane: &LaneJobs, _stop: &AtomicBool, _tally: &Tally) {}
+fn run_loop(
+    _lane: &LaneJobs,
+    _stop: &AtomicBool,
+    _tally: &Tally,
+    _startup: Option<crate::lane_admission::Release>,
+) {
+}
 
 /// What the seed before the first job found.
 #[derive(Debug, Clone)]
@@ -1695,6 +1726,8 @@ fn finish(lane: &LaneJobs, id: &str, rc: i32) {
     }
 }
 
+/// Run job `id`; true when it was a `cargo build`/`cargo test` whose build
+/// finished ([`cargo_built`]).
 fn run_one(
     lane: &LaneJobs,
     id: &str,
@@ -1702,7 +1735,7 @@ fn run_one(
     stop: &AtomicBool,
     tally: &Tally,
     seed: &SeedNote,
-) {
+) -> bool {
     run_one_timed(lane, id, job, stop, tally, seed, timeout_for)
 }
 
@@ -1715,7 +1748,7 @@ fn run_one_timed(
     tally: &Tally,
     seed: &SeedNote,
     timeout: impl FnOnce(&JobRequest, bool) -> Duration,
-) {
+) -> bool {
     run_one_authorized(lane, id, job, stop, tally, seed, timeout, false)
 }
 
@@ -1731,7 +1764,7 @@ fn run_one_authorized(
     seed: &SeedNote,
     timeout: impl FnOnce(&JobRequest, bool) -> Duration,
     host_gate: bool,
-) {
+) -> bool {
     let seed_note = seed.note.as_str();
     let out_file = out_path(&lane.results, id);
     let refuse = |why: &str| {
@@ -1739,6 +1772,7 @@ fn run_one_authorized(
         finish(lane, id, REFUSED_RC);
         tally.incomplete.fetch_add(1, Ordering::Relaxed);
         lane.log(&format!("{id} refused: {why}"));
+        false
     };
     let job = match job.and_then(|j| {
         if host_gate && fast_gate_job(&j) && j.env.is_empty() {
@@ -1907,6 +1941,25 @@ fn run_one_authorized(
         "{id} {how} rc={rc} after {}s",
         started.elapsed().as_secs()
     ));
+    // `cargo check` emits no code, so the lane's first test build is still cold.
+    !fast_gate_job(&job)
+        && matches!(job.argv.get(1).map(String::as_str), Some("build" | "test"))
+        && std::fs::File::open(&out_file)
+            .map(|f| cargo_built(std::io::BufReader::new(f)))
+            .unwrap_or(false)
+}
+
+/// Whether a cargo job's output shows its build ran to the end: cargo's
+/// `Finished ... target(s) in` line, or a compile error in a crate (the
+/// dependency graph below it was built). `--help`, a refusal or a run killed
+/// before compiling shows neither, so its lane is still cold.
+// trace:BUG-2682 | ai:claude
+pub(crate) fn cargo_built(output: impl std::io::BufRead) -> bool {
+    output.lines().map_while(|line| line.ok()).any(|line| {
+        let line = line.trim_start();
+        (line.starts_with("Finished ") && line.contains("target(s) in"))
+            || line.starts_with("error: could not compile `")
+    })
 }
 
 /// The bubblewrap launch, inside the lane's overlay namespace when the seed

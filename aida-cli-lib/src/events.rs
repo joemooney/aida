@@ -1279,6 +1279,10 @@ pub const GATE_WIP_LIMIT: &str = "wip-limit";
 /// The same limit was passed with `--over-wip`: the record of the override,
 /// not a refusal.
 pub const GATE_WIP_LIMIT_OVERRIDE: &str = "wip-limit-override";
+/// A lane launch passed the host cold-start cap or memory floor under the
+/// explicit host-limit override (never `--over-wip`); names the checks.
+// trace:BUG-2682 | ai:claude
+pub const GATE_HOST_LIMIT_OVERRIDE: &str = "host-limit-override";
 /// BUG-1551 / STORY-1430: merged, but closure held at Done.
 pub const GATE_CLOSURE_HOLD: &str = "closure-hold";
 /// BUG-1535: an id resolving to more than one requirement was refused.

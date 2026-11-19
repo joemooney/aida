@@ -277,6 +277,7 @@ mod freshness_gate;
 pub(crate) use aida_term::git_arg_guard;
 pub mod git_backend_cmd;
 pub(crate) mod intent_capture;
+mod lane_admission;
 mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;

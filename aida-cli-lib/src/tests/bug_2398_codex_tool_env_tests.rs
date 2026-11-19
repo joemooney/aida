@@ -2226,7 +2226,9 @@ fn bug_2416_guided_codex_launch_is_finalized_by_prepare_launch() {
         .env("AIDA_CONTAINMENT_POSTURE", "none")
         .env_remove("AIDA_SESSION_PURPOSE")
         .env_remove("AIDA_STANDALONE_IMPLEMENTER")
-        .env_remove("AIDA_HEADLESS_LANE");
+        .env_remove("AIDA_HEADLESS_LANE")
+        // trace:BUG-2682 | ai:claude — the spawn boundary drops the override.
+        .env_remove(crate::lane_admission::OVERRIDE_ENV);
     prepare_launch(&mut expected).unwrap();
     let args = |c: &Command| c.get_args().map(|a| a.to_owned()).collect::<Vec<_>>();
     let envs = |c: &Command| {
