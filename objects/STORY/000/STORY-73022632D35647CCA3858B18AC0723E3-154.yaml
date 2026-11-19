@@ -1,5 +1,6 @@
 id: 01a1f3f8-87b2-7623-9c74-e97039c804dd
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-154
+agreed_id: STORY-2961
 title: 'Review PR-4310: [AI:codex] fix(ps): clear heartbeat fast-gate failures in S1 (Refs STORY-2748)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f3c6`) for branch `story-b6b1278890774ef993d2ebc327862470-671`.
@@ -56,6 +57,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1f42e-e66d-77e3-8ca6-b939835714c5
+  author: joe
+  timestamp: 2026-11-19T14:21:16.781356563Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b82d606361da38f0f4180189075bf78e712c1ba1
   branch: main
