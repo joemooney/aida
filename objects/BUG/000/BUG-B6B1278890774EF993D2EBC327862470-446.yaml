@@ -12,12 +12,12 @@ description: |
   2. Launch admission also checks host memory headroom (available RAM + swap, a configurable floor) and refuses or queues with a named reason below it.
   3. `--over-wip` bypasses the WIP cap but NOT the cold-start or memory limits (a separate explicit override, logged).
   4. A test covers queueing on the cold-start cap, refusal below the memory floor, and --over-wip not bypassing either.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T12:21:12.653401675Z
+modified_at: 2026-11-19T12:21:22.951321240Z
 req_type: Bug
 tags:
 - capacity
@@ -316,6 +316,14 @@ history:
   timestamp: 2026-11-19T12:18:41.365868144Z
   session_id: 01a1f3bad994
   changes: []
+- id: 01a1f3c1-2187-7281-b95f-4a36f6aa0de4
+  author: aida-pr-open
+  timestamp: 2026-11-19T12:21:22.951318540Z
+  session_id: 01a1f36e8870
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main
