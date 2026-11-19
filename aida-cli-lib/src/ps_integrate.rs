@@ -2862,6 +2862,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     let now = chrono::Utc::now();
     let thresholds = presence::read_presence_thresholds(&config_path_for_project(&project_root));
     let operator_last_seen = presence::latest_human_input();
+    // trace:STORY-2748 | ai:codex
+    let hook_activity = crate::hook_activity::read_for_ps(&rows, &hostname(), now);
 
     if json {
         let operator = match operator_last_seen {
@@ -2923,6 +2925,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // the only value sourced from ground truth (the
                     // Notification hook marker) rather than a heuristic.
                     "activity": row.activity.as_ref().map(SeatActivity::label),
+                    "hook_activity": hook_activity.get(&row.lease.id),
                     "activity_pending_tool": match &row.activity {
                         Some(SeatActivity::LongToolCall { tool, .. })
                         | Some(SeatActivity::Blocked { tool, .. }) => tool.clone(),
@@ -3124,6 +3127,13 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                         .map(SeatActivity::label)
                         .unwrap_or_default()
                         .to_string(),
+                    hook_activity
+                        .get(&r.lease.id)
+                        .map_or_else(String::new, |a| a.age_label()),
+                    hook_activity
+                        .get(&r.lease.id)
+                        .and_then(|a| a.summary.clone())
+                        .unwrap_or_default(),
                 ]
                 .into_iter()
                 // trace:STORY-1653 | ai:claude
@@ -3147,6 +3157,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "dispatch_hint",
                     "mail_identity",
                     "activity",
+                    "heartbeat_age",
+                    "last_activity",
                     "driver",
                     "driver_kind"
                 ],
@@ -3321,7 +3333,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         // BUG-763: the started column is wide enough for a date-qualified
         // "Jun-26 11:55" — a non-today start always shows its date.
         let header = format!(
-            "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {}",
+            "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {:<15} {}",
             "session",
             "spec",
             "role",
@@ -3329,6 +3341,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             "started",
             "elapsed",
             "locked-by",
+            "heartbeat age",
             "live",
             specw = spec_w,
             rolew = role_w,
@@ -3385,7 +3398,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             let (spec_head, spec_rest) = ps_wrap_cell(&spec_col, spec_w);
             let (role_head, role_rest) = ps_wrap_cell(row.role.as_deref().unwrap_or("-"), role_w);
             println!(
-                "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {}",
+                "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {:<15} {}",
                 (&l.id[..prefix_len]).yellow(),
                 spec_head,
                 role_head,
@@ -3393,6 +3406,9 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 started,
                 humanize_duration_secs(row.elapsed_secs),
                 truncate(&locked_col, 12),
+                hook_activity
+                    .get(&l.id)
+                    .map_or_else(|| "-".into(), |a| a.age_label()),
                 live_col,
                 specw = spec_w,
                 rolew = role_w,
@@ -3406,6 +3422,12 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             // A second dimmed line carries the worktree so the wide path
             // doesn't blow out the table's column alignment.
             println!("{}{}", " ".repeat(11), l.worktree_path.display());
+            if let Some(summary) = hook_activity
+                .get(&l.id)
+                .and_then(|a| a.summary.as_deref())
+            {
+                println!("           last activity: {}", summary.dimmed());
+            }
             // BUG-763: an adopted persistent lease — the backing pid started
             // later than the lease record — names both ages explicitly, so
             // lease-age vs process-age never mix silently in one row.

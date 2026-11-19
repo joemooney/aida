@@ -61,6 +61,16 @@ fn default_phase_attempt() -> u32 {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event")]
 pub enum EventKind {
+    /// Local vendor hook observation. Silent and independent of liveness.
+    // trace:STORY-2748 | ai:codex
+    ActivityHeartbeat {
+        lease_id: String,
+        host: String,
+        vendor: String,
+        tool: Option<String>,
+        path: Option<String>,
+        summary: String,
+    },
     /// An orchestration run started for a spec. Bookkeeping — the supervisor
     /// already knows it launched. **Silent.**
     RunStarted,
@@ -657,7 +667,8 @@ impl EventKind {
             // STORY-1887: an operator batch-ship step, run at the TTY.
             | EventKind::ShipBatchStep { .. }
             // STORY-1436: a correct refusal is recorded for counting, not a wake.
-            | EventKind::GateHeld { .. } => false,
+            | EventKind::GateHeld { .. }
+            | EventKind::ActivityHeartbeat { .. } => false,
             // STORY-1218: a tick wakes only for what needs a human.
             EventKind::ShiftTick {
                 breaker,
@@ -721,6 +732,7 @@ impl EventKind {
     // trace:STORY-1226 | ai:claude
     pub fn name(&self) -> &'static str {
         match self {
+            EventKind::ActivityHeartbeat { .. } => "ActivityHeartbeat",
             EventKind::RunStarted => "RunStarted",
             EventKind::PhaseEntered { .. } => "PhaseEntered",
             EventKind::CiTerminal { .. } => "CiTerminal",
@@ -766,6 +778,7 @@ impl EventKind {
     // trace:STORY-1226 | ai:claude
     pub fn known_names() -> &'static [&'static str] {
         &[
+            "ActivityHeartbeat",
             "RunStarted",
             "PhaseEntered",
             "CiTerminal",
@@ -1237,13 +1250,17 @@ fn try_emit(project_root: &Path, ev: &Event) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let mut line = serde_json::to_string(ev)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    line.push('\n');
-    let mut file = std::fs::OpenOptions::new()
+    let file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(&path)?;
+    append_event(file, ev)
+}
+
+pub(crate) fn append_event(mut file: std::fs::File, ev: &Event) -> std::io::Result<()> {
+    let mut line = serde_json::to_string(ev)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    line.push('\n');
     file.write_all(line.as_bytes())?;
     Ok(())
 }

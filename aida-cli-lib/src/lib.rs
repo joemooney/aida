@@ -477,6 +477,7 @@ pub mod wiki;
 // trace:STORY-1424 | ai:antigravity
 mod event_wait;
 mod events;
+mod hook_activity;
 mod exit_signal;
 mod external_import_bleed;
 mod feature_cmd;

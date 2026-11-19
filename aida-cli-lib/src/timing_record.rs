@@ -106,6 +106,8 @@ pub(crate) fn lifecycle_publishable(kind: &EventKind) -> bool {
         // The landing-mode audit stays local, as the mandate's does.
         // trace:STORY-2897 | ai:claude
         | LandModeChanged { .. }
+        // trace:STORY-2748 | ai:codex
+        | ActivityHeartbeat { .. }
         | UnreadMail
         | CompeteOutcome { .. }
         | CronJobFired { .. }
