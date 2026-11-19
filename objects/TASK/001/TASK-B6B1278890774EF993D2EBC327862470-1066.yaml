@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-19T13:31:46.423772235Z
+modified_at: 2026-11-19T13:33:03.794214804Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -87,6 +87,22 @@ comments:
   created_at: 2026-11-19T13:31:46.285770281Z
   modified_at: 2026-11-19T13:31:46.285770281Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f402-f745-7861-9157-cd429b50ec94
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 06:33):
+    # Rework brief: TASK-3786 / PR #4309, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 06:36 MST. Head reviewed: 0784e8b. Lane: codex with --brief. Not STRICT.
+    Fix EXACTLY the reviewer findings below (verbatim from the recorded verdict), add a regression for each behavioural one, and make no other changes.
+
+    1. Keep the GC helper documentation attached to its function. The extraction removes the List local branches matching the review-snapshot shape doc comment and TASK-1312 trace from immediately above pr_gc_candidate_branches in pr_cmd.rs, then attaches them above fetch_change_info_via_forge in pr_service.rs (lines 52-53). The forge metadata helper now claims to list local branches and carries the unrelated GC trace. Move those two lines back above pr_gc_candidate_branches; retain the existing STORY-621/TASK-963 documentation on the forge helper. This is a non-blocking documentation attachment error introduced by this PR and does not depend on intervening base changes.
+
+    Then run cargo fmt, python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner, and push.
+  created_at: 2026-11-19T13:33:03.794214804Z
+  modified_at: 2026-11-19T13:33:03.794214804Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
