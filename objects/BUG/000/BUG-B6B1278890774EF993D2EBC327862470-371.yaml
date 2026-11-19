@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T08:17:49.772175367Z
+modified_at: 2026-11-19T08:18:06.258299642Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -196,6 +196,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete 24,826-byte protected-base-to-landed-tree diff against main 584e4e176c812166cc92c1f05619a440f7981e6e, assessing landed tree c616f80d8242ee0a4aec6f21e155c669711d2a4b while attesting only original PR head 73a796735cf7232a54e8907cd10fed940aac0610. BUG-2607 refusal discovery and deferred terminal reporting address the prior pre-branch-capture defect by source inspection; trace comments are present. Request changes for two blocking findings: new test callers do not compile against newer protected-base API signatures, and AC3 still lacks dirty/clean emitted-output regressions for several early terminal paths. The compile finding depends on subsequent base changes; the acceptance gap does not. Existing CI evidence reports dependency installation timing out after five minutes and a failed aggregate, with another job pending at launcher capture; this alone is not a waiting reason. No Cargo or local test/build commands were run, per reviewer policy. The supplied absolute codegraph client was absent; aida doctor check codegraph returned total 0, and source navigation used rg and pinned Git blobs. No merge or branch update performed.. Triage reason: Round 3 for PR #4285. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2607-r3.md: adapt the helpers to main''s run_recorded/handle_queue_work; AC3 production-path tests for the 4 remaining early paths. CLAUDE lane.'
   created_at: 2026-11-19T08:17:49.772173962Z
   modified_at: 2026-11-19T08:17:49.772173962Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f2e2-66a5-7b52-8201-c5af3ada7994
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2607):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 73a796735cf7
+    Recorded: 2026-11-19T08:16:53.769894548+00:00
+    Findings:
+    1. Adapt both new test helpers to the pinned protected base APIs. In the landed tree, aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:5461-5476 calls run_recorded with three arguments although standalone_implementer.rs:1303-1308 now requires four (on_delivery was added). Likewise aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs:1773-1814 calls handle_queue_work without the final brief_file argument now required at queue_cmd/work.rs:4517. Both produce E0061 when the aida-cli-lib test target compiles, preventing the required FAST test-compilation lane from succeeding after landing. Supply None for both new optional arguments and obtain successful test-target compilation on the protected-base merge. This finding depends on API changes on main after original PR head 73a796735cf7232a54e8907cd10fed940aac0610; it is visible in pinned landed tree c616f80d8242ee0a4aec6f21e155c669711d2a4b, not in the original-head API signatures. Source-confirmed; no local Cargo command was run, and the supplied dependency-install timeout is not evidence that CI diagnosed this compile error.
+    2. Complete BUG-2607 Acceptance 3 with dirty/clean output assertions through each early terminal production path. The four added tests exercise occupied-canonical refusal, waiting rework refusal, missing-vendor refusal, and a manually simulated post-rollback finish_result. None drives empty-rework, started-child punt/hold signal handling, pending-merge retention, or generic failed-after-start finalization and asserts their emitted retention notices. Deleting the newly added with_retained_seats calls at standalone_implementer.rs:1362,1678,1799 leaves all four new tests unaffected. The queue rollback test also sets seat_tree and deletes the clone manually rather than executing handle_queue_work's seat capture and rollback. AC3 explicitly requires a test per early terminal path, and the authoritative round-2 brief requested these actual boundaries. Add production-path regressions for dirty and clean retained seats (plus actual queue rollback/capture) rather than relying on shared formatter coverage. The implementer's spec comment explicitly acknowledges missing per-path coverage. This acceptance gap is present at the original reviewed head and remains unchanged on the pinned newer base.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T08:18:06.117870126Z
+  modified_at: 2026-11-19T08:18:06.117870126Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
