@@ -76,19 +76,49 @@ pub(super) fn eligible(
     Ok(())
 }
 
+/// Hold the auto-train's admission only for a pass that will run a train
+/// (STORY-2905 round 2): while it stands down, or cannot read the policy,
+/// the admission is released so the land loop, a manual ship or a manual
+/// train can take it. A pass that would run takes it (once) first; when
+/// another holder has it, the error says so and the pass does not run. A
+/// running train is never cut short: this is called between passes only.
+// trace:STORY-2905 | ai:claude
+pub(super) fn hold_admission(
+    root: &Path,
+    stand_down: &std::result::Result<Option<&'static str>, String>,
+    held: &mut Option<crate::admission_owner::Claim>,
+) -> Result<()> {
+    if !matches!(stand_down, Ok(None)) {
+        *held = None;
+        return Ok(());
+    }
+    if held.is_none() {
+        *held = Some(crate::admission_owner::acquire(
+            root,
+            "legacy auto-train",
+            true,
+        )?);
+    }
+    Ok(())
+}
+
 pub(super) fn run(root: &Path) -> Result<()> {
-    let _admission = crate::admission_owner::acquire(root, "legacy auto-train", true)?;
+    let mut admission: Option<crate::admission_owner::Claim> = None;
     loop {
         train_service::check_controller(root)?;
         // trace:STORY-2856 | ai:codex
         if let Err(error) = crate::ci_startup_monitor::check(root) {
             eprintln!("auto-train: startup monitor unavailable: {error:#}");
         }
+        let mut stand_down = crate::landing_merge::train_stand_down(root);
+        if let Err(error) = hold_admission(root, &stand_down, &mut admission) {
+            stand_down = Err(format!("admission is held elsewhere ({error:#})"));
+        }
         // In review-gated mode the land loop is the one merge hand, and a
         // policy that cannot be read runs nothing: the pass decision is
         // landing_merge::auto_train_pass. trace:STORY-2905 | ai:claude
         match crate::landing_merge::auto_train_pass(
-            crate::landing_merge::train_stand_down(root),
+            stand_down,
             crate::pr_train::advisor_train_handler,
         ) {
             Err(line) => {
@@ -120,5 +150,45 @@ pub(super) fn run(root: &Path) -> Result<()> {
             std::thread::sleep(std::time::Duration::from_secs(1));
             train_service::check_controller(root)?;
         }
+    }
+}
+
+// trace:STORY-2905 | ai:claude
+#[cfg(test)]
+mod story2905_admission_tests {
+    use super::*;
+
+    /// Round 2 finding 1: while the auto-train stands down (or cannot read
+    /// the policy) its admission is released, so the land loop's exclusive
+    /// admission succeeds; a pass that runs takes it again, and cannot while
+    /// the land loop holds it.
+    #[test]
+    fn standing_down_releases_the_auto_train_admission() {
+        let root = tempfile::tempdir().unwrap();
+        let root = root.path();
+        let mut held = None;
+        hold_admission(root, &Ok(None), &mut held).unwrap();
+        assert!(held.is_some(), "a running pass holds admission");
+        assert!(
+            crate::admission_owner::acquire(root, "land run", false).is_err(),
+            "the land loop waits while a train may run"
+        );
+        hold_admission(
+            root,
+            &Ok(Some(crate::landing_merge::TRAIN_STAND_DOWN)),
+            &mut held,
+        )
+        .unwrap();
+        assert!(held.is_none(), "standing down releases admission");
+        let land = crate::admission_owner::acquire(root, "land run", false)
+            .expect("the land loop takes admission while the auto-train stands down");
+        assert!(
+            hold_admission(root, &Ok(None), &mut held).is_err(),
+            "a pass cannot take admission the land loop holds"
+        );
+        drop(land);
+        hold_admission(root, &Ok(None), &mut held).unwrap();
+        hold_admission(root, &Err("unreadable".into()), &mut held).unwrap();
+        assert!(held.is_none(), "an unknown policy releases admission too");
     }
 }

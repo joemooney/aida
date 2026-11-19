@@ -363,6 +363,10 @@ pub(crate) fn load_checked(root: &Path) -> Result<LandingPolicy, String> {
     let value = body
         .parse::<toml::Value>()
         .map_err(|e| format!("the default branch's .aida/config.toml does not parse ({e})"))?;
+    // A `landing` key that is not a table is invalid, not absent.
+    if value.get("landing").is_some_and(|l| !l.is_table()) {
+        return Err("the default branch's `landing` is not a table".to_string());
+    }
     let policy = LandingPolicy::from_config(Some(&value));
     if policy.origin("mode") == Origin::Invalid {
         return Err(format!(
