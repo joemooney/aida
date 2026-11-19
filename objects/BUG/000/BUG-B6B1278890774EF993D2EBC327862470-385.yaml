@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:48:36.218731762Z
-modified_at: 2026-11-19T17:48:52.256789147Z
+modified_at: 2026-11-19T17:51:05.948278199Z
 req_type: Bug
 tags:
 - area:train
@@ -376,6 +376,21 @@ comments:
   created_at: 2026-11-19T17:48:52.256789147Z
   modified_at: 2026-11-19T17:48:52.256789147Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4ef-3bc4-7501-8262-4cc54747f215
+  author: joe
+  content: |-
+    Product 10:55: codex fresh-start lane queued on dell1 with this brief:
+    # Brief: BUG-2621 (fresh start; advisor-121 set drain 10:50)
+
+    Already on main: #4167 (skip supervisor ticks on admission-lock contention, Refs) and #4188 TASK-3809 (holder identification, findings 1 and 3). Do NOT redo those.
+    Scope: check every BUG-2621 acceptance criterion against main and implement only what is still unmet (e.g. the operator-facing 'refused: review-watch lock busy' wording when another tick holds the lock), with a behavioral test.
+    If every AC is already met on main, make no code change: punt and list per-AC evidence (file:line and test name) so the advisor can complete it.
+    Trailer: (BUG-2621) only if your PR plus main meets every AC; otherwise (Refs BUG-2621).
+    Before pushing, run `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-19T17:51:05.948278199Z
+  modified_at: 2026-11-19T17:51:05.948278199Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e488-10c5-7d40-9563-0c6b00be7024
