@@ -2,30 +2,43 @@ id: 01a1e863-f8ff-7cb0-b8c4-a62d4692bafb
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-414
 agreed_id: BUG-2650
 title: 'Train admission starves while review-watch has any review attempt in flight: ''admission busy: prior review attempts are not quiescent'''
-description: |
-  ## What happened
+description: '## What happened
+
   2026-11-16 23:59 to 00:22 MST: deputy train job 01a1e819 (members #4167, #4130, both approved at head, full green, holds cleared) ran `aida pr train` 40 times; every attempt failed in 0-2 s with "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts" (twice "review-watch lock busy: admission.lock"). Review-watch had live attempts on PR-4204 and PR-4205 (codex reviewers, ~20 min each) plus a terminal blocked attempt on PR-4171 (three inconclusive reviews) that never clears without `aida review watch --release`.
 
+
   ## Why it matters
+
   Train admission requires every review attempt to be quiescent. Review-watch launches a new attempt every few minutes whenever a head is pushed, so with steady lane output there is no window for a train: approved green PRs wait behind unrelated reviews. A terminal blocked attempt starves trains indefinitely.
 
+
   ## Expected
+
   A train for already-approved members is not blocked by review attempts on other PRs (or admission is fair: a waiting train gets the next window and review-watch defers new launches while a train waits). A terminal/blocked attempt never counts as non-quiescent for train admission.
 
+
   ## Workaround in use
+
   Advisor released PR-4171 by hand and resubmitted train jobs with a 60-minute admission retry loop (5 s interval).
 
+
   ## Acceptance (added 2026-11-17 01:22 by advisor, per product seat aida-98)
+
   - AC1: An approved, green, hold-free train member is admitted within one review-watch interval even while review attempts on other PRs are running, or admission is fair: a waiting train gets the next window and review-watch launches nothing new while a train waits.
+
   - AC2: A terminal/blocked review attempt (e.g. three inconclusive attempts) never counts as non-quiescent for train admission.
-  - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2's rollback script uses it.
+
+  - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2''s rollback script uses it.
+
   - AC4: Regression covering a train waiting behind running review attempts on unrelated PRs.
+
+  '
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-19T18:31:16.957590539Z
+created_at: 2026-11-17 07:23:48.351768+00:00
+modified_at: 2026-11-19 18:31:16.957590+00:00
 req_type: Bug
 tags:
 - docs:impacted
@@ -34,374 +47,385 @@ comments:
 - id: 01a1e890-c849-76b1-be7b-4c96408410b9
   author: joe
   content: 'Advisor 01:15 MST, pause attempt under the product ruling of 00:31 (A1 evidence for STORY-2868): auto-train #4206 landed #4144 (06bf94f) at about 01:10. The next train, p17c (#4187 alone, deputy job 01a1e86d), then looped on ''admission busy: prior review attempts are not quiescent'' (25+ attempts). Review blockers at 01:13: PR-4188, PR-4195, PR-4198, all Running (review-watch reviewing old heads of #4195 and #4198 again). NO PAUSE TAKEN: review-watch has no pause control. [review_watch] carries only max_concurrent and required_checks, and its worker is a supervised process. Killing it would not stop the three running reviewers that hold admission. Second finding for this bug: a supported ''review watch pause/resume'' (or train-priority admission) is needed. Fallback in use: p17c''s 60-min, 5 s retry, to win the gap when those reviews finish.'
-  created_at: 2026-11-17T08:12:44.934523875Z
-  modified_at: 2026-11-17T08:12:44.934523875Z
+  created_at: 2026-11-17 08:12:44.934523+00:00
+  modified_at: 2026-11-17 08:12:44.934523+00:00
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1e8cb-f58b-73e0-9142-18c940437fe4
   author: dirtlab
-  content: |
-    BUG-2650 implementation sketch — approval requested before changing the admission protocol
+  content: 'BUG-2650 implementation sketch — approval requested before changing the admission protocol
+
 
     Evidence on this lane:
+
     - pr_train_handler_with_dispatch_ctx acquires admission_owner::train before resolving candidates (aida-cli-lib/src/pr_train.rs:4714).
+
     - A manual train uses acquire(..., false), which takes the exclusive mode.lock and then calls review_watch::admission_quiescent. This checks every entry, including unrelated changes. A supervised review-watch controller holds a shared mode lock for its entire lifetime, so changing only quiescence cannot solve controller contention.
+
     - admission_quiescent first rejects Reserved/Running/Superseding phases, then independently confirms recorded processes and process groups. Terminal phase alone is intentionally not sufficient proof of exit. A terminal blocked round without live/unknown descendants already passes; deleting this confirmation would be unsafe.
-    - Legacy auto-train already shares admission with review-watch and checks each member's under_review evidence. Land exclusion and orphan-child checks must remain intact.
+
+    - Legacy auto-train already shares admission with review-watch and checks each member''s under_review evidence. Land exclusion and orphan-child checks must remain intact.
+
     - ReviewWatchArgs has no pause/resume action. Supervision is shared through advisor_loop_service.rs; killing a watcher does not settle its recorded reviewers.
 
+
     Recommended design: member-scoped manual train coexistence plus an explicit durable review-admission pause.
+
     1. Give manual trains their own explicit cooperative admission mode alongside legacy auto-train/review-watch, retaining exclusive exclusion against land. Preserve the train journal lock, merge leases, current-head approval/CI/hold gates, orphan-train detection and land-descendant checks. Do not repurpose the boolean legacy argument as an implicit authority bypass.
+
     2. Before train publication, resolve the selected member keys and check their live/ambiguous reviewer reservations using the same locked watch-state snapshot used by review reservation. Reject active/unknown work on members; unrelated reviews do not prevent admission. Member review exclusion must remain held/revalidated through the train admission boundary so a watcher cannot reserve a selected member between the check and journal publication. Apply this to --all-ready and explicit member lists. Terminal blocked review history is not active work; recorded live/unknown descendants still block that member.
+
     3. Add operator actions `aida review watch pause --reason TEXT --for SECONDS` and `aida review watch resume`. Persist an additive versioned control receipt with actor, reason, issued_at and expires_at, plus an audit trail for pause/resume/expiry. Default pause duration 3600 seconds; reject invalid or unbounded durations. Report effective control state and outstanding reviewer blockers in status. Resume clears only the explicit pause; grants, deputy policy and other admission refusals remain in force.
+
     4. Serialize control writes with review admission.lock. Enforce effective pause in select_with_coverage and in the reservation child before starting queue work. Keep an already-started reviewer running and preserve all process receipts, grants and capacity. Continue supervision/reaping/supersede recovery while paused; restart must preserve an unexpired pause. Expiry is evaluated at the locked admission boundary using UTC, with no dedicated timer.
-    5. Document that pausing stops new admission, not existing reviewers or a live controller's land-exclusion lock. A2 cutover must still stop the legacy controllers through their supported supervisor lifecycle and confirm descendants quiescent; pause alone is not a cutover handoff.
+
+    5. Document that pausing stops new admission, not existing reviewers or a live controller''s land-exclusion lock. A2 cutover must still stop the legacy controllers through their supported supervisor lifecycle and confirm descendants quiescent; pause alone is not a cutover handoff.
+
 
     Required regression coverage:
+
     - An approved/green/hold-free manual train can acquire cooperative admission while unrelated reviewers and a legacy watcher remain live; same-member live/unknown reviewer refuses.
+
     - Terminal blocked history with confirmed-dead descendants cannot starve a train; live/unknown descendants remain protected.
+
     - Two trains still serialize; land/manual exclusion, unknown/orphan train refusal and direct-child land handoff retain their existing tests.
+
     - Pause survives restart, blocks both selection and reserved-child launch, does not terminate an already-running reviewer, and resume/expiry admit again without bypassing unrelated policy.
+
     - Race tests place a pause or member reservation between selection and child launch and verify no forbidden spawn.
+
 
     Decision needed: approve the explicit cooperative manual-train mode and versioned pause receipt, or prefer fair global draining. The recommended member-scoped design meets the within-one-interval expectation without requiring existing 20-minute reviews to finish. Fair draining alone provides eventual priority but cannot promise that latency.
 
+
     Validation: source/call-site inspection only; no production edits or cargo tests yet. The operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent. `aida doctor check codegraph` reports missing; rg confirmed callers. Current implementer lease is 01a1e8c9 on this lane.
-  created_at: 2026-11-17T09:17:23.047789561Z
-  modified_at: 2026-11-17T09:17:23.047789561Z
+
+    '
+  created_at: 2026-11-17 09:17:23.047789+00:00
+  modified_at: 2026-11-17 09:17:23.047789+00:00
   session_id: 01a1e8c9e5a1
   harness_version: codex-cli 0.167.0
 - id: 01a1e8cc-2f7b-7562-a7e9-453465445259
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-414` at head `6bb1cf106caf57e7fef5c63f112df8dbaaf6f713`.'
-  created_at: 2026-11-17T09:17:38.043634106Z
-  modified_at: 2026-11-17T09:17:38.043634106Z
+  created_at: 2026-11-17 09:17:38.043634+00:00
+  modified_at: 2026-11-17 09:17:38.043634+00:00
   session_id: 01a1e8c9e5a1
 - id: 01a1e8cc-5045-7312-85a4-60c854921c8c
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-414` at head `6bb1cf106caf57e7fef5c63f112df8dbaaf6f713`.'
-  created_at: 2026-11-17T09:17:46.437407870Z
-  modified_at: 2026-11-17T09:17:46.437407870Z
+  created_at: 2026-11-17 09:17:46.437407+00:00
+  modified_at: 2026-11-17 09:17:46.437407+00:00
   session_id: 01a1e8c9e5a1
 - id: 01a1e8dd-0833-7eb2-aa38-e48ef6509e98
   author: joe
-  content: 'ADVISOR SKETCH SIGNOFF (advisor-117, 2026-11-17 02:40 MST): APPROVED, recommended design (member-scoped cooperative manual-train admission + versioned pause receipt), NOT fair global draining. Ship it as TWO PRs on this spec, slice 1 first: (S1) items 1, 2 and the doc half of 5: a cooperative manual-train admission mode that keeps exclusive exclusion against land, member-scoped reviewer exclusion held and revalidated through journal publication, terminal history with confirmed-dead descendants never blocking, plus the first three regression groups. This is the landing fix and does not need a config knob (it fixes a starvation bug; every gate is kept). (S2) items 3 and 4: review watch pause/resume with the receipt (actor, reason, issued_at, expires_at, default 3600 s, bounded), enforced at selection and in the reservation child, surviving restart, plus the pause regressions and race tests. Constraints: do not weaken admission_quiescent''s process-group confirmation; do not reuse the legacy boolean as an authority bypass; keep the land/manual and orphan-train tests unchanged. STRICT: Opus review for each slice. Implementer: start S1 now.'
-  created_at: 2026-11-17T09:35:50.097627610Z
-  modified_at: 2026-11-17T09:35:50.097627610Z
+  content: 'ADVISOR SKETCH SIGNOFF (advisor-117, 2026-11-17 02:40 MST): APPROVED, recommended design (member-scoped cooperative manual-train admission + versioned pause receipt), NOT fair global draining. Ship it as TWO PRs on this spec, slice 1 first: (S1) items 1, 2 and the doc half of 5: a cooperative manual-train admission mode that keeps exclusive exclusion against land, member-scoped reviewer exclusion held and revalidated through journal publication, terminal history with confirmed-dead descendants never blocking, plus the first three regression groups. This is the landing fix and does not need a config knob (it fixes a starvation bug; every gate is kept). (S2) items 3 and 4: review watch pause/resume with the receipt (actor, reason, issued_at, expires_at, default 3600 s, bounded), enforced at selection and in the reservation child, surviving restart, plus the pause regressions and race tests. Constraints: do not weaken admission_quiescent''s process-group confirmation; do not reuse
+    the legacy boolean as an authority bypass; keep the land/manual and orphan-train tests unchanged. STRICT: Opus review for each slice. Implementer: start S1 now.'
+  created_at: 2026-11-17 09:35:50.097627+00:00
+  modified_at: 2026-11-17 09:35:50.097627+00:00
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1e8f8-96b0-7ed2-9509-c608cfa2e4de
   author: dirtlab
-  content: 'BUG-2650 S1 implementation handoff: uncommitted edits add explicit cooperative manual-train admission, retaining direct-ship exclusive admission and land exclusion. Selected member reservations are revalidated under review admission.lock and per-member exclusion is retained through fresh and matching recovered journal publication and the run. Active/remote-held members and live/unknown descendants refuse; terminal confirmed-dead history passes. Existing global admission_quiescent and existing land/manual/orphan tests are unchanged. Docs explain coexistence and supervisor/descendant cutover limits. S2 pause/resume remains separate. Validation via launcher: final bug2650 filter 4 passed (j20261117T100143835-2-0); final admission_owner::tests 9 passed (j20261117T100158614-2-0); retained STORY-2857 filter 9 passed; review_watch::tests 74 passed. Formatting and diff checks pass. Required Opus launch was refused because this checkout is not an admitted host-recorded seat clone for that launch; blocked-dependency punt remains the publication veto. Host must arrange Opus review of the final uncommitted diff and resolve the punt. Partial native publication declaration recorded with (Refs BUG-2650) and Help-Golden: unchanged. Full local handoff: /tmp/bug2650-s1-handoff.txt. No commit/push/PR/queue completion/review record performed.'
-  created_at: 2026-11-17T10:06:07.665317868Z
-  modified_at: 2026-11-17T10:06:07.665317868Z
+  content: 'BUG-2650 S1 implementation handoff: uncommitted edits add explicit cooperative manual-train admission, retaining direct-ship exclusive admission and land exclusion. Selected member reservations are revalidated under review admission.lock and per-member exclusion is retained through fresh and matching recovered journal publication and the run. Active/remote-held members and live/unknown descendants refuse; terminal confirmed-dead history passes. Existing global admission_quiescent and existing land/manual/orphan tests are unchanged. Docs explain coexistence and supervisor/descendant cutover limits. S2 pause/resume remains separate. Validation via launcher: final bug2650 filter 4 passed (j20261117T100143835-2-0); final admission_owner::tests 9 passed (j20261117T100158614-2-0); retained STORY-2857 filter 9 passed; review_watch::tests 74 passed. Formatting and diff checks pass. Required Opus launch was refused because this checkout is not an admitted host-recorded seat clone for
+    that launch; blocked-dependency punt remains the publication veto. Host must arrange Opus review of the final uncommitted diff and resolve the punt. Partial native publication declaration recorded with (Refs BUG-2650) and Help-Golden: unchanged. Full local handoff: /tmp/bug2650-s1-handoff.txt. No commit/push/PR/queue completion/review record performed.'
+  created_at: 2026-11-17 10:06:07.665317+00:00
+  modified_at: 2026-11-17 10:06:07.665317+00:00
   session_id: 01a1e8ea1d9c
   harness_version: codex-cli 0.167.0
 - id: 01a1e91e-01b2-70b2-8a26-ebf8a726420f
   author: joe
   content: 'advisor-117 03:55: S1 PR #4212 at c701804 is RED on its own change (fast compile / Ratchet set): store-writer inventory not regenerated - new sink sites in pr_train.rs/review_watch.rs::train_members unclassified, stale rows for admission_owner::acquire callers. Rework: merge current main, run ''python3 scripts/check-store-writers.py --regenerate'', classify the additions, delete stale rows, rerun the lane pre-push gate, push. Opus STRICT review is queued by the advisor once the full run at the new head is green (no review on a red head).'
-  created_at: 2026-11-17T10:46:48.926233728Z
-  modified_at: 2026-11-17T10:46:48.926233728Z
+  created_at: 2026-11-17 10:46:48.926233+00:00
+  modified_at: 2026-11-17 10:46:48.926233+00:00
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1e963-f8b0-7393-9846-351eb9bb5cf2
   author: dirtlab
-  content: |
-    BUG-2650 S1 rework handoff — 2026-11-17
+  content: 'BUG-2650 S1 rework handoff — 2026-11-17
+
 
     Existing checkout already contains S1 and merge of main (HEAD 668bfedf37). No Git mutation performed.
 
+
     Changed files (uncommitted):
+
     - scripts/store-writers.toml: regenerated inventory; classify acquire_mode sink sites using existing runtime admission policy, classify train_members callers/directory setup as runtime coordination with member/admission locks and regression evidence; retain blocked canonical routing; remove stale acquire caller rows.
-    - aida-cli-lib/src/review_watch.rs: use main's RuntimeLock for retained train-member exclusions; expose the opaque guard crate-wide. Wrap selection's temporary member lock in RuntimeLock so forked descendants cannot retain its ownership beyond the transaction.
+
+    - aida-cli-lib/src/review_watch.rs: use main''s RuntimeLock for retained train-member exclusions; expose the opaque guard crate-wide. Wrap selection''s temporary member lock in RuntimeLock so forked descendants cannot retain its ownership beyond the transaction.
+
 
     Validation:
+
     - python3 scripts/check-ci-gates.py --tier fast: 48 gates passed; /tmp/bug2650-fast-gates.log. This was before the final selection RuntimeLock wrapper; affected final source was then checked by formatting, inventory and full review-watch regressions.
+
     - python3 -m unittest tests.test_store_writer_inventory: 55 passed; /tmp/bug2650-inventory-tests.log.
+
     - final python3 scripts/check-store-writers.py: 3685 sink sites / 297 operation mappings pass; /tmp/bug2650-inventory-check-final.log.
+
     - cargo fmt --all -- --check: passed on final diff.
+
     - git diff --check: passed.
+
     - launcher j20261117T115106159-2-0: aida-ci-guards --lib, 51 passed.
+
     - launcher j20261117T115228089-2-0: bug2650 filter, 4 passed (before final selection wrapper).
+
     - FINAL launcher j20261117T120037882-2-0: review_watch::tests, 77 passed; includes all three review-watch BUG-2650 regressions.
+
     - FINAL launcher j20261117T120044390-2-0: admission_owner::tests, 9 passed; includes cooperative BUG-2650 and unchanged land/manual/orphan/direct-child tests.
+
     - Initial compile failed on Vec<File> versus Vec<RuntimeLock>; fixed. First broader review suite had 4 inherited member-lock failures; final explicit-unlock guard fixes all four.
 
+
     Publication:
+
     Native partial declaration recorded: [AI:codex] fix(train): reconcile cooperative admission after main merge (Refs BUG-2650)
+
     Body: /tmp/bug2650-s1-publication-body.txt, includes Help-Golden: unchanged.
+
     No commit, push, PR creation, queue done, pr ship or review record.
 
+
     Blockers/remaining:
+
     STRICT Opus review is still required by advisor; latest advisor comment says review is queued after full CI is green at the new head. Host must publish this diff and arrange that review. Preserve any existing punt/hold vetoes. S2 pause/resume remains separate and BUG-2650 is not complete.
+
     The operator-supplied codegraph absolute executable remains absent; used rg for inspection.
-  created_at: 2026-11-17T12:03:25.306158060Z
-  modified_at: 2026-11-17T12:03:25.306158060Z
+
+    '
+  created_at: 2026-11-17 12:03:25.306158+00:00
+  modified_at: 2026-11-17 12:03:25.306158+00:00
   session_id: 01a1e9560ff5
   harness_version: codex-cli 0.167.0
 - id: 01a1e972-7385-7841-baad-cac26ca6988d
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-414` at head `6f8f8b64198af748f1a08c33af430e13bf454c7d`.'
-  created_at: 2026-11-17T12:19:14.437737669Z
-  modified_at: 2026-11-17T12:19:14.437737669Z
+  created_at: 2026-11-17 12:19:14.437737+00:00
+  modified_at: 2026-11-17 12:19:14.437737+00:00
   session_id: 01a1e9560ff5
 - id: 01a1e972-a610-72f1-a902-e82a6ca15574
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-414` at head `unavailable`.'
-  created_at: 2026-11-17T12:19:27.376068229Z
-  modified_at: 2026-11-17T12:19:27.376068229Z
+  created_at: 2026-11-17 12:19:27.376068+00:00
+  modified_at: 2026-11-17 12:19:27.376068+00:00
   session_id: 01a1e9560ff5
 - id: 01a1e9e3-9b97-76f0-8a84-2513e26dcd73
   author: joe
   content: 'ADVISOR RULING + BRIEF (advisor-117, 2026-11-17 07:27 MST), SUPERSEDES earlier briefs. S1 only, branch of #4212. BLOCKING (AC1, AC4): under --all-ready (manual train and the auto-train pass), a selected member with an active / RemoteHeld / Superseding review attempt or an unconfirmed descendant must be EJECTED from the train (logged with its reason), not abort the whole train; the other eligible members still train. Add the regression the reviewer names as missing: --all-ready with one blocked member trains the rest (AC4). Keep everything the review verified (unrelated reviews don''t block; terminal-member history; land/ship admission_quiescent unchanged; serialization and orphan refusal). AC3 (pause/resume) stays S2. Run the lane pre-push gate, including cargo test -p aida-cli-lib bug2650, then push to the same branch.'
-  created_at: 2026-11-17T14:22:50.263394659Z
-  modified_at: 2026-11-17T14:22:50.263394659Z
+  created_at: 2026-11-17 14:22:50.263394+00:00
+  modified_at: 2026-11-17 14:22:50.263394+00:00
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1e9e4-31fb-7f81-b0d9-64cfaa5b1d89
   author: joe
   content: 'Returned from NeedsAttention to In Progress via `aida queue rework`. It was punted on: blocked-dependency: S1 edits are ready for validation, but required Opus review cannot launch in this native worktree: AIDA refuses it because the checkout is not a host-recorded seat clone. Host must arrange an admitted Opus review of S1 before advancing the slice. No containment or launch-authority bypass attempted.. Triage reason: Opus STRICT CR at 6f8f8b6: AC1 partial + AC4 gap (blocking)'
-  created_at: 2026-11-17T14:23:28.763384104Z
-  modified_at: 2026-11-17T14:23:28.763384104Z
+  created_at: 2026-11-17 14:23:28.763384+00:00
+  modified_at: 2026-11-17 14:23:28.763384+00:00
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1e9e4-6833-71e3-86a8-61c8d3783e8d
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (PR #4212):
+  content: 'REVIEW FINDINGS TO ADDRESS (PR #4212):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 6f8f8b64198a
+
     Recorded: 2026-11-17T14:19:45.121588034+00:00
+
     Findings:
-    1. pr_train.rs ~4891: train_members over all selected members runs after the eligibility loop and truncate, and any failure (`?`) aborts the entire train. Under --all-ready (manual, and advisor_train_handler which always uses all_ready) one approved, green member with an active, RemoteHeld or Superseding attempt (e.g. a re-review of an old head) or a terminal attempt whose descendants cannot be confirmed (unknown pid namespace) blocks every other ready member, on every pass, for as long as that state lasts. The per-member gates (review-claim marker, auto-train under_review) do not apply the same predicate, so this is not filtered earlier. That reproduces BUG-2650 starvation for the all-ready path and is new for the auto-train path, which previously never checked review quiescence. Fix: evaluate the member predicate per member and eject a conflicting member as Ejected ("review reservation active"/"reviewer exit unconfirmed") before truncation or during locking, then continue with the rest. Keep the whole-train refusal only for explicit member lists if desired.
+
+    1. pr_train.rs ~4891: train_members over all selected members runs after the eligibility loop and truncate, and any failure (`?`) aborts the entire train. Under --all-ready (manual, and advisor_train_handler which always uses all_ready) one approved, green member with an active, RemoteHeld or Superseding attempt (e.g. a re-review of an old head) or a terminal attempt whose descendants cannot be confirmed (unknown pid namespace) blocks every other ready member, on every pass, for as long as that state lasts. The per-member gates (review-claim marker, auto-train under_review) do not apply the same predicate, so this is not filtered earlier. That reproduces BUG-2650 starvation for the all-ready path and is new for the auto-train path, which previously never checked review quiescence. Fix: evaluate the member predicate per member and eject a conflicting member as Ejected ("review reservation active"/"reviewer exit unconfirmed") before truncation or during locking, then continue with the
+    rest. Keep the whole-train refusal only for explicit member lists if desired.
+
     2. No regression covers AC4 for the all-ready path: add a test where one candidate has a live or unconfirmed reviewer and another approved candidate still trains (or is admitted by the member-locking step).
+
     3. admission_owner.rs acquire_mode: only a CooperativeTrain checks for a live legacy auto-train or cooperative train receipt. A legacy auto-train controller (Mode::Legacy, shared lock) is still admitted while a cooperative manual train is in pre-journal discovery, because admission_train_running checks only the journal lock. That contradicts the comment that trains serialize from discovery onward. The journal try-lock (TrainJournalBusy) keeps landing safe, so the only effect is a busy refusal for one side. Either have the Legacy auto-train purpose also refuse on a live cooperative manual train receipt, or correct the comment, and add a test.
+
     4. docs/cli/06-roles-sessions.md: the inserted section ends with two blank lines before the next paragraph.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-17T14:23:42.643972485Z
-  modified_at: 2026-11-17T14:23:42.643972485Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-17 14:23:42.643972+00:00
+  modified_at: 2026-11-17 14:23:42.643972+00:00
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ea16-7528-7792-ad92-7ead07eeb6c0
   author: dirtlab
-  content: |
-    Round 2 S1: addressed all four PR #4212 findings. All-ready manual and automatic trains validate/lock review candidates before truncation, eject active/RemoteHeld/Superseding reservations or unconfirmed reviewer exits with reasons, train remaining eligible members, and include those ejections in the outcome. Waiting members release their locks; selected locks remain held through journal publication and the run. Explicit lists retain whole-train refusal. Shared invalid/missing review evidence still refuses globally; admission_quiescent and existing land/manual/orphan tests are unchanged. Legacy auto-train now refuses cooperative manual-train discovery receipts; a separate regression covers both directions before any journal. Removed the extra documentation blank line and reconciled the writer inventory.
+  content: 'Round 2 S1: addressed all four PR #4212 findings. All-ready manual and automatic trains validate/lock review candidates before truncation, eject active/RemoteHeld/Superseding reservations or unconfirmed reviewer exits with reasons, train remaining eligible members, and include those ejections in the outcome. Waiting members release their locks; selected locks remain held through journal publication and the run. Explicit lists retain whole-train refusal. Shared invalid/missing review evidence still refuses globally; admission_quiescent and existing land/manual/orphan tests are unchanged. Legacy auto-train now refuses cooperative manual-train discovery receipts; a separate regression covers both directions before any journal. Removed the extra documentation blank line and reconciled the writer inventory.
+
 
     Validation through launcher: make check-ci-fast passed, job j20261117T145255454-2-0 (all 48 source gates, checked Rust ratchets, fresh CLI build and dynamic manual verification). admission_owner::tests passed 10 tests, job j20261117T145338890-2-0. Final cargo test --profile agent -p aida-cli-lib --lib -- bug2650 passed 7 tests, job j20261117T151528673-2-0, including all-ready ejection across Reserved/Running/RemoteHeld/Superseding and unknown descendant states. Initial fixture failures were corrected; the final fixture-only correction followed the full gate and passed rustfmt --check and git diff --check.
 
+
     Native seat leaves six changed files uncommitted. Host must commit/push this new round to the same branch/PR; required Opus review remains for the publication workflow. S1 only; pause/resume AC3 remains S2.
-  created_at: 2026-11-17T15:18:22.582624928Z
-  modified_at: 2026-11-17T15:18:22.582624928Z
+
+    '
+  created_at: 2026-11-17 15:18:22.582624+00:00
+  modified_at: 2026-11-17 15:18:22.582624+00:00
   session_id: 01a1e9f9c1d3
   harness_version: codex-cli 0.167.0
 - id: 01a1ea26-7bf4-7011-a04e-275bf1bd1f51
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-414` at head `e66bfe3230112a381c6ec139e555623d2e635066`.'
-  created_at: 2026-11-17T15:35:53.076926633Z
-  modified_at: 2026-11-17T15:35:53.076926633Z
+  created_at: 2026-11-17 15:35:53.076926+00:00
+  modified_at: 2026-11-17 15:35:53.076926+00:00
   session_id: 01a1e9f9c1d3
 - id: 01a1eb96-9175-75f1-9e1e-de0090c9ed6f
   author: joe
   content: 'Advisor 2026-11-17: set mode drain under the operator''s narrowed 11:21 rule. #4212 changes admission locking between manual trains and review-watch (pr_train.rs, review_watch.rs, admission_owner.rs). That is not authority (approve, merge, ship, hold, status, grants, mandates), credentials or containment, and no gate/ path. The train''s final gate still verifies the exact-head approval.'
-  created_at: 2026-11-17T22:17:40.989249966Z
-  modified_at: 2026-11-17T22:17:40.989249966Z
+  created_at: 2026-11-17 22:17:40.989249+00:00
+  modified_at: 2026-11-17 22:17:40.989249+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ebb4-6dd6-7280-bf2c-e5a197b4350c
   author: lane-recovery
   content: Reference merge `f002dd61d9ba42202e6fc33222757459349db47d` left unfinished work with no lease or open PR; returned to Approved.
-  created_at: 2026-11-17T22:50:32.790476585Z
-  modified_at: 2026-11-17T22:50:32.790476585Z
+  created_at: 2026-11-17 22:50:32.790476+00:00
+  modified_at: 2026-11-17 22:50:32.790476+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1f12e-c334-7a93-9220-b46d6f3643a6
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-414` at head `unavailable`.'
-  created_at: 2026-11-19T00:22:16.116672478Z
-  modified_at: 2026-11-19T00:22:16.116672478Z
+  created_at: 2026-11-19 00:22:16.116672+00:00
+  modified_at: 2026-11-19 00:22:16.116672+00:00
 - id: 01a1f143-28aa-7952-95c5-fa43d6f616a4
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-414` at head `e66bfe3230112a381c6ec139e555623d2e635066`.'
-  created_at: 2026-11-19T00:44:32.810285472Z
-  modified_at: 2026-11-19T00:44:32.810285472Z
+  created_at: 2026-11-19 00:44:32.810285+00:00
+  modified_at: 2026-11-19 00:44:32.810285+00:00
   session_id: 01a1f12f1b98
 - id: 01a1f47e-9436-7f13-b6fd-98c36972f90d
   author: joe
   content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 08:50): STAYS OPEN. #4212 approved S1 (AC1, AC2, AC4); its verdict states AC3 remains approved S2 scope. Next lane scope = S2/AC3 only.'
-  created_at: 2026-11-19T15:48:05.152257771Z
-  modified_at: 2026-11-19T15:48:05.152257771Z
+  created_at: 2026-11-19 15:48:05.152257+00:00
+  modified_at: 2026-11-19 15:48:05.152257+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f484-696e-7d42-bad3-d4976f07ad47
   author: joe
   content: 'Product 08:55: S2/AC3 codex lane queued on dell1 (fresh start), brief = the advisor-121 08:50 completion-call scope.'
-  created_at: 2026-11-19T15:54:24.800797767Z
-  modified_at: 2026-11-19T15:54:24.800797767Z
+  created_at: 2026-11-19 15:54:24.800797+00:00
+  modified_at: 2026-11-19 15:54:24.800797+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f4b7-f098-7d80-a99b-ceb8610841c3
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: e66bfe3230112a381c6ec139e555623d2e635066; reviewed the origin/main merge-base diff and native uncommitted S2 changes, including the new pause module.
+
     AC3: [evidence: behavioral-test] Launcher job j20261119T163007938-2-0 ran 80 review-watch tests successfully. The pause regression proves restart persistence, actor/reason audit, explicit resume, automatic expiry and refusal on malformed control state. The GitHub and GitLab process fixture checks a rejected grant, defaults and bounds, a pause between selection and queue-work spawn, and completion of a queue child already running at pause time. FAST source gates passed 48 checks and the classified writer inventory passed. Golden help was generated and the command paths match the JSON audit. Final-tree targeted/golden verification is job j20261119T164119633-2-0.
-    Probe findings: selection and both spawn checks read the same repository-bound journal. Explicit writes serialize with launch guards and admission.lock; expiry is audited at the locked read. A refused pause cannot count as a started review. Existing grant, controller and hub transitions still guard launch, and no test was removed or relaxed. The new state is host-local; cutover still needs the controller supervisor and descendant checks. The STORY-2868 runbook documents the resume call for the future rollback script. This is a Refs slice and the spec stays open.
-  created_at: 2026-11-19T16:50:57.494026565Z
-  modified_at: 2026-11-19T16:50:57.494026565Z
+
+    Probe findings: selection and both spawn checks read the same repository-bound journal. Explicit writes serialize with launch guards and admission.lock; expiry is audited at the locked read. A refused pause cannot count as a started review. Existing grant, controller and hub transitions still guard launch, and no test was removed or relaxed. The new state is host-local; cutover still needs the controller supervisor and descendant checks. The STORY-2868 runbook documents the resume call for the future rollback script. This is a Refs slice and the spec stays open.'
+  created_at: 2026-11-19 16:50:57.494026+00:00
+  modified_at: 2026-11-19 16:50:57.494026+00:00
   session_id: 01a1f4861f64
   harness_version: codex-cli 0.167.0
 - id: 01a1f4d3-a883-76f3-8454-12a0545f3bc9
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-414` at head `9e0bc5d5770439fa777110f063f47e9d22a4c42a`.'
-  created_at: 2026-11-19T17:21:14.371678635Z
-  modified_at: 2026-11-19T17:21:14.371678635Z
+  created_at: 2026-11-19 17:21:14.371678+00:00
+  modified_at: 2026-11-19 17:21:14.371678+00:00
   session_id: 01a1f4861f64
 - id: 01a1f4d4-f2c1-7420-9bf5-834e893b2d71
   author: joe
   content: PR-4320 at 9e0bc5d5770439fa777110f063f47e9d22a4c42a conflicts with the protected base; resolve the conflict before review
-  created_at: 2026-11-19T17:22:38.913413618Z
-  modified_at: 2026-11-19T17:22:38.913413618Z
+  created_at: 2026-11-19 17:22:38.913413+00:00
+  modified_at: 2026-11-19 17:22:38.913413+00:00
 - id: 01a1f4ea-133f-7be0-8049-f6e2c0bb5ef0
   author: joe
-  content: |-
-    AUTHORITATIVE CONFLICT BRIEF (advisor-121, relayed by product 10:45):
+  content: 'AUTHORITATIVE CONFLICT BRIEF (advisor-121, relayed by product 10:45):
+
     # Brief: BUG-2650 / PR #4320, CONFLICT-ONLY lane
 
+
     Advisor-121, 2026-11-19 10:43: #4320 (BUG-2650 S2) conflicts with main (b820668 or later).
+
     Scope: merge origin/main into this branch, resolve the conflicts, and regenerate any generated inventory (e.g. `scripts/store-writers.toml` via its --regenerate path, CLI help goldens) instead of hand-merging generated files. NO other edits: no behavior changes, no new tests, no refactors.
+
     Keep the commit subject trailer as (Refs BUG-2650).
-    Before pushing, run `python3 scripts/check-store-writers.py` and `make check-ci-fast`.
-  created_at: 2026-11-19T17:45:31.514834690Z
-  modified_at: 2026-11-19T17:45:31.514834690Z
+
+    Before pushing, run `python3 scripts/check-store-writers.py` and `make check-ci-fast`.'
+  created_at: 2026-11-19 17:45:31.514834+00:00
+  modified_at: 2026-11-19 17:45:31.514834+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f4ea-492e-7f30-82f6-b626f0b3d60c
   author: joe
   content: 'Product 10:45: CONFLICT lane queued on dell1 (codex), branch bug-b6b1278890774ef993d2ebc327862470-414. Scope = the AUTHORITATIVE CONFLICT BRIEF in the previous comment.'
-  created_at: 2026-11-19T17:45:45.342074402Z
-  modified_at: 2026-11-19T17:45:45.342074402Z
+  created_at: 2026-11-19 17:45:45.342074+00:00
+  modified_at: 2026-11-19 17:45:45.342074+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f4f5-a37b-7d00-b194-9394a337bfea
   author: dirtlab
-  content: |-
-    ## Implementer self-review
-    Reviewed HEAD: 9e0bc5d577 against origin/main plus the host-staged merge and working tree. The two recorded conflicts are marker-free. The review-watch test retains the S2 pause/resume/restart, expiry and corrupt-journal assertions and main's existing configurable-round assertions. The writer generator and inventory checker passed with 3,783 sinks and 297 operation mappings, preserving the merged policy rows. No untracked additions were present.
-    The gate and authority probe found a behavioral overlap in auto-merged review_watch.rs. The second exclusive train-member lock at line 1682 conflicts with the existing lock at line 1666 even for a free member. Also, the pause arm in admit_change at line 3455 returns unit where the new result requires Admission. Both require a behavior-aware merge. BUG-2650 was punted for this overlap. FAST gate, CLI help regeneration and targeted BUG-2650 tests were submitted to the lane runner.
-  created_at: 2026-11-19T17:58:20.784969266Z
-  modified_at: 2026-11-19T17:58:20.784969266Z
+  content: '## Implementer self-review
+
+    Reviewed HEAD: 9e0bc5d577 against origin/main plus the host-staged merge and working tree. The two recorded conflicts are marker-free. The review-watch test retains the S2 pause/resume/restart, expiry and corrupt-journal assertions and main''s existing configurable-round assertions. The writer generator and inventory checker passed with 3,783 sinks and 297 operation mappings, preserving the merged policy rows. No untracked additions were present.
+
+    The gate and authority probe found a behavioral overlap in auto-merged review_watch.rs. The second exclusive train-member lock at line 1682 conflicts with the existing lock at line 1666 even for a free member. Also, the pause arm in admit_change at line 3455 returns unit where the new result requires Admission. Both require a behavior-aware merge. BUG-2650 was punted for this overlap. FAST gate, CLI help regeneration and targeted BUG-2650 tests were submitted to the lane runner.'
+  created_at: 2026-11-19 17:58:20.784969+00:00
+  modified_at: 2026-11-19 17:58:20.784969+00:00
   session_id: 01a1f4ec4535
   harness_version: codex-cli 0.167.0
 - id: 01a1f4f9-f64a-76b3-8098-fa63140ab467
   author: joe
-  content: |-
-    ADVISOR DESIGN RULING + BRIEF (advisor-121, 11:08): #4320 S2 cannot be resolved as conflict-only. Main's admission changes make the PR's lock-based pause block train reservations (review_watch.rs:1666/1682) and break the watch_change Result<Admission> contract (:3455). Ruling: pause becomes a persisted, audited, expiring RECORD checked at the review LAUNCH point, never a lock. Claude lane; no review round spent.
-
-    # Rework brief: BUG-2650 S2 / PR #4320: reconcile pause/resume with main's admission (design ruling)
-
-    Advisor: claude-advisor-121, 2026-11-19 11:08 MST. Lane: CLAUDE (touches review-watch admission). PR not yet reviewed,
-    so no round is spent. Start from the retained merge-in-progress in seat aida-seat-aida-bug-...-414 on dell1
-    (text conflicts already resolved, inventory regenerated) or redo the merge of origin/main into the branch.
-
-    DESIGN RULING (replaces the PR's lock-based pause):
-    - Pause is a persisted, audited RECORD (who, why, paused_at, expires_at), not a lock. `aida review watch pause --reason R
-      [--for DURATION, default and max from config]` writes it; `resume` clears it (audited); expiry auto-clears it.
-    - review-watch reads the record at the point where it would LAUNCH a new review and skips launching while it is paused
-      (it logs the skip with the pause owner/reason). Running reviewers are never killed. The pause path acquires NO
-      admission/train-member lock, so it can never block train reservations (fixes review_watch.rs:1666/1682).
-    - watch_change keeps main's signature (Result<Admission>); a paused pass returns the typed "no launch" admission
-      value main already uses for a non-launch (fixes :3455), not Ok(()).
-    - Keep the existing audit trail and the STORY-2868 A2 rollback-script usage working.
-    Regressions: (a) pause, then a train reservation proceeds unblocked; (b) pause skips new launches, a running review completes;
-    (c) expiry auto-resumes; (d) resume is audited with the actor.
-    cargo fmt; python3 scripts/check-store-writers.py --regenerate (review the diff); ExecContext/task_2143 ratchets; targeted
-    cargo run over review_watch:: and the new tests; make check-ci-fast. Push (Refs BUG-2650). STRICT review follows.
-  created_at: 2026-11-19T18:02:48.447668770Z
-  modified_at: 2026-11-19T18:02:48.447668770Z
+  content: "ADVISOR DESIGN RULING + BRIEF (advisor-121, 11:08): #4320 S2 cannot be resolved as conflict-only. Main's admission changes make the PR's lock-based pause block train reservations (review_watch.rs:1666/1682) and break the watch_change Result<Admission> contract (:3455). Ruling: pause becomes a persisted, audited, expiring RECORD checked at the review LAUNCH point, never a lock. Claude lane; no review round spent.\n\n# Rework brief: BUG-2650 S2 / PR #4320: reconcile pause/resume with main's admission (design ruling)\n\nAdvisor: claude-advisor-121, 2026-11-19 11:08 MST. Lane: CLAUDE (touches review-watch admission). PR not yet reviewed,\nso no round is spent. Start from the retained merge-in-progress in seat aida-seat-aida-bug-...-414 on dell1\n(text conflicts already resolved, inventory regenerated) or redo the merge of origin/main into the branch.\n\nDESIGN RULING (replaces the PR's lock-based pause):\n- Pause is a persisted, audited RECORD (who, why, paused_at, expires_at), not\
+    \ a lock. `aida review watch pause --reason R\n  [--for DURATION, default and max from config]` writes it; `resume` clears it (audited); expiry auto-clears it.\n- review-watch reads the record at the point where it would LAUNCH a new review and skips launching while it is paused\n  (it logs the skip with the pause owner/reason). Running reviewers are never killed. The pause path acquires NO\n  admission/train-member lock, so it can never block train reservations (fixes review_watch.rs:1666/1682).\n- watch_change keeps main's signature (Result<Admission>); a paused pass returns the typed \"no launch\" admission\n  value main already uses for a non-launch (fixes :3455), not Ok(()).\n- Keep the existing audit trail and the STORY-2868 A2 rollback-script usage working.\nRegressions: (a) pause, then a train reservation proceeds unblocked; (b) pause skips new launches, a running review completes;\n(c) expiry auto-resumes; (d) resume is audited with the actor.\ncargo fmt; python3 scripts/check-store-writers.py\
+    \ --regenerate (review the diff); ExecContext/task_2143 ratchets; targeted\ncargo run over review_watch:: and the new tests; make check-ci-fast. Push (Refs BUG-2650). STRICT review follows."
+  created_at: 2026-11-19 18:02:48.447668+00:00
+  modified_at: 2026-11-19 18:02:48.447668+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f4fa-9c17-7281-b455-0191e6761243
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: PR #4320 conflict-only repair: markers cleared from aida-cli-lib/src/tests/task_1993_review_watch_tests.rs and scripts/store-writers.toml, and regenerated inventory passed. Unresolved behavioral overlap in auto-merged aida-cli-lib/src/review_watch.rs:1666 and :1682 reacquires the same exclusive train-member lock and blocks ordinary reservations, and :3455 returns Ok(()) from watch_change, which now returns Result<Admission>. Reconciling pause with main admission semantics requires a behavior change outside the conflict-only brief. CLI help regeneration also remains unverified pending compilation. Keep publication vetoed.. No triage reason was given.'
-  created_at: 2026-11-19T18:03:47.095079637Z
-  modified_at: 2026-11-19T18:03:47.095079637Z
+  created_at: 2026-11-19 18:03:47.095079+00:00
+  modified_at: 2026-11-19 18:03:47.095079+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f4fb-2115-7bb0-a9e3-3b080458cf32
   author: joe
-  content: |-
-    AUTHORITATIVE RECONCILE BRIEF (advisor-121, relayed by product 11:04):
-    # Rework brief: BUG-2650 S2 / PR #4320: reconcile pause/resume with main's admission (design ruling)
-
-    Advisor: claude-advisor-121, 2026-11-19 11:08 MST. Lane: CLAUDE (touches review-watch admission). PR not yet reviewed,
-    so no round is spent. Start from the retained merge-in-progress in seat aida-seat-aida-bug-...-414 on dell1
-    (text conflicts already resolved, inventory regenerated) or redo the merge of origin/main into the branch.
-
-    DESIGN RULING (replaces the PR's lock-based pause):
-    - Pause is a persisted, audited RECORD (who, why, paused_at, expires_at), not a lock. `aida review watch pause --reason R
-      [--for DURATION, default and max from config]` writes it; `resume` clears it (audited); expiry auto-clears it.
-    - review-watch reads the record at the point where it would LAUNCH a new review and skips launching while it is paused
-      (it logs the skip with the pause owner/reason). Running reviewers are never killed. The pause path acquires NO
-      admission/train-member lock, so it can never block train reservations (fixes review_watch.rs:1666/1682).
-    - watch_change keeps main's signature (Result<Admission>); a paused pass returns the typed "no launch" admission
-      value main already uses for a non-launch (fixes :3455), not Ok(()).
-    - Keep the existing audit trail and the STORY-2868 A2 rollback-script usage working.
-    Regressions: (a) pause, then a train reservation proceeds unblocked; (b) pause skips new launches, a running review completes;
-    (c) expiry auto-resumes; (d) resume is audited with the actor.
-    cargo fmt; python3 scripts/check-store-writers.py --regenerate (review the diff); ExecContext/task_2143 ratchets; targeted
-    cargo run over review_watch:: and the new tests; make check-ci-fast. Push (Refs BUG-2650). STRICT review follows.
-  created_at: 2026-11-19T18:04:05.637587525Z
-  modified_at: 2026-11-19T18:04:05.637587525Z
+  content: "AUTHORITATIVE RECONCILE BRIEF (advisor-121, relayed by product 11:04):\n# Rework brief: BUG-2650 S2 / PR #4320: reconcile pause/resume with main's admission (design ruling)\n\nAdvisor: claude-advisor-121, 2026-11-19 11:08 MST. Lane: CLAUDE (touches review-watch admission). PR not yet reviewed,\nso no round is spent. Start from the retained merge-in-progress in seat aida-seat-aida-bug-...-414 on dell1\n(text conflicts already resolved, inventory regenerated) or redo the merge of origin/main into the branch.\n\nDESIGN RULING (replaces the PR's lock-based pause):\n- Pause is a persisted, audited RECORD (who, why, paused_at, expires_at), not a lock. `aida review watch pause --reason R\n  [--for DURATION, default and max from config]` writes it; `resume` clears it (audited); expiry auto-clears it.\n- review-watch reads the record at the point where it would LAUNCH a new review and skips launching while it is paused\n  (it logs the skip with the pause owner/reason). Running reviewers\
+    \ are never killed. The pause path acquires NO\n  admission/train-member lock, so it can never block train reservations (fixes review_watch.rs:1666/1682).\n- watch_change keeps main's signature (Result<Admission>); a paused pass returns the typed \"no launch\" admission\n  value main already uses for a non-launch (fixes :3455), not Ok(()).\n- Keep the existing audit trail and the STORY-2868 A2 rollback-script usage working.\nRegressions: (a) pause, then a train reservation proceeds unblocked; (b) pause skips new launches, a running review completes;\n(c) expiry auto-resumes; (d) resume is audited with the actor.\ncargo fmt; python3 scripts/check-store-writers.py --regenerate (review the diff); ExecContext/task_2143 ratchets; targeted\ncargo run over review_watch:: and the new tests; make check-ci-fast. Push (Refs BUG-2650). STRICT review follows."
+  created_at: 2026-11-19 18:04:05.637587+00:00
+  modified_at: 2026-11-19 18:04:05.637587+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f4fb-6ae7-7cc1-996b-804742591d0f
   author: joe
   content: 'Product 11:04: RECONCILE lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-414. Scope = the AUTHORITATIVE RECONCILE BRIEF in the previous comment.'
-  created_at: 2026-11-19T18:04:24.216798750Z
-  modified_at: 2026-11-19T18:04:24.216798750Z
+  created_at: 2026-11-19 18:04:24.216798+00:00
+  modified_at: 2026-11-19 18:04:24.216798+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f513-2b8f-7c91-83b5-4b6a0308a47b
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-414` at head `a75316ec77c47b0fe0ee4141da2aafcb296bfe16`.'
+  created_at: 2026-11-19 18:30:36.687902+00:00
+  modified_at: 2026-11-19 18:30:36.687902+00:00
 - id: 01a1f513-bff6-7d71-b14a-d187cb20cc19
   author: joe
-  content: |-
-    AUTHORITATIVE RECONCILE-B BRIEF (advisor-121, relayed by product 11:31):
-    # Rework brief: BUG-2650 S2 / PR #4320: reconcile pause/resume with main's admission (design ruling)
-
-    Advisor: claude-advisor-121, 2026-11-19 11:08 MST. Lane: CLAUDE (touches review-watch admission). PR not yet reviewed,
-    so no round is spent. Start from the retained merge-in-progress in seat aida-seat-aida-bug-...-414 on dell1
-    (text conflicts already resolved, inventory regenerated) or redo the merge of origin/main into the branch.
-
-    DESIGN RULING (replaces the PR's lock-based pause):
-    - Pause is a persisted, audited RECORD (who, why, paused_at, expires_at), not a lock. `aida review watch pause --reason R
-      [--for DURATION, default and max from config]` writes it; `resume` clears it (audited); expiry auto-clears it.
-    - review-watch reads the record at the point where it would LAUNCH a new review and skips launching while it is paused
-      (it logs the skip with the pause owner/reason). Running reviewers are never killed. The pause path acquires NO
-      admission/train-member lock, so it can never block train reservations (fixes review_watch.rs:1666/1682).
-    - watch_change keeps main's signature (Result<Admission>); a paused pass returns the typed "no launch" admission
-      value main already uses for a non-launch (fixes :3455), not Ok(()).
-    - Keep the existing audit trail and the STORY-2868 A2 rollback-script usage working.
-    Regressions: (a) pause, then a train reservation proceeds unblocked; (b) pause skips new launches, a running review completes;
-    (c) expiry auto-resumes; (d) resume is audited with the actor.
-    cargo fmt; python3 scripts/check-store-writers.py --regenerate (review the diff); ExecContext/task_2143 ratchets; targeted
-    cargo run over review_watch:: and the new tests; make check-ci-fast. Push (Refs BUG-2650). STRICT review follows.
-
-    ## Start point (product, 11:33)
-    The previous conflict-only lane's merge of origin/main (b820668) is saved, with text conflicts resolved, as commit a75316ec77 on branch `origin/bug-2650-merge-wip`. It is a descendant of the PR head 9e0bc5d5. FIRST run `git fetch origin bug-2650-merge-wip && git merge --ff-only origin/bug-2650-merge-wip`, then do the review_watch.rs reconciliation above on top of it (it does not compile yet: watch_change at ~:3455 and the lock reacquire at ~:1666/:1682). Merge origin/main again if it has moved. Do not push the WIP commit alone.
-  created_at: 2026-11-19T18:31:01.042576247Z
-  modified_at: 2026-11-19T18:31:01.042576247Z
+  content: "AUTHORITATIVE RECONCILE-B BRIEF (advisor-121, relayed by product 11:31):\n# Rework brief: BUG-2650 S2 / PR #4320: reconcile pause/resume with main's admission (design ruling)\n\nAdvisor: claude-advisor-121, 2026-11-19 11:08 MST. Lane: CLAUDE (touches review-watch admission). PR not yet reviewed,\nso no round is spent. Start from the retained merge-in-progress in seat aida-seat-aida-bug-...-414 on dell1\n(text conflicts already resolved, inventory regenerated) or redo the merge of origin/main into the branch.\n\nDESIGN RULING (replaces the PR's lock-based pause):\n- Pause is a persisted, audited RECORD (who, why, paused_at, expires_at), not a lock. `aida review watch pause --reason R\n  [--for DURATION, default and max from config]` writes it; `resume` clears it (audited); expiry auto-clears it.\n- review-watch reads the record at the point where it would LAUNCH a new review and skips launching while it is paused\n  (it logs the skip with the pause owner/reason). Running reviewers\
+    \ are never killed. The pause path acquires NO\n  admission/train-member lock, so it can never block train reservations (fixes review_watch.rs:1666/1682).\n- watch_change keeps main's signature (Result<Admission>); a paused pass returns the typed \"no launch\" admission\n  value main already uses for a non-launch (fixes :3455), not Ok(()).\n- Keep the existing audit trail and the STORY-2868 A2 rollback-script usage working.\nRegressions: (a) pause, then a train reservation proceeds unblocked; (b) pause skips new launches, a running review completes;\n(c) expiry auto-resumes; (d) resume is audited with the actor.\ncargo fmt; python3 scripts/check-store-writers.py --regenerate (review the diff); ExecContext/task_2143 ratchets; targeted\ncargo run over review_watch:: and the new tests; make check-ci-fast. Push (Refs BUG-2650). STRICT review follows.\n\n## Start point (product, 11:33)\nThe previous conflict-only lane's merge of origin/main (b820668) is saved, with text conflicts resolved,\
+    \ as commit a75316ec77 on branch `origin/bug-2650-merge-wip`. It is a descendant of the PR head 9e0bc5d5. FIRST run `git fetch origin bug-2650-merge-wip && git merge --ff-only origin/bug-2650-merge-wip`, then do the review_watch.rs reconciliation above on top of it (it does not compile yet: watch_change at ~:3455 and the lock reacquire at ~:1666/:1682). Merge origin/main again if it has moved. Do not push the WIP commit alone."
+  created_at: 2026-11-19 18:31:01.042576+00:00
+  modified_at: 2026-11-19 18:31:01.042576+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f514-01ca-73d3-9add-c3784508f79b
   author: joe
   content: 'Product 11:31: RECONCILE-B lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-414. Scope = the AUTHORITATIVE RECONCILE-B BRIEF in the previous comment.'
-  created_at: 2026-11-19T18:31:16.957590539Z
-  modified_at: 2026-11-19T18:31:16.957590539Z
+  created_at: 2026-11-19 18:31:16.957590+00:00
+  modified_at: 2026-11-19 18:31:16.957590+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
-  timestamp: 2026-11-17T07:24:52.596978766Z
+  timestamp: 2026-11-17 07:24:52.596978+00:00
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
   changes:
@@ -410,51 +434,70 @@ history:
     new_value: Approved
 - id: 01a1e898-e4a0-7893-865e-352ca5d7102c
   author: joe
-  timestamp: 2026-11-17T08:21:36.544926461Z
+  timestamp: 2026-11-17 08:21:36.544926+00:00
   session_id: 01a1e841-6fac-7780-a4c0-87a0c0451dd3
   harness_version: 2.1.326 (Claude Code)
   changes:
   - field_name: description
-    old_value: |-
-      ## What happened
+    old_value: '## What happened
+
       2026-11-16 23:59 to 00:22 MST: deputy train job 01a1e819 (members #4167, #4130, both approved at head, full green, holds cleared) ran `aida pr train` 40 times; every attempt failed in 0-2 s with "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts" (twice "review-watch lock busy: admission.lock"). Review-watch had live attempts on PR-4204 and PR-4205 (codex reviewers, ~20 min each) plus a terminal blocked attempt on PR-4171 (three inconclusive reviews) that never clears without `aida review watch --release`.
 
+
       ## Why it matters
+
       Train admission requires every review attempt to be quiescent. Review-watch launches a new attempt every few minutes whenever a head is pushed, so with steady lane output there is no window for a train: approved green PRs wait behind unrelated reviews. A terminal blocked attempt starves trains indefinitely.
 
+
       ## Expected
+
       A train for already-approved members is not blocked by review attempts on other PRs (or admission is fair: a waiting train gets the next window and review-watch defers new launches while a train waits). A terminal/blocked attempt never counts as non-quiescent for train admission.
 
+
       ## Workaround in use
-      Advisor released PR-4171 by hand and resubmitted train jobs with a 60-minute admission retry loop (5 s interval).
-    new_value: |
-      ## What happened
+
+      Advisor released PR-4171 by hand and resubmitted train jobs with a 60-minute admission retry loop (5 s interval).'
+    new_value: '## What happened
+
       2026-11-16 23:59 to 00:22 MST: deputy train job 01a1e819 (members #4167, #4130, both approved at head, full green, holds cleared) ran `aida pr train` 40 times; every attempt failed in 0-2 s with "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts" (twice "review-watch lock busy: admission.lock"). Review-watch had live attempts on PR-4204 and PR-4205 (codex reviewers, ~20 min each) plus a terminal blocked attempt on PR-4171 (three inconclusive reviews) that never clears without `aida review watch --release`.
 
+
       ## Why it matters
+
       Train admission requires every review attempt to be quiescent. Review-watch launches a new attempt every few minutes whenever a head is pushed, so with steady lane output there is no window for a train: approved green PRs wait behind unrelated reviews. A terminal blocked attempt starves trains indefinitely.
 
+
       ## Expected
+
       A train for already-approved members is not blocked by review attempts on other PRs (or admission is fair: a waiting train gets the next window and review-watch defers new launches while a train waits). A terminal/blocked attempt never counts as non-quiescent for train admission.
 
+
       ## Workaround in use
+
       Advisor released PR-4171 by hand and resubmitted train jobs with a 60-minute admission retry loop (5 s interval).
+
 
       ## Acceptance (added 2026-11-17 01:22 by advisor, per product seat aida-98)
+
       - AC1: An approved, green, hold-free train member is admitted within one review-watch interval even while review attempts on other PRs are running, or admission is fair: a waiting train gets the next window and review-watch launches nothing new while a train waits.
+
       - AC2: A terminal/blocked review attempt (e.g. three inconclusive attempts) never counts as non-quiescent for train admission.
-      - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2's rollback script uses it.
+
+      - AC3: Review-watch has a supported, audited pause/resume control (`aida review watch pause|resume` or equivalent) that stops new launches without killing running reviewers, records who paused it and why, and auto-expires; STORY-2868 A2''s rollback script uses it.
+
       - AC4: Regression covering a train waiting behind running review attempts on unrelated PRs.
+
+      '
 - id: 01a1e8ca-0ec9-70c0-8e50-58efbf6f65b2
   author: aida-session-start
-  timestamp: 2026-11-17T09:15:18.601362647Z
+  timestamp: 2026-11-17 09:15:18.601362+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1e8cb-fd4f-7811-bcda-a84761835f57
   author: dirtlab
-  timestamp: 2026-11-17T09:17:25.199110272Z
+  timestamp: 2026-11-17 09:17:25.199110+00:00
   session_id: 01a1e8c9e5a1
   harness_version: codex-cli 0.167.0
   changes:
@@ -463,13 +506,13 @@ history:
     new_value: NeedsAttention
 - id: 01a1e8f1-13a4-70c1-9854-45a74fd588ba
   author: dirtlab
-  timestamp: 2026-11-17T09:57:55.748310058Z
+  timestamp: 2026-11-17 09:57:55.748310+00:00
   session_id: 01a1e8ea1d9c
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1e9e4-31fb-7f81-b0d9-64bcc125023a
   author: joe
-  timestamp: 2026-11-17T14:23:28.763366950Z
+  timestamp: 2026-11-17 14:23:28.763366+00:00
   session_id: 01a1e905-cabe-7b93-ab50-c08d8b1663f3
   harness_version: 2.1.326 (Claude Code)
   changes:
@@ -478,13 +521,13 @@ history:
     new_value: InProgress
 - id: 01a1eb96-4996-7703-b697-4d8868e40b46
   author: joe
-  timestamp: 2026-11-17T22:17:37.430119052Z
+  timestamp: 2026-11-17 22:17:37.430119+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
 - id: 01a1ebb4-6dd6-7280-bf2c-e5bdc269f060
   author: lane-recovery
-  timestamp: 2026-11-17T22:50:32.790485229Z
+  timestamp: 2026-11-17 22:50:32.790485+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes:
@@ -493,14 +536,14 @@ history:
     new_value: Approved
 - id: 01a1f12f-7528-7991-80f2-09a357e1eb7b
   author: aida-session-start
-  timestamp: 2026-11-19T00:23:01.672944689Z
+  timestamp: 2026-11-19 00:23:01.672944+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f143-28aa-7952-95c5-fa52034cc627
   author: lane-recovery
-  timestamp: 2026-11-19T00:44:32.810295421Z
+  timestamp: 2026-11-19 00:44:32.810295+00:00
   session_id: 01a1f12f1b98
   changes:
   - field_name: status
@@ -508,14 +551,14 @@ history:
     new_value: Approved
 - id: 01a1f486-54a8-77c2-973d-11c664be4d87
   author: aida-session-start
-  timestamp: 2026-11-19T15:56:46.632066952Z
+  timestamp: 2026-11-19 15:56:46.632066+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f4a6-f346-7931-944f-18be13ac23d5
   author: dirtlab
-  timestamp: 2026-11-19T16:32:24.390085886Z
+  timestamp: 2026-11-19 16:32:24.390085+00:00
   session_id: 01a1f4861f64
   harness_version: codex-cli 0.167.0
   changes:
@@ -524,21 +567,21 @@ history:
     new_value: docs:impacted, landing-emergency
 - id: 01a1f4d4-bbb5-77d2-b399-275f95da05c1
   author: joe
-  timestamp: 2026-11-19T17:22:24.821893486Z
+  timestamp: 2026-11-19 17:22:24.821893+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a1f4ec-826c-7383-9a7b-17e470e09f47
   author: aida-session-start
-  timestamp: 2026-11-19T17:48:23.020770615Z
+  timestamp: 2026-11-19 17:48:23.020770+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f4f5-585e-7630-8017-2f2005b552a3
   author: dirtlab
-  timestamp: 2026-11-19T17:58:02.078960879Z
+  timestamp: 2026-11-19 17:58:02.078960+00:00
   session_id: 01a1f4ec4535
   harness_version: codex-cli 0.167.0
   changes:
@@ -547,7 +590,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1f4fa-9c17-7281-b455-018120e8c2b3
   author: joe
-  timestamp: 2026-11-19T18:03:47.095064961Z
+  timestamp: 2026-11-19 18:03:47.095064+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
