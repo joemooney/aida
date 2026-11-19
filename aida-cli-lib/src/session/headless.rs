@@ -88,6 +88,12 @@ pub(crate) fn spawn_analysis_headless(
 /// commands, and the non-portable set: degraded exactly as today, never worse.
 // trace:BUG-799 | ai:claude
 pub(crate) fn codex_inline_prompt(prompt: &str) -> Option<String> {
+    // Keep pickup attachments out of the slash-command argument substitution.
+    // trace:BUG-2699 | ai:codex
+    let (prompt, brief) = match prompt.split_once(crate::brief::PICKUP_BRIEF_HEADING) {
+        Some((invocation, brief)) => (invocation, Some(brief)),
+        None => (prompt, None),
+    };
     let rest = prompt.strip_prefix('/')?;
     let (name, args) = match rest.split_once(char::is_whitespace) {
         Some((n, a)) => (n, a.trim()),
@@ -97,11 +103,16 @@ pub(crate) fn codex_inline_prompt(prompt: &str) -> Option<String> {
         return None;
     }
     let body = aida_core::scaffolding::codex_prompts::render_codex_command_prompt(name, args)?;
-    if args.is_empty() || body.contains(args) {
-        Some(body)
+    let mut rendered = if args.is_empty() || body.contains(args) {
+        body
     } else {
-        Some(format!("{body}\n\n---\nInvocation: {prompt}"))
+        format!("{body}\n\n---\nInvocation: {prompt}")
+    };
+    if let Some(brief) = brief {
+        rendered.push_str(crate::brief::PICKUP_BRIEF_HEADING);
+        rendered.push_str(brief);
     }
+    Some(rendered)
 }
 
 /// Render the ONE interactive AIDA invocation line of a Codex launch prompt.
@@ -1902,6 +1913,7 @@ pub(crate) fn exec_vendor_headless(
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
     record_no_change: bool,
+    on_delivery: Option<&dyn Fn()>,
 ) -> Result<()> {
     let status = run_vendor_headless_to_exit(
         host_main,
@@ -1916,6 +1928,7 @@ pub(crate) fn exec_vendor_headless(
         child_grant,
         lane_tree,
         record_no_change,
+        on_delivery,
     )?;
     std::process::exit(status.code().unwrap_or(1));
 }
@@ -1937,6 +1950,7 @@ pub(crate) fn run_vendor_headless_to_exit(
     child_grant: &crate::gate::seat_authority::HeadlessChildGrant,
     lane_tree: Option<(&Path, &str)>,
     record_no_change: bool,
+    on_delivery: Option<&dyn Fn()>,
 ) -> Result<std::process::ExitStatus> {
     // Revoke even when publication preparation or gate reservation fails.
     // trace:STORY-2640 trace:BUG-2139 | ai:codex
@@ -1991,6 +2005,7 @@ pub(crate) fn run_vendor_headless_to_exit(
                         child_grant.env_value(),
                         &HeadlessChildHooks {
                             customize: Some(apply_lane_env),
+                            on_delivery,
                             before_spawn: Some(&|| {
                                 if !resume {
                                     if let Some((lease, (tree, _))) =
@@ -2474,6 +2489,7 @@ pub(crate) fn scrub_launcher_session_env(cmd: &mut std::process::Command) {
 pub(crate) struct HeadlessChildHooks<'a> {
     pub(crate) customize: Option<&'a dyn Fn(&mut std::process::Command)>,
     pub(crate) on_spawn: Option<&'a dyn Fn(u32)>,
+    pub(crate) on_delivery: Option<&'a dyn Fn()>,
     /// Consume prior-attempt markers only after command policy/prepare succeeds.
     pub(crate) before_spawn: Option<&'a dyn Fn() -> Result<()>>,
     /// BUG-044: `--resume` the existing `session_id` instead of starting it
@@ -2721,6 +2737,11 @@ fn run_vendor_headless_child(
             // trace:TASK-2708 | ai:claude
             crate::gate::seat_authority::bind_contained_launch_worker(grant_env, run.receipt())?;
             run.release()?;
+            if !hooks.resume {
+                if let Some(on_delivery) = hooks.on_delivery {
+                    on_delivery();
+                }
+            }
             crate::headless_linger::wait_reaping_after_result_holding(
                 &mut run.child,
                 log_path,
@@ -2784,6 +2805,14 @@ fn run_vendor_headless_child(
             let _ = child.wait();
             tee.stop();
             return Err(error.context("could not establish the spawned worker's holder generation"));
+        }
+    }
+    // Acknowledge delivered briefs only after the lease handoff succeeded: a
+    // refused holder stamp kills the worker, and the retry must still see them.
+    // trace:BUG-2699 | ai:claude
+    if !hooks.resume {
+        if let Some(on_delivery) = hooks.on_delivery {
+            on_delivery();
         }
     }
     // trace:STORY-1688 | ai:claude

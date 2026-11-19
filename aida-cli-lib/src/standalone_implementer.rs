@@ -1296,7 +1296,7 @@ fn retained_merge(main: &Path, tree: &Path, outcome: &Outcome) -> Option<String>
 /// outcome's exit code (`Ok` only for an open PR).
 #[cfg(test)]
 pub(crate) fn run_for_test(launch: Launch<'_>) -> Result<()> {
-    run_recorded(launch, None, None)
+    run_recorded(launch, None, None, None)
 }
 
 // trace:STORY-2690 | ai:codex
@@ -1304,6 +1304,7 @@ pub(crate) fn run_recorded(
     launch: Launch<'_>,
     attempt: Option<&crate::lane_result::Attempt>,
     on_started: Option<&dyn Fn()>,
+    on_delivery: Option<&dyn Fn()>,
 ) -> Result<()> {
     let owns_attempt = attempt.is_none();
     let owned;
@@ -1329,7 +1330,7 @@ pub(crate) fn run_recorded(
         }
     }
     let spec = launch.spec;
-    let result = run(launch, attempt, on_started);
+    let result = run(launch, attempt, on_started, on_delivery);
     // Explicit signals outrank later publication/wait failures. Never reuse a
     // previous attempt's veto when this attempt never spawned.
     // trace:STORY-2690 | ai:codex
@@ -1391,6 +1392,7 @@ fn run(
     launch: Launch<'_>,
     attempt: &crate::lane_result::Attempt,
     on_started: Option<&dyn Fn()>,
+    on_delivery: Option<&dyn Fn()>,
 ) -> Result<()> {
     let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
@@ -1546,6 +1548,7 @@ fn run(
             &crate::session::HeadlessChildHooks {
                 customize: Some(&customize),
                 on_spawn: Some(&on_spawn),
+                on_delivery,
                 resume,
                 hold_reap: Some(hold),
                 before_spawn: Some(&|| {

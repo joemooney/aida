@@ -15,7 +15,7 @@ use aida_core::launch_policy::{
     LaunchKind, AGENT_CMD_ENV, CONTAINED_ENV, GRANT_ENV, LANE_MARKER_ENV, POSTURE_ENV, PURPOSE_ENV,
     ROLE_ENV, STANDALONE_MARKER_ENV,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use super::context::LaunchContext;
 use crate::session::ContainmentPosture;
@@ -237,4 +237,27 @@ pub(crate) fn exec_agent(cmd: &mut std::process::Command) -> Result<()> {
             .with_context(|| format!("failed to spawn {program}"))?;
         std::process::exit(status.code().unwrap_or(1));
     }
+}
+
+// trace:BUG-2699 | ai:codex
+pub(crate) fn exec_agent_with_delivery(
+    cmd: &mut std::process::Command,
+    on_delivery: Option<&dyn Fn()>,
+) -> Result<()> {
+    use crate::process_retry::RetryEtxtbsy;
+    use std::os::unix::process::ExitStatusExt;
+
+    let Some(deliver) = on_delivery else {
+        return exec_agent(cmd);
+    };
+    let mut child = cmd
+        .spawn_retrying_etxtbsy()
+        .context("failed to launch agent")?;
+    deliver();
+    let status = child.wait().context("failed to wait for agent")?;
+    std::process::exit(
+        status
+            .code()
+            .unwrap_or_else(|| 128 + status.signal().unwrap_or(0)),
+    );
 }
