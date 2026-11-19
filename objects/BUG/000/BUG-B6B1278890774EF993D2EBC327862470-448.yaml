@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T02:41:51.059845209Z
+modified_at: 2026-11-19T03:22:30.210832442Z
 req_type: Bug
 tags:
 - dell1
@@ -140,6 +140,34 @@ comments:
   modified_at: 2026-11-19T02:38:35.644004539Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1d3-c5c2-74f3-9318-241353115199
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5e46b1ca30 (round 2, PR #4277). Merge-base diff and the working tree were reviewed. No untracked additions belong to this change.
+
+    - AC1: [evidence: behavioral-test] worktree_lifecycle_gc::bug_2684_floor_reclaims_ended_overlays_by_ownership. Fresh ended overlays are reclaimed. Overlays with a lease, a cwd holder or an open fd are retained. A young overlay with an unknown owner is retained by the 6 h age guard (UNKNOWN_OWNER_GRACE, an internal constant). An aged one is reclaimed.
+    - AC2: [evidence: behavioral-test] bug_1675::bug_2684_refused_lane_launch_is_retried_after_floor_reclaim drives three steps: a refusal is recorded; a guard run that leaves the floor breached keeps the record; a run whose reclaim restores the floor re-runs the same arguments as a fresh aida process. bug_2681_scheduled_floor_breach_reclaims_lane_overlay asserts floor_reclaim_freed_bytes and the ledger row stopped=floor-restored on a successful recovery.
+    - AC3: [evidence: behavioral-test] bug_2651 covers the mode-zero scratch removal, unchanged.
+    - AC4: [evidence: behavioral-test] Covered by the tests above, plus bug_2684_mount_inventory_retains_direct_and_private_overlay_mounts. The new cases are bind sources on ext4 and xfs, a sibling and a different device (allowed), a subvolume-rooted mount with an escaped path, and unattributable inventories (kept). worktree_holders::bug_2684_cache_scan_past_the_fd_cap_is_unverified covers a holder past the 4096-fd cap, a list truncated at the cap, an unlistable fd dir, a zombie (skipped) and the unchanged legacy policy.
+
+    Probe findings fixed during review:
+    1. In the lane-job sandbox (a user namespace), host processes' links return EACCES. The strict scan now refuses that, which is the intended fail-safe. The GC tests use a proc view limited to the processes they can inspect. The ownership test also asserts that the real /proc refuses when a process is hidden.
+    2. Zombie and exiting tasks (state Z or X, or statm all zeros) refuse fd listing but hold nothing, so they are skipped.
+    3. A /proc literal tripped the portability ratchet. The helper is now gated on Linux.
+
+    Residual risks:
+    - Only the standalone launch path records refusals. The drain path's preflight (session/headless.rs) is not retried.
+    - The retried launch runs with the guard's environment. Launcher environment and authority are never recorded or replayed, so seat-scoped identity can differ and ordinary checks may refuse the launch.
+    - The guard's process group is left with process_group(0), but a cgroup kill of the scheduler unit could still stop the retried launch.
+    - map_files readlink needs CAP_SYS_ADMIN, so the mapped-file check stays best-effort.
+    - A short-lived process exiting during a scan can make one guard run keep everything. The next run retries.
+
+    Validation: lane jobs aida-core worktree_holders (16 passed) and aida-cli-lib worktree_lifecycle_gc, bug_1675, lane_disk_retry and machine_readiness (52 passed, run twice). cargo fmt --check, git diff --check, portability, executable-fixture, ratchet-set, structural-guards, trace-header and crate-glob checks passed. make check-ci-fast as a whole exceeds the 60 s tool cap here and was not run end to end. CI at 5e46b1ca30 is the full-suite evidence.
+  created_at: 2026-11-19T03:22:30.210832442Z
+  modified_at: 2026-11-19T03:22:30.210832442Z
+  session_id: 01a1f1ae44b9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
