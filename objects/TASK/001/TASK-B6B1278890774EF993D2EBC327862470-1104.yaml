@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1104
 agreed_id: TASK-3820
 title: 'STORY-2828 S2b: aida mandate renew --for D extends covered descendant grants in place (advisor-117 signed design)'
 description: 'Implements S2b as signed off by advisor-117 on STORY-2828 (comment 14) with product''s coverage definition (comment 13). Coverage = grants rooted in the operator''s own role enter; descendants never extend past their root. Extend in place under record locks, each descendant to min(root''s new expiry, its own cap, 168h); a concurrent revoke wins; per-grant result with no rollback; non-zero exit naming refused grants; never shortens or revives an expired or revoked grant. Relays are left to TASK-3119. CAUTION (advisor-119): must not double-extend TASK-3119 relay-parent grants (4467a61) that are already in the S2a inventory; regression for that. STRICT (authority).'
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T03:56:59.828463081Z
+modified_at: 2026-11-19T03:57:28.812353101Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -85,6 +85,15 @@ history:
   session_id: 01a1f1c9322b
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1f1f3-e58f-7a51-abe4-f8e03639d9b8
+  author: dirtlab
+  timestamp: 2026-11-19T03:57:35.503214327Z
+  session_id: 01a1f1c9322b
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
   branch: main
@@ -94,3 +103,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-19T03:57:28.812353101Z
+  implemented_by: dirtlab
