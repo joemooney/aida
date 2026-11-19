@@ -22,10 +22,11 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-01T06:47:39.554427385Z
-modified_at: 2026-11-19T20:31:29.667104621Z
+modified_at: 2026-11-19T20:48:15.535840762Z
 req_type: Task
 tags:
 - audit
+- operator-held
 - skills
 - templates
 - vendor:codex
@@ -123,6 +124,16 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f591-6326-7e03-8b83-1e8d1086de4b
+  author: joe
+  timestamp: 2026-11-19T20:48:28.454331895Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
+deferred: true
+deferred_at: 2026-11-19T20:48:15.535840762Z
+deferred_until: spec:STORY-2238=completed
+deferred_reason: blocked-by STORY-2238 (vendor-neutral containment, in progress); my 13:30 drain pick did not check blockers
 execution_mode: drain
 filed_at:
   code_sha: 6dc7d4977ac5e47c42ddfb26597fe3ec5fb70b60
