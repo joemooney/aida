@@ -3,13 +3,23 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-457
 agreed_id: BUG-2693
 title: hub-drift-guard trips on normal between-bridge aida-store drift (lane clones push origin-only; the hourly reconcile at :07 heals it)
 description: '2026-11-18: the guard ran at :04 and tripped on aida-store origin +4/gitlab +1 drift, which the hourly home-cron ''aida remote reconcile --execute'' at :07 unions anyway. Every tick routes an advisor job. Fix: when a bridge/reconcile schedule is configured, trip only when the drift is older than the bridge interval plus a grace period, or when main differs. Keep tripping immediately for main.'
-status: Draft
+status: Superseded
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T21:13:14.343592539Z
-modified_at: 2026-11-18T21:13:14.343592539Z
+modified_at: 2026-11-19T03:51:31.465016868Z
 req_type: Bug
+history:
+- id: 01a1f1ee-5788-7b80-b01e-ce643c21074a
+  author: joe
+  timestamp: 2026-11-19T03:51:31.465005023Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
 filed_at:
   code_sha: 8d81acfcb4a30dd3debdffcfda56c5deb9007bc6
   branch: main
