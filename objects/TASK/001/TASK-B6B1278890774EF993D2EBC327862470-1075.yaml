@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T18:52:15.803248843Z
+modified_at: 2026-11-19T18:57:53.676180743Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -175,6 +175,13 @@ comments:
   created_at: 2026-11-19T18:52:15.803246041Z
   modified_at: 2026-11-19T18:52:15.803246041Z
   session_id: 01a1f4f165cc
+- id: 01a1f52c-55a9-73c0-8dd6-60a3a97db94e
+  author: joe
+  content: 'Product 11:58: the codex lane (dell1, 10:51) committed 2c8123174d (19 files, +558/-190, ''bound eligibility checks by one deadline''), but publication was refused after its one repair round. Fast gate: gate::mandate_gates::story_1888_gate_paths_tests::gate_orchestrators_reach_outside_only_through_their_frozen_inventory (plus 1 more) failed, meaning the change reaches outside a gate orchestrator''s frozen inventory. The work is preserved on origin task-b6b1278890774ef993d2ebc327862470-1075 (no PR). The retained lease 01a1f4f165cc on dell1 is still held. The gate-path change means any rework should be a Claude lane.'
+  created_at: 2026-11-19T18:57:53.676180743Z
+  modified_at: 2026-11-19T18:57:53.676180743Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
