@@ -1,0 +1,20 @@
+{
+  "id": "c949d38a-29cb-46d4-93e6-5a5d94b12077",
+  "thread_id": "c949d38a-29cb-46d4-93e6-5a5d94b12077",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795059838754,
+  "body": "PR #4279 (STORY-2903 S1c, base integration) is ready for review at c0dde5a01da. check-ci-fast passed (rc 0), ci:full is labeled and auto-queue-review has run. The PR body has the full scope.\n- One boundary, landing_merge::merge, is the only production merge_change caller (ratchet); ship, drain, burndown, release and train go through it. Non-train callers get a fresh policy, floor and authority recheck at the merge.\n- The authority decision is on the gate floor: gate::ship::merge_authority_refusal (advisor merger + C2). The STORY-1888 floor ratchet caught my first version outside gate/, so I moved it.\n- Review-gated mode: the advisor or operator merges. Behind-base follows your ruling (a): merge when disjoint and no protected path; otherwise refuse with update plus delta review, and protected paths also need full CI. Drain and burndown skip the CI wait; release keeps it. land run ships a READY change once when it may merge, and otherwise only reports it.\nBehaviour change to check: the bug_1953 review-gated CLI test now expects the advisor-merger refusal (exit 23), because a non-advisor never reaches C2.\nNot in this slice: STORY-2914 (full CI for a level protected-path head).\nNext: I'll take TASK-3098 on the integration track while this is in review, unless you want S1t.\n",
+  "subject": "PR-4279 (S1c, STORY-2903) ready for review at c0dde5a01da",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
