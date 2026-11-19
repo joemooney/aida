@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T18:13:08.351988298Z
-modified_at: 2026-11-19T13:26:15.265540204Z
+modified_at: 2026-11-19T13:26:16.555857469Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -127,13 +127,11 @@ comments:
   created_at: 2026-11-19T10:54:12.815308564Z
   modified_at: 2026-11-19T10:54:12.815308564Z
   session_id: 01a1f3504f2f
-- id: 01a1f3fc-859c-72c0-a6a1-313edbec78bb
+- id: 01a1f3fc-8aa7-72d2-ad8a-1e76ba41d209
   author: aida-auto-bump
   content: 'Auto-completion warning: BUG-2690 was In Progress when merge 69ebf0d8012056a448bbc20da16bfc9803828d80 completed it; verify that no active round remains.'
-  created_at: 2026-11-19T13:26:15.196910970Z
-  modified_at: 2026-11-19T13:26:15.196910970Z
-  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
-  harness_version: 2.1.327 (Claude Code)
+  created_at: 2026-11-19T13:26:16.487185789Z
+  modified_at: 2026-11-19T13:26:16.487185789Z
 history:
 - id: 01a1efdd-905d-72a3-a2ef-d8c8fff89539
   author: joe
@@ -186,18 +184,16 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
-- id: 01a1f3fc-859c-72c0-a6a1-314e8d814973
+- id: 01a1f3fc-8aa7-72d2-ad8a-1e897343255c
   author: aida-auto-bump
-  timestamp: 2026-11-19T13:26:15.196918718Z
-  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
-  harness_version: 2.1.327 (Claude Code)
+  timestamp: 2026-11-19T13:26:16.487193065Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Completed
 processing_record:
-- id: 01a1f3fc-85e1-7303-8f7a-71755b851a4f
-  timestamp: 2026-11-19T13:26:15.265537591Z
+- id: 01a1f3fc-8aeb-7310-9b9d-02332fffe886
+  timestamp: 2026-11-19T13:26:16.555854630Z
   agent: aida
   commit_sha: 69ebf0d8012056a448bbc20da16bfc9803828d80
   summary: 'Reviewed all nine changed files and the complete 57,908-byte pinned diff against protected main 12264ad1cb941ee1fb74173293104c323aa5f06a, with landed tree be48d579d475a5780ca14fc4baa8484e2c7776d2; this verdict attests only original PR head dd7acef523d89ef9dc11eb37a8594d2061ed89f5. Read BUG-2690 in full, including its behavioral acceptance criteria, prior blocking finding and authoritative round-2 brief. PASS: selected CI checkout evidence is repository/run/PR/head bound, compares the two-parent merge first parent against the pinned target tip, rejects stale green/red results from landing and CI-failure rework, and refuses missing evidence. PASS: the automatic remedy checks repository identity, lease ownership, local/discovered/live holds, live PR state/head/branch/target, and shared head protection, then submits the repository-bound PUT with expected_head_sha. PASS: round-2 tests exercise the real Live::update_ci_base -> forge::landing_update_branch path with exact-argv positive controls and no-PUT refusal assertions, addressing the previous blocking coverage finding; existing shared head-guard tests cover train pins. Inspected source tests without executing them, as required by reviewer policy. Existing GitHub fast gates passed; directly inspected the completed job checkout log and GitHub merge-commit parents, confirming the parser matches real log formatting and binds the reviewed head. Diff whitespace check passed. No actionable defects found, including in interaction with the pinned newer base; no findings depend on intervening base changes. CI pending at review time (fast compile in progress and merge-hold status pending); pending CI does not require WAITING. The supplied host codegraph executable was absent, so navigation used source searches; the project diagnostic returned no codegraph checks. No Cargo, local test/build, branch update or merge was run.'
@@ -215,5 +211,5 @@ filed_at:
   harness_version: 2.1.327 (Claude Code)
 implementation_info:
   implemented: false
-  completed_at: 2026-11-19T13:26:15.196915890Z
+  completed_at: 2026-11-19T13:26:16.487190389Z
   completion_sha: 69ebf0d8012056a448bbc20da16bfc9803828d80
