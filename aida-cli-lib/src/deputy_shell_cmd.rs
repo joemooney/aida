@@ -839,7 +839,9 @@ pub(crate) fn write_runner_status(status: ds::RunnerStatus, out: &mut dyn Write)
         ds::RunnerStatus::Legacy(pid) => {
             writeln!(out, "runner: live, pid {pid} (legacy bash runner)")?
         }
-        ds::RunnerStatus::NotRunning => writeln!(out, "runner: NOT running")?,
+        ds::RunnerStatus::NotRunning | ds::RunnerStatus::Dead(_) => {
+            writeln!(out, "runner: NOT running")?
+        }
         ds::RunnerStatus::Unknown(why) => writeln!(out, "runner: UNKNOWN ({why})")?,
     }
     Ok(())
