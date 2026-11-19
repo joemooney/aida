@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-463
 agreed_id: BUG-2699
 title: 'Codex lanes ignore pending agent briefs: a brief file in .aida/agent-briefs/codex/ never reaches the codex lane''s launch context (BUG-2688 r2 redid the wrong scope)'
 description: 'Evidence 2026-11-18: the BUG-2688 r2 brief was placed at dell1 ~/ai/aida/.aida/agent-briefs/codex/BUG-2688-r2-2026-11-19T023229Z.md at 19:32, before the 19:37 launch, and was also posted as a spec comment with a pointer. The codex lane log has zero references to the brief or to agent-briefs. It implemented a different change, and the round-2 review repeated all three round-1 findings. Every Claude lane given an agent-briefs/claude file today followed it (TASK-3814 R4, STORY-2912 R2, STORY-2913 R2/R3). Sibling of BUG-2603 (lane prompt omits the newest advisor comment). Fix: the codex launch path loads pending agent briefs for the spec into the lane prompt exactly as the Claude path does, and marks them consumed. Add an explicit ''queue work --brief FILE''. Regression: a codex lane launched with a pending brief has the brief text in its prompt. Interim advisor rule: brief-scoped reworks go to Claude lanes.'
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T03:27:50.709989341Z
+modified_at: 2026-11-19T03:53:05.655822173Z
 req_type: Bug
 comments:
 - id: 01a1f1d8-e737-7781-ae25-b47bb9e37714
@@ -28,6 +28,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a1f1ef-c777-71c0-99dc-9c760befdacc
+  author: aida-session-start
+  timestamp: 2026-11-19T03:53:05.655821031Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 697f85f2fff7d766cd736db2a56b705ed281ee10
   branch: main
