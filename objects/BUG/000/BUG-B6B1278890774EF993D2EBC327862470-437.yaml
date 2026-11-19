@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:53:28.582833597Z
-modified_at: 2026-11-19T06:09:29.251320329Z
+modified_at: 2026-11-19T06:22:05.166155389Z
 req_type: Bug
 comments:
 - id: 01a1ecbe-8a96-7340-adfc-0449d21fca9f
@@ -26,6 +26,21 @@ comments:
   modified_at: 2026-11-18T03:41:00.652484531Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f278-88ba-7d80-9bb0-9f99fb7dce56
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: edbcfef98e60b4863afdd698f495c295e85bb129. The merge-base diff is empty in this native lane. Reviewed the six tracked working-tree changes and checked for untracked additions.
+
+    - AC1: [evidence: behavioral-test] The advanced-origin regression in aida-cli-lib/src/tests/bug_2169_seat_clone_tests.rs:1232 checks the new clone HEAD, its tracking ref, the host pin and lease fork point against the remote tip. The fetch and exact commit selection are in aida-cli-lib/src/seat_clone.rs:308 and aida-cli-lib/src/session_start.rs:2826.
+    - AC2: [evidence: behavioral-test] The deleted-origin regression in aida-cli-lib/src/tests/bug_2169_seat_clone_tests.rs:1321 runs the deferred queue lookup with a cached ref, checks the base and Git error, and checks that no pin or lease survived.
+    - AC3: [evidence: behavioral-test] The success test captures the pickup diagnostic and compares its SHA to the upstream tip. The diagnostic is emitted in aida-cli-lib/src/session_start.rs:2861.
+
+    Adversarial sweep covered case and slash preservation, the documented direct session --base origin/<branch> spelling, malformed refspec/revision syntax, missing and single branch results, and concurrent fetch isolation via invocation-private refs without shared FETCH_HEAD. Ordinary claim and branch checks still precede the fetch; an explicit-base fetch error returns before clone allocation and cannot authorize linked-worktree fallback. Added output coverage and preserved the qualified spelling during self-review. Formatting and diff checks passed, as did a scratch Git probe for mixed-case refs, malformed refs, remote deletion and FETCH_HEAD preservation. The final Rust lane job j20261119T061447977-2-0 is pending behind the initial build. CI at a published head is pending host publication. CodeGraph's configured host client was unavailable, so call sites were verified with rg.
+  created_at: 2026-11-19T06:22:05.166155389Z
+  modified_at: 2026-11-19T06:22:05.166155389Z
+  session_id: 01a1f26c0e0f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ecbd-9669-71b0-bc78-1573465302ba
   author: joe

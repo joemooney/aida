@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T06:03:56.639019787Z
+modified_at: 2026-11-19T06:27:41.924194116Z
 req_type: Bug
 tags:
 - alert-noise
@@ -140,6 +140,26 @@ comments:
   modified_at: 2026-11-19T06:01:44.281593181Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f27d-52e4-7a81-8bc9-7342df23cfba
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b6b19d859f (r2, addresses #4282 r1 CR per advisor brief 2026-11-19).
+
+    Acceptance evidence:
+    - AC1 [evidence: behavioral-test]: remote_drift_real_probe_classifies_fixture_hubs covers in-sync, behind (count + oldest-missing age) and diverged (unique counts), per branch, against fixture bare remotes.
+    - AC2 [evidence: behavioral-test]: divergence is always a finding (fixture asserts recent store + main divergence fail at 120m and 15m windows); FF lag on BOTH main and aida-store within window is info, past window a finding. Default window = 2x bridge interval via saturating_mul (lag_window_from; remote_drift_lag_window_is_twice_the_bridge_interval covers 1h default->2h, 30m->60m, 2h->4h, invalid cadence, configured override, 0/overflow minutes).
+    - AC3 [evidence: behavioral-test]: actions: within window 'wait for the bridge'; past window 'check the bridge cron or run aida remote mirror-sync'; diverged 'reconcile by hand', safe_heal=false.
+    - AC4 [evidence: behavioral-test]: same fixture test.
+    - P2 transport: scratch fetch now gets the source repo's local/worktree-scope core.sshCommand, core.gitProxy, ssh.variant, credential.*, http.*, protocol.* and remote.<name>.{proxy,proxyauthmethod,uploadpack,serveroption,vcs}, written into the private scratch config in original order (preserves credential.helper resets). Fixture: origin URL moved away + uploadpack wrapper set only in the observer repo; divergence still classifies. Unit test asserts the filter/quoting round-trips through git config.
+
+    Probes: config quoting escapes backslash/quote/newline/tab; non-UTF8 entries skipped; config read failure fails closed (uncertainty finding). Remote subsection match is case-sensitive like git.
+    Validation: cargo test -p aida-cli-lib --lib remote_drift orphan_store -> 10 passed. make check-ci-fast could not complete inside the 60s tool cap; relying on CI.
+    Residual: url.*.insteadOf is not forwarded (git remote get-url already applies it); FF grace applies whether or not a bridge is configured, per AC2's branch-independent wording.
+  created_at: 2026-11-19T06:27:41.924194116Z
+  modified_at: 2026-11-19T06:27:41.924194116Z
+  session_id: 01a1f2674bb2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b
   author: joe
