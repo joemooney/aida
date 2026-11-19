@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T12:58:16.174860970Z
+modified_at: 2026-11-19T13:06:22.283927385Z
 req_type: Bug
 tags:
 - conflicts
@@ -839,6 +839,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f3ea-51cc-7373-99cc-15a463df794f
+  author: aida-orchestrator
+  timestamp: 2026-11-19T13:06:22.284046198Z
+  session_id: 01a1f3e65fae
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
@@ -852,17 +860,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: |-
-    Reviewed the entire 1,472-line landed diff (all eight files), protected base d4579825efe809f14e650af4d4f2f2d21aeea09f and landed tree 056623853574c19df7b720dbd805b47ee6da4e31, attesting only original PR head 872a1e9f0d62b203142579aa3f63aaaefdf96792. Covered spec: BUG-2688 (origin BUG-b6b1278890774ef993d2ebc327862470-452). Request changes for ownership safeguards and unmet claimed acceptance criteria; retain the formatting finding as well.
-    Acceptance criterion sweep, using the supplied aida criteria list:
-    BUG-b6b1278890774ef993d2ebc327862470-452.aca42931 — Rework preparation for a conflicting PR branch either (a) creates the seat, merges current main and hands the agent a clean resolve-these-files state, or (b) refuses with a message naming the exact missing evidence and the ONE command that provides or clears it; generic diagnose-that-failure is unacceptable: unverified. The happy path and HeadReserved/unfinished-merge diagnostics have source coverage, but ordinary fetch/probe/preparation failures still lack the required recovery command (finding 4).
-    BUG-b6b1278890774ef993d2ebc327862470-452.ac153421 — A retained conflict with no host journal (seat gone, journal missing) is treated as no retained conflict after verifying the remote branch head, allowing a fresh start: verified by source inspection of clean_remote_branch_and_seat_gone_without_journal_start_fresh and the fetched-head preparation path. The regression reseats the tree, deletes the journal, and asserts PR HEAD, main MERGE_HEAD and UU README.md. Execution not independently performed.
-    BUG-b6b1278890774ef993d2ebc327862470-452.acc34a6d — --fresh always starts from the remote branch head and ignores retained-conflict state after logging it: unverified. Clone relocation and dead-reservation tests cover part of this, but retained linked-worktree conflicts still refuse before relocation/preparation (finding 3).
-    BUG-b6b1278890774ef993d2ebc327862470-452.Tests — Tests cover conflict rework from a clean remote branch; seat gone plus journal missing leads to fresh start; genuinely retained conflict with journal resumes: verified by source inspection of clean_remote_branch_and_seat_gone_without_journal_start_fresh and adopted_seat_resumes_journaled_conflict_with_edits. These exercise the shared preparation path; dead_lane_reservation_names_fresh_and_fresh_restarts_from_origin covers reservation release. No local test/build commands were run under reviewer policy; the PR's claimed local results are author-reported evidence only.
-    Type protocol checklist: BUG-2688 (bug protocol: touches at least one test file) — met; adds aida-cli-lib/src/tests/bug_2688_fresh_rework_tests.rs and changes bug_home_038_seat_publish_tests.rs. New implementation and regressions carry BUG-2688 trace comments. The supplied untraced-criteria list was checked against the diff; required scenario tests exist, while criteria 1 and 3 remain incomplete as described above.
-    Existing CI evidence: exact-head CI (fast gates), job 135520369426, failed in Check formatting with rustfmt diffs in queue_cmd/mod.rs and repair_journal.rs; compile was still in progress when inspected. This verdict does not wait for CI. No branch update or merge performed.
-    Freshness: all findings are present in both the original head and the pinned landed tree; none depends on the six newer base commits. The base changes to touched queue/seat files add lane-result/disk-deferral integration and test visibility, without repairing these paths.
-    Navigation limitation: the operator-supplied /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph is absent; aida doctor check codegraph returned total: 0 without supplying a client. Used rg/source inspection to confirm callers. Host deployment of that fixed client remains needed for codegraph navigation.
+  detail: 'Request changes after reading all 167233 bytes / nine files of the supplied diff against protected main 69ebf0d8012056a448bbc20da16bfc9803828d80, landed tree a0ec35cbddc5a829db8ed085b42d8fdfe72522c3; attest only original PR head adeab8a790bb5bcaaf425dfe68151c62876bd73a. Read BUG-2688 acceptance and authoritative rework comments through AIDA; generated review checklist could not resolve the display alias, so consulted the full spec directly. BUG-2688 (bug protocol): met; new bug_2688_fresh_rework_tests.rs and modified bug_home_038_seat_publish_tests.rs. AC1 PARTIAL: alignment is now classified by observed drift, but the behind-origin recovery still cannot clear the restored leased-seat state through production pickup. AC2 PASS by source/regression inspection: missing seat/journal can restart from verified origin. AC3 PASS for the inspected unleased retained-seat paths: explicit fresh routing, intact clone and linked-worktree relocation, strict ownership reads, locked revalidation and reservation reconciliation are present. AC4 PARTIAL overall because the leased behind-origin recovery regression is missing; conflict/restart/adoption coverage and the new real session_start_with_receipt placement-lock regressions for new and adopted seats are present. The previous production lock-lifetime finding is resolved by source inspection. Trace comments are present. No local test/build commands run per operator policy; no mutation run claimed. Existing exact-head FAST gates and tier selection passed; CI pending at review time (fast compile running, merge-hold-gate awaiting recorded clearance), which is not the reason for refusal. Head is one commit behind protected main; its BUG-2690 landing/CI changes do not affect this finding. No absolute reviewed CodeGraph client was supplied, so navigation used rg. Standalone draft only; parent validation and recording remain outstanding.'
   recovery_hint: address the review findings, move BUG-2688 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-19T11:25:34.527577619Z
+  shelved_at: 2026-11-19T13:06:22.283927385Z
