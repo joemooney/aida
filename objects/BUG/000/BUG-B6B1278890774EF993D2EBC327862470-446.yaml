@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T09:11:10.022199376Z
+modified_at: 2026-11-19T10:40:48.576382497Z
 req_type: Bug
 tags:
 - capacity
@@ -93,6 +93,26 @@ comments:
   created_at: 2026-11-19T09:11:09.889890267Z
   modified_at: 2026-11-19T09:11:09.889890267Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f365-3e6c-7311-8f06-f269c595adcb
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 03:40):
+    # Rework brief: BUG-2682 / PR #4293, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 02:13 MST. Head reviewed: 1226f14. Lane: Claude. Three AC gaps:
+    1. AC1, lane_job.rs:1412-1414, 1938: hold the cold-start reservation until an ACTUAL first build finishes (a cargo build/test
+       that compiled, or a build-complete marker), not merely until run_one() returns true. A `--help` or no-op job must not release
+       it. Regression: a no-op job keeps the reservation; a real build releases it.
+    2. AC3: add a SEPARATE, explicit, logged host-limit override (e.g. `--over-host-limit`, internal; not a config setting, per the
+       10:37 rule), passed into Startup::acquire() by both launcher callers, logging who/when/why. --over-wip stays independent.
+       Regression: without the override, below headroom refuses; with it, launch proceeds and a log line records it.
+    3. AC4: test --over-wip THROUGH the production launch admission path (the real launcher calls Startup::acquire), so skipping
+       acquire fails the test. Low memory still refuses even with --over-wip.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T10:40:48.576382497Z
+  modified_at: 2026-11-19T10:40:48.576382497Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ee99-c89f-7e53-8fdd-89426e025c9f
