@@ -7219,8 +7219,12 @@ pub(crate) fn end_finished_review(
     let canonical = crate::worktree::canonical_or_self;
     let path = canonical(worktree);
     leases.iter()
+        // A collected verdict reaps the review's lease over this tree whatever
+        // its id (the launch id need not equal the lease id); only teardown
+        // without a verdict is bound to this exact exited session.
+        // trace:BUG-2684 | ai:claude
         .filter(|l| {
-            l.id == reviewer_session
+            (verdict_collected || l.id == reviewer_session)
                 && l.scope.eq_ignore_ascii_case(scope)
                 && canonical(&l.worktree_path) == path
         })
@@ -7985,9 +7989,11 @@ pub(crate) fn run_standalone_reviewer(
     // trace:BUG-2176 | ai:claude
     // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     // A legacy marker a pre-ledger reviewer left is collected too.
-    let preserved =
-        crate::merge_hold::preserve_review_worktree_holds(project_root, worktree, pr, launched_at);
-    if let Err(err) = preserved {
+    // Teardown (reap_one) re-checks with preserve_review_worktree_holds and
+    // keeps the tree while any marker remains. trace:BUG-2684 | ai:claude
+    if let Err(err) =
+        crate::merge_hold::adopt_worktree_hold(project_root, worktree, pr, launched_at)
+    {
         eprintln!(
             "  {} could not collect the legacy merge-hold marker for PR-{pr} from {} ({err})",
             crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
