@@ -6050,6 +6050,11 @@ pub(crate) fn handle_queue_work(
             )
         })?;
             minted_lease_id = Some(lease.id.clone());
+            if let Some(attempt) = &attempt {
+                if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
+                    attempt.set_seat_tree(&lease.worktree_path);
+                }
+            }
             // The PR branch has been seated by session_start. Prepare it before
             // any vendor, red run, child grant or resume is started.
             // trace:STORY-2475 | ai:codex

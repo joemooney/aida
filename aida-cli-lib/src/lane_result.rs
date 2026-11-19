@@ -49,6 +49,7 @@ pub(crate) struct Attempt {
     path: PathBuf,
     receipt: RefCell<Receipt>,
     start_error: RefCell<Option<String>>,
+    seat_tree: RefCell<Option<PathBuf>>,
 }
 
 impl Attempt {
@@ -79,6 +80,7 @@ impl Attempt {
                 self_review: None,
             }),
             start_error: RefCell::new(None),
+            seat_tree: RefCell::new(None),
         };
         attempt.persist()?;
         Ok(attempt)
@@ -117,6 +119,13 @@ impl Attempt {
             }
         }
         self.persist()
+    }
+
+    // Keep the selected clone path even if failed pickup rollback drops its lease.
+    // The terminal read checks whether the clone still exists.
+    // trace:BUG-2607 | ai:codex
+    pub(crate) fn set_seat_tree(&self, tree: &Path) {
+        self.seat_tree.replace(Some(tree.to_path_buf()));
     }
 
     pub(crate) fn bind(
@@ -363,8 +372,44 @@ impl Attempt {
             None,
             true,
         )?;
-        println!("{}", self.line()?);
+        println!("{}", self.with_retained_seats(self.line()?));
         Ok(())
+    }
+
+    // Early exits may have no final SeatState, or may refuse before selecting
+    // a lease at all (for example when the branch is already occupied).
+    pub(crate) fn with_retained_seats(&self, mut line: String) -> String {
+        let Some(main) = self.path.ancestors().nth(3) else {
+            return line;
+        };
+        let trees = if let Some(tree) = self.seat_tree.borrow().as_ref() {
+            vec![tree.clone()]
+        } else if let Some(branch) = self.receipt.borrow().branch.as_deref() {
+            crate::status_prs::clone_seat_trees(main)
+                .into_iter()
+                .filter(|tree| tree.branch.as_deref() == Some(branch))
+                .map(|tree| tree.path)
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let deadline = std::time::Instant::now() + crate::status_prs::CLONE_PROBE_BUDGET;
+        for tree in trees {
+            if std::time::Instant::now() >= deadline {
+                break;
+            }
+            if !std::fs::symlink_metadata(&tree).is_ok_and(|metadata| metadata.is_dir()) {
+                continue;
+            }
+            if let crate::seat_clone::Probe::Known(facts) =
+                crate::seat_clone::probe_until(main, &tree, &[], Some(deadline))
+            {
+                if !facts.dirty.is_empty() {
+                    line = retained_work_line(line, &tree);
+                }
+            }
+        }
+        line
     }
 
     pub(crate) fn line(&self) -> Result<String> {
@@ -399,6 +444,13 @@ impl Attempt {
             _ => line,
         })
     }
+}
+
+pub(crate) fn retained_work_line(line: String, tree: &Path) -> String {
+    format!(
+        "{line} retained: dirty or unpublished work at {}",
+        tree.display()
+    )
 }
 
 #[cfg(test)]

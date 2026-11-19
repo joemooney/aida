@@ -5370,3 +5370,64 @@ fn bug_2648_failed_queue_exit_preserves_seat_then_clean_exit_can_publish() {
     assert!(ref_exists(&fx.origin, "refs/heads/exit-policy"));
     assert_eq!(forge.opened.lock().unwrap().len(), 1);
 }
+
+// trace:BUG-2607 | ai:codex
+fn check_early_retention_notice(kind: crate::lane_result::Kind, reason: &str) {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "retention-notice", "c0ffee260700");
+    let attempt = crate::lane_result::Attempt::begin(&fx.main, "BUG-2607", Some("feat")).unwrap();
+    if kind != crate::lane_result::Kind::RefusedBeforeStart {
+        attempt.set_seat_tree(&clone);
+        attempt.started(123);
+    }
+    attempt.finish(kind, reason, "", None, None, true).unwrap();
+    let result_line = || attempt.with_retained_seats(attempt.line().unwrap());
+    assert!(!result_line().contains("retained: dirty"));
+    std::fs::write(clone.join("unfinished.txt"), "unfinished work\n").unwrap();
+    let line = result_line();
+    assert!(
+        line.ends_with(&format!(
+            "retained: dirty or unpublished work at {}",
+            clone.display()
+        )),
+        "{line}"
+    );
+    std::fs::remove_dir_all(&clone).unwrap();
+    assert!(!result_line().contains("retained: dirty"));
+}
+
+#[test]
+fn bug_2607_refused_before_start_names_retained_dirty_seat() {
+    check_early_retention_notice(
+        crate::lane_result::Kind::RefusedBeforeStart,
+        "admission-refused",
+    );
+}
+
+#[test]
+fn bug_2607_empty_rework_names_retained_dirty_seat() {
+    check_early_retention_notice(crate::lane_result::Kind::NoChangeWithReason, "empty-rework");
+}
+
+#[test]
+fn bug_2607_punt_names_retained_dirty_seat() {
+    check_early_retention_notice(crate::lane_result::Kind::Punted, "explicit-punt");
+}
+
+#[test]
+fn bug_2607_hold_names_retained_dirty_seat() {
+    check_early_retention_notice(crate::lane_result::Kind::Held, "explicit-hold");
+}
+
+#[test]
+fn bug_2607_failed_exit_names_retained_dirty_seat() {
+    check_early_retention_notice(crate::lane_result::Kind::FailedAfterStart, "lane-failed");
+}
+
+#[test]
+fn bug_2607_pending_merge_names_retained_dirty_seat() {
+    check_early_retention_notice(crate::lane_result::Kind::FailedAfterStart, "retained-merge");
+}
