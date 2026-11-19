@@ -1,0 +1,36 @@
+id: 01a1f153-9dae-7782-85b1-8041df21cece
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-460
+agreed_id: BUG-2696
+title: 'Completion depends on the PR title trailer: implementer pushes never set Done (reworks reset to Approved), so ''(Refs SPEC)'' landings leave finished specs open'
+description: |
+  Observed 2026-11-18 (operator question: "does 'done' come before 'complete'?"). RequirementStatus::Done exists (aida-core/src/models.rs:17, "work finished on a branch; not yet merged") and `aida pull` bumps Done -> Completed when a commit referencing the spec lands. In practice the Done state is barely used (4 specs in the store), and completion depends on the PR title's trailer form:
+  - `aida queue rework` returns a spec to Approved; when the rework lane pushes its fix, nothing sets it back to Done.
+  - Codex lanes often title whole fixes `(Refs SPEC)`. Merge-time completion skips Refs, so finished specs stay open: BUG-2648 (fix landed in #4216 as "Refs BUG-2648"; a lane was relaunched on it today and punted "nothing to publish") and BUG-2657 (#4226 "Refs BUG-2657").
+  - Separately, merge-time completion stalled this afternoon (BUG-2689, TASK-3814 and STORY-2912 stayed open until the product seat ran `aida pull`), and a manual pull completes specs only in the local store until `db sync --push`. A dell1 lane for STORY-2913 was refused as "blocked-by TASK-3814 (In Progress)" for that reason.
+
+  Make Done the implementer's explicit "my work is finished" signal, independent of the title trailer.
+
+  Acceptance criteria:
+  1. Every implementer push that the lane reports as complete for its scope (first round AND every rework round) sets the spec to Done. A test covers a rework round: Approved (via queue rework) -> push -> Done.
+  2. When a commit referencing a Done spec lands on the default branch, the spec becomes Completed whether the trailer is `(SPEC)` or `(Refs SPEC)`. Tests cover both forms.
+  3. A `(Refs SPEC)` landing on a spec that is NOT Done leaves it open (partial slices stay open) and records a visible note that product can triage (spec comment or queue item). Test included.
+  4. An explicit implementer punt or a refused-before-start never sets Done. Test included.
+  5. Landing-time completion is written to the shared store (pushed), not only to a local cache, so other hosts (lane hosts) see it before their next admission check. Test or documented evidence.
+
+  Process-policy note: this changes the landing lifecycle, so it needs an advisor architecture sketch on this spec before implementation (repo rule).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T01:02:31.342527150Z
+modified_at: 2026-11-19T01:02:31.342527150Z
+req_type: Bug
+filed_at:
+  code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6da63c98036
+  vendor: claude
+  session: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
