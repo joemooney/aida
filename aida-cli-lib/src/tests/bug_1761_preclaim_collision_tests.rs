@@ -92,6 +92,7 @@ fn unoccupied_branch_proceeds_and_rework_plan_bypasses_pr() {
     );
 
     let plan = QueueWorkPlan {
+        done_rework_change: None,
         mode: QueueWorkMode::Item,
         entries: vec![QueueWorkEntry {
             queue: aida_core::QueueEntry {

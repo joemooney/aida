@@ -281,7 +281,10 @@ printf '2\tapproved second PR\thttps://example.invalid/pull/2\tshared-head\n'
 /// that resolve back to the requested store object; a colliding literal alias
 /// must never borrow another object's association. This is linkage, not credit.
 // trace:BUG-2400 | ai:codex
-fn pr_spec_association_ids(project_root: &std::path::Path, spec: &str) -> Result<Vec<String>> {
+pub(crate) fn pr_spec_association_ids(
+    project_root: &std::path::Path,
+    spec: &str,
+) -> Result<Vec<String>> {
     crate::spec_arg::ensure_alias_map();
     let Some(root) = detect_distributed_store_from(project_root) else {
         return Ok(vec![spec.to_string()]);
@@ -865,7 +868,8 @@ fn spec_lookup_deadline() -> std::time::Instant {
         .with(|c| c.get())
         .unwrap_or(SPEC_LOOKUP_BUDGET)
         .min(SPEC_LOOKUP_BUDGET);
-    std::time::Instant::now() + budget
+    let deadline = std::time::Instant::now() + budget;
+    crate::forge_lookup::forge_lookup_deadline().map_or(deadline, |outer| outer.min(deadline))
 }
 
 /// Per-candidate commit evidence from one batched GraphQL read.

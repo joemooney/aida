@@ -1775,6 +1775,26 @@ impl Storage {
         self.queue_backend()?.queue_users()
     }
 
+    /// Find a requirement's routing row in each queue using one backend.
+    // trace:STORY-2690 | ai:codex
+    pub fn queue_entries_for_requirement(
+        &self,
+        requirement_id: &uuid::Uuid,
+    ) -> Result<Vec<(String, crate::models::QueueEntry)>> {
+        let backend = self.queue_backend()?;
+        let mut matches = Vec::new();
+        for user in backend.queue_users()? {
+            if let Some(entry) = backend
+                .queue_list(&user, true)?
+                .into_iter()
+                .find(|entry| entry.requirement_id == *requirement_id)
+            {
+                matches.push((user, entry));
+            }
+        }
+        Ok(matches)
+    }
+
     /// Add an entry to a user's queue
     pub fn queue_add(&self, entry: crate::models::QueueEntry) -> Result<()> {
         self.queue_backend()?.queue_add(entry)
