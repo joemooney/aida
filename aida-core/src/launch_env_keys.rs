@@ -270,9 +270,6 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_INTAKE_TRIVIAL_PROPOSALS",
     "AIDA_JEV_API_KEY",
     "AIDA_JIRA_TOKEN",
-    // Guard-to-retried-launch first-refusal time; never a vendor input.
-    // trace:BUG-2684 | ai:claude
-    "AIDA_LANE_RETRY_SINCE",
     "AIDA_LIB_TEST_REAL_HOMES",
     "AIDA_LIFECYCLE_TAGS",
     "AIDA_LIST_LIMIT",

@@ -219,12 +219,15 @@ build-target and temporary filesystems before spawning. They refuse below
 `[doctor.disk_headroom] min_free_gib` (default 60 GiB), or if measurement fails.
 The refusal names the GC preview and apply commands. This is an admission check;
 it does not reserve disk space against growth by already-running lanes.
-A standalone launch refused below the floor is recorded under
-`.aida/lane-launch-retry/`. When a scheduled guard run ends with the floor
-restored, it runs each recorded command again as a fresh launch, which repeats
-every launch check; records older than a day are dropped. The guard's report
-and `.aida/disk-reclaim-ledger.jsonl` keep what its floor reclaim freed, even
-when the reclaim restored the floor.
+A launch refused below the floor starts no agent, so the pickup rolls back
+its worktree, lease and claim and the spec keeps its earlier status. Its queue
+rows stay in place with the note `deferred: disk below floor at <time>`, and
+the pickup exits 36. A drain stops its batch on that exit without parking the
+spec. Nothing relaunches it: the scheduled disk guard only frees space, and the
+next ordinary pickup (a filler, a drain wave or `aida queue work <ID>`) admits
+the spec once the floor holds. The guard's report and
+`.aida/disk-reclaim-ledger.jsonl` keep what its floor reclaim freed, even when
+the reclaim restored the floor.
 Fast-gate failures with explicit ENOSPC diagnostics are reported as
 `skipped(disk-full)` without consuming a source repair. Old failure receipts with
 those diagnostics receive the same classification; ordinary and unknown failures

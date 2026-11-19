@@ -108,14 +108,17 @@ pub(crate) fn require_lane_space(path: &Path, available: u64, floor_gib: u64) ->
         return Ok(());
     }
     Err(anyhow::Error::new(
-        crate::lane_disk_retry::LaneSpaceRefused(format!(
-            "lane launch refused: {} has {} free, below the {} GiB floor \
-         ([doctor.disk_headroom] min_free_gib); inspect `aida worktree gc` and \
-         reclaim ended overlays with `aida worktree gc --apply` before retrying",
-            path.display(),
-            human_bytes(available),
-            floor_gib
-        )),
+        crate::lane_disk_deferral::LaneSpaceRefused {
+            at: chrono::Utc::now(),
+            message: format!(
+                "lane launch refused: {} has {} free, below the {} GiB floor \
+             ([doctor.disk_headroom] min_free_gib); inspect `aida worktree gc` and \
+             reclaim ended overlays with `aida worktree gc --apply` before retrying",
+                path.display(),
+                human_bytes(available),
+                floor_gib
+            ),
+        },
     ))
 }
 

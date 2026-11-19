@@ -6994,6 +6994,19 @@ pub(crate) fn handle_queue_work(
         };
         let (setup_result, rolled_back) =
             run_pickup_launch(&project_root, setup_receipt, launch_agent);
+        // BUG-2684: the lane disk preflight refused before any agent started,
+        // so the setup was rolled back (the spec keeps its pre-pickup status).
+        // The spec stays queued with the refusal recorded on its queue rows and
+        // the pickup exits as deferred: nothing is failed, punted or shelved,
+        // and the next ordinary pickup admits it once space is freed.
+        // trace:BUG-2684 | ai:claude
+        let setup_result = setup_result.map_err(|error| {
+            if crate::lane_disk_deferral::refusal(&error).is_none() {
+                return error;
+            }
+            let ids = disk_deferral_requirement_ids(storage, &plan);
+            crate::lane_disk_deferral::defer(storage, &plan.scope, &ids, error)
+        });
         // BUG-2428 / TASK-2807: a launch that failed before any agent could start
         // launched nobody, so `run_pickup_launch` rolled back everything this
         // invocation's setup created (worktree, branch, lease, claim and status
@@ -7140,11 +7153,42 @@ pub(crate) fn end_finished_review(
 /// watch-launch refusal, a lease-lookup miss, a failed chdir, a failed exec).
 /// A refused child grant is minted before its worker spawns, so it is one
 /// wherever it surfaces.
+/// BUG-2684: so is the lane disk preflight's refusal, which the drain launch
+/// reaches after its launch mark but before it spawns anything.
 // trace:BUG-2428 TASK-2807 | ai:claude
+// trace:BUG-2684 | ai:claude
 pub(crate) fn launch_refused_before_agent(setup_result: &Result<()>, agent_started: bool) -> bool {
     setup_result.as_ref().is_err_and(|err| {
-        !agent_started || crate::gate::seat_authority::ChildGrantRefused::is_in(err)
+        !agent_started
+            || crate::gate::seat_authority::ChildGrantRefused::is_in(err)
+            || crate::lane_disk_deferral::refusal(err).is_some()
     })
+}
+
+/// The requirements a disk-deferred pickup was for: the plan's members, or
+/// its scope's spec when the plan carries none.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn disk_deferral_requirement_ids(
+    storage: &Storage,
+    plan: &QueueWorkPlan,
+) -> Vec<uuid::Uuid> {
+    let mut ids: Vec<uuid::Uuid> = plan
+        .entries
+        .iter()
+        .map(|entry| entry.queue.requirement_id)
+        .collect();
+    if ids.is_empty() {
+        if let Some(id) = storage.load().ok().and_then(|store| {
+            store
+                .get_requirement_by_spec_id(&plan.scope)
+                .map(|req| req.id)
+        }) {
+            ids.push(id);
+        }
+    }
+    ids.sort();
+    ids.dedup();
+    ids
 }
 
 /// TASK-2807: whether a pickup's launch can have started an agent. A spawn

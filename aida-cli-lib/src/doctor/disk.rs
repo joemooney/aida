@@ -135,11 +135,9 @@ pub(super) fn disk_headroom_light_report_finish(
             eprintln!("warning: could not log the floor reclaim: {error:#}");
         }
     }
-    // A lane launch refused below the floor is retried once the floor holds.
+    // The guard only frees space. A lane launch refused below the floor left
+    // its spec queued, and the next ordinary admission picks it up.
     // trace:BUG-2684 | ai:claude
-    if scheduled && !report.findings.iter().any(is_floor_finding) {
-        crate::lane_disk_retry::retry_refused(project_root);
-    }
     let min_free_gib = disk_headroom_min_free_gib(cfg);
     if scheduled {
         escalate_stuck_floor(project_root, &mut report.findings, min_free_gib, stuck_scan);

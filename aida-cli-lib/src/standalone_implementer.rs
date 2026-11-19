@@ -1383,10 +1383,9 @@ fn run(
 ) -> Result<()> {
     let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
-    // A launch refused below the floor is retried by the disk guard.
-    // trace:BUG-2684 | ai:claude
-    crate::machine_readiness::lane_disk_preflight(&main_root)
-        .map_err(|error| crate::lane_disk_retry::defer(&main_root, launch.spec, error))?;
+    // A refusal below the floor starts no agent: the pickup rolls back and
+    // defers the spec (`lane_disk_deferral`). trace:BUG-2684 | ai:claude
+    crate::machine_readiness::lane_disk_preflight(&main_root)?;
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // Resolve transport now, but retain the prior veto until command policy
