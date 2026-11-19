@@ -9,12 +9,12 @@ description: |
   1. Every lane terminal-result path that keeps a dirty seat clone (including refused-before-start, empty-rework, and punt) prints the same `retained: dirty` notice, naming the retained seat path, that the normal completion path prints.
   2. Result paths that do not keep a seat, or keep a clean one, print no such notice.
   3. A test per early terminal path asserts the notice is present when the seat is dirty and absent when it is clean.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T10:50:23.881251577Z
+modified_at: 2026-11-19T12:31:30.678857254Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -260,6 +260,13 @@ comments:
   modified_at: 2026-11-19T10:50:23.881251577Z
   session_id: 01a1f344d015
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f3ca-6731-76a1-aaee-442f2f36fc33
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2607 was In Progress when merge d4579825efe809f14e650af4d4f2f2d21aeea09f completed it; verify that no active round remains.'
+  created_at: 2026-11-19T12:31:30.609316598Z
+  modified_at: 2026-11-19T12:31:30.609316598Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
   author: joe
@@ -349,6 +356,25 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f3ca-6731-76a1-aaee-4439cce38601
+  author: aida-auto-bump
+  timestamp: 2026-11-19T12:31:30.609324878Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f3ca-6776-74f1-8398-eaffe1a00a2d
+  timestamp: 2026-11-19T12:31:30.678853414Z
+  agent: aida
+  commit_sha: d4579825efe809f14e650af4d4f2f2d21aeea09f
+  summary: 'APPROVED: no actionable defects found. Read the complete 35,717-byte protected-base-to-landed-tree diff, assessing landed tree a90aa26c45717471d920543f3287a7eece2666b3 against protected main b82d606361da38f0f4180189075bf78e712c1ba1 while attesting only original PR head 408383fc60b71bb18873975a04adee4bcc90e068. BUG-2607 acceptance review: PASS for retained dirty-clone notices across admission refusal, empty rework, punt/hold, pending merge and failed-after-start terminal paths; PASS for clean/removed-seat suppression; PASS by source inspection for per-path dirty/clean emitted-output regressions. Scope discovery covers canonical-branch and inferred-rework refusals before seat selection, and captured clone paths survive lease rollback for post-rollback reporting. The previously missing optional test-helper arguments now match the pinned landed-tree APIs. The added started-child tests execute the previously untested production terminal boundaries. The queue rollback fixture remains a modeled rollback, as explicitly retained by the authoritative round-3 brief; production capture and post-rollback finalization were inspected. Trace comments are present and git diff --check passed. Existing implementer evidence reports eight BUG-2607 tests passing and mutation checks failing the relevant tests when terminal notice calls are removed; those runs were not independently repeated. CI pending at review time: exact-head fast gates succeeded, fast compilation remains in progress, and merge-hold-gate is pending. No Cargo or local test/build commands were run. Subsequent protected-base changes were inspected and introduce no identified conflict with this change. The supplied absolute codegraph client was absent; doctor reported total 0 and navigation used rg and pinned Git blobs. No branch update or merge performed.'
+  punted:
+  - 'punted: Reviewed the entire 10,924-byte pinned landed-tree diff against main edbcfef98e60b4863afdd698f495c295e85bb129, attesting only original PR head 85cde0b7a4ec8624ed09b4cee8b0a44503280d68. REQUEST CHANGES for two blocking acceptance gaps. Covered spec: BUG-2607 (origin BUG-b6b1278890774ef993d2ebc327862470-371). Acceptance checklist: BUG-b6b1278890774ef993d2ebc327862470-371.ac9718ef — Every lane terminal-result path retaining a dirty seat clone, including refused-before-start, empty-rework and punt, prints the normal retained: dirty notice naming its path: unverified. The renderer works for a supplied path or branch, but some admission refusals occur before either is captured; see finding 1. BUG-b6b1278890774ef993d2ebc327862470-371.acd838d3 — Result paths retaining no seat or a clean seat print no such notice: verified by source inspection of with_retained_seats, check_early_retention_notice clean/removed-clone assertions, and the normal-result worktree.is_dir guard. The spec comments report six regression tests passed without bubblewrap skips; no local tests were run in this review. BUG-b6b1278890774ef993d2ebc327862470-371.acf1206a — A test per early terminal path asserts the notice present for dirty and absent for clean seats: unverified. Six kind-labelled tests exercise one renderer directly, not the respective terminal paths or their emitted output; see finding 2. Existing CI evidence: fast gates and merge-hold status succeeded; fast compilation pending at review time, no failed jobs. No Cargo, build, or local test commands were run. git diff --check passed. The required host codegraph executable was absent at /home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph; aida doctor check codegraph returned total: 0, so navigation used source searches. Both findings apply to the original head and the pinned landed tree; neither depends on the two intervening base commits, which do not change these result/pickup/test paths.'
+  - 'punted: Reviewed the complete 24,826-byte protected-base-to-landed-tree diff against main 584e4e176c812166cc92c1f05619a440f7981e6e, assessing landed tree c616f80d8242ee0a4aec6f21e155c669711d2a4b while attesting only original PR head 73a796735cf7232a54e8907cd10fed940aac0610. BUG-2607 refusal discovery and deferred terminal reporting address the prior pre-branch-capture defect by source inspection; trace comments are present. Request changes for two blocking findings: new test callers do not compile against newer protected-base API signatures, and AC3 still lacks dirty/clean emitted-output regressions for several early terminal paths. The compile finding depends on subsequent base changes; the acceptance gap does not. Existing CI evidence reports dependency installation timing out after five minutes and a failed aggregate, with another job pending at launcher capture; this alone is not a waiting reason. No Cargo or local test/build commands were run, per reviewer policy. The supplied absolute codegraph client was absent; aida doctor check codegraph returned total 0, and source navigation used rg and pinned Git blobs. No merge or branch update performed.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
@@ -359,3 +385,7 @@ filed_at:
   vendor: claude
   session: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T12:31:30.609321739Z
+  completion_sha: d4579825efe809f14e650af4d4f2f2d21aeea09f
