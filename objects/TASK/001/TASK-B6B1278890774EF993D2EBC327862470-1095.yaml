@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T16:21:28.223318083Z
+modified_at: 2026-11-19T17:50:26.052744742Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -286,6 +286,13 @@ comments:
   content: Reference merge `e5b78d27e147ce008ab5557b0ea7f55afc79dd4d` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-19T16:21:28.223303627Z
   modified_at: 2026-11-19T16:21:28.223303627Z
+- id: 01a1f4ee-9c44-7f83-b456-fff241a1707e
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 10:52): STAYS OPEN. #4290 landed the stale-binary lane refusal (Refs, partial); the verdict states that host autobuild repair/verification and doctor per-host reporting remain outside it. Next lane scope = those two items only.'
+  created_at: 2026-11-19T17:50:26.052744742Z
+  modified_at: 2026-11-19T17:50:26.052744742Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
