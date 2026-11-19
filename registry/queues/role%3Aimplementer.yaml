@@ -34,13 +34,6 @@
   added_at: 2026-11-19T06:04:14.305139814Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1ec8a-2c66-7022-9d5c-01d6514aa984
-  position: -857000
-  added_by: role:implementer
-  note: 'Round 2 for PR #4282. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2672-r2.md: divergence always fails; FF grace for main and store; window 2x interval. CLAUDE lane.'
-  added_at: 2026-11-19T06:01:15.995667263Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1ecce-8905-7051-a16c-2e950de34de0
   position: -856000
   added_by: role:implementer
@@ -277,6 +270,114 @@
     Max cache size                        10 GiB
     lane sccache: server exited before sandbox teardown
   added_at: 2026-11-19T04:28:13.660378670Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1ec8a-2c66-7022-9d5c-01d6514aa984
+  position: 0
+  added_by: fast-gate
+  note: |-
+    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.
+    RUN   Help golden snapshot co-change guard  [fast]
+    check-help-golden-cochange fixtures: ok
+    fatal: unable to access 'https://github.com/joemooney/aida.git/': Could not resolve host: github.com
+    ok    Help golden snapshot co-change guard  (0.2s)
+    RUN   Check Rust test portability ratchet  [fast]
+    fatal: unable to access 'https://github.com/joemooney/aida.git/': Could not resolve host: github.com
+    ok    Check Rust test portability ratchet  (19.0s)
+    RUN   Prose-classification rule fixtures  [fast]
+    ......................
+    ----------------------------------------------------------------------
+    Ran 22 tests in 1.743s
+
+    OK
+    ok    Prose-classification rule fixtures  (1.8s)
+    RUN   Executable fixture ratchet  [fast]
+    .......F
+    ======================================================================
+    FAIL: test_test_sources_do_not_set_executable_modes_directly (tests.test_executable_fixture_ratchet.ExecutableFixtureRatchetTests.test_test_sources_do_not_set_executable_modes_directly)
+    ----------------------------------------------------------------------
+    Traceback (most recent call last):
+      File "/home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-436/tests/test_executable_fixture_ratchet.py", line 100, in test_test_sources_do_not_set_executable_modes_directly
+        self.assertEqual([], offenders, "\n".join(offenders))
+    AssertionError: Lists differ: [] != ['aida-cli-lib/src/tests/task_1544_light_d[74 chars]ble']
+
+    Second list contains 1 additional elements.
+    First extra element 0:
+    'aida-cli-lib/src/tests/task_1544_light_doctor_tests.rs: line 285: executable mode must use test_exec::mark_executable'
+
+    - []
+    + ['aida-cli-lib/src/tests/task_1544_light_doctor_tests.rs: line 285: executable '
+    +  'mode must use test_exec::mark_executable'] : aida-cli-lib/src/tests/task_1544_light_doctor_tests.rs: line 285: executable mode must use test_exec::mark_executable
+
+    ----------------------------------------------------------------------
+    Ran 8 tests in 0.829s
+
+    FAILED (failures=1)
+    FAIL  Executable fixture ratchet  (0.9s)
+            this is CI's own `Executable fixture ratchet` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  added_at: 2026-11-19T06:34:50.109561159Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
