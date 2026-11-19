@@ -27,6 +27,12 @@ pub(crate) const PUBLICATION_DONE_AUTHOR: &str = aida_core::conflict::PUBLICATIO
 /// `aida add --parent` record) that is neither terminal nor archived. A
 /// publication for such a spec is one slice, never the whole spec. An edge
 /// whose child cannot be found counts as outstanding (fail closed, A2).
+///
+/// A plan followup is not a slice: `aida queue done`, `aida edit` and the
+/// landing scan file a plan's `## Followups` bullets as `--parent` children
+/// once the spec is already Done, stamped with a `followup-src:` provenance
+/// tag. They are follow-on work after the spec, so they never hold it open.
+// trace:BUG-2696 | ai:claude
 pub(crate) fn slice_plan_outstanding(store: &RequirementsStore, req: &Requirement) -> bool {
     req.relationships
         .iter()
@@ -34,11 +40,22 @@ pub(crate) fn slice_plan_outstanding(store: &RequirementsStore, req: &Requiremen
         .any(
             |rel| match store.requirements.iter().find(|r| r.id == rel.target_id) {
                 Some(child) => {
-                    !child.archived && !aida_core::conflict::is_terminal_status(&child.status)
+                    !child.archived
+                        && !aida_core::conflict::is_terminal_status(&child.status)
+                        && !is_plan_followup(child)
                 }
                 None => true,
             },
         )
+}
+
+/// True when `child` was filed from a plan's `## Followups` section (it
+/// carries the `followup-src:` provenance tag the filer stamps).
+fn is_plan_followup(child: &Requirement) -> bool {
+    child
+        .tags
+        .iter()
+        .any(|t| t.starts_with(crate::plan_followups::FOLLOWUP_SRC_TAG_PREFIX))
 }
 
 /// The slice-plan graph a completion decision rests on: every outgoing
@@ -516,6 +533,33 @@ mod tests {
             .unwrap();
         let store = storage.load().unwrap();
         assert!(completes_spec(Some(&store), "STORY-1", false));
+    }
+
+    // A plan followup filed at Done (`followup-src:` tagged `--parent` child)
+    // is follow-on work, not a slice: it never holds its parent open. An
+    // untagged open child beside it still does.
+    #[test]
+    fn bug_2696_plan_followup_child_is_not_an_outstanding_slice() {
+        let mut parent = spec("BUG-1", RequirementStatus::Done);
+        let mut followup = spec("TASK-2", RequirementStatus::Approved);
+        followup.tags.insert(format!(
+            "{}docs/plans/p.md",
+            crate::plan_followups::FOLLOWUP_SRC_TAG_PREFIX
+        ));
+        parent.relationships.push(parent_edge(followup.id));
+        let store = RequirementsStore {
+            requirements: vec![parent.clone(), followup.clone()],
+            ..Default::default()
+        };
+        assert!(!slice_plan_outstanding(&store, &parent));
+
+        let slice = spec("TASK-3", RequirementStatus::Approved);
+        parent.relationships.push(parent_edge(slice.id));
+        let store = RequirementsStore {
+            requirements: vec![parent.clone(), followup, slice],
+            ..Default::default()
+        };
+        assert!(slice_plan_outstanding(&store, &parent));
     }
 
     fn parent_edge(target: uuid::Uuid) -> aida_core::Relationship {

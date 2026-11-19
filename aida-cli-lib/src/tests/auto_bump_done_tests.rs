@@ -6283,6 +6283,10 @@ fn bug_2696_shared_store(
     run_git(tmp, &["init", "--bare", "--quiet", "store-origin.git"]);
     let store = tmp.join("shared-store");
     std::fs::create_dir_all(&store).unwrap();
+    // The store is its own repository. Without this, git discovery from the
+    // store reaches the enclosing project repo, so the store's config, status
+    // and pushes are really the project's.
+    run_git(&store, &["init", "--quiet"]);
     let storage = crate::test_env::home_fixture_storage(&store);
     aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
     for (id, status) in seed {
@@ -6480,6 +6484,7 @@ fn bug_2696_r4_failing_store_probe_never_reports_propagation() {
     let corrupt = || std::fs::write(&config, "[core\n").unwrap();
     let restore = || std::fs::write(&config, &good).unwrap();
     let publish = || crate::publication_completion::propagate_store_writes(&store, "test");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
 
     // The probes cannot answer: owed, the push is unconfirmed, and the push
     // helper does not report local-only success.
@@ -6490,7 +6495,6 @@ fn bug_2696_r4_failing_store_probe_never_reports_propagation() {
     ));
     assert!(crate::store_push_pull::push_store_confirmed(&store, "test").is_err());
     assert!(publish().is_err(), "an unanswered probe is not propagation");
-    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
     let scan = || {
         crate::db_reconcile::auto_bump_done_to_completed_with(
             &project_root,
@@ -6529,9 +6533,19 @@ fn bug_2696_r4_failing_store_probe_never_reports_propagation() {
     let (_, scanned) = scan().unwrap();
     assert!(scanned, "a confirmed push checkpoints the scan");
     assert_eq!(remote_head(), aida_core::git_ops::head_sha(&store).unwrap());
-    assert!(!crate::publication_completion::store_owes_shared_push(
-        &store
-    ));
+    assert!(
+        !crate::publication_completion::store_owes_shared_push(&store),
+        "store still owes a push: status={:?} ahead={:?}",
+        run_git(&store, &["status", "--porcelain"]),
+        run_git(
+            &store,
+            &[
+                "rev-list",
+                "--count",
+                &format!("refs/remotes/origin/{branch}..HEAD")
+            ]
+        ),
+    );
 }
 
 /// What a [`bug_2696_canonical_landing_race`] hook does to the store between

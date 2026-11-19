@@ -31,6 +31,8 @@ fn spec_status(store_dir: &std::path::Path, id: &str) -> aida_core::RequirementS
 /// `(BUG-2169)` from the branch-name fallback — and the merge must leave
 /// BUG-2169's status alone. The historical polluted subject
 /// `… (Refs BUG-2169) (BUG-2169)` (main b66e4d93b8) must not complete it either.
+/// BUG-2696 (D4): a Refs landing completes a spec already Done, so the
+/// referenced spec is open here and a separate Done spec shows the D4 side.
 // trace:BUG-2203 | ai:claude
 #[test]
 fn bug_2203_refs_subject_ship_appends_no_trailer_and_completes_nothing() {
@@ -43,12 +45,17 @@ fn bug_2203_refs_subject_ship_appends_no_trailer_and_completes_nothing() {
     git(root, &["add", "a"]);
     git(root, &["commit", "-q", "-m", "chore: initial"]);
 
-    // BUG-2169 is Done, so a completion trailer WOULD complete it; BUG-999 is
-    // the control proving the scan ran.
+    // BUG-2169 is open, so only a completion trailer could complete it;
+    // BUG-999 is the control proving the scan ran. BUG-2170 is Done, which a
+    // Refs landing completes (BUG-2696 D4).
     let mut referenced = aida_core::Requirement::new("t".to_string(), String::new());
     referenced.spec_id = Some("BUG-2169".to_string());
     referenced.req_type = aida_core::RequirementType::Bug;
-    referenced.status = aida_core::RequirementStatus::Done;
+    referenced.status = aida_core::RequirementStatus::Approved;
+    let mut done_refs = aida_core::Requirement::new("d".to_string(), String::new());
+    done_refs.spec_id = Some("BUG-2170".to_string());
+    done_refs.req_type = aida_core::RequirementType::Bug;
+    done_refs.status = aida_core::RequirementStatus::Done;
     let mut control = aida_core::Requirement::new("c".to_string(), String::new());
     control.spec_id = Some("BUG-999".to_string());
     control.req_type = aida_core::RequirementType::Bug;
@@ -58,7 +65,7 @@ fn bug_2203_refs_subject_ship_appends_no_trailer_and_completes_nothing() {
     aida_core::DatabaseBackend::save(
         &backend,
         &aida_core::RequirementsStore {
-            requirements: vec![referenced, control],
+            requirements: vec![referenced, control, done_refs],
             ..Default::default()
         },
     )
@@ -116,6 +123,7 @@ fn bug_2203_refs_subject_ship_appends_no_trailer_and_completes_nothing() {
             "[AI:claude] feat(contained): slice 1 (Refs BUG-2169) (BUG-2169) (#2780)".to_string(),
         ),
         ("5", "fix: unrelated (BUG-999) (#2791)".to_string()),
+        ("6", "fix: follow-up (Refs BUG-2170) (#2792)".to_string()),
     ] {
         std::fs::write(root.join("a"), content).unwrap();
         git(root, &["commit", "-q", "-am", &msg]);
@@ -130,11 +138,16 @@ fn bug_2203_refs_subject_ship_appends_no_trailer_and_completes_nothing() {
     );
     assert!(
         !flips.iter().any(|f| f.spec_id == "BUG-2169"),
-        "a Refs id must never complete: {flips:?}"
+        "a Refs id must never complete an open spec: {flips:?}"
     );
     assert_eq!(
         spec_status(&store_dir, "BUG-2169"),
-        aida_core::RequirementStatus::Done
+        aida_core::RequirementStatus::Approved
+    );
+    // trace:BUG-2696 | ai:claude — D4: a Done spec on a Refs subject completes.
+    assert!(
+        flips.iter().any(|f| f.spec_id == "BUG-2170"),
+        "a Refs landing completes a Done spec: {flips:?}"
     );
 }
 
