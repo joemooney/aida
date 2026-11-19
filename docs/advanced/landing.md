@@ -34,6 +34,12 @@ Every AIDA command that merges follows the mode, and each re-checks it immediate
 | `aida land run` | boards ready changes onto the train | ships each ready change once when the run may merge it; otherwise reports it |
 | `aida pr train` | as described below | not yet covered: being brought under the mode |
 
+<!-- trace:STORY-2905 | ai:claude -->
+
+One merge hand per pull request: before any of these commands merges a pull request, it claims it on this host, and a pull request another command is already merging (or a train has boarded) is refused rather than merged twice. Claims are local to the host, so only the primary host merges; every merge also names the exact head it merges (`--match-head-commit`), which stops a second host's stale merge at the forge. A claim left by a process that has exited is taken over; one whose holder cannot be checked refuses.
+
+In `review-gated` mode the auto-train stands down: each pass does nothing and says so (`standing down: landing.mode=review-gated`, also shown by `aida pr train --status`). `aida land run` is the merge hand. In `ci-gated` mode the auto-train runs as before.
+
 ### Changing the mode
 
 `aida land mode status` prints the mode, the checks it requires, the checks the forge requires, and any drift between them. It also shows the last few changes, which are recorded in `.aida/land/landing-audit.jsonl`.

@@ -374,3 +374,100 @@ fn renames_count_both_their_source_and_destination() {
         "{why}"
     );
 }
+
+/// STORY-2905 (advisor call (c); round-1 finding 2): the auto-train stands
+/// down in review-gated mode, runs in ci-gated mode (or with no config),
+/// and does NOT run when the policy cannot be read or parsed or names an
+/// invalid mode: uncertainty is never the ci-gated default.
+#[test]
+fn the_auto_train_runs_only_under_a_readable_ci_gated_policy() {
+    let (_t, repo) = review_gated("notes/a.txt", "notes/b.txt");
+    assert_eq!(
+        super::train_stand_down(&repo),
+        Ok(Some("standing down: landing.mode=review-gated"))
+    );
+    let (_t, plain) = behind("notes/a.txt", "notes/b.txt");
+    assert_eq!(
+        super::train_stand_down(&plain),
+        Ok(None),
+        "no config: defaults"
+    );
+    for bad in [
+        "[landing\nmode = ",
+        "[landing]\nmode = \"yolo\"\n",
+        "landing = \"review-gated\"\n",
+        "landing = false\n",
+        "landing = [1]\n",
+    ] {
+        let (_t, repo) = behind("notes/a.txt", "notes/b.txt");
+        git(&repo, &["checkout", "-q", "main"]);
+        commit(&repo, ".aida/config.toml", bad);
+        let origin = repo.parent().unwrap().join("origin.git");
+        git(&repo, &["push", "-q", origin.to_str().unwrap(), "main"]);
+        let checked = super::train_stand_down(&repo);
+        let err = checked.clone().unwrap_err();
+        assert!(
+            err.contains("parse") || err.contains("not valid") || err.contains("not a table"),
+            "{bad:?}: {err}"
+        );
+        // Through the production pass decision: the handler never runs.
+        let ran = std::cell::Cell::new(false);
+        let _ = super::auto_train_pass(checked, || {
+            ran.set(true);
+            Ok(())
+        });
+        assert!(!ran.get(), "{bad:?}: no train under an invalid policy");
+    }
+
+    // The pass decision: the handler runs only when the policy allows it.
+    let ran = std::cell::Cell::new(0);
+    let handler = || {
+        ran.set(ran.get() + 1);
+        Ok(())
+    };
+    assert!(super::auto_train_pass(Ok(None), handler).is_ok());
+    assert_eq!(ran.get(), 1, "ci-gated runs the train");
+    let stood = super::auto_train_pass(Ok(Some(super::TRAIN_STAND_DOWN)), || {
+        ran.set(ran.get() + 1);
+        Ok(())
+    })
+    .unwrap_err();
+    assert_eq!(stood, "standing down: landing.mode=review-gated");
+    let unknown = super::auto_train_pass(Err("unreadable".into()), || {
+        ran.set(ran.get() + 1);
+        Ok(())
+    })
+    .unwrap_err();
+    assert!(unknown.contains("not running"), "{unknown}");
+    assert_eq!(
+        ran.get(),
+        1,
+        "neither review-gated nor unknown runs a train"
+    );
+}
+
+/// The auto-train worker decides every pass through auto_train_pass with
+/// the checked stand-down (removing it fails this test).
+#[test]
+fn the_auto_train_worker_decides_each_pass_through_the_policy() {
+    let src = include_str!("../advisor_loop_train.rs");
+    let run = src.split("pub(super) fn run(").nth(1).expect("run");
+    let pass = run
+        .find(concat!("landing_merge::", "auto_train_pass("))
+        .expect("the pass decision");
+    let stand_down = run
+        .find(concat!("landing_merge::", "train_stand_down(root)"))
+        .expect("the checked policy");
+    let admission = run
+        .find("hold_admission(")
+        .expect("admission follows the policy");
+    assert!(
+        stand_down < admission && admission < pass,
+        "the stand-down decides admission, then the pass"
+    );
+    assert_eq!(
+        run.matches("advisor_train_handler").count(),
+        1,
+        "the handler is reached only through the pass decision"
+    );
+}

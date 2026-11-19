@@ -4949,6 +4949,14 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             .collect();
         let _recovery_reviews =
             crate::review_watch::train_members(&main_worktree, &recovery_members)?;
+        // The retained train's cars are claimed for it again before anything
+        // resumes; a car another hand holds refuses the recovery.
+        // trace:STORY-2905 | ai:claude
+        let _recovery_claims = crate::merge_claim::claim_all(&main_worktree, &recovery_members)
+            .map_err(|why| {
+                crate::gate::ship::ShipRefusal::Review
+                    .error(format!("the retained train is not resumed: {why}"))
+            })?;
         let mut ports = LiveTrainForge {
             project_root: project_root.clone(),
             main_worktree: main_worktree.clone(),
@@ -5107,6 +5115,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     };
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
+    // Cars another merge hand holds stay off this train (STORY-2905).
+    let mut claim_ejected: Vec<Ejected> = Vec::new();
     let mut outcome = if opts.dry_run {
         let built = build(&main_worktree, &main, &members)?;
         println!(
@@ -5149,14 +5159,26 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             dispatch_ctx,
             dispatch_abort: None,
         };
+        // One merge hand per PR: the train claims each car it boards and
+        // holds the claims until it returns; a car another hand holds (a
+        // ship or drain merging it now) is not boarded. trace:STORY-2905 | ai:claude
+        let (car_claims, members, refused) =
+            crate::merge_claim::board(&main_worktree, members, |m: &Member| (m.pr, m.head.clone()));
+        claim_ejected.extend(
+            refused
+                .into_iter()
+                .map(|(pr, reason)| Ejected { pr, reason }),
+        );
         let mut rails = ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir);
         let outcome = drive(&mut rails, members)?;
+        drop(car_claims);
         warnings = std::mem::take(&mut rails.warnings);
         dispatch_abort = ports.dispatch_abort.take();
         outcome
     };
     outcome.ejected.extend(review_ejected);
+    outcome.ejected.extend(claim_ejected);
     outcome.landed.extend(recovered.landed);
     outcome.ejected.extend(recovered.ejected);
     outcome.ci_runs += recovered.ci_runs;
