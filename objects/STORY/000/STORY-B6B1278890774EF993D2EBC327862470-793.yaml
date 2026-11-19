@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T17:59:08.513862545Z
+modified_at: 2026-11-19T17:59:28.393988714Z
 req_type: Story
 tags:
 - landing
@@ -251,6 +251,13 @@ comments:
     and story_2893_*; make check-ci-fast. Push. A delta limited to this gets a light re-review.
   created_at: 2026-11-19T17:59:08.513862545Z
   modified_at: 2026-11-19T17:59:08.513862545Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4f6-dff6-7d63-95a3-0d4bb1a9c493
+  author: joe
+  content: 'Product 10:59: R3 lane queued on dell1 (claude), branch story-b6b1278890774ef993d2ebc327862470-793. Scope = the AUTHORITATIVE R3 BRIEF in the previous comment.'
+  created_at: 2026-11-19T17:59:28.393988714Z
+  modified_at: 2026-11-19T17:59:28.393988714Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
