@@ -215,3 +215,43 @@ path. That last pre-push check remains for the host. The 86 Python
 ratchet/manual/structural/writer-inventory fixtures and the writer inventory
 check passed separately. Edits remain uncommitted for host publication with
 a Refs trailer; the existing merge hold is not cleared by this validation.
+
+## Round 4: advisor-121 ruling, verified same-service quiet skip
+
+<!-- trace:BUG-2621 | ai:claude -->
+
+The binding advisor-121 ruling (2026-11-19) supersedes the earlier
+investigation-first boundary for this path. It accepts the TASK-3809 host
+sampling as the holder evidence: supervisor ticks, train workers and reviewer
+children of the same services hold the per-service `admission.lock`. It rules
+that the refusal does harm, because it drives the consecutive-failure counters
+and advisor alerts. This resolves review finding 2 (holder correlation) for the
+supervisor tick.
+
+Implemented contract (`tick_with_launcher` / `contended` in
+`aida-cli-lib/src/advisor_loop_service.rs`, `service_holder` in
+`aida-cli-lib/src/admission_owner.rs`):
+
+- Only a `WouldBlock` from the bounded `admission.lock` attempt is contention.
+  Unsafe-file and other I/O errors remain refusals.
+- After the lock attempt fails, the tick re-reads the `.aida/admission-owner`
+  receipts under the receipt serializer with a bounded wait. It never uses a
+  cached receipt. It skips only when a receipt names this service's controller
+  purpose (`legacy review-watch` or `legacy auto-train`) and its PID/start
+  identity is observed alive, and that PID is not the supervisor process. It
+  then prints `skipped: <service> tick already running (pid N)` once per
+  episode. It neither counts a failure nor alerts.
+- Any other case is a counted, alerting refusal: missing receipts, a malformed
+  or unsupported receipt, another purpose, a dead PID, a recycled PID (start
+  identity mismatch), an unverifiable identity, or a receipt naming this
+  process. The refusal keeps the original `WouldBlock` cause and prefixes the
+  holder evidence, so alerts carry it.
+- Reading holder evidence is read-only. It never unlinks, steals, or signals
+  anything based on receipts. Flock stays the exclusion authority.
+
+Tests (`bug2621` filter, both service inclusions): verified live same-service
+holder skips quietly (zero failure count, no alert, receipts untouched), then
+refuses once that holder exits (revalidation at decision time); refusal plus
+holder evidence in the threshold alert for unknown holder, another service,
+dead PID, recycled PID, malformed receipt and own-process receipt; the
+unsafe-file refusal is retained.
