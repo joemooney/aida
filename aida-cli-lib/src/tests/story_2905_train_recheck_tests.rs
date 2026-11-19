@@ -136,3 +136,24 @@ fn a_train_without_advisor_authority_is_refused_in_review_gated_mode() {
     assert_eq!(kind, ShipRefusal::Review, "{why}");
     assert!(why.contains("has the advisor perform"), "{why}");
 }
+
+/// Round 2 finding 2: a landing config that does not parse is never taken
+/// as the ci-gated default; the train is refused.
+#[test]
+fn a_malformed_landing_config_refuses_the_train() {
+    let (_t, repo, tip) = repo("landing = 3\n");
+    let (kind, why) = train_recheck(
+        &repo,
+        &train(),
+        &[(7, vec!["TASK-1".to_string()])],
+        &entry(&repo),
+        "main",
+        &tip,
+    )
+    .unwrap_err();
+    assert_eq!(kind, ShipRefusal::Review, "{why}");
+    assert!(
+        why.contains("landing policy cannot be established"),
+        "{why}"
+    );
+}

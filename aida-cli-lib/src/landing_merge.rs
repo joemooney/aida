@@ -380,7 +380,26 @@ pub(crate) fn train_recheck(
         entry.floor,
         crate::gate::role_authority::has_integrity_floor_authority,
     )?;
+    // On the refs `recheck` just fetched, the policy is resolved
+    // fail-closed: a config that cannot be read or
+    // parsed is never taken as the ci-gated default (round 2 finding 2).
+    let policy = crate::landing_policy::load_checked(root).map_err(|why| {
+        (
+            ShipRefusal::Review,
+            format!("the train is not merged: its landing policy cannot be established ({why})"),
+        )
+    })?;
     let floor = crate::gate::role_authority::has_integrity_floor_authority();
+    if policy.advisor_merges() && !cars.is_empty() && !floor {
+        // Each car's author rule reads the authorship ledger; one that
+        // cannot be trusted refuses rather than warns (round 2 finding 3).
+        if let Some(why) = crate::gate::review_authority::ledger_untrusted(root) {
+            return Err((
+                ShipRefusal::Review,
+                format!("the train is not merged: its cars' authors cannot be established: {why}"),
+            ));
+        }
+    }
     for (pr, specs) in cars {
         let car = ChangeRef {
             id: *pr,

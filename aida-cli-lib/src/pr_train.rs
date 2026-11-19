@@ -4904,7 +4904,13 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     // anyone else is refused before a train is built; the merge boundary
     // judges it again for every car. trace:STORY-2905 | ai:claude
     if !opts.dry_run {
-        let policy = crate::landing_policy::load(&main_worktree);
+        // Fail closed: a landing policy that cannot be read or parsed is
+        // never taken as the ci-gated default here.
+        let policy = crate::landing_policy::load_checked(&main_worktree).map_err(|why| {
+            crate::gate::ship::ShipRefusal::Review.error(format!(
+                "this train is not run: the landing policy cannot be established ({why})"
+            ))
+        })?;
         if let Some(why) = crate::gate::ship::advisor_merge_refusal(
             policy.advisor_merges(),
             crate::gate::seat_authority::current_seat(&main_worktree).as_deref(),
@@ -5291,16 +5297,31 @@ pub(crate) fn abandon_journal(name: &str) -> Result<()> {
 
 // trace:BUG-2618 | ai:codex
 pub(crate) fn pr_head_pins(root: &Path, pr: u64) -> Result<Vec<String>> {
+    Ok(pr_head_pin_journals(root, pr)?
+        .into_iter()
+        .map(|(train, _)| train)
+        .collect())
+}
+
+/// [`pr_head_pins`] with each pinning train's journal file name, the name
+/// `aida pr train --abandon` takes to release it.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn pr_head_pin_journals(root: &Path, pr: u64) -> Result<Vec<(String, String)>> {
     let mut pins = Vec::new();
-    for (_, entry) in journal::peek(&root.join(".aida/train"))? {
+    for (path, entry) in journal::peek(&root.join(".aida/train"))? {
         if entry.train.cars.iter().any(|c| c.member.pr == pr)
             && !entry.completed_members.contains(&pr)
             && !entry.rejected.iter().any(|r| r.pr == pr)
         {
-            pins.push(match entry.change_id {
+            let train = match entry.change_id {
                 Some(id) => format!("{} (PR #{id})", entry.branch),
                 None => entry.branch.clone(),
-            });
+            };
+            let file = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |f| f.to_string_lossy().into_owned(),
+            );
+            pins.push((train, file));
         }
     }
     Ok(pins)

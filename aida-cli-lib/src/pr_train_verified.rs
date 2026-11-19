@@ -50,16 +50,9 @@ impl VerifiedTrainMerge<'_> {
             "train merge identity or pin changed"
         );
         // Per-car merge authority and the proof's base, judged afresh before
-        // each attempt (STORY-2905 S1t-b). trace:STORY-2905 | ai:claude
-        crate::landing_merge::train_recheck(
-            root,
-            change,
-            &self.cars,
-            &self.landing,
-            &self.base_ref,
-            &self.base_tip,
-        )
-        .map_err(|(kind, why)| kind.error(why))?;
+        // each attempt (STORY-2905 S1t-b), first to fail fast, and again
+        // below after the last refresh and wait. trace:STORY-2905 | ai:claude
+        self.authority(root, change)?;
         let (evidence, mapped) = (self.refresh)()?;
         anyhow::ensure!(
             evidence == self.evidence && mapped == self.mapped,
@@ -145,9 +138,31 @@ impl VerifiedTrainMerge<'_> {
             meta.head_sha == self.tip,
             "train head moved during final gate"
         );
+        drop(_phase);
+        // The refresh and the corpus and head reads above can take minutes
+        // (a CI wait); a grant can lapse or the base move meanwhile. The
+        // authority is judged again as the last step before the forge
+        // transport (round 2 finding 1). trace:STORY-2905 | ai:claude
+        self.authority(root, change)?;
         // trace:BUG-2433 | ai:claude
         self.reached_forge = true;
         Ok(())
+    }
+
+    /// [`crate::landing_merge::train_recheck`] over this merge's cars,
+    /// landing snapshot and proof base.
+    // trace:STORY-2905 | ai:claude
+    fn authority(&self, root: &Path, change: &ChangeRef) -> Result<()> {
+        let _phase = FinalGatePhase::start("recheck: train merge authority");
+        crate::landing_merge::train_recheck(
+            root,
+            change,
+            &self.cars,
+            &self.landing,
+            &self.base_ref,
+            &self.base_tip,
+        )
+        .map_err(|(kind, why)| kind.error(why))
     }
 }
 

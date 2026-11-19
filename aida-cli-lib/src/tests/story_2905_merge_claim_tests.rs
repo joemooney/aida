@@ -200,6 +200,12 @@ fn a_train_pin_refuses_other_hands() {
     std::fs::write(journal.join("example.json"), entry.to_string()).unwrap();
     let why = claim(root, 7, Some("h"), Hand::Ship).unwrap_err();
     assert!(why.contains("boarded on train/example"), "{why}");
+    // Round 2 finding 5: the refusal names the recovery, exactly.
+    assert!(why.contains("`aida pr train --status`"), "{why}");
+    assert!(
+        why.contains("`aida pr train --abandon example.json`"),
+        "{why}"
+    );
     claim(root, 7, Some("h"), Hand::Train).expect("the train holds its own car");
 }
 
