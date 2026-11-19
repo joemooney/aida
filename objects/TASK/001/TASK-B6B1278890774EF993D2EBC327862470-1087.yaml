@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:49.349747862Z
-modified_at: 2026-11-19T23:37:20.331287467Z
+modified_at: 2026-11-19T23:37:35.069577827Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -262,6 +262,13 @@ comments:
     sink diff equals the union of both sides. No other edits. Merge commit; cargo fmt --check; make check-ci-fast; push.
   created_at: 2026-11-19T23:37:20.331287467Z
   modified_at: 2026-11-19T23:37:20.331287467Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f62c-6fd3-7bc1-b81f-3be3dd05d770
+  author: joe
+  content: 'Product 16:37: CONFLICT-SW lane queued on dell1 (codex), branch task-b6b1278890774ef993d2ebc327862470-1087. Scope = the AUTHORITATIVE CONFLICT-SW BRIEF in the previous comment.'
+  created_at: 2026-11-19T23:37:35.069577827Z
+  modified_at: 2026-11-19T23:37:35.069577827Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
