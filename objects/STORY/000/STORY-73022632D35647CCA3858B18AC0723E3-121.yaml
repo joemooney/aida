@@ -1,0 +1,47 @@
+id: 01a1f131-ea31-7a90-9c3c-58a2823d427d
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-121
+title: 'Review PR-4269: [AI:claude] feat(review): configurable blocking-tier class list with operator/mandate authority (STORY-2913)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f117`) for branch `story-b6b1278890774ef993d2ebc327862470-806`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4269>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-806` → `main`
+
+  ## Covers
+
+  - STORY-2913
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4269` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T00:25:42.705979609Z
+modified_at: 2026-11-19T00:25:46.324304167Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
+  created_at: 2026-11-19T00:25:46.324273637Z
+  created_by: dirtlab
+history:
+- id: 01a1f131-ff61-7f62-8762-853cf33f25f4
+  author: dirtlab
+  timestamp: 2026-11-19T00:25:48.129086177Z
+  session_id: 01a1f1174143
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: a9832d7d44dcce5b20aae7301b3a606a26e0a8e1
+  branch: story-b6b1278890774ef993d2ebc327862470-806
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e207f1f671
+  vendor: claude
+  session: 01a1f1174143
+  harness_version: 2.1.319 (Claude Code)

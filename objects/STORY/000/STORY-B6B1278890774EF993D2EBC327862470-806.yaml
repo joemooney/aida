@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205938Z
-modified_at: 2026-11-19T00:13:24.374573743Z
+modified_at: 2026-11-19T00:25:49.779674582Z
 req_type: Story
 tags:
 - docs:impacted
@@ -34,6 +34,11 @@ relationships:
   target_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
   created_at: 2026-11-18T16:22:36.515796246Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f131-ea31-7a90-9c3c-58a2823d427d
+  created_at: 2026-11-19T00:25:49.779643457Z
+  created_by: dirtlab
 comments:
 - id: 01a1ef77-6367-7b82-9b1f-0e3ced5bee78
   author: joe
@@ -49,6 +54,29 @@ comments:
   modified_at: 2026-11-18T22:39:22.722909201Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f131-82f2-7611-9272-73f3adcf0d93
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a9832d7d44 (git diff origin/main...HEAD; tree clean apart from sandbox mount stubs that are not part of the change).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: registry + strict parse: review_blocking::tests::story_2913_registry_parses_strictly; unknown/empty/wrong-type refuse and fail closed: task_3814_invalid_policy_refuses (7 malformed settings incl. unparseable TOML -> AllBlock, Source::Invalid, prompt says invalid).
+    - AC2 [behavioral-test]: default unchanged: task_3814_absent_preserves_p2_refusal_and_prompt; .aida/config.toml sets [p1, data-loss, security-authority-bypass, unmet-claimed-ac] (the same semantics as the old alias spelling on main).
+    - AC3 [behavioral-test]: story_1421...::story_2913_custom_list_auto_files_followups (custom list approves, files 2 linked follow-ups, retry deduplicated by finding-hash; listed class refuses).
+    - AC4 [behavioral-test]: story_2913_unauthorized_change_is_refused (operator ok; advisor+review-policy mandate ok; 9 refusal cases: no mandate, wrong scope, legacy scope, expired, stopped, past-expiry active, implementer seat, other principal, no grant); story_2913_set_writes_an_audited_canonical_list (stamp set_by/set_at/authority; refused list writes nothing); story_2913_branch_local_edit_cannot_relax_the_list (list read only from default branch).
+    - AC5 [behavioral-test]: config show row reads the same loader (config_cmd [review] blocking_tiers, PolicySource::DefaultBranchConfig); worksheet quotes list in default and enforced cases (task_3814_absent..., task_3814_enabled...).
+    - AC6: tests above; story_2913_custom_list_blocks_only_its_classes covers floors (security-authority-bypass, ADR-76 test-gap in gate code, unknown tier, forged reviewer deferral).
+
+    Probe findings fixed during review: (1) AC3 test recorded verdict approved with a blocking finding; the writer correctly refused, so the test now records request-changes. (2) Making the launch prompt always carry the quote changed review_launch None/Some semantics that stale-base tests depend on. The launch suffix now appears only while a list is in force; the worksheet (aida review prompt) always quotes. (3) A positional class could have displaced an embedded listed class. The merge is now ranked by blocking strength under the active list, with a regression test.
+
+    Validation: lane jobs - 116 targeted (story_2913, task_3814, story2763, task_471, review_prompt, story_1888, bug_1723) and 646 (config_cmd, knob, mandate, story_1728, cli::, review_cmd), 0 failed; help golden regenerated. check-ci-gates --tier fast stopped at Containment conformance evidence tests because the sandbox denies AF_UNIX sockets (unrelated code). CI is the evidence for the rest.
+
+    Residual risks: (a) contained seats whose clone lacks origin/main or main refs resolve to the all-block default (fail closed, so throughput only). (b) Unaudited path: a hand edit of [review] blocking_tiers merged without the set command carries no stamp. .aida/config.toml is gate-protected, so it cannot ship under a mandate, but an advisor ship without a mandate is still possible. (c) The new mandate scope review-policy is explicit-only; drive mandates do not imply it.
+  created_at: 2026-11-19T00:25:16.274640120Z
+  modified_at: 2026-11-19T00:25:16.274640120Z
+  session_id: 01a1f1174143
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
@@ -87,6 +115,12 @@ history:
   - field_name: tags
     old_value: operator-ask, process-knob, product-intake, review, throughput
     new_value: docs:impacted, operator-ask, process-knob, product-intake, review, throughput
+- id: 01a1f132-0cb9-7522-9a84-016a406a5e4a
+  author: dirtlab
+  timestamp: 2026-11-19T00:25:51.545954498Z
+  session_id: 01a1f1174143
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
