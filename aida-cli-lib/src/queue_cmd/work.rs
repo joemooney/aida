@@ -5945,7 +5945,7 @@ pub(crate) fn handle_queue_work(
         // STORY-248: resolve the stacked base BEFORE session_start so the
         // worktree is forked from the right place and the SHA capture has a
         // real base to record. Both `--stack` and `--base` flow through the
-        // same `session_start(base: Option<&str>)` parameter.
+        // session base parameter, which distinguishes explicit and inferred bases.
         // trace:STORY-248 | ai:claude
         let project_root_for_base = project_root.clone();
         let cwd_for_base =
@@ -5956,6 +5956,7 @@ pub(crate) fn handle_queue_work(
             stack,
             base,
             force_base,
+            contained,
         )?;
         if let Some(b) = resolved_base.as_deref() {
             eprintln!(
@@ -5981,7 +5982,13 @@ pub(crate) fn handle_queue_work(
             crate::session_start::session_start_with_receipt(
                 &plan.scope,
                 session_branch_override,
-                resolved_base.as_deref(),
+                resolved_base
+                    .as_deref()
+                    .map(|branch| match (base.is_some(), contained) {
+                        (true, true) => crate::session_start::SessionBase::QueueBranch(branch),
+                        (true, false) => crate::session_start::SessionBase::Explicit(branch),
+                        (false, _) => crate::session_start::SessionBase::Local(branch),
+                    }),
                 /* reuse_branch */ false,
                 path_override,
                 /* forge_override */ None,
