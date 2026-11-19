@@ -674,6 +674,7 @@ pub(crate) struct DevBuildOptions {
     pub install_links: bool,
     pub yes: bool,
     pub after_wave: bool,
+    pub autopromote_target: Option<String>,
 }
 
 /// What re-recording the mail-retention activation after a promote did.
@@ -696,6 +697,7 @@ pub(crate) const RETENTION_RECORD_COMMAND: &str = "aida mailbox retention activa
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BuildOutcome {
     Promoted,
+    AlreadyPromoted,
     BuiltOnly(BuildOnlyReason),
 }
 
@@ -843,9 +845,32 @@ pub(crate) fn run_dev_build(
             // live-dir lock, and the smoke test runs against the staged
             // copies, so the pair that goes live is exactly the pair that
             // was tested even if another build rewrites target/ meanwhile.
-            let lock = lock_live_dir(layout)?;
+            // trace:BUG-2628 | ai:codex
+            let wait = if opts.autopromote_target.is_some() {
+                Duration::from_secs(30)
+            } else {
+                LIVE_LOCK_WAIT
+            };
+            let (lock, contended) = acquire_live_lock(layout, wait)?;
+            let Some(lock) = lock else {
+                let why = live_lock_busy(layout);
+                if opts.autopromote_target.is_some() {
+                    return Err(PromotionRefused(why).into());
+                }
+                bail!("{why}");
+            };
             for note in recover_live_dir(layout)? {
                 writeln!(out, "note: {note}")?;
+            }
+            if let Some(target) = opts.autopromote_target.as_deref().filter(|_| contended) {
+                if read_promotion_meta(&layout.live_dir).is_some_and(|meta| meta.sha == target) {
+                    writeln!(out, "{target} already promoted by a concurrent build")?;
+                    return Ok(BuildOutcome::AlreadyPromoted);
+                }
+                return Err(PromotionRefused(format!(
+                    "live update finished without promoting {target}; the next tick will retry"
+                ))
+                .into());
             }
             let incoming = stage_incoming(layout)?;
             let smoked = steps
@@ -1326,6 +1351,22 @@ fn fresh_dir(dir: &Path) -> Result<()> {
 /// prev rotation and the final renames (and across a rollback). A second
 /// promote or rollback refuses instead of interleaving with this one.
 pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
+    acquire_live_lock(layout, LIVE_LOCK_WAIT)?
+        .0
+        .with_context(|| live_lock_busy(layout))
+}
+
+const LIVE_LOCK_WAIT: Duration = Duration::from_millis(500);
+
+fn live_lock_busy(layout: &DevLayout) -> String {
+    format!(
+        "another `aida dev build` or `aida dev rollback` is updating {} right now; \
+         retry when it finishes. Nothing was changed.",
+        layout.live_dir.display()
+    )
+}
+
+fn acquire_live_lock(layout: &DevLayout, wait: Duration) -> Result<(Option<std::fs::File>, bool)> {
     use fs2::FileExt;
     let live = &layout.live_dir;
     std::fs::create_dir_all(live).with_context(|| format!("creating {}", live.display()))?;
@@ -1340,19 +1381,22 @@ pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
     // Retry briefly: a child forked by this process (any thread) shares the
     // lock's file description until it execs, which reads as "held" for a
     // few microseconds even though no other promote is running.
-    let deadline = Instant::now() + Duration::from_millis(500);
-    while file.try_lock_exclusive().is_err() {
-        if Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(20));
-            continue;
+    let deadline = Instant::now() + wait;
+    let mut contended = false;
+    loop {
+        match FileExt::try_lock_exclusive(&file) {
+            Ok(()) => return Ok((Some(file), contended)),
+            Err(e) if e.kind() == fs2::lock_contended_error().kind() => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Ok((None, true));
+                }
+                contended = true;
+                std::thread::sleep(remaining.min(Duration::from_millis(20)));
+            }
+            Err(e) => return Err(e).with_context(|| format!("locking {}", path.display())),
         }
-        bail!(
-            "another `aida dev build` or `aida dev rollback` is updating {} right now; \
-             retry when it finishes. Nothing was changed.",
-            live.display()
-        );
     }
-    Ok(file)
 }
 
 /// Finish or undo whatever an interrupted promote or rollback left behind.
