@@ -9,6 +9,10 @@
     {
       "at": "2026-11-19T08:13:16.124055795Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-19T09:59:52.737117222Z",
+      "closed_by": "auto-bump"
     }
   ],
   "events": [
@@ -39,6 +43,26 @@
         "event": "SpecCompleted",
         "commit": "4d6994869def49bf5179328a9d1a7f6c9752315a",
         "pr": 4284,
+        "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:33:50.283214277Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-463",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T09:59:52.483319211Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-463",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6f1d576470199708200bdb0202c5e77e542d24bd",
+        "pr": 4297,
         "closed_by": "auto-bump"
       }
     }
