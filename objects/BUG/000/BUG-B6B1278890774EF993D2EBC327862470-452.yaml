@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T11:09:11.427705094Z
+modified_at: 2026-11-19T11:09:31.412680294Z
 req_type: Bug
 tags:
 - conflicts
@@ -460,6 +460,28 @@ comments:
   content: Commit 872a1e9f0d references this requirement
   created_at: 2026-11-19T11:09:11.427705094Z
   modified_at: 2026-11-19T11:09:11.427705094Z
+  session_id: 01a1f3667868
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f37f-5794-7261-b49a-5d0aaef12a3d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 872a1e9f0d (redesign per advisor ruling 2026-11-18 23:40; supersedes parked #4275).
+
+    Design: `queue work --fresh` never resets/cleans a seat in place. Before session start it no-replace-renames each unleased seat clone of the scope on the PR branch (plus seats named by unreleased reservations of that PR) to `<seat>.retained-<UTC>`, moving its base pin; host Git never runs in it. New seat = fresh clone at the original path; lane prompt names the moved path. Rework prep fetches heads first; refusals name seat state, reserving lane + liveness, and one recovery command. Under --fresh, dead-lane reservations are released; live/unproven refuse.
+
+    AC1 [evidence: behavioral-test] dead_lane_reservation_names_fresh_and_fresh_restarts_from_origin; bug_2504_rework_preflight_has_no_commit_recovery (no 'diagnose', names missing journal + fetch command).
+    AC2 [evidence: behavioral-test] clean_remote_branch_and_seat_gone_without_journal_start_fresh.
+    AC3 [evidence: behavioral-test] fresh_moves_retained_seat_aside_intact_then_checks_out_pr_head (staged/unstaged/untracked/ignored/local commit + whole .git byte-for-byte in moved dir; new checkout at PR head); dead_lane_..._fresh_restarts_from_origin.
+    AC4 [evidence: behavioral-test] the two above + adopted_seat_resumes_journaled_conflict_with_edits.
+    Brief (d): failed_move_aside_refuses_with_no_changes. Leased/other-branch seats kept: fresh_moves_only_seats_of_the_pr_branch + leased check. Live reservation: fresh_keeps_an_unproven_lanes_reservation.
+    Production path (c): queue_work_wires_fresh_into_move_aside_and_rework_prep is a source ratchet over handle_queue_work (move-aside gated on fresh && !adopt, before session_start; rework_seat_for(adopt, fresh) passed to prep). Launching paths are not hermetically drivable (all handle_queue_work tests use no_launch); behavior is proven by the function-level tests.
+
+    Probes: rename is renameat2 NOREPLACE (an existing target refuses, never replaces); pin moved by CAS update-ref (create-new with empty old value, delete-old with exact oid) and rolled back on rename failure; candidates require real dir + seat-clone location + clone root == canonical path + plain-file HEAD on the branch; in-use seats refuse (check_worktree_removal).
+    Validation: lane job 'cargo test -p aida-cli-lib --lib -- seat_clone repair_journal queue_cmd': 431 passed, 22 failed — all 22 environmental (nested bwrap, mail-retention writer-admission scan, 60 GiB disk-headroom floor), none in changed code; all 8 BUG-2688 tests + all rework/bug_2504 tests pass. check-store-writers.py passes (6 new rows classified). check-ci-fast not runnable within the 60 s tool cap; left to host/CI.
+    Residual risks: linked-worktree (non-clone) seats are not moved (only seat clones); mail retention of the moved dir not addressed (BUG-2643); the moved dir still carries the aida-seat- prefix, so reap lists it as an unleased clone kept for the operator (pin kept), and `aida worktree dismiss` removes it.
+  created_at: 2026-11-19T11:09:31.412680294Z
+  modified_at: 2026-11-19T11:09:31.412680294Z
   session_id: 01a1f3667868
   harness_version: 2.1.319 (Claude Code)
 history:
