@@ -173,7 +173,8 @@ fn remote_drift_real_probe_classifies_fixture_hubs() {
     let set_layer = |body: &str| std::fs::write(&layer, body).unwrap();
     let set_bridge = |enabled: bool| {
         set_layer(&format!(
-            "[repo.\"{clone_key}\"]\nbridge = {enabled}\nbridge_every = \"1h\"\n"
+            "[repo.{}]\nbridge = {enabled}\nbridge_every = \"1h\"\n",
+            aida_core::toml_quote::toml_key(&clone_key)
         ))
     };
     let report = || remote_drift_light_report(observer.path());
