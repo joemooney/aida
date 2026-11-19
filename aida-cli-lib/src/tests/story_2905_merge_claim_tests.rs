@@ -3,72 +3,56 @@
 
 use super::*;
 
-fn record(pid: u32, start: &str) -> Record {
+fn record(hand: &str) -> Record {
     Record {
         pr: 7,
-        hand: "train".into(),
-        pid,
-        start: start.into(),
+        hand: hand.into(),
+        holder: aida_core::proc_identity::HolderRecord::refused(
+            aida_core::proc_identity::HolderRefusal::EvidenceUnavailable("fixture".into()),
+        ),
         head: None,
         at: "t".into(),
     }
 }
 
-#[test]
-fn a_live_holder_blocks_and_only_a_positively_dead_one_is_taken_over() {
-    let same = |_: u32| Some("linux-starttime:1".to_string());
-    // Nobody holds it, or we already do.
-    assert_eq!(blocked_by(None, Hand::Train, 2, "s", &same), None);
-    assert_eq!(
-        blocked_by(Some(&record(2, "s")), Hand::Train, 2, "s", &same),
-        None
-    );
-    // Another live process holds it.
-    let why = blocked_by(
-        Some(&record(9, "linux-starttime:1")),
-        Hand::Train,
-        2,
-        "s",
-        &same,
-    )
-    .unwrap();
-    assert!(why.contains("held by the train (pid 9)"), "{why}");
-    // Its pid now names another process: positively dead.
-    let reused = |_: u32| Some("linux-starttime:2".to_string());
-    assert_eq!(
-        blocked_by(
-            Some(&record(9, "linux-starttime:1")),
-            Hand::Train,
-            2,
-            "s",
-            &reused
-        ),
-        None
-    );
+fn ours() -> aida_core::proc_identity::ProcIdentity {
+    aida_core::proc_identity::HolderRecord::capture(std::process::id())
+        .validate()
+        .expect("this test process has an identity")
+        .clone()
 }
 
 #[test]
-fn a_second_hand_is_refused_while_the_first_holds_the_claim() {
+fn a_live_holder_blocks_and_only_a_positively_dead_one_is_taken_over() {
+    let me = ours();
+    assert_eq!(blocked_by(None, Hand::Ship, &me, &|_| Some(true)), None);
+    // Another live holder blocks.
+    let why = blocked_by(Some(&record("train")), Hand::Ship, &me, &|_| Some(true)).unwrap();
+    assert!(why.contains("held by the train"), "{why}");
+    // A positively dead holder is taken over.
+    assert_eq!(
+        blocked_by(Some(&record("train")), Hand::Ship, &me, &|_| Some(false)),
+        None
+    );
+    // A holder that cannot be judged refuses.
+    let why = blocked_by(Some(&record("train")), Hand::Ship, &me, &|_| None).unwrap();
+    assert!(why.contains("liveness cannot be checked"), "{why}");
+}
+
+#[test]
+fn one_process_is_still_two_hands() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path();
     let first = claim(root, 7, Some("abc"), Hand::Ship).expect("first claim");
-    // A claim held by this same process is re-entrant (one process, one
-    // hand); a different live process is refused, as the record shows.
-    let path = claim_file(root, 7);
-    let mut other = read(&path).unwrap().unwrap();
-    other.pid = 1; // init: alive, and never this process
-    other.start = aida_core::liveness::process_start_identity(1).unwrap_or_default();
-    other.hand = "train".into();
-    std::fs::write(&path, serde_json::to_vec(&other).unwrap()).unwrap();
-    let why = claim(root, 7, Some("abc"), Hand::Ship).unwrap_err();
+    // The same hand again is re-entrant; another hand is refused, even in
+    // this same process.
+    claim(root, 7, Some("abc"), Hand::Ship).expect("re-entrant for the same hand");
+    let why = claim(root, 7, Some("abc"), Hand::Train).unwrap_err();
     assert!(
-        why.contains("PR-7 is not merged here") && why.contains("held by the train"),
+        why.contains("PR-7 is not merged here") && why.contains("held by the ship"),
         "{why}"
     );
-    // The first guard no longer owns the file, so dropping it leaves the
-    // other hand's claim in place.
     drop(first);
-    assert!(path.exists(), "another hand's claim survives our release");
 }
 
 #[test]

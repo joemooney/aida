@@ -41,9 +41,8 @@ impl Hand {
 struct Record {
     pr: u64,
     hand: String,
-    pid: u32,
-    /// The holder's kernel start identity: with `pid`, who holds it.
-    start: String,
+    /// Who holds it: the shared process-identity record.
+    holder: aida_core::proc_identity::HolderRecord,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     head: Option<String>,
     at: String,
@@ -54,17 +53,23 @@ struct Record {
 pub(crate) struct ClaimGuard {
     root: PathBuf,
     path: PathBuf,
-    pid: u32,
-    start: String,
+    holder: aida_core::proc_identity::ProcIdentity,
+    hand: Hand,
+    /// Whether this guard took the claim (a re-entrant claim of a PR this
+    /// hand already holds in this process releases nothing).
+    releases: bool,
 }
 
 impl Drop for ClaimGuard {
     fn drop(&mut self) {
+        if !self.releases {
+            return;
+        }
         let Ok(_lock) = lock(&self.root) else {
             return;
         };
         if let Ok(Some(record)) = read(&self.path) {
-            if record.pid == self.pid && record.start == self.start {
+            if record.holder.identity() == Some(&self.holder) && record.hand == self.hand.as_str() {
                 let _ = std::fs::remove_file(&self.path);
             }
         }
@@ -125,42 +130,45 @@ fn read(path: &Path) -> std::io::Result<Option<Record>> {
         .map_err(|e| std::io::Error::other(format!("{} is malformed: {e}", path.display())))
 }
 
-/// Whether a claim's holder is alive: `Some(true)` the same process still
-/// runs, `Some(false)` it is positively gone (no such process, or its pid
-/// names a process with another start identity), `None` cannot be told.
-fn holder_alive(record: &Record, identity: &dyn Fn(u32) -> Option<String>) -> Option<bool> {
-    match identity(record.pid) {
-        Some(now) => Some(now == record.start),
-        None if cfg!(target_os = "linux") && Path::new("/proc/self").exists() => {
-            Some(Path::new(&format!("/proc/{}", record.pid)).exists())
-        }
-        None => None,
+/// Whether a claim's holder is alive, from the shared process-identity
+/// observation: `Some(true)` it still runs, `Some(false)` it is positively
+/// gone (exited, or its pid reused), `None` it cannot be judged here.
+fn holder_alive(record: &Record) -> Option<bool> {
+    use aida_core::proc_identity::Verdict;
+    match record.holder.observe() {
+        Ok(Verdict::Alive) => Some(true),
+        Ok(Verdict::Dead(_)) => Some(false),
+        _ => None,
     }
 }
 
-/// PURE: whether `existing` stops a new claim by `pid`/`start`, and why.
+/// PURE: whether `existing` stops `ours` claiming the PR as `hand`, and why.
+/// `alive` judges the existing holder.
 fn blocked_by(
     existing: Option<&Record>,
     hand: Hand,
-    pid: u32,
-    start: &str,
-    identity: &dyn Fn(u32) -> Option<String>,
+    ours: &aida_core::proc_identity::ProcIdentity,
+    alive: &dyn Fn(&Record) -> Option<bool>,
 ) -> Option<String> {
     let record = existing?;
     // Re-entrant only for the same hand in the same process: one process
     // running a train and a ship of the same PR is still two hands.
-    if record.pid == pid && record.start == start && record.hand == hand.as_str() {
+    if record.holder.identity() == Some(ours) && record.hand == hand.as_str() {
         return None;
     }
-    match holder_alive(record, identity) {
+    let pid = record
+        .holder
+        .identity()
+        .map_or_else(|| "unknown".to_string(), |id| id.pid.to_string());
+    match alive(record) {
         Some(false) => None,
         Some(true) => Some(format!(
-            "it is held by the {} (pid {}) since {}",
-            record.hand, record.pid, record.at
+            "it is held by the {} (pid {pid}) since {}",
+            record.hand, record.at
         )),
         None => Some(format!(
-            "it is claimed by the {} (pid {}), whose liveness cannot be checked on this host",
-            record.hand, record.pid
+            "it is claimed by the {} (pid {pid}), whose liveness cannot be checked on this host",
+            record.hand
         )),
     }
 }
@@ -175,9 +183,12 @@ pub(crate) fn claim(
     hand: Hand,
 ) -> Result<ClaimGuard, String> {
     let pid = std::process::id();
-    let start = aida_core::liveness::process_start_identity(pid)
-        .ok_or("this process's start identity cannot be read, so it cannot hold a claim")?;
     let refuse = |why: String| format!("PR-{pr} is not merged here: {why}");
+    let holder = aida_core::proc_identity::HolderRecord::capture(pid);
+    let ours = holder
+        .validate()
+        .map_err(|e| refuse(format!("this process cannot hold a claim ({e:?})")))?
+        .clone();
     let _lock = lock(root).map_err(|e| refuse(format!("the claim lock cannot be taken ({e})")))?;
     if hand != Hand::Train {
         let pins = crate::pr_train::pr_head_pins(&main_root(root), pr)
@@ -188,20 +199,26 @@ pub(crate) fn claim(
     }
     let path = claim_file(root, pr);
     let existing = read(&path).map_err(|e| refuse(format!("its claim cannot be read ({e})")))?;
-    if let Some(why) = blocked_by(
-        existing.as_ref(),
-        hand,
-        pid,
-        &start,
-        &aida_core::liveness::process_start_identity,
-    ) {
+    if let Some(why) = blocked_by(existing.as_ref(), hand, &ours, &holder_alive) {
         return Err(refuse(why));
+    }
+    // Already ours for this hand: the outer claim keeps (and releases) it.
+    if existing
+        .as_ref()
+        .is_some_and(|r| r.holder.identity() == Some(&ours) && r.hand == hand.as_str())
+    {
+        return Ok(ClaimGuard {
+            root: root.to_path_buf(),
+            path,
+            holder: ours,
+            hand,
+            releases: false,
+        });
     }
     let record = Record {
         pr,
         hand: hand.as_str().to_string(),
-        pid,
-        start: start.clone(),
+        holder,
         head: head.map(str::to_string),
         at: chrono::Utc::now().to_rfc3339(),
     };
@@ -215,8 +232,9 @@ pub(crate) fn claim(
     Ok(ClaimGuard {
         root: root.to_path_buf(),
         path,
-        pid,
-        start,
+        holder: ours,
+        hand,
+        releases: true,
     })
 }
 
