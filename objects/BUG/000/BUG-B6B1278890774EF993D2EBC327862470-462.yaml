@@ -1,0 +1,27 @@
+id: 01a1f1c0-36b0-7730-be47-5859d37396e6
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-462
+agreed_id: BUG-2698
+title: Lane pickup refusal 'canonical branch X still has a lease' names neither the lease id nor its file, so the blocker can't be found or ended
+description: |-
+  Observed 2026-11-18 19:49 and 20:00 on dell1: TASK-3219 pickup refused with "canonical branch task-...-878 still has a lease; inspect or resume that lease explicitly". The check (aida-cli-lib/src/queue_cmd/work.rs:935-938) reads list_leases_strict_all over <launcher project_root>/.aida/sessions/*.toml, including mcp-claim.<id>.toml (leases.rs:306), but the message gives no id or path. Product ended the only matching lease file, the refusal recurred, and at the next check no matching file existed in any sessions dir, so the blocker couldn't be identified.
+
+  Acceptance criteria:
+  1. The refusal names every blocking lease: id, file path, kind (session vs mcp-claim), hostname and started_at. Test: a fixture with one plain and one mcp-claim lease on the branch prints both.
+  2. The refusal prints the exact next command for each (e.g. aida session end <id>, or the claim-release command).
+  3. Unit test that the message includes the path for both lease kinds.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T03:01:08.400632766Z
+modified_at: 2026-11-19T03:01:08.400632766Z
+req_type: Bug
+filed_at:
+  code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 9f2f93cc432
+  vendor: claude
+  session: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
