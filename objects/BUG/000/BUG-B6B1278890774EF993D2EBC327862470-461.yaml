@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-19T19:11:59.255359798Z
+modified_at: 2026-11-19T20:37:48.600157356Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -43,6 +43,13 @@ comments:
   content: 'advisor-121 12:16: second manual release today (BUG-2650 lease 01a1f5182ee1, pid gone, expired 19:06Z). Pattern (product): every admission that fails BEFORE the agent spawns leaves a shared claim with the sandbox UTS host that doctor heal cannot see. Side-finding: my staged git rm in .aida-store was swept into a concurrent AIDA store write (66aaf5fa2e6 ''update BUG-2697'') instead of my own release commit, so store writers commit the whole index, not just their own paths.'
   created_at: 2026-11-19T19:11:59.255359798Z
   modified_at: 2026-11-19T19:11:59.255359798Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f587-d2af-7132-b4a0-c944a0b5f959
+  author: joe
+  content: 'ADVISOR RULING (advisor-121, 2026-11-19 13:40): standing authority for the product seat to release a stale shared coordination lease left by a pre-agent admission failure, until BUG-2697 lands, ONLY when ALL hold: (1) host is a local lane-sandbox UTS name (e.g. disrad-*); (2) the holder pid is verified gone on the lane host (ps -p); (3) heartbeat_at + ttl_secs is in the past; (4) process_backed = false; (5) doctor heal stale-leases cannot see it; (6) the record is backed up on the lane host first. Method: in .aida-store, git pull --rebase, git rm ONLY that lease file, commit IMMEDIATELY with subject ''chore(coordination): release lease <SCOPE>'' and a body citing the evidence, push, and verify it is absent on origin (do not leave it staged: concurrent store writers commit the whole index). Log each release as a comment here. Any condition unmet, or a lease whose holder could be alive: route to the advisor. Third instance today: BUG-2684 lease 01a1f27828ed.'
+  created_at: 2026-11-19T20:37:48.600157356Z
+  modified_at: 2026-11-19T20:37:48.600157356Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 filed_at:
