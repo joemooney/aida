@@ -562,6 +562,77 @@ fn blocked_reason(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:BUG-2685 | ai:codex
+    #[test]
+    fn landing_health_gitlab_stalled_trace_keeps_failed_steps() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        use crate::forge::{ChangeRef, Forge, GitLabForge};
+        use std::os::unix::fs::PermissionsExt;
+        use std::time::{Duration as StdDuration, Instant};
+
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let script = root.join("glab");
+        std::fs::write(
+            &script,
+            r#"#!/bin/sh
+case "$4" in
+  projects/:id/pipelines) printf '%s' '[{"id":42}]' ;;
+  projects/:id/pipelines/42/jobs) cat jobs.json ;;
+  projects/:id/jobs/1/trace) touch stalled-trace-started; exec sleep 30 ;;
+  projects/:id/jobs/2/trace) printf '%s\n' 'ERROR: test failed' ;;
+  projects/:id/jobs/3/trace) printf '%s\n' 'ERROR: unavailable'; exit 1 ;;
+  *) exit 99 ;;
+esac
+"#,
+        )
+        .unwrap();
+        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let _env = crate::test_env::EnvVarsGuard::set(&[
+            ("PATH", "/usr/bin:/bin"),
+            ("AIDA_TEST_GLAB_BINARY", script.to_str().unwrap()),
+        ]);
+        std::fs::write(
+            root.join("jobs.json"),
+            r#"[
+                {"id":1,"name":"build","status":"failed","finished_at":"2026-11-16T02:55:00+01:00"},
+                {"id":2,"name":"test","status":"failed","finished_at":"2026-11-16T01:56:00Z"},
+                {"id":3,"name":"lint","status":"failed","finished_at":"2026-11-16T01:57:00Z"},
+                {"name":"package","status":"failed","finished_at":"2026-11-16T01:58:00Z"},
+                {"id":4,"name":"docs","status":"success","finished_at":"2026-11-16T01:59:00Z"}
+            ]"#,
+        )
+        .unwrap();
+        let forge = GitLabForge::new(root);
+        let change = ChangeRef {
+            id: 1,
+            branch: "feature".into(),
+            base: "main".into(),
+            url: String::new(),
+            title: None,
+        };
+        let started = Instant::now();
+        let steps = forge.landing_steps(&change).unwrap().unwrap().steps;
+        assert!(root.join("stalled-trace-started").is_file());
+        assert!(started.elapsed() < StdDuration::from_secs(25));
+        assert_eq!(steps.len(), 4);
+        assert_eq!(steps[0].check, "build");
+        assert_eq!(steps[0].completed.to_rfc3339(), "2026-11-16T01:55:00+00:00");
+        assert_eq!(steps[1].check, "test");
+        assert_eq!(steps[1].error, "ERROR: test failed");
+        assert_eq!(steps[2].check, "lint");
+        assert_eq!(steps[3].check, "package");
+        for index in [0, 2, 3] {
+            assert_eq!(steps[index].error, "unknown (job trace unavailable)");
+        }
+        assert!(steps
+            .iter()
+            .all(|step| step.failed && step.name == "script"));
+    }
+
     // trace:STORY-b6b1278890774ef993d2ebc327862470-772.acfec592 | ai:codex
     #[test]
     fn landing_health_github_adapter_required_dependencies() {

@@ -844,6 +844,16 @@ A change merged before review is not exempt from review. Its specs get the `merg
 
 **Gotchas.** Run it on `integration`, with no tracked changes, equal to `origin/integration`; it refuses otherwise. The `[integration]` table is read from the default branch, not from the worktree, so a change cannot switch the setting on for itself. A value the command cannot read is an error, not "off".
 
+<!-- trace:BUG-2690 | ai:codex -->
+`aida land status` and `aida land run` read the GitHub CI job's checkout
+commit and compare its first parent with the target branch tip fetched for the
+pass. A mismatch reports `STALE-CI-BASE` and keeps that result out of landing
+and CI-failure rework. The lander can request GitHub's merge-based branch
+update for an idle, unheld branch, subject to PR head protection. Clean base
+merges remain eligible for ordinary approval carryover. If the job log or
+checkout commit is unavailable, landing status reports `UNKNOWN` for that CI
+evidence.
+
 **Chains with**: `aida land status` → `aida integration merge <PR> --dry-run` → `aida integration merge <PR> --push` → `aida integration tags`.
 
 PR review coverage and merge-time commit-range reads exclude an integration

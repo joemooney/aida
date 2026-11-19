@@ -737,11 +737,15 @@ pub(crate) fn head_matches_pin(pin: &str, actual: &str) -> bool {
 /// instead of updated.
 // trace:STORY-1887 | ai:claude
 pub(crate) fn github_update_branch_argv(id: u64, expected_head: &str) -> Vec<String> {
+    github_update_branch_for_repo("{owner}/{repo}", id, expected_head)
+}
+
+fn github_update_branch_for_repo(repo: &str, id: u64, expected_head: &str) -> Vec<String> {
     vec![
         "api".to_string(),
         "--method".to_string(),
         "PUT".to_string(),
-        format!("repos/{{owner}}/{{repo}}/pulls/{id}/update-branch"),
+        format!("repos/{repo}/pulls/{id}/update-branch"),
         "-f".to_string(),
         format!("expected_head_sha={expected_head}"),
     ]
@@ -2262,6 +2266,114 @@ impl GitHubForge {
     }
 }
 
+// trace:BUG-2690 | ai:codex
+fn landing_github_call(
+    root: &Path,
+    repo: &crate::review_watch::forge::Repository,
+    args: &[&str],
+) -> Result<std::process::Output> {
+    use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
+    const CAP: u64 = 4 * 1024 * 1024;
+    let mut command = Command::new("gh");
+    command
+        .args(args)
+        .current_dir(root)
+        .stdin(std::process::Stdio::null());
+    repo.pin_command(&mut command);
+    match command_output_with_timeout_capped(command, std::time::Duration::from_secs(10), CAP) {
+        BoundedCommandOutput::Completed(out)
+            if out.stdout.len() as u64 <= CAP && out.stderr.len() as u64 <= CAP =>
+        {
+            Ok(out)
+        }
+        _ => anyhow::bail!("GitHub request timed out, exceeded its output limit or could not run"),
+    }
+}
+
+pub(crate) fn landing_ci_api(
+    root: &Path,
+    repo: &crate::review_watch::forge::Repository,
+    path: &str,
+) -> Result<Vec<u8>> {
+    let out = landing_github_call(root, repo, &["api", "--allow-escape-sequences", path])
+        .with_context(|| format!("reading {path}"))?;
+    anyhow::ensure!(
+        out.status.success(),
+        "GitHub CI evidence unavailable at {path}"
+    );
+    Ok(out.stdout)
+}
+
+pub(crate) fn landing_update_branch(
+    root: &Path,
+    repo: &crate::review_watch::forge::Repository,
+    id: u64,
+    head: &str,
+    branch: &str,
+    base: &str,
+) -> Result<()> {
+    let slug = repo
+        .github_slug()
+        .context("update-branch requires GitHub")?;
+    let (_, project) = slug.split_once('/').context("GitHub project is unknown")?;
+    let path = format!("repos/{project}/pulls/{id}");
+    let live: serde_json::Value = serde_json::from_slice(&landing_ci_api(root, repo, &path)?)?;
+    validate_landing_update_target(&live, head, branch, base)?;
+    crate::pr_head_guard::check(root, &format!("PR-{id}"), id, head)?;
+    let argv = github_update_branch_for_repo(project, id, head);
+    let argv: Vec<_> = argv.iter().map(String::as_str).collect();
+    let out = landing_github_call(root, repo, &argv)?;
+    anyhow::ensure!(
+        out.status.success(),
+        "GitHub could not update PR #{id}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Ok(())
+}
+
+fn validate_landing_update_target(
+    live: &serde_json::Value,
+    head: &str,
+    branch: &str,
+    base: &str,
+) -> Result<()> {
+    anyhow::ensure!(
+        live["state"] == "open"
+            && live["draft"] == false
+            && live["head"]["sha"] == head
+            && live["head"]["ref"] == branch
+            && live["base"]["ref"] == base,
+        "the open PR's head or target changed since the landing pass"
+    );
+    let labels = live["labels"].as_array().context("PR labels are unknown")?;
+    for label in labels {
+        anyhow::ensure!(
+            label["name"].as_str().context("PR label name is unknown")?
+                != crate::merge_hold::HOLD_LABEL,
+            "the change is held"
+        );
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn bug_2690_branch_update_refuses_moved_heads_targets_and_unreadable_holds() {
+    let mut live = serde_json::json!({
+        "state": "open", "draft": false,
+        "head": {"sha": "abc", "ref": "feature"},
+        "base": {"ref": "main"},
+        "labels": [],
+    });
+    assert!(validate_landing_update_target(&live, "abc", "feature", "main").is_ok());
+    assert!(validate_landing_update_target(&live, "def", "feature", "main").is_err());
+    assert!(validate_landing_update_target(&live, "abc", "feature", "integration").is_err());
+    live["labels"] = serde_json::json!([{"name": crate::merge_hold::HOLD_LABEL}]);
+    assert!(validate_landing_update_target(&live, "abc", "feature", "main").is_err());
+    live["labels"] = serde_json::Value::Null;
+    assert!(validate_landing_update_target(&live, "abc", "feature", "main").is_err());
+}
+
 /// Every open GitHub change with its title, labels and check rollup, in one
 /// bounded read. `pin` fixes the host and clears inherited routing, as the
 /// caller's pinned discovery does. This is a plain read for the landing
@@ -3357,17 +3469,9 @@ impl Forge for GitLabForge {
                     let Some(end) = job["finished_at"].as_str() else {
                         continue;
                     };
-                    let id = job["id"].as_u64().context("missing pipeline job id")?;
                     let name = job["name"].as_str().context("missing pipeline job name")?;
-                    let out = self.glab_api_get(&format!("projects/:id/jobs/{id}/trace"), &[])?;
-                    let log = String::from_utf8_lossy(&out.stdout);
-                    let error = if out.status.success() {
-                        crate::landing_health::error_line(&log, "")
-                    } else {
-                        "unknown (job trace unavailable)".into()
-                    };
                     // GitLab exposes a job script as one unit, not individual script timings.
-                    steps.push(crate::landing_health::Step {
+                    let mut step = crate::landing_health::Step {
                         check: name.into(),
                         name: "script".into(),
                         workflow: ".gitlab-ci.yml".into(),
@@ -3377,8 +3481,24 @@ impl Forge for GitLabForge {
                         failed: true,
                         successful: false,
                         required: true,
-                        error,
+                        error: "unknown (job trace unavailable)".into(),
+                    };
+                    // trace:BUG-2685 | ai:codex — trace output only enriches job evidence.
+                    let trace = job["id"].as_u64().and_then(|id| {
+                        crate::forge_lookup::with_forge_lookup_deadline(
+                            std::time::Duration::from_secs(10),
+                            || self.glab_api_get(&format!("projects/:id/jobs/{id}/trace"), &[]),
+                        )
+                        .ok()
+                        .filter(|out| out.status.success())
                     });
+                    if let Some(out) = trace {
+                        step.error = crate::landing_health::error_line(
+                            &String::from_utf8_lossy(&out.stdout),
+                            "",
+                        );
+                    }
+                    steps.push(step);
                 }
                 if done {
                     break;

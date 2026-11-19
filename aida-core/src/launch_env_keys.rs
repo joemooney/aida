@@ -156,6 +156,9 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     // Supervisor-to-sweep lock handoff (post-ship cleanup); never a vendor input.
     // trace:BUG-2535 | ai:claude
     "AIDA_SWEEP_PARENT",
+    // The operator's reasoned host-limit override for one launch command;
+    // a vendor child must never inherit it. trace:BUG-2682 | ai:claude
+    "AIDA_OVER_HOST_LIMIT",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",
