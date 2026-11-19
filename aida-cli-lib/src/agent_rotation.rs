@@ -697,6 +697,8 @@ pub(crate) enum RotationOutcome {
 pub(crate) struct Supervision<'a> {
     pub policy: RotationPolicy,
     pub on_gap: &'a mut dyn FnMut(u64),
+    /// Wait one second in production, or advance the hold fixture in tests.
+    pub tick: &'a mut dyn FnMut(),
 }
 
 /// PURE: the line the supervisor prints for a decision that stops it.

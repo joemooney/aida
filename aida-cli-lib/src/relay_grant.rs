@@ -13,7 +13,7 @@
 //! accepts it for this process; the scan only finds its selector.
 // trace:BUG-2585 | ai:claude
 
-use crate::gate::seat_authority::{self as authority, GrantCheck, GrantRejection, SeatGrant};
+use crate::gate::seat_authority::{self as authority, GrantCheck, SeatGrant};
 use aida_core::exec_context::Environment;
 use chrono::{DateTime, Duration, Utc};
 use std::path::Path;
@@ -158,17 +158,6 @@ impl Hold {
     }
 }
 
-fn expired_at(reason: &GrantRejection) -> Option<DateTime<Utc>> {
-    match reason {
-        GrantRejection::Expired { at } => Some(*at),
-        GrantRejection::Parent(inner) => match inner.as_ref() {
-            GrantRejection::Expired { at } => Some(*at),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
 /// The top of `grant`'s delegation chain (itself when it is direct).
 fn chain_root(grant: SeatGrant) -> SeatGrant {
     let mut current = grant;
@@ -218,7 +207,7 @@ pub(crate) fn hold(project_root: &Path, requested_seat: &str, adopt: bool) -> Op
     else {
         return None;
     };
-    let expired_at = expired_at(&reason)?;
+    let expired_at = reason.expired_at()?;
     let own = authority::read_grant(&id).ok()?;
     if let Some(next) = renewed(project_root, &own, requested_seat, now) {
         if adopt {

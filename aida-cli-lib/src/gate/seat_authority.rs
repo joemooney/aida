@@ -663,6 +663,32 @@ pub(crate) enum GrantRejection {
     },
 }
 
+impl GrantRejection {
+    pub(crate) fn expired_at(&self) -> Option<DateTime<Utc>> {
+        match self {
+            Self::Expired { at } => Some(*at),
+            Self::Parent(inner) => inner.expired_at(),
+            _ => None,
+        }
+    }
+}
+
+// Keep the verdict alongside the existing launch diagnostic.
+// trace:BUG-2653 | ai:codex
+#[derive(Debug)]
+struct LaunchParentRefused {
+    reason: GrantRejection,
+    message: String,
+}
+
+impl std::fmt::Display for LaunchParentRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for LaunchParentRefused {}
+
 impl std::fmt::Display for GrantRejection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let stamp = |at: &DateTime<Utc>| at.format("%Y-%m-%dT%H:%MZ").to_string();
@@ -2520,11 +2546,14 @@ pub(crate) fn validate_child_delegation(
         GrantCheck::Absent => bail!(
             "no valid parent seat grant is active: {GRANT_ENV} is absent; re-enter your role at a terminal before launching children"
         ),
-        GrantCheck::Rejected { id, reason, .. } => bail!(
-            "{}{}",
-            parent_grant_refusal(&id, &reason),
-            parent_roster_refusal_detail(project_root, &reason).unwrap_or_default()
-        ),
+        GrantCheck::Rejected { id, reason, .. } => {
+            let message = format!(
+                "{}{}",
+                parent_grant_refusal(&id, &reason),
+                parent_roster_refusal_detail(project_root, &reason).unwrap_or_default()
+            );
+            return Err(LaunchParentRefused { reason, message }.into());
+        }
     };
     if !parent
         .delegable_seats
@@ -2586,6 +2615,14 @@ impl ChildGrantRefused {
     /// Whether `err`'s chain carries a [`ChildGrantRefused`].
     pub(crate) fn is_in(err: &anyhow::Error) -> bool {
         err.chain().any(|cause| cause.is::<ChildGrantRefused>())
+    }
+
+    // trace:BUG-2653 | ai:codex
+    pub(crate) fn is_parent_expired(err: &anyhow::Error) -> bool {
+        err.chain()
+            .filter_map(|cause| cause.downcast_ref::<Self>())
+            .filter_map(|refusal| refusal.0.downcast_ref::<LaunchParentRefused>())
+            .any(|refusal| refusal.reason.expired_at().is_some())
     }
 }
 
