@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
+  position: -832000
+  added_by: role:implementer
+  note: 'Round 2 for PR #4269 (CR at c7c3eb6). AUTHORITATIVE scope: .aida/tmp/brief-STORY-2913-r2.md: (1) a listed or security class never displaced by an unlisted test-gap class; (2) AllBlock forces every finding to blocking; (3) always quote the active policy with provenance (AC5). Regression first; check-ci-fast through the lane job runner. CLAUDE lane, STRICT.'
+  added_at: 2026-11-19T00:40:30.489194166Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ef65-4722-7ab0-b5fc-6771a8aa6dd2
   position: -831000
   added_by: role:implementer
