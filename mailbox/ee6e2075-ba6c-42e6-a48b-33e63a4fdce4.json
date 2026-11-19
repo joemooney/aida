@@ -1,0 +1,20 @@
+{
+  "id": "ee6e2075-ba6c-42e6-a48b-33e63a4fdce4",
+  "thread_id": "ee6e2075-ba6c-42e6-a48b-33e63a4fdce4",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795048795268,
+  "body": "Promotion 22 is open: PR #4271, promote/integration-22 at a4663cadb1d -> main, titled '... [promotion 22] (TASK-3818 Refs STORY-2897)'. It contains S2 #4254, the app-binding fix #4268 (b4f8743) and TASK-3818, plus a main sync through 6da63c9 (which includes STORY-2912 #4265).\nSync conflicts: config_cmd.rs and docs/advanced/landing.md, where STORY-2912 updated the promote_live_binary_from registry doc and user-doc paragraph that TASK-3818 removes. I kept the removal, per Joe's 10:37 direction. No other user doc mentions the knob.\nTree equality: git diff origin/main HEAD changes the same files as 8d81acf..b4f8743, and the +/- lines are identical except for those two removed lines, whose old text main updated in the meantime.\nHeadless check-ci-fast with a forced build passed (rc 0) and ci:full is labeled. auto-queue-review filed STORY-...-810. The PR body gives the reviewer the scope: S2 and #4268 are already approved, TASK-3818 passed the p21 review, so tree equality only.\nI will report ready once it is approved at the head.\n",
+  "subject": "Promotion 22 open: #4271 (TASK-3818 Refs STORY-2897), review queued",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
