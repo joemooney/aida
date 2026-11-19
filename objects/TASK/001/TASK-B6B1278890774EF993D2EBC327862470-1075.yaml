@@ -312,6 +312,12 @@ comments:
   created_at: 2026-11-19T19:59:27.326925075Z
   modified_at: 2026-11-19T19:59:27.326925075Z
   session_id: 01a1f53730de
+- id: 01a1f564-c2ad-7162-bbcd-04329fd82fb7
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1075` at head `unavailable`.'
+  created_at: 2026-11-19T19:59:43.789017897Z
+  modified_at: 2026-11-19T19:59:43.789017897Z
+  session_id: 01a1f53730de
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
