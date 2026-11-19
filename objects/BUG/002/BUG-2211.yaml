@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-19T14:05:19.009654450Z
+modified_at: 2026-11-19T20:26:01.269570314Z
 req_type: Bug
 comments:
 - id: 01a169c8-3728-75a1-91fc-4539b94d63a4
@@ -62,6 +62,12 @@ history:
   - field_name: status
     old_value: Completed
     new_value: Approved
+- id: 01a1f57d-1491-7c90-ba3b-ad64f8cc841f
+  author: joe
+  timestamp: 2026-11-19T20:26:17.617178374Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 processing_record:
 - id: 01a16ac8-c893-7610-b6bc-b501d1fb57f7
   timestamp: 2026-10-23T22:01:45.875970641Z
@@ -69,6 +75,7 @@ processing_record:
   commit_sha: 4aa9aea412a5418bc7cc92e607a3175eedd17372
   summary: 'BUG-2211 met: empty-0444 config.lock predicate, pre-clear + one retry on worktree-add/branch -D/git config call sites, doctor scan + heal with tests; CI green at head. Non-blocking: push -u sites unwrapped, misplaced lib.rs trace, doctor routing untested.'
   review_verdict: approved
+execution_mode: drain
 filed_at:
   code_sha: a9e78d34914e43b30fc9d2b590d83ab96feb48b2
   branch: main
