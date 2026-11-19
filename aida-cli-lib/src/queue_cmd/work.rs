@@ -4283,6 +4283,24 @@ pub(crate) fn scope_conflict_resume_hint(
     }
 }
 
+/// The rework preparation mode for a seated pickup. The conversation choice
+/// (resume vs. a new one) never decides it: a resumed conversation can get a
+/// replacement seat, and adoption can start a new conversation. Only verified
+/// orphan adoption carries working-tree state forward; an explicit `--fresh`
+/// reconciles retained state into a restart from the verified remote head.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn rework_seat_for(
+    adopt_orphan: Option<&SessionLease>,
+    explicit_fresh: bool,
+) -> crate::seat_clone::ReworkSeat {
+    use crate::seat_clone::ReworkSeat;
+    match (adopt_orphan, explicit_fresh) {
+        (Some(_), _) => ReworkSeat::Adopted,
+        (None, true) => ReworkSeat::Fresh,
+        (None, false) => ReworkSeat::New,
+    }
+}
+
 // trace:STORY-2325 | ai:codex
 pub(crate) fn refuse_retired_steal(steal: bool) -> Result<()> {
     anyhow::ensure!(!steal, "`--steal` is retired: ownership decides reclaim automatically; live or unknown owners retain their lane. Ask the owner to use `aida session end <id>` for voluntary handoff");
@@ -6062,12 +6080,11 @@ pub(crate) fn handle_queue_work(
                         &project_root,
                         &lease.worktree_path,
                         branch,
-                        // A resumed conversation can still have a newly created
-                        // seat. Only adoption carries forward working-tree state.
-                        // trace:BUG-2688 | ai:codex
-                        adopt_orphan.is_some(),
+                        // trace:BUG-2688 | ai:claude
+                        rework_seat_for(adopt_orphan.as_ref(), fresh),
                         *pr,
                         &lease.id,
+                        &plan.scope,
                     );
                     launch_vendor = apply_rework_conflict_route(
                         &project_root,

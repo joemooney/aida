@@ -3713,6 +3713,18 @@ fn bug_2504_rework_preflight_has_no_commit_recovery() {
         assert!(!message.contains("add -A"), "{message}");
         assert!(!message.contains("commit-pending"), "{message}");
         assert!(!message.contains(". ."), "{message}");
+        // The refusal names the missing evidence and its one recovery path.
+        // trace:BUG-2688 | ai:claude
+        if branch == "feat" {
+            for needle in [
+                "cannot resume: no host repair journal entry binds it",
+                "origin/feat is unverified",
+                "host repair journal: no unreleased entry for this seat or head",
+                "fetch origin feat` succeeds, retry `aida queue work SPEC-ID --fresh`",
+            ] {
+                assert!(message.contains(needle), "missing {needle:?} in {message}");
+            }
+        }
     }
     assert!(git_ok(&tree, &["status", "--porcelain"]).contains("UU README.md"));
     assert_eq!(
@@ -5167,6 +5179,251 @@ fn bug_2688_deleted_seat_restarts_conflict_from_origin_without_journal() {
     assert_eq!(
         std::fs::read_to_string(seat.join("README.md")).unwrap(),
         "keep both versions\n"
+    );
+}
+
+// A seat whose PR branch conflicts with main on README.md, pushed to origin.
+// trace:BUG-2688 | ai:claude
+struct Bug2688Seat {
+    fx: Fixture,
+    seat: PathBuf,
+    head: String,
+    base: String,
+}
+
+fn bug_2688_conflict_seat() -> Bug2688Seat {
+    let fx = fixture();
+    git_ok(&fx.main, &["branch", "feat"]);
+    let seat = fx.root.join("repair-seat");
+    git_ok(
+        &fx.main,
+        &["worktree", "add", seat.to_str().unwrap(), "feat"],
+    );
+    std::fs::write(seat.join("README.md"), "PR version\n").unwrap();
+    git_ok(&seat, &["commit", "-qam", "PR version"]);
+    git_ok(&seat, &["push", "-q", "origin", "feat"]);
+    std::fs::write(fx.main.join("README.md"), "main version\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main version"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    let head = git_ok(&seat, &["rev-parse", "HEAD"]);
+    let base = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    Bug2688Seat {
+        fx,
+        seat,
+        head,
+        base,
+    }
+}
+
+// A lease with no recorded owner process: its lane cannot be proven dead.
+fn bug_2688_unproven_lease(main: &Path, id: &str, tree: &Path) {
+    let path = crate::lease_path(main, id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    std::fs::write(
+        path,
+        format!(
+            "id = {id:?}\nscope = \"BUG-2688\"\nslug = \"bug-2688\"\nowner = \"test\"\nworktree_path = {}\nbranch = \"feat\"\nstarted_at = \"2026-11-16T00:00:00Z\"\nhostname = \"h\"\nrole = \"implementer\"\n",
+            aida_core::toml_quote::toml_string(&tree.display().to_string()),
+        ),
+    )
+    .unwrap();
+}
+
+fn bug_2688_prepare(c: &Bug2688Seat, seat: ReworkSeat, lane: &str) -> anyhow::Result<Vec<String>> {
+    prepare_rework_merge_fixture_seat(&c.fx.main, &c.seat, "feat", seat, 2688, lane, "BUG-2688")
+}
+
+fn bug_2688_preserved_refs(seat: &Path) -> Vec<String> {
+    git_ok(
+        seat,
+        &[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/aida/rework-preserved/",
+        ],
+    )
+    .lines()
+    .map(str::to_owned)
+    .collect()
+}
+
+// A replacement seat for a dead lane's journaled conflict refuses with the
+// state and the one recovery command; explicit `--fresh` (through the queue
+// decision seam) preserves the retained work and restarts from origin.
+// trace:BUG-2688 | ai:claude
+#[test]
+fn bug_2688_fresh_restarts_retained_journaled_conflict_from_origin() {
+    let c = bug_2688_conflict_seat();
+    let seat = &c.seat;
+    assert_eq!(
+        bug_2688_prepare(&c, ReworkSeat::New, "old-lane").unwrap(),
+        ["README.md"]
+    );
+    std::fs::write(seat.join("README.md"), "half-resolved\n").unwrap();
+    std::fs::write(seat.join("notes.txt"), "agent notes\n").unwrap();
+
+    // A resumed conversation in a replacement seat is not an adoption.
+    let replacement = crate::queue_cmd::rework_seat_for(None, false);
+    assert_eq!(replacement, ReworkSeat::New);
+    let refusal = format!(
+        "{:#}",
+        bug_2688_prepare(&c, replacement, "new-lane").unwrap_err()
+    );
+    for needle in [
+        format!(
+            "seat retains an unfinished merge (HEAD {}, MERGE_HEAD {}) that lane new-lane cannot resume: its host repair journal entry belongs to lane old-lane",
+            c.head, c.base
+        ),
+        format!("lane old-lane reserves head {}", c.head),
+        "releasable: its lease has ended".into(),
+        "0 local commit(s) not on origin; 2 pending path(s)".into(),
+        format!(
+            "Recovery: `aida queue work BUG-2688 --fresh` saves the seat's retained state under refs/aida/rework-preserved/ and restarts the conflict merge from origin/feat at {}",
+            c.head
+        ),
+    ] {
+        assert!(refusal.contains(&needle), "missing {needle:?} in {refusal}");
+    }
+    assert!(!refusal.contains("diagnose"), "{refusal}");
+    assert_eq!(
+        std::fs::read_to_string(seat.join("README.md")).unwrap(),
+        "half-resolved\n"
+    );
+    assert_eq!(git_ok(seat, &["rev-parse", "MERGE_HEAD"]), c.base);
+    assert!(bug_2688_preserved_refs(seat).is_empty());
+
+    let fresh = crate::queue_cmd::rework_seat_for(None, true);
+    assert_eq!(fresh, ReworkSeat::Fresh);
+    assert_eq!(
+        bug_2688_prepare(&c, fresh, "new-lane").unwrap(),
+        ["README.md"]
+    );
+    assert_eq!(git_ok(seat, &["rev-parse", "HEAD"]), c.head);
+    assert_eq!(git_ok(seat, &["rev-parse", "MERGE_HEAD"]), c.base);
+    assert_eq!(git_ok(seat, &["status", "--porcelain"]), "UU README.md");
+    assert!(!seat.join("notes.txt").exists());
+    let preserved = bug_2688_preserved_refs(seat);
+    assert_eq!(preserved.len(), 1, "{preserved:?}");
+    assert!(preserved[0].starts_with("refs/aida/rework-preserved/pr-2688-"));
+    let saved = &preserved[0];
+    assert_eq!(
+        git_ok(seat, &["show", &format!("{saved}:README.md")]),
+        "half-resolved"
+    );
+    assert_eq!(
+        git_ok(seat, &["show", &format!("{saved}:notes.txt")]),
+        "agent notes"
+    );
+    assert_eq!(
+        git_ok(seat, &["show", "-s", "--format=%P", saved]),
+        format!("{} {}", c.head, c.base)
+    );
+    let journal = crate::repair_journal::RepairGuard::lock(&c.fx.main).unwrap();
+    assert_eq!(
+        journal
+            .for_tree(seat, "feat", &c.head, &c.base)
+            .unwrap()
+            .lane_id,
+        "new-lane"
+    );
+}
+
+// `--fresh` never discards a live/unknown lane's reservation or local commits.
+// trace:BUG-2688 | ai:claude
+#[test]
+fn bug_2688_fresh_keeps_unproven_reservation_and_local_commits() {
+    let c = bug_2688_conflict_seat();
+    let seat = &c.seat;
+    assert_eq!(
+        bug_2688_prepare(&c, ReworkSeat::New, "live-lane").unwrap(),
+        ["README.md"]
+    );
+    bug_2688_unproven_lease(&c.fx.main, "live-lane", seat);
+    let refusal = format!(
+        "{:#}",
+        bug_2688_prepare(&c, ReworkSeat::Fresh, "new-lane").unwrap_err()
+    );
+    for needle in [
+        "fresh restart would discard local commits or a live reservation",
+        "retained: its lease is live or its owner cannot be proven dead",
+        "lane live-lane keeps its reservation because its lease is live or its owner cannot be proven dead; `aida session show live-lane` reports its liveness. After that lane exits, `aida session end live-lane` releases it; then retry `aida queue work BUG-2688 --fresh`",
+    ] {
+        assert!(refusal.contains(needle), "missing {needle:?} in {refusal}");
+    }
+    assert_eq!(git_ok(seat, &["rev-parse", "MERGE_HEAD"]), c.base);
+    assert!(bug_2688_preserved_refs(seat).is_empty());
+    let lane = |c: &Bug2688Seat| {
+        crate::repair_journal::RepairGuard::lock(&c.fx.main)
+            .unwrap()
+            .retained_for(&c.seat, "feat", 2688, &c.head)
+            .into_iter()
+            .map(|e| e.lane_id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(lane(&c), ["live-lane"]);
+
+    // The lane has ended, but the seat carries an unpublished commit.
+    std::fs::remove_file(crate::lease_path(&c.fx.main, "live-lane")).unwrap();
+    git_ok(seat, &["merge", "--abort"]);
+    git_ok(seat, &["commit", "-qm", "local work", "--allow-empty"]);
+    let local = git_ok(seat, &["rev-parse", "HEAD"]);
+    let refusal = format!(
+        "{:#}",
+        bug_2688_prepare(&c, ReworkSeat::Fresh, "new-lane").unwrap_err()
+    );
+    for needle in [
+        "1 local commit(s) not on origin".to_owned(),
+        "releasable: its lease has ended".into(),
+        format!(
+            "Recovery: `git -C {} push origin HEAD:refs/heads/feat` publishes its 1 local commit(s) to origin/feat; then retry `aida queue work BUG-2688 --fresh`",
+            seat.display()
+        ),
+    ] {
+        assert!(refusal.contains(&needle), "missing {needle:?} in {refusal}");
+    }
+    assert_eq!(git_ok(seat, &["rev-parse", "HEAD"]), local);
+    assert_eq!(lane(&c), ["live-lane"]);
+}
+
+// Verified adoption resumes the journaled conflict and its edits even when the
+// launch starts a new conversation; the queue seam decides by adoption alone.
+// trace:BUG-2688 | ai:claude
+#[test]
+fn bug_2688_adopted_seat_resumes_journaled_conflict_with_edits() {
+    let c = bug_2688_conflict_seat();
+    let seat = &c.seat;
+    assert_eq!(
+        bug_2688_prepare(&c, ReworkSeat::New, "orphan-lane").unwrap(),
+        ["README.md"]
+    );
+    std::fs::write(seat.join("README.md"), "keep both\n").unwrap();
+    bug_2688_unproven_lease(&c.fx.main, "orphan-lane", seat);
+    let orphan = crate::leases::read_exact_lease(&c.fx.main, "orphan-lane")
+        .unwrap()
+        .unwrap();
+    let adopted = crate::queue_cmd::rework_seat_for(Some(&orphan), false);
+    assert_eq!(adopted, ReworkSeat::Adopted);
+    crate::repair_journal::RepairGuard::lock(&c.fx.main)
+        .unwrap()
+        .transfer_adopted_lane(seat, "feat", "orphan-lane", "successor")
+        .unwrap();
+    assert_eq!(
+        bug_2688_prepare(&c, adopted, "successor").unwrap(),
+        ["README.md"]
+    );
+    assert_eq!(
+        std::fs::read_to_string(seat.join("README.md")).unwrap(),
+        "keep both\n"
+    );
+    assert_eq!(git_ok(seat, &["rev-parse", "MERGE_HEAD"]), c.base);
+    assert!(bug_2688_preserved_refs(seat).is_empty());
+    let journal = crate::repair_journal::RepairGuard::lock(&c.fx.main).unwrap();
+    assert_eq!(
+        journal
+            .for_tree(seat, "feat", &c.head, &c.base)
+            .unwrap()
+            .lane_id,
+        "successor"
     );
 }
 

@@ -201,7 +201,7 @@ pub(crate) use work::{
 #[cfg(test)]
 pub(crate) use work::{
     derive_queue_work_prompt, latest_ruling_comment, prepend_ruling, resolve_pickup_attempt,
-    rework_pr_head_branch_from_lookup,
+    rework_pr_head_branch_from_lookup, rework_seat_for,
 };
 pub(crate) use work::{
     effective_execution_mode, headless_plan_refusal, launcher_track,

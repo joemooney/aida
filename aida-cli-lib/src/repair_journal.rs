@@ -86,6 +86,20 @@ impl RepairEntry {
         Ok(())
     }
 }
+/// A live or unproven reservation of the same PR head.
+// trace:BUG-2688 | ai:claude
+#[derive(Debug)]
+pub(crate) struct HeadReserved(pub RepairEntry);
+impl std::fmt::Display for HeadReserved {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "repair head {} of PR-{} is already reserved by lane {}; unknown spawn outcomes require proof that the prior lane is dead",
+            self.0.key.original_head, self.0.key.pr, self.0.lane_id
+        )
+    }
+}
+impl std::error::Error for HeadReserved {}
 #[derive(Serialize, Deserialize)]
 struct Journal {
     version: u32,
@@ -170,7 +184,16 @@ impl RepairGuard {
         })
     }
     pub fn reserve(&mut self, entry: RepairEntry) -> Result<()> {
-        anyhow::ensure!(!self.journal.entries.iter().any(|e| e.key == entry.key && e.spawn != SpawnOutcome::ProvenDead), "repair head already reserved; unknown spawn outcomes require proof that the prior lane is dead");
+        // Typed so preparation can name the holder and its recovery.
+        // trace:BUG-2688 | ai:claude
+        if let Some(held) = self
+            .journal
+            .entries
+            .iter()
+            .find(|e| e.key == entry.key && e.spawn != SpawnOutcome::ProvenDead)
+        {
+            return Err(HeadReserved(held.clone()).into());
+        }
         self.journal.entries.retain(|e| e.key != entry.key);
         self.journal.entries.push(entry);
         self.save()
@@ -291,6 +314,39 @@ impl RepairGuard {
             "ambiguous host repair journal evidence"
         );
         Ok(entry)
+    }
+    /// Unreleased entries a fresh restart must reconcile: those bound to this
+    /// seat and branch, and any reservation of the fetched PR head.
+    // trace:BUG-2688 | ai:claude
+    pub fn retained_for(&self, tree: &Path, branch: &str, pr: u64, head: &str) -> Vec<RepairEntry> {
+        self.journal
+            .entries
+            .iter()
+            .filter(|e| {
+                e.spawn != SpawnOutcome::ProvenDead
+                    && ((e.tree_path == tree && e.branch == branch)
+                        || (e.key.pr == pr && e.key.original_head == head))
+            })
+            .cloned()
+            .collect()
+    }
+    /// Record proof that a reservation's lane is dead. The entry must still
+    /// belong to the lane whose death was proven; anything else refuses.
+    // trace:BUG-2688 | ai:claude
+    pub fn mark_proven_dead(&mut self, key: &RepairKey, lane_id: &str) -> Result<()> {
+        let entry = self
+            .journal
+            .entries
+            .iter_mut()
+            .find(|e| &e.key == key && e.spawn != SpawnOutcome::ProvenDead)
+            .context("repair reservation changed during fresh recovery; retry the pickup")?;
+        anyhow::ensure!(
+            entry.lane_id == lane_id,
+            "repair reservation moved to lane {} during fresh recovery; it is retained",
+            entry.lane_id
+        );
+        entry.spawn = SpawnOutcome::ProvenDead;
+        self.save()
     }
     fn save(&self) -> Result<()> {
         aida_core::fs_atomic::write_atomic(&self.path, serde_json::to_vec_pretty(&self.journal)?)?;

@@ -849,9 +849,23 @@ pickup performs a forge PR lookup unless an explicit branch was selected. Before
 launching an implementer, the host fetches the PR head and base from `origin`
 and attempts the base merge in the seat. If a previous seat is gone and its
 repair journal is absent, a replacement seat starts at the fetched PR head and
-recreates the conflict. A fresh pickup logs the fetched head and only
-fast-forwards a clean seat. It refuses to discard local commits or edits.
+recreates the conflict. A new seat only fast-forwards a clean tree to the
+fetched head and refuses to discard local commits or edits. Only a verified
+orphan adoption resumes an existing tree's unfinished merge, whichever
+conversation is launched.
 <!-- trace:BUG-2688 | ai:codex -->
+
+A seat that retains an unfinished merge or repair reservation the pickup does
+not own refuses with the seat, branch, fetched head, local commit and pending
+path counts, the reserving lane and the one recovery command for that state.
+`aida queue work <SPEC> --fresh` logs that state, saves pending edits and the
+unfinished merge under `refs/aida/rework-preserved/pr-<N>-<commit>`, releases
+reservations whose lanes have ended, and restarts the conflict merge from the
+fetched PR head. It still refuses while the seat has commits not on `origin`
+(publish them first) or while a reserving lane is live or cannot be proven
+dead (`aida session show <lane>`, then `aida session end <lane>` after it
+exits).
+<!-- trace:BUG-2688 | ai:claude -->
 
 A clean merge is committed with the host's identity and pushed to the trusted
 host's `origin` before the vendor starts.
