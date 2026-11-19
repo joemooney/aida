@@ -187,7 +187,10 @@ fn unauthorized_approval_stays_needs_review_through_the_handler() {
         .unwrap();
         assert_eq!(value["actionability"], "needs-review", "{label}: {value}");
         assert!(value.get("next_actor").is_none(), "{label}: {value}");
-        assert!(!observed.get(), "{label}: no forge read for a refused approval");
+        assert!(
+            !observed.get(),
+            "{label}: no forge read for a refused approval"
+        );
 
         // The same refusal holds for a PR-keyed record at the PR's head.
         let path = rv::verdict_path(root, "PR-4318");
