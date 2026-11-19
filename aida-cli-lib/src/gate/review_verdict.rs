@@ -3341,6 +3341,36 @@ pub(crate) fn restore_pending_handoff(
     Ok(restored)
 }
 
+/// Re-decide a same-launch replay record under the recorder's held policy
+/// snapshot. A completed record was decided under the policy in force when it
+/// was first written; replaying it must not resurrect that decision. Its
+/// stored findings are re-decided, and the result must be the disposition the
+/// recorder already routed (`kind`) — otherwise the replay refuses, so the
+/// record, the handshake and the hold routing always describe one verdict.
+/// On success the verdict word is the routed kind's canonical spelling.
+// trace:STORY-2913 | ai:claude
+pub(crate) fn redecide_replay_record(
+    record: JsonObj,
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+    kind: VerdictKind,
+) -> Result<JsonObj, String> {
+    let mut record = record;
+    reapply_policy_to_stored_findings(&mut record, effective);
+    let redecided = disposition_verdict(&record);
+    if redecided != kind {
+        return Err(format!(
+            "refused: the recorded review this launch is replaying reads as {} under the \
+             current blocking policy, but this draft routes as {}; nothing was recorded",
+            redecided.label(),
+            kind.label()
+        ));
+    }
+    if let Some(word) = kind.canonical() {
+        record.insert("verdict".into(), word.into());
+    }
+    Ok(record)
+}
+
 /// A draft cannot override evidence left by the legacy record route. Validate
 /// all fresh sources before the record handler mutates the canonical ledger.
 /// trace:BUG-2564 | ai:codex

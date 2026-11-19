@@ -3319,7 +3319,7 @@ fn handle_review_record_context_with_policy_at(
     let mut verdict_obj = if let Some(record) = &replay_record {
         // A same-launch retry of a delivery-pending barrier delivers the
         // reviewer's verdict, never the barrier. trace:BUG-2564 | ai:claude
-        crate::gate::review_verdict::restore_pending_handoff(
+        let restored = crate::gate::review_verdict::restore_pending_handoff(
             record,
             &crate::gate::review_verdict::DraftFacts {
                 pr: pr.unwrap_or_default(),
@@ -3328,7 +3328,12 @@ fn handle_review_record_context_with_policy_at(
                 findings,
             },
         )
-        .map_err(anyhow::Error::msg)?
+        .map_err(anyhow::Error::msg)?;
+        // trace:STORY-2913 | ai:claude — a completed replay is re-decided
+        // under the held snapshot and must match the routed kind, so the
+        // record and handshake never keep an approval the policy now blocks.
+        crate::gate::review_verdict::redecide_replay_record(restored, policy, kind)
+            .map_err(anyhow::Error::msg)?
     } else {
         crate::gate::review_verdict::build_verdict_object_with_effective(
             &project_root,

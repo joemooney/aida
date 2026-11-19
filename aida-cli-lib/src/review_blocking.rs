@@ -257,11 +257,11 @@ pub(crate) fn commit_config_for_test(root: &Path) {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::gate::review_verdict as rv;
 
-    fn set_policy(root: &Path, setting: &str) {
+    pub(crate) fn set_policy(root: &Path, setting: &str) {
         std::fs::create_dir_all(root.join(".aida")).unwrap();
         std::fs::write(
             root.join(".aida/config.toml"),
@@ -972,7 +972,7 @@ mod tests {
 
     /// A default branch whose `.aida/config.toml` exists in the tree but
     /// cannot be read (a gitlink to an absent object).
-    fn publish_unreadable_config(root: &Path) {
+    pub(crate) fn publish_unreadable_config(root: &Path) {
         let index = root.join("aida-test-unreadable-index");
         let git = |args: &[&str]| {
             let out = crate::test_git::git_command()
@@ -1120,7 +1120,7 @@ mod tests {
             .approves());
     }
 
-    fn p2_finding() -> String {
+    pub(crate) fn p2_finding() -> String {
         serde_json::json!({"text": "contained defect", "severity": "minor",
             "blocking_tier": "p2"})
         .to_string()
