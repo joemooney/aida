@@ -22528,9 +22528,9 @@ Discover new heads and dispatch attested reviews without waiting for CI
 Usage: aida review watch [OPTIONS] [COMMAND]
 
 Commands:
-  pause   Pause new review-watch admissions for a bounded time
+  pause   Pause new review launches for a bounded time
   resume  Clear the active review-watch pause
-  status  Show the admission pause and outstanding review reservations
+  status  Show the launch pause and outstanding review reservations
   help    Print this message or the help of the given subcommand(s)
 
 Options:
@@ -22568,7 +22568,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida review watch pause
-Pause new review-watch admissions for a bounded time
+Pause new review launches for a bounded time
 
 Usage: aida review watch pause [OPTIONS] --reason <REASON>
 
@@ -22576,8 +22576,9 @@ Options:
       --reason <REASON>
           Reason to record in the audit history
 
-      --for <SECONDS>
-          Pause duration in seconds (default 3600)
+      --for <DURATION>
+          Pause duration, e.g. 3600, 30m or 2h (default and maximum come from `[review]
+          watch_pause_default` / `watch_pause_max`: 1h / 24h)
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -22618,7 +22619,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida review watch status
-Show the admission pause and outstanding review reservations
+Show the launch pause and outstanding review reservations
 
 Usage: aida review watch status [OPTIONS]
 
@@ -55749,7 +55750,7 @@ Working on aida itself
       "watch",
       "pause"
     ],
-    "about": "Pause new review-watch admissions for a bounded time",
+    "about": "Pause new review launches for a bounded time",
     "flags": [
       {
         "name": "canonical-ids",
@@ -55759,7 +55760,7 @@ Working on aida itself
       {
         "name": "for",
         "takes_value": true,
-        "help": "Pause duration in seconds (default 3600)"
+        "help": "Pause duration, e.g. 3600, 30m or 2h (default and maximum come from `[review] watch_pause_default` / `watch_pause_max`: 1h / 24h)"
       },
       {
         "name": "format",
@@ -55813,7 +55814,7 @@ Working on aida itself
       "watch",
       "status"
     ],
-    "about": "Show the admission pause and outstanding review reservations",
+    "about": "Show the launch pause and outstanding review reservations",
     "flags": [
       {
         "name": "canonical-ids",

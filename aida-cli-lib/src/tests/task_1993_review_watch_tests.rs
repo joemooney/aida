@@ -4246,44 +4246,220 @@ fn bug2650_all_ready_refuses_invalid_shared_review_evidence() {
     assert!(select_train_members(temp.path(), &[1, 2], true).is_err());
 }
 
-// trace:BUG-2650 | ai:codex
+fn pause_for(reason: &str, duration: &str) -> pause::Control {
+    pause::Control::Pause {
+        reason: reason.into(),
+        duration: Some(duration.into()),
+    }
+}
+
+fn pause_events(store: &Store) -> Vec<serde_json::Value> {
+    let audit: serde_json::Value =
+        serde_json::from_slice(&store.dir.read("pause.json").unwrap().unwrap()).unwrap();
+    audit["events"].as_array().unwrap().clone()
+}
+
+// (a) The pause is a record, not a lock: a train reserves members while a
+// pause is active, and a pause is recorded while the train holds them.
+// trace:BUG-2650 | ai:claude
 #[test]
-fn bug2650_pause_survives_restart_and_audits_resume_and_expiry() {
+fn bug2650_pause_never_blocks_train_reservations() {
     let (temp, store) = fixture();
-    let control = pause::Control::Pause {
-        reason: "  rollback \"window\"  ".into(),
-        seconds: 3600,
-    };
     let now = chrono::Utc::now();
-    pause::fixture_change(&store, &control, now).unwrap();
+    pause::fixture_change(&store, &pause_for("cutover", "1h"), "advisor-a", now).unwrap();
+    let _train = crate::admission_owner::cooperative_train(temp.path(), false).unwrap();
+    let (locks, ejected) = select_train_members(temp.path(), &[1, 2], true).unwrap();
+    assert_eq!(locks.len(), 2);
+    assert!(ejected.is_empty());
+    // Pause controls and launch checks proceed while the train holds members.
+    pause::fixture_change(&store, &pause_for("extend", "2h"), "advisor-a", now).unwrap();
+    assert!(pause::check_launch(&store)
+        .unwrap_err()
+        .is::<pause::Paused>());
+    // The member lock still decides first for a reserved change.
+    assert!(
+        matches!(select(&store, &change(1, 1, false), None, 2).unwrap(),
+        Action::Skip(reason) if reason == "change reserved by a merge train")
+    );
+    drop(locks);
+    assert!(store
+        .load()
+        .unwrap()
+        .entries
+        .values()
+        .all(|e| e.attempts.is_empty()));
+}
+
+// (b) A pause skips new launches (at selection and at the dispatcher's
+// pre-spawn check) and logs the owner and reason; a running review is never
+// cancelled and completes normally.
+// trace:BUG-2650 | ai:claude
+#[test]
+fn bug2650_pause_skips_new_launches_and_running_review_completes() {
+    let (temp, store) = fixture();
+    let running = change(1, 1, false);
+    let attempt = dispatch(select(&store, &running, None, 2).unwrap());
+    store
+        .transaction(&running.key(), |state| {
+            let a = attempt_mut(state, &running.key(), &attempt.token).unwrap();
+            a.phase = Phase::Running;
+            a.identity = Some(Identity::current()?);
+            Ok(())
+        })
+        .unwrap();
+    // A dispatcher reserved before the pause has not started queue work yet.
+    let late = change(3, 3, false);
+    let reserved = dispatch(select(&store, &late, None, 3).unwrap());
+
+    let now = chrono::Utc::now();
+    pause::fixture_change(
+        &store,
+        &pause_for("  rollback \"window\"  ", "3600"),
+        "advisor-a",
+        now,
+    )
+    .unwrap();
     let repository = store.repository.clone();
     drop(store);
     let store = Store::open(temp.path(), &repository).unwrap();
-    let candidate = change(1, 1, false);
-    assert!(matches!(select(&store, &candidate, None, 2).unwrap(),
-        Action::Skip(reason) if reason.starts_with("review-watch paused until ")));
-    assert!(pause::launch_guard(&store)
-        .err()
+
+    let skipped = match select(&store, &change(2, 2, false), None, 3).unwrap() {
+        Action::Skip(reason) => reason,
+        other => panic!("expected pause skip: {other:?}"),
+    };
+    assert!(skipped.starts_with("review-watch paused by advisor-a until "));
+    assert!(skipped.ends_with(": rollback \"window\""));
+    assert!(
+        !store.load().unwrap().entries.contains_key("PR-2")
+            || store.load().unwrap().entries["PR-2"].attempts.is_empty()
+    );
+
+    let mut launched = false;
+    execute_reservation(
+        &store,
+        &late.key(),
+        &reserved.token,
+        |_| pause::check_launch(&store),
+        |_| {
+            launched = true;
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert!(!launched);
+    assert_eq!(
+        store.load().unwrap().entries["PR-3"].attempts[0].phase,
+        Phase::Failed
+    );
+
+    let state = store.load().unwrap();
+    assert_eq!(state.entries["PR-1"].attempts[0].phase, Phase::Running);
+    store
+        .transition(&running.key(), &attempt.token, Phase::Completed)
+        .unwrap();
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Completed
+    );
+}
+
+// (c) Expiry auto-resumes launches and is audited once at its deadline.
+// trace:BUG-2650 | ai:claude
+#[test]
+fn bug2650_pause_expiry_auto_resumes() {
+    let (_temp, store) = fixture();
+    let past = chrono::Utc::now() - chrono::Duration::seconds(3600);
+    pause::fixture_change(&store, &pause_for("window", "30m"), "advisor-a", past).unwrap();
+    assert!(pause::check_launch(&store).is_ok());
+    dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
+    assert!(pause::current(&store, chrono::Utc::now())
         .unwrap()
-        .is::<pause::Paused>());
-    assert!(store.load().unwrap().entries.is_empty());
-    pause::fixture_change(&store, &pause::Control::Resume, now).unwrap();
-    assert!(pause::launch_guard(&store).is_ok());
+        .is_none());
+    let events = pause_events(&store);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["pause"]["expires_at"], events[1]["expired"]["at"]);
 
-    let past = now - chrono::Duration::seconds(3600);
-    pause::fixture_change(&store, &control, past).unwrap();
-    dispatch(select(&store, &candidate, None, 2).unwrap());
-    assert!(pause::launch_guard(&store).is_ok());
-    let audit: serde_json::Value =
-        serde_json::from_slice(&store.dir.read("pause.json").unwrap().unwrap()).unwrap();
-    let events = audit["events"].as_array().unwrap();
-    assert_eq!(events.len(), 4);
-    assert_eq!(events[0]["pause"]["actor"], "fixture advisor");
-    assert_eq!(events[0]["pause"]["reason"], "rollback \"window\"");
-    assert_eq!(events[1]["resume"]["actor"], "fixture advisor");
-    assert_eq!(events[2]["pause"]["expires_at"], events[3]["expired"]["at"]);
-
+    // An unreadable record fails closed.
     store.dir.write("pause.json", b"{").unwrap();
     assert!(select(&store, &change(2, 2, false), None, 2).is_err());
-    assert!(pause::launch_guard(&store).is_err());
+    assert!(pause::check_launch(&store).is_err());
+}
+
+// (d) Resume is audited with its actor; a redundant resume records nothing.
+// trace:BUG-2650 | ai:claude
+#[test]
+fn bug2650_resume_is_audited_with_actor() {
+    let (_temp, store) = fixture();
+    let now = chrono::Utc::now();
+    pause::fixture_change(&store, &pause_for("cutover", "1h"), "advisor-a", now).unwrap();
+    pause::fixture_change(
+        &store,
+        &pause::Control::Resume,
+        "operator-b (uid 1000)",
+        now,
+    )
+    .unwrap();
+    assert!(pause::check_launch(&store).is_ok());
+    dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
+    let message = pause::fixture_change(
+        &store,
+        &pause::Control::Resume,
+        "operator-b (uid 1000)",
+        now,
+    )
+    .unwrap();
+    assert!(message.contains("already inactive"));
+    let events = pause_events(&store);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["pause"]["actor"], "advisor-a");
+    assert_eq!(events[0]["pause"]["reason"], "cutover");
+    assert_eq!(events[1]["resume"]["actor"], "operator-b (uid 1000)");
+}
+
+// Durations default and cap from `[review] watch_pause_default/max`.
+// trace:BUG-2650 | ai:claude
+#[test]
+fn bug2650_pause_duration_limits_come_from_config() {
+    assert_eq!(
+        pause::parse_limits("").unwrap(),
+        pause::Limits {
+            default: 3600,
+            max: 86400
+        }
+    );
+    assert_eq!(
+        pause::parse_limits("[review]\nwatch_pause_default = \"30m\"\nwatch_pause_max = 7200\n")
+            .unwrap(),
+        pause::Limits {
+            default: 1800,
+            max: 7200
+        }
+    );
+    assert_eq!(
+        pause::parse_limits("[review]\nwatch_pause_max = \"10m\"\n").unwrap(),
+        pause::Limits {
+            default: 600,
+            max: 600
+        }
+    );
+    for bad in [
+        "[review]\nwatch_pause_default = \"2h\"\nwatch_pause_max = \"1h\"\n",
+        "[review]\nwatch_pause_max = 700000\n",
+        "[review]\nwatch_pause_max = 0\n",
+        "[review]\nwatch_pause_default = true\n",
+    ] {
+        assert!(pause::parse_limits(bad).is_err(), "{bad}");
+    }
+    let (_temp, store) = fixture();
+    let now = chrono::Utc::now();
+    assert!(pause::fixture_change(&store, &pause_for("long", "25h"), "advisor-a", now).is_err());
+    assert!(pause::fixture_change(&store, &pause_for("bad", "soon"), "advisor-a", now).is_err());
+    assert!(store.dir.read("pause.json").unwrap().is_none());
+    let default = pause::Control::Pause {
+        reason: "default".into(),
+        duration: None,
+    };
+    pause::fixture_change(&store, &default, "advisor-a", now).unwrap();
+    let paused = pause::current(&store, now).unwrap().unwrap();
+    assert_eq!(paused.expires_at, now + chrono::Duration::seconds(3600));
 }

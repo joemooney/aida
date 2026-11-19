@@ -643,20 +643,13 @@ impl Directory {
         Ok(())
     }
     fn lock(&self, name: &str) -> Result<RuntimeLock> {
-        self.lock_mode(name, FileExt::try_lock_exclusive)
-    }
-    fn lock_mode(
-        &self,
-        name: &str,
-        acquire: fn(&File) -> std::io::Result<()>,
-    ) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
         // Retry brief concurrent transactions; a holder that outlasts the
         // bounded retry window still yields WouldBlock to the caller.
         // trace:TASK-1993 | ai:claude
         let mut attempts = 0;
         loop {
-            match acquire(&file) {
+            match file.try_lock_exclusive() {
                 Ok(()) => return Ok(RuntimeLock(file)),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
@@ -1658,6 +1651,10 @@ fn select_with_coverage(
     // Whether this head's staleness keeps it from review under the project's
     // `[review] stale_base` policy. trace:STORY-2821 | ai:claude
     let overlap = stale_refused(&store.root, change)?;
+    // The pause is a record read before, never a lock held inside, the
+    // admission transaction: it cannot block train reservations.
+    // trace:BUG-2650 | ai:claude
+    let paused = pause::current(store, chrono::Utc::now()).context(GlobalState)?;
     store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
@@ -1674,21 +1671,6 @@ fn select_with_coverage(
         // trace:BUG-2650 | ai:codex
         let _member = RuntimeLock(member);
         store.reconcile_lost_dispatchers(state);
-        if let Some(paused) = pause::effective_locked(store, chrono::Utc::now()).context(GlobalState)? {
-            return Ok(Action::Skip(paused.to_string()));
-        }
-        // The train takes these locks under this same admission lock.
-        // trace:BUG-2650 | ai:codex
-        let member = store.dir.file(&format!("train-member-{key}.lock"), true)?;
-        if let Err(error) = member.try_lock_exclusive() {
-            if error.kind() == std::io::ErrorKind::WouldBlock {
-                return Ok(Action::Skip("change reserved by a merge train".into()));
-            }
-            return Err(error.into());
-        }
-        // End ownership even if a concurrent fork retains the descriptor.
-        // trace:BUG-2650 | ai:codex
-        let _member = RuntimeLock(member);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
         // count against a changed cap without needing to drain first.
@@ -1808,6 +1790,10 @@ fn select_with_coverage(
         }
         if history.blocking() >= store.max_rounds { return Ok(Action::Skip(store.round_cap_reason())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
+        // Launch point: a pause skips only the new reservation; running
+        // reviews, notices and reconciliation above are unaffected.
+        // trace:BUG-2650 | ai:claude
+        if let Some(paused) = &paused { return Ok(Action::Skip(paused.to_string())); }
         // Exited->Failed setup conversions have a claimed dispatcher identity
         // and a diagnostic. Unclaimed cancellations retain diagnostics alone.
         // Preflight and spawn failures preserve the inherited review budget.
@@ -2402,7 +2388,6 @@ fn child_with_program(
     let id = parse_key(key)?;
     let store = Store::open(root, &repo.identity)?;
     let round = std::cell::Cell::new(0);
-    let launch_guard = std::cell::Cell::new(None);
     execute_reservation(
         &store,
         key,
@@ -2423,25 +2408,25 @@ fn child_with_program(
                     "head changed before review dispatch"
                 );
                 round.set(store.round_for(key, attempt)?);
-                retry_busy(|| pause::launch_guard(&store))
+                // A pause recorded after admission still stops this launch.
+                // trace:BUG-2650 | ai:claude
+                pause::check_launch(&store)
             })();
-            let launch = match checked {
-                Ok(launch) => launch,
-                Err(error) => {
-                    if let Err(cancel) = admission::transition(
-                        root,
-                        key,
-                        &attempt.head,
-                        token,
-                        admission::State::Cancelled,
-                        format!("pre-spawn preflight failed: {error:#}"),
-                    ) {
-                        eprintln!("{key}: hub claim retained: {cancel:#}");
-                    }
-                    return Err(error);
+            if let Err(error) = checked {
+                if let Err(cancel) = admission::transition(
+                    root,
+                    key,
+                    &attempt.head,
+                    token,
+                    admission::State::Cancelled,
+                    format!("pre-spawn preflight failed: {error:#}"),
+                ) {
+                    eprintln!("{key}: hub claim retained: {cancel:#}");
                 }
-            };
-            // Consume the process-bound hub token before any queue-work spawn.
+                return Err(error);
+            }
+            // The local receipt is process-bound; the hub token is consumed
+            // exactly once before any queue-work/reviewer process is started.
             // trace:STORY-2492 | ai:codex
             admission::transition(
                 root,
@@ -2456,13 +2441,9 @@ fn child_with_program(
                     Identity::current()?.start
                 ),
             )?;
-            launch_guard.set(Some(launch));
             Ok(())
         },
         |attempt| {
-            let launch = launch_guard
-                .take()
-                .context("missing review-watch launch guard")?;
             let mut cmd = watch_command(repo, root, program);
             cmd.args(queue_args(key, attempt.vendor.as_deref()))
                 .env(WATCH_HEAD, &attempt.head)
@@ -2472,7 +2453,6 @@ fn child_with_program(
             // trace:TASK-1993 | ai:claude
             retry_busy(|| store.record_worker(key, token, None))?;
             let mut child = crate::process_retry::RetryEtxtbsy::spawn_retrying_etxtbsy(&mut cmd)?;
-            drop(launch);
             match Identity::child(&child) {
                 Ok(worker) => {
                     if let Err(error) = retry_busy(|| store.record_worker(key, token, Some(worker.clone()))) {
@@ -3463,17 +3443,6 @@ fn admit_change(
             report(root, store, &change, &live)?;
         }
         Action::Dispatch(mut attempt) => {
-            let launch = match pause::launch_guard(store) {
-                Ok(launch) => launch,
-                Err(error) => {
-                    retry_busy(|| mark_spawn_failed(store, &key, &attempt.token))?;
-                    if error.is::<pause::Paused>() {
-                        eprintln!("{key}: {error}");
-                        return Ok(());
-                    }
-                    return Err(error);
-                }
-            };
             // Reserve at the sole authority before spawning even the dispatcher.
             // A refused/uncertain claim never authorizes a child.
             // trace:STORY-2492 | ai:codex
@@ -3503,7 +3472,6 @@ fn admit_change(
                     &mut command,
                 )?)
             })();
-            drop(launch);
             match spawned {
                 Ok(mut child) => {
                     // trace:TASK-1993 | ai:claude
