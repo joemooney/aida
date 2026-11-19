@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3820",
+  "publishes": [
+    {
+      "at": "2026-11-19T08:12:57.289020208Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-19T04:10:25.879816583Z",
+      "spec": "TASK-3820",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4280,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "d790cb075a4eaedd9e914fb037265c1e7c0e409f"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:10:30.302362894Z",
+      "spec": "TASK-3820",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full sweep of all 10 files in the supplied protected-base landed diff; attested original head d790cb075a4eaedd9e914fb037265c1e7c0e409f. Request changes for three defects. No local builds/tests run per reviewer policy. Existing CI fast gates passed; fast compilation pending. Implementer reports 7 new tests and 558 related tests passing; these do not cover the interleavings/retry below. Host Codegraph query client is absent; source searches used. TASK-3820 acceptance sweep (including STORY-2828 comments 13-14):\n1. Operator role-enter coverage, excluding inline roots/other principals: verified by inventory_principal, inline_rooted and candidate filtering.\n2. Extend every eligible live descendant: unverified; partial-failure retry misclassifies children as capped (finding 1).\n3. In-place ID/binding/subject/delegation preservation: verified by expiry-only mutation in extend_one.\n4. Mandate deadline, effective seat cap and 168h ceiling: verified by deadline calculations in extend_grants/extend_one.\n5. Preserve intentional shorter descendant cap: unverified; concurrent launcher cap overwritten (finding 2).\n6. Whole descendant chain live and validated: unverified; incomplete locked ancestor checks (finding 3).\n7. Concurrent revoke wins with locked recheck: unverified for ancestor revocation; existing target-only regression is insufficient (finding 3).\n8. Per-grant atomicity: verified by update_grant.\n9. No rollback of successes: verified by sequential extension loop without rollback.\n10. One table with holder, role, old/new expiry and outcome/reason: verified by GrantExtensionReport::text.\n11. Nonzero exit naming every refused grant: verified by grants_outcome.\n12. Never shorten longer grants: verified by pre-lock and locked deadline comparisons.\n13. Never revive expired/revoked grants: verified by target lifetime checks; concurrent ancestor invalidation is unverified (finding 3).\n14. No relay double extension; skip replacements, predecessors and descendants: unverified for ancestor supersession during a descendant lock wait (finding 3); static regression exists.\n15. Human-only TTY entry: verified by require_direct_human at production entry.\n16. Audit each extension/refusal: verified by grant_audit_lines plus renewal event emission.\nParent STORY-2828 original acceptance: inventory under 5s/text-JSON parity: not-applicable-because S2a owns the read-only view; global knob/default/169h/project precedence cases: not-applicable-because prior duration-knob slice owns them; relay expiry notices and doctor findings: not-applicable-because earlier warning work owns them; noninteractive extend refusal: verified by production direct-human guard.",
+        "recovery_hint": "address the review findings, move TASK-3820 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T04:11:26.789919341Z",
+      "spec": "TASK-3820",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T05:04:58.269861373Z",
+      "spec": "TASK-3820",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4280,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ab78b795bfa1234e342015c172b2b317cfe629d3"
+      }
+    },
+    {
+      "ts": "2026-11-19T05:05:23.605313799Z",
+      "spec": "TASK-3820",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed all 19 files in the complete supplied protected-base landed diff (main 697f85f2fff7d766cd736db2a56b705ed281ee10, landed tree 938499e5fa2a5dae47d026f1f4c2defdaae024b6), attesting original PR head ab78b795bfa1234e342015c172b2b317cfe629d3. Read TASK-3820 including the authoritative round-2 brief and implementation evidence. The earlier partial-retry, concurrent-shortening and ancestor-revocation/supersession findings have explicit fixes and regressions. Request changes for two remaining blocking defects: launcher deadlines are not recorded when initially above the child expiry, and lifetime validation can become stale during ancestor-lock waits and revive an expired child. Retain the P2 missing writer-inventory classifications as a follow-up. Existing exact-head CI compilation succeeded, but fast gates and fast compile both failed the writer-inventory ratchet, causing aggregate Build failure. No local build or tests run per reviewer policy. The reviewed absolute host Codegraph client is absent; doctor reports a stale index, and source searches were used. No branch changes or merge performed.",
+        "recovery_hint": "address the review findings, move TASK-3820 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T05:07:27.750053259Z",
+      "spec": "TASK-3820",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T06:07:03.870268728Z",
+      "spec": "TASK-3820",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4280,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "a3729cf5b889d8478fab5679c6a2287931beacff"
+      }
+    },
+    {
+      "ts": "2026-11-19T06:07:09.206876753Z",
+      "spec": "TASK-3820",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Read the complete 20-file protected-base landed diff (main edbcfef98e60b4863afdd698f495c295e85bb129, landed tree 5999332fa6b541b7c0c6019fe1d2b840a795a679), attesting original PR head a3729cf5b889d8478fab5679c6a2287931beacff. Checked TASK-3820, STORY-2828 coverage and signed design, authoritative rework briefs, grant validation/update and contained-launch callers. Earlier partial-retry, fresh cap, ancestor revoke/supersession and post-lock lifetime findings have source fixes and regressions; writer inventory entries are present. Request changes for one remaining security defect: pre-existing credential-capped grants have no recorded cap marker and are extended beyond their launcher deadline. This finding does not depend on the one newer protected-base commit, whose changes are outside the renewal code. Exact-head CI fast gates, fast compilation and aggregate Build succeeded; merge-hold-gate was pending at review time. Implementer reports 18 targeted tests passed; no local builds or tests were run under reviewer policy. The absolute host Codegraph client is absent and doctor reports an unreachable index; source searches were used. No branch update or merge performed.",
+        "recovery_hint": "address the review findings, move TASK-3820 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T06:08:08.791133922Z",
+      "spec": "TASK-3820",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T07:08:12.077410436Z",
+      "spec": "TASK-3820",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4280,
+        "verdict": "APPROVED",
+        "reviewed_sha": "dd44583ebca82f267870fa59b593ec922d0c20f2"
+      }
+    },
+    {
+      "ts": "2026-11-19T08:12:57.074947195Z",
+      "spec": "TASK-3820",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "081a16e34364351848a22096d12c0a482a2b0d44",
+        "pr": 4280,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
