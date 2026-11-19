@@ -19,10 +19,11 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-19T15:48:20.778228287Z
+modified_at: 2026-11-19T15:48:41.220120665Z
 req_type: Bug
 tags:
 - linked:BUG-2626
+- operator-held
 - product-intake
 - scheduler
 comments:
@@ -301,6 +302,16 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f47f-1bdd-7880-a1f9-54a1c07cbdf2
+  author: joe
+  timestamp: 2026-11-19T15:48:53.341517495Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
+deferred: true
+deferred_at: 2026-11-19T15:48:41.220120665Z
+deferred_until: date:2026-11-20
+deferred_reason: 24h live window of night-shift phase timings needed for AC2/AC3; no implementable work until the data exists
 execution_mode: drain
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
