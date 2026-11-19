@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T03:53:27.857324293Z
+modified_at: 2026-11-19T04:21:24.740316619Z
 req_type: Bug
 comments:
 - id: 01a1f1d8-e737-7781-ae25-b47bb9e37714
@@ -18,6 +18,31 @@ comments:
   modified_at: 2026-11-19T03:27:50.709989341Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f209-b62a-7d21-aa27-089135966989
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 697f85f2fff7d766cd736db2a56b705ed281ee10. The merge-base diff with origin/main is empty. Reviewed the native git diff HEAD and checked for untracked additions.
+
+    AC1: [evidence: behavioral-test] A fresh Codex pickup receives brief text using aida-cli-lib/src/queue_cmd/work.rs:6120 and aida-cli-lib/src/session/headless.rs:90. The fake Codex process in bug_2699_codex_child_receives_and_acknowledges_pending_briefs records its argv (aida-cli-lib/src/session/inline_tests.rs:5063). It checks for the expanded pickup workflow, two matching briefs, and exclusion of an unrelated spec, another vendor, and an already acknowledged brief.
+    AC2: [evidence: behavioral-test] The same regression checks that a failed launch keeps both briefs and that successful delivery archives both. aida-cli-lib/src/brief.rs:1256 revalidates content and uses a no-replace rename.
+    AC3: [evidence: behavioral-test] bug_2699_explicit_brief_is_scoped_and_external_files_stay_in_place (aida-cli-lib/src/session/inline_tests.rs:5143) covers queue work --brief parsing, incompatible modes, scope mismatch, symlink refusal, and preservation of an explicitly selected external file.
+
+    Adversarial pass
+
+    1. Cross-reference consistency. Discovery now follows the existing case-insensitive vendor convention. Matching uses normalized IDs and the final launch vendor after rework routing.
+    2. Formats. Fixed the shared filename fallback for hyphenated UTC timestamps. Single-quoted brief metadata uses the existing parser. Codex expansion preserves the brief as a separate prompt section. Regenerated command help and checked its catalog.
+    3. Multiplicity. Empty discovery leaves the pickup prompt intact. Explicit selection replaces discovery. Multiple pending briefs are included deterministically and archived individually after launch.
+    4. Adversarial inputs. Reviewed symlinks, nonregular files, empty or non-UTF-8 input, NUL bytes, oversized input, and replacement before acknowledgement. The read is bounded, fails closed on invalid selected content, and archive collisions preserve the existing archive.
+    5. Launch authority. The brief argument supplies prompt text. Existing queue admission, seat grants, and containment checks still determine launch authority. Failed spawn keeps briefs pending. The contained callback runs after worker grant binding and the release barrier. Existing refusal tests retain their assertions.
+
+    Residual risks. The regression uses a fake vendor and does not exercise a live Codex service. Launch and archive are separate effects, so interruption between them can leave a brief pending. Exact PR-head CI will be supplied by host publication. The reviewed CodeGraph client is absent on this host. Confirmed code navigation with rg.
+
+    Validation passed. Lane job j20261119T041105376-2-0 ran 65 tests with zero failures, including the BUG-2699 regressions, existing brief tests, help snapshot comparison, launch rollback, containment refusals, and the vendor-token ratchet. The store-writer inventory, ExecContext ledger, help-guard fixtures, rustfmt on changed sources, and git diff --check passed.
+  created_at: 2026-11-19T04:21:24.740316619Z
+  modified_at: 2026-11-19T04:21:24.740316619Z
+  session_id: 01a1f1ef942f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f1ce-b18e-73c2-ab3b-eb509a4e5413
   author: joe
