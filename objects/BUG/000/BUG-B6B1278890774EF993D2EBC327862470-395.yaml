@@ -165,6 +165,13 @@ comments:
   modified_at: 2026-11-19T15:47:47.239598197Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f485-327e-7442-b647-bbcdeb210c73
+  author: joe
+  content: 'advisor-121 08:55: execution mode set to drain. The remaining slice (AC2 per-seat PR-attribution count in the blocked-seat alert, plus its test) is alerting, not authority or gate code.'
+  created_at: 2026-11-19T15:55:18.815706774Z
+  modified_at: 2026-11-19T15:55:18.815706774Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
