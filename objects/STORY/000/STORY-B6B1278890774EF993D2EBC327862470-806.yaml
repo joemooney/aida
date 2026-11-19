@@ -2,22 +2,30 @@ id: 01a1ef76-3f0b-7393-bd34-02831db1185f
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-806
 agreed_id: STORY-2913
 title: 'Review blocking tier: free, configurable class list (default = today), auto-filed follow-ups, operator/mandate authority to change, visible in config show and review prompts'
-description: |
-  Follow-up slice of TASK-3814 (#4207). Advisor ruling 2026-11-18 09:20; operator ask (Joe 09:19, "make that configurable"). #4207 ships `[review] blocking_tiers` over a fixed set (p1, data-loss, acceptance), plus a blocking rework that adds a security/authority-bypass class. This slice makes the tier fully configurable.
+description: 'Follow-up slice of TASK-3814 (#4207). Advisor ruling 2026-11-18 09:20; operator ask (Joe 09:19, "make that configurable"). #4207 ships `[review] blocking_tiers` over a fixed set (p1, data-loss, acceptance), plus a blocking rework that adds a security/authority-bypass class. This slice makes the tier fully configurable.
+
 
   ## Acceptance
+
   1. `[review] blocking_tiers` accepts a free list of finding classes from a documented registry (at least p1, p2, p3, data-loss, security-authority-bypass, unmet-claimed-ac, test-gap, style). Unknown classes refuse to parse.
-  2. Default = today's behaviour (every finding blocks). This repo sets ["p1", "data-loss", "security-authority-bypass", "unmet-claimed-ac"] (operator ruling 09:18).
-  3. Non-blocking findings are AUTOMATICALLY filed as follow-up specs linked to the PR's spec (deduplicated by finding hash), and the PR is approved.
+
+  2. Default = today''s behaviour (every finding blocks). This repo sets ["p1", "data-loss", "security-authority-bypass", "unmet-claimed-ac"] (operator ruling 09:18).
+
+  3. Non-blocking findings are AUTOMATICALLY filed as follow-up specs linked to the PR''s spec (deduplicated by finding hash), and the PR is approved.
+
   4. Changing the list needs operator or mandate authority (it decides what counts as a defect). The change is audited.
+
   5. `aida config show` lists the effective tier with provenance, and every review prompt quotes the active list.
+
   6. Tests: default behaviour unchanged; a custom list blocks only its classes; follow-ups auto-filed; an unauthorized change refused.
+
+  '
 status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-18T16:21:06.443205938Z
-modified_at: 2026-11-19T00:39:21.975900554Z
+created_at: 2026-11-18 16:21:06.443205+00:00
+modified_at: 2026-11-19 00:39:21.975900+00:00
 req_type: Story
 tags:
 - docs:impacted
@@ -29,138 +37,180 @@ tags:
 relationships:
 - rel_type: Child
   target_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
-  created_at: 2026-11-18T16:21:11.423029144Z
+  created_at: 2026-11-18 16:21:11.423029+00:00
 - rel_type: BlockedBy
   target_id: 01a1e826-0f9e-7d83-8668-4d967448bf2b
-  created_at: 2026-11-18T16:22:36.515796246Z
+  created_at: 2026-11-18 16:22:36.515796+00:00
   created_by: joe
 - rel_type:
     custom: implemented-by
   target_id: 01a1f131-ea31-7a90-9c3c-58a2823d427d
-  created_at: 2026-11-19T00:25:49.779643457Z
+  created_at: 2026-11-19 00:25:49.779643+00:00
   created_by: dirtlab
 comments:
 - id: 01a1ef77-6367-7b82-9b1f-0e3ced5bee78
   author: joe
   content: 'Advisor 09:31: approved. This is review-gate policy, so STRICT review. Start after #4207 lands, since it builds on review_blocking.rs. Invariant: an unknown or unparseable class list fails closed to the default (all findings block), never to fewer blockers.'
-  created_at: 2026-11-18T16:22:08.849701129Z
-  modified_at: 2026-11-18T16:22:08.849701129Z
+  created_at: 2026-11-18 16:22:08.849701+00:00
+  modified_at: 2026-11-18 16:22:08.849701+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f0d0-c2d0-7932-b8c8-d12d2a274274
   author: joe
   content: 'Product 15:40: lane launched on dell1 (claude). The base is TASK-3814 (#4207, merged as 4abdfe5): [review] blocking_tiers is already a project setting. This story makes the class list free and configurable (default = today), auto-files follow-ups, and adds operator/mandate authority to change it plus visibility in config show and review prompts. Authority-path code: expect a STRICT review and full CI before merge.'
-  created_at: 2026-11-18T22:39:22.722909201Z
-  modified_at: 2026-11-18T22:39:22.722909201Z
+  created_at: 2026-11-18 22:39:22.722909+00:00
+  modified_at: 2026-11-18 22:39:22.722909+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f131-82f2-7611-9272-73f3adcf0d93
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: a9832d7d44 (git diff origin/main...HEAD; tree clean apart from sandbox mount stubs that are not part of the change).
 
+
     Acceptance evidence:
+
     - AC1 [behavioral-test]: registry + strict parse: review_blocking::tests::story_2913_registry_parses_strictly; unknown/empty/wrong-type refuse and fail closed: task_3814_invalid_policy_refuses (7 malformed settings incl. unparseable TOML -> AllBlock, Source::Invalid, prompt says invalid).
+
     - AC2 [behavioral-test]: default unchanged: task_3814_absent_preserves_p2_refusal_and_prompt; .aida/config.toml sets [p1, data-loss, security-authority-bypass, unmet-claimed-ac] (the same semantics as the old alias spelling on main).
+
     - AC3 [behavioral-test]: story_1421...::story_2913_custom_list_auto_files_followups (custom list approves, files 2 linked follow-ups, retry deduplicated by finding-hash; listed class refuses).
+
     - AC4 [behavioral-test]: story_2913_unauthorized_change_is_refused (operator ok; advisor+review-policy mandate ok; 9 refusal cases: no mandate, wrong scope, legacy scope, expired, stopped, past-expiry active, implementer seat, other principal, no grant); story_2913_set_writes_an_audited_canonical_list (stamp set_by/set_at/authority; refused list writes nothing); story_2913_branch_local_edit_cannot_relax_the_list (list read only from default branch).
+
     - AC5 [behavioral-test]: config show row reads the same loader (config_cmd [review] blocking_tiers, PolicySource::DefaultBranchConfig); worksheet quotes list in default and enforced cases (task_3814_absent..., task_3814_enabled...).
+
     - AC6: tests above; story_2913_custom_list_blocks_only_its_classes covers floors (security-authority-bypass, ADR-76 test-gap in gate code, unknown tier, forged reviewer deferral).
+
 
     Probe findings fixed during review: (1) AC3 test recorded verdict approved with a blocking finding; the writer correctly refused, so the test now records request-changes. (2) Making the launch prompt always carry the quote changed review_launch None/Some semantics that stale-base tests depend on. The launch suffix now appears only while a list is in force; the worksheet (aida review prompt) always quotes. (3) A positional class could have displaced an embedded listed class. The merge is now ranked by blocking strength under the active list, with a regression test.
 
+
     Validation: lane jobs - 116 targeted (story_2913, task_3814, story2763, task_471, review_prompt, story_1888, bug_1723) and 646 (config_cmd, knob, mandate, story_1728, cli::, review_cmd), 0 failed; help golden regenerated. check-ci-gates --tier fast stopped at Containment conformance evidence tests because the sandbox denies AF_UNIX sockets (unrelated code). CI is the evidence for the rest.
 
-    Residual risks: (a) contained seats whose clone lacks origin/main or main refs resolve to the all-block default (fail closed, so throughput only). (b) Unaudited path: a hand edit of [review] blocking_tiers merged without the set command carries no stamp. .aida/config.toml is gate-protected, so it cannot ship under a mandate, but an advisor ship without a mandate is still possible. (c) The new mandate scope review-policy is explicit-only; drive mandates do not imply it.
-  created_at: 2026-11-19T00:25:16.274640120Z
-  modified_at: 2026-11-19T00:25:16.274640120Z
+
+    Residual risks: (a) contained seats whose clone lacks origin/main or main refs resolve to the all-block default (fail closed, so throughput only). (b) Unaudited path: a hand edit of [review] blocking_tiers merged without the set command carries no stamp. .aida/config.toml is gate-protected, so it cannot ship under a mandate, but an advisor ship without a mandate is still possible. (c) The new mandate scope review-policy is explicit-only; drive mandates do not imply it.'
+  created_at: 2026-11-19 00:25:16.274640+00:00
+  modified_at: 2026-11-19 00:25:16.274640+00:00
   session_id: 01a1f1174143
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f13e-6a77-7d73-91fc-d205c8ed9def
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-806` at head `c7c3eb65493eb7cbdf212281695b336741dda8bb`.'
-  created_at: 2026-11-19T00:39:21.975896147Z
-  modified_at: 2026-11-19T00:39:21.975896147Z
+  created_at: 2026-11-19 00:39:21.975896+00:00
+  modified_at: 2026-11-19 00:39:21.975896+00:00
   session_id: 01a1f1174143
 - id: 01a1f13f-3340-7570-9f3f-1054318b27aa
   author: joe
-  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed original head c7c3eb65493eb7cbdf212281695b336741dda8bb as landed on protected main 6da63c980365a3d2035dda4ffd1afa687be6c6ec (landed tree 2bb112115f0639cb98df33454df69d1042853217). Read the complete 88,388-byte supplied diff, all 16 changed files, STORY-2913 and its comments, plus relevant classification, verdict, ledger, trusted-config and launch consumers. Request changes for three defects: class merging can discard a listed blocker; invalid/all-block policy preserves explicit deferrals; default-policy launches omit the mandatory quote.. Triage reason: Round 2 for PR #4269 (CR at c7c3eb6). AUTHORITATIVE scope: .aida/tmp/brief-STORY-2913-r2.md: (1) a listed or security class never displaced by an unlisted test-gap class; (2) AllBlock forces every finding to blocking; (3) always quote the active policy with provenance (AC5). Regression first; check-ci-fast through the lane job runner. CLAUDE lane, STRICT.'
-  created_at: 2026-11-19T00:40:13.376435313Z
-  modified_at: 2026-11-19T00:40:13.376435313Z
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed original head c7c3eb65493eb7cbdf212281695b336741dda8bb as landed on protected main 6da63c980365a3d2035dda4ffd1afa687be6c6ec (landed tree 2bb112115f0639cb98df33454df69d1042853217). Read the complete 88,388-byte supplied diff, all 16 changed files, STORY-2913 and its comments, plus relevant classification, verdict, ledger, trusted-config and launch consumers. Request changes for three defects: class merging can discard a listed blocker; invalid/all-block policy preserves explicit deferrals; default-policy launches omit the mandatory quote.. Triage reason: Round 2 for PR #4269 (CR at c7c3eb6). AUTHORITATIVE scope: .aida/tmp/brief-STORY-2913-r2.md: (1) a listed or security class never displaced by an unlisted test-gap class; (2) AllBlock forces every finding to blocking; (3) always quote the active policy with provenance (AC5). Regression first; check-ci-fast
+    through the lane job runner. CLAUDE lane, STRICT.'
+  created_at: 2026-11-19 00:40:13.376435+00:00
+  modified_at: 2026-11-19 00:40:13.376435+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f13f-6a2e-7683-9eb2-87fdc54102ba
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (STORY-2913):
+  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2913):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: c7c3eb65493e
+
     Recorded: 2026-11-19T00:39:15.927262426+00:00
+
     Findings:
+
     1. [P1] Preserve listed blockers when merging a test-gap class. In aida-cli-lib/src/gate/kernel_deps.rs:951-999, rank assigns every test-gap rank 2 even when it is unlisted and the finding is outside sensitive code, above a listed class at rank 1. With blocking_tiers=["data-loss"], a finding {"text":"data corruption","blocking_tier":"p3","class":"data-loss","file":"src/report.rs"} plus --finding-class untested-path replaces data-loss with untested-path; blocks then sees an unlisted p3/test-gap on ordinary code and defers it. Reversing the class channels also loses the positional listed data-loss class because the embedded test-gap wins. The PR can approve and auto-file a finding that the active list explicitly requires to block. Preserve the union of blocking effects, or rank by actual path-sensitive blocking under the current policy. Add regressions for both channel orders with an unlisted test gap and a listed class.
-    2. [P1] Make the invalid-policy fallback actually block every finding. In aida-cli-lib/src/gate/kernel_deps.rs:1048-1049, Policy::AllBlock returns findings unchanged. For a malformed/unknown default-branch list (which previously refused recording), pass {"text":"authority bypass remains","severity":"major","blocking_tier":"security-authority-bypass","disposition":"deferred","rationale":"later"}. from_config_text chooses AllBlock, but this early return preserves deferred; review_verdict::finding_is_deferred/disposition_verdict then permit approval and follow-up delivery. Thus an invalid list can produce fewer blockers than a valid list, directly violating the advisor fail-closed invariant, and even the claimed security floor disappears. The new invalid-policy test uses only findings already marked blocking and misses this case. Ensure invalid/unavailable policy cannot honor reviewer-supplied deferrals (and reconcile the stated all-block default with existing explicit deferrals). Add regression coverage through the canonical verdict builder for security, p1 and unknown-tier findings carrying explicit deferred metadata.
+
+    2. [P1] Make the invalid-policy fallback actually block every finding. In aida-cli-lib/src/gate/kernel_deps.rs:1048-1049, Policy::AllBlock returns findings unchanged. For a malformed/unknown default-branch list (which previously refused recording), pass {"text":"authority bypass remains","severity":"major","blocking_tier":"security-authority-bypass","disposition":"deferred","rationale":"later"}. from_config_text chooses AllBlock, but this early return preserves deferred; review_verdict::finding_is_deferred/disposition_verdict then permit approval and follow-up delivery. Thus an invalid list can produce fewer blockers than a valid list, directly violating the advisor fail-closed invariant, and even the claimed security floor disappears. The new invalid-policy test uses only findings already marked blocking and misses this case. Ensure invalid/unavailable policy cannot honor reviewer-supplied deferrals (and reconcile the stated all-block default with existing explicit deferrals). Add regression
+    coverage through the canonical verdict builder for security, p1 and unknown-tier findings carrying explicit deferred metadata.
+
     3. [Acceptance] Quote the active policy in default and invalid-policy reviewer launches. In aida-cli-lib/src/review_blocking.rs:65-70, launch_prompt returns an empty string whenever enabled is false, including unset, unreadable and invalid config. review_launch::review_prompt therefore omits the policy section (and for strict/no-forge launches returns None), so the launched reviewer receives no active-list/default provenance quote. AC5 explicitly requires every review prompt to quote the active list; the worksheet-only quote does not satisfy launches that never generate that worksheet, and hides invalid-policy fallback from the reviewer. Always include the short active-policy/provenance quote in the launch prompt, update the old None/Some expectations, and add launch tests for unset and invalid config.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-19T00:40:27.438105794Z
-  modified_at: 2026-11-19T00:40:27.438105794Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-19 00:40:27.438105+00:00
+  modified_at: 2026-11-19 00:40:27.438105+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f13f-d005-72f1-a0c4-f35626216f47
   author: joe
-  content: |-
-    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 17:41):
+  content: 'AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 17:41):
+
     # Rework brief: STORY-2913 / PR #4269, round 2 of 4
 
+
     Advisor: claude-advisor-119, 2026-11-18 17:42 MST. Head under review: c7c3eb6. Lane: Claude. STRICT (review-gate policy).
+
     This file is the authoritative scope (BUG-2603: lane prompts can miss the newest advisor comment).
+
 
     ## Fix exactly these three, each with a regression written FIRST (watch it fail at c7c3eb6)
 
+
     ### 1. P1: aida-cli-lib/src/gate/kernel_deps.rs:951-999 (class-merge ranking)
+
     `rank` gives every test-gap class rank 2, above a LISTED blocker at rank 1, even when the test-gap
+
     class is unlisted and the file is outside sensitive code. With blocking_tiers=["data-loss"], the finding
+
     {"text":"data corruption","blocking_tier":"p3","class":"data-loss","file":"src/report.rs"} plus
+
     --finding-class untested-path ends up deferred. Rule: a class in the active blocking list (and
+
     security/authority-bypass, always) must never be displaced by a non-blocking class. The merged class
+
     is blocking if EITHER channel carries a blocking class.
 
+
     ### 2. P1: kernel_deps.rs:1048-1049 (invalid-policy fallback)
+
     `Policy::AllBlock` returns findings unchanged, so a finding that arrives with disposition "deferred"
+
     stays deferred when the default-branch list is malformed or unknown. AllBlock must force EVERY finding
+
     to blocking (clear any incoming deferred disposition) and make the verdict request-changes.
+
     Regression: malformed list plus an incoming deferred finding gives blocking.
 
+
     ### 3. Acceptance (AC5): aida-cli-lib/src/review_blocking.rs:65-70 (prompt quoting)
+
     `launch_prompt` returns "" when the policy is not enabled (unset, unreadable or invalid), so reviewers
+
     get no policy section and strict/no-forge launches return None. Always quote the ACTIVE policy with
+
     its provenance: "default: all findings block (no [review] blocking_tiers set)", "invalid list at
+
     <ref>: falling back to all-block", or the configured list. Regression for each of the three cases.
 
+
     ## Validation
+
     Targeted kernel_deps and review_blocking tests (new regressions included) plus `make check-ci-fast`,
-    run through the lane job runner (never inline; it exceeds the 60 s tool cap). Then push. Nothing else.
-  created_at: 2026-11-19T00:40:41.930061722Z
-  modified_at: 2026-11-19T00:40:41.930061722Z
+
+    run through the lane job runner (never inline; it exceeds the 60 s tool cap). Then push. Nothing else.'
+  created_at: 2026-11-19 00:40:41.930061+00:00
+  modified_at: 2026-11-19 00:40:41.930061+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f140-0613-7571-8328-7e3eca25e447
   author: joe
   content: 'Product 17:41: round-2 lane launched on dell1 (claude, STRICT). Its scope is the AUTHORITATIVE ROUND-2 BRIEF in the previous comment.'
-  created_at: 2026-11-19T00:40:55.870890642Z
-  modified_at: 2026-11-19T00:40:55.870890642Z
+  created_at: 2026-11-19 00:40:55.870890+00:00
+  modified_at: 2026-11-19 00:40:55.870890+00:00
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
-  timestamp: 2026-11-18T16:21:24.825334747Z
+  timestamp: 2026-11-18 16:21:24.825334+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
   changes: []
 - id: 01a1ef77-288a-7e90-bdfc-3fa75b9b762e
   author: joe
-  timestamp: 2026-11-18T16:22:06.218526788Z
+  timestamp: 2026-11-18 16:22:06.218526+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes:
@@ -169,20 +219,20 @@ history:
     new_value: Approved
 - id: 01a1ef78-3f44-7243-ab45-23e6942456f2
   author: joe
-  timestamp: 2026-11-18T16:23:17.572114144Z
+  timestamp: 2026-11-18 16:23:17.572114+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
   changes: []
 - id: 01a1f117-682b-7a31-b0b5-a084fecca5bc
   author: aida-session-start
-  timestamp: 2026-11-18T23:56:45.483393668Z
+  timestamp: 2026-11-18 23:56:45.483393+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f126-a616-7bd0-88ed-c42a68eeef93
   author: dirtlab
-  timestamp: 2026-11-19T00:13:24.374569238Z
+  timestamp: 2026-11-19 00:13:24.374569+00:00
   session_id: 01a1f1174143
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -191,13 +241,13 @@ history:
     new_value: docs:impacted, operator-ask, process-knob, product-intake, review, throughput
 - id: 01a1f132-0cb9-7522-9a84-016a406a5e4a
   author: dirtlab
-  timestamp: 2026-11-19T00:25:51.545954498Z
+  timestamp: 2026-11-19 00:25:51.545954+00:00
   session_id: 01a1f1174143
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1f13e-0261-7f11-a2d1-dc58e5b92588
   author: fast-gate
-  timestamp: 2026-11-19T00:38:55.329902254Z
+  timestamp: 2026-11-19 00:38:55.329902+00:00
   session_id: 01a1f1174143
   changes:
   - field_name: status
@@ -205,7 +255,7 @@ history:
     new_value: Approved
 - id: 01a1f13e-69d0-7d63-8e20-1bf8162bdb22
   author: aida-orchestrator
-  timestamp: 2026-11-19T00:39:21.808493752Z
+  timestamp: 2026-11-19 00:39:21.808493+00:00
   session_id: 01a1f13b19ec
   harness_version: 2.1.327 (Claude Code)
   changes:
@@ -214,13 +264,20 @@ history:
     new_value: NeedsAttention
 - id: 01a1f13f-3340-7570-9f3f-104638fa1f40
   author: joe
-  timestamp: 2026-11-19T00:40:13.376412424Z
+  timestamp: 2026-11-19 00:40:13.376412+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f13f-a34c-7281-ba8e-3f2b1bbdfb04
+  author: aida-pr-open
+  timestamp: 2026-11-19 00:40:42.060859+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
