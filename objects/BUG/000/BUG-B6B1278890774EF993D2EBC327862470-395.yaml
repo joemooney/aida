@@ -12,12 +12,12 @@ description: |-
   4. Peer seats are told the seat is blocked on operator input (not just idle), so they stop re-pinging and escalate instead.
   5. A test simulates a blocked advisor past the threshold and asserts exactly one alert per backoff window, plus a clear notice on recovery.
   6. Default threshold is a project knob (process-policies-as-project-knobs); this project sets 15 min.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-19T18:40:01.734904850Z
+modified_at: 2026-11-19T18:40:31.126528160Z
 req_type: Bug
 tags:
 - advisor
@@ -326,6 +326,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f51c-3d96-7240-848b-171b5380c281
+  author: joe
+  timestamp: 2026-11-19T18:40:31.126521510Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
@@ -336,3 +345,6 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T18:40:19.108265002Z
