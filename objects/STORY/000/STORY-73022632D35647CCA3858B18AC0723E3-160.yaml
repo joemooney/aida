@@ -1,5 +1,6 @@
 id: 01a1f4d2-e9c7-7072-8fc9-77c5ab53dcd3
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-160
+agreed_id: STORY-2963
 title: 'Review PR-4320: [AI:codex] fix(review): add audited review-watch pause and resume (Refs BUG-2650)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f486`) for branch `bug-b6b1278890774ef993d2ebc327862470-414`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T17:20:36.111822140Z
   session_id: 01a1f4861f64
+  changes: []
+- id: 01a1f595-a859-7a60-819b-76ac57c8ff4e
+  author: joe
+  timestamp: 2026-11-19T20:53:08.313337970Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d

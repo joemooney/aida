@@ -1,5 +1,6 @@
 id: 01a1f533-4dd2-7c60-87e8-579611449928
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-164
+agreed_id: STORY-2969
 title: 'Review PR-4327: [AI:codex] fix(lanes): repair scheduled builds and report host binaries (Refs TASK-3812)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f4fa`) for branch `task-b6b1278890774ef993d2ebc327862470-1095-2026-11-19`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T19:06:07.198573572Z
   session_id: 01a1f4fa3d81
+  changes: []
+- id: 01a1f596-c78d-7880-8e37-2b0271ad49ad
+  author: joe
+  timestamp: 2026-11-19T20:54:21.837508137Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: fa5ac3dab15dc0acd307f03fb259427942293c24

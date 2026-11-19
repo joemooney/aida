@@ -1,5 +1,6 @@
 id: 01a1f4bd-9579-76e0-8459-abefcd1a628a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-156
+agreed_id: STORY-2964
 title: 'Review PR-4316: [AI:codex] fix(tests): detect unsupported live Codex seat fixtures (BUG-2676)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f489`) for branch `bug-b6b1278890774ef993d2ebc327862470-440`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1f595-d9b4-7063-9e68-d38ecc331978
+  author: joe
+  timestamp: 2026-11-19T20:53:20.948021967Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d
   branch: main

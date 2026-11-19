@@ -1,5 +1,6 @@
 id: 01a1f4d2-f267-79b1-8634-8b00494e4b16
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-161
+agreed_id: STORY-2970
 title: 'Review PR-4321: [AI:codex] fix(rework): validate host-managed conflict repairs (Refs TASK-3804)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f48c`) for branch `task-b6b1278890774ef993d2ebc327862470-1087`.
@@ -35,6 +36,12 @@ history:
 - id: 01a1f4d4-3668-7c80-bc1c-756ca86933b4
   author: dirtlab
   timestamp: 2026-11-19T17:21:50.696234594Z
+  changes: []
+- id: 01a1f596-f6e4-7723-957a-198f8bdaecc5
+  author: joe
+  timestamp: 2026-11-19T20:54:33.956852219Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d

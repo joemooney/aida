@@ -1,5 +1,6 @@
 id: 01a1f4fc-2fd6-7e60-8ea9-dcd8172ec41c
 spec_id: BUG-73022632d35647cca3858b18ac0723e3-003
+agreed_id: BUG-2700
 title: Interactive resume fixture reads the invoking lane worktree
 description: |
   The existing a_contained_interactive_resume_goes_through_os_wrap test failed on unmodified origin/main b82066836029b7ef323861eb91d1dbd4967a3096 in TASK-3133 baseline lane job j20261119T175135035-2-0. The test creates a temporary project and pins the containment cwd for argv construction. Mailbox preparation nevertheless observes the invoking lane's real cwd and refuses because it is not a recorded seat clone for the test project. Isolate the test working directory within its temporary fixture while retaining its existing containment assertions. No production authority changes are requested.
@@ -13,6 +14,13 @@ req_type: Bug
 tags:
 - linked:TASK-3133
 - tests
+history:
+- id: 01a1f595-1465-79d1-99b1-24a99fc7a0e5
+  author: joe
+  timestamp: 2026-11-19T20:52:30.437792389Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5b78d27e1

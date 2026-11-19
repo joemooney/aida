@@ -1,5 +1,6 @@
 id: 01a1f4db-3a02-7f60-8e54-b9438f0d498d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1123
+agreed_id: TASK-3165
 title: 'Review follow-up: Keep unrelated project deputies out of operator awaiting reports. In aida-cli-lib/src/depu'
 description: |-
   From TASK-3801
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1e0fa-f56b-73a0-b88a-fc7a47513bd0
   created_at: 2026-11-19T17:29:43.278472220Z
+history:
+- id: 01a1f594-e0a6-7b30-b81b-4f644b2c54fd
+  author: joe
+  timestamp: 2026-11-19T20:52:17.190817128Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 768640005c55bef865e331d70f2a1e0be1058617
   branch: pr-4319

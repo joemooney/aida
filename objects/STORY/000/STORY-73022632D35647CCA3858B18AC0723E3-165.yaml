@@ -1,5 +1,6 @@
 id: 01a1f564-a63a-75d1-a058-56e97a6e452c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-165
+agreed_id: STORY-2965
 title: 'Review PR-4330: [AI:claude] fix(train): bound --check discovery and member subprocesses by one deadline (TASK-3792)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1f537`) for branch `task-b6b1278890774ef993d2ebc327862470-1075`.
@@ -23,6 +24,13 @@ feature: Uncategorized
 created_at: 2026-11-19T19:59:36.506502921Z
 modified_at: 2026-11-19T19:59:36.506502921Z
 req_type: Story
+history:
+- id: 01a1f596-0a2b-7ff0-bf12-f8a3756a0543
+  author: joe
+  timestamp: 2026-11-19T20:53:33.355740933Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: fa5ac3dab15dc0acd307f03fb259427942293c24
   branch: main

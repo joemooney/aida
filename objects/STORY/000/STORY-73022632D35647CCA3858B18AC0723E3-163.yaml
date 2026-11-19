@@ -1,5 +1,6 @@
 id: 01a1f523-1333-78b2-9912-98f6ac74f792
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-163
+agreed_id: STORY-2962
 title: 'Review PR-4326: [AI:codex] test(seat-clone): isolate mail and disk fixtures (Refs TASK-3133)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f4ec`) for branch `task-73022632d35647cca3858b18ac0723e3-027`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T18:48:17.109156772Z
   session_id: 01a1f4ece859
+  changes: []
+- id: 01a1f595-7722-7a23-a8e8-1af1d33f042f
+  author: joe
+  timestamp: 2026-11-19T20:52:55.714386448Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: bd8d20479cb93a41e5f9b6e58c5112016e9ed9aa

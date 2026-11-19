@@ -1,5 +1,6 @@
 id: 01a1f55a-f5a5-7200-85fe-6e4b05ac1852
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1126
+agreed_id: TASK-3160
 title: 'Review follow-up: Apply rustfmt to aida-cli-lib/src/review_commands.rs:4400 and aida-cli-lib/src/tests/story'
 description: |-
   From STORY-2893
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1ebe3-43dc-7810-8dd1-f2918d7dbc7c
   created_at: 2026-11-19T19:49:14.182860611Z
+history:
+- id: 01a1f593-e86e-7802-b1d0-4aa050ee7bc5
+  author: joe
+  timestamp: 2026-11-19T20:51:13.646168026Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f30f3d8e98f56f2828c5f2d9a203835321364d15
   branch: pr-4318

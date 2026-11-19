@@ -1,5 +1,6 @@
 id: 01a1f51e-ca95-7a82-92f4-5a4cc664a489
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-162
+agreed_id: STORY-2968
 title: 'Review PR-4325: [AI:codex] fix(relay): retry only expired parent grant refusals (BUG-2653)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f4f4`) for branch `bug-b6b1278890774ef993d2ebc327862470-417`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1f54e-a60b-7c91-9aae-44b0bffdadae
   author: dirtlab
   timestamp: 2026-11-19T19:35:34.667730473Z
+  changes: []
+- id: 01a1f596-9853-7831-8adb-e19b37ca8dbe
+  author: joe
+  timestamp: 2026-11-19T20:54:09.747070121Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: bd8d20479cb93a41e5f9b6e58c5112016e9ed9aa
