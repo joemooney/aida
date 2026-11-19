@@ -1,8 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-11-18T21:12:40.193052552Z
+last_run: 2026-11-19T09:25:45.435331864Z
 last_by:
   seat: advisor
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   vendor: claude
 result: done
-note: 'Expected between-bridge drift: lane clones push aida-store to origin only, and the hourly home-cron reconcile (:07) unions the hubs. The guard ran at :04, just before it. Filed a follow-up so the guard tolerates drift younger than the bridge interval.'
+note: '02:25: between-bridge aida-store drift; reconciled. BUG-2672 (#4282) fixes the guard noise once it merges.'
