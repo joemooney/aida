@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T10:02:41.305200855Z
-modified_at: 2026-11-19T01:27:47.592643778Z
+modified_at: 2026-11-19T01:27:51.147476136Z
 req_type: Bug
 tags:
 - flaky
@@ -94,6 +94,13 @@ comments:
   content: Reference merge `e192d5d84c6cda3400e4c0ab6385b3750d07053e` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-18T12:31:37.821128280Z
   modified_at: 2026-11-18T12:31:37.821128280Z
+- id: 01a1f16a-fdd8-7180-b1d2-961fee1fca09
+  author: joe
+  content: 'Advisor 18:30 (Refs-landed sweep, Joe 18:13 ''reduce open specs''): DONE. Fix e192d5d: AC1 audit-entry assertion, AC2 50 consecutive passes, AC3 docs in docs/cli/10-storage.md. The unexplained earlier main pass is not an AC.'
+  created_at: 2026-11-19T01:27:51.147476136Z
+  modified_at: 2026-11-19T01:27:51.147476136Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ee20-2d34-7850-902f-dd82ac559f6c
   author: joe
