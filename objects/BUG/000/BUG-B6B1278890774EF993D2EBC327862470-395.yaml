@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T12:42:23.262670694Z
-modified_at: 2026-11-19T00:07:37.797238222Z
+modified_at: 2026-11-19T00:22:19.479198577Z
 req_type: Bug
 tags:
 - advisor
@@ -99,6 +99,25 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-395` at head `unavailable`.'
   created_at: 2026-11-19T00:06:55.637277890Z
   modified_at: 2026-11-19T00:06:55.637277890Z
+- id: 01a1f12e-d247-7640-8aa7-2e03d358cbf0
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 3e87013dc3af2625ffab263ca4659eaf51df77f9, its merge-base diff against origin/main, and the native worktree changes. There were no untracked additions.
+
+    - AC1 and AC5 [evidence: behavioral-test] — `aida-cli-lib/src/seat_health.rs:333` preserves elapsed waiting through missing rows and statuses, sends a clear on confirmed termination, and checks continuous delivery state across old-hello acknowledgement and source changes. The backoff and failed-clear tests cover repeat windows, delivery retry, and a fresh threshold after recovery. `aida-cli-lib/src/notify.rs:1115` covers trusted multi-channel delivery, and the test at line 1159 verifies ordinary delivery and persisted state when a health push fails.
+    - AC2 and AC3 [evidence: behavioral-test] — the registry fixture checks the terminal, prompt, reason, and original elapsed timestamp. The alert constructs unread mail and local watched-PR counts at `aida-cli-lib/src/seat_health.rs:159`. The local watcher count and incomplete-mail limitations remain as recorded in the advisor ruling.
+    - AC4 [evidence: manual-inspection] — followed `notes_by_id` through the plain-text and JSON `agent ls` projections and the advisor-handshake output. The message tells peers to escalate and stop re-pinging. Existing peer-surface gaps are outside this rework per the ruling.
+    - AC6 [evidence: configuration-validation] — checked the 15-minute default and bounded integer lookup in `seat_health.rs`, the explicit 15-minute setting in `.aida/config.toml`, and the policy/command split in `scripts/config-trust.toml`.
+
+    Adversarial pass covered status normalization, optional JSON fields and legacy ledger compatibility, multiple outstanding hellos and transports, and a re-block after a failed clear. Blank and unknown status strings now preserve the wait. Failed clears retain their retry state while recovered, and a subsequent block starts its own threshold and backoff. Push command execution remains gated by trusted default-branch config. The untrusted-edit test verifies that a local edit cannot supply a command. No existing test was removed or ignored. Per-channel retries can repeat a successful delivery when another channel fails, as documented. The configured host Codegraph client was missing, so callers were checked in source.
+
+    Lane validation: `cargo test --profile agent -p aida-cli-lib --lib -- seat_health` passed 7 tests.
+  created_at: 2026-11-19T00:22:19.479198577Z
+  modified_at: 2026-11-19T00:22:19.479198577Z
+  session_id: 01a1f1210f13
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e464-caaf-7271-bb60-119680392019
   author: joe
