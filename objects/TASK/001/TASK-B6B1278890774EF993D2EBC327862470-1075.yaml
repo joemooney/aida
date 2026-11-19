@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1075
 agreed_id: TASK-3792
 title: 'aida pr train --check: propagate the --timeout deadline into discovery and member subprocesses'
 description: Deferred from the PR-4053 review (STORY-2824 finding 5, ruled non-blocking 2026-11-14). --timeout is consulted only between candidate checks; protected_base (git ls-remote), live_trains and member fetch/metadata reads can block past it, so --timeout 0 may hang before any row. Propagate a deadline through discovery and member subprocesses, terminate outstanding children, report unfinished PRs as not-checked; add subprocess timeout fixtures with no network.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T19:42:47.486082160Z
+modified_at: 2026-11-19T19:56:48.782449330Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -275,6 +275,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f562-170e-78c3-b8ce-e38bc76729f9
+  author: aida-orchestrator
+  timestamp: 2026-11-19T19:56:48.782648806Z
+  session_id: 01a1f55e3c1f
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 3cb7ba4fab12c60797d42bf51c7845633680c7d2
@@ -285,3 +293,21 @@ filed_at:
   vendor: claude
   session: 01a1dc2c-25f2-7d52-aa8c-61e0f270e9d1
   harness_version: 2.1.325 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Request changes after full sweep of all 13 files in the pinned landed diff. Reviewed original PR head 64254a089e358f954886f3a2459f4f8ce3a4214f against protected main 4f2d07f88b8f89f20d72ac49e8fc155655e1d211, using landed tree bbf026c434024d83a0c06c1f9836128844fa71ac. Four actionable findings retained below. None depends on code changed by the one newer protected-base commit; its ownership-reader addition does not alter the confirmation path identified here. TASK-3792 was retrieved directly from AIDA after the generated checklist incorrectly reported it missing. It has no separately enumerated acceptance section; complete criterion inventory from its description and authoritative round-2 brief follows.
+    AC1 shared deadline through discovery: unverified; unbounded local discovery and credential preparation remain (finding 2).
+    AC2 shared deadline through member subprocesses: unverified; ownership confirmation retains a fixed 30-second remote-fetch timeout (finding 3).
+    AC3 terminate outstanding children at deadline: unverified; exited-leader pipe collection bypasses deadline monitoring and group cleanup (finding 1).
+    AC4 report unfinished known PRs as not-checked: verified by pr_train_check.rs check_all post-check expiry handling, discovery-error conversion, and row assertions in story_2824_train_check_tests.rs.
+    AC5 add subprocess timeout fixtures without network: verified by source inspection of the new Git/gh fixture covering base, train discovery, shared budget, member metadata, labels, member-head fetch, known and unknown all-open lists; implementer reports 69 passing focused tests. Coverage limitations are findings 1-4.
+    AC6 zero timeout does not hang before any row: verified by initial expired check before roots discovery and zero-budget fixture assertions for no spawn, null base and not-checked named rows.
+    AC7 preserve frozen gate outside-reach inventory and use existing entry points: verified by complete diff inspection, unchanged inventory files, existing train checkpoint carrying the deadline, and implementer-reported passing inventory checks.
+    AC8 cut scope to deadline-required edits: verified by inspection of all 13 changed source, fixture, help and documentation files.
+    Existing exact-head CI evidence: fast gates passed; fast compile still pending at review time, no failed jobs observed. Local tests/builds were not run, as instructed. Pending CI is not the reason for this verdict.
+  recovery_hint: address the review findings, move TASK-3792 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T19:56:48.782449330Z
