@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-19T10:57:12.087186845Z
+modified_at: 2026-11-19T15:48:20.778228287Z
 req_type: Bug
 tags:
 - linked:BUG-2626
@@ -234,6 +234,13 @@ comments:
   content: Reference merge `12264ad1cb941ee1fb74173293104c323aa5f06a` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-19T10:57:12.087178968Z
   modified_at: 2026-11-19T10:57:12.087178968Z
+- id: 01a1f47e-cea3-76a3-8160-024afe87d7c0
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 08:50): STAYS OPEN, deferred. #4303/#4307 landed the phase instrumentation (AC1 partial). AC2 needs a 24h live window on a binary containing it (live since ~04:20 MST 11-19), and AC3 needs that window''s phase attribution. No lane can do this before 2026-11-20 05:00 MST; then measure from the night-shift terminal records and either complete it or scope the slow phase.'
+  created_at: 2026-11-19T15:48:20.778228287Z
+  modified_at: 2026-11-19T15:48:20.778228287Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebf7-4f19-7dc0-beeb-d67d7e9a2239
   author: joe
