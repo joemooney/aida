@@ -4900,6 +4900,20 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     crate::standalone_implementer::refuse_under_marker("pr train")?;
     let project_root = crate::find_project_root()?;
     let main_worktree = crate::main_worktree_root_from(&project_root);
+    // A train merges: where the advisor performs merges (review-gated mode),
+    // anyone else is refused before a train is built; the merge boundary
+    // judges it again for every car. trace:STORY-2905 | ai:claude
+    if !opts.dry_run {
+        let policy = crate::landing_policy::load(&main_worktree);
+        if let Some(why) = crate::gate::ship::advisor_merge_refusal(
+            policy.advisor_merges(),
+            crate::gate::seat_authority::current_seat(&main_worktree).as_deref(),
+            crate::gate::role_authority::has_integrity_floor_authority(),
+            "this train",
+        ) {
+            return Err(crate::gate::ship::ShipRefusal::Review.error(why));
+        }
+    }
     // trace:STORY-2857 | ai:codex
     let _admission = if opts.dry_run {
         None

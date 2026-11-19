@@ -23,6 +23,14 @@ pub(crate) struct VerifiedTrainMerge<'a> {
     refresh: Box<dyn FnMut() -> Result<(Value, Bodies)> + 'a>,
     /// BUG-2433: a final gate passed, so a forge merge call was issued.
     reached_forge: bool,
+    /// STORY-2905: what each car's merge authority is re-judged from before
+    /// every attempt: the cars (PR and spec ids), the landing policy and
+    /// floor authority at the proof, and the base the stacked proof is on.
+    // trace:STORY-2905 | ai:claude
+    cars: Vec<(u64, Vec<String>)>,
+    landing: crate::landing_merge::Entry,
+    base_ref: String,
+    base_tip: String,
 }
 
 impl VerifiedTrainMerge<'_> {
@@ -41,6 +49,17 @@ impl VerifiedTrainMerge<'_> {
                 && opts.method == MergeMethod::Rebase,
             "train merge identity or pin changed"
         );
+        // Per-car merge authority and the proof's base, judged afresh before
+        // each attempt (STORY-2905 S1t-b). trace:STORY-2905 | ai:claude
+        crate::landing_merge::train_recheck(
+            root,
+            change,
+            &self.cars,
+            &self.landing,
+            &self.base_ref,
+            &self.base_tip,
+        )
+        .map_err(|(kind, why)| kind.error(why))?;
         let (evidence, mapped) = (self.refresh)()?;
         anyhow::ensure!(
             evidence == self.evidence && mapped == self.mapped,
@@ -199,6 +218,19 @@ fn verified<'a>(
     ensure_budget(existing + serde_json::to_vec(&event)?.len() as u64 + 1024)?;
     ledger::record_event(&store, event).context("persisting train coverage audit")?;
     drop(phase);
+    let cars = train
+        .cars
+        .iter()
+        .map(|car| {
+            let mut ids = crate::pr_ship::extract_spec_ids_from_text(&car.member.subject);
+            ids.extend(crate::pr_ship::extract_spec_ids_from_text(&car.member.body));
+            ids.sort();
+            ids.dedup();
+            (car.member.pr, ids)
+        })
+        .collect();
+    let landing = crate::landing_merge::Entry::capture(&live.project_root);
+    let base_ref = live.base.clone();
     Ok(VerifiedTrainMerge {
         root,
         change: change.clone(),
@@ -207,6 +239,10 @@ fn verified<'a>(
         mapped,
         refresh: Box::new(|| collect(live, change, train, lease, "recheck")),
         reached_forge: false,
+        cars,
+        landing,
+        base_ref,
+        base_tip: train.base.clone(),
     })
 }
 

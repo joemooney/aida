@@ -355,6 +355,68 @@ fn merge_authors(
     )
 }
 
+/// The merge authority of a train, judged immediately before each forge
+/// merge attempt of the train change (STORY-2905 S1t-b): the boundary's
+/// recheck of the train change under the landing snapshot taken at its
+/// proof (fresh fetch, unchanged policy, floor lapse, the advisor-merger
+/// rule), then the author rule for EACH car on its own specs, then the
+/// stacked proof's base: the fetched base must still be the commit the
+/// train was built and proved on. Any refusal stops the train before the
+/// merge; a grant that lapsed since the train started fails here.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn train_recheck(
+    root: &std::path::Path,
+    train: &ChangeRef,
+    cars: &[(u64, Vec<String>)],
+    entry: &Entry,
+    base_ref: &str,
+    base_tip: &str,
+) -> Result<(), (ShipRefusal, String)> {
+    recheck(
+        root,
+        train,
+        &entry.policy,
+        &[],
+        entry.floor,
+        crate::gate::role_authority::has_integrity_floor_authority,
+    )?;
+    let floor = crate::gate::role_authority::has_integrity_floor_authority();
+    for (pr, specs) in cars {
+        let car = ChangeRef {
+            id: *pr,
+            url: String::new(),
+            branch: String::new(),
+            base: base_ref.to_string(),
+            title: None,
+        };
+        caller_may_merge(root, &car, specs, &entry.policy, floor).map_err(|why| {
+            (
+                ShipRefusal::Review,
+                format!("the train is not merged: car {why}"),
+            )
+        })?;
+    }
+    if has_origin(root) {
+        let now = crate::trusted_config::rev_parse_commit(
+            root,
+            &format!("refs/remotes/origin/{base_ref}"),
+        );
+        if now.as_deref() != Some(base_tip) {
+            return Err((
+                ShipRefusal::BehindBase,
+                format!(
+                    "the train is not merged: {base_ref} moved since its stacked proof (proved on \
+                     {}, now {}); rebuild the train on the current base",
+                    &base_tip[..base_tip.len().min(12)],
+                    now.as_deref()
+                        .map_or("unreadable", |n| &n[..n.len().min(12)])
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The line the auto-train reports when it stands down (STORY-2905, advisor
 /// call (c)).
 pub(crate) const TRAIN_STAND_DOWN: &str = "standing down: landing.mode=review-gated";
@@ -482,3 +544,7 @@ mod story_2903_merge_boundary_tests;
 #[cfg(test)]
 #[path = "tests/story_2903_review_gated_base_tests.rs"]
 mod story_2903_review_gated_base_tests;
+
+#[cfg(test)]
+#[path = "tests/story_2905_train_recheck_tests.rs"]
+mod story_2905_train_recheck_tests;
