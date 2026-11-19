@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-372
 agreed_id: BUG-2608
 title: Deputy sandbox exemption docs give exact-match excludedCommands entries that never match a real submit
 description: 'docs/advanced/deputies.md ''Letting a sandboxed advisor submit'' (line ~249), and the matching refusal text from ''aida deputy shell submit'', tell the operator to add "aida deputy shell submit" and "aida deputy shell cancel" to sandbox.excludedCommands. Claude Code matches those entries like Bash(...) permission rules, so an entry without a wildcard matches only the bare command with no arguments (code.claude.com/docs/en/sandboxing). A real call such as ''aida deputy shell submit --name product --file F --wait'' therefore stays sandboxed and fails with ''sandbox blocks unix sockets'' (observed 2026-11-15 on the product seat). Acceptance: the doc and the refusal help text give "aida deputy shell submit *" and "aida deputy shell cancel *", say the call must run bare (no cd, &&, redirect, or $(...)), and say to restart the session after editing the settings.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:19:44.299216443Z
-modified_at: 2026-11-19T16:30:09.346353214Z
+modified_at: 2026-11-19T18:34:29.628869458Z
 req_type: Bug
 tags:
 - area:deputy
@@ -67,6 +67,11 @@ comments:
   created_at: 2026-11-19T16:30:09.346348454Z
   modified_at: 2026-11-19T16:30:09.346348454Z
   session_id: 01a1f483abc6
+- id: 01a1f516-b95b-7050-873c-805e10a81392
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2608 was In Progress when merge bd8d20479cb93a41e5f9b6e58c5112016e9ed9aa completed it; verify that no active round remains.'
+  created_at: 2026-11-19T18:34:29.595884051Z
+  modified_at: 2026-11-19T18:34:29.595884051Z
 history:
 - id: 01a1ebdb-1254-7ab2-9598-8b84a8a990cc
   author: joe
@@ -95,6 +100,19 @@ history:
   timestamp: 2026-11-19T16:29:10.973922077Z
   session_id: 01a1f483abc6
   changes: []
+- id: 01a1f516-b95b-7050-873c-806db4703413
+  author: aida-auto-bump
+  timestamp: 2026-11-19T18:34:29.595895457Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f516-b97c-7dd0-9cbf-2ed5a0c68375
+  timestamp: 2026-11-19T18:34:29.628866631Z
+  agent: aida
+  commit_sha: bd8d20479cb93a41e5f9b6e58c5112016e9ed9aa
+  summary: Completed via merge bd8d2047
 execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
@@ -105,3 +123,7 @@ filed_at:
   vendor: claude
   session: 01a1e1eb-147e-7ea0-b2f9-9e89606a9a89
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T18:34:29.595890816Z
+  completion_sha: bd8d20479cb93a41e5f9b6e58c5112016e9ed9aa
