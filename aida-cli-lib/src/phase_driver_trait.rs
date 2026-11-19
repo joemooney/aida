@@ -45,6 +45,11 @@ use crate::{
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+/// The marker the drain records when its CI phase did not wait for CI
+/// (review-gated landing): the head it bound is reviewed, not CI-tested.
+// trace:STORY-2903 | ai:claude
+pub(crate) const CI_SKIPPED_REVIEW_GATED: &str = "ci-skipped: review-gated";
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
@@ -1520,7 +1525,38 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),
                 branch
             );
-            return Ok(());
+            // The review still binds to an exact head: record the PR's
+            // current head as the one this phase concluded on, marked as a
+            // CI skip, so the review checks bind the reviewer to it. Then
+            // hand off to review as a CI pass does. trace:STORY-2903 | ai:claude
+            let pr = match self.pr_number.or(self.phase_done_pr) {
+                Some(pr) => pr,
+                None => match crate::ci_probe::ci_probe_change_id(&ci_probe_with_forge(
+                    &self.project_root,
+                    self.lifecycle_forge,
+                    &branch,
+                )) {
+                    Some(pr) => pr,
+                    None => {
+                        return Err(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::CiUnavailable,
+                            format!("no open change could be resolved for `{branch}`"),
+                        ))
+                    }
+                },
+            };
+            self.set_pr_number(pr);
+            self.ci_terminal_sha = pr_head_sha_best_effort(self, pr);
+            if self.ci_terminal_sha.is_none()
+                && self.lifecycle_forge != crate::forge::ForgeKind::None
+            {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiUnavailable,
+                    format!("the current head of PR-{pr} is unavailable, so its review cannot be bound to it"),
+                ));
+            }
+            self.ci_skipped = Some(CI_SKIPPED_REVIEW_GATED);
+            return self.end_implementer_session();
         }
         // Probe, then block until CI is terminal. `lifecycle:trivial` remains
         // represented by a forge-level NoCi result, but a running check is

@@ -237,13 +237,23 @@ pub(crate) fn review_gated_behind_base(
         Ok(names.into_iter().collect())
     };
     // The change's paths: its own diff from the fork point.
-    let pr_files = paths(&["diff", "--name-only", "-z", &fork, &head])?;
+    // `--no-renames`: a rename reports both its source and its destination,
+    // so moving a protected file out of its prefix still touches it.
+    let pr_files = paths(&["diff", "--no-renames", "--name-only", "-z", &fork, &head])?;
     // Every path any base commit since the fork touched, per commit, so an
     // edit later reverted still counts (STORY-2903 ruling S2).
     let range = format!("{fork}..{tip}");
     // `-m`: a merge commit lists what it changed too (over-reporting only
     // refuses more).
-    let base_files = paths(&["log", "-m", "--name-only", "-z", "--format=", &range])?;
+    let base_files = paths(&[
+        "log",
+        "-m",
+        "--no-renames",
+        "--name-only",
+        "-z",
+        "--format=",
+        &range,
+    ])?;
     let gates = crate::gate::mandate_gates::load_human_gates(project_root);
     let decision = judge_behind_base(
         behind,

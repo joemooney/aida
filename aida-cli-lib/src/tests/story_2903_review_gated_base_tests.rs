@@ -313,3 +313,64 @@ fn a_mode_change_after_the_ci_skip_refuses_the_merge() {
         }
     }
 }
+
+/// Round 2 (finding 2): a change that moves a protected file out of its
+/// protected prefix still changes the protected path (renames report both
+/// sides), and a base commit that renamed a file the change edits overlaps.
+#[test]
+fn renames_count_both_their_source_and_destination() {
+    // The change renames a gate file to outside gate/.
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.email", "t@example.com"]);
+    git(&repo, &["config", "user.name", "T"]);
+    let body = "fn gate() {}\n".repeat(40);
+    commit(&repo, "aida-cli-lib/src/gate/moved.rs", &body);
+    commit(&repo, "notes/edited.txt", &"line\n".repeat(40));
+    git(&repo, &["checkout", "-q", "-b", "feat"]);
+    git(
+        &repo,
+        &["mv", "aida-cli-lib/src/gate/moved.rs", "notes/moved.rs"],
+    );
+    git(&repo, &["commit", "-q", "-m", "move out of gate/"]);
+    git(&repo, &["checkout", "-q", "main"]);
+    commit(&repo, "notes/b.txt", "moved");
+    let origin = root.join("origin.git");
+    git(
+        &root,
+        &["clone", "-q", "--bare", "repo", origin.to_str().unwrap()],
+    );
+    git(
+        &repo,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    let (_, why) = review_gated_behind_base(&repo, "feat", 7, "main").unwrap_err();
+    assert!(
+        why.contains("protected path aida-cli-lib/src/gate/moved.rs"),
+        "{why}"
+    );
+
+    // The base renames a file the change edits.
+    git(&repo, &["checkout", "-q", "-b", "feat2", "main~1"]);
+    std::fs::write(
+        repo.join("notes/edited.txt"),
+        "line\n".repeat(40) + "added\n",
+    )
+    .unwrap();
+    git(&repo, &["commit", "-qam", "edit"]);
+    git(&repo, &["checkout", "-q", "main"]);
+    git(&repo, &["mv", "notes/edited.txt", "notes/renamed.txt"]);
+    git(&repo, &["commit", "-q", "-m", "rename on main"]);
+    git(
+        &repo,
+        &["push", "-q", origin.to_str().unwrap(), "main", "feat2"],
+    );
+    let (_, why) = review_gated_behind_base(&repo, "feat2", 8, "main").unwrap_err();
+    assert!(
+        why.contains("notes/edited.txt") && why.contains("delta review"),
+        "{why}"
+    );
+}
