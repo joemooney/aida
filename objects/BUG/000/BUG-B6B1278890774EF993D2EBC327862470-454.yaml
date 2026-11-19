@@ -8,8 +8,35 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T18:13:08.351988298Z
-modified_at: 2026-11-19T09:04:58.363593686Z
+modified_at: 2026-11-19T09:24:22.903695628Z
 req_type: Bug
+comments:
+- id: 01a1f31f-172f-79e0-b9e7-2bfb7f538e1f
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: dc36b65a1a779f573e83236c808c5e228f2f6ef1
+
+    Reviewed the origin/main merge-base diff, the native working diff, and the new land_ci_base.rs.
+
+    - AC1: [evidence: behavioral-test] PASS. land_ci_base.rs:64 compares the pinned target tip with the first parent of the selected run's actual checkout. Tests at land_ci_base.rs:197, :233, :263, and :293 cover the checkout binding, stale green/red outcomes, multiple runs, missing evidence, and superseded checks.
+    - AC2: [evidence: behavioral-test] PASS. land.rs:393 makes the shared landing pass emit STALE-CI-BASE and select update-branch for eligible rows. story_2768_land_tests.rs:809 and story_2768_land_run_tests.rs:650 cover non-landing, non-rework, hold/lease protection, dry-run, and head-pinned dispatch.
+    - AC3: [evidence: behavioral-test] PASS. A stale green result cannot board, a stale red result cannot dispatch CI-failure rework, and missing checkout evidence yields UNKNOWN. Matching base evidence preserves the existing result.
+
+    Deep pass in order:
+    1. Run and job links are repository-bound with case-insensitive repository comparison. Checkout must name the exact PR and resolve to a two-parent commit whose second parent is the pinned head.
+    2. Checked CRLF logs, invalid revisions, later lookalike log lines, and malformed or unavailable evidence. Missing evidence refuses landing.
+    3. Covered empty evidence, one run, and multiple runs. Superseded and unrelated jobs cannot establish the chosen checkout.
+    4. A stale rollup remains bound to its historical checkout even if the live merge ref moves. A read-only probe of PR #4259's job 135037634581 recovered checkout 02be90839596 and parent 64468cd293b5 while origin/main was dc36b65a1a77.
+    5. Status and dry-run are read-only with respect to PRs. The admitted lander checks hold and ownership evidence, rechecks the open PR's head, target and labels, invokes existing head protection, and sends GitHub's expected_head_sha. forge.rs:2361 covers moved heads/targets, held PRs and missing labels. Existing assertions were retained. No live update was sent in validation.
+
+    Launcher tests passed: bug_2690 (7), land:: (114), and story_2768 (13). The filters overlap. rustfmt and tracked/untracked whitespace checks passed. The first launcher build identified a missing borrow and a moved iterator. Both were corrected and the affected checks rerun.
+
+    Residual limits: Missing or expired checkout logs report UNKNOWN. GitHub pins the update to the head and the target is checked immediately before requesting the change. Existing project head protection can refuse the automatic remedy for approved or train-reserved heads. Publication CI is pending host publication.
+  created_at: 2026-11-19T09:24:22.903695628Z
+  modified_at: 2026-11-19T09:24:22.903695628Z
+  session_id: 01a1f30c6fce
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1efdd-905d-72a3-a2ef-d8c8fff89539
   author: joe

@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-19T09:21:56.413109625Z
+modified_at: 2026-11-19T09:25:53.341562348Z
 req_type: Task
 tags:
 - landing-emergency
@@ -84,6 +84,16 @@ comments:
   modified_at: 2026-11-19T09:03:34.689665314Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f320-77d5-7bc1-aecc-a68d86c6cb51
+  author: dirtlab
+  content: |-
+    Measurement checkpoint (2026-11-19 UTC). PR #4209 (a4332e712245b3ae348235395ddbd09c4dffce57) merged at 2026-11-17 12:20:18 UTC with [review] implementer_self_review = true. The TASK-3813 command is on main. The config timestamp is verified. Host rollout remains unverified: on 2026-11-19 both generated primary-checkout skills, .agents/skills/aida-implement/SKILL.md and .agents/skills/aida-pickup/SKILL.md, still lacked the committed self-review section and had November 16 modification times.
+
+    Using the config merge as the advisor's measurement boundary, the baseline window is [2026-11-10 12:20:18Z, 2026-11-17 12:20:18Z). In the primary checkout, the installed command `aida land metrics --since 2026-11-10T12:20:18Z --format json` returned zero review-round groups. Intersecting its unavailable-approval PR IDs with first-parent main landings restricted to the exact baseline found 173 landed PRs, all 173 unavailable. Vendor samples, mean and median are unavailable from this checkout. The post-enable window ends 2026-11-24 12:20:18Z, so the comparison and recommendation remain open. The measurement requires a reporting environment with retained approval and request-changes history.
+  created_at: 2026-11-19T09:25:53.341562348Z
+  modified_at: 2026-11-19T09:25:53.341562348Z
+  session_id: 01a1f31c8b08
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e945-2e3a-7833-8bd2-590ea073a5d1
   author: joe
