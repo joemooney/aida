@@ -521,7 +521,10 @@ case "$*" in
 esac
 "#
         .replace("@S@", &r.display().to_string())
-        .replace("@G@", crate::bounded_process::SCOPED_DEADLINE_SPAWN_ENV),
+        .replace(
+            "@G@",
+            crate::bounded_process::test_hooks::SCOPED_DEADLINE_SPAWN_ENV,
+        ),
     );
     crate::test_exec::write_executable(
         &r.join("gh"),
@@ -558,7 +561,7 @@ case "$*" in
 esac
 "#
         .replace("@S@", &r.display().to_string())
-        .replace("@G@", crate::bounded_process::SCOPED_DEADLINE_SPAWN_ENV),
+        .replace("@G@", crate::bounded_process::test_hooks::SCOPED_DEADLINE_SPAWN_ENV),
     );
     let _path = crate::test_env::EnvVarGuard::prepend_path(r);
     let unmarked = std::cell::RefCell::new(Vec::<String>::new());

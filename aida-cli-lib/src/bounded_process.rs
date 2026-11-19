@@ -111,11 +111,15 @@ fn kill_bounded_child(pid: u32, forward: bool) {
     }
 }
 
-/// Test hook (TASK-3792): every child [`run_bounded`] spawns while a scoped
-/// read deadline is active carries this variable, so a fixture's fake binary
-/// can count the spawns that ran without one.
+/// Test hooks (TASK-3792), kept in a cfg(test) module so the ambient-input
+/// inventory never sees them as production inputs.
 #[cfg(test)]
-pub(crate) const SCOPED_DEADLINE_SPAWN_ENV: &str = "AIDA_TEST_SCOPED_DEADLINE_SPAWN";
+pub(crate) mod test_hooks {
+    /// Every child [`super::run_bounded`] spawns while a scoped read deadline
+    /// is active carries this variable, so a fixture's fake binary can count
+    /// the spawns that ran without one.
+    pub(crate) const SCOPED_DEADLINE_SPAWN_ENV: &str = "AIDA_TEST_SCOPED_DEADLINE_SPAWN";
+}
 
 fn run_bounded(
     mut cmd: std::process::Command,
@@ -143,7 +147,7 @@ fn run_bounded(
     }
     #[cfg(test)]
     if scoped.is_some() {
-        cmd.env(SCOPED_DEADLINE_SPAWN_ENV, "1");
+        cmd.env(test_hooks::SCOPED_DEADLINE_SPAWN_ENV, "1");
     }
 
     #[cfg(unix)]
