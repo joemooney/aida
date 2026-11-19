@@ -35,6 +35,11 @@ pub(crate) struct Validation {
 pub(crate) struct RefusalNotice {
     pub reason: String,
     pub accepted_delivery: Option<String>,
+    // Set when the mailbox could not be read to prove whether the notice was
+    // already accepted; nothing is sent until an operator resolves it.
+    // trace:TASK-3804 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery_unknown: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct RepairEntry {
@@ -398,18 +403,14 @@ pub(crate) fn refusal_delivery_id(key: &RepairKey) -> String {
 }
 
 // Has the mailbox (local layer or canonical store) already accepted a message
-// on this delivery thread? A read failure is an error, never "not delivered".
+// on this delivery thread? A read failure is an error, never "not delivered":
+// the strict reader refuses an unreadable or malformed message file instead
+// of skipping it, since a skipped copy of the accepted notice reads as absent.
 // trace:TASK-3804 | ai:claude
 fn mailbox_has_delivery(main: &Path, delivery: &str) -> Result<bool> {
-    let home = crate::mailbox_store::mailbox_home(main);
-    let local = crate::mailbox_store::read_local_messages(home.root())
+    let messages = crate::mailbox_store::read_all_messages_strict(main)
         .context("could not read the mailbox to deduplicate the repair refusal")?;
-    let canonical = crate::mailbox_store::read_canonical_messages(&main.join(".aida-store"))
-        .context("could not read the canonical mailbox to deduplicate the repair refusal")?;
-    Ok(local
-        .iter()
-        .chain(&canonical)
-        .any(|message| message.thread_id == delivery))
+    Ok(messages.iter().any(|message| message.thread_id == delivery))
 }
 
 // Keep the journal lock out of the mail subprocess, but serialize retries
@@ -446,9 +447,40 @@ fn notify_refusal_with(
         let notice = entry.refusal_notice.get_or_insert_with(|| RefusalNotice {
             reason: String::new(),
             accepted_delivery: None,
+            delivery_unknown: None,
         });
         notice.accepted_delivery = Some(when);
+        notice.delivery_unknown = None;
         guard.save()
+    };
+    // Fail closed: a mailbox that cannot be read leaves the delivery state
+    // unknown. Record that in the journal and refuse to send.
+    // trace:TASK-3804 | ai:claude
+    let lookup = |delivery: &str| -> Result<bool> {
+        delivered(delivery).map_err(|error| {
+            let state = format!("delivery state unknown: {error:#}");
+            let recorded = RepairGuard::lock(main).and_then(|mut guard| {
+                let entry = guard.entry_mut(key)?;
+                let notice = entry.refusal_notice.get_or_insert_with(|| RefusalNotice {
+                    reason: String::new(),
+                    accepted_delivery: None,
+                    delivery_unknown: None,
+                });
+                notice.delivery_unknown = Some(state);
+                guard.save()
+            });
+            let error = error.context(format!(
+                "repair refusal for PR #{} head {} was not sent: its delivery state is \
+                 unknown. Repair or remove the unreadable mailbox message, then retry",
+                key.pr, key.original_head
+            ));
+            match recorded {
+                Ok(()) => error,
+                Err(journal) => error.context(format!(
+                    "the unknown delivery state could not be journaled: {journal:#}"
+                )),
+            }
+        })
     };
     {
         let guard = RepairGuard::lock(main)?;
@@ -468,7 +500,7 @@ fn notify_refusal_with(
     }
     // The mailbox accepted this head's notice earlier but its receipt was
     // never saved (host exit, journal write failure, or a timed-out sender).
-    if delivered(&delivery)? {
+    if lookup(&delivery)? {
         return accept(format!("adopted from mailbox thread {delivery}"));
     }
     let mut guard = RepairGuard::lock(main)?;
@@ -483,15 +515,17 @@ fn notify_refusal_with(
     entry.refusal_notice = Some(RefusalNotice {
         reason,
         accepted_delivery: None,
+        delivery_unknown: None,
     });
     guard.save()?;
     drop(guard);
     if let Err(error) = send(&subject, &body, &delivery) {
         // A sender timeout can follow mailbox acceptance: reconcile, never resend.
-        if delivered(&delivery).unwrap_or(false) {
-            return accept(format!("adopted from mailbox thread {delivery}"));
+        match lookup(&delivery) {
+            Ok(true) => return accept(format!("adopted from mailbox thread {delivery}")),
+            Ok(false) => return Err(error),
+            Err(unknown) => return Err(error.context(format!("{unknown:#}"))),
         }
-        return Err(error);
     }
     accept(chrono::Utc::now().to_rfc3339())
 }
@@ -668,6 +702,90 @@ mod tests {
             assert_eq!(mail.iter().filter(|t| **t == id).count(), 1);
         }
         assert_ne!(refusal_delivery_id(&lost), refusal_delivery_id(&timed_out));
+    }
+
+    // The mailbox accepted the notice and the journal receipt was lost, but
+    // the accepted copy is now malformed. The real mailbox reader must not
+    // read that as "absent": no second send, and the journal records that
+    // the delivery state is unknown.
+    // trace:TASK-3804 | ai:claude
+    #[test]
+    fn task_3804_malformed_accepted_notice_fails_closed_through_real_mailbox() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let key = reserved(main, &"f".repeat(40));
+        let delivery = refusal_delivery_id(&key);
+        let accepted = aida_core::mailbox::Message {
+            subject: Some(format!("Conflict repair refused for PR #{}", key.pr)),
+            id: "accepted-refusal".into(),
+            thread_id: delivery.clone(),
+            from: "host".into(),
+            to: aida_core::mailbox::Recipient::Agent("advisor".into()),
+            timestamp: 1,
+            in_reply_to: None,
+            body: "refused".into(),
+            urgent: false,
+            intent: aida_core::mailbox::Intent::Request,
+            retracted: false,
+            deleted: false,
+            archived: false,
+            from_source: aida_core::mailbox::SenderSource::Explicit,
+            from_role: None,
+            from_seat: None,
+            relayed_from: None,
+        };
+        crate::mailbox_store::write_message(main, &accepted).unwrap();
+        // A readable accepted notice is adopted through the real reader.
+        notify_refusal(main, &key, "refused").unwrap();
+        // The journal receipt is lost, then the accepted copy is mangled.
+        {
+            let mut guard = RepairGuard::lock(main).unwrap();
+            guard.entry_mut(&key).unwrap().refusal_notice = None;
+            guard.save().unwrap();
+        }
+        let file = crate::mailbox_store::mailbox_dir(main).join("accepted-refusal.json");
+        std::fs::write(&file, b"{\"id\": \"accepted-refusal\", \"thread_id\": ").unwrap();
+        // The tolerant inbox reader skips it: the defect this guards against.
+        assert!(!crate::mailbox_store::read_local_messages(main)
+            .unwrap()
+            .iter()
+            .any(|m| m.thread_id == delivery));
+        for _ in 0..2 {
+            let error = notify_refusal_with(
+                main,
+                &key,
+                "refused",
+                |d| mailbox_has_delivery(main, d),
+                |_, _, _| panic!("an unproven delivery state must not send"),
+            )
+            .unwrap_err();
+            assert!(
+                format!("{error:#}").contains("delivery state is unknown"),
+                "{error:#}"
+            );
+        }
+        let guard = RepairGuard::lock(main).unwrap();
+        let notice = guard.journal.entries[0].refusal_notice.as_ref().unwrap();
+        assert!(notice.accepted_delivery.is_none());
+        assert!(notice
+            .delivery_unknown
+            .as_deref()
+            .unwrap()
+            .contains("delivery state unknown"));
+        drop(guard);
+        // Exactly the one accepted message exists; nothing was resent.
+        let files = std::fs::read_dir(crate::mailbox_store::mailbox_dir(main))
+            .unwrap()
+            .filter(|e| {
+                e.as_ref()
+                    .unwrap()
+                    .path()
+                    .extension()
+                    .and_then(|x| x.to_str())
+                    == Some("json")
+            })
+            .count();
+        assert_eq!(files, 1);
     }
 
     #[test]
