@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T15:22:29.707055410Z
+modified_at: 2026-11-19T15:22:52.237273138Z
 req_type: Bug
 tags:
 - conflicts
@@ -728,6 +728,13 @@ comments:
   created_at: 2026-11-19T14:38:18.433290443Z
   modified_at: 2026-11-19T14:38:18.433290443Z
   session_id: 01a1f3f1469b
+- id: 01a1f467-77b5-7140-9e5a-9e83643265b7
+  author: joe
+  content: 'Advisor-119 08:25: PR #4306 is PARKED at the round-4 cap (CR at b631568, not a merge-only head). Round 4 introduced a new P1: queue_cmd/work.rs:4174-4175 keep_tree releases lease files after the dead-owner checks but WITHOUT session_end''s live worktree-holder scan, so --fresh can drop the lease of a seat a live descendant process still uses. Three P2 unmet-AC items remain (stale local branch with no linked worktree; stage-specific recovery for dirty adopted repairs; actionable errors for RepairGuard::lock failures). Recommendation for the morning advisor: do NOT grant a round-5 exception on this PR. Split BUG-2688: (1) the move-aside-intact core plus the locked revalidation (rounds 1-3, reviewed) as a narrow PR that never ends leases itself and refuses with recovery text when an orphan lease exists; (2) orphan-lease handling as a follow-up that reuses session_end''s holder scan.'
+  created_at: 2026-11-19T15:22:52.237273138Z
+  modified_at: 2026-11-19T15:22:52.237273138Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
