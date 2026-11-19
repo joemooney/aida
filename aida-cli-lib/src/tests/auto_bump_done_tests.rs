@@ -5909,6 +5909,203 @@ fn bug_2696_sliced_spec_first_slice_landing_stays_open() {
     );
 }
 
+/// BUG-2696 round 7 (finding 1, AC6): a committed seat slice titled as a
+/// completion, `feat: slice one (STORY-…)`, lands on a parent whose child
+/// slice is still outstanding. The host's push verdict is partial, so the
+/// spec is not Done; and the landing — a bare subject trailer, and the same
+/// completion trailer retained in a squash body — never completes it either.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_committed_completing_slice_with_open_child_never_completes_at_landing() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "STORY-9107", "In Progress");
+    seed_spec_at(&store_path, "TASK-9108", "Approved");
+    let storage = Storage::new(store_path.clone());
+    link_parent(&storage, "STORY-9107", "TASK-9108");
+    let subject = "feat: slice one (STORY-9107)";
+    let verdict = crate::publication_completion::push_completion_with(
+        &storage,
+        "STORY-9107",
+        subject,
+        "abc",
+        || {},
+    )
+    .unwrap();
+    assert!(!verdict.completes, "{verdict:?}");
+    let store = storage.load().unwrap();
+    assert_eq!(
+        crate::ship_from_seat::aligned_title(
+            Some(&store),
+            subject,
+            "STORY-9107",
+            subject,
+            verdict.completes
+        )
+        .as_deref(),
+        Some("feat: slice one (Refs STORY-9107)")
+    );
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    // Even if a completing subject reached main (title not yet retitled),
+    // and a squash body retains the completion trailer:
+    land(&project_root, "h.txt", "feat: slice one (STORY-9107) (#77)");
+    std::fs::write(project_root.join("i.txt"), "i").unwrap();
+    run_git(&project_root, &["add", "i.txt"]);
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "-m",
+            "feat: slice one (Refs STORY-9107) (#78)",
+            "-m",
+            "* feat: slice one (STORY-9107)",
+        ],
+    );
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(flips.iter().all(|f| f.spec_id != "STORY-9107"), "{flips:?}");
+    // (Reference recovery may return the In Progress spec to Approved.)
+    let after = status_of(&storage, "STORY-9107");
+    assert!(
+        !matches!(
+            after,
+            RequirementStatus::Done | RequirementStatus::Completed
+        ),
+        "{after:?}"
+    );
+    // Once the child is terminal, a completing landing completes again.
+    mutate_spec(&store_path, "TASK-9108", |r| {
+        r.status = RequirementStatus::Completed
+    });
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(flips.iter().any(|f| f.spec_id == "STORY-9107"), "{flips:?}");
+}
+
+/// BUG-2696 round 7 (finding 1, A2): the declaration passes on the unlocked
+/// snapshot, but a child slice is added before the locked Done write. The
+/// verdict is partial (title → Refs), the spec is not Done, and the landing
+/// of the completing commit does not complete the parent.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_lock_time_graph_change_publication_then_landing_stays_open() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "STORY-9109", "In Progress");
+    seed_spec_at(&store_path, "TASK-9110", "Approved");
+    let storage = Storage::new(store_path.clone());
+    let subject = "feat: whole thing (STORY-9109)";
+    let verdict = crate::publication_completion::push_completion_with(
+        &storage,
+        "STORY-9109",
+        subject,
+        "abc",
+        || link_parent(&storage, "STORY-9109", "TASK-9110"),
+    )
+    .unwrap();
+    assert!(!verdict.completes && !verdict.moved, "{verdict:?}");
+    let store = storage.load().unwrap();
+    assert_eq!(
+        crate::ship_from_seat::aligned_title(
+            Some(&store),
+            subject,
+            "STORY-9109",
+            subject,
+            verdict.completes
+        )
+        .as_deref(),
+        Some("feat: whole thing (Refs STORY-9109)")
+    );
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "j.txt",
+        "feat: whole thing (STORY-9109) (#79)",
+    );
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(flips.iter().all(|f| f.spec_id != "STORY-9109"), "{flips:?}");
+    let after = status_of(&storage, "STORY-9109");
+    assert!(
+        !matches!(
+            after,
+            RequirementStatus::Done | RequirementStatus::Completed
+        ),
+        "{after:?}"
+    );
+}
+
+/// BUG-2696 round 7 (finding 2, AC3): a refused Refs-landing note write
+/// leaves the scan incomplete (no checkpoint, the pending scan base stays),
+/// and the retry with unchanged inputs writes exactly one durable note.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_refused_refs_note_write_keeps_the_scan_retryable() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-9113", "Approved");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "k.txt",
+        "fix: first slice (Refs BUG-9113) (#80)",
+    );
+    let storage = Storage::new(store_path.clone());
+    struct Refuse;
+    impl Drop for Refuse {
+        fn drop(&mut self) {
+            crate::db_reconcile::REFUSE_REFS_NOTE_WRITE.with(|r| r.set(false));
+        }
+    }
+    {
+        let _refuse = Refuse;
+        crate::db_reconcile::REFUSE_REFS_NOTE_WRITE.with(|r| r.set(true));
+        for scan_base in [Some(pre_sha.as_str()), None] {
+            let (flips, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+                &project_root,
+                &store_path,
+                scan_base,
+                &storage,
+                true,
+            )
+            .unwrap();
+            assert!(flips.is_empty(), "{flips:?}");
+            assert!(
+                !scanned,
+                "a refused note write must not checkpoint the scan"
+            );
+        }
+        assert_eq!(refs_notes(&storage, "BUG-9113"), 0);
+    }
+    for _ in 0..2 {
+        let (_, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+            &project_root,
+            &store_path,
+            Some(&pre_sha),
+            &storage,
+            true,
+        )
+        .unwrap();
+        assert!(scanned);
+    }
+    assert_eq!(refs_notes(&storage, "BUG-9113"), 1);
+    assert_eq!(status_of(&storage, "BUG-9113"), RequirementStatus::Approved);
+}
+
+fn link_parent(storage: &Storage, parent: &str, child: &str) {
+    storage
+        .update_atomically(|s| {
+            let child = s.get_requirement_by_spec_id(child).unwrap().id;
+            s.get_requirement_by_spec_id_mut(parent)
+                .unwrap()
+                .relationships
+                .push(aida_core::Relationship {
+                    rel_type: aida_core::RelationshipType::Parent,
+                    target_id: child,
+                    created_at: None,
+                    created_by: None,
+                });
+        })
+        .unwrap();
+}
+
 fn refs_notes(storage: &Storage, id: &str) -> usize {
     storage
         .load()

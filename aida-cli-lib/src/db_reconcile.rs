@@ -2114,13 +2114,43 @@ pub(crate) fn refs_landing_note(r: &Requirement, sha: &str) -> Option<String> {
     ))
 }
 
+/// Returns whether every owed note was written. A failed write (writer-lock
+/// contention, an I/O error) is `false`: the scan is incomplete, so no caller
+/// checkpoints it or clears its pending scan base, and the next scan retries
+/// the landing (round-7 finding 2). Independent notes are still written.
 // trace:BUG-2696 | ai:claude
-fn note_refs_landings_on_open_specs(
+pub(crate) fn note_refs_landings_on_open_specs(
     project_root: &std::path::Path,
     storage: &Storage,
     store: &aida_core::RequirementsStore,
     refs_landed: &std::collections::BTreeMap<String, String>,
-) {
+) -> bool {
+    note_refs_landings_with(project_root, store, refs_landed, |req, mutate| {
+        #[cfg(test)]
+        if REFUSE_REFS_NOTE_WRITE.with(std::cell::Cell::get) {
+            anyhow::bail!("writer lock contended (test refusal)");
+        }
+        storage.update_spec_atomically(req, mutate).map(|_| ())
+    })
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test seam: refuse every Refs-landing note write on this thread.
+    pub(crate) static REFUSE_REFS_NOTE_WRITE: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
+/// [`note_refs_landings_on_open_specs`] with the per-spec write injected, so
+/// a test can refuse it.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn note_refs_landings_with(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    refs_landed: &std::collections::BTreeMap<String, String>,
+    mut write: impl FnMut(&Requirement, &mut dyn FnMut(&mut Requirement)) -> Result<()>,
+) -> bool {
+    let mut complete = true;
     for (spec_id, sha) in refs_landed {
         let Ok(Some(req)) = store.get_requirement_unambiguous(spec_id) else {
             continue;
@@ -2135,7 +2165,7 @@ fn note_refs_landings_on_open_specs(
         if !eligible(req) || refs_landing_note(req, sha).is_none() {
             continue;
         }
-        let written = storage.update_spec_atomically(req, |r| {
+        let written = write(req, &mut |r: &mut Requirement| {
             if !eligible(r) {
                 return;
             }
@@ -2153,9 +2183,16 @@ fn note_refs_landings_on_open_specs(
                 req.status,
                 sha.get(..7).unwrap_or(sha)
             ),
-            Err(e) => eprintln!("  warning: could not note reference merge on {spec_id}: {e:#}"),
+            Err(e) => {
+                complete = false;
+                eprintln!(
+                    "  warning: could not note reference merge on {spec_id} (retried on the \
+                     next scan): {e:#}"
+                );
+            }
         }
     }
+    complete
 }
 
 pub(crate) fn auto_bump_done_to_completed(
@@ -2494,7 +2531,10 @@ fn auto_bump_scan(
     // landing (`references`), numbered slices, plan commits and explicit
     // non-completing markers included, not just `refs_landed`.
     // trace:BUG-2696 | ai:claude
-    note_refs_landings_on_open_specs(project_root, storage, &store, &references);
+    // Round 7 (finding 2): an unwritten note keeps the scan incomplete.
+    let notes_complete =
+        note_refs_landings_on_open_specs(project_root, storage, &store, &references);
+    let recovery_complete = recovery_complete && notes_complete;
     let eligibility_phase =
         crate::store_push_pull::PullPhase::start("completion eligibility/forge");
     let (stranded_review_pr, stranded_review_pr_failures) =
@@ -2730,6 +2770,27 @@ fn auto_bump_scan(
             ));
         }
     }
+    // Round 7 (BUG-2696 finding 1, AC6 / A2): a landing never completes a
+    // spec whose slice plan still has an outstanding child, whatever evidence
+    // proposed it: a bare subject trailer, a completion trailer retained in a
+    // squash body, a covers chain or a Done set before the graph changed. The
+    // host vetoed such a publication as partial; the landing honours it.
+    // trace:BUG-2696 | ai:claude
+    flips.retain(|flip| {
+        let outstanding = store
+            .get_requirement_by_spec_id(&flip.spec_id)
+            .is_some_and(|r| crate::publication_completion::slice_plan_outstanding(&store, r));
+        if outstanding {
+            eprintln!(
+                "  {} {} stays {} — merge {} landed, but child slices are still outstanding",
+                "↷".yellow(),
+                flip.spec_id,
+                flip.prior_status,
+                flip.sha.get(..7).unwrap_or(&flip.sha)
+            );
+        }
+        !outstanding
+    });
     retain_fresh_auto_bump_flips(project_root, &store, &mut flips);
     let candidate_ids = flips.iter().map(|flip| flip.spec_id.clone());
     let mut still_held: Vec<HeldCompletion> = Vec::new();
@@ -2824,6 +2885,12 @@ fn auto_bump_scan(
             let Some(mut r) = backend.get_requirement_by_spec_id(&flip.spec_id)? else {
                 continue;
             };
+            // BUG-2696 round 7: the fresh copy's edges, judged fail-closed
+            // (a child the scan snapshot lacks counts as outstanding).
+            // trace:BUG-2696 | ai:claude
+            if crate::publication_completion::slice_plan_outstanding(&store, &r) {
+                continue;
+            }
             if apply_auto_bump_flip(&mut r, flip, now, project_root) {
                 backend.update_requirement(&r)?;
             }
@@ -2889,6 +2956,13 @@ fn auto_bump_scan(
                 }
             }
             for flip in &flips_for_write {
+                // BUG-2696 round 7: re-check the slice plan inside the lock.
+                // trace:BUG-2696 | ai:claude
+                if s.get_requirement_by_spec_id(&flip.spec_id)
+                    .is_some_and(|r| crate::publication_completion::slice_plan_outstanding(s, r))
+                {
+                    continue;
+                }
                 // TASK-1-113: match agreed_id as well as spec_id — the
                 // eligibility scan above resolves via the agreed-aware
                 // `get_requirement_by_spec_id`, so a node-aware spec whose

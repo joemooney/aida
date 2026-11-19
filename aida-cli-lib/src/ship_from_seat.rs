@@ -2225,22 +2225,47 @@ pub(crate) fn run_from_with_reconciliation(
     // cleanup and PR bookkeeping, so a failure there cannot strand pushed
     // complete work without its Done (round-4 finding 1).
     // trace:BUG-2696 | ai:claude
-    mark_done_after_confirmed_push(&main, &spec, tip);
+    // Round 7 (finding 1): the host's decision travels with the publication.
+    // A partial verdict (an outstanding child, a graph that changed under the
+    // writer lock, an unreadable subject or store) makes the PR title a
+    // `(Refs SPEC)` however the seat's commit was titled.
+    let completes = mark_done_after_confirmed_push(&main, &spec, tip);
     // Pushed: the quarantine ref has done its job (a failure above keeps it
     // for investigation; a later run prunes it once stale).
     git_text(&main, &["update-ref", "-d", quarantine, tip])?;
-    finish_published(&main, &seat, &branch, &spec, tip, opts.no_pr, deps)?;
+    finish_published(
+        &main,
+        &seat,
+        &branch,
+        &spec,
+        tip,
+        Publication {
+            no_pr: opts.no_pr,
+            completes,
+        },
+        deps,
+    )?;
     Ok(())
 }
 
 /// D3 (BUG-2696): after origin confirmed the push of `tip`, set `spec` Done
 /// when the publication subject behind `tip` completes it. Reported on
-/// stderr; never fails the caller: the code push already succeeded.
+/// stderr; never fails the caller: the code push already succeeded. Returns
+/// the host's completion decision (`false` whenever it could not decide).
 // trace:BUG-2696 | ai:claude
-pub(crate) fn mark_done_after_confirmed_push(main: &Path, spec: &str, tip: &str) {
-    if let Some(subject) = publication_subject(main, tip) {
-        crate::publication_completion::mark_done_after_push_reported(main, spec, &subject, tip);
-    }
+pub(crate) fn mark_done_after_confirmed_push(main: &Path, spec: &str, tip: &str) -> bool {
+    publication_subject(main, tip).is_some_and(|subject| {
+        crate::publication_completion::mark_done_after_push_reported(main, spec, &subject, tip)
+    })
+}
+
+/// How [`finish_published`] finishes a pushed publication.
+// trace:BUG-2696 | ai:claude
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Publication {
+    pub(crate) no_pr: bool,
+    /// The host's completion decision for the pushed tip.
+    pub(crate) completes: bool,
 }
 
 /// Subject prefix of the host's reconciliation merge of a diverged remote PR
@@ -2339,10 +2364,10 @@ fn finish_published(
     branch: &str,
     spec: &str,
     tip: &str,
-    no_pr: bool,
+    publication: Publication,
     deps: &Deps<'_>,
 ) -> Result<()> {
-    if no_pr {
+    if publication.no_pr {
         eprintln!(
             "{} aida ship --from-seat — {branch} pushed (--no-pr; no PR opened)",
             crate::glyph(crate::glyphs::Glyph::Check).green().bold()
@@ -2385,10 +2410,15 @@ fn finish_published(
             // trace:BUG-2696 | ai:claude
             let tip_subject = publication_subject(main, tip).unwrap_or_default();
             let store = crate::load_store_for_lookup(main);
-            if let Some(title) = current
-                .as_deref()
-                .and_then(|title| aligned_title(store.as_ref(), title, spec, &tip_subject))
-            {
+            if let Some(title) = current.as_deref().and_then(|title| {
+                aligned_title(
+                    store.as_ref(),
+                    title,
+                    spec,
+                    &tip_subject,
+                    publication.completes,
+                )
+            }) {
                 let metadata =
                     forge.change_metadata(change.id, &mut crate::network_retry::NoopSink)?;
                 require_publication_change(
@@ -2410,9 +2440,15 @@ fn finish_published(
             );
             change.id
         }
-        Ok(crate::forge::ChangeLookup::NoChange) => {
-            open_seat_pr(&*forge, main, seat, branch, spec, tip)?
-        }
+        Ok(crate::forge::ChangeLookup::NoChange) => open_seat_pr(
+            &*forge,
+            main,
+            seat,
+            branch,
+            spec,
+            tip,
+            publication.completes,
+        )?,
         Ok(other) => anyhow::bail!(
             "{branch} was pushed, but looking up its open PR failed ({}); no PR was opened. \
              Check the forge CLI, then run `aida ship --from-seat {}` again",
@@ -2440,13 +2476,17 @@ fn finish_published(
 
 /// D2 (BUG-2696): `title` with its single-spec trailer switched to the form
 /// the pushed tip carries, or `None` when they already agree, the title
-/// names more than this spec, or the tip names neither form.
+/// names more than this spec, or the tip names neither form. The tip
+/// completes only when its subject does AND `host_completes`, the host's own
+/// decision for the push (round-7 finding 1): a host veto turns a completing
+/// subject into a `(Refs SPEC)` title, never the reverse.
 // trace:BUG-2696 | ai:claude
 pub(crate) fn aligned_title(
     store: Option<&aida_core::RequirementsStore>,
     title: &str,
     spec: &str,
     tip_subject: &str,
+    host_completes: bool,
 ) -> Option<String> {
     let req = store?.get_requirement_unambiguous(spec).ok()??;
     let completing = crate::pr_ship::extract_trailing_spec_ids_from_subject(title);
@@ -2463,12 +2503,14 @@ pub(crate) fn aligned_title(
     if !names(&single) {
         return None;
     }
-    let tip_completes = crate::publication_completion::subject_completes(store, tip_subject, req);
+    let subject_completes =
+        crate::publication_completion::subject_completes(store, tip_subject, req);
+    let tip_completes = subject_completes && host_completes;
     let tip_refs = crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(tip_subject)
         .iter()
         .any(|id| names(id));
     let title_completes = !completing.is_empty();
-    if tip_completes == title_completes || !(tip_completes || tip_refs) {
+    if tip_completes == title_completes || !(subject_completes || tip_refs) {
         return None;
     }
     crate::publication_completion::derive_trailer(title, &single, tip_completes).ok()
@@ -2510,10 +2552,20 @@ fn open_seat_pr(
     branch: &str,
     spec: &str,
     tip: &str,
+    completes: bool,
 ) -> Result<u64> {
     let message = git_text(main, &["log", "-1", "--format=%B", tip])?;
     let subject = git_text(main, &["log", "-1", "--format=%s", tip])?;
     let title = publication_title(main, spec, &subject)?;
+    // Round 7 (finding 1): a host veto downgrades a completing title.
+    // trace:BUG-2696 | ai:claude
+    let title = if completes {
+        title
+    } else {
+        let store = crate::load_store_for_lookup(main);
+        let tip_subject = publication_subject(main, tip).unwrap_or_default();
+        aligned_title(store.as_ref(), &title, spec, &tip_subject, false).unwrap_or(title)
+    };
     let seat_name = seat
         .root
         .file_name()

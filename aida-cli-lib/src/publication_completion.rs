@@ -180,16 +180,6 @@ pub(crate) fn done_after_push_flip(req: &mut Requirement, tip: &str) -> bool {
 /// (the Done write stays recorded locally and the push is retried, see
 /// [`propagate_store_writes`]). Callers treat an error as a warning: the code
 /// push itself already succeeded.
-pub(crate) fn mark_done_after_push(
-    project_root: &Path,
-    spec: &str,
-    subject: &str,
-    tip: &str,
-) -> Result<bool> {
-    let storage = crate::lane_recovery::storage_for(project_root)?;
-    mark_done_after_push_in(&storage, spec, subject, tip)
-}
-
 pub(crate) fn mark_done_after_push_in(
     storage: &Storage,
     spec: &str,
@@ -208,6 +198,37 @@ pub(crate) fn mark_done_after_push_with(
     tip: &str,
     between: impl FnOnce(),
 ) -> Result<bool> {
+    let verdict = push_completion_with(storage, spec, subject, tip, between)?;
+    match verdict.unconfirmed {
+        Some(why) => Err(why),
+        None => Ok(verdict.moved),
+    }
+}
+
+/// The host's completion decision for one confirmed implementer push.
+/// `completes` is the veto every later publication step carries (round-7
+/// finding 1): true only when the publication subject completes the spec AND
+/// the slice graph re-read under the writer lock has no outstanding child.
+/// A partial decision makes the PR title a `(Refs SPEC)`, whatever the seat's
+/// commit subject says.
+// trace:BUG-2696 | ai:claude
+#[derive(Debug)]
+pub(crate) struct PushCompletion {
+    pub(crate) completes: bool,
+    pub(crate) moved: bool,
+    /// The shared-store push was not confirmed; the decision above stands.
+    pub(crate) unconfirmed: Option<anyhow::Error>,
+}
+
+/// [`mark_done_after_push_with`], returning the full [`PushCompletion`]. An
+/// `Err` means the decision could not be made at all (fail closed: partial).
+pub(crate) fn push_completion_with(
+    storage: &Storage,
+    spec: &str,
+    subject: &str,
+    tip: &str,
+    between: impl FnOnce(),
+) -> Result<PushCompletion> {
     let store = storage.load()?;
     let (id, evidence) = match store.get_requirement_unambiguous(spec)? {
         Some(req)
@@ -219,17 +240,28 @@ pub(crate) fn mark_done_after_push_with(
         _ => {
             // Nothing to write, but a status write the shared store does
             // not have yet is still owed. trace:BUG-2696 | ai:claude
-            propagate_store_writes(storage.path(), "implementer push → Done")?;
-            return Ok(false);
+            return Ok(PushCompletion {
+                completes: false,
+                moved: false,
+                unconfirmed: propagate_store_writes(storage.path(), "implementer push → Done")
+                    .err(),
+            });
         }
     };
     between();
     let mut moved = false;
+    let mut graph_unchanged = false;
     storage.update_atomically(|locked| {
-        moved = done_write_under_lock(locked, id, &evidence, |r| done_after_push_flip(r, tip));
+        moved = done_write_under_lock(locked, id, &evidence, |r| {
+            graph_unchanged = true;
+            done_after_push_flip(r, tip)
+        });
     })?;
-    propagate_store_writes(storage.path(), "implementer push → Done")?;
-    Ok(moved)
+    Ok(PushCompletion {
+        completes: graph_unchanged,
+        moved,
+        unconfirmed: propagate_store_writes(storage.path(), "implementer push → Done").err(),
+    })
 }
 
 /// Whether `store` positively has a shared remote: `Ok(false)` only when git
@@ -341,18 +373,33 @@ pub(crate) fn propagate_store_writes(store: &Path, reason: &str) -> Result<()> {
     }
 }
 
-/// [`mark_done_after_push`] reported on stderr; never fails the caller.
+/// [`mark_done_after_push_in`] on the project's store, reported on stderr;
+/// never fails the caller.
+/// Returns whether the host decided the publication completes the spec
+/// ([`PushCompletion::completes`]); any failure to decide is `false`.
 pub(crate) fn mark_done_after_push_reported(
     project_root: &Path,
     spec: &str,
     subject: &str,
     tip: &str,
-) {
+) -> bool {
     let shown = aida_core::node_alias::display_spec_id(spec);
-    match mark_done_after_push(project_root, spec, subject, tip) {
-        Ok(true) => eprintln!("  {shown} → Done (the push completes it for its scope)"),
-        Ok(false) => {}
-        Err(e) => eprintln!("  warning: could not mark {shown} Done after the push: {e:#}"),
+    let verdict = crate::lane_recovery::storage_for(project_root)
+        .and_then(|storage| push_completion_with(&storage, spec, subject, tip, || {}));
+    match verdict {
+        Ok(verdict) => {
+            if verdict.moved {
+                eprintln!("  {shown} → Done (the push completes it for its scope)");
+            }
+            if let Some(e) = verdict.unconfirmed {
+                eprintln!("  warning: could not mark {shown} Done after the push: {e:#}");
+            }
+            verdict.completes
+        }
+        Err(e) => {
+            eprintln!("  warning: could not mark {shown} Done after the push: {e:#}");
+            false
+        }
     }
 }
 
@@ -611,7 +658,7 @@ mod tests {
         let mut store = RequirementsStore::new();
         store.requirements = vec![spec("BUG-1", RequirementStatus::Approved)];
         let align = |title: &str, tip: &str| {
-            crate::ship_from_seat::aligned_title(Some(&store), title, "BUG-1", tip)
+            crate::ship_from_seat::aligned_title(Some(&store), title, "BUG-1", tip, true)
         };
         assert_eq!(
             align("fix: x (Refs BUG-1)", "fix: rework (BUG-1)").as_deref(),
@@ -625,6 +672,72 @@ mod tests {
         assert_eq!(align("fix: x (BUG-1)", "chore: no trailer"), None);
         assert_eq!(align("fix: x (BUG-1 BUG-2)", "fix: (Refs BUG-1)"), None);
         assert_eq!(align("fix: x (BUG-2)", "fix: (Refs BUG-1)"), None);
+    }
+
+    // Round 7 (finding 1): the host's partial decision travels into the PR
+    // title. A seat commit `feat: slice one (STORY-1)` for a spec with an
+    // outstanding child is vetoed: the push reports NOT completing, the spec
+    // is not Done, and the title the publication carries is `(Refs STORY-1)`
+    // whether the PR title was completing or already a reference; it is never
+    // upgraded.
+    #[test]
+    fn bug_2696_host_veto_carries_into_the_pr_title() {
+        let mut parent = spec("STORY-1", RequirementStatus::InProgress);
+        let child = spec("TASK-2", RequirementStatus::Approved);
+        parent.relationships.push(parent_edge(child.id));
+        let (_dir, storage) = store_with(vec![parent, child]);
+        let subject = "feat: slice one (STORY-1)";
+        let verdict = push_completion_with(&storage, "STORY-1", subject, "a", || {}).unwrap();
+        assert!(!verdict.completes && !verdict.moved, "{verdict:?}");
+        assert_eq!(status(&storage, "STORY-1"), RequirementStatus::InProgress);
+        let store = storage.load().unwrap();
+        let align = |title: &str| {
+            crate::ship_from_seat::aligned_title(
+                Some(&store),
+                title,
+                "STORY-1",
+                subject,
+                verdict.completes,
+            )
+        };
+        assert_eq!(
+            align("feat: slice one (STORY-1)").as_deref(),
+            Some("feat: slice one (Refs STORY-1)")
+        );
+        assert_eq!(
+            align("feat: slice one (Refs STORY-1)"),
+            None,
+            "never upgraded"
+        );
+    }
+
+    // Round 7 (finding 1): a declaration that passes on the unlocked snapshot
+    // but whose graph changes before the locked write is partial too: the
+    // verdict, not just the status write, reports it.
+    #[test]
+    fn bug_2696_lock_time_graph_change_makes_the_verdict_partial() {
+        let parent = spec("STORY-1", RequirementStatus::InProgress);
+        let child = spec("TASK-2", RequirementStatus::Approved);
+        let child_id = child.id;
+        let (_dir, storage) = store_with(vec![parent, child]);
+        let verdict = push_completion_with(&storage, "STORY-1", "feat: x (STORY-1)", "a", || {
+            storage
+                .update_atomically(|s| {
+                    s.get_requirement_by_spec_id_mut("STORY-1")
+                        .unwrap()
+                        .relationships
+                        .push(parent_edge(child_id));
+                })
+                .unwrap();
+        })
+        .unwrap();
+        assert!(!verdict.completes && !verdict.moved, "{verdict:?}");
+        // Control: an already-Done spec on a rework round still completes
+        // (nothing moves, but the host's decision is completing).
+        let (_dir, storage) = store_with(vec![spec("STORY-1", RequirementStatus::Done)]);
+        let verdict =
+            push_completion_with(&storage, "STORY-1", "feat: x (STORY-1)", "a", || {}).unwrap();
+        assert!(verdict.completes && !verdict.moved, "{verdict:?}");
     }
 
     #[test]
