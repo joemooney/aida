@@ -3,12 +3,12 @@ spec_id: TASK-b6b1278890774ef993d2ebc327862470-1104
 agreed_id: TASK-3820
 title: 'STORY-2828 S2b: aida mandate renew --for D extends covered descendant grants in place (advisor-117 signed design)'
 description: 'Implements S2b as signed off by advisor-117 on STORY-2828 (comment 14) with product''s coverage definition (comment 13). Coverage = grants rooted in the operator''s own role enter; descendants never extend past their root. Extend in place under record locks, each descendant to min(root''s new expiry, its own cap, 168h); a concurrent revoke wins; per-grant result with no rollback; non-zero exit naming refused grants; never shortens or revives an expired or revoked grant. Relays are left to TASK-3119. CAUTION (advisor-119): must not double-extend TASK-3119 relay-parent grants (4467a61) that are already in the S2a inventory; regression for that. STRICT (authority).'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T06:07:06.539189446Z
+modified_at: 2026-11-19T06:08:07.564206487Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -221,6 +221,13 @@ comments:
   created_at: 2026-11-19T05:48:56.910733097Z
   modified_at: 2026-11-19T05:48:56.910733097Z
   session_id: 01a1f23b9488
+- id: 01a1f26b-678c-7bb0-a10d-bc397c863f0b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Read the complete 20-file protected-base landed diff (main edbcfef98e60b4863afdd698f495c295e85bb129, landed tree 5999332fa6b541b7c0c6019fe1d2b840a795a679), attesting original PR head a3729cf5b889d8478fab5679c6a2287931beacff. Checked TASK-3820, STORY-2828 coverage and signed design, authoritative rework briefs, grant validation/update and contained-launch callers. Earlier partial-retry, fresh cap, ancestor revoke/supersession and post-lock lifetime findings have source fixes and regressions; writer inventory entries are present. Request changes for one remaining security defect: pre-existing credential-capped grants have no recorded cap marker and are extended beyond their launcher deadline. This finding does not depend on the one newer protected-base commit, whose changes are outside the renewal code. Exact-head CI fast gates, fast compilation and aggregate Build succeeded; merge-hold-gate was pending at review time. Implementer reports 18 targeted tests passed; no local builds or tests were run under reviewer policy. The absolute host Codegraph client is absent and doctor reports an unreachable index; source searches were used. No branch update or merge performed.. Triage reason: ROUND 4 of 4 (final) for PR #4280. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3820-r4.md: a legacy child without a recorded cap is never extended (fail closed). CLAUDE lane.'
+  created_at: 2026-11-19T06:08:07.564204610Z
+  modified_at: 2026-11-19T06:08:07.564204610Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f199-a555-7012-b7ed-90d9cae21bfa
   author: joe
@@ -330,6 +337,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f26b-678c-7bb0-a10d-bc221c54d899
+  author: joe
+  timestamp: 2026-11-19T06:08:07.564181078Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
   branch: main
@@ -343,11 +359,3 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-19T03:57:28.812353101Z
   implemented_by: dirtlab
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Read the complete 20-file protected-base landed diff (main edbcfef98e60b4863afdd698f495c295e85bb129, landed tree 5999332fa6b541b7c0c6019fe1d2b840a795a679), attesting original PR head a3729cf5b889d8478fab5679c6a2287931beacff. Checked TASK-3820, STORY-2828 coverage and signed design, authoritative rework briefs, grant validation/update and contained-launch callers. Earlier partial-retry, fresh cap, ancestor revoke/supersession and post-lock lifetime findings have source fixes and regressions; writer inventory entries are present. Request changes for one remaining security defect: pre-existing credential-capped grants have no recorded cap marker and are extended beyond their launcher deadline. This finding does not depend on the one newer protected-base commit, whose changes are outside the renewal code. Exact-head CI fast gates, fast compilation and aggregate Build succeeded; merge-hold-gate was pending at review time. Implementer reports 18 targeted tests passed; no local builds or tests were run under reviewer policy. The absolute host Codegraph client is absent and doctor reports an unreachable index; source searches were used. No branch update or merge performed.'
-  recovery_hint: address the review findings, move TASK-3820 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T06:07:06.539189446Z
