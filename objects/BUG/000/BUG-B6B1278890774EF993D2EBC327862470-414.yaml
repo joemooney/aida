@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768277Z
-modified_at: 2026-11-19T16:32:24.390090128Z
+modified_at: 2026-11-19T16:50:57.494026565Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -239,6 +239,17 @@ comments:
   modified_at: 2026-11-19T15:54:24.800797767Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f4b7-f098-7d80-a99b-ceb8610841c3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e66bfe3230112a381c6ec139e555623d2e635066; reviewed the origin/main merge-base diff and native uncommitted S2 changes, including the new pause module.
+    AC3: [evidence: behavioral-test] Launcher job j20261119T163007938-2-0 ran 80 review-watch tests successfully. The pause regression proves restart persistence, actor/reason audit, explicit resume, automatic expiry and refusal on malformed control state. The GitHub and GitLab process fixture checks a rejected grant, defaults and bounds, a pause between selection and queue-work spawn, and completion of a queue child already running at pause time. FAST source gates passed 48 checks and the classified writer inventory passed. Golden help was generated and the command paths match the JSON audit. Final-tree targeted/golden verification is job j20261119T164119633-2-0.
+    Probe findings: selection and both spawn checks read the same repository-bound journal. Explicit writes serialize with launch guards and admission.lock; expiry is audited at the locked read. A refused pause cannot count as a started review. Existing grant, controller and hub transitions still guard launch, and no test was removed or relaxed. The new state is host-local; cutover still needs the controller supervisor and descendant checks. The STORY-2868 runbook documents the resume call for the future rollback script. This is a Refs slice and the spec stays open.
+  created_at: 2026-11-19T16:50:57.494026565Z
+  modified_at: 2026-11-19T16:50:57.494026565Z
+  session_id: 01a1f4861f64
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
