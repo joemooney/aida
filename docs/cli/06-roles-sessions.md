@@ -991,6 +991,29 @@ Publication failures retain the seat for recovery.
 This host step replaces the advisor's manual auto-publish workaround.
 <!-- trace:STORY-2475 | ai:codex -->
 
+## Declaring acceptance scope for a Refs-only review
+<!-- trace:BUG-2683 | ai:codex -->
+
+For a PR or MR with a `(Refs SPEC-ID)` title or commit trailer, add one
+standalone line per acceptance criterion to its description. For example:
+
+```text
+Slice-Scope: BUG-42 AC1 covered
+Slice-Scope: BUG-42 AC2 deferred slice-2
+Slice-Scope: BUG-42 AC3 deferred TASK-89
+```
+
+Use the criterion labels from `aida criteria BUG-42` (the part after the
+spec ID and dot). The deferred destination is one token, such as a spec ID
+or slice name, using letters, digits, hyphens, underscores, periods, slashes,
+or hashes. Repeat the spec ID on each line to declare scope for multiple specs.
+
+`aida review prompt --pr <N>` pre-marks deferred criteria as N/A and asks
+reviewers to verify covered criteria. Missing, incomplete, or conflicting
+declarations use an undeclared-slice checklist. Reviewers verify the diff's
+claims and report uncovered criteria as informational. A completing trailer
+for the same spec keeps the whole-spec checklist, regardless of these lines.
+
 ## Watching for new review heads
 
 Manual merge trains cooperate with review-watch: unrelated reviews and a live

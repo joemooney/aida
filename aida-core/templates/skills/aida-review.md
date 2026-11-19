@@ -446,7 +446,7 @@ This is only needed here for entry points that don't already hold the marker the
 aida review prompt --pr <N> --write .aida/review-prompt-pr-<N>.md
 ```
 
-`aida review prompt` walks the PR's commit range, extracts every `(REQ-ID)` trailer, loads each spec's acceptance criteria + a diff hint, and emits a structured checklist. Read the generated file; that's the worksheet.
+`aida review prompt` reads completion and Refs trailers from the PR title and commit range, then emits a structured checklist for the linked specs. Read the generated file; that's the worksheet.
 
 **Dim already-Completed specs — but only when they weren't subject of a commit in this PR.** Before walking the checklist, check each spec's current status AND whether it's the subject of a commit in `<base>..HEAD`:
 
@@ -468,7 +468,7 @@ A spec gets the **informational** treatment ("STORY-54 [Completed, shipped earli
 If the spec IS the subject of a commit in this PR — even if pre-marked Completed by /aida-implement's eager status update — a real PASS / PARTIAL / FAIL verdict is still required. The two-signal check prevents the failure mode where every spec gets marked Completed pre-PR (because /aida-implement does that today; the proper deferral lives behind STORY-86) and the whole checklist degenerates into informational rows. (TASK-72 polish — items 4 & 6)
 
 <!-- kind:design-fork -->
-If `aida review prompt` returns "no specs found" — the PR has commits without `(REQ-ID)` trailers. STOP and ask the user how to attribute the diff before continuing. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`; attribution is a real judgement call, not a mechanical confirmation.
+If `aida review prompt` returns "no specs found" — the PR has neither completing nor Refs trailers. STOP and ask the user how to attribute the diff before continuing. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`; attribution is a real judgement call, not a mechanical confirmation.
 
 ### 2b. The correct diff instrument — trace:BUG-1518 | ai:claude
 
@@ -522,11 +522,17 @@ For each non-informational spec in the checklist, in order:
 
 1. **Read the diff against acceptance criteria** — the merge-base diff from
    step 2b above, never a raw tree diff against `main`'s tip — does each
-   `- [ ]` line in the spec have the evidence required by its declared type?
+   applicable criterion have the evidence required by its declared type?
+   For a completing spec, review the whole acceptance list. For a declared Refs-only
+   slice, verify the covered criteria and retain the worksheet's pre-marked
+   deferrals as N/A. For an undeclared slice, verify the diff's claims and list
+   uncovered criteria as informational. In both slice cases, inspect the entire
+   diff for defects and keep uncovered or deferred criteria out of the actionable
+   findings unless the diff claims to satisfy them.
 2. **Gate on CI, not local cargo** — by default the reviewer runs no cargo: cite available CI evidence at the exact PR head, and record approval without waiting for pending CI when there are no actionable defects. Run one targeted `cargo test --profile agent -p <crate> <test_name>` only to reproduce a specific suspected defect. Never run `cargo test --workspace`, `make check-ci` or an unfiltered `aida-cli-lib --lib` locally: CI's run at the PR head is the full-suite evidence, so cite it. Never set `AIDA_CARGO_NO_SLOT`. trace:TASK-2209 | ai:claude
 3. **Record the verdict inline in `.aida/review-prompt-pr-<N>.md`** — the file `aida review prompt --write` generated is your worksheet. Edit it in place, appending a verdict block under each spec's section:
-   - ✅ **PASS** — every acceptance bullet covered, no actionable defect; pending CI is reported separately
-   - ⚠️ **PARTIAL** — some bullets covered, others missing; name the gap precisely (file + line + which bullet)
+   - ✅ **PASS** — every applicable acceptance bullet verified, no actionable defect; pending CI is reported separately
+   - ⚠️ **PARTIAL** — some applicable bullets verified, others missing; name the gap precisely (file + line + which bullet)
    - ❌ **FAIL** — acceptance not met, tests red, or design diverges from the spec
 
 Evidence required for every verdict: a file:line reference for PASS, the missing bullet for PARTIAL, the failing test name + line of the divergent code for FAIL. "Looks good" without a reference is not a verdict.
@@ -1136,9 +1142,9 @@ gh pr merge <N> --squash --delete-branch=false
 
 Keep the branch around so a follow-up `aida session end` on the implementer side still resolves naming cleanly. (Branch deletion is the user's call, not the reviewer's.)
 
-### 10. Mark every covered spec Completed (when not already)
+### 10. Mark passing completing specs Completed
 
-For each `REQ-ID` from the checklist whose verdict was ✅ PASS, mark Completed only if it isn't already (eager-marking by /aida-implement is the norm today, so most will be no-ops — that's fine):
+For each completing `REQ-ID` whose verdict was ✅ PASS, mark Completed if needed. A passing Refs-only slice leaves the linked spec open:
 
 ```bash
 # Idempotent — `aida edit` with the same status is a no-op
@@ -1352,7 +1358,7 @@ merge has already landed; the hand-off is the courier-replacement, not a gate.
 ## Common Failure Modes
 
 - **No active session lease and no `--pr`**: refuse — never guess the PR number from cwd alone.
-- **`aida review prompt` returns empty**: PR has no `(REQ-ID)` trailers. STOP and ask the user how to attribute the diff.
+- **`aida review prompt` returns empty**: PR has neither completing nor Refs trailers. STOP and ask the user how to attribute the diff.
 - **CI red for an unrelated reason**: don't auto-bypass. Surface to the user; they decide whether to override.
 - **Spec's acceptance criteria are vague**: <!-- kind:design-fork --> ⚠️ PARTIAL by default and ask the user to either tighten the spec or accept the gap explicitly. Don't let vagueness leak through as PASS. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`.
 - **Implementer pushes new commits mid-review**: re-run step 2 (`aida review prompt --pr N` again) so the checklist matches the latest range. Verdicts on stale code are worse than none.
