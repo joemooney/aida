@@ -1601,7 +1601,7 @@ fn full_tier_gate(
             return Ok(());
         }
         // The override admits only once it is on record.
-        crate::pr_cmd::try_append_ship_activity_line(
+        crate::pr_service::try_append_ship_activity_line(
             checks.marker_root(),
             &crate::full_tier::skip_event(&chrono::Utc::now().to_rfc3339(), pr, head, &why),
         )
@@ -3318,7 +3318,7 @@ impl LiveTrainForge<'_> {
         }
         let specs = crate::pr_ship::extract_trailing_spec_ids_from_subject(&car.member.subject);
         crate::pr_cmd::emit_ship_pr_merged(&self.main_worktree, car.member.pr as u32, &specs);
-        crate::pr_cmd::append_ship_activity_line(
+        crate::pr_service::append_ship_activity_line(
             &self.main_worktree,
             &serde_json::json!({
                 "ts": chrono::Utc::now().to_rfc3339(),
