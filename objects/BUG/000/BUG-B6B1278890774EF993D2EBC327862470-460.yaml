@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T03:38:38.059922980Z
+modified_at: 2026-11-19T03:39:04.355169476Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -232,6 +232,37 @@ comments:
   created_at: 2026-11-19T03:38:37.861814533Z
   modified_at: 2026-11-19T03:38:37.861814533Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1e3-2327-7fe0-b30e-661dd21fb908
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 20:39):
+    # Rework brief: BUG-2696 / PR #4274, round 3 of 4
+
+    Advisor: claude-advisor-119, 2026-11-18 20:40 MST. Head reviewed: 69c5f0a. Lane: Claude. STRICT.
+    Authoritative scope (BUG-2603). Round-2 fixes stand: keep A1/A2 and the F1-F9 work.
+
+    ## Fix exactly these three (regression first; watch it fail at 69c5f0a)
+    1. publication_completion.rs:197-200, pr_merge_gate.rs:506-510 (stale child state): under the parent
+       writer lock, RE-READ every Parent-linked child's current status (and archived flag) and compare it
+       with the snapshot, not just the edge set. Any child that is now non-terminal, or any difference
+       between snapshot and re-read, refuses Done (fail closed). Regression: a child reopened from Completed
+       to Approved between snapshot and lock means no Done.
+    2 and 3 (pending-push marker race; marker creation failure ignored), publication_completion.rs:233-251:
+       DESIGN CHANGE: DELETE the pending-marker file entirely. "Push pending" is DERIVED from the store
+       itself: the local aida-store is ahead of its shared remote (git rev-list remote..HEAD non-empty). The
+       landing scan and every completion write call one helper: if the store is ahead, push it and retry
+       with backoff; report failure non-zero; never checkpoint or clear a scan while the store is ahead.
+       This removes both the race (no shared file to delete) and the creation-failure path.
+       Regressions: (a) a rejected push leaves the store ahead and the next scan pushes it; (b) two
+       concurrent writers, one push failing: the later scan still pushes both commits.
+
+    ## Validation
+    Targeted publication_completion, pr_merge_gate and db_reconcile tests plus `make check-ci-fast` through
+    the lane job runner. Push. Nothing else.
+  created_at: 2026-11-19T03:39:04.355169476Z
+  modified_at: 2026-11-19T03:39:04.355169476Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
