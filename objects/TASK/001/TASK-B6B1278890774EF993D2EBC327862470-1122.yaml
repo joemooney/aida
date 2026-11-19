@@ -1,0 +1,31 @@
+id: 01a1f4ca-51ba-7fe1-b19b-9b2fb4b3582c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1122
+title: 'Review follow-up: [P2] Preserve the existing authorization result when relabeling approval actionability. re'
+description: |-
+  From STORY-2893
+  Reviewed sha: 6edcb21547e083271200f1c4c6ca611d99576ced
+
+  [P2] Preserve the existing authorization result when relabeling approval actionability. review_verdict_show_body deliberately returns needs-review when independent_approval_authorized rejects an unattested, self-authored, revoked or otherwise invalid approval. The new postprocessing at review_commands.rs:4337-4340 and 4390 checks only the parsed approval word and matching SHA, then unconditionally overwrites that result with current-head-approved. An unattested APPROVED file at local HEAD is enough to trigger this even without a PR lookup; the real merge gates may still correctly demand a reviewer. Keep the authority validation in the display path and cover the full handler/postprocessing with the existing invalid-authority fixtures, rather than testing only the preexisting body function or a fabricated renderer input.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-19T17:11:02.330067815Z
+modified_at: 2026-11-19T17:11:02.330067815Z
+req_type: Task
+tags:
+- carried-from:STORY-2893
+- finding-hash:5b98fcee
+- from-review:STORY-2893
+relationships:
+- rel_type: References
+  target_id: 01a1ebe3-43dc-7810-8dd1-f2918d7dbc7c
+  created_at: 2026-11-19T17:11:14.207115740Z
+filed_at:
+  code_sha: 6edcb21547e083271200f1c4c6ca611d99576ced
+  branch: pr-4318
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5b78d27e14
+  vendor: claude
+  session: 01a1f4c617e1
