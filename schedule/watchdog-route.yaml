@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 23h-old trip from the prior advisor era; no current runaway seat (3 live seats, fresh)
+due_since: 2026-11-19T17:24:24.254365348Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-11-19T17:15:37.520970618Z
+  job: watchdog
+  error: 'exit 1: '
