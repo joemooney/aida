@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T10:05:48.220714449Z
+modified_at: 2026-11-19T10:50:23.881251577Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -239,6 +239,27 @@ comments:
   modified_at: 2026-11-19T10:02:54.835536197Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f36d-d509-7bd3-844c-5996bde8d604
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 408383fc60 (round 3, on origin/main b0671acf9f)
+
+    Finding 1 (compile vs pinned base): bug_home_038 run_recorded call now passes on_delivery=None; bug_2451 headless_pickup passes brief_file=None. aida-cli-lib test target compiles; no behaviour change.
+
+    Finding 2 / AC3: [evidence: behavioral-test] new tests in aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs drive standalone_implementer::run_for_test with a mock Claude agent on a real leased seat clone, dirty and clean, through each remaining early terminal path, asserting one emitted result line with 'retained: dirty or unpublished work at <clone>' only when dirty:
+    - bug_2607_empty_rework_reports_only_a_dirty_retained_seat (empty_rework::inspect/route via gh stub; exit 35, reason=empty-rework)
+    - bug_2607_started_signal_handling_reports_only_a_dirty_retained_seat (punt and hold; host mirror write fails after start so run_recorded's signal finalization emits; reason=explicit-punt/explicit-hold)
+    - bug_2607_pending_merge_reports_only_a_dirty_retained_seat (agent leaves MERGE_HEAD; reason=retained-merge)
+    - bug_2607_failed_after_start_reports_only_a_dirty_retained_seat (unreadable signal; finish_result reason=lane-failed)
+    Mutation check: deleting the with_retained_seats calls at standalone_implementer.rs:1362/1678/1799 fails the signal, merge and empty-rework tests (3 failed); restored.
+    Evidence: lane job cargo test -p aida-cli-lib --lib -- bug_2607: 8 passed. check-store-writers.py ok; check-exec-context.py zero additions.
+
+    Residual: the queue rollback test still models the rollback by hand (it sets seat_tree and removes the clone) and does not run handle_queue_work through run_pickup_launch. A full handle_queue_work fresh-clone launch fixture does not exist yet. The round-3 advisor brief limited this round to paths (a)-(d) and kept the four existing tests, so that part of finding 2 is left as a follow-up rather than done here.
+  created_at: 2026-11-19T10:50:23.881251577Z
+  modified_at: 2026-11-19T10:50:23.881251577Z
+  session_id: 01a1f344d015
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
   author: joe
