@@ -15,12 +15,12 @@ description: |
   2. The ownership semantics under test are unchanged; no production code changes.
   3. The test passes 20/20 in a loop locally (one targeted cargo run) and is green on its PR's full tier.
   Test-only, codex lane, FASTTRACK review. Trailer (Refs BUG-2684) is NOT used; this task completes on its own.
-status: Approved
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T21:42:23.178585823Z
-modified_at: 2026-11-19T22:09:42.830355260Z
+modified_at: 2026-11-19T22:16:42.917763717Z
 req_type: Task
 tags:
 - fix-forward
@@ -67,6 +67,113 @@ comments:
   modified_at: 2026-11-19T22:09:42.830355260Z
   session_id: 01a1f5c7f722
   harness_version: codex-cli 0.167.0
+- id: 01a1f5e2-2ca5-7180-a6e3-cba96180cc63
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+    ----------------------------------------------------------------------
+    Ran 30 tests in 31.648s
+
+    OK
+    ok    PreCompact handoff hook protocol  (31.7s)
+    RUN   Grant expiry hook protocol  [fast]
+    .............
+    ----------------------------------------------------------------------
+    Ran 13 tests in 2.330s
+
+    OK
+    ok    Grant expiry hook protocol  (2.4s)
+    RUN   Book glossary generator tests (stub binary, no build)  [fast]
+    ok: generate-glossary.sh --check
+    ok    Book glossary generator tests (stub binary, no build)  (0.7s)
+    RUN   Performance profile guard  [fast]
+    Checking release profile opt-level...
+    [profile.release] is omitted, using cargo default (opt-level 3). OK.
+    Checking agent profile...
+    Performance profile gate passed.
+    ok    Performance profile guard  (0.0s)
+    RUN   Check formatting  [fast]
+    ok    Check formatting  (13.9s)
+    RUN   Removed mode-flag spelling guard  [fast]
+    check-removed-flags fixture tests passed
+    ok    Removed mode-flag spelling guard  (1.3s)
+    RUN   Help golden snapshot co-change guard  [fast]
+    check-help-golden-cochange fixtures: ok
+    fatal: unable to access 'https://github.com/joemooney/aida.git/': Could not resolve host: github.com
+    ok    Help golden snapshot co-change guard  (0.2s)
+    RUN   Check Rust test portability ratchet  [fast]
+    fatal: unable to access 'https://github.com/joemooney/aida.git/': Could not resolve host: github.com
+    error: new ratchet findings (non-portable test assumptions or prose classification):
+    aida-cli-lib/src/worktree_lifecycle_gc.rs:752: proc literal: std::os::unix::fs::symlink("/proc/self", dir.path().join("self")).unwrap();
+
+    Move the code behind #[cfg(unix)] / #[cfg(target_os = "linux")], make it portable, or shrink/regenerate the baseline only for existing debt. For prose-classification: branch on a typed field (enum, exit code, error variant) instead of the message text, or mark a real external-tool contract with `// external-prose-classifier: <site>`. A deliberate GNU/BSD fallback pair may use `# portable-fallback: <reason>`.
+    FAIL  Check Rust test portability ratchet  (19.1s)
+            this is CI's own `Check Rust test portability ratchet` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-19T22:16:42.917762577Z
+  modified_at: 2026-11-19T22:16:42.917762577Z
+  session_id: 01a1f5c7f722
 history:
 - id: 01a1f5c3-790d-7e72-aad3-67032fd7c265
   author: joe
@@ -87,6 +194,14 @@ history:
   session_id: 01a1f5c7f722
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1f5e2-2ca5-7180-a6e3-cb9fdc20a60c
+  author: fast-gate
+  timestamp: 2026-11-19T22:16:42.917756800Z
+  session_id: 01a1f5c7f722
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: fd4018a2b2fada46b4d110d11cd446d7fe65d293
