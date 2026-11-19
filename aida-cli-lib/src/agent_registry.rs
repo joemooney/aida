@@ -3617,6 +3617,13 @@ fn process_cmdline(pid: u32) -> Option<String> {
     }
 }
 
+// trace:BUG-2638 | ai:codex
+pub(crate) fn is_vendor_process(entry: &AgentRegistryEntry) -> bool {
+    PidObserver::current().can_observe(entry.pid_namespace)
+        && process_cmdline(entry.pid)
+            .is_some_and(|cmd| cmdline_matches_agent(&cmd, &entry.agent_type))
+}
+
 #[cfg(unix)]
 pub(crate) fn session_start_agent_pid(child_pid: u32, agent_type: &str) -> Option<u32> {
     #[cfg(test)]

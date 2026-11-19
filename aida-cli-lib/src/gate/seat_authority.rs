@@ -216,6 +216,7 @@ pub(crate) struct HeldGrant {
     pub holders: Vec<(u32, bool)>,
 }
 
+#[cfg(test)]
 impl HeldGrant {
     /// The first bound process that is alive, if any.
     pub(crate) fn live_holder(&self) -> Option<u32> {
