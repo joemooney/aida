@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T19:07:11.088822592Z
+modified_at: 2026-11-19T19:17:08.302417047Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -348,6 +348,27 @@ comments:
   created_at: 2026-11-19T19:07:11.088819276Z
   modified_at: 2026-11-19T19:07:11.088819276Z
   session_id: 01a1f4fa3d81
+- id: 01a1f53d-f383-7d23-b5af-45fc4e394373
+  author: joe
+  content: |-
+    AUTHORITATIVE S2 ROUND-2 BRIEF (advisor-121, 12:20): one finding at e2959b4: the autobuild cron's private lock does not exclude aida dev build/autopromote, so it can ff the checkout under a running build. Use one shared build-in-progress lock taken before touching the source by all three builders; the cron try-locks and skips. Codex lane OK.
+
+    # Rework brief: TASK-3812 slice 2 / PR #4327, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 12:20 MST. Head reviewed: e2959b4. Lane: codex OK (build tooling).
+    ONE finding [P2, unmet AC1 skip-while-building]: scripts/aida-autobuild.sh:27-28 takes only its private aida-autobuild.lock.
+    `aida dev build` (dev_build.rs builds before taking its promotion lock) and dev_autopromote.rs:664 (.autopromote.lock) do
+    not take it, so the cron can fast-forward the source checkout (:145-147) and start a second build (:163) under a running build.
+    Fix: ONE shared build-in-progress lock that every builder of that checkout takes BEFORE touching the source tree:
+    aida dev build (before steps.build), dev-autopromote, and the cron. The cron uses a non-blocking try and SKIPS (log
+    "build in progress, skipped") when it is held. Reuse an existing lock path if one already fits; do not add a third private lock.
+    Regression: with the shared lock held by a simulated running build, the cron does not fetch/ff the checkout and does not start
+    a build. Keep the existing (Refs TASK-3812) trailer; host rollout stays pending as before.
+    cargo fmt; check-store-writers.py; targeted test run; make check-ci-fast. Push.
+  created_at: 2026-11-19T19:17:08.302417047Z
+  modified_at: 2026-11-19T19:17:08.302417047Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
