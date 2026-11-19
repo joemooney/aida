@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T14:01:56.369532759Z
+modified_at: 2026-11-19T14:11:59.778387051Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -260,6 +260,19 @@ comments:
   content: Implementer self-review validation update. The new check_fresh_reports_all_three_process_exit_codes test ran and passed in lane job j20261119T133431420-2-0 (1 passed). The lane check-ci-fast run j20261119T133319118-2-0 also finished with exit 0.
   created_at: 2026-11-19T14:01:56.369532759Z
   modified_at: 2026-11-19T14:01:56.369532759Z
+  session_id: 01a1f401bb54
+  harness_version: codex-cli 0.167.0
+- id: 01a1f426-68da-7900-92fb-be79f9ebe934
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: e84ecaeabf6518f9504d55e55bcf5e7752c97994, plus the uncommitted host fast-gate fix.
+
+    AC1: [evidence: behavioral-test] aida-cli/tests/task_3812_check_fresh.rs:79 still asserts the three real process exits. Lane job j20261119T140632484-2-0 ran the test and passed it.
+
+    Host fast-gate fix: aida-cli/tests/task_3812_check_fresh.rs:20 uses the same fixed system Git PATH as existing CLI fixtures and removes the ambient environment read. The tracked-file ExecContext suite passed all 19 tests, and the same gate passed in sandboxed job j20261119T140637265-2-0. The diff has one changed line, with no new format, iteration, or authority path. The fixed PATH requires system Git, which the sandboxed CLI regression exercised.
+  created_at: 2026-11-19T14:11:59.778387051Z
+  modified_at: 2026-11-19T14:11:59.778387051Z
   session_id: 01a1f401bb54
   harness_version: codex-cli 0.167.0
 history:

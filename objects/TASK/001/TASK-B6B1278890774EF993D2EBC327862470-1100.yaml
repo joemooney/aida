@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-19T13:39:30.826593051Z
+modified_at: 2026-11-19T14:07:37.770027158Z
 req_type: Task
 tags:
 - landing-emergency
@@ -188,6 +188,20 @@ comments:
   modified_at: 2026-11-19T13:35:14.609868883Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f422-6844-7393-bfe1-4b8126c5b6e9
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 0cdc18c33bf559792d40dddbc351da85f3bf95a5, plus the pending native-seat change for PR #4304 round 2. Inspected the origin/main merge-base diff, the working-tree diff and the untracked-file list.
+
+    AC (round 2): [evidence: behavioral-test] An approval-derived READY wait ends by the historical cutoff. The regression in aida-cli-lib/src/land_metrics.rs:796 puts the merge and recording start after the cutoff and verifies an unmerged approximate wait of 18,000 seconds. All 18 landing-metrics tests passed in the lane runner. Formatting, the store-writer guard and lane check-ci-fast also passed.
+
+    Cross-checked the CLI bounds, help snapshot and shared time-flag classification. Checked the cutoff comparisons and per-PR interval grouping for empty evidence, multiple PRs, an in-window merge, and the exclusive end boundary. No further round-2 defects found. The publication declaration uses Refs because the seven-day measurement remains open.
+  created_at: 2026-11-19T14:07:37.770027158Z
+  modified_at: 2026-11-19T14:07:37.770027158Z
+  session_id: 01a1f40869a1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e945-2e3a-7833-8bd2-590ea073a5d1
   author: joe
