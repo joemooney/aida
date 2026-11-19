@@ -702,7 +702,8 @@ fn review_gated_ready_changes_ship_once_for_a_caller_who_may_merge() {
 #[test]
 fn the_ship_child_keeps_the_operators_terminal_only_under_floor_authority() {
     const HELPER: &str = "AIDA_TEST_OPERATOR_TERMINAL_FLOOR";
-    if let Ok(floor) = std::env::var(HELPER) {
+    let env = aida_core::exec_context::Environment::capture();
+    if let Some(floor) = env.get(HELPER).and_then(|v| v.to_str()) {
         // Inside `script`: start a child as the land run does (null input
         // first), apply the terminal rule, report what the child sees.
         let mut child = std::process::Command::new("sh");
