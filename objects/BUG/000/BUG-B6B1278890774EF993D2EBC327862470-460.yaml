@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T15:46:11.579709968Z
+modified_at: 2026-11-19T16:03:54.269336382Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -824,6 +824,20 @@ comments:
   modified_at: 2026-11-19T15:43:10.948776571Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f48c-db1d-7532-81d0-a3e3477829f8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c778a0e587 (round 4/4, CI-red fix for #4305).
+    - Test 1 (r4 store probe): root cause was the fixture. bug_2696_shared_store never ran git init in the store, so the store resolved to the enclosing project repo: the corrupted config was the project's, and the bare remote's files left it dirty. The fixture now inits the store repo. Assertions are unchanged.
+    - Test 2 (BUG-2203 Refs subject): the referenced spec is now Approved, and the test still asserts it does not complete and that the flip list excludes it. A new Done spec on a Refs subject asserts D4 (it completes).
+    - Test 3 (BUG-1633 pull followup): this one was a CODE defect. Plan followups are filed as --parent children tagged followup-src: while the parent is Done (queue done, edit, landing scan), and slice_plan_outstanding treated them as outstanding slices, so such a parent would never complete. The fix exempts followup-tagged children only. Untagged open or missing children still fail closed. New unit test: bug_2696_plan_followup_child_is_not_an_outstanding_slice (positive and negative cases).
+    - Evidence: the targeted lane job ran bug_2696|bug_1633|followup|bug_2203 with 81 passed, 0 failed. scripts/check-store-writers.py OK. cargo fmt clean.
+    - Residual risk: the followup exemption keys on a tag that anyone with store write access can add. That person could also set the status directly, so the authority surface does not grow. Advisor attention is requested because this narrows A2. make check-ci-fast could not complete in this sandbox: the Containment conformance step fails on read-only /tmp and EPERM, and check-ratchets needs a compile longer than 60s. CI is the evidence.
+  created_at: 2026-11-19T16:03:54.269336382Z
+  modified_at: 2026-11-19T16:03:54.269336382Z
+  session_id: 01a1f47c71c1
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe

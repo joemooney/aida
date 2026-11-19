@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-19T16:00:23.956878898Z
+modified_at: 2026-11-19T16:03:43.574013103Z
 req_type: Bug
 tags:
 - bwrap
@@ -53,6 +53,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f48c-b613-7420-a116-9bb42a2b0263
+  author: dirtlab
+  timestamp: 2026-11-19T16:03:44.787607263Z
+  session_id: 01a1f4895588
+  harness_version: codex-cli 0.167.0
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 307446f83d1ab789bb6cde3901f15fe77f50942f
