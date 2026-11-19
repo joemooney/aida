@@ -43,6 +43,9 @@ struct Record {
     hand: String,
     /// Who holds it: the shared process-identity record.
     holder: aida_core::proc_identity::HolderRecord,
+    /// The authority it was taken under, for the audit: `grant:<id>` (the
+    /// validated seat grant), `operator` (at a terminal), or `none`.
+    authority: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     head: Option<String>,
     at: String,
@@ -173,6 +176,15 @@ fn blocked_by(
     }
 }
 
+/// The authority this process acts under, as a claim records it.
+fn authority(root: &Path) -> String {
+    if crate::gate::role_authority::has_integrity_floor_authority() {
+        return "operator".to_string();
+    }
+    crate::gate::seat_authority::current_grant(root)
+        .map_or_else(|| "none".to_string(), |g| format!("grant:{}", g.id))
+}
+
 /// Claim PR `pr` for `hand` on this host, or say why not: another live
 /// hand holds it, a train has it pinned (for any hand but the train), or
 /// the claim store cannot be read. The claim lasts as long as the guard.
@@ -219,6 +231,7 @@ pub(crate) fn claim(
         pr,
         hand: hand.as_str().to_string(),
         holder,
+        authority: authority(root),
         head: head.map(str::to_string),
         at: chrono::Utc::now().to_rfc3339(),
     };
@@ -236,6 +249,44 @@ pub(crate) fn claim(
         hand,
         releases: true,
     })
+}
+
+/// The train's boarding (STORY-2905): claim each of `members` (by PR and
+/// head) for the train; those another hand holds are left off, each with
+/// why. Returns the guards (held while the train runs), the members that
+/// boarded, and the refused ones.
+// trace:STORY-2905 | ai:claude
+#[allow(clippy::type_complexity)]
+pub(crate) fn board<T>(
+    root: &Path,
+    members: Vec<T>,
+    key: impl Fn(&T) -> (u64, String),
+) -> (Vec<ClaimGuard>, Vec<T>, Vec<(u64, String)>) {
+    let mut guards = Vec::new();
+    let mut boarded = Vec::new();
+    let mut refused = Vec::new();
+    for member in members {
+        let (pr, head) = key(&member);
+        match claim(root, pr, Some(&head), Hand::Train) {
+            Ok(guard) => {
+                guards.push(guard);
+                boarded.push(member);
+            }
+            Err(why) => refused.push((pr, why)),
+        }
+    }
+    (guards, boarded, refused)
+}
+
+/// Journal recovery (STORY-2905 round 1): every car of a retained train is
+/// claimed for the train again before the recovery mutates or lands
+/// anything; any car another hand holds, or whose claim cannot be read or
+/// judged, refuses the whole recovery.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn claim_all(root: &Path, prs: &[u64]) -> Result<Vec<ClaimGuard>, String> {
+    prs.iter()
+        .map(|pr| claim(root, *pr, None, Hand::Train))
+        .collect()
 }
 
 #[cfg(test)]

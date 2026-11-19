@@ -324,6 +324,55 @@ pub(crate) fn from_body(body: Option<&str>) -> LandingPolicy {
     }
 }
 
+/// The landing policy for a decision that must not default under
+/// uncertainty (the auto-train's choice to run, STORY-2905): no trusted
+/// default branch, a config that exists but cannot be read, config that
+/// does not parse, or an invalid `mode` is an error, never the ci-gated
+/// default. A default branch with no `.aida/config.toml` is the defaults.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn load_checked(root: &Path) -> Result<LandingPolicy, String> {
+    let sha = crate::trusted_config::local_trusted_default_branch_sha(root)
+        .ok_or("the default branch cannot be resolved, so its landing policy is unknown")?;
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .map_err(|e| format!("git could not run: {e}"))
+    };
+    let listed = git(&["ls-tree", "--name-only", &sha, "--", ".aida/config.toml"])?;
+    if !listed.status.success() {
+        return Err(format!(
+            "the default branch's tree cannot be read ({})",
+            String::from_utf8_lossy(&listed.stderr).trim()
+        ));
+    }
+    if listed.stdout.iter().all(u8::is_ascii_whitespace) {
+        return Ok(LandingPolicy::default());
+    }
+    let shown = git(&["show", &format!("{sha}:.aida/config.toml")])?;
+    if !shown.status.success() {
+        return Err(format!(
+            "the default branch's .aida/config.toml cannot be read ({})",
+            String::from_utf8_lossy(&shown.stderr).trim()
+        ));
+    }
+    let body = String::from_utf8(shown.stdout)
+        .map_err(|_| "the default branch's .aida/config.toml is not UTF-8".to_string())?;
+    let value = body
+        .parse::<toml::Value>()
+        .map_err(|e| format!("the default branch's .aida/config.toml does not parse ({e})"))?;
+    let policy = LandingPolicy::from_config(Some(&value));
+    if policy.origin("mode") == Origin::Invalid {
+        return Err(format!(
+            "the default branch's `[landing] mode` is not valid: {}",
+            policy.warnings.join("; ")
+        ));
+    }
+    Ok(policy)
+}
+
 /// `load`, printing any fallback warnings once to stderr.
 pub(crate) fn load_reporting(root: &Path) -> LandingPolicy {
     let policy = load(root);

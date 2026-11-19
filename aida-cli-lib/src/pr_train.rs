@@ -4949,6 +4949,14 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             .collect();
         let _recovery_reviews =
             crate::review_watch::train_members(&main_worktree, &recovery_members)?;
+        // The retained train's cars are claimed for it again before anything
+        // resumes; a car another hand holds refuses the recovery.
+        // trace:STORY-2905 | ai:claude
+        let _recovery_claims = crate::merge_claim::claim_all(&main_worktree, &recovery_members)
+            .map_err(|why| {
+                crate::gate::ship::ShipRefusal::Review
+                    .error(format!("the retained train is not resumed: {why}"))
+            })?;
         let mut ports = LiveTrainForge {
             project_root: project_root.clone(),
             main_worktree: main_worktree.clone(),
@@ -5154,23 +5162,13 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
         // One merge hand per PR: the train claims each car it boards and
         // holds the claims until it returns; a car another hand holds (a
         // ship or drain merging it now) is not boarded. trace:STORY-2905 | ai:claude
-        let mut car_claims = Vec::new();
-        let mut boarding = Vec::new();
-        for m in members {
-            match crate::merge_claim::claim(
-                &main_worktree,
-                m.pr,
-                Some(&m.head),
-                crate::merge_claim::Hand::Train,
-            ) {
-                Ok(guard) => {
-                    car_claims.push(guard);
-                    boarding.push(m);
-                }
-                Err(reason) => claim_ejected.push(Ejected { pr: m.pr, reason }),
-            }
-        }
-        let members = boarding;
+        let (car_claims, members, refused) =
+            crate::merge_claim::board(&main_worktree, members, |m: &Member| (m.pr, m.head.clone()));
+        claim_ejected.extend(
+            refused
+                .into_iter()
+                .map(|(pr, reason)| Ejected { pr, reason }),
+        );
         let mut rails = ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir);
         let outcome = drive(&mut rails, members)?;

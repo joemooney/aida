@@ -423,7 +423,7 @@ pub(crate) fn train_status(json: bool) -> Result<()> {
         },
     )?;
     // trace:STORY-2905 | ai:claude
-    let standing_down = crate::landing_merge::train_stand_down(&main_worktree);
+    let standing_down = crate::landing_merge::train_stand_down_line(&main_worktree);
     if json {
         let mut value = serde_json::to_value(&status)?;
         if let (Some(line), Some(obj)) = (standing_down, value.as_object_mut()) {

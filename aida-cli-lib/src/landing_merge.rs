@@ -359,19 +359,52 @@ fn merge_authors(
 /// call (c)).
 pub(crate) const TRAIN_STAND_DOWN: &str = "standing down: landing.mode=review-gated";
 
-/// `Some(line)` when the auto-train must not run a pass: the default
-/// branch's landing mode is review-gated, where the land loop is the one
-/// merge hand and no train runs. The default branch is fetched first (best
-/// effort; its local copy decides when the fetch fails).
+/// Whether the auto-train may run a pass: `Ok(None)` it may (ci-gated);
+/// `Ok(Some(line))` it stands down (review-gated, where the land loop is
+/// the one merge hand); `Err(why)` the policy cannot be established, and the
+/// pass does not run either (never a ci-gated default under uncertainty).
+/// The default branch is fetched first, best effort.
 // trace:STORY-2905 | ai:claude
-pub(crate) fn train_stand_down(root: &std::path::Path) -> Option<&'static str> {
+pub(crate) fn train_stand_down(root: &std::path::Path) -> Result<Option<&'static str>, String> {
     if has_origin(root) {
         if let Some(default) = crate::trusted_config::local_default_branch_name(root) {
             let _ = crate::pr_cmd::fetch_ship_refs(root, &default, &default);
         }
     }
-    (crate::landing_policy::load(root).mode == crate::landing_policy::LandingMode::ReviewGated)
-        .then_some(TRAIN_STAND_DOWN)
+    let policy = crate::landing_policy::load_checked(root)?;
+    Ok(
+        (policy.mode == crate::landing_policy::LandingMode::ReviewGated)
+            .then_some(TRAIN_STAND_DOWN),
+    )
+}
+
+/// The stand-down line the status surfaces show, if any: the stand-down,
+/// or why the auto-train is not running.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn train_stand_down_line(root: &std::path::Path) -> Option<String> {
+    match train_stand_down(root) {
+        Ok(line) => line.map(str::to_string),
+        Err(why) => Some(format!(
+            "not running: the landing policy is unknown ({why})"
+        )),
+    }
+}
+
+/// The auto-train's one decision per pass (STORY-2905): run `handler` only
+/// when `stand_down` says the policy allows it. Returns what the pass did,
+/// for the service log and status.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn auto_train_pass(
+    stand_down: Result<Option<&'static str>, String>,
+    handler: impl FnOnce() -> anyhow::Result<()>,
+) -> Result<anyhow::Result<()>, String> {
+    match stand_down {
+        Ok(None) => Ok(handler()),
+        Ok(Some(line)) => Err(line.to_string()),
+        Err(why) => Err(format!(
+            "not running: the landing policy is unknown ({why})"
+        )),
+    }
 }
 
 /// Whether the repository at `root` has an `origin` remote.
