@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T06:33:24.256130067Z
+modified_at: 2026-11-19T06:35:01.122596969Z
 req_type: Bug
 tags:
 - conflicts
@@ -392,6 +392,13 @@ comments:
   modified_at: 2026-11-19T06:08:46.191935216Z
   session_id: 01a1f26232b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f284-5fa7-7812-a5c3-bd3c46d4ae42
+  author: joe
+  content: 'ADVISOR RULING 2026-11-18 23:40 (advisor-119): #4275 is PARKED, per the round-5 cap-exception condition. Round 5 (945c044) removed git clean, but reconcile_fresh still runs reset --hard over ignored obstructions (an ignored d/x under a formerly tracked file d), so the data-loss class persists. Root cause: in-place reset of a retained worktree is inherently lossy around ignored content. REDESIGN for any future attempt: --fresh NEVER resets in place. It renames or moves the retained seat aside INTACT (e.g. <seat>.retained-<ts>, recorded in the recovery text), then creates a fresh checkout of the PR head in a new directory. Nothing in the old tree is modified or deleted. The parts of #4275 that passed review (actionable recovery text; --fresh reaching rework prep; production-path regression) can be re-landed on that design. The PR stays open with its hold as reference; the spec goes back to approved for re-slicing when capacity allows.'
+  created_at: 2026-11-19T06:35:01.122596969Z
+  modified_at: 2026-11-19T06:35:01.122596969Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
