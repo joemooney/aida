@@ -13,12 +13,12 @@ description: |
   3. Works for Claude, Codex and AGY through their headless resume commands; one adapter test per vendor using a recorded fixture.
   4. A wait whose seat or session has been lost surfaces as an escalation, never a silent drop.
   Ref: docs/plans/2026-11-07-infinity-agent-architecture-deep-dive.md section 3.3 and the SPIKE-711 results table.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-19T02:44:30.326158008Z
+modified_at: 2026-11-19T02:45:49.252752601Z
 req_type: Story
 tags:
 - area:human-wait
@@ -1167,6 +1167,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f1b2-3044-7fb2-82f6-017ad610c638
+  author: dirtlab
+  timestamp: 2026-11-19T02:45:49.252798371Z
+  session_id: 01a1f1b0cca4
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: dc41ee8da2f44f88178936fc1a8e6cb7168a3de7
   branch: main
@@ -1176,3 +1185,9 @@ filed_at:
   vendor: claude
   session: 01a1b8be-8170-7fb2-89ab-ecb4c6eee98c
   harness_version: 2.1.319 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'Seat cannot be brought up to main, so slice 2 (Option A bound-resume per the 2026-11-19 ruling) cannot start. The lane branch is 296 commits behind origin/main and carries only superseded sketch commits; it lacks d9775a3 park_runtime.rs and the current sketch. ''git merge origin/main'' aborts in the sandbox: ''unable to create symlink .claude/skills/aida-emergency-fix: Read-only file system'' and ''unable to unlink aida-core/templates/settings.json: Device or resource busy'' (bind-mounted deny paths). A plumbing merge (commit-tree on main''s tree + reset + path-excluded checkout) was denied by the permission policy. The worktree was restored to its starting state; no code changes were made.'
+  lean: Re-seat the lane fresh from origin/main (or have the host fast-forward the seat branch to main) and relaunch the slice 2 brief unchanged.
+  raised_by: implementer
+  raised_at: 2026-11-19T02:45:49.252752601Z
