@@ -79,14 +79,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
-  requirement_id: 01a1ef4d-ffbc-74d3-afdd-35a12624acda
-  position: -1500
-  added_by: claude-product-12
-  note: Slice-scope review prompts; costs a review round per sliced PR.
-  added_at: 2026-11-18T15:41:38.610541168Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1cad4-2d59-7ec3-aafa-5c9c9f23373b
   position: -1000
   added_by: claude-product-12
