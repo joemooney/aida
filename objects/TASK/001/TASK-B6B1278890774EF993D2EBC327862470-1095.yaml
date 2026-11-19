@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T19:17:43.410875818Z
+modified_at: 2026-11-19T19:53:13.290669664Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -396,6 +396,24 @@ comments:
   modified_at: 2026-11-19T19:17:43.410875818Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f55e-cf7c-76d1-b94c-5af1f32f7a97
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: c7e04ab64dfd2e40aba8e7c9224ffd6d10965d4a and the uncommitted native-seat rework. Reviewed the committed delta from merge base fa5ac3dab15dc0acd307f03fb259427942293c24, the working-tree delta from HEAD, and the untracked-file list (empty).
+
+    AC1: [evidence: behavioral-test] The round-2 contention finding is addressed. scripts/aida-autobuild.sh:30 takes a nonblocking exclusive flock on the primary checkout's existing Git directory before fetching. tests/test_lane_autobuild.py:158 proves that a contended tick logs the skip, does not fetch or fast-forward, and does not build. The successful fixture also checks that the cron child inherits the lock. The 11 cron fixtures passed. Operator installation, the supervised dell1 tick, and verification of the next scheduled tick are still pending.
+    AC2: [evidence: behavioral-test] Prior slice #4290 supplied the stale-binary launch refusal according to the advisor brief. That criterion is outside the round-2 scope.
+    AC3: [evidence: behavioral-test] aida-cli-lib/src/doctor/lane_binaries.rs:243 exercises SHA, age, dirty stamp, ancestry, unavailable inputs, and repeated hosts with a pinned tip. All three doctor tests passed. Live SSH evidence remains part of host rollout.
+
+    Probes: Bash and Rust use the same Git directory inode and Linux flock API. Cron distinguishes contention from flock errors. Rust validates the inherited descriptor, refuses a competing or unrelated description, and sets close-on-exec. The operation-local marker is read through ExecContext and dropped from vendor forwarding. The lock order lets the autopromote tick release the checkout before releasing the state lock, and a worker that loses the handoff race records a retryable refusal. The lock uses a read-open directory so native clones with read-only Git metadata can still build. The fixtures cover a busy checkout, a mismatched descriptor, and multiple host observations. No existing test was weakened.
+
+    Targeted validation on the final diff passed 47 Rust tests via lane job j20261119T194544449-2-0, 11 Python cron fixtures, the store writer inventory, the ExecContext inventory, formatting, shell syntax, and both Git whitespace checks. The FAST source and application gate runs are in progress. On the existing PR head named above, GitHub reports the FAST gates, FAST compile, and required Build aggregate successful. The uncommitted rework has no forge CI result yet.
+  created_at: 2026-11-19T19:53:13.290669664Z
+  modified_at: 2026-11-19T19:53:13.290669664Z
+  session_id: 01a1f54122a1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
   author: joe
