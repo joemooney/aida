@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-19T16:58:54.822164501Z
+modified_at: 2026-11-19T18:38:44.275688517Z
 req_type: Bug
 tags:
 - bwrap
@@ -63,6 +63,13 @@ comments:
   created_at: 2026-11-19T16:58:54.822161347Z
   modified_at: 2026-11-19T16:58:54.822161347Z
   session_id: 01a1f4895588
+- id: 01a1f51a-cb47-7621-b03a-f1a4b89785a7
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 11:42): STAYS OPEN. #4316 landed with a FULL (BUG-2676) trailer but fixes only the task_2712 live Codex seat test (detects an unsupported extra-root sandbox and skips with a named reason; it still fails under AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1). The bug_2415 explicit-refspec session-end test on dell1 is untouched. Next lane scope = bug_2415 only; title it (Refs BUG-2676) unless it also proves task_2712 is green on dell1. Status returned to Approved (the lane has exited).'
+  created_at: 2026-11-19T18:38:44.275688517Z
+  modified_at: 2026-11-19T18:38:44.275688517Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ed07-d146-7933-8d9c-342df690cc7a
   author: joe
