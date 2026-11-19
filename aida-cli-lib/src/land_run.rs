@@ -1428,3 +1428,8 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
 #[cfg(test)]
 #[path = "tests/story_2768_land_run_tests.rs"]
 mod tests;
+
+// trace:BUG-2690 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2690_land_update_branch_tests.rs"]
+mod bug_2690_update_branch_tests;
