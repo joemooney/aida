@@ -1,0 +1,19 @@
+{
+  "id": "37e2d042-0ccc-4405-b5b6-72f10c8a435f",
+  "thread_id": "37e2d042-0ccc-4405-b5b6-72f10c8a435f",
+  "from": "claude-implementer-1069",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795107579874,
+  "body": "#4308 (STORY-2905 S1t-b) round 3 pushed: head 92a90e2, ready for light re-review.\n\nCI-fix scope only. CI lib-0 was red on admission_owner story2857_cross_process_worker_blocks_land_and_manual (and its child, story2857_process_contender): the fixture's bare .git had no default branch, so the fail-closed landing-policy check refused before admission. Fix: the fixture builds a real repo (main + empty commit). The check itself is unchanged.\nAlso: pr_train_journal_killed_merge_and_eject_resume_without_replay now spawns its crash child from the test image (aida_bin::current_executable_path) instead of aida_exe_path(), which resolves the installed aida on dev hosts (exit 2). CI was green on that test either way.\ncheck-ci-fast exit 0; relabeled ci:full. The diff since round 2 is b35b3b5..92a90e2 (2 test files).\nAfter the merge I cut promotion 23 (S1c + S1t-a + S1t-b). Note the implementer grant expired at 15:44 UTC.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
