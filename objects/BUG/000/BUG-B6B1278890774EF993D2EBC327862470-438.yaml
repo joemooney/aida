@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T03:58:40.901223798Z
-modified_at: 2026-11-19T08:34:39.414151353Z
+modified_at: 2026-11-19T08:55:33.366864076Z
 req_type: Bug
 tags:
 - landing
@@ -296,6 +296,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f304-e4ed-7293-bfbd-57944a4ac5ba
+  author: joe
+  timestamp: 2026-11-19T08:55:46.669120225Z
+  session_id: 01a1f301754c
+  changes: []
 filed_at:
   code_sha: 444867815903588c91b36614a56eeffa671fc548
   branch: main
@@ -305,3 +310,11 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Request changes: BUG-2674 AC4 / authoritative round-2 eligible-work health requirement remains incomplete because a hub-refused head becomes RemoteHeld and subsequent passes clear the sustained-idle timer. Also found an auto-train false-degraded regression and the exact-head CI store-writer inventory mismatch. AC2 per-change refusal continuation, AC3 every-pass timestamp/dispatch logging, bounded no-report grace, unreadable report reporting, and refusal total/sample handling are supported by source and added inline regressions. Type protocol checklist: BUG-2674 (bug protocol) met: advisor_loop_service.rs is touched and contains added #[test] regressions (inline test module). Read the complete pinned landed diff against protected main dc36b65a1a779f573e83236c808c5e228f2f6ef1, landed tree c3c6a232fd83c58a9b6cb53bca727ffe5486e363; attest only original head 0aeae185378bb67e48c086b5ddc961e8851a82b0. The one-commit stale-base delta changes CI startup monitoring/notification code and does not affect these findings. Existing CI shows workspace/test compilation succeeded; fast gates and the post-compile ratchet failed on the renamed inventory owner, leaving Build failed. No local tests/builds were run per reviewer policy. Host codegraph client was absent; source caller searches were used. No independent host evidence is required to judge these code defects.'
+  recovery_hint: address the review findings, move BUG-2674 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-19T08:55:33.366864076Z
