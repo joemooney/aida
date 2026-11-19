@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-18T23:36:34.248774621Z
+modified_at: 2026-11-19T00:56:21.499363992Z
 req_type: Story
 tags:
 - landing
@@ -511,6 +511,13 @@ comments:
   created_at: 2026-11-18T23:36:34.248774621Z
   modified_at: 2026-11-18T23:36:34.248774621Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f14e-262d-7630-ae72-e80d8ed68e13
+  author: joe
+  content: 'Integration seat 2026-11-18 17:56 MST: promotion 22 = PR #4271 (promote/integration-22 at a4663ca, title (TASK-3818 Refs STORY-2897)) is APPROVED at head; the advisor''s job merges it to main after full CI and merge-hold-gate pass. Contents: S2 #4254 (136a929), the app-binding fix #4268 (b4f8743: trusted pre-PATCH binding record under ~/.aida/land-bindings, never GitHub''s app choice; the same-uid residual is accepted), and TASK-3818. #4267 (p21) was closed for the app-binding P1. Integration is synced with main through 6da63c9 (STORY-2912); in the conflicts I kept TASK-3818''s removal of the promote_live_binary_from user docs. Remaining slices: S3, S1b, S1c (STORY-2903), and S1t (STORY-2905, sketch first). Open follow-up: BUG-2691 (an outcome-audit append failure returns success).'
+  created_at: 2026-11-19T00:56:21.499363992Z
+  modified_at: 2026-11-19T00:56:21.499363992Z
+  session_id: 01a1ef55-3ba5-7da3-8ef8-d8ebc6eb4186
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
