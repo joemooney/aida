@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T06:03:52.100978880Z
+modified_at: 2026-11-19T06:04:12.081430439Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -78,6 +78,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the entire 10,924-byte pinned landed-tree diff against main edbcfef98e60b4863afdd698f495c295e85bb129, attesting only original PR head 85cde0b7a4ec8624ed09b4cee8b0a44503280d68. REQUEST CHANGES for two blocking acceptance gaps. Covered spec: BUG-2607 (origin BUG-b6b1278890774ef993d2ebc327862470-371).. Triage reason: Round 2 for PR #4285. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2607-r2.md: capture the seat identity before admission gates; real-path tests. CLAUDE lane.'
   created_at: 2026-11-19T06:03:52.100974332Z
   modified_at: 2026-11-19T06:03:52.100974332Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f267-c059-7232-9bf2-e60c39bc4316
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2607):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 85cde0b7a4ec
+    Recorded: 2026-11-19T06:02:45.880311956+00:00
+    Findings:
+    1. [P1; blocking_tier=acceptance] aida-cli-lib/src/lane_result.rs:381-400 and queue_cmd/work.rs:4671-4722: Capture the retained seat identity before admission gates can refuse. with_retained_seats searches only a previously selected seat_tree or receipt.branch. A normal headless pickup without --branch begins with neither; resolve_scope only supplies an explicit or open-PR branch. canonical_resume_branch then refuses an existing canonical branch with any lease (work.rs:942-947) before returning its name. If that lease owns a dirty private clone and the canonical branch exists in host/origin refs with no open change, finish_result prints refused-before-start without the required retained: dirty notice, despite retaining that clone. Likewise, refuse_waiting_pickup executes before the inferred rework branch is persisted. Resolve/capture relevant scope-owned clone identities before these refusals, or provide a safely scoped discovery fallback independent of receipt.branch. Add dirty/clean refusal coverage without an explicit branch. This misses ac9718ef and is unchanged by the newer pinned base.
+    2. [P1; blocking_tier=acceptance] aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs:5375-5433: Exercise the actual early terminal paths and their emitted result lines. All six new tests call check_early_retention_notice, manually finalize an Attempt, and explicitly invoke with_retained_seats. Changing Kind or reason does not execute refused pickup/rollback, empty-rework routing, signal handling, pending-merge handling, or generic error finalization. Removing any production call to with_retained_seats, or breaking queue set_seat_tree capture, leaves these tests passing. Consequently they do not satisfy acf1206a's per-early-path regression requirement and miss finding 1. Add output assertions for dirty and clean/removed seats through the production terminal boundaries, including refused-before-start after rollback and before branch capture. This test gap is unchanged by the newer pinned base.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T06:04:08.153801815Z
+  modified_at: 2026-11-19T06:04:08.153801815Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
