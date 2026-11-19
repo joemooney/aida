@@ -1,0 +1,32 @@
+id: 01a1f4be-eda9-7850-bbdf-d9aa75268dd1
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-158
+title: 'Review PR-4318: [AI:codex] fix(pr): report the observed next actor (STORY-2893)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f480`) for branch `story-b6b1278890774ef993d2ebc327862470-793`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4318>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-793` → `main`
+
+  ## Covers
+
+  - STORY-2893
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4318` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T16:58:35.817632580Z
+modified_at: 2026-11-19T16:58:35.817632580Z
+req_type: Story
+filed_at:
+  code_sha: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5b78d27e1
+  session: 01a1f48082ec
