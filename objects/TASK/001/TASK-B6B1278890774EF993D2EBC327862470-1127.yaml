@@ -196,6 +196,22 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `task-b6b1278890774ef993d2ebc327862470-1127` at head `07e7c7b0ce8a87445be4a2d6a5cef066e56ff138`.'
   created_at: 2026-11-19T23:20:27.520009933Z
   modified_at: 2026-11-19T23:20:27.520009933Z
+- id: 01a1f61c-fd0c-7ef1-95b1-4953d674b6f9
+  author: joe
+  content: |-
+    Product 16:24: the codex lane failed the portability ratchet (/proc literal). Work salvaged to origin task-...-1127 (efa79a02 + WIP 07e7c7b0). Relaunched on Claude to finish, brief:
+    # Brief: TASK-3821 finish (Claude; top priority; main flake fix-forward)
+
+    The 14:46 codex lane wrote the fix (efa79a023d "test(gc): scope overlay reclaim assertions to fixtures") but publication was refused. The fast gate "Check Rust test portability ratchet" flagged a new finding:
+      aida-cli-lib/src/worktree_lifecycle_gc.rs:752: proc literal: std::os::unix::fs::symlink("/proc/self", ...)
+    Its repair added #[cfg(target_os = "linux")] on fixture_processes and on the test but did not commit. Product committed that as 07e7c7b0ce (WIP) and pushed both to origin task-b6b1278890774ef993d2ebc327862470-1127.
+    Your job: start from that branch, make the portability ratchet pass (gate correctly, or move the /proc literal behind the existing linux-only helper; do NOT grow the ratchet baseline), squash or reword the WIP commit into a proper `[AI:claude] test(gc): ... (TASK-3821)` commit, keep the test asserting only its own fixture bytes, prove 20/20 locally, and quote the loop in the PR body. Then open the PR.
+    NO production code change. Trailer (TASK-3821). FASTTRACK review.
+    Before pushing, run `make check-ci-fast` (the ratchet is in it) and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-19T23:20:42.187514224Z
+  modified_at: 2026-11-19T23:20:42.187514224Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f5c3-790d-7e72-aad3-67032fd7c265
   author: joe
