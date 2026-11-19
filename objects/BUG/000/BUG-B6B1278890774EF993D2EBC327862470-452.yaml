@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T05:57:12.052490939Z
+modified_at: 2026-11-19T06:01:29.666538173Z
 req_type: Bug
 tags:
 - conflicts
@@ -372,6 +372,13 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-452` at head `77948ca3931dfdad641caff9278e081c02499ce2`.'
   created_at: 2026-11-19T05:57:12.052486131Z
   modified_at: 2026-11-19T05:57:12.052486131Z
+- id: 01a1f265-8a5f-74f1-8775-3d11e4ad74b3
+  author: joe
+  content: 'Advisor 23:12 note (pattern, recorded here rather than as a new spec): a lane''s RETAINED seat from round N blocks round N+1''s pickup via mail retention (''fresh writer-admission scan could not verify every mail writer''), even when the seat is clean, pushed and idle (r4 seat lease 01a1f249c534 blocked r5; the #4137 reviewer tree did the same at 12:16). End-finished does not reap at lane exit when retention is involved, so product ends these by hand. Related: BUG-2643 (exit-time mail retention refusal). Consider folding ''reap a clean, pushed, process-free prior-round seat before rework prep'' into the --fresh/retained-conflict work.'
+  created_at: 2026-11-19T06:01:29.666538173Z
+  modified_at: 2026-11-19T06:01:29.666538173Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
