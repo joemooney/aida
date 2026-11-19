@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-463
 agreed_id: BUG-2699
 title: 'Codex lanes ignore pending agent briefs: a brief file in .aida/agent-briefs/codex/ never reaches the codex lane''s launch context (BUG-2688 r2 redid the wrong scope)'
 description: 'Evidence 2026-11-18: the BUG-2688 r2 brief was placed at dell1 ~/ai/aida/.aida/agent-briefs/codex/BUG-2688-r2-2026-11-19T023229Z.md at 19:32, before the 19:37 launch, and was also posted as a spec comment with a pointer. The codex lane log has zero references to the brief or to agent-briefs. It implemented a different change, and the round-2 review repeated all three round-1 findings. Every Claude lane given an agent-briefs/claude file today followed it (TASK-3814 R4, STORY-2912 R2, STORY-2913 R2/R3). Sibling of BUG-2603 (lane prompt omits the newest advisor comment). Fix: the codex launch path loads pending agent briefs for the spec into the lane prompt exactly as the Claude path does, and marks them consumed. Add an explicit ''queue work --brief FILE''. Regression: a codex lane launched with a pending brief has the brief text in its prompt. Interim advisor rule: brief-scoped reworks go to Claude lanes.'
-status: Completed
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:16:08.214859078Z
-modified_at: 2026-11-19T08:30:05.496371024Z
+modified_at: 2026-11-19T08:33:44.732310626Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -246,6 +246,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1f2f0-b91c-7751-ba32-81b438113874
+  author: joe
+  timestamp: 2026-11-19T08:33:44.732296517Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Completed
+    new_value: Approved
 processing_record:
 - id: 01a1f2dd-7cf4-7010-ab59-507f5e9b318c
   timestamp: 2026-11-19T08:12:44.148653418Z
@@ -266,5 +275,5 @@ filed_at:
   harness_version: 2.1.327 (Claude Code)
 implementation_info:
   implemented: false
-  completed_at: 2026-11-19T08:12:44.080487499Z
   completion_sha: 4d6994869def49bf5179328a9d1a7f6c9752315a
+  reopened_at_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
