@@ -1,0 +1,21 @@
+id: 01a1f12c-2705-7b10-a5be-6a38dbf2ff23
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1102
+agreed_id: TASK-3819
+title: Deploy the tracked scripts/lane-run.sh (BUG-2648) on dell1 in place of the hand-written ~/lane-run.sh, and confirm the primary host has no auto-publish path left
+description: 'Operational remainder of BUG-2648 (code landed via #4216 at 325920e, full review clean). (1) On dell1, replace ~/lane-run.sh with a link to, or exec of, the repo''s tracked scripts/lane-run.sh, keeping backups. It delegates to aida queue work and never publishes after a punt, refusal or crash (allow-list: publish only on pushed, or a clean exit with unpushed commits). (2) Confirm the primary host (imac) has no equivalent wrapper that publishes seat clones unconditionally. (3) Record evidence: diff of the host scripts and one lane run showing a punt does not publish. Product seat / operator host maintenance.'
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T00:19:25.061912368Z
+modified_at: 2026-11-19T00:19:25.061912368Z
+req_type: Task
+filed_at:
+  code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6da63c98036
+  vendor: claude
+  session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
