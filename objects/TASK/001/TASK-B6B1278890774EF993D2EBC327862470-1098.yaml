@@ -11,12 +11,12 @@ description: |
   3. When the lane pushes without that comment, the lane result says so (it does not block).
   4. A template test asserts the implementer brief embeds the reviewer rubric from the single source.
   5. Measured with the landing-metrics command: report rounds per landed PR one week before and one week after enabling.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:16:14.883372299Z
-modified_at: 2026-11-19T01:28:19.036417538Z
+modified_at: 2026-11-19T01:28:34.312232533Z
 req_type: Task
 tags:
 - landing-emergency
@@ -100,6 +100,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f16b-7708-7d51-9029-c889e2f86102
+  author: joe
+  timestamp: 2026-11-19T01:28:34.312226999Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
   branch: main
