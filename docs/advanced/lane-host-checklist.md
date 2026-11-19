@@ -8,6 +8,29 @@ Run `aida doctor --lane-host` on the target machine. Apply safe user-level permi
 - Run any system-level install/userns/AppArmor commands printed by `aida doctor --fix-sandbox` yourself.
 - Fetch dependencies on the host before starting lanes. The doctor requires a configured executable Cargo wrapper and runs a lane-job sandbox probe that starts a private sccache server, queries its transport, and writes/reads a temporary cache file. Sandbox, transport or write failures produce a required finding with a fix hint.
 
+## Live seat-clone tests
+
+The BUG-2415 explicit-refspec test uses a disposable local origin and a
+fixture-provided mail-writer inventory. It requires bubblewrap and working
+unprivileged user namespaces. Set `AIDA_REQUIRE_BWRAP_LIVE=1` to make a
+missing sandbox a test failure.
+
+The TASK-2712 test also needs `codex` on PATH. It first checks that
+`codex sandbox -P :workspace` can write to an extra root outside its working
+directory with a temporary Codex home. It also probes an ungranted sibling
+directory. The test prints a named skip if Codex denies the extra-root write,
+still allows writes to the ungranted sibling in a `/tmp` fixture despite the
+temp exclusions, or reports an app-server socket directory ownership/mode
+error. Run the live check from a host checkout outside `/tmp` with a Codex
+build that honors `sandbox_workspace_write.writable_roots` and a user-owned app-server
+socket directory with mode `0700`. An outer Codex sandbox can mask that
+directory. For a required-live run, set `AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1`
+and point `AIDA_TEST_AIDA_BIN` at the built AIDA executable. Required-live
+runs fail on those preflight errors. Once the preflight passes, the test
+requires the production launch arguments, cache and store writes, and
+protected-path denials to pass. Both fixtures support unseeded Cargo targets.
+<!-- trace:BUG-2676 | ai:codex -->
+
 ## Lane wrapper publication
 
 Use `bash scripts/lane-run.sh SPEC` from the primary checkout (additional
