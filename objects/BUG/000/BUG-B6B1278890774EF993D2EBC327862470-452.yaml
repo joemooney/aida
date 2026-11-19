@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T10:09:49.980792006Z
+modified_at: 2026-11-19T10:10:10.594452806Z
 req_type: Bug
 tags:
 - conflicts
@@ -446,6 +446,13 @@ comments:
     "[AI:claude] fix(rework): --fresh moves a retained seat aside intact and re-checks out (BUG-2688)". Link #4275 and close it as superseded.
   created_at: 2026-11-19T10:09:49.980792006Z
   modified_at: 2026-11-19T10:09:49.980792006Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f349-3784-7553-b358-9bf9975a3d1b
+  author: joe
+  content: 'Product 03:10: fresh-PR lane queued on dell1 (claude, STRICT), branch bug-2688-redesign. Scope = the AUTHORITATIVE FRESH-PR BRIEF in the previous comment. It opens a NEW PR that supersedes the parked one.'
+  created_at: 2026-11-19T10:10:10.594452806Z
+  modified_at: 2026-11-19T10:10:10.594452806Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
