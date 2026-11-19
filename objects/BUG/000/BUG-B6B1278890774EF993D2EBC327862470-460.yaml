@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T13:53:25.892357164Z
+modified_at: 2026-11-19T13:53:35.094596332Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -666,6 +666,21 @@ comments:
   created_at: 2026-11-19T13:53:25.734009596Z
   modified_at: 2026-11-19T13:53:25.734009596Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f415-c67f-7843-b75e-57b0f3626b07
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 06:53):
+    # Rework brief: BUG-2696 / PR #4305, round 3 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 06:56 MST. Head reviewed: 6f21736. Lane: Claude. STRICT. Round-2 items resolved. ONE item:
+    - [P1; severity=p1; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/db_reconcile.rs; lines=2885-2895] Revalidate the child graph under the writer lock on the Git-canonical landing path. The new slice_plan_outstanding(&store, &r) guard uses the scan snapshot loaded at line 2511 for every child status, even though r is freshly read. If the scan sees STORY-1 with a Completed child TASK-2, then an advisor reopens TASK-2 before the landing write (for example during the intervening forge probes), the fresh parent still has the same edge and this guard still sees the old Completed child. apply_auto_bump_flip then completes STORY-1 and GitBackend::update_requirement persists it; that method acquires its lock only after this decision and does not revalidate children. Adding a Parent edge after the parent read likewise escapes the check. The legacy YAML/SQLite path correctly checks the graph inside update_atomically, but the production Git-canonical path does not. This leaves the prior partial-completion finding unresolved for concurrent graph changes and violates AC6 and the advisor A2 fail-closed rule: a parent with outstanding children must stay open. Move the graph read, eligibility check and parent mutation into one store-locked transaction, and add a Git-canonical landing regression that reopens an existing child or adds an outstanding child between scan and write, asserting the parent remains open; include an unchanged-graph positive control. The newly added landing regressions use init_test_project/legacy storage and do not exercise this canonical writer race. Source inspection only; no local tests were run under reviewer policy. Present in both the original reviewed head and pinned landed tree; independent of the intervening base changes to lib.rs, the help golden and store-writer inventory.
+
+    Required shape: decide "slice plan outstanding" from children read FRESH UNDER THE SAME WRITER LOCK that persists the completion (move the check into the locked update, or re-read the parent and all Parent-edge children inside it and abort the flip if any child is open). Regression: a scan sees a Completed child, the child is reopened before the write, and the parent is NOT completed. Also cover a Parent edge added after the scan.
+    No other changes. cargo fmt; ExecContext/task_2143 ratchets; python3 scripts/check-store-writers.py; check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T13:53:35.094596332Z
+  modified_at: 2026-11-19T13:53:35.094596332Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
