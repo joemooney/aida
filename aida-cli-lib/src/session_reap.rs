@@ -1215,6 +1215,13 @@ fn reap_one_with_clear_hooks(
         // the tree is kept. trace:TASK-1955 | ai:claude (BUG-2206)
         // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
         if let Some(pr) = crate::gate::review_authority::review_lease_pr(lease) {
+            // An unrecorded reviewer draft lives only in this gitignored
+            // tree; removing the tree would delete its findings.
+            // trace:BUG-2684 | ai:claude
+            if let Some(why) = crate::review_draft::unconsumed_draft_retention(&lease.worktree_path)
+            {
+                return format!("skipped — {why}");
+            }
             match crate::merge_hold::preserve_review_worktree_holds(
                 project_root,
                 &lease.worktree_path,
@@ -1736,6 +1743,10 @@ pub(crate) fn reap_finished_review(
     }
     if worktree_is_locked(project_root, &lease.worktree_path) {
         return Err("its review tree is locked".to_string());
+    }
+    // trace:BUG-2684 | ai:claude
+    if let Some(why) = crate::review_draft::unconsumed_draft_retention(&lease.worktree_path) {
+        return Err(why);
     }
     if worktree_status_dirty(&lease.worktree_path) {
         return Err("its review tree has uncommitted changes".to_string());

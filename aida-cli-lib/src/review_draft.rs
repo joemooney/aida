@@ -173,6 +173,59 @@ impl LaunchDraft {
     }
 }
 
+/// The unconsumed reviewer handoffs (`draft-*/draft.json`) a review checkout
+/// still holds. A recorded draft is renamed to `recorded.json`, so any
+/// `draft.json` left here is a draft the parent never recorded (a failed
+/// recording or a rejected draft) and is the only copy of its findings.
+/// Teardown keeps the checkout while this is non-empty, and treats an
+/// unreadable verdict directory (`Err`) the same way.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn unconsumed_drafts(worktree: &Path) -> Result<Vec<PathBuf>> {
+    // Report the same canonical path `LaunchDraft::prepare` handed the reviewer.
+    let root = worktree
+        .canonicalize()
+        .unwrap_or_else(|_| worktree.to_path_buf())
+        .join(".aida/review-verdicts");
+    let entries = match std::fs::read_dir(&root) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e).with_context(|| format!("cannot inspect {}", root.display())),
+    };
+    let mut drafts = Vec::new();
+    for entry in entries {
+        let entry = entry.with_context(|| format!("cannot inspect {}", root.display()))?;
+        if !entry.file_name().to_string_lossy().starts_with("draft-") {
+            continue;
+        }
+        let draft = entry.path().join("draft.json");
+        match std::fs::symlink_metadata(&draft) {
+            Ok(_) => drafts.push(draft),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e).with_context(|| format!("cannot inspect {}", draft.display())),
+        }
+    }
+    drafts.sort();
+    Ok(drafts)
+}
+
+/// `Some(why kept)` when teardown of `worktree` would discard an unrecorded
+/// reviewer draft (or the drafts cannot be inspected); `None` when it holds
+/// none. trace:BUG-2684 | ai:claude
+pub(crate) fn unconsumed_draft_retention(worktree: &Path) -> Option<String> {
+    match unconsumed_drafts(worktree) {
+        Ok(drafts) if drafts.is_empty() => None,
+        Ok(drafts) => Some(format!(
+            "it holds an unrecorded reviewer draft at {}; record it (or remove it deliberately) before the checkout can be removed",
+            drafts
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+        Err(e) => Some(format!("its reviewer drafts could not be inspected ({e:#})")),
+    }
+}
+
 fn full_sha(sha: &str) -> bool {
     sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit())
 }

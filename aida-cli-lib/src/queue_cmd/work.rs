@@ -3922,6 +3922,16 @@ fn review_worktree_retirement(
     } else {
         None
     };
+    // A retained tree may hold the only copy of a reviewer draft the parent
+    // failed to record; next-head pickup must not discard it.
+    // trace:BUG-2684 | ai:claude
+    if let Some(why) = crate::review_draft::unconsumed_draft_retention(&path) {
+        anyhow::bail!(
+            "branch `{branch}` is held by worktree {} before pickup setup. \
+             Keep this checkout: {why}.",
+            path.display()
+        );
+    }
     if !retire {
         return Ok(Some(path));
     }
@@ -7190,7 +7200,9 @@ pub(crate) fn release_refused_review_lease(
 /// lease, and review branch — so neither the lease nor the tree blocks the
 /// next review of the PR. Exit records a lease-bound completion receipt even
 /// without a verdict. A finished default review checkout is eligible for the
-/// same guarded teardown even when verdict collection fails. Returns
+/// same guarded teardown even when verdict collection fails, unless it still
+/// holds an unrecorded reviewer draft: that tree is kept and its draft path
+/// reported (BUG-2684), since the draft is the only copy of its findings. Returns
 /// `(lease id, Ok(outcome) | Err(why kept))` per matching lease.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 pub(crate) fn end_finished_review(
