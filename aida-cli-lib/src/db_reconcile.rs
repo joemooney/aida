@@ -1318,6 +1318,34 @@ pub(crate) fn parse_pr_number_from_url(url: &str) -> Option<u64> {
         .ok()
 }
 
+/// The landing completion write for one flip, run on a store read under the
+/// writer lock (both write paths). A slice plan with an outstanding child,
+/// judged on that locked store, refuses the flip (A2: a child it cannot find
+/// counts as outstanding). Returns whether the spec flipped.
+// trace:BUG-2696 | ai:claude
+fn complete_flip_under_lock(
+    locked: &mut aida_core::RequirementsStore,
+    flip: &AutoBumpFlip,
+    now: chrono::DateTime<chrono::Utc>,
+    project_root: &std::path::Path,
+) -> bool {
+    // TASK-1-113: resolve the way the eligibility scan did (agreed_id and
+    // node-alias aware), so a spec whose commit subject carries the agreed_id
+    // (e.g. `(BUG-42)` for canonical `BUG-1-099`) re-finds the same row here
+    // instead of the flip being silently dropped. trace:BUG-405 | ai:claude
+    let Some(parent) = locked.get_requirement_by_spec_id(&flip.spec_id) else {
+        return false;
+    };
+    if crate::publication_completion::slice_plan_outstanding(locked, parent) {
+        return false;
+    }
+    let id = parent.id;
+    match locked.requirements.iter_mut().find(|r| r.id == id) {
+        Some(parent) => apply_auto_bump_flip(parent, flip, now, project_root),
+        None => false,
+    }
+}
+
 // Shared per-requirement mutation for the Done→Completed auto-bump. One
 // body used by BOTH write paths: the targeted per-spec path (git-canonical
 // stores — one `update SPEC-ID` commit per bumped spec, no bulk chore
@@ -2878,22 +2906,19 @@ fn auto_bump_scan(
         // trace:TASK-1161 | ai:claude
         use aida_core::db::DatabaseBackend;
         let backend = aida_core::db::GitBackend::new(store_path)?;
+        // BUG-1638: the race-test seam between the scan and the writes.
+        // trace:BUG-1638 | ai:claude
+        crate::status_write_race_seam(store_path);
         for flip in &flips {
-            // Plain lookup: a checked one on a bare GitBackend reloads the whole
-            // store per spec. Trailer ids were vetted by trailer_spec_or_skip.
-            // trace:TASK-1468 | ai:claude
-            let Some(mut r) = backend.get_requirement_by_spec_id(&flip.spec_id)? else {
-                continue;
-            };
-            // BUG-2696 round 7: the fresh copy's edges, judged fail-closed
-            // (a child the scan snapshot lacks counts as outstanding).
+            // BUG-2696 round 8 (A2): the parent and every child are read in
+            // the same store-locked transaction that persists the completion,
+            // so a child reopened or a slice added after the scan keeps the
+            // parent open. The closure changes at most this one spec, so the
+            // write stays a targeted `update SPEC-ID` commit.
             // trace:BUG-2696 | ai:claude
-            if crate::publication_completion::slice_plan_outstanding(&store, &r) {
-                continue;
-            }
-            if apply_auto_bump_flip(&mut r, flip, now, project_root) {
-                backend.update_requirement(&r)?;
-            }
+            backend.update_atomically(|locked| {
+                complete_flip_under_lock(locked, flip, now, project_root);
+            })?;
         }
         // BUG-1551: closure holds — same targeted write, one commit each.
         for hold in &closure_holds {
@@ -2956,26 +2981,7 @@ fn auto_bump_scan(
                 }
             }
             for flip in &flips_for_write {
-                // BUG-2696 round 7: re-check the slice plan inside the lock.
-                // trace:BUG-2696 | ai:claude
-                if s.get_requirement_by_spec_id(&flip.spec_id)
-                    .is_some_and(|r| crate::publication_completion::slice_plan_outstanding(s, r))
-                {
-                    continue;
-                }
-                // TASK-1-113: match agreed_id as well as spec_id — the
-                // eligibility scan above resolves via the agreed-aware
-                // `get_requirement_by_spec_id`, so a node-aware spec whose
-                // commit subject carries the agreed_id (e.g. `(BUG-42)` for
-                // canonical `BUG-1-099`) must re-find by the same key here or
-                // the flip is silently dropped. Mirrors the reconcile-status
-                // fix. trace:BUG-405 | ai:claude
-                if let Some(r) = s.requirements.iter_mut().find(|r| {
-                    r.spec_id.as_deref() == Some(flip.spec_id.as_str())
-                        || r.agreed_id.as_deref() == Some(flip.spec_id.as_str())
-                }) {
-                    apply_auto_bump_flip(r, flip, now, project_root);
-                }
+                complete_flip_under_lock(s, flip, now, project_root);
             }
             // TASK-246 / BUG-219: review stories whose PR merged before the
             // review lifecycle finished. The helper re-checks the status

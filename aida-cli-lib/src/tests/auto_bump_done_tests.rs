@@ -6533,3 +6533,114 @@ fn bug_2696_r4_failing_store_probe_never_reports_propagation() {
         &store
     ));
 }
+
+/// What a [`bug_2696_canonical_landing_race`] hook does to the store between
+/// the landing scan and the locked completion write.
+// trace:BUG-2696 | ai:claude
+#[derive(Clone, Copy)]
+enum Bug2696LandingRace {
+    /// Nothing: the graph is unchanged.
+    None,
+    /// The Completed child is reopened.
+    ReopenChild,
+    /// A new, open child slice is added under the parent.
+    AddOpenChild,
+}
+
+/// BUG-2696 round 8: a Git-canonical store holding a Done parent with one
+/// Completed child; a completing `(PARENT)` commit lands, and `race` runs at
+/// the seam between the scan and the write. Returns whether the seam ran and
+/// the parent's status afterwards.
+// trace:BUG-2696 | ai:claude
+fn bug_2696_canonical_landing_race(race: Bug2696LandingRace) -> (bool, RequirementStatus) {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+    let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
+    let mut parent = aida_core::Requirement::new("parent".into(), String::new());
+    parent.spec_id = Some("STORY-9801".into());
+    parent.status = RequirementStatus::Done;
+    let mut child = aida_core::Requirement::new("child".into(), String::new());
+    child.spec_id = Some("TASK-9802".into());
+    child.status = RequirementStatus::Completed;
+    parent.relationships.push(aida_core::Relationship {
+        rel_type: aida_core::RelationshipType::Parent,
+        target_id: child.id,
+        created_at: None,
+        created_by: None,
+    });
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(parent);
+    store.requirements.push(child);
+    backend.save(&store).unwrap();
+    drop(backend);
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(&project_root, "p.txt", "feat: last slice (STORY-9801)");
+
+    let ran = std::rc::Rc::new(std::cell::Cell::new(false));
+    let seen = ran.clone();
+    crate::inject_status_write_race(move |store_root| {
+        seen.set(true);
+        let backend = crate::test_env::home_fixture_backend(store_root).unwrap();
+        backend
+            .update_atomically(|s| match race {
+                Bug2696LandingRace::None => {}
+                Bug2696LandingRace::ReopenChild => {
+                    s.get_requirement_by_spec_id_mut("TASK-9802")
+                        .unwrap()
+                        .status = RequirementStatus::Approved;
+                }
+                Bug2696LandingRace::AddOpenChild => {
+                    let mut late = aida_core::Requirement::new("late".into(), String::new());
+                    late.spec_id = Some("TASK-9803".into());
+                    late.status = RequirementStatus::Approved;
+                    let late_id = late.id;
+                    s.requirements.push(late);
+                    s.get_requirement_by_spec_id_mut("STORY-9801")
+                        .unwrap()
+                        .relationships
+                        .push(aida_core::Relationship {
+                            rel_type: aida_core::RelationshipType::Parent,
+                            target_id: late_id,
+                            created_at: None,
+                            created_by: None,
+                        });
+                }
+            })
+            .unwrap();
+    });
+    let storage = Storage::new(store_dir.clone());
+    auto_bump_done_to_completed(&project_root, &store_dir, Some(&pre_sha), &storage).unwrap();
+    (ran.get(), status_of(&storage, "STORY-9801"))
+}
+
+/// BUG-2696 round 8 (A2): on the Git-canonical landing path, a child
+/// reopened after the scan saw it Completed keeps the parent open.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_canonical_landing_child_reopened_after_scan_keeps_parent_open() {
+    let (ran, status) = bug_2696_canonical_landing_race(Bug2696LandingRace::ReopenChild);
+    assert!(ran, "the scan-to-write seam must run on the canonical path");
+    assert_eq!(status, RequirementStatus::Done);
+}
+
+/// BUG-2696 round 8 (A2): on the Git-canonical landing path, a slice added
+/// under the parent after the scan keeps the parent open.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_canonical_landing_slice_added_after_scan_keeps_parent_open() {
+    let (ran, status) = bug_2696_canonical_landing_race(Bug2696LandingRace::AddOpenChild);
+    assert!(ran, "the scan-to-write seam must run on the canonical path");
+    assert_eq!(status, RequirementStatus::Done);
+}
+
+/// BUG-2696 round 8: the positive control — with the graph unchanged between
+/// scan and write, the completing landing completes the parent.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_canonical_landing_unchanged_graph_completes_parent() {
+    let (ran, status) = bug_2696_canonical_landing_race(Bug2696LandingRace::None);
+    assert!(ran, "the scan-to-write seam must run on the canonical path");
+    assert_eq!(status, RequirementStatus::Completed);
+}
