@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T19:59:46.686518791Z
-modified_at: 2026-11-19T01:40:05.440799761Z
+modified_at: 2026-11-19T01:42:51.462310956Z
 req_type: Bug
 comments:
 - id: 01a1f176-0573-7ad0-b3c8-5afdcf49d248
@@ -22,6 +22,13 @@ comments:
     - Deep pass: compared status-rollup detailsUrl, health check links, and Actions metadata on PR #4264. FAST 44367788279 was cancelled even though its aggregate step failed, and FULL 44368725164 succeeded on the same head and workflow. Reviewed missing/malformed identity, row order, repeated runs, other workflows, different heads, and failures in the replacement. Fixed the case where a prior run's green aggregate could give the current FULL run premature credit. Unverified run identity retains the existing observations. Rust formatting and git diff --check passed. Host PR CI is pending publication.
   created_at: 2026-11-19T01:40:05.440799761Z
   modified_at: 2026-11-19T01:40:05.440799761Z
+  session_id: 01a1f16a2c45
+  harness_version: codex-cli 0.167.0
+- id: 01a1f178-8cda-7973-89b4-43878afa9592
+  author: dirtlab
+  content: 'Implementer self-review validation update. Both final-tree behavioral regressions passed in the native lane. AC1: [evidence: behavioral-test] bug_2692_land_ignores_verified_cancelled_fast_run (j20261119T013100583-2-0). AC2: [evidence: behavioral-test] landing_health_github_adapter_required_dependencies (j20261119T013027985-2-0). Each ran one test with zero failures. Host PR CI remains pending publication.'
+  created_at: 2026-11-19T01:42:51.462310956Z
+  modified_at: 2026-11-19T01:42:51.462310956Z
   session_id: 01a1f16a2c45
   harness_version: codex-cli 0.167.0
 history:
