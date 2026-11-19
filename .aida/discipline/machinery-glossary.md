@@ -204,7 +204,8 @@ it. The launcher waits and ends with one `implementer:` result line and an
 exit code the caller branches on: 0 PR opened, 31 no PR, 32 punted, 33 held,
 34 refused at the concurrency cap (`[queue] standalone_implementer_cap`,
 host-wide; `~/.aida/host.toml` overrides project config, default
-`max(1, floor(nproc/2))`). See `docs/cli/03-work-autonomy.md`.
+`max(1, floor(nproc/2))`), 36 deferred below the disk floor (the spec stays
+queued). See `docs/cli/03-work-autonomy.md`.
 
 ### worktree
 
