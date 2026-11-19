@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T11:40:13.936935065Z
+modified_at: 2026-11-19T11:53:03.891977812Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -572,6 +572,18 @@ comments:
   modified_at: 2026-11-19T11:37:33.798085358Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3a7-3494-77c0-81fd-0830685f669f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c2ae5cd92a (merge of origin/main d4579825ef into bug-2696-fresh, PR #4305).
+    Conflict-only lane per the advisor brief. aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs had an add/add conflict, and git's hunks split both sides mid-function. Rebuilt it keeping both sides intact: BUG-2696 f7 refused-before-start test and fixtures (HEAD), and BUG-2607 retention-notice helpers and tests (main). No other edits, no behaviour change.
+    Evidence: lane job cargo test seat_clone:: task_2143 — all bug_2696_* (7) and bug_2607_* (5) tests pass; task_2143 ratchet tests pass. python3 -m unittest tests.test_exec_context_ratchet: 19 OK (round-6 GIT_DIR finding already addressed by 8374be25cb). scripts/check-store-writers.py: OK.
+    Residual: 22 seat_clone tests fail locally from host conditions outside the merge: disk floor (31 GiB free < 60 GiB), mail-retention writer-admission scan, bwrap/nested git in the sandbox. make check-ci-fast not run (exceeds the 60s tool cap); CI at the PR head is authoritative.
+  created_at: 2026-11-19T11:53:03.891977812Z
+  modified_at: 2026-11-19T11:53:03.891977812Z
+  session_id: 01a1f39b42c8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe

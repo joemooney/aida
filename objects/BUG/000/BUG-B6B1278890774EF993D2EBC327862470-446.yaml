@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T12:19:19.676916809Z
-modified_at: 2026-11-19T11:35:17.796736314Z
+modified_at: 2026-11-19T11:49:22.733943637Z
 req_type: Bug
 tags:
 - capacity
@@ -177,6 +177,24 @@ comments:
   modified_at: 2026-11-19T11:35:17.796736314Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3a3-d4ad-7062-a3eb-40b9c9b08d6a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8c6766edf2 (round 2, PR #4293)
+
+    AC1 [evidence: behavioral-test]: lane_job.rs run_one_authorized now returns true only for a cargo build/test job whose output carries Cargo's 'Finished ... target(s) in' or 'error: could not compile' (cargo_built). --help, refusals, cargo check and fast-gate jobs keep the slot. Tests: lane_job::tests::bug_2682_only_a_finished_build_releases_the_cold_start_slot (help keeps, check keeps, real build releases, released once), bug_2682_cargo_built_reads_cargo_completion_markers.
+    AC2 [evidence: behavioral-test]: unchanged from round 1; bug_2682_refuses_low_or_unreadable_memory_and_returns_slot.
+    AC3 [evidence: behavioral-test]: AIDA_OVER_HOST_LIMIT=<reason> (env var, not config; blank refuses) is read by both launchers and passed into Startup::acquire(root, spec, override). It passes a full cap and/or the memory floor, prints the checks passed and records a host-limit-override gate event (checks, spec, reason; actor/timestamp from the event). --over-wip untouched. Key classified DROPPED so vendor children never inherit it. Tests: bug_2682_host_override_passes_and_names_each_check, bug_2682_host_override_needs_a_reason, and the launch-boundary test below.
+    AC4 [evidence: behavioral-test]: bug_044 headless_background::bug_2682_over_wip_launches_still_wait_on_host_limits_until_explicitly_overridden drives standalone run() and run_vendor_headless_to_exit after wip_limit::admit(over_wip=true) passes a full WIP limit: below the floor the launch refuses with no child; at a full cap the child waits and spawns only after the slot is released; only the explicit override passes both and the record names both checks. Skipping acquire in either launcher fails it.
+
+    Probes: fork-inherited socket fds can delay rebinding briefly, so the unit tests assert queued>=1, not ==1. Fail-open review: an unreadable memory reading, a settings error or a blank override all refuse.
+    Residual risks: (1) a seat could release its slot early with a small 'cargo build -p <tiny crate>' that finishes; the 30-minute timeout still bounds everything. (2) The override is an env var, not a CLI flag, so it reaches drain phase subprocesses without new plumbing; reviewers who want a --over-host-limit flag on queue work could add one as a follow-up that sets it.
+    Validation: cargo test bug_2682 + drain_launcher + fixture_lane via lane job runner: 10 passed. Wider lane_job/headless_background/seat_publish run: 10 failures, all from the pre-existing disk-headroom preflight (this host's /tmp has 31 GiB, below the 60 GiB floor) or a missing prebuilt CLI; not from this change. check-store-writers.py: ok. check-ci-fast: see PR.
+  created_at: 2026-11-19T11:49:22.733943637Z
+  modified_at: 2026-11-19T11:49:22.733943637Z
+  session_id: 01a1f36e8870
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ee99-c89f-7e53-8fdd-89426e025c9f
   author: joe
