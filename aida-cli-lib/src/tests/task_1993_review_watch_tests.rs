@@ -786,7 +786,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             "advisor",
             &["reviewer"],
         );
-        env.set_key(crate::gate::seat_authority::GRANT_ENV, parent); // trace:TASK-1993 | ai:claude
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent); // trace:TASK-1993 | ai:claude
         let repo = forge::Repository::load(&root).unwrap();
         let mut changes = repo.discover(&root).unwrap();
         assert_eq!(changes.len(), 1);
@@ -871,7 +871,63 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             );
             env.unset_key(WATCH_HEAD);
         }
+        // Pause after selection, before the production reservation child runs.
+        // trace:BUG-2650 | ai:codex
+        let store = Store::open(&root, &repo.identity).unwrap();
+        let key = changes[0].key();
+        let selected = dispatch(select(&store, &changes[0], None, 2).unwrap());
+        use clap::Parser;
+        #[derive(Parser)]
+        struct WatchCli {
+            #[command(flatten)]
+            args: ReviewWatchArgs,
+        }
+        let control = |argv: &[&str]| {
+            let args =
+                WatchCli::try_parse_from(std::iter::once("watch").chain(argv.iter().copied()))?;
+            super::run_with_program(&args.args, &root, None)
+        };
+        assert!(control(&["pause", "--reason", "too long", "--for", "86401"]).is_err());
+        assert!(control(&["pause", "--reason", "   "]).is_err());
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, "invalid-grant");
+        let error = control(&["pause", "--reason", "cutover fixture"]).unwrap_err();
+        assert!(error.to_string().contains("requires an advisor grant"));
+        assert!(store.dir.read("pause.json").unwrap().is_none());
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+        control(&["pause", "--reason", "cutover fixture"]).unwrap();
+        control(&["status"]).unwrap();
+        let marker = root.join("unexpected-queue-spawn");
+        let forbidden = bin.join("forbidden-queue");
+        crate::test_exec::write_executable(
+            &forbidden,
+            "#!/bin/sh\ntouch unexpected-queue-spawn\nexit 5\n",
+        );
+        child_with_program(
+            &root,
+            &repo,
+            &format!("{key}:{}", selected.token),
+            &forbidden,
+        )
+        .unwrap();
+        assert!(!marker.exists());
+        let state = store.load().unwrap();
+        let attempt = &state.entries[&key].attempts[0];
+        assert_eq!(attempt.phase, Phase::Failed);
+        assert!(!attempt.spawning);
+        control(&["resume"]).unwrap();
+
         process_dispatch_barrier(&root, &repo, &changes[0], || {
+            // Pause while a real queue child is running. The barrier must
+            // still release it normally and retain its completion receipt.
+            control(&[
+                "pause",
+                "--reason",
+                "already running fixture",
+                "--for",
+                "60",
+            ])
+            .unwrap();
+
             env.set_key(WATCH_HEAD, &head);
             let prompt = reviewer_launch_prompt(&root, 1, "/aida-review --pr 1")
                 .unwrap()
@@ -881,6 +937,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             assert!(prompt.contains("Never merge or update the branch"));
             env.unset_key(WATCH_HEAD);
         });
+        control(&["resume"]).unwrap();
         std::fs::write(temp.path().join("bad-count"), "").unwrap();
         assert!(
             repo.probe(&root, &mut changes[0]).is_err(),
@@ -966,6 +1023,7 @@ exit 3
         );
         env.unset_key(WATCH_HEAD);
         let args = ReviewWatchArgs {
+            control: None,
             once: true,
             interval: 1,
             max_concurrent: Some(2),
@@ -4187,4 +4245,46 @@ fn bug2650_all_ready_refuses_invalid_shared_review_evidence() {
     assert!(select_train_members(temp.path(), &[1, 2], true).is_err());
     std::fs::remove_file(store.dir.path().join(STATE)).unwrap();
     assert!(select_train_members(temp.path(), &[1, 2], true).is_err());
+}
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_pause_survives_restart_and_audits_resume_and_expiry() {
+    let (temp, store) = fixture();
+    let control = pause::Control::Pause {
+        reason: "  rollback \"window\"  ".into(),
+        seconds: 3600,
+    };
+    let now = chrono::Utc::now();
+    pause::fixture_change(&store, &control, now).unwrap();
+    let repository = store.repository.clone();
+    drop(store);
+    let store = Store::open(temp.path(), &repository).unwrap();
+    let candidate = change(1, 1, false);
+    assert!(matches!(select(&store, &candidate, None, 2).unwrap(),
+        Action::Skip(reason) if reason.starts_with("review-watch paused until ")));
+    assert!(pause::launch_guard(&store)
+        .err()
+        .unwrap()
+        .is::<pause::Paused>());
+    assert!(store.load().unwrap().entries.is_empty());
+    pause::fixture_change(&store, &pause::Control::Resume, now).unwrap();
+    assert!(pause::launch_guard(&store).is_ok());
+
+    let past = now - chrono::Duration::seconds(3600);
+    pause::fixture_change(&store, &control, past).unwrap();
+    dispatch(select(&store, &candidate, None, 2).unwrap());
+    assert!(pause::launch_guard(&store).is_ok());
+    let audit: serde_json::Value =
+        serde_json::from_slice(&store.dir.read("pause.json").unwrap().unwrap()).unwrap();
+    let events = audit["events"].as_array().unwrap();
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[0]["pause"]["actor"], "fixture advisor");
+    assert_eq!(events[0]["pause"]["reason"], "rollback \"window\"");
+    assert_eq!(events[1]["resume"]["actor"], "fixture advisor");
+    assert_eq!(events[2]["pause"]["expires_at"], events[3]["expired"]["at"]);
+
+    store.dir.write("pause.json", b"{").unwrap();
+    assert!(select(&store, &change(2, 2, false), None, 2).is_err());
+    assert!(pause::launch_guard(&store).is_err());
 }

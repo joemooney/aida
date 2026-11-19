@@ -44,8 +44,13 @@ mod train;
 #[path = "review_watch_train_service.rs"]
 pub(crate) mod train_service;
 
+#[path = "review_watch_pause.rs"]
+mod pause;
+
 #[derive(Args, Debug, Clone)]
 pub struct ReviewWatchArgs {
+    #[command(subcommand)]
+    control: Option<pause::Control>,
     /// Discover and dispatch once, then leave admitted reviews running.
     #[arg(long)]
     pub once: bool,
@@ -634,13 +639,20 @@ impl Directory {
         Ok(())
     }
     fn lock(&self, name: &str) -> Result<RuntimeLock> {
+        self.lock_mode(name, FileExt::try_lock_exclusive)
+    }
+    fn lock_mode(
+        &self,
+        name: &str,
+        acquire: fn(&File) -> std::io::Result<()>,
+    ) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
         // Retry brief concurrent transactions; a holder that outlasts the
         // bounded retry window still yields WouldBlock to the caller.
         // trace:TASK-1993 | ai:claude
         let mut attempts = 0;
         loop {
-            match file.try_lock_exclusive() {
+            match acquire(&file) {
                 Ok(()) => return Ok(RuntimeLock(file)),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && attempts < 50 => {
                     attempts += 1;
@@ -1634,6 +1646,10 @@ fn select_with_coverage(
     store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
+        store.reconcile_lost_dispatchers(state);
+        if let Some(paused) = pause::effective_locked(store, chrono::Utc::now()).context(GlobalState)? {
+            return Ok(Action::Skip(paused.to_string()));
+        }
         // The train takes these locks under this same admission lock.
         // trace:BUG-2650 | ai:codex
         let member = store.dir.file(&format!("train-member-{key}.lock"), true)?;
@@ -1646,7 +1662,6 @@ fn select_with_coverage(
         // End ownership even if a concurrent fork retains the descriptor.
         // trace:BUG-2650 | ai:codex
         let _member = RuntimeLock(member);
-        store.reconcile_lost_dispatchers(state);
         let total = state.entries.values().flat_map(|e| &e.attempts).filter(|a| active(a)).count();
         // Apply this watcher's limit under the admission lock. Existing reviews
         // count against a changed cap without needing to drain first.
@@ -2332,6 +2347,7 @@ fn child_with_program(
     let id = parse_key(key)?;
     let store = Store::open(root, &repo.identity)?;
     let round = std::cell::Cell::new(0);
+    let launch_guard = std::cell::Cell::new(None);
     execute_reservation(
         &store,
         key,
@@ -2352,23 +2368,25 @@ fn child_with_program(
                     "head changed before review dispatch"
                 );
                 round.set(store.round_for(key, attempt)?);
-                Ok::<_, anyhow::Error>(())
+                retry_busy(|| pause::launch_guard(&store))
             })();
-            if let Err(error) = checked {
-                if let Err(cancel) = admission::transition(
-                    root,
-                    key,
-                    &attempt.head,
-                    token,
-                    admission::State::Cancelled,
-                    format!("pre-spawn preflight failed: {error:#}"),
-                ) {
-                    eprintln!("{key}: hub claim retained: {cancel:#}");
+            let launch = match checked {
+                Ok(launch) => launch,
+                Err(error) => {
+                    if let Err(cancel) = admission::transition(
+                        root,
+                        key,
+                        &attempt.head,
+                        token,
+                        admission::State::Cancelled,
+                        format!("pre-spawn preflight failed: {error:#}"),
+                    ) {
+                        eprintln!("{key}: hub claim retained: {cancel:#}");
+                    }
+                    return Err(error);
                 }
-                return Err(error);
-            }
-            // The local receipt is process-bound; the hub token is consumed
-            // exactly once before any queue-work/reviewer process is started.
+            };
+            // Consume the process-bound hub token before any queue-work spawn.
             // trace:STORY-2492 | ai:codex
             admission::transition(
                 root,
@@ -2383,9 +2401,13 @@ fn child_with_program(
                     Identity::current()?.start
                 ),
             )?;
+            launch_guard.set(Some(launch));
             Ok(())
         },
         |attempt| {
+            let launch = launch_guard
+                .take()
+                .context("missing review-watch launch guard")?;
             let mut cmd = watch_command(repo, root, program);
             cmd.args(queue_args(key, attempt.vendor.as_deref()))
                 .env(WATCH_HEAD, &attempt.head)
@@ -2395,6 +2417,7 @@ fn child_with_program(
             // trace:TASK-1993 | ai:claude
             retry_busy(|| store.record_worker(key, token, None))?;
             let mut child = crate::process_retry::RetryEtxtbsy::spawn_retrying_etxtbsy(&mut cmd)?;
+            drop(launch);
             match Identity::child(&child) {
                 Ok(worker) => {
                     if let Err(error) = retry_busy(|| store.record_worker(key, token, Some(worker.clone()))) {
@@ -2480,6 +2503,10 @@ fn execute_reservation(
             return Ok(());
         }
         retry_busy(|| store.transition(key, token, Phase::Failed))?;
+        if error.is::<pause::Paused>() {
+            eprintln!("{key}: {error}");
+            return Ok(());
+        }
         return Err(error);
     }
     if let Err(error) = work(&attempt) {
@@ -2734,6 +2761,18 @@ pub(crate) fn run_with_program(
 ) -> Result<Vec<Child>> {
     let root = forge::main_root(start)?;
     let repo = forge::Repository::load(&root)?;
+    if let Some(control) = &args.control {
+        anyhow::ensure!(
+            !args.once
+                && args.interval == 10
+                && args.max_concurrent.is_none()
+                && args.vendor.is_none()
+                && args.release.is_none()
+                && args.launch_reservation.is_none(),
+            "review-watch controls cannot be combined with watcher options"
+        );
+        return pause::run(&Store::open(&root, &repo.identity)?, control).map(|()| Vec::new());
+    }
     crate::gate::seat_authority::validate_child_delegation(&root, "reviewer")?;
     if let Some(reservation) = args.launch_reservation.as_deref() {
         let program = program
@@ -3223,6 +3262,17 @@ fn watch_change(
             report(root, store, &change, &live)?;
         }
         Action::Dispatch(mut attempt) => {
+            let launch = match pause::launch_guard(store) {
+                Ok(launch) => launch,
+                Err(error) => {
+                    retry_busy(|| mark_spawn_failed(store, &key, &attempt.token))?;
+                    if error.is::<pause::Paused>() {
+                        eprintln!("{key}: {error}");
+                        return Ok(());
+                    }
+                    return Err(error);
+                }
+            };
             // Reserve at the sole authority before spawning even the dispatcher.
             // A refused/uncertain claim never authorizes a child.
             // trace:STORY-2492 | ai:codex
@@ -3252,6 +3302,7 @@ fn watch_change(
                     &mut command,
                 )?)
             })();
+            drop(launch);
             match spawned {
                 Ok(mut child) => {
                     // trace:TASK-1993 | ai:claude

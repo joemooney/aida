@@ -375,6 +375,7 @@ fn worker(root: &Path) -> Result<()> {
 // trace:BUG-2644 | ai:codex
 fn worker_review_watch_args() -> ReviewWatchArgs {
     ReviewWatchArgs {
+        control: None,
         once: false,
         interval: 10,
         max_concurrent: None,
