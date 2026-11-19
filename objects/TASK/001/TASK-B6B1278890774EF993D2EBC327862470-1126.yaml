@@ -1,0 +1,31 @@
+id: 01a1f55a-f5a5-7200-85fe-6e4b05ac1852
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1126
+title: 'Review follow-up: Apply rustfmt to aida-cli-lib/src/review_commands.rs:4400 and aida-cli-lib/src/tests/story'
+description: |-
+  From STORY-2893
+  Reviewed sha: f30f3d8e98f56f2828c5f2d9a203835321364d15
+
+  Apply rustfmt to aida-cli-lib/src/review_commands.rs:4400 and aida-cli-lib/src/tests/story_2893_verdict_next_actor_tests.rs:187. Exact-head GitHub job 135817115232 fails Check formatting on the unwrap_or_else closure and the observed.get() assertion respectively. Job 135828484838 then fails because GATES=failure while COMPILE=success. This is a formatting-only follow-up; readiness must still require green destination-head CI.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-19T19:49:01.477082386Z
+modified_at: 2026-11-19T19:49:01.477082386Z
+req_type: Task
+tags:
+- carried-from:STORY-2893
+- finding-hash:5efb414a
+- from-review:STORY-2893
+relationships:
+- rel_type: References
+  target_id: 01a1ebe3-43dc-7810-8dd1-f2918d7dbc7c
+  created_at: 2026-11-19T19:49:14.182860611Z
+filed_at:
+  code_sha: f30f3d8e98f56f2828c5f2d9a203835321364d15
+  branch: pr-4318
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: fa5ac3dab15
+  vendor: claude
+  session: 01a1f5580577
