@@ -231,14 +231,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
-  requirement_id: 01a1ebf2-d884-7621-9a80-25344ab14aab
-  position: 21000
-  added_by: claude-product-12
-  note: Approved 17:03; night-shift timeouts after BUG-2626. Starts held until open PRs < wip_max.
-  added_at: 2026-11-18T00:04:06.560097645Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1ec45-5343-7720-a3ac-34f995c661c4
   position: 22000
   added_by: claude-product-12
