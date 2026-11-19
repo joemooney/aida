@@ -229,6 +229,8 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_DRAIN_RESUME_PHASE",
     "AIDA_DRAIN_STOP_FILE",
     "AIDA_DRAIN_TERM_GRACE_SECS",
+    // Supplied only to the doctor remote-drift Git fetch. trace:BUG-2672 | ai:codex
+    "AIDA_DRIFT_FETCH_URL",
     "AIDA_DRIVER",
     "AIDA_DRIVE_ROOT",
     "AIDA_EXIT_GRACE_MS",
