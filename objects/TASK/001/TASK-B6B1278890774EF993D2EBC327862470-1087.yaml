@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:49.349747862Z
-modified_at: 2026-11-19T18:44:19.875923383Z
+modified_at: 2026-11-19T18:44:33.605797470Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -189,6 +189,27 @@ comments:
   created_at: 2026-11-19T18:44:19.741922378Z
   modified_at: 2026-11-19T18:44:19.741922378Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f520-1f94-7e82-a769-865e1a89ce68
+  author: joe
+  content: |-
+    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 11:44):
+    # Rework brief: TASK-3804 / PR #4321, round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 11:48 MST. Head reviewed: b2abc34. AC1 and AC3 PASS; do not churn them. Lane: CLAUDE.
+    ONE finding (unmet AC2, blocking):
+    - repair_journal.rs:403-408 mailbox_has_delivery uses read_local_messages/read_canonical_messages, which (mailbox_store.rs:134-153
+      read_messages_in) silently skip unreadable files and malformed messages. After an accepted send plus a lost journal receipt,
+      an unreadable copy reads as "absent" and notify_refusal_with (line ~489) sends a second mail for the same PR/head.
+    Required shape (simplest): a STRICT delivery lookup for this path only that propagates any read/parse failure as an error,
+    and FAIL CLOSED on that error: do not send; record "delivery state unknown" in the journal and surface it to the operator view.
+    Do not change read_messages_in's tolerant behaviour for other callers.
+    Regression through the REAL mailbox reader (not an injected callback): accepted notice + lost journal receipt + a malformed
+    message file in the mailbox -> no second send, and the journal shows the unknown state.
+    cargo fmt; python3 scripts/check-store-writers.py; one targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-19T18:44:33.605797470Z
+  modified_at: 2026-11-19T18:44:33.605797470Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0fd-3b33-7230-a9b9-b924b9001fba
