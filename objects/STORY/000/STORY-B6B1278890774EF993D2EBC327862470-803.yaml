@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T09:51:59.521078755Z
+modified_at: 2026-11-19T10:45:23.581048714Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -110,6 +110,13 @@ comments:
   content: 'ADVISOR RULING 02:55 on #4292 (S1t-a) round 2 (CR at be2c3a6); all 3 block. Round 3 of 4: (1) advisor_loop_train::run (line 80, 94-96): during stand-down, RELEASE the legacy auto-train admission claim (do not hold mode.lock while idle), and reacquire only when the policy says the train may run. Regression: in review-gated mode the land loop can acquire admission while auto-train is standing down. (2) landing_policy.rs:154-161 / the 366-373 check: a non-table or malformed [landing] section counts as INVALID for the stand-down decision, so the auto-train does not run. Regression with landing = "review-gated" and landing = false. (3) A real production-path #4270 race regression: two hands (land-loop ship and train) race the same PR through the actual entry points against a forge mock; exactly ONE merge call reaches the forge and the other refuses with exit 23.'
   created_at: 2026-11-19T09:51:59.521078755Z
   modified_at: 2026-11-19T09:51:59.521078755Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f369-7154-7723-94d5-0277b8e6ac59
+  author: joe
+  content: 'Advisor 03:48 note for the #4292 ROUND-3 reviewer (STRICT) at 2d0c020: check exactly the 02:55 ruling. (1) The auto-train holds admission ONLY while running a train; stand-down or an unknown policy releases it, so the land loop can acquire it (regression). (2) A non-table or malformed [landing] section is INVALID and runs no train (through the pass decision). (3) A real-boundary race with a recording forge: ship vs drain gives exactly ONE forge merge and the loser gets 23; a train-boarded car blocks a ship until it is released. Don''t re-litigate the signed design. The 09:18 tier applies.'
+  created_at: 2026-11-19T10:45:23.581048714Z
+  modified_at: 2026-11-19T10:45:23.581048714Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
