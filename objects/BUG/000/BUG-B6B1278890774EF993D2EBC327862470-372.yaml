@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-372
 agreed_id: BUG-2608
 title: Deputy sandbox exemption docs give exact-match excludedCommands entries that never match a real submit
 description: 'docs/advanced/deputies.md ''Letting a sandboxed advisor submit'' (line ~249), and the matching refusal text from ''aida deputy shell submit'', tell the operator to add "aida deputy shell submit" and "aida deputy shell cancel" to sandbox.excludedCommands. Claude Code matches those entries like Bash(...) permission rules, so an entry without a wildcard matches only the bare command with no arguments (code.claude.com/docs/en/sandboxing). A real call such as ''aida deputy shell submit --name product --file F --wait'' therefore stays sandboxed and fails with ''sandbox blocks unix sockets'' (observed 2026-11-15 on the product seat). Acceptance: the doc and the refusal help text give "aida deputy shell submit *" and "aida deputy shell cancel *", say the call must run bare (no cd, &&, redirect, or $(...)), and say to restart the session after editing the settings.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:19:44.299216443Z
-modified_at: 2026-11-17T23:37:53.429171739Z
+modified_at: 2026-11-19T15:54:10.817098529Z
 req_type: Bug
 tags:
 - area:deputy
@@ -50,6 +50,13 @@ history:
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
+- id: 01a1f483-f401-7070-bbe1-d0e03c6a06e8
+  author: aida-session-start
+  timestamp: 2026-11-19T15:54:10.817087019Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
