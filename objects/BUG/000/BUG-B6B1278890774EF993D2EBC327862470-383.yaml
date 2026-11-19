@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-383
 agreed_id: BUG-2619
 title: aida agent new claude --resume looks for a worktree seat's transcript under the repo root's Claude project folder and fails
 description: '2026-11-15 21:30 MST, after a desktop crash: ''aida agent new claude --role implementer --seat integration --resume latest'' picked the right session (01a1e1db-76c4-74f3-ae96-925ed3d38a81) but failed with ''transcript not found at ~/.claude/projects/-home-joe-ai-aida/<id>.jsonl''. The integration seat runs in ~/ai/aida-worktrees/integration, so Claude stored the transcript under ~/.claude/projects/-home-joe-ai-aida-worktrees-integration/. Acceptance: resume derives the Claude project folder from the cwd the session was launched in (recorded in the agent registry), or searches every project folder for the session id; the resumed session starts in that cwd; a test covers a seat launched in a worktree. Recovery after a crash is the main use, so the error should also print the folder where the transcript was actually found.'
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:30:30.438085355Z
-modified_at: 2026-11-19T06:03:38.032244161Z
+modified_at: 2026-11-19T06:03:50.357719816Z
 req_type: Bug
 tags:
 - area:agent-launch
@@ -33,6 +33,11 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-383` at head `0f96aefa9a0783823da16bc1f585a99b104bd882`.'
   created_at: 2026-11-19T06:03:38.032239516Z
   modified_at: 2026-11-19T06:03:38.032239516Z
+- id: 01a1f267-7ad5-7e33-bab5-58478e47d98e
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-383` at head `0f96aefa9a0783823da16bc1f585a99b104bd882`.'
+  created_at: 2026-11-19T06:03:50.357707527Z
+  modified_at: 2026-11-19T06:03:50.357707527Z
 history:
 - id: 01a1ebdb-5b2f-75b1-b139-4b780444efea
   author: joe
@@ -56,6 +61,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f267-7ad5-7e33-bab5-585237075f56
+  author: lane-recovery
+  timestamp: 2026-11-19T06:03:50.357719769Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 5d58626acc0e98c27039a492db3a3c3f15b5a2ad
