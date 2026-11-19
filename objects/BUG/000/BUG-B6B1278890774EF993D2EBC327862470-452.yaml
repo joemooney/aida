@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T13:07:22.156411088Z
+modified_at: 2026-11-19T13:07:37.650406419Z
 req_type: Bug
 tags:
 - conflicts
@@ -644,6 +644,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes after reading all 167233 bytes / nine files of the supplied diff against protected main 69ebf0d8012056a448bbc20da16bfc9803828d80, landed tree a0ec35cbddc5a829db8ed085b42d8fdfe72522c3; attest only original PR head adeab8a790bb5bcaaf425dfe68151c62876bd73a. Read BUG-2688 acceptance and authoritative rework comments through AIDA; generated review checklist could not resolve the display alias, so consulted the full spec directly. BUG-2688 (bug protocol): met; new bug_2688_fresh_rework_tests.rs and modified bug_home_038_seat_publish_tests.rs. AC1 PARTIAL: alignment is now classified by observed drift, but the behind-origin recovery still cannot clear the restored leased-seat state through production pickup. AC2 PASS by source/regression inspection: missing seat/journal can restart from verified origin. AC3 PASS for the inspected unleased retained-seat paths: explicit fresh routing, intact clone and linked-worktree relocation, strict ownership reads, locked revalidation and reservation reconciliation are present. AC4 PARTIAL overall because the leased behind-origin recovery regression is missing; conflict/restart/adoption coverage and the new real session_start_with_receipt placement-lock regressions for new and adopted seats are present. The previous production lock-lifetime finding is resolved by source inspection. Trace comments are present. No local test/build commands run per operator policy; no mutation run claimed. Existing exact-head FAST gates and tier selection passed; CI pending at review time (fast compile running, merge-hold-gate awaiting recorded clearance), which is not the reason for refusal. Head is one commit behind protected main; its BUG-2690 landing/CI changes do not affect this finding. No absolute reviewed CodeGraph client was supplied, so navigation used rg. Standalone draft only; parent validation and recording remain outstanding.. Triage reason: Round 4 (FINAL) for PR #4306. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-fresh-r4.md: a working recovery from a restored dead orphan lease, with a real-path regression. CLAUDE, STRICT.'
   created_at: 2026-11-19T13:07:22.156404530Z
   modified_at: 2026-11-19T13:07:22.156404530Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3eb-77a2-75c3-86e0-82fc1badc8b4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: adeab8a790bb
+    Recorded: 2026-11-19T13:06:15.725987965+00:00
+    Findings:
+    1. [P2; severity=p2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/seat_clone.rs:3764-3769] Make the behind-origin recovery command work with the restored orphan lease (BUG-2688 AC1 and authoritative round-3 item 1). The new message says that after lane exit, `aida queue work <scope> --fresh` without --resume ends the exited lane's clean lease and restarts. In the actual adopted-seat failure path, run_pickup_launch rolls back setup and SessionStartCleanup restores the original orphan lease (session_start.rs:1767-1803). On the suggested retry there is no adopt_orphan because --resume is absent (queue_cmd/work.rs:4756); the branch preflight at :5179-5190 runs before the ownership sweep at :5993-6068. inspect_queue_work_branch refuses a leased private clone at :4070-4076, or a leased linked worktree because the fresh bypass at :4100 requires !leased. Thus the advertised automatic lease ending is unreachable, and the same clean, behind-origin orphan remains blocked after following the exact recovery command. clean_adopted_seat_behind_origin_recovers_with_fresh_not_push does not catch this: conflict_seat creates no lease, and recover_fresh bypasses handle_queue_work, preflight, and failed-adoption rollback. Provide a supported state-correct recovery (or safely arrange the existing ownership reconciliation before occupancy refusal), retaining live/unknown ownership and local content protections, and add a regression with an actual restored dead orphan lease that executes the production recovery/preflight path. This finding is in the named original head and does not depend on the newer protected-base commit.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T13:07:37.506215618Z
+  modified_at: 2026-11-19T13:07:37.506215618Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
