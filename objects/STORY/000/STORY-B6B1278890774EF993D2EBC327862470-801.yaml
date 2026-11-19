@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:26:06.757643260Z
-modified_at: 2026-11-19T05:09:46.387581445Z
+modified_at: 2026-11-19T05:18:33.871539749Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -86,6 +86,13 @@ comments:
   content: 'Advisor 22:12 note for the #4279 round-2 reviewer (STRICT): check exactly the 20:58 ruling. F1: freshness is judged inside the boundary recheck for every caller. F2/F3: per-commit ''git log -m --name-only -z'', NUL-split; non-UTF-8 refuses. F4/S1: a stale protected path always refuses (no merge-ref CI branch, by design). F5: the drain and burndown CI-skip snapshot is carried to the merge, and a change refuses. F6: the ratchet is syn-parsed workspace-wide, including method, UFCS and in-macro calls, with bypass regressions. F7: the land-run ship child keeps operator floor authority, with a pty regression. Do not re-litigate the signed S1c design. Round 2 of 4; the 09:18 tier applies.'
   created_at: 2026-11-19T05:09:46.387581445Z
   modified_at: 2026-11-19T05:09:46.387581445Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f23e-367a-72a3-b963-02ce7c759346
+  author: joe
+  content: 'ADVISOR RULING 22:21 on #4279 round 2 (CR at edc4d70, 2 P1s; the other 5 round-1 findings are resolved). Round 3 of 4: (1) when review-gated mode skips CI in the drain (phase_driver_trait.rs:1523), initialize the review prerequisites it skips: set ci_terminal_sha to the head being reviewed, with an explicit ''ci-skipped: review-gated'' marker, so verify_ci_for_review (:1791) and run_reviewer proceed, and refuse only when the mode actually requires CI. Regression: a fresh hosted-forge drain in review-gated mode reaches review. (2) landing_merge.rs:240/246: pass --no-renames (or parse -M with both source and destination) so a rename reports BOTH paths into the freshness and protected-path inventory. Regression: renaming a protected file out of the protected prefix is classified protected. Run check-store-writers.py.'
+  created_at: 2026-11-19T05:18:33.871539749Z
+  modified_at: 2026-11-19T05:18:33.871539749Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
