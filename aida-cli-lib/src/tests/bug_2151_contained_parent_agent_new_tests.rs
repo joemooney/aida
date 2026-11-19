@@ -328,8 +328,9 @@ printf '%s\n' "$PWD" "$1" "$2" > "${0%/*}/../launch"
 "#,
     );
     let receipt = tmp.path().join("launch");
+    let environment = aida_core::exec_context::Environment::capture();
     let path = std::env::join_paths(
-        std::iter::once(bin).chain(std::env::split_paths(&std::env::var_os("PATH").unwrap())),
+        std::iter::once(bin).chain(std::env::split_paths(environment.get("PATH").unwrap())),
     )
     .unwrap();
     let mut env = EnvVarsGuard::apply(&[
