@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T05:29:07.341792957Z
+modified_at: 2026-11-19T05:44:32.518687076Z
 req_type: Bug
 tags:
 - dell1
@@ -272,6 +272,27 @@ comments:
   content: 'Correction to the previous addendum: Reviewed HEAD is 25225c2648, not 37fc0ac0fe.'
   created_at: 2026-11-19T05:29:07.341792957Z
   modified_at: 2026-11-19T05:29:07.341792957Z
+  session_id: 01a1f2278818
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f255-d006-7a80-b2ab-c61ed7753932
+  author: dirtlab
+  content: |-
+    ## Implementer self-review (round 3 final)
+    Reviewed HEAD: 5b4d0bc4d9 (PR #4277). Round 3 made no behaviour change. It fixed three CI gates that 5e46b1ca30 had left red:
+    - The store-writer inventory (e14bbf6f5b).
+    - The launch-key disposition for AIDA_LANE_RETRY_SINCE (25225c2648).
+    - A raw env read flagged by the ExecContext ratchet, now routed through Environment::capture (5b4d0bc4d9).
+    The five review findings on 7f19674 remain addressed by 5e46b1ca30. The per-AC evidence is in the round-2 self-review comment.
+
+    Local evidence:
+    - FAST gates 0-3 and 20-46 pass, except gate 45. Gate 45 (dell1 controller socket fixtures) fails only because AF_UNIX is denied in this sandbox; it is unrelated to these files.
+    - aida-ci-guards: 51 passed.
+    - The ratchet-set aida-cli-lib groups: 145 passed.
+    - lane_disk_retry, bug_1675 and bug_2684: 21 passed.
+    - aida-core launch: 12 passed.
+    Gates 4-19 (hook fixtures unrelated to this diff) were not run locally. CI decides.
+  created_at: 2026-11-19T05:44:32.518687076Z
+  modified_at: 2026-11-19T05:44:32.518687076Z
   session_id: 01a1f2278818
   harness_version: 2.1.319 (Claude Code)
 history:
