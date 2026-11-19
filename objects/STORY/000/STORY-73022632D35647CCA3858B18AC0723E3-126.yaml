@@ -1,5 +1,6 @@
 id: 01a1f18d-a52f-7c22-a28e-64557812c2f8
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-126
+agreed_id: STORY-2928
 title: 'Review PR-4276: [AI:codex] fix(land): ignore cancelled FAST runs replaced by FULL CI (BUG-2692)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f16a`) for branch `bug-b6b1278890774ef993d2ebc327862470-456`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T02:06:02.819255488Z
   session_id: 01a1f16a2c45
+  changes: []
+- id: 01a1f19b-f4c7-7220-abe8-1fe91f8c9959
+  author: joe
+  timestamp: 2026-11-19T02:21:32.231836423Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
