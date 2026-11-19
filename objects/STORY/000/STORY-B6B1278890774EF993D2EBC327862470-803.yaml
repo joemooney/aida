@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T10:45:23.581048714Z
+modified_at: 2026-11-19T12:16:09.292521224Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -117,6 +117,13 @@ comments:
   content: 'Advisor 03:48 note for the #4292 ROUND-3 reviewer (STRICT) at 2d0c020: check exactly the 02:55 ruling. (1) The auto-train holds admission ONLY while running a train; stand-down or an unknown policy releases it, so the land loop can acquire it (regression). (2) A non-table or malformed [landing] section is INVALID and runs no train (through the pass decision). (3) A real-boundary race with a recording forge: ship vs drain gives exactly ONE forge merge and the loser gets 23; a train-boarded car blocks a ship until it is released. Don''t re-litigate the signed design. The 09:18 tier applies.'
   created_at: 2026-11-19T10:45:23.581048714Z
   modified_at: 2026-11-19T10:45:23.581048714Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3bc-89d2-7562-a76f-1fe448ae0ea1
+  author: joe
+  content: 'Advisor 05:18 scope for the #4308 S1t-b reviewer (STRICT, landing authority) at 584b5d5: (1) train_recheck runs before EVERY per-car merge attempt, under the proof snapshot (no TOCTOU between recheck and merge); (2) C2 per car: a car whose approval, hold or head changed since boarding is ejected, not merged; (3) a stacked proof is bound to its base: a car proven on base X cannot merge onto base Y; (4) the advisor''s manual merge of a train-boarded car is refused with clear recovery text. Behavioural tests through the real boundary with a recording forge. The 09:18 tier applies. Don''t re-litigate the signed design.'
+  created_at: 2026-11-19T12:16:09.292521224Z
+  modified_at: 2026-11-19T12:16:09.292521224Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
