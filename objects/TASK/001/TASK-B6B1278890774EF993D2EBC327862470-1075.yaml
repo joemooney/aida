@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T22:34:02.118672027Z
+modified_at: 2026-11-19T23:28:33.518088630Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -535,6 +535,13 @@ comments:
   content: PR-4330 at 5d2f0ce83166d5233ea6d6e21a1daed775ee238d conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-19T22:35:54.754307950Z
   modified_at: 2026-11-19T22:35:54.754307950Z
+- id: 01a1f624-24fa-7450-bd32-d1c0006e7501
+  author: joe
+  content: 'advisor-121 16:32: the manual r5 review was refused because #4330 conflicts with main (pr_train_check.rs and story_2824 tests, from #4318). Conflict-only lane (part of the cap exception): .aida/tmp/brief-TASK-3792-r5-conflict.md'
+  created_at: 2026-11-19T23:28:33.518088630Z
+  modified_at: 2026-11-19T23:28:33.518088630Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
