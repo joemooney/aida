@@ -31,6 +31,9 @@ pub(crate) fn pause() -> Duration {
 
 pub(crate) fn backoff() {
     let pause = pause();
+    let pause = crate::forge_lookup::forge_lookup_deadline().map_or(pause, |deadline| {
+        pause.min(deadline.saturating_duration_since(std::time::Instant::now()))
+    });
     if !pause.is_zero() {
         std::thread::sleep(pause);
     }

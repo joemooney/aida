@@ -94,6 +94,7 @@ fn adopt_receipt(
         /* rollback_failed_setup */ rollback,
         crate::session_start::PathReentry::AdoptOrphan,
         None,
+        /* done_rework_admitted */ false,
     )
 }
 
