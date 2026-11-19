@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:49.349747862Z
-modified_at: 2026-11-19T19:12:04.231437336Z
+modified_at: 2026-11-19T23:33:58.360901589Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -243,6 +243,13 @@ comments:
   modified_at: 2026-11-19T19:12:04.231437336Z
   session_id: 01a1f52df3e7
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f629-2746-7ae2-86af-b724be5e7088
+  author: joe
+  content: 'advisor-121 16:36: train #4339 ejected this PR for a store-writers.toml-only conflict with main (generated inventory). Conflict-only lane: .aida/tmp/brief-conflict-storewriters.md'
+  created_at: 2026-11-19T23:33:58.360901589Z
+  modified_at: 2026-11-19T23:33:58.360901589Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0fd-3b33-7230-a9b9-b924b9001fba
   author: joe
