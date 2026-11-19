@@ -10,12 +10,12 @@ description: |
   Likely a dell1 environment difference (AppArmor or bwrap profile, CARGO_TARGET_DIR shared with the primary checkout, or a non-seeded seat cargo target).
 
   Acceptance: both pass on dell1 with the documented lane-host setup (docs/advanced/lane-host-checklist.md); or the tests detect the unsupported environment and skip with a named reason, and the checklist is updated.
-status: Approved
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-19T18:39:29.478409220Z
+modified_at: 2026-11-19T19:01:25.452764395Z
 req_type: Bug
 tags:
 - bwrap
@@ -113,6 +113,19 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1f52f-6143-7ae0-ab43-c141b532a81c
+  author: aida-auto-bump
+  timestamp: 2026-11-19T19:01:25.443146683Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
+processing_record:
+- id: 01a1f52f-614c-7811-ba25-20efe4bd456a
+  timestamp: 2026-11-19T19:01:25.452762937Z
+  agent: aida
+  commit_sha: 3c527fa4b7269c2d47d45d94f7b56a6313905532
+  summary: Completed via merge 3c527fa4
 execution_mode: drain
 filed_at:
   code_sha: 307446f83d1ab789bb6cde3901f15fe77f50942f
@@ -123,3 +136,7 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T19:01:25.443141331Z
+  completion_sha: 3c527fa4b7269c2d47d45d94f7b56a6313905532
