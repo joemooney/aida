@@ -9,12 +9,12 @@ description: |
   1. The CLI help golden (the snapshot checked by scripts/check-help-golden-cochange.sh) is registered in the generated-file regeneration registry STORY-2710 added for conflict lanes.
   2. The registry's single regenerate command rewrites the help golden along with the other entries; a conflict in the golden is resolved by regeneration, not by hand.
   3. A test asserts the registry lists the golden and that regenerating it on a clean tree is a no-op.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:01.812287350Z
-modified_at: 2026-11-19T05:34:56.188235408Z
+modified_at: 2026-11-19T06:29:06.087617098Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -68,6 +68,11 @@ comments:
   created_at: 2026-11-19T05:34:56.188223266Z
   modified_at: 2026-11-19T05:34:56.188223266Z
   session_id: 01a1f21913d5
+- id: 01a1f27e-9b41-74a0-b6b9-1b65bd1792c0
+  author: aida-auto-bump
+  content: 'Auto-completion warning: TASK-3803 was In Progress when merge edbcfef98e60b4863afdd698f495c295e85bb129 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T06:29:05.985560738Z
+  modified_at: 2026-11-19T06:29:05.985560738Z
 history:
 - id: 01a1e0fc-8e71-7023-8d0a-0e8207ec7ca3
   author: joe
@@ -117,6 +122,20 @@ history:
   timestamp: 2026-11-19T05:33:41.841159113Z
   session_id: 01a1f21913d5
   changes: []
+- id: 01a1f27e-9b41-74a0-b6b9-1b70d23d2799
+  author: aida-auto-bump
+  timestamp: 2026-11-19T06:29:05.985569635Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f27e-9ba7-7661-be86-3471bda49299
+  timestamp: 2026-11-19T06:29:06.087612987Z
+  agent: aida
+  commit_sha: edbcfef98e60b4863afdd698f495c295e85bb129
+  summary: 'Full sweep of all three changed files in the supplied protected-base landed-tree diff (main 0f96aefa9a0783823da16bc1f585a99b104bd882; landed tree 3c4f669c45d30684d653840819f6b0517e109486), attesting original PR head db3b6529bca1b846c0ad995888a65cbb2650de82. No actionable defects found. Covered spec TASK-3803 resolves through origin ID TASK-b6b1278890774ef993d2ebc327862470-1086. Acceptance checklist: acf37e37 (register the CLI help golden in the conflict-lane generated-file registry): verified by scripts/repair-generated.py REGISTRY and registered(), seat_clone.rs pinned discovery, and tests/test_repair_generated.py::RepairGenerationTests.test_cli_help_golden_regenerates_alongside_ledger membership assertions. ac666bd9 (one regenerate command rewrites the golden with other entries and resolves golden conflicts by regeneration): verified by the shared main generation loop, exact default-feature Rust snapshot test selector, and the same Git fixture''s real conflict restore followed by generation assertions for both golden and ledger. acd5546a (test registry membership and clean-tree regeneration no-op): verified by that fixture''s membership assertion and empty git status after generation. Fixture Cargo is substituted; the spec''s implementer evidence separately reports two successful real snapshot-renderer runs and unchanged golden SHA-256 d02e21b071393c9ede84a6388d6b993f94a5daf7e4c34f07221d889aec144a37. Source inspection confirms the exact Rust test path and default tui feature. No local builds or tests run, per reviewer policy. Exact-head GitHub run 44465902204 reports successful fast gates, fast compile, and Build (ubuntu-latest); full test shards were skipped under FAST. Full host repair with real Cargo was not exercised end to end in the supplied evidence. The PR is one commit behind the pinned base; base-only changes are in scripts/check-ratchets.py and tests/test_ratchet_set.py and do not alter this review''s conclusions. Supplied absolute codegraph client is absent; rg was used to inspect callers and test definitions; aida doctor check codegraph returned zero findings. No merge or branch update performed.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 6f0d951dd9bd8ac704f942526e974d9a1f06f97e
@@ -127,3 +146,7 @@ filed_at:
   vendor: claude
   session: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T06:29:05.985566102Z
+  completion_sha: edbcfef98e60b4863afdd698f495c295e85bb129
