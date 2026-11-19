@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:18:29.838942815Z
-modified_at: 2026-11-19T06:08:07.564206487Z
+modified_at: 2026-11-19T06:08:22.466707928Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -226,6 +226,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Read the complete 20-file protected-base landed diff (main edbcfef98e60b4863afdd698f495c295e85bb129, landed tree 5999332fa6b541b7c0c6019fe1d2b840a795a679), attesting original PR head a3729cf5b889d8478fab5679c6a2287931beacff. Checked TASK-3820, STORY-2828 coverage and signed design, authoritative rework briefs, grant validation/update and contained-launch callers. Earlier partial-retry, fresh cap, ancestor revoke/supersession and post-lock lifetime findings have source fixes and regressions; writer inventory entries are present. Request changes for one remaining security defect: pre-existing credential-capped grants have no recorded cap marker and are extended beyond their launcher deadline. This finding does not depend on the one newer protected-base commit, whose changes are outside the renewal code. Exact-head CI fast gates, fast compilation and aggregate Build succeeded; merge-hold-gate was pending at review time. Implementer reports 18 targeted tests passed; no local builds or tests were run under reviewer policy. The absolute host Codegraph client is absent and doctor reports an unreachable index; source searches were used. No branch update or merge performed.. Triage reason: ROUND 4 of 4 (final) for PR #4280. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3820-r4.md: a legacy child without a recorded cap is never extended (fail closed). CLAUDE lane.'
   created_at: 2026-11-19T06:08:07.564204610Z
   modified_at: 2026-11-19T06:08:07.564204610Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f26b-a12e-7a30-9ec1-b259ff40aa97
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3820):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a3729cf5b889
+    Recorded: 2026-11-19T06:06:59.006086967+00:00
+    Findings:
+    1. [P1][blocking_tier=security] aida-cli-lib/src/gate/seat_authority.rs:70-72,4179-4192: Preserve launcher deadlines for grants issued by the existing binary before this schema change. The protected-base cap_launch_child_expiry only shortened expires_at and persisted no launch_expiry_cap; the new serde default reads every such record as None, and map_or(new, ...) therefore treats it as freely renewable. Concrete upgrade case: an existing live role-enter root expires in 4h and its delegated ChatGPT child was capped by the old launcher to a credential deadline in 30m. Run the new mandate renew --for 8h before those 30m elapse: the root extends, the child passes the chain/locked checks, and its expiry becomes 8h rather than retaining its 30m launcher deadline. Being process-bound or short-lived does not preserve this deadline once renewal rewrites it. Old running launcher binaries can also continue creating this record shape after deployment. Distinguish positively recorded renewable uncapped grants from legacy records with unknown cap provenance (for example with an explicit schema/eligibility marker), and refuse extension or require relaunch for ambiguous legacy children rather than inferring uncapped from a missing field. Add a regression deserializing a real old-format capped child without the new member and prove renewal cannot extend it past its original deadline, while retaining the new-format partial-failure retry test. This is introduced by the new extension path and is independent of the newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T06:08:22.318622641Z
+  modified_at: 2026-11-19T06:08:22.318622641Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
