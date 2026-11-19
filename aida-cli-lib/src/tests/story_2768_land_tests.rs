@@ -803,3 +803,47 @@ fn bug_2692_land_ignores_verified_cancelled_fast_run() {
     rows.push(row(11, "CI (lib-0)", "FAILURE"));
     assert_eq!(observe(rows, 1, &head), Ci::Red("CI (lib-0)".into()));
 }
+
+// trace:BUG-2690 | ai:codex
+#[test]
+fn bug_2690_stale_ci_neither_lands_nor_dispatches_rework() {
+    for ci_gates in [false, true] {
+        let stale = Fake {
+            ci: Ok(Ci::StaleBase("old base".into())),
+            ci_gates,
+            ..approved()
+        };
+        let row = derive(&pr("main", "feature"), &stale);
+        assert_eq!(row.state.label(), "STALE-CI-BASE");
+        assert_eq!(row.action, Action::UpdateBranch);
+        assert_eq!(row.ci.as_deref(), Some("stale-base"));
+        assert!(row.reason.contains("update-branch"));
+
+        assert_eq!(
+            decided(Fake {
+                lane: Ok(Some("implementer".into())),
+                ..stale
+            }),
+            (State::StaleCiBase, Action::Wait)
+        );
+    }
+    assert_eq!(
+        decided(Fake {
+            ci: Ok(Ci::StaleBase("old base".into())),
+            hold: Ok(Some(Hold {
+                detail: "operator hold".into(),
+                release: HoldRelease::Met,
+                since: None,
+            })),
+            ..approved()
+        }),
+        (State::StaleCiBase, Action::Wait)
+    );
+    assert_eq!(
+        decided(Fake {
+            ci: Err("logs expired".into()),
+            ..approved()
+        }),
+        (State::Unknown, Action::Wait)
+    );
+}
