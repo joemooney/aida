@@ -9,12 +9,12 @@ description: |
   1. Every lane terminal-result path that keeps a dirty seat clone (including refused-before-start, empty-rework, and punt) prints the same `retained: dirty` notice, naming the retained seat path, that the normal completion path prints.
   2. Result paths that do not keep a seat, or keep a clean one, print no such notice.
   3. A test per early terminal path asserts the notice is present when the seat is dirty and absent when it is clean.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T08:16:59.150537371Z
+modified_at: 2026-11-19T08:17:49.772175367Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -191,6 +191,13 @@ comments:
   modified_at: 2026-11-19T07:49:05.357481752Z
   session_id: 01a1f2bcded2
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f2e2-26cc-7c81-8c8c-5cd57379e256
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete 24,826-byte protected-base-to-landed-tree diff against main 584e4e176c812166cc92c1f05619a440f7981e6e, assessing landed tree c616f80d8242ee0a4aec6f21e155c669711d2a4b while attesting only original PR head 73a796735cf7232a54e8907cd10fed940aac0610. BUG-2607 refusal discovery and deferred terminal reporting address the prior pre-branch-capture defect by source inspection; trace comments are present. Request changes for two blocking findings: new test callers do not compile against newer protected-base API signatures, and AC3 still lacks dirty/clean emitted-output regressions for several early terminal paths. The compile finding depends on subsequent base changes; the acceptance gap does not. Existing CI evidence reports dependency installation timing out after five minutes and a failed aggregate, with another job pending at launcher capture; this alone is not a waiting reason. No Cargo or local test/build commands were run, per reviewer policy. The supplied absolute codegraph client was absent; aida doctor check codegraph returned total 0, and source navigation used rg and pinned Git blobs. No merge or branch update performed.. Triage reason: Round 3 for PR #4285. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2607-r3.md: adapt the helpers to main''s run_recorded/handle_queue_work; AC3 production-path tests for the 4 remaining early paths. CLAUDE lane.'
+  created_at: 2026-11-19T08:17:49.772173962Z
+  modified_at: 2026-11-19T08:17:49.772173962Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
   author: joe
@@ -264,6 +271,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f2e2-26cc-7c81-8c8c-5cc04282e9fb
+  author: joe
+  timestamp: 2026-11-19T08:17:49.772161160Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: fde1fb8145ebba784165cb4d89c2175815f67e45
@@ -274,11 +290,3 @@ filed_at:
   vendor: claude
   session: 01a1e1ca-1c8b-7061-8a57-59e699b400ba
   harness_version: 2.1.325 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Reviewed the complete 24,826-byte protected-base-to-landed-tree diff against main 584e4e176c812166cc92c1f05619a440f7981e6e, assessing landed tree c616f80d8242ee0a4aec6f21e155c669711d2a4b while attesting only original PR head 73a796735cf7232a54e8907cd10fed940aac0610. BUG-2607 refusal discovery and deferred terminal reporting address the prior pre-branch-capture defect by source inspection; trace comments are present. Request changes for two blocking findings: new test callers do not compile against newer protected-base API signatures, and AC3 still lacks dirty/clean emitted-output regressions for several early terminal paths. The compile finding depends on subsequent base changes; the acceptance gap does not. Existing CI evidence reports dependency installation timing out after five minutes and a failed aggregate, with another job pending at launcher capture; this alone is not a waiting reason. No Cargo or local test/build commands were run, per reviewer policy. The supplied absolute codegraph client was absent; aida doctor check codegraph returned total 0, and source navigation used rg and pinned Git blobs. No merge or branch update performed.'
-  recovery_hint: address the review findings, move BUG-2607 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T08:16:59.150537371Z
