@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:49:05.557728295Z
-modified_at: 2026-11-19T05:58:04.966632774Z
+modified_at: 2026-11-19T06:12:46.222550177Z
 req_type: Story
 tags:
 - area:deputy
@@ -22,6 +22,21 @@ comments:
   modified_at: 2026-11-17T23:33:52.121101461Z
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f26f-a9bc-7452-ad28-2a68f2f27ae6
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 0f96aefa9a0783823da16bc1f585a99b104bd882; the origin/main merge-base diff was empty. Reviewed the native worktree diff, generated help snapshot, and untracked deputy/progress.rs before declaration.
+
+    - Startup, claim, start, finish, refusal and output modes: aida-cli-lib/src/deputy/tests.rs:819 and aida-cli-lib/src/deputy_shell/tests.rs:601 exercise real jobs in each mode, including refusal diagnostics and raw transcripts. Startup shows the configured submit policy. The command run subcommand takes the same path as the bare command.
+    - Timing and cadence: aida-cli-lib/src/deputy/progress.rs:140 tests the 600-second threshold, repeat cadence, active-work reset, two handled jobs, and local day rollover. The runner tests exercise local HH:MM:SS output.
+    - Probe findings and fixes: command and script dispatch use the same clap flag definitions. Job previews are bounded and escape newline, ANSI escape and Unicode formatting controls. Command verbose output renders ASCII controls as text while preserving the underlying transcript. Zero, one and multiple jobs were checked in the new heartbeat test and existing deputy suite. Existing script PTY test explicitly selects the new verbose mode and retains its original assertions.
+    - Authority paths: the explicit command run route uses the existing human-terminal, wrapper and grant checks. Command claims still pass the executable, hook and TTY policy checks. Script start still requires advisor authority, socket submissions still require an attested live peer and claim-time attribution still runs before scripts are written or launched. Mode flags affect presentation and terminal relay. Existing no-grant, disallowed-seat, foreign-peer, command allow-list and single-use persistence refusal tests passed.
+    - Validation: lane job j20261119T060515517-2-0 passed 121 tests. Lane job j20261119T061212122-2-0 passed the saved help snapshot comparison without regeneration. Changed Rust files passed rustfmt. The generated Clap snapshot contains expected spaces on blank option separators. Exact publication-head CI awaits host publication. Script prompts require --verbose, and a real ten-minute operator-terminal wait was represented by the deterministic clock test.
+  created_at: 2026-11-19T06:12:46.222550177Z
+  modified_at: 2026-11-19T06:12:46.222550177Z
+  session_id: 01a1f261993a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebdb-b0c3-74d2-8e57-4c76690dc100
   author: joe
