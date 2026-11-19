@@ -4384,6 +4384,7 @@ pub(crate) fn handle_queue_work(
     // STORY-2768: start a new spec although the project is at its limit of
     // open changes. trace:STORY-2768 | ai:claude
     over_wip: bool,
+    brief_file: Option<&std::path::Path>,
 ) -> Result<()> {
     // Record admission before any pickup gate; previews and interactive sessions
     // do not claim a headless lane attempt. trace:STORY-2690 | ai:codex
@@ -4556,6 +4557,28 @@ pub(crate) fn handle_queue_work(
             )?)
         };
 
+        // trace:BUG-2699 | ai:codex
+        let brief_pickup = role == "implementer"
+            && plan.mode != QueueWorkMode::Cluster
+            && plan.entries.len() == 1
+            && plan.review_target.is_none()
+            && !plan_only
+            && !guided
+            && !list_sessions
+            && matches!(launch, Some(QueueWorkLaunch::Fresh(_)));
+        let explicit_brief = if let Some(path) = brief_file {
+            anyhow::ensure!(
+                brief_pickup,
+                "--brief requires a fresh single-spec implementer launch"
+            );
+            Some(crate::brief::PickupBrief::read_explicit(
+                path,
+                &plan.entries[0].spec_id,
+                &plan.anchor_display,
+            )?)
+        } else {
+            None
+        };
         let project_root_for_config = find_main_worktree_root().ok();
         // BUG-898/BUG-902/BUG-913: resolve + validate the launch/display vendor
         // before any write below (calibration tags, leases, worktrees), for both
@@ -6094,6 +6117,23 @@ pub(crate) fn handle_queue_work(
             {
                 crate::lane_host::preflight(&project_root, launch_vendor.as_str(), sandbox)?;
             }
+            let briefs = if brief_pickup {
+                crate::brief::pickup_briefs(
+                    &project_root,
+                    launch_vendor.as_str(),
+                    &plan.entries[0].spec_id,
+                    &plan.anchor_display,
+                    explicit_brief.as_ref(),
+                )?
+            } else {
+                Vec::new()
+            };
+            crate::brief::append_pickup_briefs(&mut prompt, &briefs);
+            let on_brief_delivery = || {
+                crate::brief::consume_pickup_briefs(&briefs);
+                agent.starting()
+            };
+            let on_brief_delivery = (!briefs.is_empty()).then_some(&on_brief_delivery as &dyn Fn());
             let headless_vendor = no_human.then_some(launch_vendor);
 
             // STORY-1386: opt-in pre-implementation red run, in this lane's own
@@ -6493,6 +6533,7 @@ pub(crate) fn handle_queue_work(
                         },
                         attempt.as_ref(),
                         Some(&|| agent.starting()),
+                        on_brief_delivery,
                     );
                 }
             }
@@ -6590,6 +6631,7 @@ pub(crate) fn handle_queue_work(
                     resolved_model.as_deref(),
                     child_grant_id.as_deref(),
                     Some(&crate::canonical_role_name(&role)),
+                    on_brief_delivery,
                 );
             }
             // BUG-1607: an interactive Agy launch is now refused by
@@ -6802,6 +6844,7 @@ pub(crate) fn handle_queue_work(
                             // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
                             Some((&lease.worktree_path, &lease.branch)),
                             preclaim_orchestrator_corroborated,
+                            on_brief_delivery,
                         );
                     }
                     eprintln!(
@@ -6835,7 +6878,7 @@ pub(crate) fn handle_queue_work(
                             grant: child_grant_id.as_deref().unwrap_or(""),
                         },
                     )?;
-                    crate::launch::spawn::exec_agent(&mut cmd)
+                    crate::launch::spawn::exec_agent_with_delivery(&mut cmd, on_brief_delivery)
                 }
             }
         };
@@ -8907,6 +8950,7 @@ pub(super) fn handle_queue_command(
         QueueCommand::Work {
             id,
             count,
+            brief,
             permission_mode,
             sandbox,
             no_launch,
@@ -9193,6 +9237,10 @@ pub(super) fn handle_queue_command(
             // token back as an identifier. trace:TASK-270 | ai:claude
             let (effective_id, effective_batch) =
                 resolve_queue_work_batch(id.as_deref(), batch.as_deref());
+            anyhow::ensure!(
+                brief.is_none() || effective_batch.is_none(),
+                "--brief requires a single-spec pickup without a batch"
+            );
             let effective_batches = if let Some(raw) = batches.as_deref() {
                 Some(parse_batch_chain(raw)?)
             } else if auto_complete.is_some()
@@ -10079,6 +10127,7 @@ pub(super) fn handle_queue_command(
                 *dry_run,
                 model.as_deref(),
                 *over_wip,
+                brief.as_deref(),
             )?;
         }
         _ => unreachable!("dispatcher selected another queue subcommand"),

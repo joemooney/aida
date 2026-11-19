@@ -551,6 +551,13 @@ pub enum QueueCommand {
         /// Only meaningful directly after the `next` keyword.
         // trace:TASK-293 | ai:claude — plain `//` keeps the marker out of `--help`.
         count: Option<String>,
+        /// Attach a brief file to a fresh single-spec implementer launch
+        // trace:BUG-2699 | ai:codex
+        #[clap(long, value_name = "FILE", conflicts_with_all = [
+            "auto_complete", "drain", "resume_drain", "resume_dry_run", "batch", "batches",
+            "resume", "no_launch", "list_sessions", "plan_only", "plan_phase", "guided"
+        ])]
+        brief: Option<PathBuf>,
         /// Permission mode for the launched claude. Resolution order:
         ///   1. this flag
         ///   2. `AIDA_PERMISSION_MODE` env var

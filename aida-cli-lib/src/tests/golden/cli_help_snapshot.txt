@@ -25925,6 +25925,9 @@ Arguments:
           compact `aida queue work next3`. Only meaningful directly after the `next` keyword
 
 Options:
+      --brief <FILE>
+          Attach a brief file to a fresh single-spec implementer launch
+
       --permission-mode <MODE>
           Permission mode for the launched claude. Resolution order: 1. this flag 2.
           `AIDA_PERMISSION_MODE` env var 3. `.aida/config.toml [behavior] permission_mode` 4.
@@ -25964,15 +25967,6 @@ Options:
           interactive-only and conflicts with the autonomous drain. Finishes with a PR for human
           review (no auto-merge). Pass an explicit spec id
 
-      --with-plan
-          Plan-then-ship: run a PLAN phase before the implementer phase, then the normal autonomous
-          drain. The plan phase produces a `docs/plans/` file (the same planning session as
-          `--plan-only`) and promotes the spec Approved -> Planned; the drain then implements, CIs,
-          reviews, merges, pulls, and builds as usual. Opt-in — without this flag the drain starts
-          straight at the implementer phase (default unchanged). Only meaningful with an autonomous
-          drain (`--auto-complete` / `--drain`). Composes with `--no-human` (the plan phase runs
-          headless too when the implementer does)
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -25983,14 +25977,23 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --role <NAME>
-          Override the inferred role. Without this, the role is derived from the queue items'
-          `for_role` (single-item: that item's role; cluster: majority with a warning about minority
-          items). Falls back to active shell role when items have no `for_role`
+      --with-plan
+          Plan-then-ship: run a PLAN phase before the implementer phase, then the normal autonomous
+          drain. The plan phase produces a `docs/plans/` file (the same planning session as
+          `--plan-only`) and promotes the spec Approved -> Planned; the drain then implements, CIs,
+          reviews, merges, pulls, and builds as usual. Opt-in — without this flag the drain starts
+          straight at the implementer phase (default unchanged). Only meaningful with an autonomous
+          drain (`--auto-complete` / `--drain`). Composes with `--no-human` (the plan phase runs
+          headless too when the implementer does)
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --role <NAME>
+          Override the inferred role. Without this, the role is derived from the queue items'
+          `for_role` (single-item: that item's role; cluster: majority with a warning about minority
+          items). Falls back to active shell role when items have no `for_role`
 
       --no-pull
           Skip the pre-pickup `aida db sync --pull`. By default queue work pulls the orphan-store
@@ -59050,6 +59053,11 @@ Working on aida itself
         "name": "branch",
         "takes_value": true,
         "help": "Override the auto-derived branch name. Mirrors `aida session start --branch`"
+      },
+      {
+        "name": "brief",
+        "takes_value": true,
+        "help": "Attach a brief file to a fresh single-spec implementer launch"
       },
       {
         "name": "calibrate",
