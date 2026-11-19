@@ -16,13 +16,19 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:37:08.796411381Z
-modified_at: 2026-11-19T20:46:50.622031249Z
+modified_at: 2026-11-19T21:30:08.744681570Z
 req_type: Bug
 tags:
 - product-intake
 - review
 - slices
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f5b7-4300-7cc1-afd3-3a4d8b2447aa
+  created_at: 2026-11-19T21:30:08.744666282Z
+  created_by: dirtlab
 comments:
 - id: 01a1ef4e-cdd3-7360-b35a-c0079f100208
   author: joe
@@ -103,6 +109,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f5b7-90e6-7951-b6cf-61a2e5fee84b
+  author: dirtlab
+  timestamp: 2026-11-19T21:30:10.534885958Z
+  session_id: 01a1f584399e
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
