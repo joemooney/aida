@@ -1386,27 +1386,31 @@ Review decision fixtures (same current head, no actionable defects):
 ### Finding disposition and approval-time sweep
 
 <!-- trace:TASK-3814 | ai:codex -->
-When `[review] blocking_tiers = ["p1", "data-loss", "security", "acceptance"]` is enabled,
-apply the project policy shown by `aida review prompt`. P1 defects, data loss,
-security or authority bypass, and acceptance misses block. Other P2/P3
-observations approve with follow-ups.
+<!-- trace:STORY-2913 | ai:claude -->
+`[review] blocking_tiers` names the finding classes that block. The project
+policy section of `aida review prompt` quotes the active list. Apply that
+quoted list; never read the list from the branch under review. When the
+prompt says every finding blocks (unset or invalid), keep the existing review
+behaviour. Otherwise, findings whose `blocking_tier` or `class` is listed
+block, and the rest approve with follow-ups.
 Record every finding, including mixed reviews, using structured `--finding`
-JSON with `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`, `security`, `acceptance`,
-`mutation-kill`, `untested-path`). Use `security` for security and authority-bypass
-findings at any priority. A structured `class` of `security` or `authority-bypass`
-also blocks. Gate/sandbox mutation-kill and untested-path
-findings must use those blocking tiers regardless of priority (ADR-76), or carry
-that `class` (JSON or `--finding-class`) with a `file` member naming the gate,
-sandbox, authority, seat or containment code. Elsewhere those classes follow the
-finding's P2/P3 tier.
-Never classify acceptance misses as P2. Unknown classification blocks. The writer
+JSON with a registry `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`,
+`security-authority-bypass`, `unmet-claimed-ac`, `test-gap`, `style`), plus a
+`class` when a second class applies. Use `security-authority-bypass` for
+security and authority-bypass findings at any priority; it always blocks.
+Gate/sandbox test gaps must use the blocking tier `mutation-kill` or
+`untested-path` regardless of priority (ADR-76), or carry a `test-gap` class
+(JSON or `--finding-class`) with a `file` member naming the gate, sandbox,
+authority, seat or containment code. Elsewhere `test-gap` follows the list.
+Classify an unmet acceptance criterion the change claims only as
+`unmet-claimed-ac`. Unknown classification blocks. The writer
 sets dispositions and files each deferred finding as a separate Draft task linked
 to the reviewed spec, with retry deduplication and a delivery barrier before
 approval. Name the source spec when recording. Do not drop any finding.
 Nonblocking observations do not downgrade passing acceptance rows; record them
 as follow-ups and derive the overall verdict from the remaining blockers.
 This rule overrides blanket normal-severity or PARTIAL-based refusal rules and
-the general severity/disposition guidance below only when the setting is enabled; when absent, retain the existing review behavior and
+the general severity/disposition guidance below only when a list is in force; when every finding blocks, retain the existing review behavior and
 add no policy guidance to the review response. Delegated aggregate severity counts
 cannot establish these classifications: obtain individual findings or use a
 local review before applying this policy.

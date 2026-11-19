@@ -88,7 +88,9 @@ pub(crate) fn review_prompt(
     prompt: &str,
 ) -> Result<Option<String>> {
     // trace:TASK-3814 | ai:codex
-    let policy = crate::review_blocking::prompt(root)?;
+    // trace:STORY-2913 | ai:claude — the launch prompt carries the policy
+    // only while a list is in force; the review worksheet always quotes it.
+    let policy = crate::review_blocking::launch_prompt(root)?;
     let with_policy = format!("{prompt}{policy}");
     let prompt = with_policy.as_str();
     // Strict projects do not need a new forge request or synthetic evidence.

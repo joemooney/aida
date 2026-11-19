@@ -271,6 +271,9 @@ pub(crate) enum PolicySource {
     ProjectMcpJson,
     /// Overridden by an environment variable (named).
     Env(&'static str),
+    /// Read from the trusted default branch's `.aida/config.toml`, never the
+    /// working tree. STORY-2913.
+    DefaultBranchConfig,
 }
 
 impl PolicySource {
@@ -285,6 +288,9 @@ impl PolicySource {
             PolicySource::GlobalCodexConfig => "~/.codex/config.toml".dimmed().to_string(),
             PolicySource::ProjectMcpJson => ".mcp.json".dimmed().to_string(),
             PolicySource::Env(name) => format!("{name} (env)").yellow().to_string(),
+            PolicySource::DefaultBranchConfig => crate::review_blocking::DEFAULT_BRANCH_CONFIG
+                .dimmed()
+                .to_string(),
         }
     }
 
@@ -302,6 +308,9 @@ impl PolicySource {
             PolicySource::GlobalCodexConfig => "~/.codex/config.toml".to_string(),
             PolicySource::ProjectMcpJson => ".mcp.json".to_string(),
             PolicySource::Env(name) => format!("{name} (env)"),
+            PolicySource::DefaultBranchConfig => {
+                crate::review_blocking::DEFAULT_BRANCH_CONFIG.to_string()
+            }
         }
     }
 }
@@ -705,6 +714,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         default: "off",
         edit: EditSafety::ReadOnly {
             reason: "toggle with `aida review mode mass-change on|off` — the on-verb stamps the clock",
+        },
+    },
+    // trace:STORY-2913 | ai:claude
+    KnobSpec {
+        section: "review",
+        key: "blocking_tiers",
+        doc: "Finding classes that block a merge (p1, p2, p3, data-loss, security-authority-bypass, unmet-claimed-ac, test-gap, style); the rest are approved and filed as linked follow-ups. Read from the default branch; unset or invalid, every finding blocks.",
+        default: "(every finding blocks)",
+        edit: EditSafety::ReadOnly {
+            reason: "operator or mandate authority — use `aida review blocking-tiers set`",
         },
     },
     // trace:STORY-2821 | ai:claude
@@ -3089,6 +3108,21 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                     source: exec_source,
                 },
                 solo_human_policy_row(project_root),
+                // trace:STORY-2913 | ai:claude — the effective list, from the
+                // same loader the review writer uses.
+                {
+                    use crate::gate::kernel_deps::review_blocking::Source;
+                    let effective =
+                        crate::gate::kernel_deps::review_blocking::effective(project_root);
+                    PolicyRow {
+                        key: "blocking_tiers",
+                        value: crate::review_blocking::describe(&effective),
+                        source: match effective.source {
+                            Source::DefaultBranch => PolicySource::DefaultBranchConfig,
+                            _ => PolicySource::Default,
+                        },
+                    }
+                },
                 // trace:STORY-2821 | ai:claude
                 {
                     let configured = config_lookup(cfg.as_ref(), "review", "stale_base");
