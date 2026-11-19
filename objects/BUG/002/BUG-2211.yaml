@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-10-23T22:01:45.875980893Z
+modified_at: 2026-11-19T14:02:52.361737676Z
 req_type: Bug
 comments:
 - id: 01a169c8-3728-75a1-91fc-4539b94d63a4
@@ -23,6 +23,13 @@ comments:
   created_at: 2026-10-23T17:30:41.968965555Z
   modified_at: 2026-10-23T17:30:41.968965555Z
   session_id: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
+- id: 01a1f41e-4413-7651-8988-ea465f3b8696
+  author: joe
+  content: 'Product 2026-11-19 07:03, field evidence (no new spec): the stale read-only 0-byte .git/config.lock recurred twice tonight in the primary checkout (04:23, 07:00:24). Both times it was created by `git worktree add -b <branch> <W> origin/main`, which writes upstream-tracking config and fails ''could not lock config file .git/config: File exists''. The lock''s mtime equals the command time and no process holds it afterwards, so it looks like a race with a concurrent config writer (likely a checkout hook), leaving a read-only lock that blocks every later worktree add or branch. Workaround that works: `git worktree add --detach <W> origin/main`, commit, then `git push origin HEAD:refs/heads/<branch>` (no tracking-config write). Removing the lock is safe once no process holds it.'
+  created_at: 2026-11-19T14:02:52.361737676Z
+  modified_at: 2026-11-19T14:02:52.361737676Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a16a2e-33cc-7b11-8f1d-2ed267d72e78
   author: joe
