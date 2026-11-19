@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T01:58:39.064485765Z
-modified_at: 2026-11-19T03:20:34.819743996Z
+modified_at: 2026-11-19T03:36:44.987715674Z
 req_type: Story
 tags:
 - area:orchestration
@@ -292,6 +292,29 @@ comments:
   content: PR-4278 at fe1cd4140e1b7543b4716e5ef645282f59e68444 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-19T03:20:36.024692883Z
   modified_at: 2026-11-19T03:20:36.024692883Z
+- id: 01a1f1e1-011d-7621-acd1-1f03dac73d3a
+  author: joe
+  content: |-
+    AUTHORITATIVE CONFLICT-ONLY BRIEF (product 20:36):
+    # Rework brief: STORY-2690 / PR #4278, CONFLICT-ONLY (product seat, 2026-11-18 20:36 MST)
+
+    Branch: story-b6b1278890774ef993d2ebc327862470-613 (head fe1cd41). Lane: Claude.
+
+    ## Do exactly this
+    1. Merge origin/main into the branch. Two files conflict: aida-cli-lib/src/queue_cmd/mod.rs and
+       aida-cli-lib/src/queue_cmd/work.rs. Resolve them by keeping BOTH sides' behaviour: this PR's STORY-2690 lane-result
+       receipts and unpickable-rework refusal, AND every main-side change (e.g. rework/conflict and pickup changes from
+       other merged PRs). Do not drop, rename or weaken either side.
+    2. Run the targeted tests for both sides through the lane job runner: the queue_cmd/work and story_2690 tests, plus any
+       test named in the conflicting hunks. Then run make check-ci-fast through the lane job runner.
+    3. PUSH. Do not punt because of the gate's duration.
+
+    ## Do NOT
+    - Fix review findings, refactor, or change behaviour beyond what the merge requires. No new features.
+  created_at: 2026-11-19T03:36:44.987715674Z
+  modified_at: 2026-11-19T03:36:44.987715674Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1c5dd-0795-7ee0-b474-74b907f4c43a
   author: joe
