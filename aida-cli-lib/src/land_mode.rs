@@ -13,18 +13,96 @@ use std::path::{Path, PathBuf};
 
 const AUDIT: &str = ".aida/land/landing-audit.jsonl";
 
+/// Which GitHub App must provide a required check. A check bound to an app
+/// is satisfied only by that app's status; dropping the binding would let
+/// any app satisfy it, so a binding is carried through every write.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum AppBinding {
+    /// Only this app (`app_id`).
+    App(i64),
+    /// Any app (`app_id` null, or `-1` when written).
+    Any,
+}
+
+/// One required check and the app bound to it.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Check {
+    pub context: String,
+    pub app: AppBinding,
+}
+
+impl Check {
+    pub(crate) fn new(context: &str, app: AppBinding) -> Self {
+        Self {
+            context: context.to_string(),
+            app,
+        }
+    }
+
+    fn json(&self) -> serde_json::Value {
+        match self.app {
+            AppBinding::App(id) => serde_json::json!({ "context": self.context, "app_id": id }),
+            AppBinding::Any => serde_json::json!({ "context": self.context, "app_id": -1 }),
+        }
+    }
+
+    fn label(&self) -> String {
+        match self.app {
+            AppBinding::App(id) => format!("{} (app {id})", self.context),
+            _ => self.context.clone(),
+        }
+    }
+}
+
+/// The audit form of a check list: `{context, app_id}` (`app_id` null for
+/// any app).
+fn audit_checks(checks: &[Check]) -> serde_json::Value {
+    serde_json::Value::Array(
+        checks
+            .iter()
+            .map(|c| match c.app {
+                AppBinding::App(id) => serde_json::json!({ "context": c.context, "app_id": id }),
+                _ => serde_json::json!({ "context": c.context, "app_id": null }),
+            })
+            .collect(),
+    )
+}
+
 /// The forge's required status checks on the default branch.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Required {
-    pub contexts: Vec<String>,
+    pub checks: Vec<Check>,
     pub strict: bool,
 }
 
+impl Required {
+    /// The required check names.
+    pub(crate) fn contexts(&self) -> Vec<String> {
+        self.checks.iter().map(|c| c.context.clone()).collect()
+    }
+
+    /// The checks for display, each with its app when bound.
+    pub(crate) fn shown(&self) -> String {
+        show(&self.checks)
+    }
+}
+
+fn show(checks: &[Check]) -> String {
+    checks
+        .iter()
+        .map(Check::label)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// Read and replace the required status checks of the default branch. Only
-/// the check list is replaced; `strict` is written back as it was read.
+/// the check list is replaced, each check with its app binding; `strict` is
+/// written back as it was read.
 pub(crate) trait Protection {
     fn read(&mut self) -> Result<Required>;
-    fn write(&mut self, contexts: &[String], strict: bool) -> Result<()>;
+    fn write(&mut self, checks: &[Check], strict: bool) -> Result<()>;
 }
 
 /// GitHub's branch protection, through `gh api`.
@@ -61,8 +139,11 @@ impl Protection for GhProtection {
         parse_required(&body)
     }
 
-    fn write(&mut self, contexts: &[String], strict: bool) -> Result<()> {
-        let body = serde_json::json!({ "strict": strict, "contexts": contexts }).to_string();
+    fn write(&mut self, checks: &[Check], strict: bool) -> Result<()> {
+        // Explicit `checks`, never the deprecated `contexts`: a `contexts`
+        // write drops every check's app binding. trace:STORY-2897 | ai:claude
+        let checks: Vec<serde_json::Value> = checks.iter().map(Check::json).collect();
+        let body = serde_json::json!({ "strict": strict, "checks": checks }).to_string();
         self.gh(
             &["-X", "PATCH", &self.endpoint, "--input", "-"],
             Some(&body),
@@ -107,19 +188,37 @@ pub(crate) fn bound_policy(root: &Path, branch: &str) -> Result<LandingPolicy> {
     Ok(policy)
 }
 
-/// PURE: the `required_status_checks` object GitHub returns.
+/// PURE: the `required_status_checks` object GitHub returns. Its `checks`
+/// carry each check's app binding (`app_id` null: any app); a response with
+/// only the legacy `contexts` list binds none.
 pub(crate) fn parse_required(body: &str) -> Result<Required> {
     let value: serde_json::Value =
         serde_json::from_str(body).context("the forge's required checks are not JSON")?;
-    let contexts = value
-        .get("contexts")
-        .and_then(|c| c.as_array())
-        .context("the forge's required checks carry no `contexts` list")?
-        .iter()
-        .filter_map(|c| c.as_str().map(str::to_string))
-        .collect();
+    let checks = match value.get("checks").and_then(|c| c.as_array()) {
+        Some(items) => items
+            .iter()
+            .map(|item| {
+                let context = item
+                    .get("context")
+                    .and_then(|c| c.as_str())
+                    .context("a required check carries no `context`")?;
+                let app = match item.get("app_id").and_then(|a| a.as_i64()) {
+                    Some(id) if id > 0 => AppBinding::App(id),
+                    _ => AppBinding::Any,
+                };
+                Ok(Check::new(context, app))
+            })
+            .collect::<Result<Vec<_>>>()?,
+        None => value
+            .get("contexts")
+            .and_then(|c| c.as_array())
+            .context("the forge's required checks carry no `checks` or `contexts` list")?
+            .iter()
+            .filter_map(|c| c.as_str().map(|c| Check::new(c, AppBinding::Any)))
+            .collect(),
+    };
     Ok(Required {
-        contexts,
+        checks,
         strict: value
             .get("strict")
             .and_then(|s| s.as_bool())
@@ -135,6 +234,55 @@ fn same_set(a: &[String], b: &[String]) -> bool {
     b.sort();
     b.dedup();
     a == b
+}
+
+/// Whether `got` requires exactly the checks of `want`, each from the app
+/// `want` binds it to.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn same_checks(want: &[Check], got: &[Check]) -> bool {
+    let names = |c: &[Check]| c.iter().map(|c| c.context.clone()).collect::<Vec<_>>();
+    same_set(&names(want), &names(got))
+        && want.iter().all(|w| {
+            got.iter()
+                .filter(|g| g.context == w.context)
+                .all(|g| g.app == w.app)
+        })
+}
+
+/// The checks to require for the names `want`: a check the forge already
+/// requires keeps its binding; one it no longer requires takes the binding
+/// the trusted record holds for it (`trusted`). A name with neither is
+/// returned as missing: GitHub is never left to pick its app.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn target_checks(
+    want: &[String],
+    before: &Required,
+    trusted: &std::collections::BTreeMap<String, AppBinding>,
+) -> std::result::Result<Vec<Check>, Vec<String>> {
+    let mut missing = Vec::new();
+    let checks = want
+        .iter()
+        .filter_map(|name| {
+            let app = before
+                .checks
+                .iter()
+                .find(|c| &c.context == name)
+                .map(|c| c.app)
+                .or_else(|| trusted.get(name).copied());
+            match app {
+                Some(app) => Some(Check::new(name, app)),
+                None => {
+                    missing.push(name.clone());
+                    None
+                }
+            }
+        })
+        .collect();
+    if missing.is_empty() {
+        Ok(checks)
+    } else {
+        Err(missing)
+    }
 }
 
 /// Whether a restore of the previous checks took, by its own read-back.
@@ -196,7 +344,7 @@ impl Reconciled {
 
     /// Why a reconcile that is not in step failed, with the forge's state.
     pub(crate) fn failure(&self) -> Option<String> {
-        let before = self.before.contexts.join(", ");
+        let before = self.before.shown();
         match &self.outcome {
             Outcome::Unchanged | Outcome::Applied => None,
             Outcome::NotApplied { reason } => Some(format!(
@@ -230,10 +378,37 @@ impl Reconciled {
 pub(crate) fn reconcile(
     forge: &mut dyn Protection,
     want: &[String],
+    store: &crate::land_bindings::BindingStore,
     authority: &mut dyn FnMut() -> Result<()>,
 ) -> Result<Reconciled> {
     let before = forge.read()?;
-    if same_set(&before.contexts, want) {
+    let refuse = |why: String| {
+        Err(crate::gate::ship::ShipRefusal::Review.error(format!(
+            "{why}. Branch protection is UNRESOLVED for this change and was left unchanged \
+             (it still requires [{}])",
+            before.shown()
+        )))
+    };
+    let trusted = match store.load() {
+        Ok(trusted) => trusted,
+        Err(e) => {
+            return refuse(format!(
+                "the trusted check-binding record is unusable ({e:#})"
+            ))
+        }
+    };
+    let want = match target_checks(want, &before, &trusted) {
+        Ok(want) => want,
+        Err(missing) => {
+            return refuse(format!(
+                "no trusted app binding is on record for {}, so it cannot be required again \
+                 from the app it was bound to",
+                missing.join(", ")
+            ))
+        }
+    };
+    let want = want.as_slice();
+    if same_checks(want, &before.checks) {
         return Ok(Reconciled {
             after: Some(before.clone()),
             before,
@@ -241,29 +416,36 @@ pub(crate) fn reconcile(
         });
     }
     authority()?;
+    // The bindings this PATCH may remove are recorded first, durably: a
+    // crash after the PATCH still leaves them to restore from.
+    if let Err(e) = store.record(&before.checks) {
+        return refuse(format!(
+            "the check bindings could not be recorded before the change ({e:#})"
+        ));
+    }
     let wrote = forge.write(want, before.strict);
     let read = forge.read();
     let reason = match (&wrote, &read) {
-        (Ok(()), Ok(after)) if same_set(&after.contexts, want) => {
+        (Ok(()), Ok(after)) if same_checks(want, &after.checks) => {
             return Ok(Reconciled {
                 after: Some(after.clone()),
                 before,
                 outcome: Outcome::Applied,
             })
         }
-        (Err(e), _) => format!("the forge refused [{}] ({e:#})", want.join(", ")),
+        (Err(e), _) => format!("the forge refused [{}] ({e:#})", show(want)),
         (Ok(()), Err(e)) => format!(
             "the forge accepted [{}] but could not be read back ({e:#})",
-            want.join(", ")
+            show(want)
         ),
         (Ok(()), Ok(after)) => format!(
             "the forge requires [{}] after it was asked for [{}]",
-            after.contexts.join(", "),
-            want.join(", ")
+            after.shown(),
+            show(want)
         ),
     };
     if let Ok(after) = &read {
-        if same_set(&after.contexts, &before.contexts) {
+        if same_checks(&before.checks, &after.checks) {
             return Ok(Reconciled {
                 after: Some(after.clone()),
                 before,
@@ -288,12 +470,12 @@ fn restore(
     before: &Required,
     last: Option<Required>,
 ) -> (Option<Required>, Restore) {
-    match forge.write(&before.contexts, before.strict) {
+    match forge.write(&before.checks, before.strict) {
         Err(e) => (last, Restore::Failed(format!("{e:#}"))),
         Ok(()) => match forge.read() {
-            Ok(now) if same_set(&now.contexts, &before.contexts) => (Some(now), Restore::Verified),
+            Ok(now) if same_checks(&before.checks, &now.checks) => (Some(now), Restore::Verified),
             Ok(now) => {
-                let why = format!("the forge requires [{}]", now.contexts.join(", "));
+                let why = format!("the forge requires [{}]", now.shown());
                 (Some(now), Restore::Unverified(why))
             }
             Err(e) => (
@@ -307,16 +489,16 @@ fn restore(
 /// PURE: how the forge differs from what the effective mode requires.
 pub(crate) fn drift(policy: &LandingPolicy, forge: &Required) -> Vec<String> {
     let want = policy.required_checks();
-    if same_set(want, &forge.contexts) {
+    let have = forge.contexts();
+    if same_set(want, &have) {
         return Vec::new();
     }
     let missing: Vec<&str> = want
         .iter()
-        .filter(|w| !forge.contexts.contains(w))
+        .filter(|w| !have.contains(w))
         .map(String::as_str)
         .collect();
-    let extra: Vec<&str> = forge
-        .contexts
+    let extra: Vec<&str> = have
         .iter()
         .filter(|c| !want.contains(c))
         .map(String::as_str)
@@ -498,6 +680,7 @@ pub(crate) fn apply_change(
     forge: &mut dyn Protection,
     actor: &Actor,
     change: &Change<'_>,
+    store: &crate::land_bindings::BindingStore,
     authority: &mut dyn FnMut() -> Result<()>,
 ) -> Result<Reconciled> {
     let mut journal = Journal::open(root)?;
@@ -526,7 +709,7 @@ pub(crate) fn apply_change(
         line
     };
     journal.record(&entry("attempt", serde_json::json!({})))?;
-    let mut done = match reconcile(forge, &change.want, authority) {
+    let mut done = match reconcile(forge, &change.want, store, authority) {
         Ok(done) => done,
         Err(e) => {
             let refused = e.downcast_ref::<crate::gate::ship::ShipFailure>().is_some();
@@ -585,8 +768,8 @@ pub(crate) fn apply_change(
         "outcome",
         serde_json::json!({
             "outcome": if lapsed.is_some() && done.in_step() { "refused" } else { done.outcome_name() },
-            "forge_before": done.before.contexts,
-            "forge_after": done.after.as_ref().map(|a| &a.contexts),
+            "forge_before": audit_checks(&done.before.checks),
+            "forge_after": done.after.as_ref().map(|a| audit_checks(&a.checks)),
             "read_back_ok": done.in_step(),
             "error": done.failure(),
             "config_written": config_written.as_ref().map(Result::is_ok),
@@ -610,8 +793,8 @@ pub(crate) fn apply_change(
                 from: change.from.map(|m| m.as_str().to_string()),
                 to: change.to.as_str().to_string(),
                 outcome: done.outcome_name().to_string(),
-                forge_before: done.before.contexts.clone(),
-                forge_after: done.after.as_ref().map(|a| a.contexts.clone()),
+                forge_before: done.before.contexts(),
+                forge_after: done.after.as_ref().map(Required::contexts),
                 grant_id: actor.grant_id.clone(),
                 mandate: actor.mandate.clone(),
             },
@@ -640,7 +823,7 @@ pub(crate) fn apply_change(
              run `aida land mode reconcile`; or fix the file and run `aida land mode set {}` again.",
             done.after
                 .as_ref()
-                .map_or_else(|| change.want.join(", "), |a| a.contexts.join(", ")),
+                .map_or_else(|| change.want.join(", "), Required::shown),
             change.to.as_str()
         );
     }
@@ -651,12 +834,12 @@ fn print_change(done: &Reconciled) {
     match (&done.outcome, &done.after) {
         (Outcome::Applied, Some(after)) => println!(
             "  forge required checks: [{}] -> [{}] (read back)",
-            done.before.contexts.join(", "),
-            after.contexts.join(", ")
+            done.before.shown(),
+            after.shown()
         ),
         _ => println!(
             "  forge required checks already [{}]; nothing changed",
-            done.before.contexts.join(", ")
+            done.before.shown()
         ),
     }
 }
@@ -684,6 +867,12 @@ pub(crate) fn set(root: &Path, mode: LandingMode) -> Result<()> {
             want,
             config: Some(&path),
         },
+        &crate::land_bindings::BindingStore::for_target(
+            root,
+            &branch,
+            &actor.user,
+            actor.grant_id.as_deref(),
+        )?,
         &mut || recheck_caller(acting_caller(root), &actor),
     )?;
     println!("landing mode: {} -> {}", from.as_str(), mode.as_str());
@@ -714,6 +903,12 @@ pub(crate) fn reconcile_effective(root: &Path) -> Result<()> {
             want: policy.required_checks().to_vec(),
             config: None,
         },
+        &crate::land_bindings::BindingStore::for_target(
+            root,
+            &branch,
+            &actor.user,
+            actor.grant_id.as_deref(),
+        )?,
         &mut || recheck_caller(acting_caller(root), &actor),
     )?;
     println!("landing mode: {} (default branch)", policy.mode.as_str());
@@ -746,7 +941,7 @@ pub(crate) fn status(root: &Path) -> Result<()> {
     };
     match forge {
         Ok(required) => {
-            println!("  the forge requires: {}", required.contexts.join(", "));
+            println!("  the forge requires: {}", required.shown());
             let drift = drift(&policy, &required);
             if drift.is_empty() {
                 println!("  in step");
