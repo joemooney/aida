@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-19T20:31:09.697356899Z
+modified_at: 2026-11-19T20:42:07.820850722Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -163,6 +163,11 @@ comments:
   modified_at: 2026-11-19T20:31:09.697356899Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f58b-944c-7200-a602-7b454e63ef91
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `task-b6b1278890774ef993d2ebc327862470-1066` at head `unavailable`.'
+  created_at: 2026-11-19T20:42:07.820843053Z
+  modified_at: 2026-11-19T20:42:07.820843053Z
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
   author: joe
