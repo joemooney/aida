@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-459
 agreed_id: BUG-2695
 title: 'No-new-failures promotion: accept the real zero-test nextest JUnit report from the rest shard (--bins --no-tests warn) when the invocation is proven complete (follow-up from #4265 round 2)'
 description: 'Deferred from PR #4265 (STORY-2912) round 2 at f3e8978 under the 09:18 tier; it fails closed (wrongly refuses, never wrongly promotes). promotion_failures.rs:290-292, 595-600: parse_junit rejects documents without a <testsuite>, but rest always runs ''cargo nextest run -p aida-cli --bins --no-tests warn'', which legitimately emits a zero-test report (see base run 44408993587, artifact test-timings-rest). So promotion is refused whenever rest is red, even with equal failing sets. Accept an empty report when test-run.log proves that invocation completed. Regression from the real artifact shape.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T22:35:02.770624205Z
-modified_at: 2026-11-19T00:29:39.379325328Z
+modified_at: 2026-11-19T01:18:57.634166573Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -42,6 +42,13 @@ comments:
   created_at: 2026-11-19T00:29:39.379320822Z
   modified_at: 2026-11-19T00:29:39.379320822Z
   session_id: 01a1f11ae47c
+- id: 01a1f162-aa1c-74c3-bd57-34a12af5ea8a
+  author: aida-auto-bump
+  content: 'Auto-completion warning: BUG-2695 was In Progress when merge 88dfd128ab8c73ece3afdf78a1872df7515228c0 completed it; verify that no active round remains.'
+  created_at: 2026-11-19T01:18:57.564772654Z
+  modified_at: 2026-11-19T01:18:57.564772654Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f0cd-71d1-72b2-b7bf-79747f4cec4a
   author: joe
@@ -70,6 +77,22 @@ history:
   timestamp: 2026-11-19T00:28:44.799549025Z
   session_id: 01a1f11ae47c
   changes: []
+- id: 01a1f162-aa1c-74c3-bd57-34b2ddee7d06
+  author: aida-auto-bump
+  timestamp: 2026-11-19T01:18:57.564787183Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
+processing_record:
+- id: 01a1f162-aa62-7932-be2d-7a0adb5afafc
+  timestamp: 2026-11-19T01:18:57.634162445Z
+  agent: aida
+  commit_sha: 88dfd128ab8c73ece3afdf78a1872df7515228c0
+  summary: 'Full sweep of the entire supplied protected-base landing diff (main 6da63c980365a3d2035dda4ffd1afa687be6c6ec to landed tree 64a261a09cc0f1c0e4029cda2e985e1770fce729), attesting original PR head 3c53a7894b57df3d51d913ea7e295d21aa48f264. No actionable defects found. Covered spec BUG-2695 was resolved with aida show --full and --format json after the generated prompt incorrectly reported it missing. It has no separate Acceptance section; every acceptance obligation in its description is enumerated here. AC1: Accept the real zero-test rest binary report when test-run.log proves the invocation completed — verified by source inspection of shard_evidence, nextest_failed and is_empty_nextest_report, and the regression empty_rest_bins_report_requires_matching_completion, which asserts promotion with identical rest failures at both candidate and promoted commits. AC2: Regression from the real artifact shape — verified by inspecting that regression and independently downloading GitHub Actions run 44408993587 artifact test-timings-rest (artifact 14475999142); its junit-rest-1.xml and ANSI zero-test summary match the committed fixtures. The exception requires the exact rest binary command, second nextest invocation, one complete zero-test summary, one empty testsuites root, unique attributes and all four zero counters. Existing full-shard/report inventory, doctest completion, failed-count comparison and candidate failed-step checks remain in force. Added negative regression cases cover absent/interrupted/nonzero summaries, wrong selections or no-tests policy, empty/truncated XML, stray text, nonzero failures and duplicate contradictory attributes. Trace comments link implementation and regression to BUG-2695. Source and existing evidence only: no local builds or tests run; the implementer reports 18 targeted tests passed, but this review does not claim independent execution. CI pending at review time: fast gates and merge-hold publication succeeded, fast compile remained in progress. The supplied absolute codegraph client was absent; aida doctor check codegraph produced no codegraph findings, and callers were traced with rg and source inspection. No independent external evidence is needed for judgment.'
+  review_verdict: approved
 filed_at:
   code_sha: 4abdfe54d36e03223d1fea36ca971e97514b65a6
   branch: main
@@ -79,3 +102,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-19T01:18:57.564783528Z
+  completion_sha: 88dfd128ab8c73ece3afdf78a1872df7515228c0
