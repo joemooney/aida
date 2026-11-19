@@ -24,13 +24,6 @@
   added_at: 2026-11-19T17:22:39.904789101Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1e944-7b60-71d1-a8ec-a30b7e4c5f90
-  position: -888000
-  added_by: role:implementer
-  note: 'Round 2 for PR #4304. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3817-r2.md (the reviewer findings verbatim). codex --brief.'
-  added_at: 2026-11-19T13:32:38.388733055Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1ca8b-86cf-7bb0-bb1c-87ea20a576ef
   position: -887000
   added_by: role:implementer
