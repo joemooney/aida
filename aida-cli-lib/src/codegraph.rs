@@ -703,6 +703,7 @@ mod tests {
         use crate::queue_cmd::{QueueWorkMode, QueueWorkPlan};
         use crate::session_start::ReviewForge;
         let plan = QueueWorkPlan {
+            done_rework_change: None,
             mode: QueueWorkMode::Item,
             entries: Vec::new(),
             scope: "STORY-2630".into(),
