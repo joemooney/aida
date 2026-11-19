@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T06:19:13.488633452Z
+modified_at: 2026-11-19T15:52:50.440388669Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -199,6 +199,13 @@ comments:
   modified_at: 2026-11-19T06:19:13.488633452Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f482-f1ef-7dc1-8e39-57224faed42a
+  author: joe
+  content: 'Product 08:52: a 11-18 22:19 codex lane left 2 unpushed commits (915184fd) in seat 1084 under lease 01a1f2231f02. Fresh and --resume admissions both refused (holder state Unknown, host=sandbox UTS name, see BUG-2697). Salvaged by pushing the seat HEAD to origin task-b6b1278890774ef993d2ebc327862470-1084 and ending the lease with --yes, then relaunched codex with --branch on it to finish and open the PR.'
+  created_at: 2026-11-19T15:52:50.440388669Z
+  modified_at: 2026-11-19T15:52:50.440388669Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0fb-44fe-7d43-b093-79c5cabd700d
   author: joe
