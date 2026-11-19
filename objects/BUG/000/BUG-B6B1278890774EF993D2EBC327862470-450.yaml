@@ -11,12 +11,12 @@ description: |
   3. A host-memory precheck: skip (and log) the repack when available RAM is below a configurable floor.
   4. A concurrency guard: at most one store repack per host (lock), and none while the host is over its lane cap.
   5. Tests: the threshold no longer triggers from a lane-context sync; resource flags are passed; the low-memory skip.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:30:18.124265288Z
-modified_at: 2026-11-19T08:46:13.163001764Z
+modified_at: 2026-11-19T09:10:49.506854044Z
 req_type: Bug
 tags:
 - dell1
@@ -50,6 +50,113 @@ comments:
   modified_at: 2026-11-19T08:46:13.163001764Z
   session_id: 01a1f2ee0336
   harness_version: codex-cli 0.167.0
+- id: 01a1f312-aba2-7543-b370-2dad36f68f8e
+  author: fast-gate
+  content: |-
+    Publication refused: fast gate failed after the one repair round.
+        |
+    note: function defined here
+       --> aida-cli-lib/src/store_cmd.rs:173:4
+        |
+    173 | fn store_compact_at(store_path: &std::path::Path) -> Result<()> {
+        |    ^^^^^^^^^^^^^^^^
+    help: remove the extra arguments
+        |
+     44 -             tx.send(store_compact_at(&contender, true, true)).unwrap();
+     44 +             tx.send(store_compact_at(&contender)).unwrap();
+        |
+
+    error[E0061]: this function takes 1 argument but 3 arguments were supplied
+       --> aida-cli-lib/src/tests/task_1981_compact_tests.rs:93:21
+        |
+     93 |             tx.send(store_compact_at(&contender, false, true)).unwrap();
+        |                     ^^^^^^^^^^^^^^^^             -----  ---- unexpected argument #3 of type `bool`
+        |                                                  |
+        |                                                  unexpected argument #2 of type `bool`
+        |
+    note: function defined here
+       --> aida-cli-lib/src/store_cmd.rs:173:4
+        |
+    173 | fn store_compact_at(store_path: &std::path::Path) -> Result<()> {
+        |    ^^^^^^^^^^^^^^^^
+    help: remove the extra arguments
+        |
+     93 -             tx.send(store_compact_at(&contender, false, true)).unwrap();
+     93 +             tx.send(store_compact_at(&contender)).unwrap();
+        |
+
+    For more information about this error, try `rustc --explain E0061`.
+    error: could not compile `aida-cli-lib` (lib test) due to 2 previous errors
+    ratchets: 237.90s exit=101 passed=0
+    make: *** [Makefile:570: check-ratchets] Error 101
+    lane sccache: final job statistics
+    Compile requests                      9
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   9
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    incremental                           6
+    crate-type (bin)                      2
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      9
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   9
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    incremental                           6
+    crate-type (bin)                      2
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  created_at: 2026-11-19T09:10:49.506853381Z
+  modified_at: 2026-11-19T09:10:49.506853381Z
+  session_id: 01a1f2ee0336
 history:
 - id: 01a1ef7f-3f7e-7dc1-91a3-7e0b17213017
   author: joe
@@ -67,6 +174,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f312-aba2-7543-b370-2d9cd6eccda2
+  author: fast-gate
+  timestamp: 2026-11-19T09:10:49.506846234Z
+  session_id: 01a1f2ee0336
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
   branch: main
