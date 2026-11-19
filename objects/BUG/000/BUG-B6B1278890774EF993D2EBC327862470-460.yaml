@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T11:19:11.415454398Z
+modified_at: 2026-11-19T11:37:19.623415269Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -547,6 +547,24 @@ comments:
   content: PR-4305 at 8374be25cb0dfd9bcef819fd9aca03beeb049bb9 conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-19T11:19:11.264541229Z
   modified_at: 2026-11-19T11:19:11.264541229Z
+- id: 01a1f398-fc84-7551-a116-ceebf32c733e
+  author: joe
+  content: |-
+    AUTHORITATIVE CONFLICT-ONLY BRIEF (advisor-119, relayed by product 04:37):
+    # Brief: BUG-2696 / PR #4305 (fresh), CONFLICT-ONLY (advisor 04:37; product relay)
+
+    Lane: Claude. Do exactly this:
+    1. Merge origin/main into branch bug-2696-fresh. One file conflicts:
+       aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs. Keep BOTH sides' tests intact (add/add); rebuild any
+       test that git's hunk splits mid-statement. Adapt only call sites that main's signatures require. No behaviour
+       change, no other edits.
+    2. Run that test file, the ExecContext ratchet (tests/test_exec_context_ratchet.py) and the task_2143 ratchets,
+       plus `python3 scripts/check-store-writers.py`, through the lane job runner. Then PUSH.
+    Do NOT address review findings in this lane; the STRICT review of the PR follows after the push.
+  created_at: 2026-11-19T11:37:19.623415269Z
+  modified_at: 2026-11-19T11:37:19.623415269Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
