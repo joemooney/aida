@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T05:11:44.581940694Z
+modified_at: 2026-11-19T05:19:35.853264847Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -54,6 +54,16 @@ comments:
     Deep pass covered consistent state names across the output formats, timestamp serialization and TOON quoting, empty and multiple job lists, reused PIDs, hidden process namespaces and successor changes during collection. The report is read-only. Dead status retains the existing submit refusal and the successor runner owns orphan recovery. The first compile exposed a fully specified statusbar fixture and its initializer was fixed. Formatting, diff whitespace, trace-header and ExecContext checks passed. Lane job j20261119T045530163-2-0 timed out during compilation at 900 seconds with no executed tests. untested=true. The prescribed CodeGraph client was missing and the call sites were verified with rg.
   created_at: 2026-11-19T05:11:44.581940694Z
   modified_at: 2026-11-19T05:11:44.581940694Z
+  session_id: 01a1f2231f02
+  harness_version: codex-cli 0.167.0
+- id: 01a1f23e-fb9b-7e42-be5a-0b485e7569f8
+  author: dirtlab
+  content: |
+    ## Implementer self-review — fast-gate fix
+    Reviewed HEAD: ded1c4323f and the uncommitted fix. The script-deputy status and timeout regression now use the same ownership reader for local process death. The status caller still checks PID visibility and the reader rejects invalid PID ranges. The timeout regression still checks for positive evidence that its child died.
+    The CI git auto-maintenance and ownership-liveness ratchet command passed all 10 tests. Rust formatting and Git whitespace checks passed. Rust behavioral tests were not rerun in this fix round. The existing Refs publication declaration still applies.
+  created_at: 2026-11-19T05:19:35.853264847Z
+  modified_at: 2026-11-19T05:19:35.853264847Z
   session_id: 01a1f2231f02
   harness_version: codex-cli 0.167.0
 history:

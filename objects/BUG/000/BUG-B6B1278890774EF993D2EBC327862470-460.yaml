@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T04:41:14.866973916Z
+modified_at: 2026-11-19T05:22:59.025306516Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -358,6 +358,19 @@ comments:
   modified_at: 2026-11-19T04:41:14.866973916Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f242-1351-7033-9e66-e8ed74ec98d0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: eeac5d54aa (round 4).
+    Finding 1 (Done after forge failure): ship_from_seat.rs run_from_with_reconciliation now calls mark_done_after_confirmed_push immediately after origin confirms the push, before quarantine update-ref and finish_published. The vetoes are unchanged: refused and vetoed paths return before the push, and completeness still goes through publication_subject, subject_completes and the locked slice re-check. Regression: bug_2696_r4_done_survives_forge_failure_after_confirmed_push (CliFailed lookup after the push; asserts the origin head subject and Done).
+    Finding 2 (fail-open probes): new aida_core::git_ops::probe_git_repo returns Ok(false) only on git's 'not a git repository' and Err on a seat-clone refusal, spawn failure, bad config or any other failure. publication_completion::store_has_shared_remote = probe_git_repo && probe_remote(origin). store_owes_shared_push treats Err as owed, and a hub lookup that fails also counts as owed. push_store_confirmed defers with Err instead of reporting local-only success. The post-push-error recheck in propagate_store_writes inherits the owed result. Regression: bug_2696_r4_failing_store_probe_never_reports_propagation corrupts the store config. With the config unreadable, owed=true, push_store_confirmed is Err, propagate is Err and the landing scan does not checkpoint. A remote pre-receive hook corrupts the config and rejects the push, so the post-error recheck still reports Err. After the config is restored, the scan publishes and checkpoints.
+    Validation: the first lane run of the bug_2696 filter passed 26 of 27 tests, including the new forge-failure regression and all earlier BUG-2696 tests. The new probe test failed only on a fixture path (the store git dir is not store/.git). I fixed that by resolving the path with rev-parse --git-path config. Re-runs after the fix could not link: the seat target's incremental cache is corrupt (rust-lld undefined hidden symbols, left by a run that timed out), and the lane runner allows no --config or clean. That test is unverified after the fix.
+    Residual risk: push_store_confirmed now prints a deferral warning when the store probe errors; before, it silently treated that case as local-only (this includes auto_push_store_best_effort callers).
+  created_at: 2026-11-19T05:22:59.025306516Z
+  modified_at: 2026-11-19T05:22:59.025306516Z
+  session_id: 01a1f220e943
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
