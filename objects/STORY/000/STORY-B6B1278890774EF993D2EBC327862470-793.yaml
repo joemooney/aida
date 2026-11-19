@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T19:22:53.327845829Z
+modified_at: 2026-11-19T19:50:02.557606378Z
 req_type: Story
 tags:
 - landing
@@ -308,6 +308,13 @@ comments:
   created_at: 2026-11-19T19:22:53.327839383Z
   modified_at: 2026-11-19T19:22:53.327839383Z
   session_id: 01a1f536ee89
+- id: 01a1f55c-1f65-7710-a226-f2d2886c42bb
+  author: joe
+  content: 'advisor-121 12:52: r3 at f30f3d8 approved and the protected-floor fix verified (it calls gate::review_approval::independent_approval_authorized). CI fails only on rustfmt (r3 item 2 missed). Format-only follow-up: .aida/tmp/brief-STORY-2893-fmt.md'
+  created_at: 2026-11-19T19:50:02.557606378Z
+  modified_at: 2026-11-19T19:50:02.557606378Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
   author: joe
