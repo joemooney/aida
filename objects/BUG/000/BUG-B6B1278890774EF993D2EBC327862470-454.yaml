@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T18:13:08.351988298Z
-modified_at: 2026-11-19T10:18:30.454528587Z
+modified_at: 2026-11-19T10:37:28.539609255Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -109,6 +109,18 @@ comments:
   modified_at: 2026-11-19T10:22:06.263644298Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f362-005b-7663-ae2d-d2b3b5b9d8b0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: dd7acef523 (round 2, PR #4301). Test-only change.
+    Acceptance evidence [behavioral-test]: land::run::bug_2690_update_branch_tests::bug_2690_real_update_branch_path_puts_once_and_refuses_every_guard drives the real Live::update_ci_base -> forge::landing_update_branch against a fake gh (isolated PATH, exact-argv log). Positive: exactly one PUT 'GH_HOST=github.com api --method PUT repos/owner/repo/pulls/7/update-branch -f expected_head_sha=<head>'; repeat at the same head sends none. Negatives (no PUT each): live lease on the branch (no forge read either), torn lease file, origin changed after pinning (no forge read), local hold marker, discovered hold label, live hold label, moved head, renamed branch, retargeted base, closed, draft, unreadable labels, approved head under [pr-head] protect=true (error names the recorded approval, proving the caller runs pr_head_guard::check); control: approval at another head still PUTs. land::tests::bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed runs the real ci_base::observe over a fake gh (job log + merge commit) and derive(): old merge base -> STALE-CI-BASE/UpdateBranch; current base -> CI-FAILED.
+    Validation: lane job cargo test -p aida-cli-lib --lib -- bug_2690 => 9 passed. Gates run individually: cargo fmt --check, check-store-writers.py, executable-fixture ratchet (fixed: fakes now use test_exec::write_executable), git-maintenance/ownership ratchets, exec-context, crate-glob, trace headers, portability, removed flags, glyph lint all OK.
+    Residual: full check-ci-fast could not complete in this seat: 'Containment conformance evidence tests' raise PermissionError from the seat sandbox (scripts/containment/conformance.py:1167), unrelated to this diff; CI is the evidence. The train-pin branch of the head guard is not exercised through this caller (approval path proves the guard is wired; train-pin refusal is covered in pr_head_guard itself).
+  created_at: 2026-11-19T10:37:28.539609255Z
+  modified_at: 2026-11-19T10:37:28.539609255Z
+  session_id: 01a1f3504f2f
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1efdd-905d-72a3-a2ef-d8c8fff89539
   author: joe
