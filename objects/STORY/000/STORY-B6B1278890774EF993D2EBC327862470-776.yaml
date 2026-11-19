@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T04:49:05.557728295Z
-modified_at: 2026-11-19T06:12:46.222550177Z
+modified_at: 2026-11-19T06:30:06.334686122Z
 req_type: Story
 tags:
 - area:deputy
@@ -35,6 +35,15 @@ comments:
     - Validation: lane job j20261119T060515517-2-0 passed 121 tests. Lane job j20261119T061212122-2-0 passed the saved help snapshot comparison without regeneration. Changed Rust files passed rustfmt. The generated Clap snapshot contains expected spaces on blank option separators. Exact publication-head CI awaits host publication. Script prompts require --verbose, and a real ten-minute operator-terminal wait was represented by the deterministic clock test.
   created_at: 2026-11-19T06:12:46.222550177Z
   modified_at: 2026-11-19T06:12:46.222550177Z
+  session_id: 01a1f261993a
+  harness_version: codex-cli 0.167.0
+- id: 01a1f27f-8d3a-76d3-a0f0-c35bf465d837
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: eab9468fa2291d1ac128a41cd3243fb1c581328c. Fast-gate repair changes only the command and script progress test subprocess fixtures. Both now read the mode marker through an ExecContext environment snapshot, preserving empty and invalid-UTF-8 handling. The ExecContext ratchet passed all 19 tests with the existing ledger. Rustfmt and the repair diff whitespace check passed. Focused Rust lane job j20261119T061909742-2-0 is rebuilding the test binary.
+  created_at: 2026-11-19T06:30:06.334686122Z
+  modified_at: 2026-11-19T06:30:06.334686122Z
   session_id: 01a1f261993a
   harness_version: codex-cli 0.167.0
 history:
