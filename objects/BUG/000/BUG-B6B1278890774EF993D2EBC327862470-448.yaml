@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T20:45:13.822925763Z
+modified_at: 2026-11-19T21:03:34.235100902Z
 req_type: Bug
 tags:
 - dell1
@@ -468,6 +468,24 @@ comments:
   modified_at: 2026-11-19T20:30:27.440069451Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f59f-37db-7430-84dd-22f4891b3e5e
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 4f2d07f88b8f89f20d72ac49e8fc155655e1d211, plus the native seat's working-tree diff. The origin/main merge-base diff was empty. There were no untracked additions.
+
+    - Reviewer teardown [evidence: behavioral-test]. The supervisor binds teardown to the launched lease ID. A finished default review can be reaped after a missing verdict. The checkout and branch must be covered by a recorded or freshly verified published head, and any recognized local merge hold reaches the shared ledger before removal. See queue_cmd/work.rs:7196, session_reap.rs:1726, and the extended bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_trees regression.
+    - Reviewer pickup [evidence: behavioral-test]. The same regression exercises next-head pickup from an unleased standard sibling checkout, with retention when the branch has unpublished commits. The pickup still checks leases, dirt, locks and holders. See queue_cmd/work.rs:3808.
+    - Landed disk acceptance. Origin/main includes ownership-based reclaim, the unknown-owner grace, guarded scratch removal, freed-byte reporting, and queued disk deferral on the standalone and drain routes. Existing coverage includes bug_2684_floor_reclaims_ended_overlays_by_ownership, bug_2684_mount_inventory_retains_direct_and_private_overlay_mounts, bug_2651_orphan_overlays_reclaim_but_seat_targets_remain_report_only, bug_2681_scheduled_floor_breach_reclaims_lane_overlay and bug_2684_both_launch_shapes_roll_back_below_the_floor_and_admit_after_recovery.
+
+    The adversarial pass checked exact review IDs, default and configured placement, missing metadata, competing leases, branch movement, unpublished commits, non-directory or linked state paths, and unfamiliar hold markers. The first lane job reproduced teardown refusal when the successfully fetched PR had no recorded metadata. The patch now confirms the forge head in that case while reusing the worker identity checks. Private clones retain their existing lifecycle. The publication head will receive its CI run after host publication.
+
+    Validation passed. Lane jobs j20261119T205556568-2-0 and j20261119T205759274-2-0 ran 5 and 11 tests respectively. The Python fixture, Git-maintenance, ownership-liveness, ExecContext and gate-dependency checks ran 49 tests. Store-writer inventory, trace-header guard, rustfmt on changed Rust files and git diff --check passed.
+  created_at: 2026-11-19T21:03:34.235100902Z
+  modified_at: 2026-11-19T21:03:34.235100902Z
+  session_id: 01a1f58e1ba0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
