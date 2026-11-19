@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T11:29:01.792013325Z
-modified_at: 2026-11-19T16:21:34.251187302Z
+modified_at: 2026-11-19T17:49:45.248372252Z
 req_type: Task
 tags:
 - landing-emergency
@@ -213,6 +213,13 @@ comments:
   content: Reference merge `0ee5f68e12a20fec54884f89a495e4ac503bb85a` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-19T16:21:34.251179491Z
   modified_at: 2026-11-19T16:21:34.251179491Z
+- id: 01a1f4ed-f4f5-7c91-9129-a8a18a7da294
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 10:52): STAYS OPEN, deferred. #4304 landed the bounded historical metrics command (tooling); the verdict states it does not complete the measurement. AC1 (record the TASK-3815 enable date) is due now if 3815 is enabled; AC2/AC3 need 7 days after enablement. Deferred to 2026-11-26; then run the before/after metrics and post the conclusion for an advisor ruling.'
+  created_at: 2026-11-19T17:49:45.248372252Z
+  modified_at: 2026-11-19T17:49:45.248372252Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e945-2e3a-7833-8bd2-590ea073a5d1
   author: joe
