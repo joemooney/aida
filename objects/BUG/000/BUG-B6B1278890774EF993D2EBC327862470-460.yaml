@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T16:23:01.194888389Z
+modified_at: 2026-11-19T16:23:16.475578956Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -883,6 +883,13 @@ comments:
     Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
   created_at: 2026-11-19T16:23:01.194888389Z
   modified_at: 2026-11-19T16:23:01.194888389Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f49e-c9de-7f20-a03b-21878ad2b5cf
+  author: joe
+  content: 'Product 09:23: R4B lane queued on dell1 (claude), branch bug-2696-fresh. Scope = the AUTHORITATIVE R4B BRIEF in the previous comment.'
+  created_at: 2026-11-19T16:23:16.475578956Z
+  modified_at: 2026-11-19T16:23:16.475578956Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
