@@ -256,3 +256,157 @@ fn the_train_handler_claims_before_driving_and_resuming() {
         .expect("the live drive");
     assert!(board < drive_live, "claims precede the live drive");
 }
+
+fn git_in(dir: &Path, args: &[&str]) {
+    let out = crate::test_git::git_command()
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {out:?}");
+}
+
+/// A ci-gated repo with `feat` served from a local origin.
+fn served_repo() -> (tempfile::TempDir, std::path::PathBuf) {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    let repo = root.join("repo");
+    std::fs::create_dir_all(&repo).unwrap();
+    git_in(&repo, &["init", "-q", "-b", "main"]);
+    git_in(&repo, &["config", "user.email", "t@example.com"]);
+    git_in(&repo, &["config", "user.name", "T"]);
+    std::fs::write(repo.join("a.txt"), "a").unwrap();
+    git_in(&repo, &["add", "."]);
+    git_in(&repo, &["commit", "-q", "-m", "base"]);
+    git_in(&repo, &["branch", "feat"]);
+    let origin = root.join("origin.git");
+    git_in(
+        &root,
+        &["clone", "-q", "--bare", "repo", origin.to_str().unwrap()],
+    );
+    git_in(
+        &repo,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    (temp, repo)
+}
+
+fn change7() -> crate::forge::ChangeRef {
+    crate::forge::ChangeRef {
+        id: 7,
+        url: String::new(),
+        branch: "feat".into(),
+        base: "main".into(),
+        title: None,
+    }
+}
+
+fn opts7() -> crate::forge::MergeOptions {
+    crate::forge::MergeOptions {
+        method: crate::forge::MergeMethod::Squash,
+        squash_subject: None,
+        squash_body: None,
+        delete_branch: false,
+        match_head: None,
+    }
+}
+
+/// Round 2 finding 3, the #4270 race through the production merge
+/// boundary: two merge hands (a ship and a drain) reach the boundary for
+/// the same PR at once, against a forge that holds each merge open.
+/// Exactly one merge reaches the forge; the other is refused with the
+/// review exit category (23). Without the claim both would merge.
+#[test]
+fn two_hands_racing_for_one_pr_merge_it_exactly_once() {
+    use crate::landing_merge::{merge, Caller, Entry, MergeError};
+    let (_t, repo) = served_repo();
+    let merges = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let forge = crate::forge::fake::RecordingForge {
+        merges: Some(merges.clone()),
+        merge_hold: std::time::Duration::from_millis(400),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let entry = Entry {
+        policy: crate::landing_policy::LandingPolicy::default(),
+        floor: false,
+    };
+    let start = std::sync::Barrier::new(2);
+    let results: Vec<Result<(), MergeError>> = std::thread::scope(|s| {
+        let racers: Vec<_> = [Caller::Ship, Caller::Drain]
+            .into_iter()
+            .map(|caller| {
+                let (forge, repo, entry, start) = (&forge, &repo, &entry, &start);
+                s.spawn(move || {
+                    start.wait();
+                    merge(
+                        forge,
+                        repo,
+                        caller,
+                        entry,
+                        &change7(),
+                        &[],
+                        &opts7(),
+                        &mut crate::network_retry::NoopSink,
+                    )
+                    .map(|_| ())
+                })
+            })
+            .collect();
+        racers.into_iter().map(|r| r.join().unwrap()).collect()
+    });
+    assert_eq!(
+        merges.lock().unwrap().as_slice(),
+        &[7],
+        "exactly one merge reached the forge"
+    );
+    let refused: Vec<_> = results.into_iter().filter_map(Result::err).collect();
+    assert_eq!(refused.len(), 1, "exactly one hand lost: {refused:?}");
+    let loser = refused.into_iter().next().unwrap();
+    assert!(loser.to_string().contains("held by the"), "{loser}");
+    assert_eq!(crate::exit_code_for_error(&loser.into_anyhow()), 23);
+}
+
+/// The same race against the train: a car the train boarded (through the
+/// handler's own `board`) is not merged by a ship until the train lets go.
+#[test]
+fn a_ship_waits_out_a_train_that_boarded_the_pr() {
+    use crate::landing_merge::{merge, Caller, Entry, MergeError};
+    let (_t, repo) = served_repo();
+    let merges = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let forge = crate::forge::fake::RecordingForge {
+        merges: Some(merges.clone()),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let entry = Entry {
+        policy: crate::landing_policy::LandingPolicy::default(),
+        floor: false,
+    };
+    let (guards, boarded, _) = board(&repo, vec![(7u64, "h")], |m| (m.0, m.1.to_string()));
+    assert_eq!(boarded.len(), 1);
+    let ship = |forge: &crate::forge::fake::RecordingForge| {
+        merge(
+            forge,
+            &repo,
+            Caller::Ship,
+            &entry,
+            &change7(),
+            &[],
+            &opts7(),
+            &mut crate::network_retry::NoopSink,
+        )
+    };
+    match ship(&forge) {
+        Err(MergeError::Refused(kind, why)) => {
+            assert_eq!(kind, crate::gate::ship::ShipRefusal::Review);
+            assert!(why.contains("held by the train"), "{why}");
+        }
+        other => panic!("the ship must be refused: {other:?}"),
+    }
+    assert!(
+        merges.lock().unwrap().is_empty(),
+        "nothing merged while the train held it"
+    );
+    drop(guards);
+    ship(&forge).expect("the ship merges once the train lets go");
+    assert_eq!(merges.lock().unwrap().as_slice(), &[7]);
+}

@@ -5951,6 +5951,11 @@ pub(crate) mod fake {
         // trace:TASK-2891 | ai:codex
         pub(crate) retitled: Arc<Mutex<Vec<(u64, String)>>>,
         pub(crate) retitle_error: Option<String>,
+        /// When set, `merge_change` records each change id here and merges
+        /// (after `merge_hold`); unset, it is not scripted and fails.
+        // trace:STORY-2905 | ai:claude
+        pub(crate) merges: Option<Arc<Mutex<Vec<u64>>>>,
+        pub(crate) merge_hold: std::time::Duration,
     }
 
     impl RecordingForge {
@@ -5975,6 +5980,8 @@ pub(crate) mod fake {
                 opened: Arc::new(Mutex::new(Vec::new())),
                 retitled: Arc::new(Mutex::new(Vec::new())),
                 retitle_error: None,
+                merges: None,
+                merge_hold: std::time::Duration::ZERO,
             }
         }
 
@@ -6120,11 +6127,20 @@ pub(crate) mod fake {
         }
         fn merge_change(
             &self,
-            _: &ChangeRef,
-            _: &MergeOptions,
+            c: &ChangeRef,
+            o: &MergeOptions,
             _: &mut dyn crate::network_retry::RetrySink,
         ) -> Result<MergeResult> {
-            anyhow::bail!("RecordingForge: merge_change not scripted")
+            let Some(merges) = &self.merges else {
+                anyhow::bail!("RecordingForge: merge_change not scripted")
+            };
+            merges.lock().unwrap().push(c.id);
+            std::thread::sleep(self.merge_hold);
+            Ok(MergeResult {
+                merged: true,
+                sha: None,
+                method: o.method,
+            })
         }
         fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
             self.commented

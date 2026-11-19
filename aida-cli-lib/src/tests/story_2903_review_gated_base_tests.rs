@@ -392,17 +392,31 @@ fn the_auto_train_runs_only_under_a_readable_ci_gated_policy() {
         Ok(None),
         "no config: defaults"
     );
-    for bad in ["[landing\nmode = ", "[landing]\nmode = \"yolo\"\n"] {
+    for bad in [
+        "[landing\nmode = ",
+        "[landing]\nmode = \"yolo\"\n",
+        "landing = \"review-gated\"\n",
+        "landing = false\n",
+        "landing = [1]\n",
+    ] {
         let (_t, repo) = behind("notes/a.txt", "notes/b.txt");
         git(&repo, &["checkout", "-q", "main"]);
         commit(&repo, ".aida/config.toml", bad);
         let origin = repo.parent().unwrap().join("origin.git");
         git(&repo, &["push", "-q", origin.to_str().unwrap(), "main"]);
-        let err = super::train_stand_down(&repo).unwrap_err();
+        let checked = super::train_stand_down(&repo);
+        let err = checked.clone().unwrap_err();
         assert!(
-            err.contains("parse") || err.contains("not valid"),
+            err.contains("parse") || err.contains("not valid") || err.contains("not a table"),
             "{bad:?}: {err}"
         );
+        // Through the production pass decision: the handler never runs.
+        let ran = std::cell::Cell::new(false);
+        let _ = super::auto_train_pass(checked, || {
+            ran.set(true);
+            Ok(())
+        });
+        assert!(!ran.get(), "{bad:?}: no train under an invalid policy");
     }
 
     // The pass decision: the handler runs only when the policy allows it.
@@ -444,7 +458,13 @@ fn the_auto_train_worker_decides_each_pass_through_the_policy() {
     let stand_down = run
         .find(concat!("landing_merge::", "train_stand_down(root)"))
         .expect("the checked policy");
-    assert!(stand_down > pass, "the stand-down is the pass's input");
+    let admission = run
+        .find("hold_admission(")
+        .expect("admission follows the policy");
+    assert!(
+        stand_down < admission && admission < pass,
+        "the stand-down decides admission, then the pass"
+    );
     assert_eq!(
         run.matches("advisor_train_handler").count(),
         1,
