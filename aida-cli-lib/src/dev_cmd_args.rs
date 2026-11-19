@@ -185,6 +185,32 @@ pub enum DevCommand {
     /// binary is being used, when was it built, what's the AIDA repo path.
     Status,
 
+    /// Check whether this binary is too far behind `origin/main` to launch
+    /// lanes. Compares the binary's build commit with the checkout's local
+    /// `origin/main` ref (pass --fetch to refresh it first). Exits 0 when
+    /// fresh, 10 when stale (naming the rebuild command), 3 when freshness
+    /// cannot be judged.
+    // trace:TASK-3812 | ai:claude
+    CheckFresh {
+        /// Checkout to compare against (default: the primary checkout).
+        #[clap(long)]
+        repo: Option<String>,
+
+        /// Fetch `origin main` before comparing.
+        #[clap(long)]
+        fetch: bool,
+
+        /// Stale when more than this many merged changes on `origin/main`
+        /// are missing from the binary.
+        #[clap(long, default_value_t = 10)]
+        max_behind: u32,
+
+        /// Stale when the oldest missing change landed more than this many
+        /// hours ago.
+        #[clap(long, default_value_t = 6)]
+        max_hours: u32,
+    },
+
     /// Print the compact PS1 staleness marker for the active dev binary.
     Ps1,
 
