@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-19T15:53:07.426095698Z
+modified_at: 2026-11-19T19:07:44.328375863Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -23,6 +23,13 @@ comments:
   created_at: 2026-11-19T15:53:07.426095698Z
   modified_at: 2026-11-19T15:53:07.426095698Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f535-5cb8-7d43-a33a-032ae59918b1
+  author: joe
+  content: 'advisor-121 2026-11-19 12:12: another instance. STORY-2893 r3 admission refused on lease 01a1f4f93790 (claim f750a6d1) whose host is the sandbox UTS name disrad-dvp98b3puw; holder pid gone and heartbeat expired 18:32Z, but doctor heal stale-leases (even --force) reports ''no eligible stale lease finding'' because it treats the record as foreign. Released by a manual store commit 337e94d01d4 (backup on dell1). The heal path must recognise local sandbox UTS hostnames, or the lease must record the host identity.'
+  created_at: 2026-11-19T19:07:44.328375863Z
+  modified_at: 2026-11-19T19:07:44.328375863Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
