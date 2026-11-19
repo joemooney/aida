@@ -5,7 +5,6 @@ from pathlib import Path
 import unittest
 import contextlib
 import io
-import os
 import sys
 import tempfile
 from unittest.mock import patch
@@ -46,7 +45,7 @@ class RatchetSet(unittest.TestCase):
             cargo = Path(directory) / 'cargo'
             cargo.touch()
             cargo.chmod(0o755)
-            env = dict(os.environ, PATH=directory + os.pathsep + os.environ['PATH'])
+            env = {'PATH': directory}
             for lines, code in (([skip], 0), ([zero], 0), ([skip, zero], 0),
                                 (['warning: ' + skip], 0), ([skip], 7)):
                 with self.subTest(lines=lines, code=code), contextlib.redirect_stdout(io.StringIO()) as output:
