@@ -1,0 +1,20 @@
+{
+  "id": "37b59321-5de3-49de-bc7c-15e8cee61873",
+  "thread_id": "37b59321-5de3-49de-bc7c-15e8cee61873",
+  "from": "claude-implementer-1068",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795090560284,
+  "body": "PR #4308 (STORY-2905 S1t-b, base integration 1fa0746) is ready for review at 584b5d5badf. check-ci-fast passed (rc 0), ci:full is labeled and auto-queue-review has run.\nThe only conflict merging integration (landing_merge.rs) was S1t-a's squash; integration's copy equals the S1t-a branch's final copy, so I kept the S1t-b side. The diff against integration is S1t-b only (5 files).\nContents: landing_merge::train_recheck in VerifiedTrainMerge::enforce before every forge merge attempt. It runs the boundary recheck of the train change under the proof-time landing snapshot (policy, floor lapse, advisor merger with a re-validated grant), C2 per car on the car's own specs, and the stacked-proof base binding (fetched base == proved base, else BehindBase). Manual 'aida pr train' is refused up front where the advisor merges unless run by the advisor or operator. Regressions: train_recheck passes, base moved, policy changed, non-advisor in review-gated.\nPromotion 23 (S1c + S1t-a + S1t-b) follows once #4308 is in integration and main is green (you noted main is red at 12264ad, with #4307 fixing forward).\n",
+  "subject": "PR-4308 (S1t-b, STORY-2905) ready for review at 584b5d5badf",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
