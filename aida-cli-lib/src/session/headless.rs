@@ -2781,11 +2781,6 @@ fn run_vendor_headless_child(
     if let Some(on_spawn) = hooks.on_spawn {
         on_spawn(child.id());
     }
-    if !hooks.resume {
-        if let Some(on_delivery) = hooks.on_delivery {
-            on_delivery();
-        }
-    }
     #[cfg(target_os = "linux")]
     if let Some(id) = lease_id {
         let holder = holder_capture.finish(&mut child);
@@ -2810,6 +2805,14 @@ fn run_vendor_headless_child(
             let _ = child.wait();
             tee.stop();
             return Err(error.context("could not establish the spawned worker's holder generation"));
+        }
+    }
+    // Acknowledge delivered briefs only after the lease handoff succeeded: a
+    // refused holder stamp kills the worker, and the retry must still see them.
+    // trace:BUG-2699 | ai:claude
+    if !hooks.resume {
+        if let Some(on_delivery) = hooks.on_delivery {
+            on_delivery();
         }
     }
     // trace:STORY-1688 | ai:claude

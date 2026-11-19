@@ -5088,7 +5088,7 @@ mod tests {
         };
         let vendor = root.path().join("codex");
         crate::test_exec::write_executable(&vendor, "#!/bin/sh\nprintf '%s\\n' \"$@\"\n");
-        let run = |name: &str, program: &str| {
+        let run = |name: &str, program: &str, lease: Option<&str>| {
             let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
                 root.path(),
                 "advisor",
@@ -5102,7 +5102,7 @@ mod tests {
             let _cwd = contained_cwd_seam::pin(root.path());
             let log = root.path().join(name);
             let status = run_vendor_headless_child(
-                None,
+                lease.map(|_| root.path()),
                 None,
                 HeadlessVendor::Codex,
                 &prompt,
@@ -5113,16 +5113,30 @@ mod tests {
                     label: None,
                 },
                 false,
-                None,
+                lease,
                 "implementer",
                 "",
                 &hooks,
             );
             (status, log)
         };
-        assert!(run("failed.log", "/missing/bug-2699/codex").0.is_err());
+        assert!(run("failed.log", "/missing/bug-2699/codex", None).0.is_err());
         assert!(first.exists() && second.exists());
-        let (status, log) = run("started.log", vendor.to_str().unwrap());
+        // A refused holder stamp (the lease is gone) kills the spawned worker;
+        // its briefs must stay pending for the retry. trace:BUG-2699 | ai:claude
+        #[cfg(target_os = "linux")]
+        {
+            let (status, _) = run(
+                "refused-holder.log",
+                vendor.to_str().unwrap(),
+                Some("bug-2699-missing-lease"),
+            );
+            let err = status.expect_err("a missing lease must refuse the holder handoff");
+            assert!(format!("{err:#}").contains("holder generation"), "{err:#}");
+            assert!(first.exists() && second.exists(), "refused handoff acked briefs");
+            assert!(!first.with_extension("md.acked").exists());
+        }
+        let (status, log) = run("started.log", vendor.to_str().unwrap(), None);
         assert!(status.unwrap().success());
         let argv = std::fs::read_to_string(log).unwrap();
         assert!(
@@ -5137,6 +5151,77 @@ mod tests {
         assert!(first.with_extension("md.acked").is_file());
         assert!(second.with_extension("md.acked").is_file());
         assert!(!first.exists() && !second.exists() && other.exists());
+    }
+
+    // trace:BUG-2699 | ai:claude
+    #[test]
+    fn bug_2699_round_suffixed_brief_without_frontmatter_is_delivered() {
+        let root = tempfile::tempdir().unwrap();
+        let mailbox = root.path().join(".aida/agent-briefs/codex");
+        std::fs::create_dir_all(&mailbox).unwrap();
+        let round = mailbox.join("BUG-2699-r2-2026-11-19T023229Z.md");
+        std::fs::write(&round, "Plain rework round two").unwrap();
+        for (name, body) in [
+            ("BUG-26990-r2-2026-11-19T023229Z.md", "Neighbor round"),
+            ("BUG-26990-2026-11-19T023229Z.md", "Neighbor"),
+            ("BUG-2699-rework-2026-11-19T023229Z.md", "Not a round suffix"),
+            ("BUG-2699-r12345-2026-11-19T023229Z.md", "Unbounded round"),
+        ] {
+            std::fs::write(mailbox.join(name), body).unwrap();
+        }
+        let briefs =
+            crate::brief::pickup_briefs(root.path(), "codex", "BUG-2699", "BUG-2699", None)
+                .unwrap();
+        let mut prompt = String::new();
+        crate::brief::append_pickup_briefs(&mut prompt, &briefs);
+        assert_eq!(briefs.len(), 1, "{prompt}");
+        assert!(prompt.contains("Plain rework round two"), "{prompt}");
+        crate::brief::consume_pickup_briefs(&briefs);
+        assert!(!round.exists() && round.with_extension("md.acked").is_file());
+    }
+
+    // trace:BUG-2699 | ai:claude
+    #[test]
+    fn bug_2699_replacement_at_ack_boundary_stays_pending() {
+        let root = tempfile::tempdir().unwrap();
+        let mailbox = root.path().join(".aida/agent-briefs/codex");
+        std::fs::create_dir_all(&mailbox).unwrap();
+        let path = mailbox.join("BUG-2699-2026-11-19T023229Z.md");
+        std::fs::write(&path, "Original instructions").unwrap();
+        let briefs =
+            crate::brief::pickup_briefs(root.path(), "codex", "BUG-2699", "BUG-2699", None)
+                .unwrap();
+        assert_eq!(briefs.len(), 1);
+
+        // An operator atomically replaces the brief after the child received
+        // the original but before the acknowledgement claims it.
+        crate::brief::ack_boundary_hook::set(|path| {
+            let tmp = path.with_file_name("revised.tmp");
+            std::fs::write(&tmp, "Revised instructions").unwrap();
+            std::fs::rename(&tmp, path).unwrap();
+        });
+        crate::brief::consume_pickup_briefs(&briefs);
+        crate::brief::ack_boundary_hook::clear();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "Revised instructions",
+            "the unseen revision must remain pending"
+        );
+        assert!(!path.with_extension("md.acked").exists());
+        let leftovers: Vec<_> = std::fs::read_dir(&mailbox)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        assert_eq!(leftovers.len(), 1, "{leftovers:?}");
+
+        // Once the pending generation is the delivered one, it is archived.
+        std::fs::write(&path, "Original instructions").unwrap();
+        crate::brief::consume_pickup_briefs(&briefs);
+        assert_eq!(
+            std::fs::read_to_string(path.with_extension("md.acked")).unwrap(),
+            "Original instructions"
+        );
+        assert!(!path.exists());
     }
 
     #[test]

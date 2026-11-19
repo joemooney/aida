@@ -1128,6 +1128,24 @@ fn pickup_brief_matches(query: &str, spec: &str, display: &str) -> bool {
         .any(|id| aida_core::id_identity::same_id(id, &query))
 }
 
+/// A rework brief's filename may carry a round suffix after the spec identity
+/// (`BUG-2699-r2-<ts>.md`). Accept exactly `-r<1..3 digits>` after an identity
+/// that already matches, so `BUG-26990` stays out of `BUG-2699`'s scope.
+/// trace:BUG-2699 | ai:claude
+fn pickup_brief_filename_matches(filename_id: &str, spec: &str, display: &str) -> bool {
+    if pickup_brief_matches(filename_id, spec, display) {
+        return true;
+    }
+    filename_id
+        .rsplit_once('-')
+        .filter(|(_, round)| {
+            round.strip_prefix(['r', 'R']).is_some_and(|digits| {
+                (1..=3).contains(&digits.len()) && digits.bytes().all(|b| b.is_ascii_digit())
+            })
+        })
+        .is_some_and(|(base, _)| pickup_brief_matches(base, spec, display))
+}
+
 impl PickupBrief {
     pub(crate) fn read_explicit(path: &std::path::Path, spec: &str, display: &str) -> Result<Self> {
         let body = read_pickup_brief(path)?;
@@ -1214,7 +1232,7 @@ pub(crate) fn pickup_briefs(
                 .and_then(spec_id_from_brief_filename);
             let named_for_spec = filename_id
                 .as_deref()
-                .is_some_and(|id| pickup_brief_matches(id, spec, display));
+                .is_some_and(|id| pickup_brief_filename_matches(id, spec, display));
             let body = match read_pickup_brief(&path) {
                 Ok(body) => body,
                 Err(err) if !named_for_spec => {
@@ -1260,15 +1278,44 @@ pub(crate) fn consume_pickup_briefs(briefs: &[PickupBrief]) {
             if !path.try_exists()? {
                 return Ok(());
             }
-            anyhow::ensure!(
-                read_pickup_brief(path)? == brief.body,
-                "brief changed during launch"
-            );
+            #[cfg(test)]
+            ack_boundary_hook::fire(path);
+            // Atomically claim the current generation off the pending path,
+            // then validate what was claimed: a replacement published before
+            // the claim is the claimed content (mismatch → restored pending);
+            // one published after it lands at the pending path untouched.
+            // trace:BUG-2699 | ai:claude
+            let claim = claim_path(path)?;
+            match aida_core::mailbox_lifecycle::rename_noreplace(path, &claim) {
+                Ok(()) => {}
+                // Already acknowledged by a concurrent consumer.
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+                Err(err) => return Err(err.into()),
+            }
+            let claimed = read_pickup_brief(&claim);
+            if claimed.as_ref().ok() != Some(&brief.body) {
+                return match aida_core::mailbox_lifecycle::rename_noreplace(&claim, path) {
+                    Ok(()) => Err(anyhow::anyhow!(
+                        "brief changed during launch; left the revised brief pending"
+                    )),
+                    Err(err) => Err(anyhow::Error::from(err).context(format!(
+                        "brief changed during launch and a newer brief now occupies its path; \
+                         the unseen revision is preserved at {}",
+                        claim.display()
+                    ))),
+                };
+            }
             let mut destination = path.as_os_str().to_owned();
             destination.push(".acked");
             // Publish the acknowledgement without overwriting an existing archive
             // or writing through the original path.
-            aida_core::mailbox_lifecycle::rename_noreplace(path, destination.as_ref())?;
+            if let Err(err) =
+                aida_core::mailbox_lifecycle::rename_noreplace(&claim, destination.as_ref())
+            {
+                // Never strand a delivered brief under the claim name.
+                let _ = aida_core::mailbox_lifecycle::rename_noreplace(&claim, path);
+                return Err(err.into());
+            }
             let pending = path.with_file_name(".pending");
             if let Ok(meta) = pending.symlink_metadata() {
                 use std::os::unix::fs::MetadataExt;
@@ -1284,6 +1331,47 @@ pub(crate) fn consume_pickup_briefs(briefs: &[PickupBrief]) {
                 brief.path.display()
             );
         }
+    }
+}
+
+/// A same-directory, non-`.md` name (never discovered as pending) unique to
+/// this acknowledgement attempt. trace:BUG-2699 | ai:claude
+fn claim_path(path: &std::path::Path) -> Result<std::path::PathBuf> {
+    let name = path
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or_else(|| anyhow::anyhow!("invalid brief file path: {}", path.display()))?;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    Ok(path.with_file_name(format!(".{name}.claim-{}-{nanos}", std::process::id())))
+}
+
+/// Test seam at the acknowledgement boundary: runs just before the pending
+/// generation is claimed. trace:BUG-2699 | ai:claude
+#[cfg(test)]
+pub(crate) mod ack_boundary_hook {
+    use std::cell::RefCell;
+
+    type Hook = Box<dyn FnMut(&std::path::Path)>;
+    thread_local! {
+        static HOOK: RefCell<Option<Hook>> = RefCell::new(None);
+    }
+
+    pub(crate) fn set(hook: impl FnMut(&std::path::Path) + 'static) {
+        HOOK.with(|h| *h.borrow_mut() = Some(Box::new(hook)));
+    }
+
+    pub(crate) fn clear() {
+        HOOK.with(|h| *h.borrow_mut() = None);
+    }
+
+    pub(super) fn fire(path: &std::path::Path) {
+        HOOK.with(|h| {
+            if let Some(hook) = h.borrow_mut().as_mut() {
+                hook(path);
+            }
+        });
     }
 }
 
