@@ -14,12 +14,12 @@ description: |
   1. Find out which shift-tick phase uses up the budget on the failing ticks: emit per-phase timings in the tick's terminal record.
   2. Over a 24h window on the live binary, night-shift times out on fewer than 1 in 50 ticks.
   3. A regression test or bench bounds the phase that is identified (for example, a gate-ledger or store scan over a fixture the size of today's repo).
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:58:43.332449636Z
-modified_at: 2026-11-19T10:21:11.693843177Z
+modified_at: 2026-11-19T10:57:12.087186845Z
 req_type: Bug
 tags:
 - linked:BUG-2626
@@ -229,6 +229,11 @@ comments:
   created_at: 2026-11-19T10:21:11.693836597Z
   modified_at: 2026-11-19T10:21:11.693836597Z
   session_id: 01a1f31848aa
+- id: 01a1f374-0f97-7b10-bf0a-acc8297b9a02
+  author: lane-recovery
+  content: Reference merge `12264ad1cb941ee1fb74173293104c323aa5f06a` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-19T10:57:12.087178968Z
+  modified_at: 2026-11-19T10:57:12.087178968Z
 history:
 - id: 01a1ebf7-4f19-7dc0-beeb-d67d7e9a2239
   author: joe
@@ -282,6 +287,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f374-0f97-7b10-bf0a-acd1922900f4
+  author: lane-recovery
+  timestamp: 2026-11-19T10:57:12.087186724Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
