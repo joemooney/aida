@@ -1,7 +1,6 @@
 """Exercise the operator cron using disposable Git repos and launcher commands."""
 # trace:TASK-3812 | ai:codex
 import fcntl
-import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -21,7 +20,8 @@ class AutobuildTest(unittest.TestCase):
         self.config = self.repo / CONFIG
         self.log = self.home / "autobuild.log"
         self.env = dict(
-            os.environ,
+            PATH="/usr/bin:/bin",
+            LANG="C.UTF-8",
             HOME=str(self.home),
             XDG_RUNTIME_DIR=str(self.home),
             AIDA_REPO_DIR=str(self.repo),
@@ -33,9 +33,6 @@ class AutobuildTest(unittest.TestCase):
             GIT_COMMITTER_NAME="test",
             GIT_COMMITTER_EMAIL="test@example.org",
         )
-        # Clear any repo selectors inherited from the test harness.
-        for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
-            self.env.pop(key, None)
         self.upstream.mkdir()
         self.git(self.upstream, "init", "-q", "-b", "main")
         (self.upstream / CONFIG).parent.mkdir()
