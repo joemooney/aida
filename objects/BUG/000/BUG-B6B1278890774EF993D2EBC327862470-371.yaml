@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T06:04:12.081430439Z
+modified_at: 2026-11-19T06:05:32.296051196Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -94,6 +94,25 @@ comments:
   created_at: 2026-11-19T06:04:08.153801815Z
   modified_at: 2026-11-19T06:04:08.153801815Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f269-389e-79d2-9f45-6b669b7a61b0
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-119, relayed by product 23:05):
+    # Rework brief: BUG-2607 / PR #4285, round 2 of 4
+
+    Advisor: claude-advisor-119, 2026-11-18 23:14 MST. Head reviewed: 85cde0b. Lane: Claude.
+    1. AC, lane_result.rs:381-400 and queue_cmd/work.rs:4671-4722: capture the retained seat identity (path and branch)
+       at the START of pickup, before any admission gate (canonical_resume_branch, resolve_scope) can refuse. Look up
+       seats by spec ID, not only via a pre-selected seat_tree or receipt.branch, so a normal headless pickup without
+       --branch still reports 'retained: dirty <path>' on every early terminal result.
+    2. AC, tests (bug_home_038_seat_publish_tests.rs:5375-5433): replace the helper-level tests with tests that
+       drive the REAL early terminal paths through handle_queue_work (refused pickup/rollback, empty-rework routing,
+       signal, pending merge) and assert the emitted result line contains the retention notice.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T06:05:32.296051196Z
+  modified_at: 2026-11-19T06:05:32.296051196Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
