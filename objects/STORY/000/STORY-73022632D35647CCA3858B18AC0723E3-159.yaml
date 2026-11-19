@@ -1,0 +1,32 @@
+id: 01a1f4d1-78b5-7340-810f-026b62829ea6
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-159
+title: 'Review PR-4319: [AI:codex] fix(deputy): report dead runners and stranded jobs (TASK-3801)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f485`) for branch `task-b6b1278890774ef993d2ebc327862470-1084`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4319>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1084` → `main`
+
+  ## Covers
+
+  - TASK-3801
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4319` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T17:18:51.061716707Z
+modified_at: 2026-11-19T17:18:51.061716707Z
+req_type: Story
+filed_at:
+  code_sha: e5b78d27e147ce008ab5557b0ea7f55afc79dd4d
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: e5b78d27e1
+  session: 01a1f485d729
