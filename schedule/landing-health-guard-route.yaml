@@ -1,14 +1,8 @@
 job: landing-health-guard-route
-last_run: 2026-11-18T20:00:13.344015789Z
+last_run: 2026-11-19T00:47:53.804876427Z
 last_by:
   seat: advisor
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   vendor: claude
 result: done
-note: 'False positive: fast-tier runs cancelled by ci:full relabels leave Build red on #4137/#4207/#4254 while their full tiers run. Filed BUG-2692.'
-due_since: 2026-11-18T20:00:17.675190553Z
-due_reason: on CronJobFailed:landing-health-guard
-due_failure:
-  trip_id: landing-health-guard@2026-11-18T21:32:00.015245099Z
-  job: landing-health-guard
-  error: 'exit 1: landing-health: main tip age 117 minutes; 4 open PRs; #4266: merge hold; #4265: CI red: Build (ubuntu-latest); #4207: merge hold; #4137: CI red: Release (${{ matrix.os }})'
+note: '17:47: #4269/#4270/#4271 red Build/Release are cancelled fast-tier aggregates superseded by full runs (BUG-2692). #4272 is a real conflict, routed as a conflict rework.'
