@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T03:38:19.982744938Z
+modified_at: 2026-11-19T03:38:38.059922980Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -215,6 +215,22 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full supplied 138218-byte landing diff against pinned main 697f85f2fff7d766cd736db2a56b705ed281ee10 and landed tree aad7cd9d72866b666a7edd962239b469e03e0b78, attesting original head 69c5f0a1e38dd3548aba4af3aafef2b676102ded. Read BUG-2696, the advisor sketch and binding round-two A1/A2 amendments. Source and regression inspection support the ordinary completion, Refs landing, notification, punt/refused-start and missing-declaration fixes; A1 explicitly excludes prose-only plans. Request changes for three remaining blocking findings: stale child-state authorization in both Done writers (F4/A2), concurrent deletion of newer propagation debt, and non-durable retry setup after status commits (F6/AC5). No Cargo, local tests or builds were run, as instructed; reported implementer test runs were treated as supplied evidence, not independently executed. Exact-head FAST source gates passed; FAST compile and merge-hold status were pending at review time. Pending CI is not the reason for this verdict. The fixed host codegraph client was absent, so navigation used source searches. No branch changes or merge were performed.. Triage reason: Round 3 for PR #4274. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2696-r3.md: child-state re-read under the lock; the marker file deleted in favour of derived ''store ahead of remote'' push-pending. CLAUDE lane.'
   created_at: 2026-11-19T03:38:19.982741168Z
   modified_at: 2026-11-19T03:38:19.982741168Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1e2-89a5-7823-9a4c-a3aa4711b205
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2696):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 69c5f0a1e38d
+    Recorded: 2026-11-19T03:36:38.367353133+00:00
+    Findings:
+    1. aida-cli-lib/src/publication_completion.rs:197-200 and aida-cli-lib/src/pr_merge_gate.rs:506-510: F4 still authorizes Done using stale child-state evidence. Start with a parent In Progress whose existing Parent-linked child is Completed. After slice_plan_outstanding reads that snapshot, reopen the child to Approved (or unarchive a nonterminal child) before the parent writer acquires its lock. slice_plan_unchanged compares only the parent target UUIDs, which did not change, and both writers set the parent Done despite its now-outstanding child. update_spec_atomically reloads only the parent object; it does not refresh child statuses. A later eligible Refs landing can then complete the parent. This violates the binding A2 host veto and lock-time F4 requirement; the implementer self-review also acknowledges this remaining race. Re-read the relevant parent/child graph under the store writer lock, or compare a graph snapshot including child status/archive/existence under that lock and refuse stale evidence. Add regressions using both existing race seams to reopen an already-linked child, rather than only adding an edge.
+    2. aida-cli-lib/src/publication_completion.rs:248-251: An older successful push can delete a newer failed publication's pending retry. The marker is one shared unversioned file and its removal has no lock or comparison. push_store_confirmed captures H1 under the store lock and releases that lock for network I/O. While that push is in flight, another writer can commit H2, overwrite the marker and fail its own H2 push. When the H1 invocation completes successfully, it unconditionally removes the marker even though only H1 reached the remote. A later scan with no new writes sees no marker and returns success, so the H2 status can remain local and reconciliation can checkpoint, violating AC5/F6. Bind pending debt to a commit or generation, and compare-clear it under synchronization only when the confirmed push covers that debt; alternatively serialize the complete propagation protocol. Add a deterministic overlapping-push regression where the older push succeeds and the newer push fails, then verify a no-write retry publishes H2.
+    3. aida-cli-lib/src/publication_completion.rs:233-244: Failure to establish the pending marker is only logged (and failure to resolve its path is silently ignored), although the status mutation has already committed. If marker creation fails and the remote push is rejected, this invocation returns an error, but the next scan finds the status already Done/Completed, writes nothing and has no marker. propagate_store_writes then returns Ok without retrying, allowing the scan to checkpoint while the remote still lacks the status. The same missing-debt window exists if the process exits between committing the status and recording the marker. This leaves F6's durable retry requirement unmet on precisely the failed-publication path. Establish recoverable propagation debt before or atomically with the status write, or reconstruct outstanding debt from committed local-versus-remote evidence; marker setup failures must not permit a later no-op scan to claim confirmation. Add marker-creation-failure and restart recovery coverage that verifies the remote receives the status before checkpointing.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T03:38:37.861814533Z
+  modified_at: 2026-11-19T03:38:37.861814533Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
