@@ -201,6 +201,8 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
                 print_status("not-configured", None, &[], *json)?;
                 return Ok(());
             };
+            let report = pass_report(&dir);
+            let degraded = pass_degradation(report.as_ref(), Utc::now());
             let status = if let Some(status) = host_refusal(&state) {
                 status
             } else if state.binding.validate(&root).is_err() {
@@ -212,9 +214,22 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
             } else {
                 "waiting-for-supervisor"
             };
+            let status = pass_status(status, &degraded);
             let mut blockers = review_blockers(&dir)?;
             blockers.extend(retry_blockers(&root, &dir)?);
-            print_status(status, Some(&state), &blockers, *json)?;
+            let degraded = if status == "degraded" {
+                degraded
+            } else {
+                Vec::new()
+            };
+            print_status_with_pass(
+                status,
+                Some(&state),
+                &blockers,
+                report.as_ref(),
+                &degraded,
+                *json,
+            )?;
             Ok(())
         }
         AdvisorLoopsCommand::Rebind { deputy } => {
@@ -248,6 +263,19 @@ fn print_status(
     blockers: &[String],
     json: bool,
 ) -> Result<()> {
+    print_status_with_pass(status, state, blockers, None, &[], json)
+}
+
+// trace:STORY-2571 | ai:codex
+// trace:BUG-2674 | ai:claude
+fn print_status_with_pass(
+    status: &str,
+    state: Option<&Service>,
+    blockers: &[String],
+    pass: Option<&PassReport>,
+    degraded: &[String],
+    json: bool,
+) -> Result<()> {
     let root = forge::main_root(&std::env::current_dir()?)?;
     let failure = failure_state(&root)?;
     let binary = binary_status(
@@ -267,6 +295,8 @@ fn print_status(
         "last_exit": state.and_then(|s| s.last_exit),
         "retired_controllers": state.map(|s| s.retired_grants.len()).unwrap_or(0),
         "review_blockers": blockers,
+        "last_pass": pass,
+        "degraded_reasons": degraded,
         "recovery": "docs/cli/06-roles-sessions.md#review-watch-service-recovery",
     });
     if json || crate::output_format_is_json() {
@@ -291,6 +321,19 @@ fn print_status(
         println!("{}", binary_line(&value));
         println!("{NAME}: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}; consecutive failures {}; alert {}",
             value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]);
+        // trace:BUG-2674 | ai:claude
+        if let Some(pass) = pass {
+            println!(
+                "last pass: {}; {} open change(s); {} dispatched; {} refused",
+                pass.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+                pass.changes,
+                pass.dispatched,
+                pass.errors.len()
+            );
+        }
+        for reason in degraded {
+            println!("degraded: {reason}");
+        }
     }
     Ok(())
 }
@@ -1567,6 +1610,7 @@ mod loop_tests {
                             .map(|_| ());
                     super::super::observe_dispatch_result(&root, result)
                 })
+                .map(|_| ())
             };
             assert!(result.unwrap_err().is::<ImageSuperseded>());
             return;
@@ -1886,6 +1930,118 @@ mod loop_tests {
             resolve_max_concurrent(root, args.max_concurrent).unwrap(),
             2
         );
+    }
+
+    // A change refused mid-pass (here one that closed after discovery) is
+    // recorded and skipped; the open change after it is admitted in the same
+    // pass, and status then reports the running worker as degraded, naming it.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_refused_change_never_blocks_the_next_and_degrades_status() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        let change = |id: u64| forge::Change {
+            id,
+            head: format!("{id:040x}"),
+            base: "main".into(),
+            author: "writer".into(),
+            gitlab: false,
+            overlap: Some(false),
+            conflict: None,
+            behind: Some(0),
+            head_branch: None,
+        };
+        let mut admitted = Vec::new();
+        let refused = super::super::watch_changes(&store, vec![change(1), change(2)], |c| {
+            if c.id == 1 {
+                anyhow::bail!("change is closed or draft; no review started");
+            }
+            let action = super::super::select(&store, &c, None, 2)?;
+            assert!(matches!(action, super::super::Action::Dispatch(_)));
+            admitted.push(c.key());
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(admitted, ["PR-2"]);
+        assert_eq!(refused.len(), 1);
+        assert!(refused[0].starts_with("PR-1: refused: change is closed"));
+
+        // Without a controller (a manual watcher) nothing is recorded.
+        controller_pass_report(root, 2, 1, &refused).unwrap();
+        let dir = directory(root, true).unwrap().unwrap();
+        assert!(pass_report(&dir).is_none());
+
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        controller_pass_report(root, 2, 1, &refused).unwrap();
+        let report = pass_report(&dir).unwrap();
+        assert_eq!((report.changes, report.dispatched), (2, 1));
+        let degraded = pass_degradation(Some(&report), Utc::now());
+        assert_eq!(degraded.len(), 1);
+        assert!(degraded[0].contains("PR-1"), "{degraded:?}");
+        assert_eq!(pass_status("running", &degraded), "degraded");
+        // Only a live worker is downgraded; other states keep their meaning.
+        assert_eq!(
+            pass_status("blocked-authority", &degraded),
+            "blocked-authority"
+        );
+
+        // A clean pass restores health.
+        controller_pass_report(root, 1, 0, &[]).unwrap();
+        let report = pass_report(&dir).unwrap();
+        assert!(pass_degradation(Some(&report), Utc::now()).is_empty());
+        assert_eq!(pass_status("running", &[]), "running");
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+    }
+
+    // A worker that is alive but no longer completes passes is not healthy.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_stalled_passes_degrade_a_running_worker() {
+        let report = PassReport {
+            at: Utc::now() - chrono::Duration::minutes(PASS_STALE_MINUTES + 5),
+            changes: 10,
+            dispatched: 0,
+            errors: Vec::new(),
+        };
+        let degraded = pass_degradation(Some(&report), Utc::now());
+        assert_eq!(degraded.len(), 1);
+        assert!(
+            degraded[0].starts_with("no discovery pass for"),
+            "{degraded:?}"
+        );
+        assert_eq!(pass_status("running", &degraded), "degraded");
+        // A fresh worker that has not yet reported is not condemned.
+        assert!(pass_degradation(None, Utc::now()).is_empty());
+    }
+
+    // A whole-watcher stop names itself, not a refusal of the change it hit.
+    // trace:BUG-2674 | ai:claude
+    #[test]
+    fn bug2674_watcher_stop_is_not_reported_as_one_change_refusal() {
+        let temp = tempfile::tempdir().unwrap();
+        let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
+        let change = forge::Change {
+            id: 3793,
+            head: format!("{:040x}", 1),
+            base: "main".into(),
+            author: "writer".into(),
+            gitlab: false,
+            overlap: Some(false),
+            conflict: None,
+            behind: Some(0),
+            head_branch: None,
+        };
+        let error = super::super::watch_changes(&store, vec![change], |_| {
+            Err(anyhow::anyhow!("advisor loop controller binding superseded").context(GlobalState))
+        })
+        .unwrap_err();
+        let text = format!("{error:#}");
+        assert!(
+            text.contains("review-watch pass stopped while processing PR-3793"),
+            "{text}"
+        );
+        assert!(!text.contains("review watch refused"), "{text}");
     }
 
     // trace:STORY-2691 | ai:codex
@@ -2341,6 +2497,102 @@ mod loop_tests {
         })
         .unwrap();
         assert!(seat_authority::read_grant(&child.id).is_ok());
+    }
+}
+
+/// The controller's latest completed (or stopped) discovery pass. Status uses
+/// it to report a running worker as degraded rather than healthy.
+// trace:BUG-2674 | ai:claude
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct PassReport {
+    at: DateTime<Utc>,
+    changes: usize,
+    dispatched: usize,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    errors: Vec<String>,
+}
+const PASS_REPORT: &str = "last-pass.json";
+const PASS_REPORT_ERRORS: usize = 16;
+// The worker polls every ten seconds; this long without a pass is a stall.
+const PASS_STALE_MINUTES: i64 = 15;
+// A quiet pass is logged at most this often; any dispatch or error always is.
+const PASS_LOG_QUIET_SECONDS: u64 = 300;
+thread_local! {
+    static PASS_LOGGED: std::cell::Cell<Option<std::time::Instant>> =
+        const { std::cell::Cell::new(None) };
+}
+
+// trace:BUG-2674 | ai:claude
+pub(super) fn controller_pass_report(
+    root: &Path,
+    changes: usize,
+    dispatched: usize,
+    errors: &[String],
+) -> Result<()> {
+    if CONTROLLER.with(|id| id.borrow().is_none()) {
+        return Ok(());
+    }
+    let report = PassReport {
+        at: Utc::now(),
+        changes,
+        dispatched,
+        errors: errors
+            .iter()
+            .take(PASS_REPORT_ERRORS)
+            .map(|e| bounded_diagnostic(e))
+            .collect(),
+    };
+    // stderr is the service log. Bound quiet passes to a heartbeat line.
+    let quiet = dispatched == 0 && errors.is_empty();
+    let due = PASS_LOGGED.with(|last| {
+        last.get()
+            .is_none_or(|at| at.elapsed() >= std::time::Duration::from_secs(PASS_LOG_QUIET_SECONDS))
+    });
+    if !quiet || due {
+        PASS_LOGGED.with(|last| last.set(Some(std::time::Instant::now())));
+        eprintln!(
+            "{} {NAME} pass: {changes} open change(s), {dispatched} dispatched, {} refused",
+            report.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            errors.len()
+        );
+    }
+    let dir = directory(root, true)?.context("service directory missing")?;
+    dir.write(PASS_REPORT, &serde_json::to_vec_pretty(&report)?)
+}
+
+fn pass_report(dir: &Directory) -> Option<PassReport> {
+    dir.read(PASS_REPORT)
+        .ok()
+        .flatten()
+        .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+}
+
+/// Why a running worker is degraded: its last pass refused changes or
+/// stopped, or it has not completed a pass recently.
+// trace:BUG-2674 | ai:claude
+fn pass_degradation(report: Option<&PassReport>, now: DateTime<Utc>) -> Vec<String> {
+    let Some(report) = report else {
+        return Vec::new();
+    };
+    let mut reasons: Vec<String> = report
+        .errors
+        .iter()
+        .map(|e| format!("last pass: {e}"))
+        .collect();
+    let idle = now.signed_duration_since(report.at).num_minutes();
+    if idle >= PASS_STALE_MINUTES {
+        reasons.push(format!("no discovery pass for {idle} min"));
+    }
+    reasons
+}
+
+/// A live worker is healthy only while its passes complete without refusals.
+// trace:BUG-2674 | ai:claude
+fn pass_status(status: &'static str, degraded: &[String]) -> &'static str {
+    if status == "running" && !degraded.is_empty() {
+        "degraded"
+    } else {
+        status
     }
 }
 

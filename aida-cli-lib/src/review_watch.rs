@@ -2849,30 +2849,56 @@ pub(crate) fn run_with_program(
         // One lazy classification per pass, rather than one /proc scan per PR.
         // trace:BUG-2442 | ai:codex
         let authors = update::AuthorLiveness::default();
-        watch_changes(
-            &store,
-            reviewable_changes(changes, &mut reported_trains),
-            |change| {
-                // A pass can contain many bounded forge probes. Reap between
-                // changes as well as between passes so finished children do not
-                // sit as zombies throughout a large discovery batch.
-                // trace:BUG-2640 | ai:codex
-                for outcome in reap_dispatchers(&store, &mut children) {
-                    service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+        let reviewable = reviewable_changes(changes, &mut reported_trains);
+        let considered = reviewable.len();
+        // trace:BUG-2674 | ai:claude
+        let mut dispatched = 0usize;
+        let watched = watch_changes(&store, reviewable, |change| {
+            // A pass can contain many bounded forge probes. Reap between
+            // changes as well as between passes so finished children do not
+            // sit as zombies throughout a large discovery batch.
+            // trace:BUG-2640 | ai:codex
+            for outcome in reap_dispatchers(&store, &mut children) {
+                service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
+            }
+            let before = children.len();
+            let result = watch_change(
+                &root,
+                &repo,
+                &store,
+                args,
+                &mut children,
+                &authors,
+                change,
+                program,
+            );
+            dispatched += children.len().saturating_sub(before);
+            observe_dispatch_result(&root, result)
+        });
+        // Every pass leaves a timestamped report, including one stopped by a
+        // whole-watcher failure, so status can tell an idle healthy watcher
+        // from one that refuses work or no longer completes passes.
+        // trace:BUG-2674 | ai:claude
+        let refused = match watched {
+            Ok(refused) => refused,
+            Err(error) => {
+                if !error.is::<service::ImageSuperseded>() {
+                    let stop = [format!("{error:#}")];
+                    if let Err(report) =
+                        service::controller_pass_report(&root, considered, dispatched, &stop)
+                    {
+                        eprintln!("review-watch: could not record the pass report: {report:#}");
+                    }
                 }
-                let result = watch_change(
-                    &root,
-                    &repo,
-                    &store,
-                    args,
-                    &mut children,
-                    &authors,
-                    change,
-                    program,
-                );
-                observe_dispatch_result(&root, result)
-            },
-        )?;
+                return Err(error);
+            }
+        };
+        // A report is diagnostics: failing to write it must not stop dispatch.
+        if let Err(report) =
+            service::controller_pass_report(&root, considered, dispatched, &refused)
+        {
+            eprintln!("review-watch: could not record the pass report: {report:#}");
+        }
         // Synchronous setup/spawn errors are dispatch failures too: an idle
         // discovery pass must not clear them before a dispatch succeeds.
         // trace:STORY-2691 | ai:codex
@@ -2986,24 +3012,33 @@ pub(crate) fn fixture_sync_pass(root: &Path, once: bool) -> Result<bool> {
 }
 
 /// Per-change refusals are durable diagnostics, never a reason to abandon the
-/// remaining changes in this pass (including `--once`).
+/// remaining changes in this pass (including `--once`). Returns each refused
+/// change as `KEY: reason`, so the pass report can surface them.
 // trace:BUG-2471 | ai:codex
+// trace:BUG-2674 | ai:claude
 fn watch_changes(
     store: &Store,
     changes: Vec<forge::Change>,
     mut watch: impl FnMut(forge::Change) -> Result<()>,
-) -> Result<()> {
+) -> Result<Vec<String>> {
+    let mut refused = Vec::new();
     for change in changes {
         let key = change.key();
         match watch(change.clone()) {
             Ok(()) => {}
             Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
+            // Whole-watcher failure (unusable state, controller authority
+            // ended or superseded). Name it as a watcher stop: it is not a
+            // refusal of this one change. trace:BUG-2674 | ai:claude
             Err(error) if stops_watcher(&error) => {
-                return Err(error.context(format!("{key}: review watch refused")))
+                return Err(error.context(format!(
+                    "review-watch pass stopped while processing {key}; the watcher cannot continue"
+                )))
             }
             Err(error) => {
                 let reason = format!("refused: {error:#}");
                 eprintln!("{key}: {reason}");
+                refused.push(format!("{key}: {reason}"));
                 // Diagnostic contention or per-change I/O must not stop the pass.
                 // Preserve only the whole-state failures tagged by store.load().
                 match retry_busy(|| record_skip(store, &change, Some(&reason))) {
@@ -3017,7 +3052,7 @@ fn watch_changes(
             }
         }
     }
-    Ok(())
+    Ok(refused)
 }
 
 /// Only whole-state failure stops the watcher; one change's refusal must not
