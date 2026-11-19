@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T17:54:03.287023023Z
+modified_at: 2026-11-19T18:30:47.862084850Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -37,6 +37,25 @@ comments:
   modified_at: 2026-11-19T17:48:22.728104727Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f513-5a56-7a40-82b3-ee5d701ebb47
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: b82066836029b7ef323861eb91d1dbd4967a3096. The merge-base diff against origin/main was empty. I reviewed the native lane's working-tree diff against HEAD and checked for untracked additions.
+
+    - Shared deadline [evidence: behavioral-test]. The report scopes the deadline before worktree and forge discovery and keeps it through member checks. The offline fixture exercises stalled worktree discovery, protected-base Git, open and live train listings, member ownership, metadata and label probes, and head fetch. It also divides the budget across two individually short reads. See aida-cli-lib/src/pr_train_check.rs:335 and aida-cli-lib/src/tests/story_2824_train_check_tests.rs:455.
+    - Termination [evidence: behavioral-test]. The fixture covers an exited Git leader with a descendant holding output pipes and checks that the descendant stops. The collector reserves the process-group ID until the leader is reaped. See aida-cli-lib/src/bounded_process.rs:236.
+    - Fail-closed reporting [evidence: behavioral-test]. Zero budget bypasses discovery, named and discovered PRs retain their IDs and report not-checked on exhaustion, and an unknown open-PR list returns an error. The row test retains earlier verdicts in input order and verifies that duplicate IDs are checked once. Existing unavailable and gate refusal tests remain active. See aida-cli-lib/src/tests/story_2824_train_check_tests.rs:202.
+    - CLI contract [evidence: documentation-inspection]. The help snapshot and docs/cli/04-git-lifecycle.md:461 describe the shared budget and the documented JSON null for an undiscovered base.
+
+    Adversarial pass covered timeout propagation, Git argument and forge response parsing, empty and multi-PR results, and refusal paths. It found a nested ownership Git read and a separate hold-label read that needed deadline wiring. Both now have offline stall coverage. The deadline does not grant admission or introduce write paths. A child that leaves its process group can outlive group termination, but its output pipes cannot hold the report past the deadline. CI evidence depends on the host-published head.
+
+    Validation passed on the final working-tree diff (Git blob hash 11ede4c3266e8e80917c11bdc87306fa0504afa6). Lane job j20261119T181916214-2-0 executed 17 tests and passed all 17, including the timeout fixture, CLI help snapshot, and host remote credential-routing ratchet. Diff whitespace, trace headers, documentation links, and showcase drift checks passed.
+  created_at: 2026-11-19T18:30:47.862084850Z
+  modified_at: 2026-11-19T18:30:47.862084850Z
+  session_id: 01a1f4f165cc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
