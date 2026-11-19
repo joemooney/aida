@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T03:38:30.777259172Z
+modified_at: 2026-11-19T03:39:41.958105341Z
 req_type: Story
 tags:
 - docs:impacted
@@ -299,6 +299,13 @@ comments:
   content: 'Advisor 20:27 note for the #4269 DELTA reviewer at c2047ff: round 3 was APPROVED at 1097003. The CI-fix lane was scoped to cargo fmt plus regenerating the BUG-1502 audit ONLY, but it pushed a real code change: ''fix(review): record reads the blocking policy once for routing, record and CI request'' (kernel_deps.rs +1, review_blocking.rs +72, review_commands.rs +83/-16), and it did not touch the audit catalog. Review exactly the delta 1097003..c2047ff, excluding the automatic main merge 9bf7338. Approve only if the change is correct and keeps every round-1 to round-3 guarantee (security classes always win, AllBlock forces blocking, policy re-applied to inherited findings, the active policy quoted). Also confirm whether the fmt and BUG-1502 audit failures are fixed. If they aren''t, that is an AC-blocking CI failure. This is the final round (4 of 4); the 09:18 tier applies.'
   created_at: 2026-11-19T03:26:01.636148111Z
   modified_at: 2026-11-19T03:26:01.636148111Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1e3-b606-77e2-a46e-8127e4c7be75
+  author: joe
+  content: 'ADVISOR RULING 20:45: #4269 round 4 (final) is CR with P1 (completed-draft replay bypasses the policy) and P2 (store-writer inventory). Neither merge nor park fits: the P1 is live on the standalone-draft path, while the rest of the PR is approved work. CAP EXCEPTION: one round 5, limited to exactly these two items plus mechanical fmt/audit if still red (brief .aida/tmp/brief-STORY-2913-r5.md). If round 5 is not clean on those, the PR is PARKED. Recorded transparently for the operator.'
+  created_at: 2026-11-19T03:39:41.958105341Z
+  modified_at: 2026-11-19T03:39:41.958105341Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
