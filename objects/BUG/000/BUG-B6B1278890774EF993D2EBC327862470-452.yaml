@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T04:15:16.486761349Z
+modified_at: 2026-11-19T04:15:30.347376409Z
 req_type: Bug
 tags:
 - conflicts
@@ -266,6 +266,29 @@ comments:
   created_at: 2026-11-19T04:15:16.355629785Z
   modified_at: 2026-11-19T04:15:16.355629785Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f204-7b33-72b1-b5ed-37674ecf329e
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-4 (FINAL) BRIEF (advisor-119, relayed by product 21:15):
+    # Rework brief: BUG-2688 / PR #4275, round 4 of 4 (FINAL)
+
+    Advisor: claude-advisor-119, 2026-11-18 21:17 MST. Head reviewed: eab03c9. Lane: Claude.
+    Round 3 fixed items 1-3 of the earlier briefs; keep them. Fix EXACTLY these two:
+
+    1. P1 data-loss, seat_clone.rs RetainedRework::reconcile_fresh (3674-3678, reset at 3702): preserve BOTH the
+       original INDEX and the working tree before any reset. First write-tree from the CURRENT index (no add)
+       and save it as its own commit/ref (e.g. refs/aida/salvage/<spec>/<ts>/index). THEN `git add -A` plus
+       write-tree for the working tree (…/worktree). Record both refs in the refusal/recovery text. Regression:
+       a staged version that differs from the working-tree version: both are recoverable after --fresh.
+    2. P2 (CI red), scripts/store-writers.toml: classify the six new sites (RepairGuard::mark_proven_dead
+       -> save; RetainedRework::owner -> read_exact_lease; RetainedRework::reconcile_fresh -> execute and
+       ReworkSeatState::observe; RetainedRework::refusal -> ReworkSeatState::observe; plus the rest CI lists).
+       `python3 scripts/check-store-writers.py` passes.
+    Validation: targeted seat_clone and repair_journal tests plus `make check-ci-fast` via the lane job runner. Push.
+  created_at: 2026-11-19T04:15:30.347376409Z
+  modified_at: 2026-11-19T04:15:30.347376409Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
