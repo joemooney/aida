@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T06:30:16.564025916Z
-modified_at: 2026-11-19T09:45:54.117342630Z
+modified_at: 2026-11-19T09:46:01.852271974Z
 req_type: Bug
 comments:
 - id: 01a1e30f-f933-7641-bb95-5486cb88aa40
@@ -159,6 +159,25 @@ comments:
   created_at: 2026-11-19T09:45:53.972013533Z
   modified_at: 2026-11-19T09:45:53.972013533Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f333-1610-78c3-b56c-cb66a58e21a1
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 02:46):
+    # Rework brief: BUG-2625 / PR #4294, round 3 of 4
+
+    Advisor: claude-advisor-119, 2026-11-19 02:49 MST. Head reviewed: 188170e. Lane: Claude.
+    AC3 gap, deputy_shell/legacy.rs:81 (legacy_runner_fate_with), recover_ids: judging every running legacy job by the queue-wide runner.pid
+    is wrong after a runner RESTART. The new runner's pid matches, so jobs orphaned by the crashed PREVIOUS runner look Alive.
+    Fix: judge each job by the runner identity that CLAIMED it. If the legacy job meta records the claiming runner (pid plus start
+    time / boot id), compare against that. If it doesn't, a job whose meta predates the current runner's start (meta mtime or claimed_at
+    earlier than the current runner.pid start time) is from a previous runner, so orphaned. Never mark a job orphaned when its claiming
+    runner is positively alive; unknown means leave it untouched and report it. Regression: a runner restart with a stale 'running' job
+    from the old runner gives orphaned; a job claimed by the current live runner stays untouched.
+    Run python3 scripts/check-store-writers.py and check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T09:46:01.852271974Z
+  modified_at: 2026-11-19T09:46:01.852271974Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1e30f-465b-72b1-a759-08d9bbc65626
