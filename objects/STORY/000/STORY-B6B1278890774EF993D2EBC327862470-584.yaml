@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-08T02:58:08.667753563Z
-modified_at: 2026-11-10T15:14:03.735900924Z
+modified_at: 2026-11-19T02:18:01.329764897Z
 req_type: Story
 tags:
 - area:human-wait
@@ -607,6 +607,13 @@ comments:
   modified_at: 2026-11-10T14:40:04.683609222Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
+- id: 01a1f198-eb78-7d02-ada5-0198774fa277
+  author: joe
+  content: 'ADVISOR RULING 2026-11-18 19:20 (advisor-119), design fork from the 11-10 15:14Z attention note: OPTION A, a bound-resume queue entry that retains the original dirty seat/session. It matches the signed sketch (docs/plans/2026-11-08-story-2661-park-resume-sketch.md: bound waits suppress generic autoqueue, and reclaim doors refuse retained ownership) and is the only option that meets AC2 (''that exact vendor session''). Option B is rejected: it fails AC2 and risks a second implementer landing on the parked lane''s uncommitted edits. The 11-10 slice-2 brief (comment 41, ''re-queues the spec with the answer'') CONTRADICTED the sketch and is SUPERSEDED by this ruling. Slice 2 scope: the consumer, evaluate_bound_resume, the exit/park handshake, a finalize_answer hook in questions.rs, and resume admission in session.rs spawn_vendor_headless_resume_granted plus launch/contained.rs. Claude lanes park/resume; Codex parks ONLY when uncontained (contained Codex resume stays refused). AC1 and AC2 fully; AC3 for Claude and uncontained Codex. AGY and AC4 escalation are slice 3. Keeps d9775a3 park_runtime. STRICT. Claude lane.'
+  created_at: 2026-11-19T02:18:01.329764897Z
+  modified_at: 2026-11-19T02:18:01.329764897Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1b9c5-1aa6-78e3-9355-9af12a0ce44c
   author: joe
