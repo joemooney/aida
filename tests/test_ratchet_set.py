@@ -6,6 +6,7 @@ import unittest
 import contextlib
 import io
 import sys
+import tempfile
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -31,6 +32,36 @@ def names(text):
 
 
 class RatchetSet(unittest.TestCase):
+    # trace:BUG-2664 | ai:codex
+    def test_runner_distinguishes_cargo_diff_skip_from_zero_tests(self):
+        runner_spec = importlib.util.spec_from_file_location('ratchet_runner', ROOT / 'scripts/check-ratchets.py')
+        runner = importlib.util.module_from_spec(runner_spec)
+        runner_spec.loader.exec_module(runner)
+        skip = ('cargo: no compile inputs changed; CI covers it (no changes vs origin/main). '
+                'Skipped; pass --force-build to run anyway.')
+        zero = 'test result: ok. 0 passed; 0 failed;'
+        command = ['cargo', 'test', '-p', 'aida-ci-guards', '--lib']
+        with tempfile.TemporaryDirectory() as directory:
+            cargo = Path(directory) / 'cargo'
+            cargo.touch()
+            cargo.chmod(0o755)
+            env = {'PATH': directory}
+            for lines, code in (([skip], 0), ([zero], 0), ([skip, zero], 0),
+                                (['warning: ' + skip], 0), ([skip], 7)):
+                with self.subTest(lines=lines, code=code), contextlib.redirect_stdout(io.StringIO()) as output:
+                    message = '\n'.join(lines)
+                    cargo.write_text(f'#!{sys.executable}\nimport sys\nprint({message!r}, file=sys.stderr)\n'
+                                     f'sys.exit({code})\n')
+                    if lines == [skip] and code == 0:
+                        runner.run(command, env=env, require_tests=True, expected_tests=3)
+                        self.assertIn('ratchets: skipped cargo test -p aida-ci-guards --lib', output.getvalue())
+                    else:
+                        with self.assertRaises(SystemExit) as failed:
+                            runner.run(command, env=env, require_tests=True, expected_tests=3)
+                        self.assertEqual(failed.exception.code,
+                                         code or 'ratchets: refusing a successful command with no executed tests')
+                        self.assertNotIn('ratchets: skipped', output.getvalue())
+
     def test_runner_refuses_empty_filters_and_failed_children(self):
         runner_spec = importlib.util.spec_from_file_location('ratchet_runner', ROOT / 'scripts/check-ratchets.py')
         runner = importlib.util.module_from_spec(runner_spec)
