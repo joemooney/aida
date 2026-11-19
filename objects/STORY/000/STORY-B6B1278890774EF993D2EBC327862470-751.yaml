@@ -22,12 +22,12 @@ description: |
   - A grant 90 minutes from expiry with a live relay bound to it produces a notice to the product and advisor seats and a doctor finding naming the grant, the relay and the renew command.
   - An agent session (no interactive terminal) calling the extend path is refused.
   Not in scope: changing who may mint authority; any agent-side renewal.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T20:30:53.775714194Z
-modified_at: 2026-11-19T02:20:09.323108353Z
+modified_at: 2026-11-19T02:20:37.613531789Z
 req_type: Story
 tags:
 - landing-emergency
@@ -174,6 +174,13 @@ comments:
   modified_at: 2026-11-19T02:20:09.323108353Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f19b-1f6d-71e2-add6-a11b373ec406
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: Slice 2 requires separate sketch signoff per advisor comment of 2026-11-14 13:40. Posted concrete sketch and inspected renewal/grant validators. Latest acceptance requires all covered live seat/deputy/controller grants to extend, but grants have no project/mandate binding and children retain independent expiries; coverage and descendant-renewal policy need approval before authority lifecycle changes. Prescribed host codegraph client is also absent. No source edits or tests; publication veto intentional.. No triage reason was given.'
+  created_at: 2026-11-19T02:20:37.613519669Z
+  modified_at: 2026-11-19T02:20:37.613519669Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1dbc9-8d7f-7011-a059-a04197eb5620
   author: joe
@@ -232,6 +239,15 @@ history:
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1f19b-1f6d-71e2-add6-a10610908bb8
+  author: joe
+  timestamp: 2026-11-19T02:20:37.613506526Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: ce660d553f782fd223ca091bb3bd2dc394352eb5
   branch: main
@@ -240,9 +256,3 @@ filed_at:
   aida_build_sha: ce660d553f7
   vendor: claude
   session: 01a1db78-560d-7a81-a467-3742be1fefc3
-attention_reason:
-  category: design-fork
-  detail: Slice 2 requires separate sketch signoff per advisor comment of 2026-11-14 13:40. Posted concrete sketch and inspected renewal/grant validators. Latest acceptance requires all covered live seat/deputy/controller grants to extend, but grants have no project/mandate binding and children retain independent expiries; coverage and descendant-renewal policy need approval before authority lifecycle changes. Prescribed host codegraph client is also absent. No source edits or tests; publication veto intentional.
-  lean: Approve same-principal current-roster live roots plus validated live descendant chains, preserving binding/delegation, under effective caps and record locks; report partial failures explicitly.
-  raised_by: implementer
-  raised_at: 2026-11-17T05:58:56.038937668Z
