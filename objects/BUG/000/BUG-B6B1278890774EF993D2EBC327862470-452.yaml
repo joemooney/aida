@@ -566,6 +566,13 @@ comments:
   modified_at: 2026-11-19T11:58:19.265916911Z
   session_id: 01a1f391de67
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f3b8-c4b4-7173-a443-57e46654e586
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed all 142097 bytes / nine files of the supplied landed-tree diff against protected main 011d61c4a6e31913dd6f30c1767c0323c113085e, landed tree 4ad4eb5e0a48df9a029c50a8723dfdd734b8ce67; attest only original PR head cc66ee0087c7f325ef1195638eac00f81b10b400. Read BUG-2688 acceptance and authoritative advisor rework comments through AIDA. The generated checklist could not resolve the display ID, so the full spec was consulted directly. BUG-2688 (bug protocol): met, with new bug_2688_fresh_rework_tests.rs and modified bug_home_038_seat_publish_tests.rs. AC1 PARTIAL: fetch and merge-observation recovery now name commands, but the alignment recovery command cannot clear a behind-origin adopted seat. AC2 PASS by source/regression inspection: missing seat and journal permit a clean remote-head restart. AC3 implemented by source inspection: explicit fresh intent, intact clone relocation, linked-worktree relocation/detachment, strict lease inventory and per-move revalidation are present. AC4 PARTIAL: remote restart and adopted conflict preservation have behavioral regression source, but production placement-lock lifetime lacks protective coverage. Trace comments are present. Request changes for unmet claimed AC1 and an ADR-76 untested seat-lifecycle path; no local tests/builds were run per operator instruction. Existing exact-head CI fast gates and tier selection passed; CI pending at review time (fast compile running, merge-hold-gate awaiting clearance), which is not the reason for refusal. The PR head is three commits behind protected main; the newer base changes concern landing health, shift labels and relay renewal, and neither finding depends on those changes. The required absolute CodeGraph client is absent; doctor reports its index unreachable, so call sites were confirmed with rg. Standalone draft only; the parent must validate and record it.. Triage reason: Round 3 for PR #4306. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-fresh-r3.md: state-correct alignment recovery command; a production placement-lock lifetime regression. CLAUDE, STRICT.'
+  created_at: 2026-11-19T12:12:14.900017510Z
+  modified_at: 2026-11-19T12:12:14.900017510Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -757,6 +764,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f3b8-c4b3-73e3-9f12-38ec4e65086f
+  author: joe
+  timestamp: 2026-11-19T12:12:14.900003192Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
