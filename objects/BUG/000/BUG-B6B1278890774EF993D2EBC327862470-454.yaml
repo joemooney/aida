@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T18:13:08.351988298Z
-modified_at: 2026-11-19T10:09:11.745496884Z
+modified_at: 2026-11-19T10:09:34.702600282Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -60,6 +60,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: ROUND 1 FULL SWEEP: Inspected all eight files and the complete 41,419-byte pinned diff from protected main b0671acf9f4a74e96171d8e035d8ca40a28efda8 to landed tree c6b9ac4e6b2d3f09ee306cabd7716d6cc8239810, attesting only original PR head 3cce1669002526e9bed06c424f5dabc4cb97253d. Covered spec BUG-2690 was resolved through AIDA using its canonical ID BUG-b6b1278890774ef993d2ebc327862470-454; it has no separate Acceptance section, so the complete behavioral criteria in its description and the implementer AC1/AC2/AC3 claims were enumerated below.. Triage reason: Round 2 for PR #4301. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2690-r2.md: real-path tests for the update-branch head mutation and its guards. CLAUDE, STRICT.'
   created_at: 2026-11-19T10:09:11.745492306Z
   modified_at: 2026-11-19T10:09:11.745492306Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f348-755d-7131-9355-bd31cdaa554f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2690):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 3cce16690025
+    Recorded: 2026-11-19T10:05:44.098418237+00:00
+    Findings:
+    1. Add behavioral coverage through the real branch-update path before enabling this new remote head mutation. In aida-cli-lib/src/land_run.rs:1022-1051, Live::update_ci_base performs the origin-identity, live-lease and hold checks, then forge.rs:2307-2331 performs the live PR validation, head-protection check and PUT. The new story_2768_land_run_tests.rs test substitutes Fake::update_ci_base, and forge.rs:2361 tests only validate_landing_update_target. Thus removing the live-lease refusal, the repository-identity refusal, the call to pr_head_guard::check, or the expected_head_sha wiring would not fail the added tests. Existing isolated head-guard tests do not verify this new caller invokes that guard. Add a fake-forge/gh positive control exercising the actual update path and asserting the exact repository-bound PUT with expected_head_sha, plus negative controls proving no PUT for an occupied or unreadable lease set, changed repository, local/live hold, moved PR head/target, and an approved/train-protected head. Exercise the real boundary rather than replacing update_ci_base with an unconditional fake. This is an ADR-76 blocking test gap in authority/lease gate code. It is present in the reviewed head and landed tree and does not depend on newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-19T10:09:34.557422766Z
+  modified_at: 2026-11-19T10:09:34.557422766Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
