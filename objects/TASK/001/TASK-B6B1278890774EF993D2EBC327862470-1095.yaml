@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T05:12:54.381445085Z
-modified_at: 2026-11-19T13:26:27.062603259Z
+modified_at: 2026-11-19T13:28:56.550317362Z
 req_type: Task
 comments:
 - id: 01a1e804-8b81-7d21-8ed3-99c871ab860d
@@ -213,6 +213,22 @@ comments:
   created_at: 2026-11-19T13:26:22.619306031Z
   modified_at: 2026-11-19T13:26:22.619306031Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f3ff-2b6c-7fc2-b742-5ff44de4f751
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-119, relayed by product 06:28); codex lane with explicit --brief:
+    # Rework brief: TASK-3812 / PR #4290, round 3 of 4 (ONE test)
+
+    Advisor: claude-advisor-119, 2026-11-19 06:31 MST. Head reviewed: f3008c2. Lane: Claude.
+    Round 2's items are otherwise resolved. ONLY: add a test that runs the REAL check-fresh CLI path (spawn the built `aida dev
+    check-fresh` binary via the existing test-binary helper, or call handle_dev_command with the CheckFresh args and capture the exit code
+    through the process-exit seam) for fresh, stale and unknown states, and asserts 0 / EXIT_STALE / EXIT_UNKNOWN. Removing
+    process::exit(code) at dev_fresh.rs:169, or changing the CheckFresh dispatch arm to Ok(()), must fail the test. No other changes.
+    cargo fmt; python3 scripts/check-store-writers.py; check-ci-fast via the lane job runner. Push.
+  created_at: 2026-11-19T13:28:56.550317362Z
+  modified_at: 2026-11-19T13:28:56.550317362Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
 history:
 - id: 01a1ebd9-ad1b-7182-9a97-2d6c6c3922ad
