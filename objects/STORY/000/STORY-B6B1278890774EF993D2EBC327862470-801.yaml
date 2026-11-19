@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:26:06.757643260Z
-modified_at: 2026-11-19T03:54:17.755940434Z
+modified_at: 2026-11-19T05:09:46.387581445Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -79,6 +79,13 @@ comments:
   content: 'ADVISOR RULING 2026-11-18 20:58 on #4279 round 1 (CR at c0dde5a, 7 P1s, all valid). Simplifications to my (a) ruling: (S1) a PROTECTED-PATH (gate/authority) PR that is behind base ALWAYS refuses with ''update-branch + delta review''; drop the current-base merge-ref CI branch entirely (removes F4). Disjoint unprotected PRs still merge. (S2) Collect intervening paths per commit: git log --name-only -z --format= <reviewed_base>..<current_base>, NUL-split, no lossy decode (fixes F2''s revert case and F3''s quotePath). Direct fixes: F1, run the behind-base gate INSIDE landing_merge::merge/recheck so burndown and release can''t bypass it; F5, carry the policy snapshot (Entry) captured at the CI-skip decision through to the merge, and refuse if the live policy changed; F6, the ratchet must scan all production items, excluding only #[cfg(test)] mod blocks (parse items, not ''truncate at first #[cfg(test)]''), with a regression that a direct forge merge in the ship handler fails it; F7, land-run''s ship executes in-process, or passes the operator TTY/authority through, so the floor decision is consistent; regression for an operator at a terminal. Round 2 of 4, STRICT.'
   created_at: 2026-11-19T03:54:17.755940434Z
   modified_at: 2026-11-19T03:54:17.755940434Z
+  session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
+  harness_version: 2.1.327 (Claude Code)
+- id: 01a1f236-297e-7782-929f-e4d82ace238e
+  author: joe
+  content: 'Advisor 22:12 note for the #4279 round-2 reviewer (STRICT): check exactly the 20:58 ruling. F1: freshness is judged inside the boundary recheck for every caller. F2/F3: per-commit ''git log -m --name-only -z'', NUL-split; non-UTF-8 refuses. F4/S1: a stale protected path always refuses (no merge-ref CI branch, by design). F5: the drain and burndown CI-skip snapshot is carried to the merge, and a change refuses. F6: the ratchet is syn-parsed workspace-wide, including method, UFCS and in-macro calls, with bypass regressions. F7: the land-run ship child keeps operator floor authority, with a pty regression. Do not re-litigate the signed S1c design. Round 2 of 4; the 09:18 tier applies.'
+  created_at: 2026-11-19T05:09:46.387581445Z
+  modified_at: 2026-11-19T05:09:46.387581445Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 history:
