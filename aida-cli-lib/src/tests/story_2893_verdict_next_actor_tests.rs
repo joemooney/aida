@@ -134,9 +134,19 @@ fn legacy_spec_verdict_resolves_its_pr_from_an_unrelated_checkout() {
     assert!(none.get("next_actor").is_none(), "{none}");
 }
 
+/// The handler's authority closure: the gate's own approval check, unchanged.
+fn gate_authorized(root: &Path, key: &str, v: &rv::RecordedVerdict) -> bool {
+    crate::gate::review_approval::independent_approval_authorized(
+        root,
+        &[key.to_string()],
+        v.reviewed_branch.as_deref(),
+        v,
+    )
+}
+
 // Finding 3: an approval the authority check rejects is never relabelled,
 // whether its head is the local HEAD or the observed PR head. Uses the real
-// `verdict_approval_authorized` over the invalid-authority fixtures.
+// gate check over the invalid-authority fixtures.
 #[test]
 fn unauthorized_approval_stays_needs_review_through_the_handler() {
     let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
@@ -158,7 +168,7 @@ fn unauthorized_approval_stays_needs_review_through_the_handler() {
         let v = rv::parse_recorded_verdict(&body.to_string()).unwrap();
         assert!(v.kind.approves(), "{label}");
         assert!(
-            !verdict_approval_authorized(root, "STORY-1", &v),
+            !gate_authorized(root, "STORY-1", &v),
             "{label}: fixture must be an invalid authority"
         );
 
@@ -167,7 +177,7 @@ fn unauthorized_approval_stays_needs_review_through_the_handler() {
             root,
             "STORY-1",
             |_| TipRelation::AtReviewedSha,
-            |v| verdict_approval_authorized(root, "STORY-1", v),
+            |v| gate_authorized(root, "STORY-1", v),
             |_| Some(4318),
             |_| {
                 observed.set(true);
@@ -186,7 +196,7 @@ fn unauthorized_approval_stays_needs_review_through_the_handler() {
             root,
             "PR-4318",
             |_| TipRelation::Unknown,
-            |v| verdict_approval_authorized(root, "PR-4318", v),
+            |v| gate_authorized(root, "PR-4318", v),
             |_| panic!("a PR key needs no branch lookup"),
             |_| Some(train_at(&head)),
         )

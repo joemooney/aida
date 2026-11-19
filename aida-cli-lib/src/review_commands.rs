@@ -4256,7 +4256,16 @@ pub(crate) fn handle_review_verdict_show(spec: &str, json: bool) -> Result<()> {
             let branch = current_branch_at(root);
             verdict_tip_relation(root, branch.as_deref(), sha)
         },
-        |v| verdict_approval_authorized(root, spec, v),
+        // The display defers to the gate's own approval check; it makes no
+        // authorization decision of its own. trace:STORY-2893 | ai:claude
+        |v| {
+            crate::gate::review_approval::independent_approval_authorized(
+                root,
+                &[spec.to_string()],
+                v.reviewed_branch.as_deref(),
+                v,
+            )
+        },
         |branch| open_pr_for_reviewed_branch(root, branch),
         |pr| observe_pr_next_actor(root, pr),
     );
@@ -4362,20 +4371,6 @@ pub(crate) fn review_verdict_show_with_next_actor(
         &mut value,
     );
     Some((v, value, source))
-}
-
-/// The same authority the body's actionability applies: an approval that
-/// `independent_approval_authorized` rejects (unattested, self-authored,
-/// revoked, ...) is never relabelled as covering any head.
-// trace:STORY-2893 | ai:claude
-fn verdict_approval_authorized(
-    root: &std::path::Path,
-    spec: &str,
-    verdict: &crate::gate::review_verdict::RecordedVerdict,
-) -> bool {
-    use crate::gate::review_verdict::{review_actionability, ReviewActionability, TipRelation};
-    review_actionability(root, spec, Some(verdict), TipRelation::AtReviewedSha)
-        == ReviewActionability::Resolved
 }
 
 /// A legacy record keyed by SPEC names its PR only through the branch it
