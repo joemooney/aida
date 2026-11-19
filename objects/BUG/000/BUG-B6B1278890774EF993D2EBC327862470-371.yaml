@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T01:03:50.032626471Z
-modified_at: 2026-11-19T04:54:30.643453126Z
+modified_at: 2026-11-19T05:11:12.346007239Z
 req_type: Bug
 comments:
 - id: 01a1ebdb-1c64-7892-b876-2c2b819cb76d
@@ -31,6 +31,22 @@ comments:
   modified_at: 2026-11-17T23:37:23.294389407Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f237-7d39-79f2-a6c2-b8306e1741f9
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 697f85f2fff7d766cd736db2a56b705ed281ee10. Reviewed the origin/main merge-base diff, the native working-tree diff and the untracked-file inventory.
+
+    AC1 and AC2: lane_result.rs:375–419 renders the shared notice for a dirty retained clone. standalone_implementer.rs:1361,1678,1799,1859 covers the signal, pending merge, empty rework and ordinary result paths. queue_cmd/work.rs:6055 captures the selected clone so pre-spawn result reporting can inspect it after rollback. The sandboxed probe suppresses the notice for clean or unreadable candidates, and missing paths are skipped.
+
+    AC3: bug_home_038_seat_publish_tests.rs:5375–5433 checks clean, dirty and removed clone cases for refused-before-start, empty rework, punt, hold, generic failure and pending merge result rendering. git diff --check and formatting inspection passed. The launcher jobs had not yet returned an executed-test result at the time of this review.
+
+    Deep pass: the same suffix formatter supplies early and ordinary wording, branch matching uses the resolved name verbatim, the lookup handles zero or multiple candidates within a shared deadline, and the read remains bounded and sandboxed. Corrected the fixture name to use a Git-ref-safe slug. Remaining limits are unreadable clones, the probe deadline, and filesystem changes concurrent with the diagnostic read. The review found no authority change.
+  created_at: 2026-11-19T05:11:12.346007239Z
+  modified_at: 2026-11-19T05:11:12.346007239Z
+  session_id: 01a1f227c76c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e30f-3eb2-7b52-82b2-3b83b7f601b7
   author: joe

@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:51:45.643127006Z
-modified_at: 2026-11-19T04:49:44.303139153Z
+modified_at: 2026-11-19T05:11:44.581940694Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -41,6 +41,21 @@ comments:
   modified_at: 2026-11-17T23:40:44.101190358Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1f237-cebc-7ba3-8747-0e15cb8cda46
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 697f85f2fff7d766cd736db2a56b705ed281ee10. Reviewed the merge-base diff and the uncommitted native-seat changes. No untracked additions.
+
+    - AC1 [evidence: behavioral-test] — PARTIAL. The recovered regression in aida-cli-lib/src/deputy_shell/tests.rs:1542 checks child termination, a terminal timeout with rc 124, and the same runner executing the next job. Execution and CI are unverified.
+    - AC2 [evidence: behavioral-test] — PARTIAL. The collector in aida-cli-lib/src/deputy_shell/mod.rs:879 and the human, TOON and JSON renderers in aida-cli-lib/src/awaiting_you.rs report the deputy name and PID, the runner-record timestamp and the dead observation time. Queued and interrupted jobs are stranded in the report. The exact death time is unavailable.
+    - AC3 [evidence: behavioral-test] — PARTIAL. The regression at aida-cli-lib/src/deputy_shell/tests.rs:1589 starts and kills a real runner mid-job, exercises the live and hidden process cases, and checks the queued and interrupted rows across the three formats. Test execution is unverified.
+
+    Deep pass covered consistent state names across the output formats, timestamp serialization and TOON quoting, empty and multiple job lists, reused PIDs, hidden process namespaces and successor changes during collection. The report is read-only. Dead status retains the existing submit refusal and the successor runner owns orphan recovery. The first compile exposed a fully specified statusbar fixture and its initializer was fixed. Formatting, diff whitespace, trace-header and ExecContext checks passed. Lane job j20261119T045530163-2-0 timed out during compilation at 900 seconds with no executed tests. untested=true. The prescribed CodeGraph client was missing and the call sites were verified with rg.
+  created_at: 2026-11-19T05:11:44.581940694Z
+  modified_at: 2026-11-19T05:11:44.581940694Z
+  session_id: 01a1f2231f02
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0fb-44fe-7d43-b093-79c5cabd700d
   author: joe
