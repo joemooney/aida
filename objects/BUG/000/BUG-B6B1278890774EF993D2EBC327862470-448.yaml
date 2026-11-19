@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-19T01:31:10.939282812Z
+modified_at: 2026-11-19T01:50:37.213977805Z
 req_type: Bug
 tags:
 - dell1
@@ -46,6 +46,24 @@ comments:
   modified_at: 2026-11-18T15:51:37.245852239Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f17f-a760-7f01-94c5-ab8245134e4d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9f2f93cc432277dadb7781e7ddefe397bdc65b81, plus the uncommitted native-seat diff. The merge-base diff was empty and there were no untracked additions.
+
+    - AC1: [evidence: behavioral-test] `worktree_lifecycle_gc.rs::bug_2684_floor_reclaims_ended_overlays_by_ownership` proves fresh ended overlays are reclaimed and overlays with a lease, a cwd holder or an open fd are retained. The existing dirty-worktree and live-lease revalidation tests passed.
+    - AC2: [evidence: behavioral-test] `bug_2681_scheduled_floor_breach_reclaims_lane_overlay` proves the existing bounded overlay-only scheduled guard reclaims a fresh overlay and re-probes free space. A still-low finding carries its freed-byte estimate. Recovery telemetry for successful guard runs and automatically retrying an already-refused launch remain open. The broader scheduled lifecycle apply path is a separate STORY-2711 authority decision.
+    - AC3: [evidence: behavioral-test] `bug_2651_orphan_overlays_reclaim_but_seat_targets_remain_report_only` exercises removal of the kernel-style mode-zero scratch directory through the existing pinned-handle remover.
+    - AC4: [evidence: behavioral-test] The ownership regression covers fresh, held, leased and invalid-ID directories. `bug_2684_mount_inventory_retains_direct_and_private_overlay_mounts` covers escaped mount paths, host and private inventories, and component-prefix siblings. Invalid-ID directories are retained by identity under the binding advisor brief.
+
+    Adversarial pass covered exact lease IDs, byte-oriented procfs escapes, empty and multiple inventories, prefix siblings, root symlinks, raced lease creation and caller-held descriptors. Early runs over-retained fresh overlays. The corrected scan handles the kernel's EINVAL when opening mountinfo for a task without a mount namespace. Unreadable process details still limit what the host can observe. The general GC apply authority checks were reviewed and exercised by the existing authority test.
+
+    Lane job j20261119T014424123-2-0 ran 30 tests, all passed. All seven structural checks, cargo fmt --all -- --check and git diff --check passed. The configured CodeGraph client was missing. Source navigation used rg. Exact publication-head CI is pending host publication.
+  created_at: 2026-11-19T01:50:37.213977805Z
+  modified_at: 2026-11-19T01:50:37.213977805Z
+  session_id: 01a1f16d90e1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
