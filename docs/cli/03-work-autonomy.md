@@ -64,6 +64,9 @@ Three cross-cutting truths the tree assumes:
 **Pickup checks before setup.** Role precedence is `--role`, queue routing, then scope default; a conflicting shell role is reported with the chosen source before acting. Interactive pickup checks branch occupancy and validates child-seat delegation before persisting an implicit queue row, calibration, lease, worktree, or status change. An occupied branch can be retired manually only when its checkout is idle, clean, unlocked, and unleased; pickup never removes it automatically. If setup succeeds but launch fails, the error prints `aida worktree enter <ID>` and the guided continuation `claude "/aida-guided-implement <ID>"` (ordinary pickup uses `/aida-pickup`).
 <!-- trace:TASK-1337 | ai:codex -->
 
+To continue a **Done** spec on its existing PR or MR, run `aida queue work <SPEC> --role implementer`. Pickup requires one verified open change on an origin branch and applies the regular rework holds and lease checks. It can restore the queue row after preflight if completion removed it. Use `aida queue rework <SPEC>` to route the spec without launching a session. If that command times out looking up the open change, it exits before changing the spec or queue. <!-- trace:STORY-2690 | ai:codex -->
+
+
 **A standalone reviewer receives recording attribution before launch.**
 `queue work PR-N --role reviewer` sets the selected vendor's
 `AIDA_AGENT_TYPE` and a vendor/reviewer `AIDA_AGENT_NAME` in the child, for

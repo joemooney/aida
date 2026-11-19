@@ -1727,38 +1727,85 @@ and the applicable carry-over proof event.
 ### Project review blocking tiers
 
 <!-- trace:TASK-3814 | ai:codex -->
-Projects can opt into the P1 review policy in `.aida/config.toml`:
+<!-- trace:STORY-2913 | ai:claude -->
+`[review] blocking_tiers` names the finding classes that block a merge.
+Findings outside the list are approved and filed as linked follow-up specs.
 
 ```toml
 [review]
-blocking_tiers = ["p1", "data-loss", "security", "acceptance"]
+blocking_tiers = ["p1", "data-loss", "security-authority-bypass", "unmet-claimed-ac"]
 ```
 
-Omitting this setting preserves existing review behavior. The supported opt-in
-requires all four entries. Malformed settings refuse review recording.
-P1 defects, data loss, security or authority bypass, and acceptance-criterion
-misses block. Other P2/P3 findings approve with follow-ups. Mutation-kill and
-untested-path findings in gate, sandbox, authority, seat or containment code
-still block regardless of priority; the same classes elsewhere (reporting or
-documentation, for example) become follow-ups at P2/P3.
+The list takes classes from this registry:
 
-The reviewer prompt includes the policy only when enabled. Reviewers classify
-findings explicitly using the existing structured finding argument:
+| Class | Meaning |
+|---|---|
+| `p1` | priority-1 defect: wrong behaviour users will hit |
+| `p2` | priority-2 defect: real but contained |
+| `p3` | priority-3 observation: minor or cosmetic defect |
+| `data-loss` | data can be lost, corrupted or silently dropped |
+| `security-authority-bypass` | a security defect, or a path that grants, checks or bypasses authority wrongly |
+| `unmet-claimed-ac` | an acceptance criterion the change claims to meet is not met |
+| `test-gap` | changed behaviour has no test that would fail without it |
+| `style` | style, naming or readability only |
+
+Names are case-insensitive. The earlier spellings `security` and
+`authority-bypass` are accepted for `security-authority-bypass`, `acceptance`
+for `unmet-claimed-ac`, and `untested-path`, `missing-test`, `untested` and
+`mutation-kill` for `test-gap`.
+
+Reviews read the list only from the default branch's `.aida/config.toml`,
+never from the working tree. A branch therefore cannot relax the policy its own
+review runs under. The setting is unset by default. Then no finding is
+routed to a follow-up by class, and review behaves as before the setting
+existed: a finding blocks unless the reviewer explicitly records it as
+`deferred` with a severity and a one-line rationale. An unknown class, an empty
+list, a value of the wrong type or a default-branch config that exists but
+cannot be read fails closed: every finding blocks, including one the reviewer
+marked `deferred`, and review prompts say so. An invalid list therefore never
+produces fewer blockers than any valid list.
+
+Two rules apply whatever the list says. `security-authority-bypass` findings
+always block. `test-gap` findings in gate, sandbox, authority, seat or
+containment code always block. Mark such a finding with the
+`blocking_tier` `mutation-kill` or `untested-path`, or give it a `test-gap`
+class plus a `file` member naming that code. A finding without a registry
+`blocking_tier` also blocks.
+
+Every review prompt, including the prompt a launched reviewer starts with,
+quotes the active list and where it came from, and
+`aida config show` lists it under `[review]` with its source. Changing it
+decides what counts as a defect, so there is no generic config setter for this key. Use:
+
+```bash
+aida review blocking-tiers show [--json]
+aida review blocking-tiers set p1 data-loss security-authority-bypass unmet-claimed-ac
+```
+
+`set` needs a human at an interactive terminal, or the advisor seat under a
+mandate that covers the `review-policy` scope, started with
+`aida mandate start --scope review-policy`. A drive mandate does not include
+that scope. It validates the list,
+then writes it to the main checkout's `.aida/config.toml` together with
+`blocking_tiers_set_by`, `blocking_tiers_set_at` and
+`blocking_tiers_authority` (`operator` or `mandate <id>`). Reviews use the
+new list only once that edit lands on the default branch.
+`.aida/config.toml` is a gate-protected path, so it lands only through a human
+merge.
+
+Reviewers classify findings with the structured finding argument:
 
 ```bash
 aida review record <spec-id> --pr 42 --verdict request-changes \
   --finding '{"text":"Improve the diagnostic","severity":"minor","blocking_tier":"p2"}'
 ```
 
-`blocking_tier` accepts `p1`, `p2`, `p3`, `data-loss`, `security`, `acceptance`,
-`mutation-kill` or `untested-path`. Use `security` for security and
-authority-bypass findings at any priority. A structured `class` of `security`
-or `authority-bypass` also blocks. Unknown or missing classification blocks.
-Use the sensitive-path tiers for mutation-kill and untested-path observations
-in sensitive code even if their priority is P2. Alternatively, give such a
-finding a `class` (in the JSON or through `aida review record --finding-class`, in any accepted
-spelling) together with a `file` member naming the code; that classification
-is applied before the disposition is decided and retained in the record.
+A finding blocks when its `blocking_tier` or its `class` is on the list. A
+`class` can also be given through `aida review record --finding-class`, in any
+accepted spelling. Both channels are merged before the disposition is decided,
+and the merged class is the one that blocks this finding under the active list,
+its tier and `file` included, and is kept in the record. Neither channel can
+turn a blocking class into a deferral.
 
 The writer retains every finding, sets dispositions, and files each deferred
 finding as a Draft task with a References link to the source spec. The source

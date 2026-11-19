@@ -1213,6 +1213,23 @@ pub(crate) fn preflight_spec_status_review_aware(
     preflight_spec_status(owns, status, force_claim)
 }
 
+/// Session-start status gate: [`preflight_spec_status_review_aware`], plus a
+/// Done-only allowance for an implementer continuing an open change that queue
+/// work verified. Completed, Rejected and every other refusal still stand.
+/// trace:STORY-2690 | ai:claude
+pub(crate) fn preflight_spec_status_for_session(
+    owns: &str,
+    status: Option<&RequirementStatus>,
+    force_claim: bool,
+    is_review: bool,
+    done_rework_change_verified: bool,
+) -> PreflightDecision {
+    if done_rework_change_verified && !is_review && status == Some(&RequirementStatus::Done) {
+        return PreflightDecision::Allow;
+    }
+    preflight_spec_status_review_aware(owns, status, force_claim, is_review)
+}
+
 // BUG-882: reviewer-scoped queue work can reach `session_start` with `owns`
 // still set to the backing spec id rather than `PR-N`. Role intent must still
 // classify the launch as review-shaped so Done-backed open PRs are reviewable.
@@ -2066,6 +2083,7 @@ pub(crate) fn session_start(
         false,
         PathReentry::None,
         None,
+        false,
     )
     .map(|mut receipt| receipt.disarm())
 }
@@ -2112,6 +2130,10 @@ pub(crate) fn session_start_with_receipt(
     path_reentry: PathReentry,
     // Some(None) is a confirmed negative from a single-spec queue pickup.
     resolved_pr: Option<Option<(u64, String)>>,
+    // Queue work proved this Done spec's open origin change and its rework
+    // policy; only that exact change may lift the Done refusal.
+    // trace:STORY-2690 | ai:claude
+    done_rework_admitted: bool,
 ) -> Result<SessionStartReceipt> {
     let adopt_orphan = path_reentry == PathReentry::AdoptOrphan;
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
@@ -2218,6 +2240,7 @@ pub(crate) fn session_start_with_receipt(
     // the scope slug. Confirmed merged residue also permits a dated name.
     // trace:STORY-65 | ai:claude
     // trace:BUG-2451 | ai:codex — agent-new and direct session starts share queue policy.
+    let verified_pickup_pr = resolved_pr.clone().flatten();
     let existing_pr = if review_target.is_none() && !is_review_session {
         if let Some(resolved) = resolved_pr {
             resolved
@@ -2632,11 +2655,17 @@ pub(crate) fn session_start_with_receipt(
     // trace:BUG-2223 | ai:claude
     let adoption_lifts_status =
         adopted_orphan.is_some() && matches!(preflight_status, Some(RequirementStatus::InProgress));
-    match preflight_spec_status_review_aware(
+    // STORY-2690: a Done spec whose open change queue work verified stays
+    // pickable for rework on exactly that change's branch.
+    // trace:STORY-2690 | ai:claude
+    let done_rework_change_verified =
+        done_rework_admitted && verified_pickup_pr.is_some() && verified_pickup_pr == existing_pr;
+    match preflight_spec_status_for_session(
         owns,
         preflight_status.as_ref(),
         force_claim_effective || adoption_lifts_status,
         is_review_session,
+        done_rework_change_verified,
     ) {
         PreflightDecision::Refuse(msg) => anyhow::bail!("{}", msg),
         PreflightDecision::AllowWithWarning(msg) => {

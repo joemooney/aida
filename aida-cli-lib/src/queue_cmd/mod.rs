@@ -146,9 +146,8 @@ pub(crate) use time_args::{
 mod work;
 // Phase-1 admission shares pickup's canonical branch resolver in production.
 // trace:TASK-3799 | ai:codex
-pub(crate) use work::canonical_resume_branch; // trace:BUG-2549 | ai:codex
-#[cfg(test)]
-pub(crate) use work::resolve_rework_review;
+// trace:BUG-2549 | ai:codex
+pub(crate) use work::canonical_resume_branch;
 // trace:STORY-2749 | ai:claude
 pub(crate) use work::ResumePublicationFailure;
 pub(crate) use work::{
@@ -181,8 +180,8 @@ pub(crate) use work::{
     queue_work_self_claim, queued_supervised_mode, reclaim_exited_branch_clone,
     record_pickup_refusal, refuse_retired_steal, refuse_unpresentable_contained_reviewer,
     refuse_waiting_pickup, refused_review_launch_releases_lease, release_refused_review_lease,
-    resolve_auto_complete_head, resolve_queue_work_plan, resolve_queue_work_posture,
-    resolve_rework_findings, resume_autocomplete_conflict_message, retire_idle_review_worktree,
+    resolve_auto_complete_head, resolve_queue_work_plan, resolve_queue_work_plan_for_branch,
+    resolve_queue_work_posture, resume_autocomplete_conflict_message, retire_idle_review_worktree,
     review_calibration_spec_ids, review_calibration_spec_ids_in, review_envelope_targets_pr,
     review_ref_from_verdict_filename, review_round_from_comments, reviewer_from_pr_contract_suffix,
     reviewer_pickup_keeps_pr_scope, reviewer_preflight_pr_n, reviewer_prompt_for_round,
@@ -209,6 +208,8 @@ pub(crate) use work::{
     TRACK_TAG_PREFIX,
 };
 pub use work::{refuse_waiting_review, spec_open_change_key};
+#[cfg(test)]
+pub(crate) use work::{resolve_rework_findings, resolve_rework_review};
 
 /// `store_path` is the orphan-store path; the `--json` fast path opens a
 /// cache-backed backend from it to resolve titles via the SQLite cache rather
