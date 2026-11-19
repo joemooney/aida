@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:17:21.295443450Z
-modified_at: 2026-11-18T03:03:07.887092835Z
+modified_at: 2026-11-19T17:01:00.431976111Z
 req_type: Bug
 tags:
 - area:seat-clone
@@ -25,6 +25,10 @@ relationships:
     custom: implemented-by
   target_id: 01a1ea21-3faa-7b41-a0e5-f44776c893c6
   created_at: 2026-11-17T15:30:19.727148397Z
+  created_by: dirtlab
+- rel_type: Supersedes
+  target_id: 01a1e83d-fa01-7252-9f26-c432877a434e
+  created_at: 2026-11-19T17:01:00.065852426Z
   created_by: dirtlab
 comments:
 - id: 01a1e4e1-7a0e-7da2-9322-0c4e5c85dc0b
@@ -159,6 +163,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Completed
+- id: 01a1f4c1-2b88-70f1-a704-f032fb97626b
+  author: dirtlab
+  timestamp: 2026-11-19T17:01:02.728463224Z
+  session_id: 01a1f4bfc824
+  harness_version: codex-cli 0.167.0
+  changes: []
 processing_record:
 - id: 01a1ec9b-ad6f-7e71-bf12-f5aa2c17d319
   timestamp: 2026-11-18T03:03:07.887087773Z

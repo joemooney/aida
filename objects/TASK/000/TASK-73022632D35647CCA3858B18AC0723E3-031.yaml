@@ -9,18 +9,23 @@ description: |
   1. Reproduce: run `python3 -m pytest tests/test_codegraph_proxy.py -k graceful_restart` 20 times headless (no TTY; see the BUG-2624 safety rule) on origin/main and record the failure rate here.
   2. Root-cause the orphan path: either the restart cleanup races the assertion (fix by waiting, with a bounded deadline, for the cleanup to finish) or the cleanup really leaks (fix the proxy). Orphan cleanup must still be asserted; the test may not drop or weaken `assertFalse(orphan.exists())`.
   3. After the fix, 50/50 headless runs pass, and `make check-ci-fast` passes headless once.
-status: InProgress
+status: Superseded
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T06:42:18.241355410Z
-modified_at: 2026-11-19T16:59:48.989529147Z
+modified_at: 2026-11-19T17:00:55.331335965Z
 req_type: Task
 tags:
 - from-advisor:TASK-3816
 - kind:bug-spotted
 - linked:TASK-3816
 - severity:minor
+relationships:
+- rel_type: SupersededBy
+  target_id: 01a1e36e-a38f-7833-82ce-66c16f3c0a03
+  created_at: 2026-11-19T17:00:54.809277297Z
+  created_by: dirtlab
 comments:
 - id: 01a1ebb5-29b9-7900-b0f9-66501cc67a3a
   author: joe
@@ -92,6 +97,23 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f4c0-fd6d-7563-9ea1-55b933361671
+  author: dirtlab
+  timestamp: 2026-11-19T17:00:50.925845798Z
+  session_id: 01a1f4bfc824
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Superseded
+- id: 01a1f4c1-1cdf-79b1-9a60-ab52ab9a522e
+  author: dirtlab
+  timestamp: 2026-11-19T17:00:58.975826290Z
+  session_id: 01a1f4bfc824
+  harness_version: codex-cli 0.167.0
+  changes: []
+test_coverage_notes: Proxy unittest suite reported OK (22 tests, one skip). The graceful restart test passed in verbose mode and 50/50 headless targeted invocations reported OK. The advisor directed supersession for the already-merged fix, so no pre-fix replay or full fast gate was run.
+implementation_summary: 'PR #4229 (444867815903588c91b36614a56eeffa671fc548, present on origin/main) already fixes this fixture race. On restart the old descriptor persists and the socket is bound before orphan cleanup. The fixture now waits up to five seconds for fresh descriptor bytes published after cleanup and still asserts orphan removal.'
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
