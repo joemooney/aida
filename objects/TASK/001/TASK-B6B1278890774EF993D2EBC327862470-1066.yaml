@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-19T20:28:40.947347130Z
+modified_at: 2026-11-19T20:28:57.301811039Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -139,6 +139,13 @@ comments:
   content: Reference merge `b82066836029b7ef323861eb91d1dbd4967a3096` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-19T18:01:12.572827210Z
   modified_at: 2026-11-19T18:01:12.572827210Z
+- id: 01a1f57f-bcf6-7163-a5b1-6d1e4b8aaf31
+  author: joe
+  content: 'advisor-121 13:30: execution mode set to drain (lane-sized, no authority/grant/containment/landing-gate change); dell1 fill.'
+  created_at: 2026-11-19T20:28:57.301811039Z
+  modified_at: 2026-11-19T20:28:57.301811039Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
   author: joe
