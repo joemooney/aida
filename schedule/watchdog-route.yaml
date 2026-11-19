@@ -1,14 +1,8 @@
 job: watchdog-route
-last_run: 2026-11-19T15:44:52.990030473Z
+last_run: 2026-11-19T17:25:11.553265014Z
 last_by:
   seat: advisor
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: 23h-old trip from the prior advisor era; no current runaway seat (3 live seats, fresh)
-due_since: 2026-11-19T17:24:24.254365348Z
-due_reason: on CronJobFailed:watchdog
-due_failure:
-  trip_id: watchdog@2026-11-19T17:15:37.520970618Z
-  job: watchdog
-  error: 'exit 1: '
+note: 'advisor-121 10:25: mail-poll-setup on integration-3a (01a1f4a0); the seat deleted its 10-min cron 7f962a7b and now uses a single background shell wait'
