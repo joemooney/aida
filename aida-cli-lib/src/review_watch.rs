@@ -1960,22 +1960,39 @@ fn hold_cause(key: &str, attempt: &Attempt) -> String {
     )
 }
 
-// Local watcher coverage only; absence is unknown, never a zero forge backlog.
+// Count only reviews assigned to this exact local process, via the reviewer
+// receipt. Dispatcher/worker receipts and skipped changes carry no such assignment.
 // trace:BUG-2631 | ai:codex
-pub(crate) fn pending_verdict_count(root: &Path) -> Option<usize> {
+pub(crate) fn pending_verdict_count(
+    root: &Path,
+    seat: &crate::agent_registry::AgentRegistryEntry,
+) -> Option<usize> {
+    use crate::gate::review_verdict::{read_verdict_for_sha, VerdictKind};
+
+    let identity = seat.process_identity()?;
     let state = read_only_state(root)?;
+    if state.version != 1 {
+        return None;
+    }
     Some(
         state
             .entries
-            .values()
-            .filter(|entry| {
-                entry.skipped.is_some()
-                    || entry.attempts.last().is_some_and(|attempt| {
-                        matches!(
-                            attempt.phase,
-                            Phase::Reserved | Phase::Running | Phase::RemoteHeld
-                        )
-                    })
+            .iter()
+            .filter(|(key, entry)| {
+                let Some(attempt) = entry.attempts.last() else {
+                    return false;
+                };
+                attempt.phase == Phase::Running
+                    && attempt
+                        .reviewer
+                        .as_ref()
+                        .and_then(Identity::process_identity)
+                        .as_ref()
+                        == Some(&identity)
+                    && parse_key(key).is_ok()
+                    && valid_sha(&attempt.head)
+                    && read_verdict_for_sha(root, key, &attempt.head)
+                        .is_none_or(|verdict| verdict.kind == VerdictKind::Waiting)
             })
             .count(),
     )
