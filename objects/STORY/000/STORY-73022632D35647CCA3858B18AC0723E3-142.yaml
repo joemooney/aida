@@ -1,0 +1,32 @@
+id: 01a1f2ee-5f0d-7420-ac5f-028f5a22e4cf
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-142
+title: 'Review PR-4295: [AI:codex] fix(dev): retry contended scheduled promotions (BUG-2628)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f2bf`) for branch `bug-b6b1278890774ef993d2ebc327862470-392`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4295>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-392` → `main`
+
+  ## Covers
+
+  - BUG-2628
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4295` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-19T08:31:10.605564498Z
+modified_at: 2026-11-19T08:31:10.605564498Z
+req_type: Story
+filed_at:
+  code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: cfbc140e9ee
+  session: 01a1f2bf4f3e
