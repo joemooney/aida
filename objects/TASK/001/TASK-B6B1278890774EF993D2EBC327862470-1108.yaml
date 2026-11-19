@@ -1,5 +1,6 @@
 id: 01a1f262-45de-71e0-a690-cee658b5e139
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1108
+agreed_id: TASK-3146
 title: 'Review follow-up: [P2] aida-cli-lib/src/doctor/remote.rs:454-470 switches fetch to the scratch --git-dir and'
 description: |-
   From BUG-2672
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1ec8a-2c66-7022-9d5c-01d6514aa984
   created_at: 2026-11-19T05:58:28.164818537Z
+history:
+- id: 01a1f27c-b7d2-72f1-adc4-d4b333273510
+  author: joe
+  timestamp: 2026-11-19T06:27:02.226702975Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ef678e7f9515ed47f5d7485680fa6b18fbf00926
   branch: pr-4282

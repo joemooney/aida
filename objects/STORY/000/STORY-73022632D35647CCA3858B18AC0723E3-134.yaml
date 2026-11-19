@@ -1,5 +1,6 @@
 id: 01a1f256-b23f-7e63-a20c-22d6fb54ea63
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-134
+agreed_id: STORY-2935
 title: 'Review PR-4285: [AI:codex] fix(lane): report retained dirty seats on early exits (BUG-2607)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f227`) for branch `bug-b6b1278890774ef993d2ebc327862470-371`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-19T05:45:37.847237008Z
   session_id: 01a1f227c76c
+  changes: []
+- id: 01a1f27c-e942-7de1-a2b0-8e4a5546cbd7
+  author: joe
+  timestamp: 2026-11-19T06:27:14.882549291Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
   changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0

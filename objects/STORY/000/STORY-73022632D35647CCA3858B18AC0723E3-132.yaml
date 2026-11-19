@@ -1,5 +1,6 @@
 id: 01a1f24b-261f-7091-b29d-e87f6de8ba78
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-132
+agreed_id: STORY-2937
 title: 'Review PR-4283: [AI:codex] fix(repair): regenerate the CLI help golden in conflict lanes (TASK-3803)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f219`) for branch `task-b6b1278890774ef993d2ebc327862470-1086`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1f27d-4a40-7213-b7c7-9fe784d31f7d
+  author: joe
+  timestamp: 2026-11-19T06:27:39.712221685Z
+  session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
+  harness_version: 2.1.327 (Claude Code)
+  changes: []
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
