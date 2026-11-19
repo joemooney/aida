@@ -17,7 +17,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T16:21:06.443205Z
-modified_at: 2026-11-19T02:58:23.648814913Z
+modified_at: 2026-11-19T03:17:40.174955885Z
 req_type: Story
 tags:
 - docs:impacted
@@ -275,6 +275,19 @@ comments:
   modified_at: 2026-11-19T02:58:23.648814913Z
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f1cf-58cf-7972-ac6e-c1be3daae61b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c2047ff6ac. Round 3 findings vs reviewed 8e62a25f7f:
+    - P1 (inherited deferrals bypass fail-closed): fixed in 1097003953 — reapply_policy_to_stored_findings re-decides the inherited set in review_record_kind (routing) and in build_verdict_object_with_effective (incoming + retained obj) from one snapshot. Regressions: story_2913_inherited_deferrals_are_redecided_by_the_current_policy (builder) and story_2913_cli_record_refuses_approval_over_a_redecided_inherited_deferral (CLI writer), each over invalid / unavailable / newly-blocking policies.
+    - P2 (gate floor inventory): 1097003953 lists local_trusted_default_branch_sha, read_config_at_sha, config_present_at_sha in FACADE_EXTERNAL_LEAVES. gate_kernels_reach_outside_only_through_listed_leaves passes locally (lane job, 122/122 with bug_775/story_2809/bug_2517/review_draft suites).
+    - This round (c2047ff6ac), probe-found: handle_review_record read the policy twice (entry + recorder), so the CI request and the record could use different snapshots and the fail-closed warning printed twice. Now one snapshot is threaded into the recorder; new test story_2913_recorder_decides_with_the_callers_policy_snapshot. story_2913 filter 14/14 pass; cargo check --lib clean.
+    Residual: clippy not run locally (the lane runner refuses it); CI covers it. Exact-head CI pending.
+  created_at: 2026-11-19T03:17:40.174955885Z
+  modified_at: 2026-11-19T03:17:40.174955885Z
+  session_id: 01a1f1c004cb
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef76-86d9-7c00-8589-f12e22328390
   author: joe
