@@ -1203,6 +1203,15 @@ pub(crate) fn load_ledger_checked(project_root: &Path) -> (Vec<AuthorshipRecord>
     (records, warning)
 }
 
+/// `Some(why)` when the authorship ledger cannot be trusted to name the
+/// authors: it is missing, unreadable, or has malformed lines. A decision
+/// that must not fall back to live leases alone (a train car's author rule,
+/// STORY-2905) refuses on it instead of warning.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn ledger_untrusted(project_root: &Path) -> Option<String> {
+    load_ledger_checked(project_root).1
+}
+
 /// Print [`load_ledger_checked`]'s warning, if any, to stderr.
 pub(crate) fn warn_on_ledger_read(project_root: &Path) {
     if let (_, Some(warning)) = load_ledger_checked(project_root) {

@@ -116,6 +116,12 @@ if a[0]=='api':
         emit(dict(data=dict(repository=repo)))
     endpoint=next((x for x in a[1:] if x.startswith('repos/')),a[1])
     if '/check-runs' in endpoint:
+        # trace:STORY-2905 | ai:claude — a grant lapsing during the CI wait.
+        if s.get('revoke_dir'):
+            if s.get('revoke_skip',0)>0: s['revoke_skip']-=1
+            else:
+                for g in pathlib.Path(s.pop('revoke_dir')).glob('*.json'): g.unlink()
+            (r/'transport.json').write_text(json.dumps(s))
         sha=endpoint.split('/commits/')[1].split('/')[0]
         # trace:BUG-2528 | ai:codex
         pending=s.get('pending_ci_reads',0)>0
@@ -2077,5 +2083,133 @@ fn bug_2569_member_gate_refuses_what_the_merge_step_would_refuse() {
         };
         assert!(refused.contains("do not approve"), "{refused}");
         assert!(calls(f.root()).is_empty());
+    }
+}
+
+// STORY-2905 S1t-b round 2 finding 4: the per-car merge authority through
+// the production boundary (`VerifiedTrainMerge::enforce`, reached through
+// the forge's train transport), in review-gated mode.
+// trace:STORY-2905 | ai:claude
+mod story_2905_enforce {
+    use super::*;
+
+    /// A fixture whose default branch is review-gated, with an advisor
+    /// grant exported and an (empty) authorship ledger, its train opened
+    /// and verified under the live lease.
+    fn review_gated_advisor(case: impl FnOnce(&Fixture, &GitHubForge, &Built, &ChangeRef)) {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new(true);
+        fs::write(
+            f.root().join(".aida/config.toml"),
+            format!("{FIXTURE_CONFIG}[landing]\nmode = \"review-gated\"\n"),
+        )
+        .unwrap();
+        g(f.root(), &["add", "-f", ".aida/config.toml"]);
+        commit(f.root(), "review-gated landing");
+        g(f.root(), &["push", "-q", "origin", "main"]);
+        fs::write(f.root().join(".aida/review-authorship.jsonl"), "").unwrap();
+        let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+            f.root(),
+            "train-test-operator",
+            "advisor",
+            &[],
+        );
+        f.reenv(&[("AIDA_SESSION_GRANT", Some(grant.as_str()))]);
+        assert_eq!(
+            crate::gate::seat_authority::current_seat(f.root()).as_deref(),
+            Some("advisor"),
+            "{:?}",
+            crate::gate::seat_authority::grant_check(f.root())
+        );
+        let forge = GitHubForge::new(f.root());
+        let mut live = f.live(&forge);
+        let (train, change) = f.opened(&mut live);
+        case(&f, &forge, &train, &change);
+    }
+
+    fn merge_verified(
+        f: &Fixture,
+        forge: &GitHubForge,
+        train: &Built,
+        change: &ChangeRef,
+    ) -> Result<()> {
+        let mut live = f.live(forge);
+        let lease = live.lease(change.id).unwrap();
+        live.merge_verified(change, train, lease.as_ref())
+    }
+
+    fn set_state(f: &Fixture, key: &str, value: Value) {
+        let mut state: Value =
+            serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap()).unwrap();
+        state[key] = value;
+        save(f.root(), &state);
+    }
+
+    /// A valid advisor grant merges the train: one pinned rebase merge.
+    #[test]
+    fn a_valid_advisor_grant_merges_the_train() {
+        review_gated_advisor(|f, forge, train, change| {
+            merge_verified(f, forge, train, change).expect("the advisor merges the train");
+            let transport = calls(f.root());
+            assert_eq!(transport.len(), 1, "{transport:?}");
+            assert!(transport[0].contains(&format!("--match-head-commit {}", train.tip)));
+        });
+    }
+
+    /// A grant that lapses after the first authority check (here during the
+    /// refresh's CI read, the train's long wait) refuses at the check that
+    /// runs last before the transport: no forge merge call.
+    #[test]
+    fn a_grant_lapsing_after_the_first_recheck_refuses_without_a_forge_call() {
+        review_gated_advisor(|f, forge, train, change| {
+            // The proof reads CI once for the train and once per car; the
+            // grant is revoked on the first CI read after those, the final
+            // gate's refresh, which runs after the first authority check.
+            let dir = crate::gate::seat_authority::grant_dir().unwrap();
+            set_state(f, "revoke_skip", json!(1 + train.cars.len()));
+            set_state(f, "revoke_dir", json!(dir.display().to_string()));
+            let why = format!("{:#}", merge_verified(f, forge, train, change).unwrap_err());
+            assert!(why.contains("has the advisor perform"), "{why}");
+            assert!(calls(f.root()).is_empty(), "no forge merge call: {why}");
+            let state: Value =
+                serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap())
+                    .unwrap();
+            assert!(
+                state.get("revoke_dir").is_none(),
+                "the grant lapsed mid-gate"
+            );
+        });
+    }
+
+    /// The base the train was built and proved on moved: refused, no call.
+    /// (`train_recheck`'s own base pin is exercised directly in
+    /// `landing_merge`'s `story_2905_train_recheck_tests`.)
+    #[test]
+    fn a_base_move_since_the_proof_refuses_the_train() {
+        review_gated_advisor(|f, forge, train, change| {
+            g(f.root(), &["checkout", "-q", "main"]);
+            fs::write(f.root().join("base-moved"), "moved\n").unwrap();
+            commit(f.root(), "base moved");
+            g(f.root(), &["push", "-q", "origin", "main"]);
+            let why = format!("{:#}", merge_verified(f, forge, train, change).unwrap_err());
+            // Refused by whichever check sees it first (the proof's own base
+            // read, or `train_recheck`'s base pin); never merged.
+            assert!(why.contains("moved"), "{why}");
+            assert!(calls(f.root()).is_empty(), "{why}");
+        });
+    }
+
+    /// Round 2 finding 3: an authorship ledger that cannot be trusted
+    /// refuses the train's car author rule; nothing is merged.
+    #[test]
+    fn a_corrupt_authorship_ledger_refuses_the_train() {
+        review_gated_advisor(|f, forge, train, change| {
+            fs::write(f.root().join(".aida/review-authorship.jsonl"), "{torn\n").unwrap();
+            let why = format!("{:#}", merge_verified(f, forge, train, change).unwrap_err());
+            assert!(why.contains("authors cannot be established"), "{why}");
+            assert!(calls(f.root()).is_empty(), "{why}");
+        });
     }
 }

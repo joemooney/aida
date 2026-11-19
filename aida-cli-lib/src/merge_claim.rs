@@ -176,6 +176,23 @@ fn blocked_by(
     }
 }
 
+/// Why a PR boarded on a train is not merged by another hand, with the
+/// recovery: wait for the train, or release a train nothing drives.
+// trace:STORY-2905 | ai:claude
+fn boarded_refusal(pins: &[(String, String)]) -> String {
+    let trains: Vec<&str> = pins.iter().map(|(train, _)| train.as_str()).collect();
+    let release: Vec<String> = pins
+        .iter()
+        .map(|(_, journal)| format!("`aida pr train --abandon {journal}`"))
+        .collect();
+    format!(
+        "it is boarded on {}; wait for that train to finish (`aida pr train --status` shows \
+         it), or, when no process drives it, release it with {} and merge again",
+        trains.join(", "),
+        release.join(" and ")
+    )
+}
+
 /// The authority this process acts under, as a claim records it.
 fn authority(root: &Path) -> String {
     if crate::gate::role_authority::has_integrity_floor_authority() {
@@ -203,10 +220,10 @@ pub(crate) fn claim(
         .clone();
     let _lock = lock(root).map_err(|e| refuse(format!("the claim lock cannot be taken ({e})")))?;
     if hand != Hand::Train {
-        let pins = crate::pr_train::pr_head_pins(&main_root(root), pr)
+        let pins = crate::pr_train::pr_head_pin_journals(&main_root(root), pr)
             .map_err(|e| refuse(format!("its train pins cannot be read ({e:#})")))?;
         if !pins.is_empty() {
-            return Err(refuse(format!("it is boarded on {}", pins.join(", "))));
+            return Err(refuse(boarded_refusal(&pins)));
         }
     }
     let path = claim_file(root, pr);

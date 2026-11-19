@@ -32,11 +32,13 @@ Every AIDA command that merges follows the mode, and each re-checks it immediate
 | `aida burndown` (the wave merge) | waits for CI on the head | merges on the approval; the advisor or the operator only |
 | `aida release --after-pr` | waits for CI on the head | waits for CI on the head (a release must build) |
 | `aida land run` | boards ready changes onto the train | ships each ready change once when the run may merge it; otherwise reports it |
-| `aida pr train` | as described below | not yet covered: being brought under the mode |
+| `aida pr train` | as described below | the advisor or the operator only; each car's authority is judged before the merge |
 
 <!-- trace:STORY-2905 | ai:claude -->
 
-One merge hand per pull request: before any of these commands merges a pull request, it claims it on this host, and a pull request another command is already merging (or a train has boarded) is refused rather than merged twice. Claims are local to the host, so only the primary host merges; every merge also names the exact head it merges (`--match-head-commit`), which stops a second host's stale merge at the forge. A claim left by a process that has exited is taken over; one whose holder cannot be checked refuses.
+One merge hand per pull request: before any of these commands merges a pull request, it claims it on this host, and a pull request another command is already merging (or a train has boarded) is refused rather than merged twice; the refusal for a boarded pull request names how to wait for the train or release it. Claims are local to the host, so only the primary host merges; every merge also names the exact head it merges (`--match-head-commit`), which stops a second host's stale merge at the forge. A claim left by a process that has exited is taken over; one whose holder cannot be checked refuses.
+
+A train's merge is judged again before each merge attempt, and once more as the last step before the forge call, after every wait: the landing policy must be readable and the one it was proved under, the advisor-merger rule and the author rule apply to every car, and the base must still be the commit the train was built and proved on; anything else stops the train before it merges.
 
 In `review-gated` mode the auto-train stands down: each pass does nothing and says so (`standing down: landing.mode=review-gated`, also shown by `aida pr train --status`). `aida land run` is the merge hand. In `ci-gated` mode the auto-train runs as before.
 
