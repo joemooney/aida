@@ -319,14 +319,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
-  requirement_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
-  position: 26000
-  added_by: claude-product-12
-  note: 'Configurable review blocking tier (Joe 09:19). After #4207 lands.'
-  added_at: 2026-11-18T16:22:34.825352403Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   position: 27000
   added_by: claude-product-12
