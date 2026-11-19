@@ -166,6 +166,13 @@ comments:
   modified_at: 2026-11-19T21:51:32.868345459Z
   session_id: 01a1f5bf0d7e
   harness_version: codex-cli 0.167.0
+- id: 01a1f5e3-dcbc-7520-8ddd-5fbc89cc1c88
+  author: joe
+  content: 'advisor-121 15:20: the CR at 261abcc is a PREMATURE review of a merge-only head (the r1 lane merged main fd4018a at 14:38 and is still running); it repeats the r1 P1. NOT a spent round. Round 2 (the --no-track fix brief) should fire on 261abcc, or on whatever head the r1 lane leaves.'
+  created_at: 2026-11-19T22:18:21.348661708Z
+  modified_at: 2026-11-19T22:18:21.348661708Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 - id: 01a1f5e5-71a2-7691-a282-a8dff0e3d8b5
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-2211` at head `484438b9c559a5c76a805835f601d609401f1772`.'
