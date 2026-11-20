@@ -16,17 +16,23 @@ description: |
   2. A config comment marks this TEMPORARY with a pointer to the revert task.
   3. No other config changes. check-ci-fast green.
   Protected path (.aida/config.toml): ships under the active mandate (includes protected paths). Claude lane, light review.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:39:12.885207714Z
-modified_at: 2026-11-20T16:16:47.730172316Z
+modified_at: 2026-11-20T16:17:36.317352815Z
 req_type: Task
 tags:
 - config
 - review
 - temporary
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f9bf-a6a3-7f00-b162-788c44168ce9
+  created_at: 2026-11-20T16:17:36.317314661Z
+  created_by: dirtlab
 comments:
 - id: 01a1f9a0-cc3b-78e1-8d12-ed468fc96efc
   author: joe
@@ -97,6 +103,13 @@ comments:
   modified_at: 2026-11-20T16:16:47.730172316Z
   session_id: 01a1f9a316e9
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f9bf-4e15-76d0-abf4-f5385603b1d4
+  author: aida-publication-done
+  content: Implementer push b4dccb59840c declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T16:17:06.581647693Z
+  modified_at: 2026-11-20T16:17:06.581647693Z
+  session_id: 01a1f9a316e9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f99d-7db5-7bd3-997d-6bde09930651
   author: joe
@@ -120,6 +133,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f9bf-4e15-76d0-abf4-f522fa9d292b
+  author: aida-publication-done
+  timestamp: 2026-11-20T16:17:06.581645474Z
+  session_id: 01a1f9a316e9
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a1f9bf-c9ac-7872-a76b-13942dba95ce
+  author: dirtlab
+  timestamp: 2026-11-20T16:17:38.220530675Z
+  session_id: 01a1f9a316e9
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
