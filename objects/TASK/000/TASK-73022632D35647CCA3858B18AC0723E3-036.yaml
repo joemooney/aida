@@ -19,7 +19,7 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-19T08:10:22.337973035Z
-modified_at: 2026-11-20T01:10:22.865374107Z
+modified_at: 2026-11-20T01:36:02.951070827Z
 req_type: Task
 tags:
 - from-advisor:TASK-3812
@@ -39,6 +39,13 @@ comments:
   content: 'Product 18:11 (deploy, AC1): dell1 ~/bin/aida-autobuild.sh is replaced with the repo scripts/aida-autobuild.sh from the dell1 primary checkout (contains #4327 ed269f3a8), per docs/advanced/lane-host-checklist.md. Backups: ~/bin/aida-autobuild.sh.pre-task3153-20261119-1810 and ~/lanes/crontab-backup-20261119-1810.txt. The existing */30 cron line already invokes ~/bin/aida-autobuild.sh with the lane PATH, unchanged. Dry run: ''skip: CI for 6ff4b5c4f9 is in_progress'' (expected). Pre-deploy note: the old script did promote once today (16:34, be435bcf38). Pending: AC2 (override survives a config-changing ff) and AC3 (''promoted and verified'' line). Tip-CI starvation remains until BUG-2687 (lane running).'
   created_at: 2026-11-20T01:10:22.865374107Z
   modified_at: 2026-11-20T01:10:22.865374107Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f698-db4a-7780-aeb0-a8e3288bf675
+  author: joe
+  content: 'Product 18:36: AC3 MET. dell1 ~/.aida/autobuild.log: ''2026-11-19 18:32:02 promoted and verified: 6ff4b5c4f9c49608f0d14330e087b80a529d67d6''. The launcher check reports aida 0.16.0 sha 6ff4b5c4f9+dirty (dirty = the skip-worktree override), lanes running: 5. The override survived (git ls-files -v: ''S .aida/config.toml''; standalone_implementer_cap = 8 intact). AC2 is NOT yet proven: the be435bc..6ff4b5c fast-forward did not change .aida/config.toml. Keeping this open until a config-changing ff is observed, then complete.'
+  created_at: 2026-11-20T01:36:02.951070827Z
+  modified_at: 2026-11-20T01:36:02.951070827Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
