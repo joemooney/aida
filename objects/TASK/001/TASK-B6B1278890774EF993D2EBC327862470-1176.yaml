@@ -1,0 +1,31 @@
+id: 01a1fb07-b735-7002-a175-5a2aaebead3d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1176
+title: 'Review follow-up: At review_commands.rs:3711, repeat && placed is used as evidence that this refusal was nev'
+description: |-
+  From BUG-2662
+  Reviewed sha: d21536f1c46bd0168f00444bbedc68c90d93cbd7
+
+  At review_commands.rs:3711, repeat && placed is used as evidence that this refusal was never announced. An already announced refusal whose hold was subsequently released also satisfies that condition on retry, producing a second ReviewVerdictRecorded event for the same verdict. Conversely, a failed mixed filing with an equivalent pre-existing hold can miss the announcement on successful retry. Track announcement by the recorded act independently of hold placement.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T22:15:49.301850508Z
+modified_at: 2026-11-20T22:15:49.301850508Z
+req_type: Task
+tags:
+- carried-from:BUG-2662
+- finding-hash:01f886cc
+- from-review:BUG-2662
+relationships:
+- rel_type: References
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-20T22:16:11.350821948Z
+filed_at:
+  code_sha: d21536f1c46bd0168f00444bbedc68c90d93cbd7
+  branch: pr-4378
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1fb058674
