@@ -22,13 +22,19 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-20T02:00:21.768590717Z
+modified_at: 2026-11-20T02:01:40.722646152Z
 req_type: Bug
 tags:
 - landing
 - product-intake
 - promotion
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f6af-ff44-7610-a354-fe864a464530
+  created_at: 2026-11-20T02:01:40.722631860Z
+  created_by: dirtlab
 comments:
 - id: 01a1f5b4-d088-75a2-b7be-01033ec0e3c1
   author: joe
@@ -233,6 +239,10 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f6b0-29c0-72f2-ab82-b840df12905c
+  author: dirtlab
+  timestamp: 2026-11-20T02:01:42.592897818Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
