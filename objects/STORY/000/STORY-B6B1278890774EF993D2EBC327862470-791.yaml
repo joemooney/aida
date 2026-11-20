@@ -20,12 +20,12 @@ description: |
   2. With `default = "drain"` and a type list, an unattended `aida pr ship`/train ships a PR whose specs are all unset-mode, of a listed type, not sensitive, and not touching protected paths. Every other gate (independent APPROVE at head, green pinned CI, no holds) still applies. A test covers the matrix: type in or out of the list × sensitive or not × protected path or not × explicit mode.
   3. The refusal text and `aida show` name the effective mode and where it came from, for example `drain (project default for unset bug)`.
   4. The knob is documented in the config reference and the two-seat protocol. Setting it for this repository is the operator's call and is recorded separately.
-status: Done
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T02:06:39.221133869Z
+modified_at: 2026-11-20T02:09:45.859040068Z
 req_type: Story
 tags:
 - landing
@@ -122,6 +122,14 @@ history:
   session_id: 01a1f68604db
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1f6b7-8983-7aa0-adb5-9c8db6ec8aee
+  author: fast-gate
+  timestamp: 2026-11-20T02:09:45.859039306Z
+  session_id: 01a1f68604db
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
