@@ -557,7 +557,7 @@ fn branch_commit_messages_reads_full_messages_and_fails_closed() {
 /// method, before the merge, and hands its body to the forge.
 #[test]
 fn pr_ship_runs_the_trailer_check_before_the_merge() {
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     let start = src
         .find(concat!(
             "pub(crate) fn pr_ship_",
