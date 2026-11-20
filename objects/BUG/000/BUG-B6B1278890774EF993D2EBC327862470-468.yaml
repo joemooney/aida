@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T21:47:47.832017990Z
+modified_at: 2026-11-20T21:49:19.748745939Z
 req_type: Bug
 tags:
 - lanes
@@ -131,6 +131,13 @@ comments:
   modified_at: 2026-11-20T21:47:02.326105552Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1faef-a796-7e01-82ac-a562026d9fb7
+  author: joe
+  content: 'advisor-121 14:55: #4382''s claim heartbeat is ruled the SHARED foreign-lane visibility source; TASK-3827 PR-A will consume it. Keep the helper''s API small and documented (claim -> holder, host, heartbeat age).'
+  created_at: 2026-11-20T21:49:19.748745939Z
+  modified_at: 2026-11-20T21:49:19.748745939Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
