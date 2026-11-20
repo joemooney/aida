@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T12:24:58.885538365Z
+modified_at: 2026-11-20T12:43:46.366310790Z
 req_type: Story
 tags:
 - landing
@@ -532,6 +532,78 @@ comments:
   created_at: 2026-11-20T12:24:04.577220607Z
   modified_at: 2026-11-20T12:24:04.577220607Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f8fc-2c78-7ef0-84a8-a593a3e314d8
+  author: joe
+  content: |
+    SKETCH S3 (integration seat, 2026-11-20): STORY-2897 red-main watch + metrics. No code until the advisor signs. Basis: sketch revision 1 (fix-forward first), as trimmed by Joe's 2026-11-18 10:37 knob rule (exactly three user settings; everything else fixed).
+
+    ## Settings (one new, one user-facing)
+    - `[landing] red_main.fix_window` (duration, default "2h", parsed by the existing land duration parser). Read through trusted_config like the other `[landing]` keys; a malformed value falls back to "2h" with a warning in `land mode status` / `config show`. It goes in CONFIG_KNOBS as Duration and is settable with `aida config set` (operational; no authority gate).
+    - NO other knob. `red_main.policy`, `revert_on` and `keep_merging` from revision 2 are FIXED by the trim: the policy is fix-forward, revert_on covers all four triggers, and merging continues while red.
+    - **Q1, needs a ruling:** your 05:4x brief says "including keep_merging=false gating", but Joe's 10:37 trim makes "merging continues while red" FIXED, with no keep_merging setting. I propose NOT building the gate: no knob, and the ship path never reads main-watch (no gating code). The [A4] promotion guard already keeps the live binary on green. If you want the gate kept as an internal, undocumented, off-by-default switch for a future operator choice, say so; it adds ~60 lines (a refusal in landing_merge::recheck naming the episode, allowing PRs linked `fixes` to the episode's fix spec).
+
+    ## Module and trigger
+    - New `aida-cli-lib/src/main_watch.rs` (observational, not under gate/; it never decides a merge). State lives in `.aida/land/main-watch.json` (atomic tmp+rename) with a flock `main-watch.lock`, so concurrent passes are a no-op, not a race.
+    - It runs once per `land_run` pass (the supervised review-gated lander; landing-health already runs there) and on `aida land watch [--once]` for the operator or the advisor. A watch failure is printed and journaled, and never fails or blocks the pass.
+    - Mode: it runs in BOTH modes (it is cheap and observational). In ci-gated mode a red main is rare but still worth an alert. **Q2:** OK, or review-gated only?
+
+    ## Detection (fixed rules)
+    - Walk first-parent `origin/main` (freshly fetched) from the tip back to the stored `last_green`, capped at 50 commits.
+    - Read each commit with forge.commit_checks and judge it against `required_checks.ci_gated` minus merge-hold-gate. That's the same set and helper as dev_build::green_main_refusal; I'll extract a shared `main_commit_ci(repo, sha)` so the two cannot drift.
+    - RED = a required check concluded failed on that exact SHA. A CANCELLED check is NOT red. Today judge_commit_checks folds cancelled into Failed (forge_commit_ci.rs:511, right for gates), so I'll add a `cancelled` flag to the parsed check and a watch-only judgement that treats cancelled-only failure as Unknown. Gate behaviour is unchanged.
+    - Pending, NoChecks, MissingRequired and an unreadable forge are UNKNOWN: they never open or close an episode.
+    - A green re-run on the same SHA clears it (latest_per_name already takes the newest run).
+    - The episode's red SHA is the OLDEST red commit after last_green (the first bad merge). One episode at a time; later red commits are recorded as `red_merges` in it.
+
+    ## On open (once per red SHA, idempotent via the state file)
+    1. Parse the red commit for its subject, PR (#N) and spec IDs (trailer parse, reusing the completion parser), plus the failing check names and links.
+    2. Mail the advisor AND product as urgent (AIDA mailbox) and raise an `aida human` notice naming all of that.
+    3. File the fix spec: BUG "main red at <sha12>: <check>", linked `fixes` → the red commit's spec(s). It carries the failing-step log excerpt (landing_health::github_steps + error_line, already written) and the scope "make <check> green on main; no unrelated change". Queue it at the TOP of the implementer queue.
+       - Idempotency: the fix spec id is stored in the state, and a store search by exact title runs before filing, so a crash between filing and the state write cannot double-file.
+    4. Append `red_start` to `.aida/land/main-watch.jsonl` (append-only, fsync'd, like readiness.jsonl).
+
+    ## Revert recommendation (fixed triggers; recommend only, never auto-revert)
+    Each pass checks the open episode for:
+    - (a) UNBUILDABLE: the failed job's failing step is the build/compile step (github_steps step name). SMOKE-FAIL: `aida dev build` on the primary main checkout records a smoke failure for a SHA in the episode into the state, via a small hook in dev_build's smoke-failure path. The watch never builds.
+    - (b) WINDOW: now − red_since ≥ fix_window, with an injected clock for tests.
+    - (c) NEEDS-DESIGN: the fix spec has a comment tagged `needs-design`, or its lane punted with reason design.
+
+    The first trigger to fire sends ONE escalation per reason: urgent mail to advisor + operator (aida human, urgent), saying "revert recommended: <reason>" with the exact `git revert --no-edit <sha>` command. The revert is an ordinary PR with a normal review (Q1 of revision 1 withdrawn), and the review note flags it as a mechanically pure revert. It appends `revert_recommended{reason}`.
+
+    ## Close
+    - The tip is green → the episode closes.
+    - It appends `red_end`, plus `fix_landed` (the fix spec is completed and its PR is in the closing range) or `reverted` (a `Revert "…"` commit in the range names red_sha).
+    - It mails "main green again at <sha>", resolves the human notice and sets last_green.
+    - If a revert landed, the fix spec is left open for a manual re-scope, as revision 1 says, and the mail says so.
+
+    ## Metrics (never a gate)
+    `aida land metrics` gets a red-main block for the window:
+    - red-main minutes;
+    - episodes;
+    - red merges (merges landed while red);
+    - fix latency (red_start → red_end; median and max);
+    - reverted vs fixed share.
+
+    It reads only main-watch.jsonl, and an open episode counts up to now.
+
+    ## Tests (~45% of the slice)
+    - Detection: red, cancelled-only (not red), pending and unreadable (unknown, no transition), green re-run clears, the oldest red chosen, the 50-commit cap.
+    - Open: the mail, human notice and fix spec are filed exactly once across two passes and across a simulated crash between filing and the state write; queue top.
+    - Merging is NOT blocked while red: the ship/recheck path never reads main-watch (a test asserts landing_merge has no main_watch dependency).
+    - Each revert trigger: (a) the compile-step and smoke-hook paths, (b) the window via an injected clock and a configured fix_window, (c) the needs-design tag. One escalation per reason.
+    - Close: fix_landed vs reverted; the metrics fields; a malformed fix_window falls back to 2h with a warning.
+    - The [A4] guard still holds the last green SHA during an episode: an existing test is reused, with a shared helper parity test.
+    - Forge mocked throughout (the RecordingForge / commit_checks fake). Mail and queue go through injected ports.
+
+    ## Size and shipping
+    - ~450 lines including tests.
+    - One integration PR with trailer `(STORY-2897)`, the final slice. STRICT review is not required by class (it's observational and not under gate/), but I'll request whatever you rule.
+    - Docs: docs/advanced/landing.md "When main goes red" plus configuration-guide (fix_window only).
+    - Per the advisor's 04:30 ruling, this slice does NOT switch the repo's [landing] mode.
+  created_at: 2026-11-20T12:43:46.366310790Z
+  modified_at: 2026-11-20T12:43:46.366310790Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
