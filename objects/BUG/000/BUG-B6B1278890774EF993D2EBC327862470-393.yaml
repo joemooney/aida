@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T21:50:39.850213636Z
+modified_at: 2026-11-20T21:50:54.951846938Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -458,6 +458,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes. Reviewed the landed diff on base 719aa494. No finding depends on the intervening base commit. FAST CI passed. Evidence below comes from source and the implementer''s reported test results.. No triage reason was given.'
   created_at: 2026-11-20T21:50:39.850205157Z
   modified_at: 2026-11-20T21:50:39.850205157Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1faf0-e94f-7ea1-a614-1889a28ec934
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2629):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ccb4768ffb5c
+    Recorded: 2026-11-20T21:48:28.319898281+00:00
+    Findings:
+    1. rework_bindings.rs:116 — withheld_wait calls current_verdict for each inventoried change. With many fingerprinted reviews of the target spec, one lost binding and a malformed ledger, each call can retry the same failed full ownership scan. Failed scans are uncached. With no open wait, the loop visits every key. Evaluate the batch from one bounded discovery result and extend the 1,100-ledger test with many target changes and no early return.
+    2. rework_bindings.rs:84 — Recovery collects every related verdict payload in memory at once, then clones events for each view. There is no aggregate byte limit, even when recovery was triggered by a discovery-budget refusal. Stream the evidence or bound retained payloads and handle exhaustion explicitly.
+    3. rework_bindings.rs:95 — The closure list spans every raw ledger in the inventory. An annotation from a different change can suppress a wait when its embedded key and source match, even though the ordinary change-keyed reader would never see that annotation. The resulting Unavailable permits queue rework to proceed. Validate closure provenance and closed status in the correct key view and cover foreign closure evidence.
+    4. rework_bindings.rs:115 — The first recovery loop consults all change keys, including entries with proved=false. A write-ahead binding can therefore block the target with a current wait recorded for a different spec. Apply the proof-of-binding check before accepting a change-keyed wait in this loop.
+    5. rework_bindings.rs:117 — Recovery discards a non-wait returned by current_verdict and searches raw history independently. An older raw wait can therefore block rework after a signed current approval has superseded it for the same keys. Preserve authoritative verdict-source precedence and cover a signed superseding round.
+    6. work.rs:3269 — The failure branch bypasses mixed-verdict selection. A wait on one bound PR prevents importing independently readable, actionable request-changes findings on another. Preserve the existing substantive-findings precedence for authoritative evidence and exercise mixed changes during failed discovery.
+    7. rework_bindings.rs:225 — With neither hint nor binding directory, discover assumes an empty inventory without checking the completeness marker. On an unbootstrapped store an ownership-independent phase-3 WAITING event may still name the spec. The prior per-key reader found it by its event label. The new path omits the change and admits rework when there is no known open PR. Validate completeness and use a bounded fallback or refuse admission when coverage cannot be established.
+    8. rework_bindings_tests.rs — The new acceptance tests have only a bug-level trace. Add the individual worksheet criterion IDs so aida criteria can report their coverage.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T21:50:54.799826768Z
+  modified_at: 2026-11-20T21:50:54.799826768Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
