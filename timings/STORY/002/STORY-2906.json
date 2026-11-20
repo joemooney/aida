@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2906",
+  "publishes": [
+    {
+      "at": "2026-11-20T19:57:59.662139232Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-20T17:16:24.815999321Z",
+      "spec": "STORY-2906",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4372,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "0f00ac1bdef78cc67069297d0cade77bdc7e962a"
+      }
+    },
+    {
+      "ts": "2026-11-20T17:17:02.605068866Z",
+      "spec": "STORY-2906",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes after full sweep of all 17 files / 3556 diff lines against protected base 861eb515765aac3c9248675df0b8d1d50acfc5f8 and landed tree 352b8abb83daece193b736974e0e755ad32291ec. Attested subject is original head 0f00ac1bdef78cc67069297d0cade77bdc7e962a; its tree matches the supplied landed tree. STORY-2906 resolves to STORY-b6b1278890774ef993d2ebc327862470-804. The generated worksheet claims completion of all criteria, with no N/A deferrals. Thirteen actionable findings are retained, including unmet claimed criteria and the diagnosed ownership-ratchet CI regression. No local test/build commands were run. CI fast compile remained in progress when inspected; the decision rests on source defects, not pending CI.\nCriterion walk (test commands below identify source evidence and were not executed):\nac03ba3f: unverified — AC1: classify_pr uses the landing state rather than independent review facts, masking unreviewed/rework PRs behind CI-FAILED; observe dates waits from local observations instead of pushes/verdicts. See F1-F2.\nac6ad1b8: unverified — AC2: scheduled scan discards landings/hosts, and foreign-host memory is never collected. See F3.\nacd93c9f: unverified — AC3: successful due-job delivery suppresses future mail attempts even when mail delivery failed. Consolidation, ordinary dedup and dry-window escalation have source tests, but the failure path is incorrect. See F11.\naca50907: verified by source evidence — AC4: LandCommand::Stalls dispatches stalls::run; run and scan_and_route share observe; render and serde project the same Report. Added test: cargo test -p aida-cli-lib land::stalls::tests::the_json_report_and_the_table_carry_the_same_classification (not executed during review).\nac38cf37: verified by test-source evidence — AC5: added land::stalls::tests cover each class, policy thresholds, route dedup and dry-window escalation, including an I/O ledger/mail test. Runnable filter: cargo test -p aida-cli-lib land::stalls::tests (not executed during review). Production-loader regressions remain in findings.\nac0bdfe3: verified by source evidence — AC6: project substrate job, maintenance_schedule command allow-list and doctor dispatch invoke ordinary Rust classification/routing; due jobs and seat-addressed mail are vendor independent. No model or session-local monitor is introduced. New legacy liveness calls separately fail the ownership ratchet (F13).\nac2ed289: unverified — AC7: subcriteria 7a-7d are unverified for the production cases below; no deferrals were declared.\nac2ed289/7a: unverified — Approved-red detail collection starves later PRs; partial logs and mixed base/PR failures can produce incorrect rerun/no-rework advice. See F8-F10.\nac2ed289/7b: unverified — Recurrences on unapproved PRs and main failures rerun green between ticks are missed. See F4-F5.\nac2ed289/7c: unverified — Lane follow-up loader ignores routing evidence and queues. See F6.\nac2ed289/7d: unverified — Claim loader omits shared process-lock claims and silently ages out still-blocking shared claims. See F7.\nac605a0d: verified by configuration evidence — AC8: .aida/config.toml enables both throughput_guard and its 20m substrate job with project thresholds; Policy::default remains disabled per the advisor ruling.",
+        "recovery_hint": "address the review findings, move STORY-2906 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-20T18:06:23.746877372Z",
+      "spec": "STORY-2906",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4372,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b539d5c8605843af731660d300a79212af224498"
+      }
+    },
+    {
+      "ts": "2026-11-20T18:06:47.727413861Z",
+      "spec": "STORY-2906",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Reviewed the complete 163235-byte diff as landed on protected main 58b086965871a6966c7f18fed2faccdc22b68669 (synthetic tree 1df17ebe0007882d77d555dc6be9480354c419c0), attesting original PR head b539d5c8605843af731660d300a79212af224498. AC1/3/4/5/6/8 have source and supplied behavioral coverage; independent fact classification, event-based waits, saved run snapshots, per-check red reasoning, detail budgets/cache progression and mail retry address most round-1 findings. Honor the authoritative round-2 scope ruling: AC7b-d are deferred to TASK-3827, not blockers here. Request changes for AC7a red CI hidden by stale-base classification and the unresolved AC2 foreign-host memory requirement. Neither finding depends on newer base edits to scripts/store-writers.toml. CI pending at review time: fast gates succeeded; fast compile still running and merge-hold pending. No Cargo, local builds or tests run, per reviewer policy.",
+        "recovery_hint": "address the review findings, move STORY-2906 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-20T18:51:48.029801030Z",
+      "spec": "STORY-2906",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4372,
+        "verdict": "APPROVED",
+        "reviewed_sha": "986985f16f957f1f3ef655fe83381a63835fac00"
+      }
+    },
+    {
+      "ts": "2026-11-20T19:54:35.269157612Z",
+      "spec": "STORY-2906",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4372
+      }
+    },
+    {
+      "ts": "2026-11-20T19:57:59.467791466Z",
+      "spec": "STORY-2906",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "719aa4947d0673e6507e823e43e47b20b07422c8",
+        "pr": 4372,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
