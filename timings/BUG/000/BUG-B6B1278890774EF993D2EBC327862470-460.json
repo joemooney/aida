@@ -5,6 +5,10 @@
     {
       "at": "2026-11-19T20:56:35.706835345Z",
       "closed_by": "edit"
+    },
+    {
+      "at": "2026-11-20T05:06:14.612542850Z",
+      "closed_by": "edit"
     }
   ],
   "events": [
@@ -30,6 +34,44 @@
     },
     {
       "ts": "2026-11-19T20:56:35.570900243Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-460",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
+      }
+    },
+    {
+      "ts": "2026-11-20T01:05:15.468290524Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-460",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-11-20T01:14:40.875464361Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-460",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-20T05:06:14.450062351Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-460",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-20T05:06:14.464866047Z",
       "spec": "BUG-b6b1278890774ef993d2ebc327862470-460",
       "kind": {
         "event": "SpecCompleted",
