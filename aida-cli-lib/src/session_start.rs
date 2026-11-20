@@ -2679,8 +2679,13 @@ pub(crate) fn session_start_with_receipt(
                 );
             }
             Ok((coordination::AcquireOutcome::Unavailable(reason), claim)) => {
+                // A push error still returns the exact receipt: the remote
+                // may have accepted it, so a later failure must release it.
+                // trace:BUG-2697 | ai:claude
                 if let Some(cleanup) = rollback.as_mut() {
                     cleanup.claim = claim;
+                } else {
+                    unleased_claim.claim = claim;
                 }
                 eprintln!(
                     "  {} cross-clone coordination unavailable: {reason}, proceeding",

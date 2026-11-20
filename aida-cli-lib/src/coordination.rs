@@ -2651,12 +2651,12 @@ mod tests {
         std::fs::write(
             sessions.join("01a1f4f93790.toml"),
             format!(
-                "id = \"01a1f4f93790\"\nscope = \"{}\"\nslug = \"s\"\nowner = \"o\"\n\
-                 worktree_path = \"{}\"\nbranch = \"b\"\n\
-                 started_at = \"2000-01-01T00:00:00Z\"\nhostname = \"{}\"\n",
-                holder.scope,
-                clone.display(),
-                holder.host
+                "id = \"01a1f4f93790\"\nscope = {}\nslug = \"s\"\nowner = \"o\"\n\
+                 worktree_path = {}\nbranch = \"b\"\n\
+                 started_at = \"2000-01-01T00:00:00Z\"\nhostname = {}\n",
+                aida_core::toml_quote::toml_string(&holder.scope),
+                aida_core::toml_quote::toml_string(&clone.display().to_string()),
+                aida_core::toml_quote::toml_string(&holder.host)
             ),
         )
         .unwrap();
