@@ -14,12 +14,12 @@ description: |
   Impact: anything that reads the ledger before the last write lands sees request-changes for an approval the operator recorded, and the round counter inflates ("round 6").
 
   Acceptance: (1) one `review record --verdict approved` produces exactly one verdict ledger event for the spec. (2) A no-op "unchanged" record writes no ledger event. (3) Regression test covering a prior sweep_pending barrier.
-status: Approved
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-20T23:25:54.188731420Z
+modified_at: 2026-11-20T23:55:59.956619423Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -555,6 +555,30 @@ comments:
   modified_at: 2026-11-20T23:25:54.188731420Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb63-56c8-79f0-9cbb-cf9c61681aaf
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4602d292b5 (round 5 cap-exception delta over 0ab2fa4; four items)
+
+    **Acceptance evidence** [evidence: behavioral-test], `cargo test --profile agent -p aida-cli-lib --lib -- bug_2662 task_1450`: 31 passed, 0 failed.
+    1. Durability (gate/ledger/store.rs `settle`, `resync`, `review_check`): a write whose sync failed returns an error, never Appended; the receipt is kept, nothing is published, the review claim stays. A repeat syncs the ledger file and its directory before Unchanged and is refused while that sync fails. Tests: bug_2662_approval_whose_sync_failed_is_unconfirmed_until_a_retry_syncs_it, bug_2662_receipt_is_settled_by_what_the_write_did (bound and unbound, with and without a receipt).
+    2. Announce once (review_commands.rs `announce_review_once`): mark claimed with create_new before the emit, under the ledger-wide lock plus an exclusive announcement lock; pending mark is re-announced. Tests: two_recorders_of_one_act_announce_it_once, pending_mark_is_announced_again_and_a_done_mark_never.
+    3. Fallible emit: `events::emit_recorded`; mark completed only after the append. Test: bug_2662_announcement_whose_emit_failed_stays_pending_for_the_retry.
+    4. Receipt (review_authority.rs `receipt_id`): a reserved receipt that cannot be removed is adopted under its id; the reservation is never pointed elsewhere. Test: bug_2662_reserved_receipt_that_cannot_be_removed_is_adopted_not_orphaned.
+
+    **Probe findings / fixes**: a new act's mark is now named by the record this command appended (not whatever stands at read-back), so a racing later act cannot have its mark consumed. Warning text distinguishes 'emit failed' from 'announced but mark not completed'.
+
+    **Residual risks**
+    - After an unconfirmed write, the confirming retry answers Unchanged, and a repeat publishes nothing: the review publication is not issued automatically on that path (`aida review publish` issues it). It does announce and clear the claim.
+    - A crash between a successful emit and the completed mark re-announces on retry (at-least-once in that window, as the brief specifies).
+    - With the event feed disabled no mark is claimed; a later record with the feed on announces.
+    - Not run in this lane (60s tool cap): make check-ci-fast, check-ratchets. check-store-writers.py passes after regenerate; cargo fmt clean.
+    - A wider filter run had 1 unrelated failure: story_1917 reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant (mail retention writer-admission scan refused in the sandbox; code untouched here).
+  created_at: 2026-11-20T23:55:53.928850023Z
+  modified_at: 2026-11-20T23:55:53.928850023Z
+  session_id: 01a1fb497e70
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
@@ -707,6 +731,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fb63-6e94-79e3-b252-2b476f0171e8
+  author: dirtlab
+  timestamp: 2026-11-20T23:56:00.020925783Z
+  session_id: 01a1fb497e70
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2
@@ -717,3 +750,7 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-20T23:55:59.956619423Z
+  implemented_by: dirtlab
