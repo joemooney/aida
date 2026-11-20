@@ -146,6 +146,21 @@ comments:
   modified_at: 2026-11-20T11:15:07.038253365Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f8ab-0b6e-7b30-818f-412b3614222b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2705):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a12563e598a3
+    Recorded: 2026-11-20T11:13:57.309708186+00:00
+    Findings:
+    1. [P2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/standalone_implementer.rs; lines=1929-1978] Persist post-exit skip/failure diagnostics on every terminal publication path (BUG-2705/ac5c461a). The new append_detail loop executes only after empty_rework::inspect/route and only for Kind::FailedAfterStart. In the motivating rework case, a refused host commit leaves the old PR head and dirty seat; when that PR still has a blocking review, failed required check, or conflict, empty_rework returns at lines 1959-1965 with a record containing only the old PR blockage, losing leftover_note and the gate reason. Separately, a lane that pushed and then left dirty edits explicitly receives the already-published skip note, but settle_outcome/finish_outcome classify it Pushed, so that record also omits the note. The text on stderr/result lines does not satisfy the required durable publication record. Attach both host and gate diagnostics before every terminal return, independently of result kind, and cover these cases by asserting the persisted receipt details.
+    2. [P2; blocking_tier=unmet-claimed-ac; class=test-gap; file=aida-cli-lib/src/tests/bug_2705_seat_clone_leftover_tests.rs; lines=50-146] Add the required regression through the actual lane exit driver and gate (BUG-2705/ac6038cd). bug_2705_claude_seat_clone_leftovers_are_committed_published_and_gated directly calls self_published_seat_exit with independently injected post_exit/publish/republished closures, bypassing standalone_implementer::run and its production wiring. After publication it separately calls pushed_head_attempt with a closure that merely reads HEAD and returns a hard-coded pass; neither pushed()/snapshot() nor the configured fast-check command runs. Thus deleting the production helper call, moving it after the gate, or breaking the gate snapshot would leave this regression passing. Exercise scripts/lane-run.sh or its real Rust entry with a child leaving edits uncommitted, observe the production host commit, have a real controlled fast-check inspect the committed tree/head, and assert publication and the terminal receipt. The other helper tests can remain, but do not establish this completing criterion.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T11:15:21.582659077Z
+  modified_at: 2026-11-20T11:15:21.582659077Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f874-487d-7913-ba35-94353334404c
   author: joe
