@@ -2,35 +2,25 @@ id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-468
 agreed_id: BUG-2706
 title: Review-watch reviews merge-only heads while a dell1 rework lane is still live (STORY-2705 deferral misses foreign lane hosts)
-description: 'Regression / gap of STORY-2705 ("Review-watch defers reviewing a PR head while an implementer lane for its spec is live"): the deferral does not see implementer lanes running on a FOREIGN lane host (dell1). Rework lanes merge origin/main first and push that merge commit, so review-watch on the operator host reviews the merge-only head while the lane is still working, wasting a full (often STRICT, Fable) review and placing a hold on a head that is about to move.
-
+description: |
+  Regression / gap of STORY-2705 ("Review-watch defers reviewing a PR head while an implementer lane for its spec is live"): the deferral does not see implementer lanes running on a FOREIGN lane host (dell1). Rework lanes merge origin/main first and push that merge commit, so review-watch on the operator host reviews the merge-only head while the lane is still working, wasting a full (often STRICT, Fable) review and placing a hold on a head that is about to move.
 
   Evidence 2026-11-20 (lane-run.sh live on dell1 at review time):
-
   - #4364 BUG-2684 r3: review of merge-only 778dc38 (pushed 12:45) recorded about 13:25; the lane pushed its real fix later.
-
   - #4363 BUG-2703 r4: review of merge-only cde727e (pushed 13:02) recorded 13:43; the real r4 commit 1fb8210 landed 13:42.
-
   - Earlier the same day: #4347 (d728fb7) premature approval lifted a hold while CI was red.
 
-
   Acceptance:
-
-  - AC1: review-watch defers a head while an implementer lane for the PR''s spec is live on ANY registered lane host (dell1 included), using the lane-host records or relay status the lane relay and the throughput guard already read, not only local leases.
-
+  - AC1: review-watch defers a head while an implementer lane for the PR's spec is live on ANY registered lane host (dell1 included), using the lane-host records or relay status the lane relay and the throughput guard already read, not only local leases.
   - AC2: a head whose only new commit is a merge of the base, while such a lane is live, is never reviewed; once the lane exits, the newest head is reviewed.
-
   - AC3: when the lane-host state cannot be read, review-watch defers for a bounded time (a setting, default 20 min) and then reviews, logging why.
-
   - Regressions for AC1-AC3 with a fake foreign lane host.
-
-  '
 status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
-created_at: 2026-11-20 20:43:55.025623+00:00
-modified_at: 2026-11-20 21:09:02.346140+00:00
+created_at: 2026-11-20T20:43:55.025623Z
+modified_at: 2026-11-20T21:36:59.593147265Z
 req_type: Bug
 tags:
 - lanes
@@ -40,68 +30,60 @@ tags:
 comments:
 - id: 01a1fab9-02e6-7182-8ee3-a12a38436644
   author: joe
-  content: 'Product 13:48: Claude (Fable) fresh-start lane queued on dell1, brief:
-
+  content: |-
+    Product 13:48: Claude (Fable) fresh-start lane queued on dell1, brief:
     # Brief: BUG-2706 (fresh start; advisor-121 13:47: approved, drain, high; Claude+Fable)
 
-
-    Review-watch reviewed MERGE-ONLY heads while a rework lane on a FOREIGN lane host (dell1) was live and still working on that PR: twice this hour (#4364 at 778dc38, #4363 at cde727e). Each produced a premature CHANGES REQUESTED that isn''t a spent round. Cause: STORY-2705''s "defer review while a rework lane is live" check only sees lanes on the local host, not foreign lane hosts.
-
-    Implement the spec''s ACs: review-watch defers a review while a live rework lane exists for the PR''s spec on ANY registered lane host (use the existing lane/lease visibility for foreign hosts; don''t add an ad-hoc ssh probe in review-watch). Regression: a foreign-host live lane defers the review; after the lane exits, the new head is reviewed.
-
+    Review-watch reviewed MERGE-ONLY heads while a rework lane on a FOREIGN lane host (dell1) was live and still working on that PR: twice this hour (#4364 at 778dc38, #4363 at cde727e). Each produced a premature CHANGES REQUESTED that isn't a spent round. Cause: STORY-2705's "defer review while a rework lane is live" check only sees lanes on the local host, not foreign lane hosts.
+    Implement the spec's ACs: review-watch defers a review while a live rework lane exists for the PR's spec on ANY registered lane host (use the existing lane/lease visibility for foreign hosts; don't add an ad-hoc ssh probe in review-watch). Regression: a foreign-host live lane defers the review; after the lane exits, the new head is reviewed.
     Trailer (BUG-2706) if every AC is met; otherwise (Refs BUG-2706).
-
-    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.'
-  created_at: 2026-11-20 20:49:38.682949+00:00
-  modified_at: 2026-11-20 20:49:38.682949+00:00
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T20:49:38.682949Z
+  modified_at: 2026-11-20T20:49:38.682949Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fac1-1d2c-7502-b7b9-05afb5990beb
   author: dirtlab
-  content: '## Implementer approach
+  content: |-
+    ## Implementer approach
 
-
-    Root cause (store history, 2026-11-20): the foreign-host deferral does see dell1 claims, but a session claim''s heartbeat is written once at claim time and never refreshed (`coordination.rs` build_claim: "Slice 2 refreshes periodically" was never built). A watcher on another host can only judge such a claim by TTL (1800s), so the deferral lapses 30 min after the lane starts: BUG-2684 claimed 12:45:07, PR-4364 review claimed 13:22:27; BUG-2703 claimed 13:02:17, PR-4363 review claimed 13:40:04.
-
+    Root cause (store history, 2026-11-20): the foreign-host deferral does see dell1 claims, but a session claim's heartbeat is written once at claim time and never refreshed (`coordination.rs` build_claim: "Slice 2 refreshes periodically" was never built). A watcher on another host can only judge such a claim by TTL (1800s), so the deferral lapses 30 min after the lane starts: BUG-2684 claimed 12:45:07, PR-4364 review claimed 13:22:27; BUG-2703 claimed 13:02:17, PR-4363 review claimed 13:40:04.
 
     ### Acceptance criteria and evidence
-
-    - **AC1 [behavioral-test, unit]:** the lane launcher refreshes its own session claim''s heartbeat on the shared store while the lane runs (`coordination` heartbeat test against a real origin store: only the claim bound to this lease on this host is refreshed, committed and pushed). Gate test with a fake foreign lane host: a claim started 45 min ago with a fresh heartbeat defers.
-
+    - **AC1 [behavioral-test, unit]:** the lane launcher refreshes its own session claim's heartbeat on the shared store while the lane runs (`coordination` heartbeat test against a real origin store: only the claim bound to this lease on this host is refreshed, committed and pushed). Gate test with a fake foreign lane host: a claim started 45 min ago with a fresh heartbeat defers.
     - **AC2 [behavioral-test, unit]:** same fake foreign host: head deferred while the heartbeat is fresh regardless of what the head is; after the claim is released the gate returns no deferral, and the existing review-watch test shows the then-current head is admitted once.
-
     - **AC3 [behavioral-test, unit]:** a foreign implementer claim that is still present but whose heartbeat is past its TTL is "state unknown": deferred until expiry + `[review] lane_unknown_defer_mins` (default 20), then reviewed with a logged reason. Tests for the default, a configured value, and the lapse.
 
-
     ### Expected files
-
     - `aida-cli-lib/src/review_implementer_gate.rs`
-
     - `aida-cli-lib/src/coordination.rs`, new `aida-cli-lib/src/coordination_heartbeat.rs`
-
     - `aida-cli-lib/src/standalone_implementer.rs` (start/stop the heartbeat around the lane)
-
     - `docs/cli/07-project-setup.md`, `scripts/store-writers.toml`
 
-
     ### Ambiguities / conflicts as questions
-
-    - AC3 "lane-host state cannot be read": no separate lane-host record exists on main (aida lane relay, TASK-3826, is unmerged); I read it as "the host''s claim is present but its heartbeat stopped". Is that the intended meaning? Proceeding on that reading.'
-  created_at: 2026-11-20 20:58:42.348657+00:00
-  modified_at: 2026-11-20 20:58:42.348657+00:00
+    - AC3 "lane-host state cannot be read": no separate lane-host record exists on main (aida lane relay, TASK-3826, is unmerged); I read it as "the host's claim is present but its heartbeat stopped". Is that the intended meaning? Proceeding on that reading.
+  created_at: 2026-11-20T20:58:42.348657Z
+  modified_at: 2026-11-20T20:58:42.348657Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1faca-c362-7502-a03d-d0109db7ee08
   author: joe
   content: 'advisor-121 14:14: the throughput guard shows the same foreign-lane blindness (2 lanes reported vs 7 live on dell1; a false STUCK-REWORK on #4376 with its lane live). One shared lane-host visibility source should serve both; coordinate with TASK-3827.'
-  created_at: 2026-11-20 21:09:02.346140+00:00
-  modified_at: 2026-11-20 21:09:02.346140+00:00
+  created_at: 2026-11-20T21:09:02.346140Z
+  modified_at: 2026-11-20T21:09:02.346140Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fae4-5afb-7c71-b958-9778cdf80794
+  author: joe
+  content: 'advisor-121 14:45: TASK-3827 PR-A (#4381 r2) builds a shared foreign-host lane-visibility reader (a fresh lane-host record with age). BUG-2706 must use the SAME module: whichever lands first owns it, the other rebases.'
+  created_at: 2026-11-20T21:36:59.593147265Z
+  modified_at: 2026-11-20T21:36:59.593147265Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
-  timestamp: 2026-11-20 20:45:48.127870+00:00
+  timestamp: 2026-11-20T20:45:48.127870Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
@@ -110,13 +92,13 @@ history:
     new_value: Approved
 - id: 01a1fab5-c20b-7b20-a263-c2de8dd0986d
   author: joe
-  timestamp: 2026-11-20 20:46:18.123489+00:00
+  timestamp: 2026-11-20T20:46:18.123489Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
 - id: 01a1fabb-f2f6-76e2-bdf6-f04fa9bc8927
   author: aida-session-start
-  timestamp: 2026-11-20 20:53:03.862241+00:00
+  timestamp: 2026-11-20T20:53:03.862241Z
   changes:
   - field_name: status
     old_value: Approved
