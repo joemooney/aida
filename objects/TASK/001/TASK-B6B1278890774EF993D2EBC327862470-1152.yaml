@@ -1,0 +1,31 @@
+id: 01a1fabc-1f0b-73c0-a32b-ab550fa6d677
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1152
+title: 'Review follow-up: aida-core/templates/skills/aida-review.md:1451 — The skill says a contained reviewer''s col'
+description: |-
+  From BUG-2662
+  Reviewed sha: 74968c72e1561fe74733bbfa090db8a6c7b99433
+
+  aida-core/templates/skills/aida-review.md:1451 — The skill says a contained reviewer's collecting launcher persists a sweep_pending barrier before filing. The standalone draft parent actually uses the direct review-record path, and standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery now asserts an empty ledger after failure. Distinguish that draft retry from legacy record_collected_verdict collection so operators know which recovery evidence exists.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T20:53:15.147485246Z
+modified_at: 2026-11-20T20:53:15.147485246Z
+req_type: Task
+tags:
+- carried-from:BUG-2662
+- finding-hash:7bee9306
+- from-review:BUG-2662
+relationships:
+- rel_type: References
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-20T20:53:27.859403263Z
+filed_at:
+  code_sha: 74968c72e1561fe74733bbfa090db8a6c7b99433
+  branch: pr-4378
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1fab9b814
