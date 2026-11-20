@@ -20,12 +20,12 @@ description: |
   2. With `default = "drain"` and a type list, an unattended `aida pr ship`/train ships a PR whose specs are all unset-mode, of a listed type, not sensitive, and not touching protected paths. Every other gate (independent APPROVE at head, green pinned CI, no holds) still applies. A test covers the matrix: type in or out of the list × sensitive or not × protected path or not × explicit mode.
   3. The refusal text and `aida show` name the effective mode and where it came from, for example `drain (project default for unset bug)`.
   4. The knob is documented in the config reference and the two-seat protocol. Setting it for this repository is the operator's call and is recorded separately.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T10:08:44.083277061Z
+modified_at: 2026-11-20T11:47:32.528303392Z
 req_type: Story
 tags:
 - landing
@@ -590,6 +590,23 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1f8c8-813d-7810-b867-cf1fd4e11743
+  author: aida-auto-bump
+  timestamp: 2026-11-20T11:47:32.285658206Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1f8c8-8230-7193-a288-1957ecaa324b
+  timestamp: 2026-11-20T11:47:32.528299958Z
+  agent: aida
+  commit_sha: e7ea0d906995868bda6a14b0ef68d64174a574c7
+  summary: 'Reviewed all 2,317 lines of the supplied landed diff against protected main b41fd684a30a08a22ee1ac9d315ec965f5a3c9d1 and landed tree 3ef05efd34b009d9c43e799fe579c1f658c35f39, attesting only original PR head 810aabf4121b96c10023cd3509bb5639b014399c. No actionable defects found. STORY-2884 checklist: AC1 PASS by source inspection of unchanged supervised defaults, explicit-mode precedence and default-policy regressions; AC2 PASS by inspection of ship/train wiring, sensitive-class exclusions, trusted committed/operator protection union, fail-closed policy/path reads, the matrix tests and production ship regressions for unchanged, protected and moved heads; AC3 PASS by effective refusal labels and carrier-aware show resolution with regressions; AC4 PASS by config reference, generated showcase and both two-seat protocol copies, with repository opt-in left unchanged. Prior protection-policy, head-pinning, carrier-display and deadline findings are addressed. The one-commit stale-base overlap in mandate_ship.rs adds the base regression module registration in the landed tree; no finding depends on that overlap. Existing exact-head GitHub FAST gates, FAST compilation and Build aggregate succeeded; merge-hold-gate was pending at review time. Full test shards were skipped by FAST policy. No local Cargo, build or test commands were run, per reviewer policy; implementer runtime test reports were considered alongside source and CI evidence. Parent validation and canonical recording remain required.'
+  punted:
+  - 'punted: Full landed-diff review completed against pinned main 2b42e9f896c63a9152a2508fd50211741e6ee72d / landed tree 04486174b3a59478aa6acf7115c61f0a7c1b4bf6, attesting original PR head only. Four actionable defects: protected-policy read failures drop custom protections, ship path supervision is not pinned to the later authorized head, show ignores explicit carrier modes, and the new diff read bypasses the train-check timeout. Completing STORY-2884 criterion statuses: ac14a117 verified by default-policy source/test inspection and implementer-reported legacy truth-table results; ac604e5b unverified because findings 1-2 violate protected-path supervision despite ordinary-case matrix tests; ac90eb51 unverified because finding 3 misreports carrier-aware mode; ac67a09f verified by config-guide and both two-seat protocol updates, with repository opt-in left to the operator. All criteria enumerated in the generated worksheet. GitHub FAST gates/compile and Build aggregate green; full Rust execution skipped. No local builds/tests run under reviewer policy. Parent must validate and record this draft.'
+  - 'punted: Read the complete 99,644-byte supplied review diff and reviewed the change as landed on pinned main ccd9832894397b0541985d2e6ebfb8d97f0705ba, landed tree fda309cd1865483823b046b041a4f72efb0d09a8, attesting only original PR head 1de9926e14b71b647c0df6458a2101f7e7244423. The four prior implementation defects are addressed in source: protection policy and committed protected paths share one trusted config body and parse failures withhold the default; checked heads are compared to preflight and final heads remain pinned through the existing gate; show follows carrier execution modes; changed_paths uses the scoped deadline runner. STORY-2884 AC1 PASS by source/default-policy and existing test inspection (legacy truth-table execution is implementer-reported); AC2 PARTIAL because the matrix and train integration are present but the ship head-race enforcement has only a detached helper test, leaving one blocking ADR-76 mutation-kill test gap; AC3 PASS by carrier-aware source and label-test inspection; AC4 PASS by config reference, generated showcase and both two-seat protocol copies, with repository opt-in left unchanged. No additional semantic defects found. The one finding is independent of the newer base commit. Existing exact-head GitHub CI evidence: FAST source gates green, FAST compile still running and merge-hold status pending at review time; CI pending is not the reason for request-changes. No local Cargo, test or build commands were run. Standalone draft for parent validation and recording; no canonical verdict record was attempted.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
@@ -600,3 +617,7 @@ filed_at:
   vendor: claude
   session: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-20T11:47:32.285649961Z
+  completion_sha: e7ea0d906995868bda6a14b0ef68d64174a574c7
