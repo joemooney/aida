@@ -15,12 +15,12 @@ description: |
   2. Assertions keep their meaning: an unbounded or unkilled child still fails the test (state the mutation in a comment).
   3. No production changes. Loop each test 20/20 locally.
   Test-only, codex (gpt-6.2-astra), FASTTRACK review.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:56:38.591487997Z
-modified_at: 2026-11-20T15:59:49.468876802Z
+modified_at: 2026-11-20T16:04:08.353007679Z
 req_type: Task
 tags:
 - fix-forward
@@ -60,6 +60,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f9b3-6e21-7012-9bf2-dbd5d778cf92
+  author: aida-session-start
+  timestamp: 2026-11-20T16:04:08.353005851Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
