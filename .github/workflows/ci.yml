@@ -495,13 +495,19 @@ jobs:
       # installs into the job's private HOME (deleted with the job) and adds
       # that directory to PATH itself. Refuse any other cargo-nextest: a copy
       # from the seeded cache or the host would not be the pinned download.
+      # `cargo nextest` runs the copy in CARGO_HOME/bin when one exists,
+      # whether or not that directory is on PATH, and searches PATH only
+      # after it; the check resolves the subcommand in that order.
       # trace:STORY-2695 | ai:claude
       - name: Verify self-hosted cargo-nextest location
         if: runner.environment == 'self-hosted'
         run: |
-          found=$(command -v cargo-nextest) || { echo "::error::cargo-nextest is not on PATH" >&2; exit 1; }
+          found="${CARGO_HOME:-$HOME/.cargo}/bin/cargo-nextest"
+          if [ ! -e "$found" ] && [ ! -L "$found" ]; then
+            found=$(command -v cargo-nextest) || { echo "::error::cargo-nextest is not on PATH" >&2; exit 1; }
+          fi
           if [ "$found" != "$HOME/.install-action/bin/cargo-nextest" ]; then
-            echo "::error::cargo-nextest resolves to $found, not $HOME/.install-action/bin/cargo-nextest" >&2
+            echo "::error::cargo nextest resolves to $found, not $HOME/.install-action/bin/cargo-nextest" >&2
             exit 1
           fi
 

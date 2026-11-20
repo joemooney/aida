@@ -154,8 +154,9 @@ compiles into `CARGO_TARGET_DIR`, and uses the installed pinned Rust toolchain
   action installs into `$HOME/.install-action/bin` and adds that directory to
   the job's PATH. `HOME` is `current/runner/home`, deleted with the job and
   never published. "Verify self-hosted cargo-nextest location" fails the job
-  if `cargo-nextest` resolves anywhere else (a copy in the seeded
-  `CARGO_HOME/bin` or on the host).
+  if `cargo nextest` would run any other copy: one in the seeded
+  `CARGO_HOME/bin`, which cargo prefers over PATH even when that directory is
+  not on PATH, or one on the host.
 - **Always full.** The prepared tree has one commit and no remote, so the
   docs-only path filter is hosted-only and a dell1 heavy shard always runs its
   tests. For the same reason the test-time budget finds no parent commit and

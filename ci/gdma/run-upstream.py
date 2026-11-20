@@ -34,7 +34,7 @@ SELECT_STEP = {
     "run": 'echo "full_ci=$FULL_CI" >> "$GITHUB_OUTPUT"',
 }
 # Runner files only a dell1-only step may name; such a step never runs here.
-SELF_HOSTED_ONLY_VARIABLES = {"GITHUB_ENV", "GITHUB_WORKSPACE", "GITHUB_PATH"}
+SELF_HOSTED_ONLY_VARIABLES = {"GITHUB_ENV", "GITHUB_WORKSPACE"}
 # Runner-owned shell inputs must be explicitly supplied, never inherited by accident.
 # trace:STORY-2606 | ai:codex
 RUNNER_VARIABLES = {"GITHUB_STEP_SUMMARY", "RUNNER_TEMP", "GITHUB_EVENT_NAME"}

@@ -417,9 +417,13 @@ class Routing(unittest.TestCase):
             'install-action copy': ([action], [action], None),
             'install-action copy wins over a later one': ([action, host], [action, host], None),
             'not installed': ([], [action], 'cargo-nextest is not on PATH'),
-            'only in CARGO_HOME/bin': ([cargo], [action, cargo], 'cargo-nextest resolves to'),
-            'seeded CARGO_HOME copy shadows it': ([action, cargo], [cargo, action], 'cargo-nextest resolves to'),
-            'host copy shadows it': ([action, host], [host, action], 'cargo-nextest resolves to'),
+            'only in CARGO_HOME/bin': ([cargo], [action, cargo], 'cargo nextest resolves to'),
+            'seeded CARGO_HOME copy shadows it': ([action, cargo], [cargo, action], 'cargo nextest resolves to'),
+            # cargo runs the CARGO_HOME/bin copy before it searches PATH.
+            'seeded CARGO_HOME copy behind it on PATH': ([action, cargo], [action, cargo], 'cargo nextest resolves to'),
+            'seeded CARGO_HOME copy off PATH': ([action, cargo], [action], 'cargo nextest resolves to'),
+            'only in CARGO_HOME/bin, off PATH': ([cargo], [], 'cargo nextest resolves to'),
+            'host copy shadows it': ([action, host], [host, action], 'cargo nextest resolves to'),
             'installed but not on PATH': ([action], [], 'cargo-nextest is not on PATH'),
         }
         for name, (installed, path, message) in cases.items():
@@ -500,14 +504,35 @@ class Routing(unittest.TestCase):
             (other / 'cargo').write_text('#!/bin/sh\necho "cargo 1.0.0"\n')
             (other / 'cargo').chmod(0o755)
             return {'PATH': f'{other}:{paths.tools}:/usr/bin:/bin'}
+        def foreign_rustc(paths):
+            (paths.tools / 'rustc').unlink()
+            other = paths.tools.parent / 'other'
+            other.mkdir()
+            (other / 'rustc').write_text('#!/bin/sh\necho "rustc 1.0.0"\n')
+            (other / 'rustc').chmod(0o755)
+            return {'PATH': f'{paths.tools}:{other}:/usr/bin:/bin'}
+        def silent_cargo(paths):
+            (paths.tools / 'cargo').write_text('#!/bin/sh\necho "not a version"\n')
+        def failing_cargo(paths):
+            (paths.tools / 'cargo').write_text('#!/bin/sh\nexit 1\n')
+        def unreadable_index(paths):
+            # HEAD still resolves; only the comparison with it cannot run.
+            (paths.work / '.git/index').write_bytes(b'not an index\n')
+        def surviving_report(paths):
+            # An `rm` that reports success without removing anything.
+            other = paths.tools.parent / 'other'
+            other.mkdir()
+            (other / 'rm').write_text('#!/bin/sh\nexit 0\n')
+            (other / 'rm').chmod(0o755)
+            return {'PATH': f'{other}:{paths.tools}:/usr/bin:/bin'}
         cases = {
             'wrong sha': (dict(sha='0' * 40), 'this job is for'),
             'merge ref sha': (dict(sha='1' * 40), 'this job is for'),
-            'missing workspace': (dict(env={'AIDA_CI_WORKSPACE': None}), 'AIDA_CI_WORKSPACE is not an absolute'),
-            'relative workspace': (dict(env={'AIDA_CI_WORKSPACE': 'work/workspace'}), 'AIDA_CI_WORKSPACE is not an absolute'),
-            'empty target': (dict(env={'CARGO_TARGET_DIR': ''}), 'CARGO_TARGET_DIR is not an absolute'),
-            'absent cargo home': (dict(env={'CARGO_HOME': '/nonexistent/cargo'}), 'CARGO_HOME is not a host-prepared'),
-            'linked target dir': (dict(mutate=linked_target_dir), 'CARGO_TARGET_DIR is not a host-prepared'),
+            'missing workspace': (dict(env={'AIDA_CI_WORKSPACE': None}), 'AIDA_CI_WORKSPACE is not an absolute host-prepared path'),
+            'relative workspace': (dict(env={'AIDA_CI_WORKSPACE': 'work/workspace'}), 'AIDA_CI_WORKSPACE is not an absolute host-prepared path'),
+            'empty target': (dict(env={'CARGO_TARGET_DIR': ''}), 'CARGO_TARGET_DIR is not an absolute host-prepared path'),
+            'absent cargo home': (dict(env={'CARGO_HOME': '/nonexistent/cargo'}), 'CARGO_HOME is not a host-prepared directory'),
+            'linked target dir': (dict(mutate=linked_target_dir), 'CARGO_TARGET_DIR is not a host-prepared directory'),
             'no git': (dict(mutate=no_git), 'prepared source has no Git HEAD'),
             'nested': (dict(mutate=nested), 'not its own Git root'),
             'dirty': (dict(mutate=dirty), 'differs from the admitted commit'),
@@ -519,7 +544,22 @@ class Routing(unittest.TestCase):
             'target present': (dict(mutate=target_present), 'already has target'),
             'target link': (dict(mutate=target_link), 'already has target'),
             'foreign cargo': (dict(mutate=foreign_cargo), 'cargo is not the installed pinned toolchain'),
+            'foreign rustc': (dict(mutate=foreign_rustc), 'rustc is not the installed pinned toolchain'),
+            'cargo prints no version': (dict(mutate=silent_cargo), 'cargo did not report a version'),
+            'cargo fails': (dict(mutate=failing_cargo), 'cargo did not report a version'),
+            'unreadable index': (dict(mutate=unreadable_index), 'cannot compare prepared source'),
+            'report survives clearing': (dict(mutate=surviving_report), 'previous report test-run.log survives'),
         }
+        # Every refusal the step can raise has a case here.
+        import re
+        body = next(s for s in self.build_steps()
+                    if s.get('name') == 'Adopt host-prepared exact source')['run']
+        raised = re.findall(r'refuse "([^"]+)"', body)
+        self.assertEqual(len(raised), 14, raised)
+        covered = [message for _, message in cases.values()] + ['cannot clear previous reports']
+        for refusal in raised:
+            self.assertTrue(any(c in refusal or literal.strip() in c for c in covered
+                                for literal in re.split(r'\$\w+', refusal) if literal.strip()), refusal)
         if os.geteuid() != 0:  # Root ignores the directory mode this case relies on.
             cases['unclearable reports'] = (dict(mutate=unclearable), 'cannot clear previous reports')
         for name, (arguments, message) in cases.items():
