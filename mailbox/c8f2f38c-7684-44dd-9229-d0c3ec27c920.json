@@ -1,0 +1,18 @@
+{
+  "id": "c8f2f38c-7684-44dd-9229-d0c3ec27c920",
+  "thread_id": "c8f2f38c-7684-44dd-9229-d0c3ec27c920",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795207517996,
+  "body": "- [STUCK-REVIEW] #4362 at 81cbe3ad has had no verdict, no reviewer and no lane for 40 min, and its CI is red (Build (ubuntu-latest); base not fresh: CI run 44813022275's tested base is unknown: CI run has no completed checkout job)\n  -> launch a reviewer for #4362 at 81cbe3ad, or route a lane for its red CI\n- [STUCK-REWORK] #4376 has changes requested at af0a1fb5 (round 1, CI red) and no lane or session on it for 42 min\n  -> route rework of #4376 to a lane\n- [STUCK-CONFLICT] #4306 at b6315683 conflicts with its base and nobody owns it, for 1116 min\n  -> route a lane to resolve the conflict on #4306\n- [STUCK-CONFLICT] #4365 at b8d7faa4 conflicts with its base and nobody owns it, for 329 min\n  -> route a lane to resolve the conflict on #4365\n\n4 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 4 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
