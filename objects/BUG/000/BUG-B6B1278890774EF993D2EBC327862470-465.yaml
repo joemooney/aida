@@ -62,6 +62,21 @@ comments:
   modified_at: 2026-11-20T04:46:26.901681061Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f94e-3ef6-70d1-bc30-bc65a6559aee
+  author: joe
+  content: |-
+    Product 07:13: Claude fresh-start lane queued on dell1, brief:
+    # Brief: BUG-2703 (fresh start; approved + drain by advisor-121; Claude, STRICT: admission/authority code)
+
+    Implement the acceptance criteria in the spec description. The evidence is in the description and comments (2026-11-19 21:15-21:50). In short: the `aida advisor loops` workers (review-watch and train-worker) each hold a SHARED admission claim on .aida/admission-owner/mode.lock for their whole lifetime. A land/ship needs EXCLUSIVE (try_lock_exclusive), so it's starved indefinitely. A manual `aida pr train` is also refused while the auto-train worker's 'legacy auto-train' receipt exists (admission_owner.rs:252-258 serializes trains). Stopping the workers isn't durable: the supervisor respawns them in ~2-4 min.
+    ACs (see spec): (1) release shared claims between ticks/attempts, or writer preference so an exclusive request isn't starved; (2) `aida pr ship` waits a bounded, configurable time for exclusive instead of failing on the first try_lock, and names the holders and the wait if it gives up; (3) a production-path regression with both loop workers running, plus a control that an in-progress review launch or train stack is never interrupted; (4) a supported, audited drain/pause for `advisor loops` that also holds the supervisor's respawn, with claim age shown in `advisor loops status`; plus (from the 21:47 comment) a human-initiated single-PR ship or train must be able to run, or queue into auto-train, while the loops are up.
+    This touches admission (STORY-2857) and authority paths: fail closed, never break trains or reviews that are mid-operation. If a design fork appears (e.g. writer preference vs per-tick release), stop and punt to the advisor with the options.
+    Trailer (BUG-2703) only if every AC is met; otherwise (Refs BUG-2703).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T14:13:25.204687861Z
+  modified_at: 2026-11-20T14:13:25.204687861Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
