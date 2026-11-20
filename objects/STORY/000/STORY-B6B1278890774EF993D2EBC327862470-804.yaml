@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T16:54:06.714964877Z
+modified_at: 2026-11-20T17:05:46.254948094Z
 req_type: Story
 tags:
 - docs:impacted
@@ -69,6 +69,44 @@ comments:
   modified_at: 2026-11-20T16:08:44.080438046Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9eb-db0e-71b2-9735-e3048e67556b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0f00ac1bdef78cc67069297d0cade77bdc7e962a (PR #4372), diff origin/main...HEAD.
+
+    ### Acceptance evidence
+    - AC1: [evidence: behavioral-test] classes and thresholds: `each_reconciler_state_maps_to_its_stall_class_past_the_threshold`, `a_change_someone_is_working_or_that_is_not_stalled_is_moving`, `thresholds_are_project_settings_and_the_guard_ships_off` (aida-cli-lib/src/tests/story_2906_throughput_guard_tests.rs). Classification: `classify_pr` in aida-cli-lib/src/land_stalls.rs. The 20 min cadence is the `[[schedule.jobs]]` entry in .aida/config.toml.
+    - AC2: [evidence: behavioral-test] `the_report_counts_landings_lists_hosts_and_escalates_only_after_two_dry_hours_with_stalls`. Loaders `landing_times`, `host_lines` are untested against a live host.
+    - AC3: [evidence: behavioral-test] `routing_is_one_item_per_seat_and_the_same_stall_is_never_routed_twice`, `the_operator_is_escalated_to_once_per_window`, and the I/O test `a_scheduled_run_raises_due_jobs_and_mail_once_and_escalates_to_the_operator` (ledger, mail, operator job, no repeat).
+    - AC4: [evidence: behavioral-test] `the_json_report_and_the_table_carry_the_same_classification`; help golden updated for `aida land stalls`.
+    - AC5: [evidence: behavioral-test] the tests above cover each class, threshold settings, dedup and the 2 h escalation.
+    - AC6: [evidence: manual-inspection] `route` in land_stalls.rs writes only the schedule ledger, a CronJobFired event, a mailbox message and the optional `[notify]` push. No model, CronCreate or Monitor call exists in the diff. Limitation: inspection only, no test asserts the absence.
+    - AC7a: [evidence: behavioral-test] `approved_red_on_an_untouched_test_that_passes_on_base_is_a_probable_flake`, `approved_red_on_a_test_the_change_touches_routes_rework`, `approved_red_with_a_red_base_or_unread_evidence_is_never_called_a_flake`, `a_flake_reruns_once_then_becomes_a_fix_forward`. The advisor ruling (flake vs PR-caused, reason shown) is `red_cause`.
+    - AC7b: [evidence: behavioral-test] `a_flaky_test_that_fails_again_inside_the_window_is_a_recurrence_with_a_link`, `a_probable_flake_on_one_change_recurring_on_another_is_reported_once_seen`.
+    - AC7c: [evidence: behavioral-test] `a_lane_exit_nobody_followed_up_routes_to_the_seat_that_launched_it`; receipt reader `story_2906_recorded_reads_finished_and_unfinished_receipts_and_counts_bad_files` (lane_result.rs).
+    - AC7d: [evidence: behavioral-test] `only_a_stale_claim_the_doctor_cannot_heal_is_routed_with_its_record_and_evidence`. The loader `claim_facts` is untested.
+    - AC8: [evidence: configuration-validation] `[throughput_guard] enabled = true` and the `throughput-guard` job in .aida/config.toml; the `maintenance_schedule` tests that parse this file passed before the final rebase. Code default is off (`Policy::default().enabled == false`, tested).
+
+    ### Probe findings and fixes made before push
+    - Probe 4: failing test names come from the change's own CI log and reach a due job and mail an agent reads. Fixed: `test_name` accepts only a plain test path (charset and length bound), and evidence lists at most 8 names. Test: `test_names_come_from_libtest_and_nextest_failure_lines`.
+    - Probe 1: a launcher seat recorded as `Advisor` fell back to product. Fixed by lowercasing before the seat check.
+    - Ratchets caught and fixed: a raw `gh` call outside forge.rs (moved to `forge::github_stall_read`), two raw environment reads (removed or routed through `Environment::capture`), store-writer inventory rows added.
+    - A red approved head with a lane already on it was reported as stuck. Fixed: it is moving.
+    - Probe 5: the guard grants nothing. The operator job reuses the existing operator-escalation visibility rule; `known_route_seat` accepts only a route whose ledger the guard wrote (tested).
+
+    ### Residual risks
+    - The production loaders (`observe`, `read_base_runs`, `red_fact`, `claim_facts`, `landing_times`) have no test and were never run against the live forge. A wrong `gh` field name or endpoint would show as "Not read" lines, not as a crash, but would silently disable flake detection.
+    - Run time of the scheduled check is unmeasured. It has a 300 s kill ceiling and a 75 s budget for log reads; the landing pass itself is not bounded by that budget.
+    - The scheduled check fails the tick when another pass holds the readiness recorder lock.
+    - Lane-receipt `detail` (which can carry a lane's punt reason) is quoted into the product seat's due job, clipped to 300 characters but not otherwise filtered.
+    - STALE-CLAIM cannot see a claim that still reads live while its holder is gone on another host.
+    - Wait times count from the first reconciler pass that saw the state, so detection can lag by one 20 min interval.
+    - `make check-ci-fast` did not complete in the lane (sandbox denies AF_UNIX for the containment conformance tests); clippy and the aida-cli format-JSON audit test were not run locally.
+  created_at: 2026-11-20T17:05:46.254948094Z
+  modified_at: 2026-11-20T17:05:46.254948094Z
+  session_id: 01a1f9bb04bf
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
   author: joe
