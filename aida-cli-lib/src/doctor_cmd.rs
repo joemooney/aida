@@ -190,6 +190,20 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
+            // The throughput guard reads the forge, the gate ledger and
+            // lane liveness; no requirements store.
+            // trace:STORY-2906 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::land::stalls::CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::land::stalls::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
             // STORY-HOME-128: the mail-backlog guard reads the mailbox and the
             // agent registry only. trace:STORY-HOME-128 | ai:claude
             if !all
@@ -837,6 +851,16 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // The throughput guard (opt-in append path: only when --category is
+    // explicitly passed, since it runs a landing pass against the forge).
+    // trace:STORY-2906 | ai:claude
+    if opts.category.is_some()
+        && doctor_category_selected(opts.category.as_deref(), crate::land::stalls::CATEGORY)?
+    {
+        findings.extend(crate::land::stalls::scan_and_route(&project_root, false)?);
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // STORY-HOME-128: mail backlog (opt-in append path: only when --category
     // is explicitly passed, like lane-liveness). trace:STORY-HOME-128 | ai:claude
     if opts.category.is_some()
@@ -1385,6 +1409,13 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         crate::advisor_handshake::DOCTOR_CATEGORY => {
             // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
             DoctorReport::from_findings(crate::advisor_handshake::doctor_report(&project_root))
+        }
+        // Routes like lane-liveness: only the scheduled tick routes, and a
+        // routed stall is not a job failure. trace:STORY-2906 | ai:claude
+        crate::land::stalls::CATEGORY => {
+            let route = aida_core::exec_context::Environment::capture().var("AIDA_SCHEDULE_CHILD")
+                == Ok("1");
+            DoctorReport::from_findings(crate::land::stalls::scan_and_route(&project_root, route)?)
         }
         // Routes like lane-liveness: only the scheduled tick nudges, and a
         // nudged backlog is not a job failure. trace:STORY-HOME-128 | ai:claude
