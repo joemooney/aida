@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T03:28:10.902376648Z
+modified_at: 2026-11-20T04:06:40.235184107Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1159,6 +1159,13 @@ comments:
   created_at: 2026-11-20T03:28:10.902376648Z
   modified_at: 2026-11-20T03:28:10.902376648Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f722-c0af-7043-9744-d05fe9bf8936
+  author: joe
+  content: 'Product 21:05, D3 discriminator CORRECTED: TASK-3161 (fresh codex lane on the new dell1 binary, opened NEW PR #4349 with ''(TASK-3161)'') went Approved -> InProgress at 19:34 (pickup) and InProgress -> Done at 20:09 (its push). So D3 does flip from InProgress. The failing case is a REWORK push to an EXISTING PR (TASK-3821 r2 on #4340 via queue rework: no Done). Regression should cover: queue rework, then the lane pushes a new head to the existing PR with a completing declaration, then Done. A clean D4 test is pending on TASK-3161 (train #4351, no manual call).'
+  created_at: 2026-11-20T04:06:40.235184107Z
+  modified_at: 2026-11-20T04:06:40.235184107Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
