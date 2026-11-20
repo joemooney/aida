@@ -3,12 +3,12 @@ spec_id: BUG-2211
 agreed_id: BUG-2211
 title: A sandboxed git command in the primary checkout leaves a stale read-only .git/config.lock that blocks every worktree add and branch -D
 description: 'Seen twice on 2026-10-23 (09:06:59 and 09:44:23). The advisor seat ran under Claude Code''s Bash sandbox (bubblewrap), where .git/config is write-denied. A git fetch from that shell created .git/config.lock (empty, mode r--r--r--) and could not complete or remove it. Every later git worktree add -b and branch -D failed with ''could not lock config file .git/config: File exists'' until a human removed it. That blocked takeover fixers, new lanes and reviewer cleanup. Fix direction: (1) aida doctor detects a config.lock that is empty and older than N minutes, with no git process holding it, and offers or does a safe removal; launch paths (aida agent new, queue work, worktree add) run the same check first. (2) The guardrails hook warns or refuses git writes (fetch, config, branch, worktree) from a sandboxed shell in the primary checkout. The stopgap in the advisor helper scripts removes a lock older than 2 min.'
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-20T00:37:28.132761315Z
+modified_at: 2026-11-20T00:38:08.559544391Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -281,6 +281,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f663-a7af-7672-aba7-0d68dd6a6418
+  author: joe
+  timestamp: 2026-11-20T00:38:08.559540564Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a16ac8-c893-7610-b6bc-b501d1fb57f7
   timestamp: 2026-10-23T22:01:45.875970641Z
@@ -299,5 +308,6 @@ filed_at:
   session: 84f05e43-dcc5-4229-9fd9-24816e8c8bb4
 implementation_info:
   implemented: false
+  completed_at: 2026-11-20T00:37:51.312469037Z
   completion_sha: 4aa9aea412a5418bc7cc92e607a3175eedd17372
   reopened_at_sha: aeeb9023b2718b0427f667cad7d89a1ff0cd4415
