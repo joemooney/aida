@@ -54,7 +54,8 @@ const RAW_GH_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/pipeline_stall.rs", 2),
     ("aida-cli-lib/src/plan_cmd.rs", 1),
     // BUG-2515 moved ship title/body reads behind the resolved forge.
-    ("aida-cli-lib/src/pr_cmd.rs", 2),
+    ("aida-cli-lib/src/pr_cmd/mod.rs", 1),
+    ("aida-cli-lib/src/pr_cmd/shipping.rs", 1),
     ("aida-cli-lib/src/pr_service.rs", 1),
     ("aida-cli-lib/src/pr_list.rs", 1),
     ("aida-cli-lib/src/pr_lookup.rs", 3),

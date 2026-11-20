@@ -580,7 +580,7 @@ esac
             assert!(!timeout.is_zero(), "zero budget attempted discovery");
             Ok((r.to_owned(), crate::main_worktree_root_from(r)))
         });
-        assert!(started.elapsed() < Duration::from_secs(5), "{stall}");
+        assert_train_read_elapsed(stall, started.elapsed(), timeout);
         // Guard: under the check's deadline no git or gh ran without it.
         let unbounded = std::fs::read_to_string(r.join("unbounded")).unwrap_or_default();
         for line in unbounded.lines() {
@@ -588,21 +588,7 @@ esac
         }
         result
     };
-    let stopped = |stall: &str| {
-        let child = std::fs::read_to_string(r.join(format!("child-{stall}")))
-            .unwrap_or_else(|_| panic!("{stall}: the stalled subprocess never ran"));
-        let proc_stat = format!("/proc/{}/stat", child.trim());
-        let gone = || {
-            std::fs::read_to_string(&proc_stat)
-                .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
-                .unwrap_or(true)
-        };
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while !gone() && Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(10));
-        }
-        gone()
-    };
+    let stopped = |stall: &str| task_3792_recorded_child_stopped(&r.join(format!("child-{stall}")));
     let all_unchecked = |stall: &str, rows: &[Row]| {
         assert_eq!(rows.iter().map(|row| row.pr).collect::<Vec<_>>(), [41, 42]);
         assert!(
@@ -823,23 +809,48 @@ esac
     );
 }
 
-/// True once the pid recorded in `file` is gone or a zombie, waiting up to 2s.
+// trace:TASK-3825 | ai:codex
+#[cfg(target_os = "linux")]
+fn assert_train_read_elapsed(
+    stall: &str,
+    elapsed: std::time::Duration,
+    timeout: std::time::Duration,
+) {
+    // Removing the deadline waits out the 20s fixture sleep. Removing just the
+    // group kill leaves the child live beyond the separate 5s exit poll below.
+    let limit = timeout + std::time::Duration::from_secs(5);
+    assert!(
+        elapsed < limit,
+        "{stall}: took {elapsed:?}, limit {limit:?}"
+    );
+}
+
+/// True once the pid recorded in `file` is gone or a zombie, waiting up to 5s.
 #[cfg(target_os = "linux")]
 fn task_3792_recorded_child_stopped(file: &std::path::Path) -> bool {
     use std::time::{Duration, Instant};
     let child = std::fs::read_to_string(file)
         .unwrap_or_else(|_| panic!("{}: the stalled subprocess never ran", file.display()));
-    let proc_stat = format!("/proc/{}/stat", child.trim());
-    let gone = || {
-        std::fs::read_to_string(&proc_stat)
-            .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
-            .unwrap_or(true)
+    let pid: u32 = child.trim().parse().expect("expected a recorded child PID");
+    assert!(pid > 0, "expected a positive child PID");
+    let proc_stat = format!("/proc/{pid}/stat");
+    let gone = || match std::fs::read_to_string(&proc_stat) {
+        Ok(stat) => stat.rsplit_once(") ").unwrap().1.starts_with('Z'),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => true,
+        // The PID may disappear between opening its stat file and reading it.
+        Err(err) if err.raw_os_error() == Some(libc::ESRCH) => true,
+        Err(err) => panic!("reading {proc_stat}: {err}"),
     };
-    let deadline = Instant::now() + Duration::from_secs(2);
-    while !gone() && Instant::now() < deadline {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        if gone() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
         std::thread::sleep(Duration::from_millis(10));
     }
-    gone()
 }
 
 // The member gate's full-ci step reads commit checks through `gh api`, whose
@@ -951,21 +962,16 @@ exec /usr/bin/git "$@"
     let _path = crate::test_env::EnvVarGuard::prepend_path(s);
     let reads = |stall: &str| {
         std::fs::write(s.join("stall"), stall).unwrap();
+        let timeout = Duration::from_secs(1);
         let started = Instant::now();
-        let got =
-            crate::forge_lookup::with_forge_lookup_deadline(
-                Duration::from_secs(1),
-                || match stall {
-                    "log" => crate::gate::kernel_deps::commit_committed_at(r, &tip).is_some(),
-                    "merge-base" => single_merge_base(r, &base, &tip).is_ok(),
-                    "ancestry" => {
-                        crate::gate::kernel_deps::is_ancestor_commit(r, &base, &tip).is_some()
-                    }
-                    "patch-id" | "diff" => patch_id(r, &base, &tip).is_ok(),
-                    other => unreachable!("{other}"),
-                },
-            );
-        assert!(started.elapsed() < Duration::from_secs(4), "{stall}");
+        let got = crate::forge_lookup::with_forge_lookup_deadline(timeout, || match stall {
+            "log" => crate::gate::kernel_deps::commit_committed_at(r, &tip).is_some(),
+            "merge-base" => single_merge_base(r, &base, &tip).is_ok(),
+            "ancestry" => crate::gate::kernel_deps::is_ancestor_commit(r, &base, &tip).is_some(),
+            "patch-id" | "diff" => patch_id(r, &base, &tip).is_ok(),
+            other => unreachable!("{other}"),
+        });
+        assert_train_read_elapsed(stall, started.elapsed(), timeout);
         got
     };
     for stall in ["log", "merge-base", "ancestry", "patch-id", "diff"] {
