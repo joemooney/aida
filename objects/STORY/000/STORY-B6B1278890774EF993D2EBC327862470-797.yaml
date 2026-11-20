@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T14:46:44.012086482Z
+modified_at: 2026-11-20T14:47:22.759421207Z
 req_type: Story
 tags:
 - landing
@@ -654,6 +654,41 @@ comments:
   created_at: 2026-11-20T14:28:04.479546267Z
   modified_at: 2026-11-20T14:28:04.479546267Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f96d-5630-78c2-8044-1d41a9d364b1
+  author: joe
+  content: |-
+    AUTHORITATIVE S3 ROUND-2 BRIEF (advisor-121, 07:55): all 14 STRICT findings at 734a883 are in scope; F12 (an unbounded git/lock in the watch can stall landing) is first. F8 uses the simple state-first plus transition-id replay protocol. F11 is in scope (fix_window is one of Joe's three user settings).
+
+    # Rework brief: STORY-2897 S3 / PR #4362 (-> integration), round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 07:55 MST. Head reviewed: 734a883. Owner: integration seat. All 14 findings are in scope; the
+    simplifications below are advisor-approved.
+    PRIORITY 1 (can block landing; fix first):
+     F12 main_watch.rs:811-848: every Git/forge subprocess the watch runs uses null stdin plus a bounded timeout (reuse the scoped-deadline runner
+         from TASK-3792), and the watch lock is acquired with a bounded TRY (skip this pass if held). A stalled fetch must make the watch
+         report "skipped/unknown" and return, never stall land_run, the train tick or note_smoke_failure. Regression: a stalled fetch, so the caller returns.
+    CORRECTNESS:
+     F1  close the old episode at an intervening green (green rerun of A, or a green commit between A and B) and open a new one for B.
+     F7  detect a revert by inspecting the episode's closing commit range (last red .. new tip), independently of the CI scan window.
+     F8  crash safety, SIMPLEST: write the state file FIRST with a transition id, then append the journal event carrying that id; on load,
+         replay any state transition whose id is absent from the journal; metrics de-duplicate by id. Fault-inject each boundary.
+     F2  when reusing an existing fix spec, reconcile its queue entry (add if missing); test interruption after save with the real queue path.
+     F3+F4 notifications: keep independent pending/delivered flags per notice (confirm, each revert reason, close) and retry outstanding ones on
+         every pass (including after close). Create a durable `aida human` attention item on confirmation/escalation and resolve it on close;
+         push delivery stays optional.
+     F6  record every commit landed during an open episode (red, pending or unknown) into red_merges on open and on each pass.
+     F13 persist unknown failing-step evidence and retry the unbuildable probe on later passes.
+    METRICS: F5 keep event timestamps; count only within [since,until); an episode ending after `until` is open at the cutoff. F14 true median
+         for even counts. Tests for each.
+    SKETCH PROMISES: F9 carry the failing-check link plus the failing-step log excerpt and the held last-green SHA into the alert and fix spec (add a
+         ports method for the log excerpt; reuse landing_health::github_steps/error_line). F10 a fix lane's DesignFork punt (recorded punt evidence)
+         triggers needs-design once. F11 make landing.red_main.fix_window settable via `aida config set` as a validated Duration (it is one of
+         the three user settings in Joe's 10:37 trim), with trusted-default-branch reads unchanged.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. COMMIT your work. Push to s3-red-main-watch.
+  created_at: 2026-11-20T14:47:22.759421207Z
+  modified_at: 2026-11-20T14:47:22.759421207Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
