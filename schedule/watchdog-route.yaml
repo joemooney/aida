@@ -1,8 +1,8 @@
 job: watchdog-route
-last_run: 2026-11-19T17:29:22.941483279Z
+last_run: 2026-11-20T12:49:18.635615488Z
 last_by:
   seat: advisor
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: 'advisor-121 10:30: same finding (mail-poll-setup, integration-3a). The seat confirmed deletion of cron 7f962a7b at 10:24; the finding persists from transcript history inside the watchdog window. No new action; re-escalate only if it is still tripped after the window or a new rule appears.'
+note: 'advisor-121 05:52: stale mail-poll-setup on 01a1f4a0; the seat confirmed nothing armed; noted as a false positive on FAQ-50'
