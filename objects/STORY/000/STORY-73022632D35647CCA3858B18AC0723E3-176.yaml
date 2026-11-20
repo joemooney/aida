@@ -1,5 +1,6 @@
 id: 01a1f82f-cd0a-73a2-ba10-815595cf8998
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-176
+agreed_id: STORY-2982
 title: 'Review PR-4356: [AI:claude] fix(mandate): judge both sides of a conflict-marked store version; refuse markers before staging (BUG-2704)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f80c`) for branch `bug-b6b1278890774ef993d2ebc327862470-466`.
@@ -49,6 +50,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1f875-c2e8-7442-b7d5-e622055220d7
+  author: joe
+  timestamp: 2026-11-20T10:17:09.608876013Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: cae079889afe602bb9da5f2d4f681b415f7690c1
   branch: bug-b6b1278890774ef993d2ebc327862470-466

@@ -1,5 +1,6 @@
 id: 01a1f86f-93a6-7220-bab1-fba82a34677b
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-177
+agreed_id: STORY-2983
 title: 'Review PR-4344: [AI:claude] fix(leases): release and heal claims from pre-spawn admission failures (Refs BUG-2697)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1f833`) for branch `bug-b6b1278890774ef993d2ebc327862470-461`.
@@ -35,6 +36,12 @@ history:
 - id: 01a1f86f-b09c-78b0-b7c7-f105e132c6f2
   author: dirtlab
   timestamp: 2026-11-20T10:10:31.708608203Z
+  changes: []
+- id: 01a1f875-f7a5-7b43-aebd-c0ab40cbfc71
+  author: joe
+  timestamp: 2026-11-20T10:17:23.109243943Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
