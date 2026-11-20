@@ -160,6 +160,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: Completed
+- id: 01a1f879-9153-7df1-beee-68dfbb5ca798
+  author: aida-auto-bump
+  timestamp: 2026-11-20T10:21:19.059715758Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 processing_record:
 - id: 01a1f879-1f65-78e3-838d-e3b9f3dfcd60
   timestamp: 2026-11-20T10:20:49.893480778Z
@@ -167,6 +174,12 @@ processing_record:
   brief_ref: .aida/agent-briefs/claude/BUG-2704-2026-11-20T081844Z.md.acked
   commit_sha: b41fd684a30a08a22ee1ac9d315ec965f5a3c9d1
   summary: Completed via merge b41fd684
+- id: 01a1f879-93cb-7551-90da-c376f0e659f0
+  timestamp: 2026-11-20T10:21:19.691213033Z
+  agent: aida
+  commit_sha: b41fd684a30a08a22ee1ac9d315ec965f5a3c9d1
+  summary: 'APPROVED: reviewed all seven changed files against the generated .aida/review-prompt-pr-4356.md worksheet and pinned protected base 888f8b76a6d53dfb64f5d852d4490682608f7b6a, using landed tree 0fe3681c84a9d5c6bdc566d4e7a48c04c524aabc; attestation targets original PR head cae079889afe602bb9da5f2d4f681b415f7690c1. No actionable defects found. No worksheet deferrals. BUG-b6b1278890774ef993d2ebc327862470-466.acb2bfec: verified by source inspection of mandate.rs::parse_versions/conflict_resolutions and StoreHistoryBatch::read_listed feeding every resolution and its field-change versions into the existing exclusion judgment; bug_2704_both_sides_of_a_conflicted_version_are_judged, bug_2704_malformed_or_unparseable_conflicts_stay_unreadable, and bug_2704_conflicted_store_version_is_judged_on_both_sides cover both sides, diff3, combinations, malformed input, overflow refusal, excluded-side refusal and unrelated invalid YAML. BUG-b6b1278890774ef993d2ebc327862470-466.Regression: verified by source inspection of gate/tests/bug_2704_conflicted_history_tests.rs::bug_2704_conflicted_store_version_is_judged_on_both_sides: real committed history with modified_at-only conflicts is covered through mandate_ship_cover_for_ship; a stashed operator-only side returns AlwaysHuman; non-conflict malformed YAML returns HistoryUnreadable. BUG-b6b1278890774ef993d2ebc327862470-466.aca8274a: verified by historical store commit 7124c0f1a7fa574527048086d77bb445645175bf (reviewer child-write commit containing Updated upstream/Stashed changes markers around modified_at), existing BUG-2490 commit/index validation and bug_2490_autostash_conflict_refuses_store_commit regression, plus this diff''s pre-stage validate_store_worktree_paths call under the store writer lock and bug_2704_child_commit_refuses_conflict_markers_before_staging regression asserting unchanged HEAD/index/worktree and successful commit after repair. Type protocol BUG-2704 (bug protocol): met; PR adds two test files and adds the child-writer regression, with trace comments linking the tests and implementation to BUG-2704 (current alias of the worksheet origin ID). Verification was source and existing forge evidence only; no Cargo or local test/build commands were run per reviewer policy. CI pending at review time: CI (fast gates) and CI (fast compile) running; ci-tier: fast, publish-merge-hold-status and merge-hold-gate successful; full test shard skipped. Pending CI does not require WAITING. Approval does not authorize merge or bypass exact-head readiness.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
