@@ -114,7 +114,7 @@ fn drain_default_matrix() {
     let p = drain_bug_task();
     let protected_change = paths(&["aida-cli-lib/src/gate/ship.rs", "README.md"]);
     let config_change = paths(&[".aida/config.toml"]);
-    let ordinary_change = paths(&["aida-cli-lib/src/list.rs", "docs/x.md"]);
+    let ordinary_change = paths(&["aida-cli-lib/src/list.rs", "notes/x.md"]);
     let sensitive: Vec<(&str, Requirement)> = vec![
         (
             "keystone tag",
