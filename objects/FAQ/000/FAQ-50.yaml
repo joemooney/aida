@@ -18,11 +18,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-11T20:28:28.054679185Z
-modified_at: 2026-10-11T20:28:28.054679185Z
+modified_at: 2026-11-20T12:49:03.704561226Z
 req_type: Faq
 tags:
 - audience:dev
 - topic:relay
+comments:
+- id: 01a1f901-0492-7f92-b9bc-923e7f90e261
+  author: joe
+  content: 'advisor-121 2026-11-20 05:52: false positive. mail-poll-setup keeps tripping on session 01a1f4a0 (integration-3a) 19+ hours after its cron poll (7f962a7b) was deleted (2026-11-19 10:24); the seat confirms CronList is empty and no /loop, ScheduleWakeup or background shell is armed. The rule appears to match setup calls in old transcript history; it should consider only currently armed polls (or calls since the last CronDelete or teardown).'
+  created_at: 2026-11-20T12:49:03.704561226Z
+  modified_at: 2026-11-20T12:49:03.704561226Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 filed_at:
   code_sha: 18428db14cad4164704357aa5006bb5482039c62
   branch: main
