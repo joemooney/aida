@@ -1,0 +1,34 @@
+id: 01a1fb4e-f4ff-7300-bc46-c8e72a28ccc8
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-470
+agreed_id: BUG-2708
+title: cargo wrapper's diff-skip exits 0 with a one-line notice, so a skipped 'cargo test' looks like a 1-second pass and can be mistaken for evidence
+description: |
+  Observed 2026-11-20 16:31 (product-14): three "evidence" runs of `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::` on the primary host, in a detached worktree at origin/main (29e77b8), each "passed" in about 1 second with exit 0. They ran NOTHING. The operator cargo wrapper (~/.local/bin/cargo, diff_skip_check, from TASK-68 / ADR-69, requested as TASK-1780) skips test/check/clippy when no compile inputs differ from origin/main, printing one quiet line ("cargo: no compile inputs changed; CI covers it (no changes vs origin/main). Skipped; pass --force-build to run anyway.") and exiting 0. Any acceptance-evidence run on an unmodified main checkout (e.g. TASK-3133 AC3: N consecutive passing runs) is silently a no-op that looks like a pass. Related: BUG-2664 (completed) fixed the ratchet side of this skip.
+
+  Acceptance criteria:
+  1. A skipped run never exits 0. It exits with a distinct, documented code (e.g. 78, EX_CONFIG-style "skipped") so scripts and agents can't mistake it for a pass.
+  2. The skip notice goes to stderr, is prominent (clearly marked SKIPPED, naming the reason and the override), and repeats in the final line so it shows in tails.
+  3. Callers that intentionally rely on the skip (fixer/relay templates, check-ci-fast) are updated to accept the new code. Regression tests cover both paths.
+  4. Evidence-style docs and briefs that ask for "N passing runs" mention AIDA_CARGO_FORCE_BUILD=1 / --force-build.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T23:33:38.175003298Z
+modified_at: 2026-11-20T23:33:38.175003298Z
+req_type: Bug
+tags:
+- cargo-wrapper
+- linked:BUG-2664
+- linked:TASK-1780
+- linked:TASK-3133
+- testing
+filed_at:
+  code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
