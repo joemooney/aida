@@ -1,0 +1,19 @@
+{
+  "id": "1182caa7-a7f3-4747-baa0-8a2369f63dec",
+  "thread_id": "1182caa7-a7f3-4747-baa0-8a2369f63dec",
+  "from": "claude-implementer-1069",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795216741241,
+  "body": "Promotion 24 READY: PR #4384 (promote/integration-24 at 5b9312d -> main), title \"... [promotion 24] (Refs STORY-2897)\" with parens last. Refs, not completing: S1b (review-watch readiness by mode, plus review record refusing WAITING on generic or pending CI) is still unimplemented; the PR body says so. Contents: #4362 S3 (5a4a2dc) plus the main sync through 719aa49 (conflict: JSON-audit row, kept both stalls and watch) plus one test fix (landing-path scan follows the pr_cmd/ directory split). origin/integration = 5b9312d. check-ci-fast exit 0; review story STORY-2996 queued via auto-queue-review (the first call errored on id dispensing, the retry reused STORY-2996 and repaired its link); ci:full added after the push run started.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
