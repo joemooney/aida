@@ -6306,3 +6306,208 @@ fn bug_2607_failed_after_start_reports_only_a_dirty_retained_seat() {
         assert_retention_notice(&lines, "failed-after-start", &lane.clone, dirty);
     }
 }
+
+// Commit `subject` in the seat and push the seat's own branch to origin, as
+// an earlier self-published lane round did.
+// trace:BUG-2696 | ai:claude
+fn self_push(clone: &Path, branch: &str, subject: &str) {
+    std::fs::write(clone.join("self-pushed.txt"), format!("{subject}\n")).unwrap();
+    git_ok(clone, &["add", "-A"]);
+    git_ok(
+        clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "user.name=Lane",
+            "-c",
+            "user.email=lane@example.com",
+            "commit",
+            "-qm",
+            subject,
+        ],
+    );
+    git_ok(
+        clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "push",
+            "-q",
+            "origin",
+            &format!("HEAD:{branch}"),
+        ],
+    );
+}
+
+// Shell for a mock lane child that commits `subject` in its seat and pushes
+// its own branch to origin, as a self-publishing Claude lane does.
+// trace:BUG-2696 | ai:claude
+fn self_push_body(clone: &Path, subject: &str) -> String {
+    format!(
+        "cd '{clone}' && printf '%s\\n' '{subject}' > self-pushed.txt && \
+         git -c maintenance.auto=false -c gc.auto=0 add -A && \
+         git -c maintenance.auto=false -c gc.auto=0 -c core.hooksPath=/dev/null \
+         -c user.name=Lane -c user.email=lane@example.com commit -qm '{subject}' && \
+         git -c maintenance.auto=false -c gc.auto=0 -c core.hooksPath=/dev/null \
+         push -q origin HEAD:{REFUSED_BRANCH}",
+        clone = clone.display()
+    )
+}
+
+// BUG-1's status in the store the lane host's Done write resolves.
+// trace:BUG-2696 | ai:claude
+fn lane_bug_1_status(fx: &Fixture) -> aida_core::RequirementStatus {
+    crate::lane_recovery::storage_for(&fx.main)
+        .unwrap()
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-1")
+        .unwrap()
+        .status
+        .clone()
+}
+
+/// BUG-2696 reopen (D3, AC1): a self-publishing lane pushes its own branch,
+/// so the host never runs seat publication. Driven through the real
+/// standalone implementer runner `aida queue work` launches (a mock Claude
+/// child commits and pushes), its completing push sets the spec Done. A
+/// `(Refs ...)` push and a round that pushed nothing new (origin already at a
+/// completing tip from an earlier round) leave the spec where it was. A
+/// rework round (the spec back at Approved via `aida queue rework`) whose
+/// push completes it also reaches Done.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_self_published_lane_completing_push_sets_done() {
+    if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
+        return;
+    }
+    let complete = "[AI:claude] fix: complete (BUG-1)";
+    let partial = "[AI:claude] fix: one slice (Refs BUG-1)";
+    use aida_core::RequirementStatus::{Approved, Done, InProgress};
+    for (case, seed, want) in [
+        ("completing self-push", InProgress, Done),
+        ("rework completing self-push", Approved, Done),
+        ("refs self-push", InProgress, InProgress),
+        ("no new push", InProgress, InProgress),
+    ] {
+        let lane = started_lane(
+            false,
+            |_, clone| match case {
+                "completing self-push" | "rework completing self-push" => {
+                    self_push_body(clone, complete)
+                }
+                "refs self-push" => self_push_body(clone, partial),
+                _ => String::new(),
+            },
+            |fx, clone| {
+                if case == "no new push" {
+                    // An earlier round already pushed a completing tip; this
+                    // round starts there and pushes nothing.
+                    self_push(clone, REFUSED_BRANCH, complete);
+                }
+                // The seat's hermetic host resolves the distributed store;
+                // seed the spec there, as the empty-rework lane test does.
+                crate::test_env::enroll_synthetic_home(&fx.main).unwrap();
+                let mut req = title_spec("Repair seat publication");
+                req.status = seed.clone();
+                aida_core::object_store::write_object(&fx.main.join(".aida-store/objects"), &req)
+                    .unwrap();
+                set_bug_1_status(fx, seed.clone());
+                Vec::new()
+            },
+        );
+        assert_eq!(lane_bug_1_status(&lane.fx), seed, "{case}: seeded");
+        crate::standalone_implementer::TEST_PR.with(|p| *p.borrow_mut() = Some(Some((7, None))));
+        let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
+            cause: "test".into(),
+        };
+        let result =
+            crate::standalone_implementer::run_for_test(crate::standalone_implementer::Launch {
+                project_root: &lane.fx.main,
+                vendor: crate::session::HeadlessVendor::Claude,
+                prompt: "go",
+                session_id: "019e0000-0000-7000-8000-000000002696",
+                spec: "BUG-1",
+                lease_id: REFUSED_LEASE,
+                branch: REFUSED_BRANCH,
+                contained: false,
+                child_grant: &grant,
+                host_main: Some(&lane.fx.main),
+            });
+        crate::standalone_implementer::TEST_PR.with(|p| *p.borrow_mut() = None);
+        if case != "no new push" {
+            assert_eq!(
+                git_ok(
+                    &lane.fx.origin,
+                    &[
+                        "log",
+                        "-1",
+                        "--format=%s",
+                        &format!("refs/heads/{REFUSED_BRANCH}")
+                    ]
+                ),
+                if case == "refs self-push" {
+                    partial
+                } else {
+                    complete
+                },
+                "{case}: the child pushed its own branch"
+            );
+        }
+        assert_eq!(
+            lane_bug_1_status(&lane.fx),
+            want,
+            "{case}: lane result {result:?}"
+        );
+    }
+}
+
+/// BUG-2696 reopen (D3, A2): the self-published Done write fails closed. An
+/// unknown launch head, a failed exit and a publication hold each set
+/// nothing for a completing push the lane did make; the positive control
+/// with the same push sets Done.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_self_published_done_fails_closed() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for case in ["unknown launch head", "failed exit", "held", "control"] {
+        let fx = fixture();
+        let clone = seat_with_publication_pending(&fx, "self-push", "c0ffee269620", "self-push");
+        std::fs::remove_file(clone.join("self-push.txt")).unwrap();
+        set_bug_1_status(&fx, aida_core::RequirementStatus::InProgress);
+        let launch = git_ok(&clone, &["rev-parse", "HEAD"]);
+        self_push(&clone, "self-push", "[AI:claude] fix: complete (BUG-1)");
+        if case == "held" {
+            crate::punt::write_hold_signal(
+                &crate::punt::hold_signal_path(&fx.main, "BUG-1"),
+                &crate::punt::HoldSignal {
+                    spec: "BUG-1".into(),
+                    branch: "self-push".into(),
+                    reason: Some("manual gate".into()),
+                    spec_key: None,
+                },
+            )
+            .unwrap();
+        }
+        let completes = crate::ship_from_seat::mark_done_after_self_published_round(
+            &fx.main,
+            &clone,
+            "BUG-1",
+            "self-push",
+            (case != "unknown launch head").then_some(launch.as_str()),
+            case != "failed exit",
+        );
+        let want = if case == "control" {
+            aida_core::RequirementStatus::Done
+        } else {
+            aida_core::RequirementStatus::InProgress
+        };
+        assert_eq!(completes, case == "control", "{case}");
+        assert_eq!(bug_1_status(&fx), want, "{case}");
+    }
+}

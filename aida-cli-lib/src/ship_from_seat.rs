@@ -2259,6 +2259,84 @@ pub(crate) fn mark_done_after_confirmed_push(main: &Path, spec: &str, tip: &str)
     })
 }
 
+/// D3 (BUG-2696 reopen): the Done write for a SELF-PUBLISHED lane round. A
+/// lane the host does not publish for (a Claude lane, an uncontained Codex
+/// lane) pushes its own branch from the seat, so the host never runs
+/// [`run_from_with_reconciliation`] and its D3 hook. Each self-published exit
+/// (`aida queue work` through the standalone implementer, a queue resume and
+/// a drain lane) calls this once its fast gate has settled.
+///
+/// Sets nothing (A2: fail closed) unless every one of these holds:
+/// - the child exited cleanly and left no punt or hold;
+/// - the fast gate did not fail for `branch`;
+/// - this run pushed: the seat `HEAD` moved past `launch_head` (which must be
+///   known) and `origin` is at it, so an earlier round's completing tip that
+///   a no-op round leaves on the PR never sets Done;
+/// - the host's own fetch of `origin/<branch>` confirms that tip.
+///
+/// Then the same decision as a host-published push applies: the tip's
+/// publication subject must complete the spec, and the slice graph re-read
+/// under the writer lock must have no outstanding child. Reported on stderr;
+/// never fails the caller, because the code push already succeeded. Returns
+/// whether the host decided the round completes the spec.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn mark_done_after_self_published_round(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    branch: &str,
+    launch_head: Option<&str>,
+    clean_exit: bool,
+) -> bool {
+    if !clean_exit || crate::lane_fast_gate::veto(main, spec) {
+        return false;
+    }
+    // An unreadable seat signal is a veto too (A2).
+    if !matches!(publication_veto_message(main, tree, spec), Ok(None)) {
+        return false;
+    }
+    if crate::lane_fast_gate::refuse_failed_gate(main, branch).is_err() {
+        return false;
+    }
+    let Some(launch_head) = launch_head else {
+        return false;
+    };
+    let seat = crate::headless_background::SeatState::read(tree, branch);
+    if seat.pushed_since(Some(launch_head)) != Some(true) {
+        return false;
+    }
+    let Some(pushed) = seat.pushed_head().map(str::to_string) else {
+        return false;
+    };
+    let shown = aida_core::node_alias::display_spec_id(spec);
+    // The host fetches the pushed tip itself: origin, not the seat's view of
+    // it, is what confirms the push, and the subject walk needs the commit.
+    let pin = match pin_remote_branch(main, branch) {
+        Ok(Some(pin)) if pin.tip == pushed => pin,
+        Ok(_) => {
+            eprintln!(
+                "  warning: {shown} not marked Done: origin/{branch} is not at the lane's push \
+                 {pushed}"
+            );
+            return false;
+        }
+        Err(e) => {
+            eprintln!(
+                "  warning: {shown} not marked Done: could not confirm the lane's push: {e:#}"
+            );
+            return false;
+        }
+    };
+    let scope = match crate::native_publication::resolve_scope(main, spec) {
+        Ok(scope) => scope,
+        Err(e) => {
+            eprintln!("  warning: {shown} not marked Done: {e:#}");
+            return false;
+        }
+    };
+    mark_done_after_confirmed_push(main, &scope, &pin.tip)
+}
+
 /// How [`finish_published`] finishes a pushed publication.
 // trace:BUG-2696 | ai:claude
 #[derive(Debug, Clone, Copy)]

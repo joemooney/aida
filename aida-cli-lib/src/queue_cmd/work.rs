@@ -712,6 +712,12 @@ pub(crate) fn run_queue_resume_to_exit(
     } else {
         None
     };
+    // D3 (BUG-2696 reopen): a self-published round sets Done only for its own
+    // push, so remember where the seat stood before the child ran.
+    // trace:BUG-2696 | ai:claude
+    let launch_head = (implementing && !host_published)
+        .then(|| crate::standalone_implementer::implementer_launch_head(&main, tree))
+        .flatten();
     let mut status = session::spawn_vendor_headless_resume(
         host_main, target, prompt, log, tree, tee, contained, role,
     )?;
@@ -771,6 +777,15 @@ pub(crate) fn run_queue_resume_to_exit(
             anyhow::ensure!(
                 !queued,
                 "fast gate failed; one rework round queued before review"
+            );
+            // trace:BUG-2696 | ai:claude
+            crate::ship_from_seat::mark_done_after_self_published_round(
+                &main,
+                tree,
+                publication.1,
+                branch,
+                launch_head.as_deref(),
+                status.success(),
             );
         }
     }
