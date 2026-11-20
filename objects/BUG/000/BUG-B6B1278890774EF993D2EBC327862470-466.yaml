@@ -19,12 +19,12 @@ description: |
   3. Root cause: find what committed conflict markers into the store from a contained reviewer session (stash pop in the store worktree) and
      make store writers refuse to commit a file containing conflict markers. Regression for the writer guard.
   Authority path (mandate cover): Claude lane, STRICT review. Unblocks promotion 23 (#4324 @95edb31).
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T08:15:41.246362956Z
-modified_at: 2026-11-20T08:18:45.310341126Z
+modified_at: 2026-11-20T08:21:57.641158626Z
 req_type: Bug
 tags:
 - mandate
@@ -65,6 +65,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f80c-4b09-7b92-be35-6a3663e2f77e
+  author: aida-session-start
+  timestamp: 2026-11-20T08:21:57.641157093Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
