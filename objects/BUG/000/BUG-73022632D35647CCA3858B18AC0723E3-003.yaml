@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T18:05:30.454107450Z
-modified_at: 2026-11-20T04:33:50.637171675Z
+modified_at: 2026-11-20T06:55:30.250272978Z
 req_type: Bug
 tags:
 - linked:TASK-3133
@@ -77,7 +77,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Draft
-execution_mode: drain
+- id: 01a1f7bd-5342-70d0-91f0-b191291f11a1
+  author: joe
+  timestamp: 2026-11-20T06:55:42.402392029Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
+execution_mode: decide
 filed_at:
   aida_version: 0.16.0
   aida_build_sha: e5b78d27e1
