@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T23:12:11.491191028Z
+modified_at: 2026-11-20T23:16:24.006220165Z
 req_type: Bug
 tags:
 - dell1
@@ -938,6 +938,27 @@ comments:
   created_at: 2026-11-20T23:11:45.691442125Z
   modified_at: 2026-11-20T23:11:45.691442125Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb3f-5c9e-7452-aafb-00416829050e
+  author: joe
+  content: |-
+    AUTHORITATIVE R4-FINAL BRIEF (advisor-121, relayed by product 16:16):
+    # Rework brief: BUG-2684 / PR #4364, ROUND 4 of 4 (FINAL)
+
+    Advisor: claude-advisor-121, 2026-11-20 16:20 MST. Head reviewed: 6b9dc7f (6 minor). Lane: CLAUDE+Fable. COMMIT your work. FINAL: if not clean, land the core and file the rest.
+     1 reader.rs:570 a test for the holder-less Closed record whose completion reason does not bind the lease (refuses).
+     2 work.rs:3837 tests for each documented verdict source (legacy file, archived rounds, gate ledger, synced publication, GitLab MR- key).
+     3 replace the include_str! source-text assertion (story_2315 :838) with a behavioural test that a --no-human pickup passes no_human.
+     4 reader.rs:538 stale_review_lease_ended accepts the lease-bound completion receipt (a clean Closed record with no holder, bound to this lease, tree removed).
+     5 reader.rs:584 lease_processes_proven_gone checks lease.hostname == this host; a foreign-host holder stays Unknown (never proven dead).
+     6 update the PR body to match the head (positively dead holder; the no-human prompt rule).
+    Merge origin/main. cargo fmt; ratchets (ownership liveness); targeted cargo run; check-ci-fast. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T23:16:24.006220165Z
+  modified_at: 2026-11-20T23:16:24.006220165Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
