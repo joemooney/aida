@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T22:39:28.257053389Z
+modified_at: 2026-11-20T22:40:22.035615517Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -517,6 +517,12 @@ comments:
   modified_at: 2026-11-20T22:31:09.817472246Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb1e-3013-7503-82fc-1e2d7c832964
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2629-fresh` at head `8777c40af4967fe45a41403cddc5084f5532d324`.'
+  created_at: 2026-11-20T22:40:22.035610909Z
+  modified_at: 2026-11-20T22:40:22.035610909Z
+  session_id: 01a1faf418b3
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
