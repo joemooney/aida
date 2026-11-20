@@ -4013,9 +4013,23 @@ impl TrainForge for LiveTrainForge<'_> {
             match_head: Some(tip.to_string()),
         };
         journal::before("merge train")?;
-        self.forge
-            .merge_change(change, &opts, &mut crate::network_retry::StderrSink)
-            .map(|_| ())
+        // The one merge boundary, which rechecks the train change before
+        // every attempt under the landing captured now (promotion 23 review
+        // F1); the live train's own path is `merge_verified`, whose context
+        // also re-judges every car. trace:STORY-2903 trace:STORY-2905 | ai:claude
+        crate::gate::landing_merge::merge(
+            self.forge,
+            &self.main_worktree,
+            crate::gate::landing_merge::Caller::Train,
+            &crate::gate::landing_merge::Entry::capture(&self.main_worktree),
+            change,
+            &[],
+            &opts,
+            &mut crate::network_retry::StderrSink,
+            &crate::pr_train::pr_head_pin_journals,
+        )
+        .map(|_| ())
+        .map_err(crate::gate::landing_merge::MergeError::into_anyhow)
     }
 
     fn landed(&mut self, base: &str, main: &str, cars: &[Car]) -> Vec<Option<String>> {
@@ -4956,6 +4970,26 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     crate::standalone_implementer::refuse_under_marker("pr train")?;
     let project_root = crate::find_project_root()?;
     let main_worktree = crate::main_worktree_root_from(&project_root);
+    // A train merges: where the advisor performs merges (review-gated mode),
+    // anyone else is refused before a train is built; the merge boundary
+    // judges it again for every car. trace:STORY-2905 | ai:claude
+    if !opts.dry_run {
+        // Fail closed: a landing policy that cannot be read or parsed is
+        // never taken as the ci-gated default here.
+        let policy = crate::landing_policy::load_checked(&main_worktree).map_err(|why| {
+            crate::gate::ship::ShipRefusal::Review.error(format!(
+                "this train is not run: the landing policy cannot be established ({why})"
+            ))
+        })?;
+        if let Some(why) = crate::gate::ship::advisor_merge_refusal(
+            policy.advisor_merges(),
+            crate::gate::seat_authority::current_seat(&main_worktree).as_deref(),
+            crate::gate::role_authority::has_integrity_floor_authority(),
+            "this train",
+        ) {
+            return Err(crate::gate::ship::ShipRefusal::Review.error(why));
+        }
+    }
     // trace:STORY-2857 | ai:codex
     let _admission = if opts.dry_run {
         None
@@ -5005,6 +5039,16 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             .collect();
         let _recovery_reviews =
             crate::review_watch::train_members(&main_worktree, &recovery_members)?;
+        // The retained train's cars are claimed for it again before anything
+        // resumes; a car another hand holds refuses the recovery.
+        // trace:STORY-2905 | ai:claude
+        let _recovery_claims =
+            crate::gate::merge_claim::claim_all(&main_worktree, &recovery_members).map_err(
+                |why| {
+                    crate::gate::ship::ShipRefusal::Review
+                        .error(format!("the retained train is not resumed: {why}"))
+                },
+            )?;
         let mut ports = LiveTrainForge {
             project_root: project_root.clone(),
             main_worktree: main_worktree.clone(),
@@ -5164,6 +5208,8 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     };
     let mut warnings = Vec::new();
     let mut dispatch_abort: Option<String> = None;
+    // Cars another merge hand holds stay off this train (STORY-2905).
+    let mut claim_ejected: Vec<Ejected> = Vec::new();
     let mut outcome = if opts.dry_run {
         let built = build(&main_worktree, &main, &members)?;
         println!(
@@ -5206,14 +5252,28 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
             dispatch_ctx,
             dispatch_abort: None,
         };
+        // One merge hand per PR: the train claims each car it boards and
+        // holds the claims until it returns; a car another hand holds (a
+        // ship or drain merging it now) is not boarded. trace:STORY-2905 | ai:claude
+        let (car_claims, members, refused) =
+            crate::gate::merge_claim::board(&main_worktree, members, |m: &Member| {
+                (m.pr, m.head.clone())
+            });
+        claim_ejected.extend(
+            refused
+                .into_iter()
+                .map(|(pr, reason)| Ejected { pr, reason }),
+        );
         let mut rails = ForgeRails::new(&mut ports, uuid::Uuid::new_v4().to_string())
             .with_journal(&journal_dir);
         let outcome = drive(&mut rails, members)?;
+        drop(car_claims);
         warnings = std::mem::take(&mut rails.warnings);
         dispatch_abort = ports.dispatch_abort.take();
         outcome
     };
     outcome.ejected.extend(review_ejected);
+    outcome.ejected.extend(claim_ejected);
     outcome.landed.extend(recovered.landed);
     outcome.ejected.extend(recovered.ejected);
     outcome.ci_runs += recovered.ci_runs;
@@ -5312,16 +5372,31 @@ pub(crate) fn abandon_journal(name: &str) -> Result<()> {
 
 // trace:BUG-2618 | ai:codex
 pub(crate) fn pr_head_pins(root: &Path, pr: u64) -> Result<Vec<String>> {
+    Ok(pr_head_pin_journals(root, pr)?
+        .into_iter()
+        .map(|(train, _)| train)
+        .collect())
+}
+
+/// [`pr_head_pins`] with each pinning train's journal file name, the name
+/// `aida pr train --abandon` takes to release it.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn pr_head_pin_journals(root: &Path, pr: u64) -> Result<Vec<(String, String)>> {
     let mut pins = Vec::new();
-    for (_, entry) in journal::peek(&root.join(".aida/train"))? {
+    for (path, entry) in journal::peek(&root.join(".aida/train"))? {
         if entry.train.cars.iter().any(|c| c.member.pr == pr)
             && !entry.completed_members.contains(&pr)
             && !entry.rejected.iter().any(|r| r.pr == pr)
         {
-            pins.push(match entry.change_id {
+            let train = match entry.change_id {
                 Some(id) => format!("{} (PR #{id})", entry.branch),
                 None => entry.branch.clone(),
-            });
+            };
+            let file = path.file_name().map_or_else(
+                || path.display().to_string(),
+                |f| f.to_string_lossy().into_owned(),
+            );
+            pins.push((train, file));
         }
     }
     Ok(pins)
@@ -5331,3 +5406,8 @@ pub(crate) fn pr_head_pins(root: &Path, pr: u64) -> Result<Vec<String>> {
 pub(crate) fn admission_train_running(root: &Path) -> Result<bool> {
     journal::lock_held(&root.join(".aida/train"))
 }
+
+// trace:STORY-2905 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2905_train_pin_claim_tests.rs"]
+mod story_2905_train_pin_claim_tests;

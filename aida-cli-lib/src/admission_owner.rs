@@ -533,7 +533,31 @@ mod tests {
     fn story2857_cross_process_worker_blocks_land_and_manual() {
         let root = tempfile::tempdir().unwrap();
         let _worker = acquire(root.path(), "legacy auto-train", true).unwrap();
-        std::fs::create_dir(root.path().join(".git")).unwrap();
+        // A real repository with a resolvable default branch: the manual
+        // train resolves the landing policy fail-closed before admission
+        // (STORY-2905), so an unresolvable branch would refuse first.
+        // trace:STORY-2905 | ai:claude
+        for args in [
+            &["init", "-q", "-b", "main"][..],
+            &[
+                "-c",
+                "user.name=T",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                "base",
+            ],
+        ] {
+            let out = crate::test_git::git_command()
+                .current_dir(root.path())
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}: {out:?}");
+        }
         for manual in [false, true] {
             // Resolve the running test image, preserving the exact child fixture.
             // trace:STORY-2857 | ai:codex

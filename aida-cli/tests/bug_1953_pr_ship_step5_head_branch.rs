@@ -369,16 +369,18 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     );
 }
 
-/// STORY-2897 C2: in `review-gated` mode the session that authored the
-/// change does not merge it. Under the defaults (above) it still may.
-// trace:STORY-2897 | ai:claude
+/// STORY-2897/2903: in `review-gated` mode the advisor performs merges
+/// (operator direction 2026-11-18): a session holding no advisor seat is
+/// refused before anything merges, with the review/authority exit category.
+/// The author rule (C2) behind it is covered where the advisor merges.
+// trace:STORY-2897 trace:STORY-2903 | ai:claude
 #[test]
-fn review_gated_landing_refuses_a_ship_by_the_changes_author() {
+fn review_gated_landing_refuses_a_ship_by_a_non_advisor() {
     let shipped = ship_pr_42("[landing]\nmode = \"review-gated\"\n", "main", None);
     let (state, text) = (&shipped.state, &shipped.text);
     assert!(
-        text.contains("this session authored the change (lease 01bug1953abc"),
-        "the author's ship must be refused: {text}"
+        text.contains("has the advisor perform its merges"),
+        "a non-advisor's ship must be refused: {text}"
     );
     assert!(!state.join("merged").exists(), "nothing merges: {text}");
     // An authority refusal, not the behind-base condition (26).
