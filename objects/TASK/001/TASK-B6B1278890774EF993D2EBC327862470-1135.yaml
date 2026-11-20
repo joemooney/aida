@@ -28,6 +28,17 @@ tags:
 - lanes
 - linked:STORY-2906
 - product-intake
+relationships:
+- rel_type: Child
+  target_id: 01a1e282-c90c-71a1-b6e9-1884dc642720
+  created_at: 2026-11-20T16:07:40.141672470Z
+history:
+- id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
+  author: joe
+  timestamp: 2026-11-20T16:07:58.032421618Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
   branch: main
