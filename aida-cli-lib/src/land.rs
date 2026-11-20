@@ -264,6 +264,112 @@ pub(crate) trait Evidence {
     fn review_after_merge(&self, _pr: &Pr) -> Option<String> {
         None
     }
+    /// When the head was committed (RFC 3339): the throughput guard counts
+    /// an unreviewed head's wait from it. `None` when it could not be read.
+    // trace:STORY-2906 | ai:claude
+    fn head_at(&self, _pr: &Pr) -> Option<String> {
+        None
+    }
+    /// When the approval that covers the head was recorded.
+    // trace:STORY-2906 | ai:claude
+    fn approved_at(&self, _pr: &Pr) -> Option<String> {
+        None
+    }
+    /// When the base first moved to a commit the head conflicts with.
+    // trace:STORY-2906 | ai:claude
+    fn conflict_since(&self, _pr: &Pr) -> Option<String> {
+        None
+    }
+}
+
+/// One pass's evidence with each fact read once per change: the derivation
+/// and a second reader of the same pass (the throughput guard) share the
+/// reads, and so the same answers.
+// trace:STORY-2906 | ai:claude
+struct Memo<'a> {
+    inner: &'a dyn Evidence,
+    conflict: MemoCell<bool>,
+    reviewing: MemoCell<Option<String>>,
+    ci: MemoCell<Ci>,
+    approval: MemoCell<Approval>,
+    hold: MemoCell<Option<Hold>>,
+    rounds: MemoCell<Rounds>,
+    lane: MemoCell<Option<String>>,
+}
+
+type MemoCell<T> = std::cell::RefCell<BTreeMap<u64, std::result::Result<T, String>>>;
+
+fn memo<T: Clone>(
+    cell: &MemoCell<T>,
+    id: u64,
+    read: impl FnOnce() -> std::result::Result<T, String>,
+) -> std::result::Result<T, String> {
+    if let Some(known) = cell.borrow().get(&id) {
+        return known.clone();
+    }
+    let value = read();
+    cell.borrow_mut().insert(id, value.clone());
+    value
+}
+
+impl<'a> Memo<'a> {
+    fn new(inner: &'a dyn Evidence) -> Self {
+        Self {
+            inner,
+            conflict: Default::default(),
+            reviewing: Default::default(),
+            ci: Default::default(),
+            approval: Default::default(),
+            hold: Default::default(),
+            rounds: Default::default(),
+            lane: Default::default(),
+        }
+    }
+}
+
+impl Evidence for Memo<'_> {
+    fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
+        memo(&self.conflict, pr.id, || self.inner.conflict(pr))
+    }
+    fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        memo(&self.reviewing, pr.id, || self.inner.reviewing(pr))
+    }
+    fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
+        memo(&self.ci, pr.id, || self.inner.ci(pr))
+    }
+    fn ci_gates_landing(&self) -> bool {
+        self.inner.ci_gates_landing()
+    }
+    fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String> {
+        memo(&self.approval, pr.id, || self.inner.approval(pr))
+    }
+    fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
+        memo(&self.hold, pr.id, || self.inner.hold(pr))
+    }
+    fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
+        memo(&self.rounds, pr.id, || self.inner.rounds(pr))
+    }
+    fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        memo(&self.lane, pr.id, || self.inner.lane(pr))
+    }
+    fn review_timeouts(&self, pr: &Pr) -> u32 {
+        self.inner.review_timeouts(pr)
+    }
+    fn rework_stop(&self, pr: &Pr) -> Option<String> {
+        self.inner.rework_stop(pr)
+    }
+    fn review_after_merge(&self, pr: &Pr) -> Option<String> {
+        self.inner.review_after_merge(pr)
+    }
+    fn head_at(&self, pr: &Pr) -> Option<String> {
+        self.inner.head_at(pr)
+    }
+    fn approved_at(&self, pr: &Pr) -> Option<String> {
+        self.inner.approved_at(pr)
+    }
+    fn conflict_since(&self, pr: &Pr) -> Option<String> {
+        self.inner.conflict_since(pr)
+    }
 }
 
 /// One row of the derived table.
@@ -851,6 +957,16 @@ impl Live {
             .map_err(|refusal| refusal.reason())
     }
 
+    /// A commit's committer date, RFC 3339.
+    // trace:STORY-2906 | ai:claude
+    fn commit_time(&self, sha: &str) -> Option<String> {
+        let out = git(&self.root, &["log", "-1", "--format=%cI", sha], 10)
+            .ok()
+            .filter(|out| out.status.success())?;
+        let at = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        (!at.is_empty()).then_some(at)
+    }
+
     fn local_leases(&self) -> std::result::Result<&[crate::leases::SessionLease], String> {
         self.leases
             .get_or_init(|| crate::status_prs::live_owned_leases_strict(&self.root))
@@ -1192,6 +1308,96 @@ impl Evidence for Live {
     fn rework_stop(&self, pr: &Pr) -> Option<String> {
         self.book.stop(pr)
     }
+
+    // trace:STORY-2906 | ai:claude
+    fn head_at(&self, pr: &Pr) -> Option<String> {
+        let (head, _) = self.pinned(pr).ok()?;
+        self.commit_time(head)
+    }
+
+    // trace:STORY-2906 | ai:claude
+    fn approved_at(&self, pr: &Pr) -> Option<String> {
+        let change = crate::gate::ledger::ChangeKey {
+            forge: if self.gitlab {
+                crate::gate::ledger::ChangeForge::Mr
+            } else {
+                crate::gate::ledger::ChangeForge::Pr
+            },
+            number: pr.id,
+        };
+        // The newest approval the ledger took at the head; for an approval
+        // carried over clean merges of the base, the newest approval of the
+        // change. The ledger's own time: every event has one.
+        let mut at_head: Option<String> = None;
+        let mut any: Option<String> = None;
+        for (taken, record) in
+            crate::gate::ledger::project::change_verdicts_checked(&self.root, change).ok()?
+        {
+            let key = crate::gate::review_verdict::recording_key(&record);
+            if !VerdictKind::parse(&key.2).approves() {
+                continue;
+            }
+            let at = Some(taken);
+            if key.0.as_deref() == Some(pr.head.as_str()) && at > at_head {
+                at_head = at.clone();
+            }
+            if at > any {
+                any = at;
+            }
+        }
+        at_head.or(any)
+    }
+
+    // trace:STORY-2906 | ai:claude
+    fn conflict_since(&self, pr: &Pr) -> Option<String> {
+        let (head, base) = self.pinned(pr).ok()?;
+        let fork = crate::gate::review_carryover::single_merge_base(&self.root, base, head).ok()?;
+        let range = format!("{fork}..{base}");
+        let out = git(
+            &self.root,
+            &[
+                "log",
+                "--first-parent",
+                "--reverse",
+                "--format=%H %cI",
+                &range,
+            ],
+            20,
+        )
+        .ok()
+        .filter(|out| out.status.success())?;
+        let text = String::from_utf8_lossy(&out.stdout);
+        let commits: Vec<(&str, &str)> = text
+            .lines()
+            .filter_map(|line| line.trim().split_once(' '))
+            .collect();
+        let conflicts = |sha: &str| -> Option<bool> {
+            let out = git(
+                &self.root,
+                &["merge-tree", "--write-tree", "--no-messages", sha, head],
+                20,
+            )
+            .ok()?;
+            match out.status.code() {
+                Some(0) => Some(false),
+                Some(1) => Some(true),
+                _ => None,
+            }
+        };
+        // The base's tip conflicts (the pass found that). The first base
+        // commit that does is searched for by halving: a conflict, once
+        // there, is taken to stay.
+        let (mut low, mut high) = (0, commits.len().checked_sub(1)?);
+        while low < high {
+            let mid = (low + high) / 2;
+            if conflicts(commits[mid].0)? {
+                high = mid;
+            } else {
+                low = mid + 1;
+            }
+        }
+        Some(commits[low].1.to_string())
+    }
 }
 
 fn short(sha: &str) -> &str {
@@ -1421,10 +1627,6 @@ pub(crate) struct Pass {
     pub notes: Vec<String>,
     /// What the pass could not read and so does not show.
     pub warnings: Vec<String>,
-    /// The approval standing at each head whose CI is red, where there is
-    /// one: the derivation stops at the red CI and never reads it.
-    // trace:STORY-2906 | ai:claude
-    pub red_approvals: BTreeMap<u64, String>,
 }
 
 /// The warning for a lease store that could not be read.
@@ -1449,6 +1651,17 @@ pub(crate) fn open_change_count(start: &Path) -> Result<usize> {
 
 /// Discover the open changes and derive a row for each.
 pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
+    live_pass_with(start, |_, _, _| ()).map(|(pass, ())| pass)
+}
+
+/// [`live_pass`], with a second reader of the same pass: `also` sees the
+/// changes, their rows and the evidence the rows were derived from, each
+/// fact read once.
+// trace:STORY-2906 | ai:claude
+pub(crate) fn live_pass_with<T>(
+    start: &Path,
+    also: impl FnOnce(&[Pr], &[Row], &dyn Evidence) -> T,
+) -> Result<(Pass, T)> {
     // Every change's approval reads verdicts under several keys, and each
     // read used to rediscover the whole gate ledger: minutes for twenty open
     // changes. One discovery is shared for the pass; it is re-validated
@@ -1504,17 +1717,13 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         claims,
         review_after_merge: crate::integration_cmd::review::Reader::new(&root),
     };
-    let rows = pass(&changes, &live);
     // trace:STORY-2906 | ai:claude
-    let red_approvals = rows
-        .iter()
-        .filter(|row| row.state == State::CiFailed)
-        .filter_map(|row| changes.iter().find(|pr| pr.id == row.pr))
-        .filter_map(|pr| match live.approval(pr) {
-            Ok(Approval::Approved(approval)) => Some((pr.id, approval)),
-            _ => None,
-        })
-        .collect();
+    let (rows, extra) = {
+        let memo = Memo::new(&live);
+        let rows = pass(&changes, &memo);
+        let extra = also(&changes, &rows, &memo);
+        (rows, extra)
+    };
     // trace:TASK-3813 | ai:codex
     metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
     // Lanes that could not be read are said to be missing, never shown as
@@ -1523,19 +1732,21 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         Ok(leases) => (leases.to_vec(), Vec::new()),
         Err(why) => (Vec::new(), vec![lanes_unreadable(&why)]),
     };
-    Ok(Pass {
-        root,
-        changes,
-        rows,
-        local_lanes,
-        foreign_lanes: live.claims,
-        gitlab,
-        merge_trees: live.merge_trees.into_inner(),
-        book: live.book,
-        notes,
-        warnings,
-        red_approvals,
-    })
+    Ok((
+        Pass {
+            root,
+            changes,
+            rows,
+            local_lanes,
+            foreign_lanes: live.claims,
+            gitlab,
+            merge_trees: live.merge_trees.into_inner(),
+            book: live.book,
+            notes,
+            warnings,
+        },
+        extra,
+    ))
 }
 
 /// The landing reconciler: every open change's state, derived from the forge,

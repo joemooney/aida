@@ -190,8 +190,8 @@ pub(crate) fn handle_doctor_command(
                     *fail_on_findings,
                 );
             }
-            // The throughput guard reads the forge, the gate ledger, lane
-            // receipts and shared claims; no requirements store.
+            // The throughput guard reads the forge, the gate ledger and
+            // lane liveness; no requirements store.
             // trace:STORY-2906 | ai:claude
             if !all
                 && !*sub_all

@@ -1,10 +1,15 @@
 //! The throughput guard: which open changes are stuck, and who can move them.
 //!
 //! The seats' watchers are event-driven, and an absence of events wakes no
-//! one: a push nobody reviews, an approval nobody lands, a lane that exits
-//! and is never relaunched all look like silence. This module reads what the
-//! landing reconciler already derives ([`super::live_pass`]) plus the lane
-//! receipts, the shared claims and CI, and names every stall.
+//! one: a push nobody reviews, an approval nobody lands and a conflict nobody
+//! owns all look like silence. This module reads the same evidence the
+//! landing reconciler derives its table from ([`super::live_pass_with`]),
+//! fact by fact, plus CI on the red approved heads, and names every stall.
+//!
+//! The reconciler's state is one exclusive label in a fixed precedence (a red
+//! head is `CI-FAILED` before its review history is read). A stall is judged
+//! from the facts themselves: the approval, the review history, the hold, CI
+//! and who is working the change, each read on its own.
 //!
 //! `aida land stalls` prints the classification. The scheduled
 //! `throughput-guard` job (`aida doctor check throughput-guard`) computes the
@@ -24,7 +29,7 @@ use anyhow::Result;
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 
-use super::{Action, Pass, State};
+use super::{Action, Approval, Ci, Hold, HoldRelease, State};
 use crate::events::{self, Event, EventKind};
 use crate::schedule_ledger;
 use crate::DoctorFinding;
@@ -34,22 +39,22 @@ pub(crate) const CATEGORY: &str = "throughput-guard";
 pub(crate) const ROUTE_JOB_PREFIX: &str = "throughput-guard-route-";
 const OPERATOR_SEAT: &str = crate::mail_backlog::OPERATOR_SEAT;
 const ADVISOR_SEAT: &str = "advisor";
-const LAUNCH_SEAT: &str = "product";
 const SENDER: &str = "aida-throughput-guard";
 const NOTIFY_RULE: &str = "throughput-guard-escalation";
 /// Bound on one forge call.
 const GH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
-/// Time the scan may spend reading CI logs before it reports the rest as
-/// unread, so a scheduled run finishes well inside its kill ceiling.
-const DETAIL_BUDGET: std::time::Duration = std::time::Duration::from_secs(75);
-/// Receipts and claims older than this are no longer reported.
-const MAX_AGE_HOURS: i64 = 24;
+/// Time one run may spend reading CI detail. Every forge call is given what
+/// is left of it, so a scheduled run finishes well inside its kill ceiling
+/// with whatever it has read.
+pub(crate) const DETAIL_BUDGET: std::time::Duration = std::time::Duration::from_secs(75);
 /// Longest evidence text one due job carries.
 const MAX_EVIDENCE_CHARS: usize = 4000;
 /// Longest test name read from a CI log.
 const MAX_TEST_NAME_CHARS: usize = 200;
 /// Failing tests one evidence line names before it counts the rest.
 const MAX_LISTED_TESTS: usize = 8;
+/// Scheduled runs whose observation is kept (a day at the default cadence).
+const MAX_RUNS: usize = 72;
 
 /// `[throughput_guard]` in `.aida/config.toml`. Every threshold is a project
 /// setting; the scheduled check is off unless `enabled = true`.
@@ -60,9 +65,6 @@ pub(crate) struct Policy {
     pub review_mins: i64,
     pub rework_mins: i64,
     pub conflict_mins: i64,
-    pub lane_outcome_mins: i64,
-    pub stale_claim_mins: i64,
-    pub flake_window_hours: i64,
     pub landings_window_mins: i64,
     pub escalate_after_mins: i64,
     /// Red changes whose job logs one run reads.
@@ -77,9 +79,6 @@ impl Default for Policy {
             review_mins: 30,
             rework_mins: 30,
             conflict_mins: 30,
-            lane_outcome_mins: 20,
-            stale_claim_mins: 30,
-            flake_window_hours: 24,
             landings_window_mins: 60,
             escalate_after_mins: 120,
             max_red_logs: 6,
@@ -103,9 +102,6 @@ impl Policy {
             ("review_mins", &mut policy.review_mins),
             ("rework_mins", &mut policy.rework_mins),
             ("conflict_mins", &mut policy.conflict_mins),
-            ("lane_outcome_mins", &mut policy.lane_outcome_mins),
-            ("stale_claim_mins", &mut policy.stale_claim_mins),
-            ("flake_window_hours", &mut policy.flake_window_hours),
             ("landings_window_mins", &mut policy.landings_window_mins),
             ("escalate_after_mins", &mut policy.escalate_after_mins),
             ("max_red_logs", &mut policy.max_red_logs),
@@ -134,12 +130,6 @@ pub(crate) enum Class {
     StuckRework,
     #[serde(rename = "STUCK-CONFLICT")]
     StuckConflict,
-    #[serde(rename = "MAIN-FLAKE-RECURRENCE")]
-    MainFlakeRecurrence,
-    #[serde(rename = "LANE-OUTCOME")]
-    LaneOutcome,
-    #[serde(rename = "STALE-CLAIM")]
-    StaleClaim,
     #[serde(rename = "moving")]
     Moving,
 }
@@ -152,9 +142,6 @@ impl Class {
             Class::StuckReview => "STUCK-REVIEW",
             Class::StuckRework => "STUCK-REWORK",
             Class::StuckConflict => "STUCK-CONFLICT",
-            Class::MainFlakeRecurrence => "MAIN-FLAKE-RECURRENCE",
-            Class::LaneOutcome => "LANE-OUTCOME",
-            Class::StaleClaim => "STALE-CLAIM",
             Class::Moving => "moving",
         }
     }
@@ -176,12 +163,12 @@ pub(crate) struct Item {
     pub action: String,
 }
 
-/// Why CI is red on an approved head.
+/// Why a check is red on an approved head.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum RedCause {
-    /// No failing test is in a file the change touches, and the same checks
-    /// pass on the base.
+    /// No failing test is in a file the change touches, and the check passes
+    /// on the base.
     ProbableFlake,
     /// The change touches the code a failing test covers.
     PrCaused,
@@ -190,89 +177,220 @@ pub(crate) enum RedCause {
     Undetermined,
 }
 
-/// What the base's CI says about the checks that failed on a change.
+/// What the base's CI says about one check that failed on a change.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum BaseChecks {
-    /// Every one of them passed at the base's tip.
+pub(crate) enum BaseCheck {
+    /// It passed at the base's tip.
     Pass,
-    /// These are red at the base's tip.
-    Red(Vec<String>),
+    /// It is red at the base's tip.
+    Red,
     Unknown(String),
+}
+
+impl Default for BaseCheck {
+    fn default() -> Self {
+        BaseCheck::Unknown("not read".into())
+    }
+}
+
+/// One failed check run on a head and what its log said.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct FailedCheck {
+    pub name: String,
+    /// The forge's id of the check run; a rerun gives a new one.
+    pub id: u64,
+    /// The failing tests its log names; `Err` says why the log was not read.
+    pub tests: std::result::Result<Vec<String>, String>,
+    /// Judged against the base's tip on every run, never kept.
+    #[serde(skip)]
+    pub base: BaseCheck,
 }
 
 /// The facts behind one red, approved head.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RedFact {
-    pub failed_checks: Vec<String>,
-    /// The forge's ids of the failed check runs; a rerun gives new ones.
-    pub check_ids: Vec<u64>,
-    pub failing_tests: Vec<String>,
+    pub checks: Vec<FailedCheck>,
     /// `Err` when the change's files could not be listed.
     pub changed_paths: std::result::Result<Vec<String>, String>,
-    pub base: BaseChecks,
     /// The failed check runs a rerun was already routed for at this head.
     pub rerun_routed: Option<Vec<u64>>,
-    /// Why the logs were not read, when they were not.
+    /// Why the head's check runs were not listed at all, when they were not.
     pub unread: Option<String>,
 }
 
-/// One open change as the reconciler derived it, with what the guard adds.
+/// Where one open change stands, from each fact read on its own. Unlike the
+/// reconciler's state, red CI does not hide the review history, and a hold
+/// does not hide the approval.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Standing {
+    /// A train, a promotion or the integration branch: the landing itself.
+    Landing,
+    /// A fact could not be read; nothing is concluded from the rest.
+    Unknown(String),
+    Conflict {
+        /// A lane on the change.
+        owner: Option<String>,
+    },
+    /// A review of the head is running.
+    Reviewing(String),
+    Approved {
+        approval: String,
+        /// The failed checks on the head, named.
+        red: Option<String>,
+        hold: Option<Hold>,
+        lane: Option<String>,
+        /// Based on another change's branch: it lands after that one.
+        stacked: bool,
+    },
+    /// A blocking verdict stands at the head's content.
+    ChangesRequested {
+        lane: Option<String>,
+        round: usize,
+        red: bool,
+    },
+    /// No verdict covers the head and no review is running.
+    Unreviewed {
+        refusal: String,
+        red: Option<String>,
+        lane: Option<String>,
+    },
+}
+
+/// One open change: where it stands, since when, and the reconciler's row
+/// for display.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PrFact {
     pub number: u64,
     pub title: String,
     pub head: String,
+    /// The reconciler's row. Shown; a stall is never decided from it.
     pub state: State,
     pub action: Action,
-    /// A lane or reviewer working the change.
-    pub actor: Option<String>,
     pub reason: String,
-    /// CI on the head, as the reconciler labels it.
-    pub ci: Option<String>,
-    /// When the change was first seen in this state at this head.
+    pub standing: Standing,
+    /// The event the wait counts from: the head's commit for an unreviewed
+    /// head, the verdict for an approval or requested changes, the base
+    /// commit that first conflicted for a conflict. `None` when unreadable.
     pub since: Option<DateTime<Utc>>,
-    /// The approval standing at the head, if any.
-    pub approval: Option<String>,
     pub red: Option<RedFact>,
 }
 
-/// One failing test seen somewhere: a base run, or a change's head.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-pub(crate) struct TestEvent {
-    pub test: String,
-    pub at: DateTime<Utc>,
-    /// Where it happened: `run <id>#<attempt>` or `PR-<n>@<head>`.
-    pub source: String,
-    #[serde(default)]
-    pub url: String,
+impl PrFact {
+    /// An approved red head nobody is working: its CI detail is read.
+    pub(crate) fn wants_red_detail(&self) -> bool {
+        matches!(
+            &self.standing,
+            Standing::Approved {
+                red: Some(_),
+                lane: None,
+                ..
+            }
+        )
+    }
 }
 
-/// A finished lane attempt that nobody followed up.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct LaneOutcomeFact {
-    pub attempt: String,
-    pub spec: String,
-    pub result: &'static str,
-    pub reason_code: String,
-    pub detail: String,
-    pub finished_at: DateTime<Utc>,
-    pub launched_by: Option<String>,
-    /// A later attempt, a live lane or a live claim has the spec.
-    pub followed_up: Option<String>,
+fn parse_time(text: Option<String>) -> Option<DateTime<Utc>> {
+    DateTime::parse_from_rfc3339(text?.trim())
+        .ok()
+        .map(|at| at.with_timezone(&Utc))
 }
 
-/// A shared claim past its expiry, or a local lease whose holder cannot be
-/// established, that `aida doctor heal stale-leases` leaves.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ClaimFact {
-    pub scope: String,
-    pub record: PathBuf,
-    /// Why the claim reads as dead.
-    pub evidence: String,
-    /// Why the doctor does not heal it; `None` when it does.
-    pub unhealable: Option<String>,
-    /// Minutes past the claim's own expiry (a lease: since its heartbeat).
-    pub expired_mins: i64,
+/// Where `pr` stands. Facts are read independently of the reconciler's
+/// precedence; an unreadable one makes the standing unknown.
+pub(crate) fn standing(
+    pr: &super::Pr,
+    row: &super::Row,
+    evidence: &dyn super::Evidence,
+) -> Standing {
+    if row.state == State::Landing {
+        return Standing::Landing;
+    }
+    let unknown = |what: &str, why: String| Standing::Unknown(format!("{what} unknown ({why})"));
+    match evidence.conflict(pr) {
+        Err(why) => return unknown("mergeability", why),
+        Ok(true) => {
+            return match evidence.lane(pr) {
+                Ok(owner) => Standing::Conflict { owner },
+                Err(why) => unknown("lane liveness", why),
+            }
+        }
+        Ok(false) => {}
+    }
+    match evidence.reviewing(pr) {
+        Err(why) => return unknown("review ownership", why),
+        Ok(Some(review)) => return Standing::Reviewing(review),
+        Ok(None) => {}
+    }
+    let red = match evidence.ci(pr) {
+        Err(why) => return unknown("CI", why),
+        Ok(Ci::Red(names)) => Some(names),
+        Ok(_) => None,
+    };
+    let lane = match evidence.lane(pr) {
+        Ok(lane) => lane,
+        Err(why) => return unknown("lane liveness", why),
+    };
+    match evidence.approval(pr) {
+        Err(why) => unknown("approval", why),
+        Ok(Approval::Approved(approval)) => match evidence.hold(pr) {
+            Err(why) => unknown("merge hold", why),
+            Ok(hold) => Standing::Approved {
+                approval,
+                red,
+                hold,
+                lane,
+                stacked: pr.base != super::MAIN_BRANCH && pr.base != super::INTEGRATION_BRANCH,
+            },
+        },
+        Ok(Approval::Refused(refusal)) => match evidence.rounds(pr) {
+            Err(why) => unknown("review history", why),
+            Ok(rounds) if rounds.at_content => Standing::ChangesRequested {
+                lane,
+                round: rounds.content_rounds,
+                red: red.is_some(),
+            },
+            Ok(_) => Standing::Unreviewed { refusal, red, lane },
+        },
+    }
+}
+
+/// The fact for one change of a pass, with the event its wait counts from.
+pub(crate) fn pr_fact(pr: &super::Pr, row: &super::Row, evidence: &dyn super::Evidence) -> PrFact {
+    let standing = standing(pr, row, evidence);
+    let head_at = || parse_time(evidence.head_at(pr));
+    let since = match &standing {
+        // The base commit that first conflicted, or the head when it is
+        // newer. When that commit cannot be found the head's own time is
+        // used.
+        // An owned conflict is not searched: it is moving whatever its age.
+        Standing::Conflict { owner: Some(_) } => head_at(),
+        Standing::Conflict { owner: None } => {
+            match (parse_time(evidence.conflict_since(pr)), head_at()) {
+                (Some(onset), Some(head)) => Some(onset.max(head)),
+                (onset, head) => onset.or(head),
+            }
+        }
+        // An approval carried over a newer head counts from that head.
+        Standing::Approved { .. } => parse_time(evidence.approved_at(pr))
+            .map(|approved| head_at().map_or(approved, |head| head.max(approved))),
+        Standing::ChangesRequested { .. } => evidence
+            .rounds(pr)
+            .ok()
+            .and_then(|rounds| parse_time(rounds.since)),
+        Standing::Unreviewed { .. } => head_at(),
+        Standing::Landing | Standing::Unknown(_) | Standing::Reviewing(_) => None,
+    };
+    PrFact {
+        number: pr.id,
+        title: pr.title.clone(),
+        head: pr.head.clone(),
+        state: row.state.clone(),
+        action: row.action.clone(),
+        reason: row.reason.clone(),
+        standing,
+        since,
+        red: None,
+    }
 }
 
 fn short(sha: &str) -> &str {
@@ -377,31 +495,36 @@ pub(crate) fn touching_path<'a>(test: &str, changed: &'a [String]) -> Option<&'a
         .map(String::as_str)
 }
 
-/// Why an approved head is red, with the reason in words. A heuristic, so
-/// the reason always says what was compared.
-pub(crate) fn red_cause(red: &RedFact) -> (RedCause, String) {
-    if let BaseChecks::Red(names) = &red.base {
+/// Why one failed check is red, with the reason in words. A heuristic, so
+/// the reason always says what was compared. A check whose log was not read
+/// is never called a flake.
+pub(crate) fn check_cause(
+    check: &FailedCheck,
+    changed: &std::result::Result<Vec<String>, String>,
+) -> (RedCause, String) {
+    let name = &check.name;
+    if check.base == BaseCheck::Red {
         return (
             RedCause::BaseRed,
-            format!(
-                "the same check is red on the base branch too ({})",
-                names.join(", ")
-            ),
+            format!("`{name}` is red on the base branch too"),
         );
     }
-    if let Some(why) = &red.unread {
+    let tests = match &check.tests {
+        Ok(tests) => tests,
+        Err(why) => {
+            return (
+                RedCause::Undetermined,
+                format!("the log of `{name}` was not read ({why})"),
+            )
+        }
+    };
+    if tests.is_empty() {
         return (
             RedCause::Undetermined,
-            format!("the failed jobs' logs were not read ({why})"),
+            format!("the log of `{name}` names no failing test"),
         );
     }
-    if red.failing_tests.is_empty() {
-        return (
-            RedCause::Undetermined,
-            "no failing test is named in the failed jobs' logs".into(),
-        );
-    }
-    let changed = match &red.changed_paths {
+    let changed = match changed {
         Ok(changed) => changed,
         Err(why) => {
             return (
@@ -410,32 +533,83 @@ pub(crate) fn red_cause(red: &RedFact) -> (RedCause, String) {
             )
         }
     };
-    if let Some((test, path)) = red
-        .failing_tests
+    if let Some((test, path)) = tests
         .iter()
         .find_map(|test| touching_path(test, changed).map(|path| (test, path)))
     {
         return (
             RedCause::PrCaused,
-            format!("the change touches `{path}`, which failing test `{test}` covers (matched by module path)"),
+            format!("the change touches `{path}`, which failing test `{test}` of `{name}` covers (matched by module path)"),
         );
     }
-    match &red.base {
-        BaseChecks::Pass => (
+    match &check.base {
+        BaseCheck::Unknown(why) => (
+            RedCause::Undetermined,
+            format!("no failing test of `{name}` is in a file this change touches, but whether `{name}` passes on the base branch is unknown ({why})"),
+        ),
+        BaseCheck::Pass | BaseCheck::Red => (
             RedCause::ProbableFlake,
             format!(
-                "none of the {} failing test(s) is in a file this change touches (compared by module path with its {} changed file(s)), and the same check(s) pass on the base branch",
-                red.failing_tests.len(),
+                "none of the {} failing test(s) of `{name}` is in a file this change touches (compared by module path with its {} changed file(s)), and `{name}` passes on the base branch",
+                tests.len(),
                 changed.len()
             ),
         ),
-        BaseChecks::Unknown(why) => (
-            RedCause::Undetermined,
-            format!(
-                "no failing test is in a file this change touches, but whether the same checks pass on the base branch is unknown ({why})"
-            ),
-        ),
-        BaseChecks::Red(_) => unreachable!("handled above"),
+    }
+}
+
+/// What a red head's failed checks add up to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RedVerdict {
+    /// The cause that decides the action: the change's own failure first,
+    /// then anything undetermined, then a red base, and a flake only when
+    /// every failed check is one.
+    pub cause: RedCause,
+    /// One reason per failed check.
+    pub reasons: Vec<String>,
+    /// The failed checks that are red on the base too.
+    pub base_red: Vec<String>,
+}
+
+/// Every failed check is judged on its own: a check that is red on the base
+/// says nothing about another check that is not.
+pub(crate) fn red_cause(red: &RedFact) -> RedVerdict {
+    let undetermined = |reason: String| RedVerdict {
+        cause: RedCause::Undetermined,
+        reasons: vec![reason],
+        base_red: Vec::new(),
+    };
+    if let Some(why) = &red.unread {
+        return undetermined(format!("the failed jobs were not examined ({why})"));
+    }
+    if red.checks.is_empty() {
+        return undetermined("no failed check run is listed at the head".into());
+    }
+    let causes: Vec<(RedCause, String)> = red
+        .checks
+        .iter()
+        .map(|check| check_cause(check, &red.changed_paths))
+        .collect();
+    let has = |cause: RedCause| causes.iter().any(|(c, _)| *c == cause);
+    let cause = if has(RedCause::PrCaused) {
+        RedCause::PrCaused
+    } else if has(RedCause::Undetermined) {
+        RedCause::Undetermined
+    } else if has(RedCause::BaseRed) {
+        RedCause::BaseRed
+    } else {
+        RedCause::ProbableFlake
+    };
+    RedVerdict {
+        cause,
+        base_red: red
+            .checks
+            .iter()
+            .zip(&causes)
+            .filter(|(_, (cause, _))| *cause == RedCause::BaseRed)
+            .map(|(check, _)| check.name.clone())
+            .collect(),
+        reasons: causes.into_iter().map(|(_, reason)| reason).collect(),
     }
 }
 
@@ -463,310 +637,227 @@ fn pr_item(
     }
 }
 
-/// The stall one change is in, or `None` while it is moving. `known_flakes`
-/// are the tests already seen flaking inside the window.
-pub(crate) fn classify_pr(
-    fact: &PrFact,
-    policy: &Policy,
-    now: DateTime<Utc>,
-    known_flakes: &[TestEvent],
-) -> Option<Item> {
+fn merge_red_item(fact: &PrFact, names: &str, waited: &str, now: DateTime<Utc>) -> Item {
+    let pr = fact.number;
+    let head = short(&fact.head);
+    let inspect = format!("read the failed job on #{pr}: rerun it once if the failure is unrelated to the change, otherwise route rework");
+    let Some(red) = &fact.red else {
+        return pr_item(
+            Class::StuckMergeRed,
+            fact,
+            ":inspect",
+            now,
+            format!("#{pr} is approved at {head} but its CI is red ({names}), for {waited}; the cause was not examined"),
+            inspect,
+        );
+    };
+    let verdict = red_cause(red);
+    let failing: BTreeSet<&String> = red
+        .checks
+        .iter()
+        .filter_map(|check| check.tests.as_ref().ok())
+        .flatten()
+        .collect();
+    let failing: Vec<String> = failing.into_iter().cloned().collect();
+    let tests = if failing.is_empty() {
+        "failing tests: not named".to_string()
+    } else {
+        format!("failing tests: {}", listed(&failing))
+    };
+    // A rerun that was routed and came back red on new check runs.
+    let rerun_failed = red.rerun_routed.as_ref().is_some_and(|routed| {
+        !red.checks.is_empty() && red.checks.iter().all(|check| !routed.contains(&check.id))
+    });
+    let (suffix, label, action) = match verdict.cause {
+        RedCause::ProbableFlake if rerun_failed => (
+            ":fix-forward",
+            "probable flake that failed again after its rerun",
+            format!("do not rerun #{pr} again: route a fix-forward for the flaky test(s), then land #{pr}"),
+        ),
+        RedCause::ProbableFlake => (
+            ":rerun",
+            "probable flake",
+            format!("rerun the failed job on #{pr} once; if it fails again, route a fix-forward for the test, not rework of #{pr}"),
+        ),
+        RedCause::PrCaused => (
+            ":rework",
+            "the change plausibly caused it",
+            format!("route rework of #{pr} for the failing tests"),
+        ),
+        RedCause::BaseRed => (
+            ":base-red",
+            "the base branch is red",
+            format!("#{pr} needs no rework for that"),
+        ),
+        RedCause::Undetermined => (":inspect", "cause undetermined", inspect),
+    };
+    // A red base is repaired whatever else is wrong with the head.
+    let (suffix, action) = if verdict.base_red.is_empty() {
+        (suffix.to_string(), action)
+    } else {
+        let fix = format!(
+            "fix the base branch forward for {} (red there too)",
+            verdict.base_red.join(", ")
+        );
+        match verdict.cause {
+            RedCause::BaseRed => (suffix.to_string(), format!("{fix}; {action}")),
+            _ => (
+                format!("{suffix}+base-red"),
+                format!("{action}; also {fix}"),
+            ),
+        }
+    };
+    pr_item(
+        Class::StuckMergeRed,
+        fact,
+        &suffix,
+        now,
+        format!(
+            "#{pr} is approved at {head} but its CI is red ({names}), for {waited}; {tests}; {label}: {}",
+            verdict.reasons.join("; ")
+        ),
+        action,
+    )
+}
+
+/// The stall one change is in, or `None` while it is moving.
+pub(crate) fn classify_pr(fact: &PrFact, policy: &Policy, now: DateTime<Utc>) -> Option<Item> {
     let age = mins_since(fact.since, now);
     let past = |limit: i64| age.is_some_and(|age| age > limit);
     let waited = age.map_or("an unknown time".to_string(), |m| format!("{m} min"));
     let pr = fact.number;
     let head = short(&fact.head);
-    let red_ci = fact.ci.as_deref().is_some_and(|ci| ci.starts_with("red"));
-    let approved_red = (fact.state == State::CiFailed && fact.approval.is_some())
-        || (matches!(fact.state, State::Ready | State::ReadyPendingCover) && red_ci);
-    if approved_red {
-        // A lane already on the red head is moving it.
-        if !past(policy.merge_mins) || fact.actor.is_some() {
-            return None;
-        }
-        let ci = fact.ci.clone().unwrap_or_else(|| "red".into());
-        let Some(red) = &fact.red else {
-            return Some(pr_item(
-                Class::StuckMergeRed,
-                fact,
-                ":inspect",
-                now,
-                format!("#{pr} is approved at {head} but its CI is {ci}, for {waited}; the cause was not examined"),
-                format!("read the failed job on #{pr}: rerun it once if the failure is unrelated to the change, otherwise route rework"),
-            ));
-        };
-        let (cause, reason) = red_cause(red);
-        let tests = if red.failing_tests.is_empty() {
-            "failing tests: not named".to_string()
+    // Where the reconciler asks for a ruling, a lane is not the remedy.
+    let remedy = |default: String| {
+        if fact.action == Action::AdvisorRuling {
+            format!("rule on #{pr}: {}", fact.reason)
         } else {
-            format!("failing tests: {}", listed(&red.failing_tests))
-        };
-        let earlier = red
-            .failing_tests
-            .iter()
-            .find_map(|test| known_flakes.iter().find(|flake| &flake.test == test));
-        // A rerun that was routed and came back red on new check runs.
-        let rerun_failed = red.rerun_routed.as_ref().is_some_and(|routed| {
-            !red.check_ids.is_empty() && red.check_ids.iter().all(|id| !routed.contains(id))
-        });
-        let (suffix, verdict, action) = match cause {
-            RedCause::ProbableFlake if rerun_failed => (
-                ":fix-forward",
-                "probable flake that failed again after its rerun".to_string(),
-                format!("do not rerun #{pr} again: route a fix-forward for the flaky test(s), then land #{pr}"),
-            ),
-            RedCause::ProbableFlake => match earlier {
-                Some(flake) => (
-                    ":fix-forward",
-                    format!(
-                        "probable flake seen before ({} at {})",
-                        flake.source,
-                        flake.at.format("%Y-%m-%d %H:%M UTC")
-                    ),
-                    format!("route a fix-forward for `{}` (it flaked before: {}), and rerun the failed job on #{pr} once", flake.test, if flake.url.is_empty() { flake.source.as_str() } else { flake.url.as_str() }),
-                ),
-                None => (
-                    ":rerun",
-                    "probable flake".to_string(),
-                    format!("rerun the failed job on #{pr} once; if it fails again, route a fix-forward for the test, not rework of #{pr}"),
-                ),
-            },
-            RedCause::PrCaused => (
-                ":rework",
-                "the change plausibly caused it".to_string(),
-                format!("route rework of #{pr} for the failing tests"),
-            ),
-            RedCause::BaseRed => (
-                ":base-red",
-                "the base branch is red".to_string(),
-                format!("fix the base branch forward first; #{pr} needs no rework for this"),
-            ),
-            RedCause::Undetermined => (
-                ":inspect",
-                "cause undetermined".to_string(),
-                format!("read the failed job on #{pr}: rerun it once if the failure is unrelated to the change, otherwise route rework"),
-            ),
-        };
-        return Some(pr_item(
-            Class::StuckMergeRed,
-            fact,
-            suffix,
-            now,
-            format!(
-                "#{pr} is approved at {head} but its CI is {ci}, for {waited}; {tests}; {verdict}: {reason}"
-            ),
-            action,
-        ));
-    }
-    match (&fact.state, &fact.action) {
-        (State::Ready, Action::Wait) => None,
-        (State::Ready | State::ReadyPendingCover, _) if past(policy.merge_mins) => Some(pr_item(
-            Class::StuckMerge,
-            fact,
-            "",
-            now,
-            format!(
-                "#{pr} is approved at {head} and has not landed for {waited} ({})",
-                fact.reason
-            ),
-            format!("land #{pr}: {}", fact.action.label()),
-        )),
-        (State::NeedsReview, _) if past(policy.review_mins) => Some(pr_item(
-            Class::StuckReview,
-            fact,
-            "",
-            now,
-            format!("#{pr} at {head} has had no verdict and no reviewer for {waited}"),
-            format!("launch a reviewer for #{pr} at {head}"),
-        )),
-        (State::ChangesRequested, _) if fact.actor.is_none() && past(policy.rework_mins) => {
-            Some(pr_item(
-                Class::StuckRework,
-                fact,
-                "",
-                now,
-                format!(
-                    "#{pr} has changes requested at {head} and no lane or session on it for {waited}"
-                ),
-                format!("route rework of #{pr} to a lane"),
-            ))
+            default
         }
-        (State::Conflict, _) if fact.actor.is_none() && past(policy.conflict_mins) => {
-            Some(pr_item(
+    };
+    match &fact.standing {
+        Standing::Landing | Standing::Unknown(_) | Standing::Reviewing(_) => None,
+        Standing::Conflict { owner } => (owner.is_none() && past(policy.conflict_mins)).then(|| {
+            pr_item(
                 Class::StuckConflict,
                 fact,
                 "",
                 now,
+                format!("#{pr} at {head} conflicts with its base and nobody owns it, for {waited}"),
+                remedy(format!("route a lane to resolve the conflict on #{pr}")),
+            )
+        }),
+        Standing::Approved {
+            red: Some(names),
+            lane,
+            ..
+        } => {
+            // A lane already on the red head is moving it.
+            (lane.is_none() && past(policy.merge_mins))
+                .then(|| merge_red_item(fact, names, &waited, now))
+        }
+        Standing::Approved {
+            hold: None,
+            stacked: true,
+            ..
+        } => None,
+        Standing::Approved { approval, hold, .. } => past(policy.merge_mins).then(|| match hold {
+            None => pr_item(
+                Class::StuckMerge,
+                fact,
+                "",
+                now,
+                format!("#{pr} is approved at {head} and has not landed for {waited} ({approval})"),
                 format!(
-                    "#{pr} at {head} {} and nobody owns it, for {waited}",
-                    fact.reason
+                    "land #{pr} (the reconciler shows {}: {})",
+                    fact.state.label(),
+                    fact.action.label()
                 ),
-                format!("route a lane to resolve the conflict on #{pr}"),
-            ))
-        }
-        _ => None,
-    }
-}
-
-/// Flaky tests that failed again: a failure of a test after an earlier flake
-/// of the same test, somewhere else, both inside the window.
-pub(crate) fn flake_recurrences(
-    flakes: &[TestEvent],
-    failures: &[TestEvent],
-    policy: &Policy,
-    now: DateTime<Utc>,
-) -> Vec<Item> {
-    let window = Duration::hours(policy.flake_window_hours);
-    let mut by_test: BTreeMap<&str, (&TestEvent, &TestEvent)> = BTreeMap::new();
-    for failure in failures {
-        if failure.at > now || now - failure.at > window {
-            continue;
-        }
-        let earlier = flakes
-            .iter()
-            .filter(|flake| {
-                flake.test == failure.test
-                    && flake.source != failure.source
-                    && flake.at < failure.at
-                    && failure.at - flake.at <= window
+            ),
+            Some(hold) => match &hold.release {
+                HoldRelease::Unmet(why) => pr_item(
+                    Class::StuckMerge,
+                    fact,
+                    ":held",
+                    now,
+                    format!(
+                        "#{pr} is approved at {head} but held, and has not landed for {waited}: {} ({why})",
+                        hold.detail
+                    ),
+                    format!("rule on the hold on #{pr}, then land it"),
+                ),
+                HoldRelease::Met | HoldRelease::PendingCover(_) => pr_item(
+                    Class::StuckMerge,
+                    fact,
+                    "",
+                    now,
+                    format!(
+                        "#{pr} is approved at {head}, its hold can be released, and it has not landed for {waited}: {}",
+                        hold.detail
+                    ),
+                    format!("release the hold on #{pr}, then land it"),
+                ),
+            },
+        }),
+        Standing::ChangesRequested { lane, round, red } => {
+            (lane.is_none() && past(policy.rework_mins)).then(|| {
+                pr_item(
+                    Class::StuckRework,
+                    fact,
+                    "",
+                    now,
+                    format!(
+                        "#{pr} has changes requested at {head} (round {round}{}) and no lane or session on it for {waited}",
+                        if *red { ", CI red" } else { "" }
+                    ),
+                    remedy(format!("route rework of #{pr} to a lane")),
+                )
             })
-            .min_by_key(|flake| flake.at);
-        let Some(earlier) = earlier else { continue };
-        let entry = by_test
-            .entry(failure.test.as_str())
-            .or_insert((earlier, failure));
-        if failure.at > entry.1.at {
-            *entry = (earlier, failure);
         }
-    }
-    by_test
-        .into_iter()
-        .map(|(test, (earlier, again))| {
-            let link = |event: &TestEvent| {
-                if event.url.is_empty() {
-                    event.source.clone()
-                } else {
-                    format!("{} {}", event.source, event.url)
-                }
-            };
-            Item {
-                key: format!(
-                    "{}:{test}@{}",
-                    Class::MainFlakeRecurrence.label(),
-                    again.source
+        Standing::Unreviewed { red, lane, .. } => {
+            // A lane on a red, unreviewed head is about to replace it.
+            let reworking = red.is_some() && lane.is_some();
+            (!reworking && past(policy.review_mins)).then(|| match red {
+                None => pr_item(
+                    Class::StuckReview,
+                    fact,
+                    "",
+                    now,
+                    format!("#{pr} at {head} has had no verdict and no reviewer for {waited}"),
+                    remedy(format!("launch a reviewer for #{pr} at {head}")),
                 ),
-                class: Class::MainFlakeRecurrence,
-                pr: None,
-                seat: ADVISOR_SEAT.into(),
-                age_mins: mins_since(Some(again.at), now),
-                summary: format!(
-                    "`{test}` flaked at {} ({}) and failed again at {} ({})",
-                    earlier.at.format("%Y-%m-%d %H:%M UTC"),
-                    link(earlier),
-                    again.at.format("%Y-%m-%d %H:%M UTC"),
-                    link(again)
-                ),
-                action: format!(
-                    "route a fix-forward for `{test}`; rerunning it again only hides it"
-                ),
-            }
-        })
-        .collect()
-}
-
-/// A registered seat name, or the launch seat when the receipt names none.
-fn launch_seat(launched_by: Option<&str>) -> String {
-    launched_by
-        .map(|seat| crate::canonical_role_name(seat.trim()).to_ascii_lowercase())
-        .filter(|seat| {
-            !seat.is_empty()
-                && seat != OPERATOR_SEAT
-                && seat.bytes().all(|b| b.is_ascii_lowercase() || b == b'-')
-        })
-        .unwrap_or_else(|| LAUNCH_SEAT.to_string())
-}
-
-pub(crate) fn classify_lane_outcomes(
-    outcomes: &[LaneOutcomeFact],
-    policy: &Policy,
-    now: DateTime<Utc>,
-) -> Vec<Item> {
-    outcomes
-        .iter()
-        .filter(|o| o.followed_up.is_none())
-        .filter(|o| {
-            let age = now - o.finished_at;
-            age > Duration::minutes(policy.lane_outcome_mins)
-                && age <= Duration::hours(MAX_AGE_HOURS)
-        })
-        .map(|o| Item {
-            key: format!("{}:{}", Class::LaneOutcome.label(), o.attempt),
-            class: Class::LaneOutcome,
-            pr: None,
-            seat: launch_seat(o.launched_by.as_deref()),
-            age_mins: mins_since(Some(o.finished_at), now),
-            summary: format!(
-                "the lane for {} exited `{} reason={}` ({}) and nothing has relaunched or routed it",
-                o.spec,
-                o.result,
-                o.reason_code,
-                super::one_line(&o.detail, 300)
-            ),
-            action: format!(
-                "relaunch the lane for {}, or route the spec (attempt {})",
-                o.spec, o.attempt
-            ),
-        })
-        .collect()
-}
-
-pub(crate) fn classify_claims(claims: &[ClaimFact], policy: &Policy) -> Vec<Item> {
-    claims
-        .iter()
-        .filter(|c| c.expired_mins > policy.stale_claim_mins)
-        .filter_map(|c| {
-            let why = c.unhealable.as_deref()?;
-            Some(Item {
-                key: format!("{}:{}", Class::StaleClaim.label(), c.record.display()),
-                class: Class::StaleClaim,
-                pr: None,
-                seat: ADVISOR_SEAT.into(),
-                age_mins: Some(c.expired_mins),
-                summary: format!(
-                    "the claim on {} has been stale for {} min ({}); `aida doctor heal stale-leases` does not heal it: {why}; record {}",
-                    c.scope,
-                    c.expired_mins,
-                    c.evidence,
-                    c.record.display()
-                ),
-                action: format!(
-                    "confirm the holder of {} is gone, then release the record by hand",
-                    c.scope
+                Some(names) => pr_item(
+                    Class::StuckReview,
+                    fact,
+                    "",
+                    now,
+                    format!("#{pr} at {head} has had no verdict, no reviewer and no lane for {waited}, and its CI is red ({names})"),
+                    remedy(format!("launch a reviewer for #{pr} at {head}, or route a lane for its red CI")),
                 ),
             })
-        })
-        .collect()
+        }
+    }
 }
 
 /// Landings on the default branch.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Landings {
     pub window_mins: i64,
     /// `None` when the branch history could not be read.
     pub count: Option<usize>,
     /// Minutes since the newest landing.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_mins_ago: Option<i64>,
     /// No landing for the escalation window.
     pub dry: bool,
     pub dry_after_mins: i64,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct HostLine {
     pub host: String,
     pub lanes: usize,
-    /// Available memory, measured on this host only.
+    /// Available memory, measured on the host the run is on.
     pub memory: String,
 }
 
@@ -781,6 +872,16 @@ pub(crate) struct PrLine {
     pub title: String,
 }
 
+/// What one scheduled run observed, kept whether or not anything was stuck.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RunSnapshot {
+    pub at: DateTime<Utc>,
+    pub landings: Landings,
+    pub hosts: Vec<HostLine>,
+    pub changes: usize,
+    pub stuck: usize,
+}
+
 /// Everything one run found.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct Report {
@@ -793,41 +894,42 @@ pub(crate) struct Report {
     pub unknown: Vec<String>,
     /// No landing for the escalation window while something is stuck.
     pub escalate: bool,
+    /// The newest scheduled run's saved observation (`aida land stalls`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub last_scheduled_run: Option<RunSnapshot>,
 }
 
-/// What the guard keeps between runs: what it routed, and the flaky tests
-/// it has seen. Losing the file only re-routes and forgets flake history.
+/// The CI detail read for one red head, kept so a later run reads only what
+/// is still missing.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct RedDetail {
+    /// When its logs were last asked for.
+    pub at: DateTime<Utc>,
+    pub checks: Vec<FailedCheck>,
+}
+
+/// What the guard keeps between runs: what it routed, the CI detail it has
+/// read, and what each scheduled run observed. Losing the file only
+/// re-routes and re-reads.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Memory {
+    /// Stall key -> when its due job was raised.
     #[serde(default)]
     pub routed: BTreeMap<String, DateTime<Utc>>,
+    /// Routed stalls whose mail wake failed; the next run sends it again.
+    #[serde(default)]
+    pub mail_pending: BTreeSet<String>,
     /// `PR-<n>@<head>` -> the failed check runs a rerun was routed for.
     #[serde(default)]
     pub reruns: BTreeMap<String, Vec<u64>>,
+    /// `PR-<n>@<head>` -> the CI detail read so far.
     #[serde(default)]
-    pub flakes: Vec<TestEvent>,
-    /// Failures on the base branch's own runs.
-    #[serde(default)]
-    pub base_failures: Vec<TestEvent>,
-    /// Base runs already read, as `<id>#<attempt>`.
-    #[serde(default)]
-    pub seen_runs: BTreeMap<String, DateTime<Utc>>,
+    pub red_detail: BTreeMap<String, RedDetail>,
     #[serde(default)]
     pub escalated_at: Option<DateTime<Utc>>,
-}
-
-impl Memory {
-    fn prune(&mut self, policy: &Policy, now: DateTime<Utc>) {
-        let window = Duration::hours(policy.flake_window_hours);
-        self.flakes.retain(|e| now - e.at <= window);
-        self.base_failures.retain(|e| now - e.at <= window);
-        // Runs stay listed by the forge for longer than the window.
-        self.seen_runs.retain(|_, at| now - *at <= window * 4);
-        self.flakes.sort();
-        self.flakes.dedup();
-        self.base_failures.sort();
-        self.base_failures.dedup();
-    }
+    /// The scheduled runs' observations, oldest first.
+    #[serde(default)]
+    pub runs: Vec<RunSnapshot>,
 }
 
 fn rerun_key(pr: u64, head: &str) -> String {
@@ -838,8 +940,6 @@ fn rerun_key(pr: u64, head: &str) -> String {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Facts {
     pub prs: Vec<PrFact>,
-    pub lane_outcomes: Vec<LaneOutcomeFact>,
-    pub claims: Vec<ClaimFact>,
     /// When each landing in the escalation window happened; `Err` when the
     /// branch history could not be read.
     pub landings: Option<std::result::Result<Vec<DateTime<Utc>>, String>>,
@@ -848,53 +948,36 @@ pub(crate) struct Facts {
     pub unknown: Vec<String>,
 }
 
-/// The report for `facts`. Pure: `memory` supplies flake history and the
-/// reruns already routed, and is updated with the flakes this run saw.
+/// The report for `facts`. Pure: `memory` supplies the reruns already
+/// routed, and gains the reruns this report asks for.
 pub(crate) fn build_report(
     facts: &Facts,
     policy: &Policy,
     memory: &mut Memory,
     now: DateTime<Utc>,
 ) -> Report {
-    memory.prune(policy, now);
     let mut unknown = facts.unknown.clone();
     let mut stuck = Vec::new();
     let mut changes = Vec::new();
-    let mut failures = memory.base_failures.clone();
-    let mut new_flakes = Vec::new();
     for fact in &facts.prs {
-        let known: Vec<TestEvent> = memory
-            .flakes
-            .iter()
-            .filter(|flake| flake.source != rerun_key(fact.number, &fact.head))
-            .cloned()
-            .collect();
-        let item = classify_pr(fact, policy, now, &known);
-        if let Some(red) = &fact.red {
-            let at = fact.since.unwrap_or(now);
-            let source = rerun_key(fact.number, &fact.head);
-            let events = red.failing_tests.iter().map(|test| TestEvent {
-                test: test.clone(),
-                at,
-                source: source.clone(),
-                url: String::new(),
-            });
-            failures.extend(events.clone());
-            if red_cause(red).0 == RedCause::ProbableFlake {
-                new_flakes.extend(events);
-            }
-            // The failed check runs a rerun is asked for: the next run tells
-            // a rerun that failed again (new check runs) from one nobody
-            // started.
-            if item
-                .as_ref()
-                .is_some_and(|item| item.key.ends_with(":rerun"))
-                && !red.check_ids.is_empty()
-            {
+        let item = classify_pr(fact, policy, now);
+        match &fact.standing {
+            Standing::Unknown(what) => unknown.push(format!("#{}: {what}", fact.number)),
+            Standing::Landing | Standing::Reviewing(_) => {}
+            _ if fact.since.is_none() => unknown.push(format!(
+                "#{}: how long it has waited is unknown, so it is not called stuck",
+                fact.number
+            )),
+            _ => {}
+        }
+        // The failed check runs a rerun is asked for: the next run tells a
+        // rerun that failed again (new check runs) from one nobody started.
+        if let (Some(item), Some(red)) = (&item, &fact.red) {
+            if item.key.ends_with(":rerun") && !red.checks.is_empty() {
                 memory
                     .reruns
-                    .entry(source.clone())
-                    .or_insert_with(|| red.check_ids.clone());
+                    .entry(rerun_key(fact.number, &fact.head))
+                    .or_insert_with(|| red.checks.iter().map(|check| check.id).collect());
             }
         }
         changes.push(PrLine {
@@ -907,15 +990,7 @@ pub(crate) fn build_report(
         });
         stuck.extend(item);
     }
-    stuck.extend(flake_recurrences(&memory.flakes, &failures, policy, now));
-    stuck.extend(classify_lane_outcomes(&facts.lane_outcomes, policy, now));
-    stuck.extend(classify_claims(&facts.claims, policy));
     stuck.sort_by(|a, b| a.class.cmp(&b.class).then(a.key.cmp(&b.key)));
-    for flake in new_flakes {
-        if !memory.flakes.contains(&flake) {
-            memory.flakes.push(flake);
-        }
-    }
     let window = Duration::minutes(policy.landings_window_mins);
     let dry_window = Duration::minutes(policy.escalate_after_mins);
     let (count, dry) = match &facts.landings {
@@ -944,19 +1019,63 @@ pub(crate) fn build_report(
         hosts: facts.hosts.clone(),
         unknown,
         escalate,
+        last_scheduled_run: None,
     }
+}
+
+/// Keep what a scheduled run observed: the landings, each host's lanes and
+/// memory, and the counts, also when nothing is stuck.
+pub(crate) fn record_run(memory: &mut Memory, report: &Report) {
+    memory.runs.push(RunSnapshot {
+        at: report.at,
+        landings: report.landings.clone(),
+        hosts: report.hosts.clone(),
+        changes: report.changes.len(),
+        stuck: report.stuck.len(),
+    });
+    let extra = memory.runs.len().saturating_sub(MAX_RUNS);
+    memory.runs.drain(..extra);
+}
+
+fn snapshot_line(run: &RunSnapshot) -> String {
+    let hosts = run
+        .hosts
+        .iter()
+        .map(|host| {
+            format!(
+                "{}: {} lane(s), memory {}",
+                host.host, host.lanes, host.memory
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("; ");
+    format!(
+        "{}: {} landing(s) in {} min; {} open change(s), {} stuck; {}",
+        run.at.format("%Y-%m-%d %H:%M UTC"),
+        run.landings
+            .count
+            .map_or("unknown".to_string(), |n| n.to_string()),
+        run.landings.window_mins,
+        run.changes,
+        run.stuck,
+        if hosts.is_empty() {
+            "no lanes".to_string()
+        } else {
+            hosts
+        }
+    )
 }
 
 pub(crate) fn render(report: &Report) -> String {
     let mut out = String::new();
     let age = |mins: Option<i64>| mins.map_or("-".to_string(), |m| format!("{m}m"));
     out.push_str(&format!(
-        "{:<7} {:<22} {:<19} {:<9} {:>6}  {}\n",
-        "CHANGE", "CLASS", "STATE", "HEAD", "AGE", "TITLE"
+        "{:<7} {:<16} {:<19} {:<9} {:>6}  {}\n",
+        "CHANGE", "CLASS", "STATE", "HEAD", "WAIT", "TITLE"
     ));
     for line in &report.changes {
         out.push_str(&format!(
-            "{:<7} {:<22} {:<19} {:<9} {:>6}  {}\n",
+            "{:<7} {:<16} {:<19} {:<9} {:>6}  {}\n",
             format!("#{}", line.pr),
             line.class.label(),
             line.state,
@@ -1010,6 +1129,9 @@ pub(crate) fn render(report: &Report) -> String {
     if report.escalate {
         out.push_str("No landing inside the escalation window while changes are stuck.\n");
     }
+    if let Some(run) = &report.last_scheduled_run {
+        out.push_str(&format!("Last scheduled run {}\n", snapshot_line(run)));
+    }
     out
 }
 
@@ -1017,233 +1139,184 @@ pub(crate) fn render(report: &Report) -> String {
 // Production loaders
 // ---------------------------------------------------------------------------
 
-fn gh_text(root: &Path, args: &[&str]) -> std::result::Result<String, String> {
-    // Unit tests never reach a real forge.
-    if cfg!(test) {
-        return Err("the forge is not read in unit tests".into());
-    }
-    crate::forge::github_stall_read(root, args, GH_TIMEOUT)
+/// The forge reads the guard makes for CI detail, each bounded by `timeout`.
+pub(crate) trait CiReads {
+    /// The check runs at a commit or branch tip.
+    fn check_runs(
+        &self,
+        rev: &str,
+        timeout: std::time::Duration,
+    ) -> std::result::Result<Vec<crate::ci_failures::CheckRun>, String>;
+    /// The failing tests one job's log names.
+    fn job_tests(
+        &self,
+        job: u64,
+        timeout: std::time::Duration,
+    ) -> std::result::Result<Vec<String>, String>;
 }
 
-fn check_runs(
-    root: &Path,
-    rev: &str,
-) -> std::result::Result<Vec<crate::ci_failures::CheckRun>, String> {
-    let path = format!("repos/{{owner}}/{{repo}}/commits/{rev}/check-runs?per_page=100");
-    gh_text(root, &["api", &path]).and_then(|json| crate::ci_failures::parse_check_runs(&json))
+struct Gh<'a>(&'a Path);
+
+impl Gh<'_> {
+    fn text(
+        &self,
+        args: &[&str],
+        timeout: std::time::Duration,
+    ) -> std::result::Result<String, String> {
+        // Unit tests never reach a real forge.
+        if cfg!(test) {
+            return Err("the forge is not read in unit tests".into());
+        }
+        crate::forge::github_stall_read(self.0, args, timeout)
+    }
+}
+
+impl CiReads for Gh<'_> {
+    fn check_runs(
+        &self,
+        rev: &str,
+        timeout: std::time::Duration,
+    ) -> std::result::Result<Vec<crate::ci_failures::CheckRun>, String> {
+        let path = format!("repos/{{owner}}/{{repo}}/commits/{rev}/check-runs?per_page=100");
+        self.text(&["api", &path], timeout)
+            .and_then(|json| crate::ci_failures::parse_check_runs(&json))
+    }
+
+    fn job_tests(
+        &self,
+        job: u64,
+        timeout: std::time::Duration,
+    ) -> std::result::Result<Vec<String>, String> {
+        let path = format!("repos/{{owner}}/{{repo}}/actions/jobs/{job}/logs");
+        self.text(&["api", &path], timeout)
+            .map(|log| test_names(&crate::ci_failures::extract_failure_lines(&log)))
+    }
+}
+
+/// The time a run may still spend on CI detail.
+pub(crate) struct Budget<'a> {
+    pub limit: std::time::Duration,
+    /// Time spent since the detail reads began.
+    pub elapsed: &'a dyn Fn() -> std::time::Duration,
+}
+
+impl Budget<'_> {
+    /// The bound for the next forge call: what is left, at most one call's
+    /// own bound. `Err` once nothing is left.
+    pub(crate) fn call_timeout(&self) -> std::result::Result<std::time::Duration, String> {
+        self.limit
+            .checked_sub((self.elapsed)())
+            .filter(|left| !left.is_zero())
+            .map(|left| left.min(GH_TIMEOUT))
+            .ok_or_else(|| "the time budget for this run is spent".to_string())
+    }
 }
 
 fn run_failed(conclusion: &str) -> bool {
     matches!(conclusion, "failure" | "timed_out" | "startup_failure")
 }
 
-/// The failing tests one job's log names.
-fn job_tests(root: &Path, job: u64) -> std::result::Result<Vec<String>, String> {
-    let path = format!("repos/{{owner}}/{{repo}}/actions/jobs/{job}/logs");
-    gh_text(root, &["api", &path])
-        .map(|log| test_names(&crate::ci_failures::extract_failure_lines(&log)))
-}
-
-/// What the default branch's tip says about `failed` check names.
-fn base_checks(
+/// What the base's tip says about the check named `name`.
+fn base_check(
     tip: &std::result::Result<Vec<crate::ci_failures::CheckRun>, String>,
-    failed: &[String],
-) -> BaseChecks {
+    name: &str,
+) -> BaseCheck {
     let runs = match tip {
         Ok(runs) => runs,
-        Err(why) => return BaseChecks::Unknown(why.clone()),
+        Err(why) => return BaseCheck::Unknown(why.clone()),
     };
-    let mut red = Vec::new();
-    for name in failed {
-        let same: Vec<_> = runs.iter().filter(|run| &run.name == name).collect();
-        if same.iter().any(|run| run_failed(&run.conclusion)) {
-            red.push(name.clone());
-        } else if !same.iter().any(|run| run.conclusion == "success") {
-            return BaseChecks::Unknown(format!(
-                "check `{name}` has not passed at the base branch's tip"
-            ));
-        }
-    }
-    if red.is_empty() {
-        BaseChecks::Pass
+    let same: Vec<_> = runs.iter().filter(|run| run.name == name).collect();
+    if same.iter().any(|run| run_failed(&run.conclusion)) {
+        BaseCheck::Red
+    } else if same.iter().any(|run| run.conclusion == "success") {
+        BaseCheck::Pass
     } else {
-        BaseChecks::Red(red)
+        BaseCheck::Unknown(format!("`{name}` has not passed at the base branch's tip"))
     }
 }
 
-/// Read the base branch's recent runs: a run that went green on a rerun
-/// gives flakes (the tests its earlier attempt failed); a run that ended red
-/// gives failures. Each run attempt is read once.
-fn read_base_runs(
-    root: &Path,
-    branch: &str,
+/// Read the failed checks of each red head in `heads` (`PR-<n>@<head>` key,
+/// head commit), within `budget` and `max_red_logs`.
+///
+/// A log read once is kept in `memory.red_detail` and not asked for again, so
+/// the allowance goes to the heads still missing detail, the ones never
+/// asked for first: every red head is examined within a few runs however
+/// many there are. Every forge call gets what is left of the budget; once it
+/// is spent the rest is returned unread and the run carries on.
+pub(crate) fn read_red_details(
+    ci: &dyn CiReads,
+    budget: &Budget,
+    base_branch: &str,
+    heads: &[(String, String)],
     memory: &mut Memory,
     policy: &Policy,
     now: DateTime<Utc>,
-    deadline: std::time::Instant,
-    unknown: &mut Vec<String>,
-) {
-    let listed = gh_text(
-        root,
-        &[
-            "run",
-            "list",
-            "--branch",
-            branch,
-            "--limit",
-            "30",
-            "--json",
-            "databaseId,attempt,conclusion,status,updatedAt,url",
-        ],
-    )
-    .and_then(|json| {
-        serde_json::from_str::<Vec<serde_json::Value>>(&json)
-            .map_err(|e| format!("unreadable run list: {e}"))
-    });
-    let runs = match listed {
-        Ok(runs) => runs,
-        Err(why) => {
-            unknown.push(format!("flaky tests on `{branch}`: unknown ({why})"));
-            return;
-        }
-    };
-    let window = Duration::hours(policy.flake_window_hours);
-    for run in runs {
-        let (Some(id), Some(attempt)) = (run["databaseId"].as_u64(), run["attempt"].as_u64())
-        else {
-            continue;
-        };
-        if run["status"].as_str() != Some("completed") {
-            continue;
-        }
-        let Some(at) = run["updatedAt"]
-            .as_str()
-            .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
-            .map(|at| at.with_timezone(&Utc))
-        else {
-            continue;
-        };
-        let key = format!("{id}#{attempt}");
-        if now - at > window || memory.seen_runs.contains_key(&key) {
-            continue;
-        }
-        let conclusion = run["conclusion"].as_str().unwrap_or_default();
-        let flaked = conclusion == "success" && attempt > 1;
-        if !flaked && !run_failed(conclusion) {
-            memory.seen_runs.insert(key, at);
-            continue;
-        }
-        if std::time::Instant::now() > deadline {
-            unknown.push(format!(
-                "flaky tests on `{branch}`: run {key} not read this time (time budget)"
-            ));
-            continue;
-        }
-        // The attempt that failed: the one before a green rerun, or this one.
-        let jobs_path = if flaked {
-            format!(
-                "repos/{{owner}}/{{repo}}/actions/runs/{id}/attempts/{}/jobs?per_page=100",
-                attempt - 1
-            )
-        } else {
-            format!(
-                "repos/{{owner}}/{{repo}}/actions/runs/{id}/attempts/{attempt}/jobs?per_page=100"
-            )
-        };
-        let jobs = gh_text(root, &["api", &jobs_path]).and_then(|json| {
-            serde_json::from_str::<serde_json::Value>(&json)
-                .map_err(|e| format!("unreadable jobs: {e}"))
-        });
-        let jobs = match jobs {
-            Ok(jobs) => jobs,
+) -> BTreeMap<String, (Vec<FailedCheck>, Option<String>)> {
+    let mut out = BTreeMap::new();
+    memory
+        .red_detail
+        .retain(|key, _| heads.iter().any(|(head_key, _)| head_key == key));
+    if heads.is_empty() {
+        return out;
+    }
+    let tip = budget
+        .call_timeout()
+        .and_then(|timeout| ci.check_runs(base_branch, timeout));
+    let mut order: Vec<&(String, String)> = heads.iter().collect();
+    order.sort_by_key(|(key, _)| memory.red_detail.get(key).map(|detail| detail.at));
+    let mut logs_read = 0;
+    for (key, head) in order {
+        let listed = budget
+            .call_timeout()
+            .and_then(|timeout| ci.check_runs(head, timeout));
+        let runs = match listed {
+            Ok(runs) => runs,
             Err(why) => {
-                unknown.push(format!(
-                    "flaky tests on `{branch}`: run {key} unread ({why})"
-                ));
+                out.insert(key.clone(), (Vec::new(), Some(why)));
                 continue;
             }
         };
-        let mut tests = BTreeSet::new();
-        let mut complete = true;
-        for job in jobs["jobs"].as_array().into_iter().flatten() {
-            if !run_failed(job["conclusion"].as_str().unwrap_or_default()) {
-                continue;
-            }
-            match job["id"].as_u64().map(|job| job_tests(root, job)) {
-                Some(Ok(names)) => tests.extend(names),
-                Some(Err(why)) => {
-                    complete = false;
-                    unknown.push(format!(
-                        "flaky tests on `{branch}`: a job log of run {key} unread ({why})"
+        let known = memory.red_detail.get(key);
+        let mut checks: Vec<FailedCheck> = runs
+            .iter()
+            .filter(|run| run_failed(&run.conclusion))
+            .map(|run| FailedCheck {
+                name: run.name.clone(),
+                id: run.id,
+                tests: known
+                    .and_then(|detail| detail.checks.iter().find(|check| check.id == run.id))
+                    .map_or(Err("not read yet".to_string()), |check| check.tests.clone()),
+                base: base_check(&tip, &run.name),
+            })
+            .collect();
+        if checks.iter().any(|check| check.tests.is_err()) {
+            if logs_read >= policy.max_red_logs {
+                for check in checks.iter_mut().filter(|check| check.tests.is_err()) {
+                    check.tests = Err(format!(
+                        "only {} red changes are read per run; this one is read on a later run",
+                        policy.max_red_logs
                     ));
                 }
-                None => {}
+            } else {
+                logs_read += 1;
+                for check in checks.iter_mut().filter(|check| check.tests.is_err()) {
+                    let id = check.id;
+                    check.tests = budget
+                        .call_timeout()
+                        .and_then(|timeout| ci.job_tests(id, timeout));
+                }
+                memory.red_detail.insert(
+                    key.clone(),
+                    RedDetail {
+                        at: now,
+                        checks: checks.clone(),
+                    },
+                );
             }
         }
-        let url = run["url"].as_str().unwrap_or_default().to_string();
-        let events = tests.into_iter().map(|test| TestEvent {
-            test,
-            at,
-            source: format!("run {key}"),
-            url: url.clone(),
-        });
-        if flaked {
-            memory.flakes.extend(events);
-        } else {
-            memory.base_failures.extend(events);
-        }
-        // An unread log is asked for again next time.
-        if complete {
-            memory.seen_runs.insert(key, at);
-        }
+        out.insert(key.clone(), (checks, None));
     }
-    memory.prune(policy, now);
-}
-
-fn red_fact(
-    root: &Path,
-    pr: &super::Pr,
-    tip: &std::result::Result<Vec<crate::ci_failures::CheckRun>, String>,
-    memory: &Memory,
-    read_logs: std::result::Result<(), String>,
-) -> RedFact {
-    let mut fact = RedFact {
-        failed_checks: Vec::new(),
-        check_ids: Vec::new(),
-        failing_tests: Vec::new(),
-        changed_paths: super::changed_paths(root, &super::base_ref(&pr.base), &pr.head),
-        base: BaseChecks::Unknown("not read".into()),
-        rerun_routed: memory.reruns.get(&rerun_key(pr.id, &pr.head)).cloned(),
-        unread: None,
-    };
-    if let Err(why) = read_logs {
-        fact.unread = Some(why);
-        return fact;
-    }
-    let runs = match check_runs(root, &pr.head) {
-        Ok(runs) => runs,
-        Err(why) => {
-            fact.unread = Some(why);
-            return fact;
-        }
-    };
-    let mut tests = BTreeSet::new();
-    for run in runs.iter().filter(|run| run_failed(&run.conclusion)) {
-        fact.failed_checks.push(run.name.clone());
-        fact.check_ids.push(run.id);
-        match job_tests(root, run.id) {
-            Ok(names) => tests.extend(names),
-            Err(why) => fact.unread = Some(format!("{}: {why}", run.name)),
-        }
-    }
-    fact.failing_tests = tests.into_iter().collect();
-    if !fact.failing_tests.is_empty() {
-        // Named tests are enough to judge by; a partly unread log is not
-        // "undetermined".
-        fact.unread = None;
-    }
-    fact.base = base_checks(tip, &fact.failed_checks);
-    fact
+    out
 }
 
 fn landing_times(
@@ -1303,7 +1376,7 @@ fn memory_line() -> String {
     }
 }
 
-fn host_lines(pass: &Pass) -> Vec<HostLine> {
+fn host_lines(pass: &super::Pass) -> Vec<HostLine> {
     let here = crate::coordination::hostname();
     let mut lanes: BTreeMap<String, usize> = BTreeMap::new();
     *lanes.entry(here.clone()).or_default() += pass.local_lanes.len();
@@ -1321,139 +1394,11 @@ fn host_lines(pass: &Pass) -> Vec<HostLine> {
             memory: if host == here {
                 memory_line()
             } else {
-                "not measured from this host".into()
+                "unknown from this host (that host's own scheduled run records it)".into()
             },
             host,
             lanes,
         })
-        .collect()
-}
-
-fn lane_outcome_facts(pass: &Pass, unknown: &mut Vec<String>) -> Vec<LaneOutcomeFact> {
-    use crate::lane_result::Kind;
-    let (receipts, unreadable) = crate::lane_result::recorded(&pass.root);
-    if unreadable > 0 {
-        unknown.push(format!("{unreadable} lane receipt(s) could not be read"));
-    }
-    let same = aida_core::id_identity::same_id;
-    receipts
-        .iter()
-        .filter_map(|r| {
-            let kind = r.result?;
-            let finished_at = r.finished_at?;
-            if !matches!(
-                kind,
-                Kind::FailedAfterStart
-                    | Kind::Punted
-                    | Kind::NoChangeWithReason
-                    | Kind::RefusedBeforeStart
-            ) {
-                return None;
-            }
-            let followed_up = receipts
-                .iter()
-                .find(|later| later.created_at > finished_at && same(&later.spec, &r.spec))
-                .map(|later| format!("attempt {}", later.attempt))
-                .or_else(|| {
-                    pass.local_lanes
-                        .iter()
-                        .find(|lease| same(&lease.scope, &r.spec))
-                        .map(|lease| format!("lease {}", lease.id))
-                })
-                .or_else(|| {
-                    pass.foreign_lanes
-                        .iter()
-                        .find(|claim| same(&claim.scope, &r.spec))
-                        .map(|claim| format!("a claim on {}", claim.host))
-                });
-            Some(LaneOutcomeFact {
-                attempt: r.attempt.clone(),
-                spec: r.spec.clone(),
-                result: kind.label(),
-                reason_code: r.reason_code.clone().unwrap_or_else(|| "unknown".into()),
-                detail: r.detail.clone().unwrap_or_default(),
-                finished_at,
-                launched_by: r.launched_by.clone(),
-                followed_up,
-            })
-        })
-        .collect()
-}
-
-fn claim_facts(root: &Path, now: DateTime<Utc>) -> Vec<ClaimFact> {
-    let store =
-        crate::detect_distributed_store_from(root).unwrap_or_else(|| root.join(".aida-store"));
-    let here = crate::coordination::hostname();
-    let (_live, stale) =
-        crate::coordination::partition_claims(crate::coordination::list_claims(&store), now, &here);
-    // A local lease whose holder cannot be established blocks pickup of its
-    // scope, and the doctor heals only a lease it can prove stale.
-    let leases = crate::list_leases(root);
-    let sessions = if leases.is_empty() {
-        Vec::new()
-    } else {
-        crate::process_probe::probe_live_claude_sessions()
-    };
-    let unknown_leases = leases.into_iter().filter_map(|lease| {
-        let state = crate::lease_state_for(&lease, &sessions, now);
-        if state != aida_core::liveness::LeaseState::Unknown {
-            return None;
-        }
-        let idle_mins = (now - crate::leases::lease_heartbeat(&lease)).num_minutes();
-        Some(ClaimFact {
-            record: crate::leases::lease_path(root, &lease.id),
-            evidence: format!(
-                "lease {} on branch `{}`: holder {}; recorded host `{}`, this host `{here}`; last heartbeat {idle_mins} min ago",
-                lease.id,
-                lease.branch,
-                state.label(),
-                lease.hostname
-            ),
-            scope: lease.scope,
-            unhealable: Some(
-                "its holder cannot be established from this host, and the doctor ends only a lease it can prove stale".into(),
-            ),
-            expired_mins: idle_mins,
-        })
-    });
-    stale
-        .into_iter()
-        .filter_map(|(claim, evidence)| {
-            let heartbeat = DateTime::parse_from_rfc3339(&claim.heartbeat_at)
-                .ok()?
-                .with_timezone(&Utc);
-            let expired_mins = (now - heartbeat).num_minutes() - (claim.ttl_secs / 60) as i64;
-            if expired_mins > MAX_AGE_HOURS * 60 * 7 {
-                // Long-dead records are the store's housekeeping, not a stall.
-                return None;
-            }
-            let healable =
-                claim.claim_id.is_some() && crate::coordination::exited_holder_is_dead(&claim, now);
-            let unhealable = (!healable).then(|| {
-                if claim.claim_id.is_none() {
-                    "the record carries no claim id".to_string()
-                } else if claim.process_backed {
-                    "it is a lock claim, not a lane's".to_string()
-                } else if claim.review_verb {
-                    "it is a review claim".to_string()
-                } else if claim.host != here {
-                    format!(
-                        "its recorded host `{}` is not this host `{here}`, so its holder cannot be probed here",
-                        claim.host
-                    )
-                } else {
-                    "its lane's exit could not be proven from the lane record".to_string()
-                }
-            });
-            Some(ClaimFact {
-                record: crate::coordination::claim_path(&store, &claim.scope),
-                scope: claim.scope,
-                evidence,
-                unhealable,
-                expired_mins,
-            })
-        })
-        .chain(unknown_leases)
         .collect()
 }
 
@@ -1483,94 +1428,70 @@ fn save_memory(root: &Path, memory: &Memory) {
     }
 }
 
-/// One live observation: the reconciler's pass plus what the guard reads on
-/// top of it. Returns the report and the memory to keep (a scheduled run
-/// saves it; `aida land stalls` does not).
+/// One live observation: the reconciler's pass, the same evidence read fact
+/// by fact, and CI detail for the red approved heads. Returns the report and
+/// the memory to keep (a scheduled run saves it; `aida land stalls` does
+/// not).
 fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report, Memory, PathBuf)> {
+    let (pass, mut prs) = super::live_pass_with(start, |changes, rows, evidence| {
+        rows.iter()
+            .filter_map(|row| {
+                let pr = changes.iter().find(|pr| pr.id == row.pr)?;
+                Some(pr_fact(pr, row, evidence))
+            })
+            .collect::<Vec<PrFact>>()
+    })?;
     let started = std::time::Instant::now();
-    let deadline = started + DETAIL_BUDGET;
-    let pass = super::live_pass(start)?;
+    let elapsed = move || started.elapsed();
+    let budget = Budget {
+        limit: DETAIL_BUDGET,
+        elapsed: &elapsed,
+    };
     let root = pass.root.clone();
     let mut memory = load_memory(&root);
     let mut unknown = pass.warnings.clone();
-    let since = match super::metrics::observed_since(&root) {
-        Ok(since) => since,
-        Err(why) => {
-            unknown.push(format!(
-                "how long each change has waited: unknown ({why:#})"
-            ));
-            BTreeMap::new()
-        }
-    };
     let branch = crate::forge::default_branch_of(&root);
-    let red_rows: Vec<u64> = pass
-        .rows
+    let red_heads: Vec<(String, String)> = prs
         .iter()
-        .filter(|row| {
-            (row.state == State::CiFailed && pass.red_approvals.contains_key(&row.pr))
-                || (matches!(row.state, State::Ready | State::ReadyPendingCover)
-                    && row.ci.as_deref().is_some_and(|ci| ci.starts_with("red")))
-        })
-        .map(|row| row.pr)
+        .filter(|fact| fact.wants_red_detail())
+        .map(|fact| (rerun_key(fact.number, &fact.head), fact.head.clone()))
         .collect();
-    let on_github = !pass.gitlab;
-    let tip = if !on_github {
-        Err("CI detail is read on GitHub only".to_string())
-    } else if red_rows.is_empty() {
-        Err("not read".to_string())
+    let mut details = if pass.gitlab {
+        if !red_heads.is_empty() {
+            unknown.push("failing test names: CI detail is read on GitHub only".into());
+        }
+        red_heads
+            .iter()
+            .map(|(key, _)| {
+                let why = "CI detail is read on GitHub only".to_string();
+                (key.clone(), (Vec::new(), Some(why)))
+            })
+            .collect()
     } else {
-        check_runs(&root, &branch)
-    };
-    if on_github {
-        read_base_runs(
-            &root,
+        read_red_details(
+            &Gh(&root),
+            &budget,
             &branch,
+            &red_heads,
             &mut memory,
             policy,
             now,
-            deadline,
-            &mut unknown,
-        );
-    } else {
-        unknown.push("flaky tests and failing test names: CI detail is read on GitHub only".into());
-    }
-    let mut logs_read = 0;
-    let mut prs = Vec::new();
-    for row in &pass.rows {
-        let Some(pr) = pass.changes.iter().find(|pr| pr.id == row.pr) else {
+        )
+    };
+    for fact in prs.iter_mut() {
+        let key = rerun_key(fact.number, &fact.head);
+        let Some((checks, unread)) = details.remove(&key) else {
             continue;
         };
-        let red = red_rows.contains(&pr.id).then(|| {
-            let allowed = if !on_github {
-                Err("CI detail is read on GitHub only".to_string())
-            } else if logs_read >= policy.max_red_logs {
-                Err(format!(
-                    "only {} red changes are read per run",
-                    policy.max_red_logs
-                ))
-            } else if std::time::Instant::now() > deadline {
-                Err("time budget for this run spent".to_string())
-            } else {
-                logs_read += 1;
-                Ok(())
-            };
-            red_fact(&root, pr, &tip, &memory, allowed)
-        });
-        prs.push(PrFact {
-            number: pr.id,
-            title: pr.title.clone(),
-            head: pr.head.clone(),
-            state: row.state.clone(),
-            action: row.action.clone(),
-            actor: row.actor.clone(),
-            reason: row.reason.clone(),
-            ci: row.ci.clone(),
-            since: since
-                .get(&pr.id)
-                .filter(|(head, state, _)| head == &pr.head && state == row.state.label())
-                .map(|(_, _, at)| *at),
-            approval: pass.red_approvals.get(&pr.id).cloned(),
-            red,
+        let changed_paths = match pass.changes.iter().find(|pr| pr.id == fact.number) {
+            Some(pr) => super::changed_paths(&root, &super::base_ref(&pr.base), &pr.head),
+            None => Err("the change left the pass".to_string()),
+        };
+        fact.red = Some(RedFact {
+            checks,
+            changed_paths,
+            rerun_routed: memory.reruns.get(&key).cloned(),
+            unread,
         });
     }
     let dry_since =
@@ -1578,8 +1499,6 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
     let (landings, last_landing) = landing_times(&root, &branch, dry_since);
     let facts = Facts {
         prs,
-        lane_outcomes: lane_outcome_facts(&pass, &mut unknown),
-        claims: claim_facts(&root, now),
         landings: Some(landings),
         last_landing,
         hosts: host_lines(&pass),
@@ -1593,7 +1512,8 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
 pub(crate) fn run(start: &Path, json: bool) -> Result<()> {
     let cfg = crate::read_project_config_value(&crate::main_worktree_root_from(start));
     let policy = Policy::from_config(cfg.as_ref());
-    let (report, _memory, _root) = observe(start, &policy, Utc::now())?;
+    let (mut report, memory, _root) = observe(start, &policy, Utc::now())?;
+    report.last_scheduled_run = memory.runs.last().cloned();
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -1634,7 +1554,7 @@ pub(crate) fn route_prompt(seat: &str) -> String {
         )
     } else {
         format!(
-            "The throughput guard found stalled work the {seat} seat can move. Read the evidence in `aida schedule due --seat {seat}` (or run `aida land stalls`). Each line names the stall and the action it calls for: land an approved change, launch a reviewer, route rework or a conflict to a lane, rerun a probable flake once, route a fix-forward for a recurring flake, relaunch or route a lane that exited, or release a claim nothing can heal. Then run `aida schedule done {job}`."
+            "The throughput guard found stalled work the {seat} seat can move. Read the evidence in `aida schedule due --seat {seat}` (or run `aida land stalls`). Each line names the stall and the action it calls for: land an approved change, launch a reviewer, route rework or a conflict to a lane, rerun a probable flake once, route a fix-forward for a flake that failed its rerun, or repair a red base branch. Then run `aida schedule done {job}`."
         )
     }
 }
@@ -1688,9 +1608,19 @@ fn raise_due(root: &Path, store: &Path, seat: &str, evidence: &str, now: DateTim
     true
 }
 
+/// How a wake mail is written; a test injects a mailbox that fails.
+pub(crate) type Mailer<'a> = &'a dyn Fn(&Path, &aida_core::mailbox::Message) -> Result<()>;
+
 /// A short `[fyi]` mail to the seat: the wake for a session that watches
 /// its mail and not its due jobs.
-fn mail_wake(root: &Path, seat: &str, new: &[&Item], total: usize, now: DateTime<Utc>) {
+fn mail_wake(
+    root: &Path,
+    seat: &str,
+    new: &[&Item],
+    total: usize,
+    now: DateTime<Utc>,
+    mailer: Mailer,
+) -> Result<()> {
     use aida_core::mailbox::{Intent, Message, Recipient};
     let id = uuid::Uuid::new_v4().to_string();
     let lines = new
@@ -1730,37 +1660,49 @@ fn mail_wake(root: &Path, seat: &str, new: &[&Item], total: usize, now: DateTime
         from_seat: None,
         relayed_from: None,
     };
-    if let Err(err) = crate::mailbox_store::write_message(root, &msg) {
-        eprintln!("warning: throughput guard could not mail the {seat} seat: {err:#}");
-    }
+    mailer(root, &msg)
+}
+
+/// What one routing pass decided for one seat.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct SeatPlan {
+    /// Every current stall of the seat.
+    pub all: Vec<Item>,
+    /// The ones not routed before.
+    pub new: Vec<Item>,
+    /// Routed before, but the mail wake failed: mailed again, with no
+    /// second due job.
+    pub remail: Vec<Item>,
 }
 
 /// What one routing pass decided, before anything is written.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct RoutePlan {
-    /// Seat -> (every current stall of the seat, the new ones among them).
-    pub seats: BTreeMap<String, (Vec<Item>, Vec<Item>)>,
+    pub seats: BTreeMap<String, SeatPlan>,
     pub escalate: bool,
 }
 
 /// Which seats to wake: a seat is woken only when it has a stall not routed
-/// before, and then gets all of its current stalls in one item. The operator
-/// is escalated to at most once per escalation window.
+/// before (it then gets all of its current stalls in one item) or a routed
+/// stall whose mail wake failed. The operator is escalated to at most once
+/// per escalation window.
 pub(crate) fn plan_routes(
     report: &Report,
     memory: &Memory,
     policy: &Policy,
     now: DateTime<Utc>,
 ) -> RoutePlan {
-    let mut seats: BTreeMap<String, (Vec<Item>, Vec<Item>)> = BTreeMap::new();
+    let mut seats: BTreeMap<String, SeatPlan> = BTreeMap::new();
     for item in &report.stuck {
-        let entry = seats.entry(item.seat.clone()).or_default();
-        entry.0.push(item.clone());
+        let plan = seats.entry(item.seat.clone()).or_default();
+        plan.all.push(item.clone());
         if !memory.routed.contains_key(&item.key) {
-            entry.1.push(item.clone());
+            plan.new.push(item.clone());
+        } else if memory.mail_pending.contains(&item.key) {
+            plan.remail.push(item.clone());
         }
     }
-    seats.retain(|_, (_, new)| !new.is_empty());
+    seats.retain(|_, plan| !plan.new.is_empty() || !plan.remail.is_empty());
     let escalate = report.escalate
         && memory
             .escalated_at
@@ -1769,39 +1711,71 @@ pub(crate) fn plan_routes(
 }
 
 fn route(root: &Path, report: &Report, memory: &mut Memory, policy: &Policy, now: DateTime<Utc>) {
+    route_with(root, report, memory, policy, now, &|root, msg| {
+        crate::mailbox_store::write_message(root, msg)
+    });
+}
+
+pub(crate) fn route_with(
+    root: &Path,
+    report: &Report,
+    memory: &mut Memory,
+    policy: &Policy,
+    now: DateTime<Utc>,
+    mailer: Mailer,
+) {
     let store =
         crate::detect_distributed_store_from(root).unwrap_or_else(|| root.join(".aida-store"));
-    let plan = plan_routes(report, memory, policy, now);
     // A stall that is gone is forgotten, so its return routes again.
-    memory
-        .routed
-        .retain(|key, _| report.stuck.iter().any(|item| &item.key == key));
+    let current = |key: &String| report.stuck.iter().any(|item| &item.key == key);
+    memory.routed.retain(|key, _| current(key));
+    memory.mail_pending.retain(current);
+    let plan = plan_routes(report, memory, policy, now);
     let open: BTreeSet<String> = report
         .changes
         .iter()
         .map(|line| format!("PR-{}@{}", line.pr, line.head))
         .collect();
     memory.reruns.retain(|key, _| open.contains(key));
-    for (seat, (all, new)) in &plan.seats {
-        let evidence = clip(
-            all.iter()
-                .map(|item| {
-                    format!(
-                        "[{}] {} -> {}",
-                        item.class.label(),
-                        item.summary,
-                        item.action
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("; "),
-        );
-        if !raise_due(root, &store, seat, &evidence, now) {
-            continue;
+    for (seat, plan) in &plan.seats {
+        // The due job is raised for a new stall only; a failed mail alone
+        // never raises it a second time.
+        if !plan.new.is_empty() {
+            let evidence = clip(
+                plan.all
+                    .iter()
+                    .map(|item| {
+                        format!(
+                            "[{}] {} -> {}",
+                            item.class.label(),
+                            item.summary,
+                            item.action
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; "),
+            );
+            if !raise_due(root, &store, seat, &evidence, now) {
+                continue;
+            }
+            for item in &plan.all {
+                memory.routed.entry(item.key.clone()).or_insert(now);
+            }
         }
-        mail_wake(root, seat, &new.iter().collect::<Vec<_>>(), all.len(), now);
-        for item in all {
-            memory.routed.entry(item.key.clone()).or_insert(now);
+        let wake: Vec<&Item> = plan.new.iter().chain(&plan.remail).collect();
+        match mail_wake(root, seat, &wake, plan.all.len(), now, mailer) {
+            Ok(()) => {
+                for item in &wake {
+                    memory.mail_pending.remove(&item.key);
+                }
+            }
+            // The wake is owed: the next run sends it again.
+            Err(err) => {
+                eprintln!("warning: throughput guard could not mail the {seat} seat: {err:#}");
+                memory
+                    .mail_pending
+                    .extend(wake.iter().map(|item| item.key.clone()));
+            }
         }
     }
     if !report.landings.dry {
@@ -1841,8 +1815,10 @@ fn route(root: &Path, report: &Report, memory: &mut Memory, policy: &Policy, now
 }
 
 /// `aida doctor check throughput-guard`: the stalls as findings. With
-/// `route` (the scheduler's tick) each new stall is also routed once and the
-/// guard's memory is saved. Does nothing unless the guard is enabled.
+/// `route` (the scheduler's tick) each new stall is also routed once, and
+/// the run's observation (landings, lanes and memory per host) and the
+/// guard's memory are saved, whether or not anything is stuck. Does nothing
+/// unless the guard is enabled.
 pub(crate) fn scan_and_route(
     project_root: &Path,
     route_findings: bool,
@@ -1856,7 +1832,11 @@ pub(crate) fn scan_and_route(
     let (report, mut memory, root) = observe(project_root, &policy, now)?;
     if route_findings {
         route(&root, &report, &mut memory, &policy, now);
+        record_run(&mut memory, &report);
         save_memory(&root, &memory);
+        if let Some(run) = memory.runs.last() {
+            eprintln!("throughput-guard: {}", snapshot_line(run));
+        }
     }
     for unknown in &report.unknown {
         eprintln!("throughput-guard: not read: {unknown}");

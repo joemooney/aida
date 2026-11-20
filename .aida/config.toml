@@ -639,34 +639,34 @@ prompt = "Diagnose the shared CI cause first (finding 2): several PRs failing th
 enabled = true
 
 # The throughput guard: every 20 minutes, no model. It classifies every open,
-# non-draft change (STUCK-MERGE, STUCK-MERGE-RED, STUCK-REVIEW, STUCK-REWORK,
-# STUCK-CONFLICT or moving), and also reports lane exits nobody followed up
-# (LANE-OUTCOME), shared claims the doctor cannot heal (STALE-CLAIM) and flaky
-# tests that failed again (MAIN-FLAKE-RECURRENCE). Each new stall is routed
-# once, as one `throughput-guard-route-<seat>` due job per seat plus a short
-# mail, so every vendor's seat receives the same work. When nothing has landed
-# for escalate_after_mins while something is stuck, the operator gets
+# non-draft change as STUCK-MERGE, STUCK-MERGE-RED, STUCK-REVIEW, STUCK-REWORK,
+# STUCK-CONFLICT or moving, from the approval, the review history, the hold, CI
+# and who is working it, each read on its own. Each new stall is routed once,
+# as one `throughput-guard-route-<seat>` due job per seat plus a short mail, so
+# every vendor's seat receives the same work. When nothing has landed for
+# escalate_after_mins while something is stuck, the operator gets
 # `throughput-guard-route-operator`. The route jobs are built in; they need no
-# entry here. `aida land stalls` prints the same classification on demand.
+# entry here. Every scheduled run saves the landings and each host's lanes and
+# memory in `.aida/throughput-guard/state.json`. `aida land stalls` prints the
+# same classification on demand.
 # The guard ships off: both `enabled` lines below turn it on for this project.
 # trace:STORY-2906 | ai:claude
 [throughput_guard]
 enabled = true
-# Minutes a change may sit in each state before it counts as stuck.
+# Minutes a change may wait before it counts as stuck: from the approval
+# (merge), the head's commit (review), the verdict (rework), and the base
+# commit that first conflicted (conflict).
 merge_mins = 20
 review_mins = 30
 rework_mins = 30
 conflict_mins = 30
-# Minutes a failed, punted, no-change or refused lane exit may go unanswered.
-lane_outcome_mins = 20
-# Minutes past its own expiry before an unhealable shared claim is reported.
-stale_claim_mins = 30
-# A flaky test that fails again inside this many hours is a recurrence.
-flake_window_hours = 24
 # Landings are counted over this window; no landing for escalate_after_mins
 # while something is stuck goes to the operator.
 landings_window_mins = 60
 escalate_after_mins = 120
+# Red approved changes whose job logs one run reads; a log read once is kept,
+# so the rest are read on the following runs.
+max_red_logs = 6
 
 [[schedule.jobs]]
 name = "throughput-guard"

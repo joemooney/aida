@@ -29,9 +29,8 @@ pub enum LandCommand {
     /// watcher stopped.
     Run(RunArgs),
     /// Print which open changes are stuck, why, and which seat can move
-    /// them. Also lists lane exits nobody followed up, claims the doctor
-    /// cannot heal, flaky tests that failed again, recent landings and lanes
-    /// per host. Nothing is routed.
+    /// them. Also lists recent landings and lanes per host. Nothing is
+    /// routed.
     // trace:STORY-2906 | ai:claude
     Stalls {
         /// Machine-readable JSON report.

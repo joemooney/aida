@@ -152,55 +152,79 @@ repository whose CI has a single tier is admitted as before.
 <!-- trace:STORY-2906 | ai:claude -->
 
 `aida land stalls` prints which open changes are stuck and who can move them.
-It runs the same pass as `aida land status` and adds how long each change has
-been in its state at its head (from `.aida/land/readiness.jsonl`, so the wait
-counts from the first pass that saw it). Use `--json` for the same report as
+It runs the same pass as `aida land status` and reads the same evidence fact by
+fact. The reconciler's state is one label in a fixed order (a red head is
+`CI-FAILED` before its review history is read), so the guard does not classify
+from it: an unreviewed head with red CI is still `STUCK-REVIEW`, and an approved
+head behind a hold nothing releases is still `STUCK-MERGE`. The `STATE` column
+shows the reconciler's label for reference. Use `--json` for the same report as
 JSON. The command only reads and prints; it routes nothing.
 
-| Class | Meaning | Routed to |
-|---|---|---|
-| `STUCK-MERGE` | approved at the head, not landed for more than `merge_mins` | advisor |
-| `STUCK-MERGE-RED` | approved at the head, CI red there for more than `merge_mins` | advisor |
-| `STUCK-REVIEW` | no verdict at the head and no reviewer for more than `review_mins` | advisor |
-| `STUCK-REWORK` | changes requested at the head, no lane or session on it for more than `rework_mins` | advisor |
-| `STUCK-CONFLICT` | conflicts with its base, nobody on it for more than `conflict_mins` | advisor |
-| `MAIN-FLAKE-RECURRENCE` | a test that flaked failed again within `flake_window_hours` | advisor |
-| `LANE-OUTCOME` | a lane exited failed, punted, no-change or refused, and nothing relaunched or routed its spec within `lane_outcome_mins` | the seat that launched it, else product |
-| `STALE-CLAIM` | a shared claim more than `stale_claim_mins` past its expiry, or a local lease whose holder cannot be established for that long, that `aida doctor heal stale-leases` does not heal | advisor |
-| `moving` | none of the above | - |
+| Class | Meaning | Wait counted from | Routed to |
+|---|---|---|---|
+| `STUCK-MERGE` | approved at the head, not landed for more than `merge_mins` | the approval (the head's commit, when an approval was carried over a newer head) | advisor |
+| `STUCK-MERGE-RED` | approved at the head, CI red there, no lane on it, for more than `merge_mins` | the same | advisor |
+| `STUCK-REVIEW` | no verdict at the head and no reviewer for more than `review_mins` | the head's commit | advisor |
+| `STUCK-REWORK` | changes requested at the head, no lane or session on it, for more than `rework_mins` | the verdict | advisor |
+| `STUCK-CONFLICT` | conflicts with its base, nobody on it, for more than `conflict_mins` | the base commit that first conflicted, or the head's commit when that is newer | advisor |
+| `moving` | none of the above | - | - |
 
-A `STUCK-MERGE-RED` line names the failing tests and says why CI is red, with
-the reason it used:
+Each wait counts from the event that started it, not from when the guard first
+looked, so a head pushed hours ago is stuck on the first run that sees it. The
+head's time is its commit date. A change whose time or evidence cannot be read
+is listed under `Not read` and is not called stuck. A train, a promotion, a
+change under review and an approved change stacked on another change's branch
+are moving. An unreviewed red head with a lane on it is moving too: the lane is
+about to replace the head.
 
-- **probable flake**: no failing test is in a file the change touches, and the
-  same checks pass at the base branch's tip. The action is one rerun. If the
-  rerun fails again, or the test already flaked inside the window, the action
-  becomes a fix-forward for the test, not rework of the change.
+A `STUCK-MERGE-RED` line names the failing tests and says why CI is red. Each
+failed check is judged on its own, and the line gives one reason per check:
+
+- **probable flake**: no failing test of the check is in a file the change
+  touches, and the same check passes at the base branch's tip.
 - **the change plausibly caused it**: the change touches a file a failing test
-  covers. The action is rework.
+  covers.
 - **the base branch is red**: the same check is red on the base too.
-- **undetermined**: the logs, the changed files or the base's CI could not be
-  read. The line says which.
+- **undetermined**: the check's log, the changed files or the base's CI could
+  not be read, or the log names no test. The line says which.
+
+The action follows from the checks together. Any check the change plausibly
+caused means rework. Otherwise any undetermined check means reading the failed
+job: a red head is called a flake only when every failed check was read and is
+one. Then the action is one rerun, and if the rerun fails again, a fix-forward
+for the test, not rework of the change. A check that is red on the base adds a
+fix-forward of the base to whatever the other checks call for; it never
+excuses them.
 
 Tests are matched to files by module path (`queue::tests::drains` matches
 `src/queue.rs`), so this is a heuristic and the line always shows what it
-compared. A flake is a base-branch run that went green on a rerun, or a red the
-guard itself judged a probable flake. Failing test names and flake history are
-read on GitHub only; on another forge those lines say so.
+compared. Failing test names are read on GitHub only; on another forge the line
+says so. One run reads the job logs of at most `max_red_logs` red changes and
+spends at most 75 seconds on CI detail. A log read once is kept, so the next
+runs read the changes that are still missing; anything not read yet is
+reported as undetermined, with the reason.
 
 The report also counts landings on the default branch in the last
 `landings_window_mins` and lists live lanes per host, with available memory for
-the host the command runs on.
+the host the command runs on. Another host's memory is not measured from here;
+that host's own scheduled run records it.
 
 The scheduled `throughput-guard` job runs `aida doctor check throughput-guard`,
 which computes the same report. On the scheduler's tick each stall not routed
 before goes out once: one `throughput-guard-route-<seat>` due job per seat,
-carrying all of that seat's current stalls, and a short mail to the seat. A
-change with a new head, or a red whose remedy changed, is a new stall. When
-nothing has landed for `escalate_after_mins` while something is stuck, the
-operator gets `throughput-guard-route-operator` in `aida awaiting` (at most once
-per window) and a push if `[notify]` is configured. No model runs, and the
-guard never launches, merges or releases anything.
+carrying all of that seat's current stalls, and a short mail to the seat. If
+the mail cannot be written, the next run sends it again without raising the due
+job a second time. A change with a new head, or a red whose remedy changed, is
+a new stall. When nothing has landed for `escalate_after_mins` while something
+is stuck, the operator gets `throughput-guard-route-operator` in `aida awaiting`
+(at most once per window) and a push if `[notify]` is configured. No model
+runs, and the guard never launches, merges or releases anything.
+
+Every scheduled run, including one that finds nothing stuck, saves what it
+observed in `.aida/throughput-guard/state.json` under `runs`: the time, the
+landings in the window, each host's lane count and memory, and how many changes
+were open and stuck. The last 72 runs are kept, and `aida land stalls` prints
+the newest.
 
 The guard is off unless the project sets `[throughput_guard] enabled = true`
 and enables the `throughput-guard` job; see `[throughput_guard]` in

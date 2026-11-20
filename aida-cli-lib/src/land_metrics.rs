@@ -34,35 +34,6 @@ fn read_events(root: &Path) -> Result<Vec<Event>> {
         Err(e) => Err(e.into()),
     }
 }
-/// When each change was first observed in its current state at its current
-/// head: PR -> (head, state label, first observation). A change that left a
-/// state and came back to it at the same head keeps the first observation.
-// trace:STORY-2906 | ai:claude
-pub(super) fn observed_since(
-    root: &Path,
-) -> Result<BTreeMap<u64, (String, String, DateTime<Utc>)>> {
-    Ok(first_observations(&read_events(root)?))
-}
-
-// trace:STORY-2906 | ai:claude
-fn first_observations(events: &[Event]) -> BTreeMap<u64, (String, String, DateTime<Utc>)> {
-    let mut first: BTreeMap<(u64, &str, &str), DateTime<Utc>> = BTreeMap::new();
-    let mut current: BTreeMap<u64, (&str, &str)> = BTreeMap::new();
-    for event in events.iter().filter(|event| event.pr != 0) {
-        first
-            .entry((event.pr, event.head.as_str(), event.new.as_str()))
-            .or_insert(event.at);
-        current.insert(event.pr, (event.head.as_str(), event.new.as_str()));
-    }
-    current
-        .into_iter()
-        .filter_map(|(pr, (head, state))| {
-            let at = *first.get(&(pr, head, state))?;
-            Some((pr, (head.to_string(), state.to_string(), at)))
-        })
-        .collect()
-}
-
 // Explicitly unlock the open file description before closing it: another
 // thread may fork while we hold it, retaining an inherited descriptor.
 struct RecordingLock(std::fs::File);
@@ -649,39 +620,6 @@ mod tests {
     use super::*;
     fn at(h: i64) -> DateTime<Utc> {
         DateTime::from_timestamp(h * 3600, 0).unwrap()
-    }
-    // trace:STORY-2906 | ai:claude
-    #[test]
-    fn first_observations_date_the_current_state_at_the_current_head() {
-        let ev = |pr, h, head: &str, new: &str| Event {
-            at: at(h),
-            pr,
-            head: head.into(),
-            old: None,
-            new: new.into(),
-        };
-        let events = [
-            ev(0, 0, "", "recording-start"),
-            // Left NEEDS-REVIEW for a review and came back: the first sighting counts.
-            ev(1, 1, "a", "NEEDS-REVIEW"),
-            ev(1, 2, "a", "REVIEWING"),
-            ev(1, 3, "a", "NEEDS-REVIEW"),
-            // A new head starts the clock again.
-            ev(2, 1, "a", "READY"),
-            ev(2, 4, "b", "READY"),
-            // A merged change reads as absent.
-            ev(3, 1, "a", "READY"),
-            ev(3, 5, "a", "absent"),
-        ];
-        let seen = first_observations(&events);
-        assert_eq!(
-            seen[&1],
-            ("a".to_string(), "NEEDS-REVIEW".to_string(), at(1))
-        );
-        assert_eq!(seen[&2], ("b".to_string(), "READY".to_string(), at(4)));
-        assert_eq!(seen[&3].1, "absent");
-        assert!(!seen.contains_key(&0));
-        assert!(first_observations(&[]).is_empty());
     }
     fn event(pr: u64, h: i64, new: &str) -> Event {
         Event {

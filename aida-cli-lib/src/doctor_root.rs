@@ -1910,8 +1910,7 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     // `.done` acknowledgement. trace:STORY-1699 | ai:claude
     // trace:STORY-2849 | ai:codex
     (&["landing-health"], "landing-health"),
-    // Stuck changes, lane exits nobody followed up, unhealable claims and
-    // recurring flakes. trace:STORY-2906 | ai:claude
+    // Open changes nobody is moving. trace:STORY-2906 | ai:claude
     (
         &["throughput-guard", "throughput", "land-stalls", "stalls"],
         "throughput-guard",
