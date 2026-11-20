@@ -200,7 +200,7 @@ pub(crate) fn record_verdict_at(
     record: &crate::gate::review_verdict::JsonObj,
     spec: Option<&GateSpec>,
 ) -> std::io::Result<Delivered> {
-    crate::gate::ledger::record_verdict_with(path, record, spec, false)
+    crate::gate::ledger::record_verdict_with(path, record, spec, false, None)
 }
 
 /// [`record_verdict_at`] for one act of review (`aida review record`): one
@@ -208,14 +208,17 @@ pub(crate) fn record_verdict_at(
 /// repeats the act standing there for the same spec
 /// ([`crate::gate::review_verdict::repeats_recorded_act`]) is not appended
 /// (`Unchanged`), a record the ledger already holds that no longer stands is
-/// refused, and a history that cannot be read whole is refused.
+/// refused, and a history that cannot be read whole is refused. A `receipt`
+/// is settled with the append, under the same locks ([`store::Receipt`]):
+/// none is persisted for a repeat, a refusal or a failed follow-up filing.
 // trace:BUG-2662 | ai:claude
 pub(crate) fn record_review_act_at(
     path: &Path,
     record: &crate::gate::review_verdict::JsonObj,
     spec: Option<&GateSpec>,
+    receipt: Option<&dyn store::Receipt>,
 ) -> std::io::Result<Delivered> {
-    crate::gate::ledger::record_verdict_with(path, record, spec, true)
+    crate::gate::ledger::record_verdict_with(path, record, spec, true, receipt)
 }
 
 fn record_verdict_with(
@@ -223,6 +226,7 @@ fn record_verdict_with(
     record: &crate::gate::review_verdict::JsonObj,
     spec: Option<&GateSpec>,
     once: bool,
+    receipt: Option<&dyn store::Receipt>,
 ) -> std::io::Result<Delivered> {
     // How follow-up findings and the verdict are ordered depends on the path:
     //
@@ -273,8 +277,8 @@ fn record_verdict_with(
             if !deferred.is_empty() {
                 // trace:BUG-2662 | ai:claude — a retry finds its refusal
                 // standing and files against it: one verdict event in all.
-                let delivered =
-                    Destination::resolve(&root, &key, record, spec)?.append(record, None, once)?;
+                let delivered = Destination::resolve(&root, &key, record, spec)?
+                    .append(record, None, once, receipt)?;
                 // A one-shot, thread-local test fault: the filing fails after
                 // the refusal is on record, as in production.
                 #[cfg(test)]
@@ -324,12 +328,7 @@ fn record_verdict_with(
         // appended). The locked append decides either way.
         let observed = destination.observe()?;
         let standing = observed.standing();
-        let stands = once
-            && observed
-                .current_act(destination.event_spec())
-                .is_some_and(|act| {
-                    crate::gate::review_verdict::repeats_recorded_act(act, &delivered)
-                });
+        let stands = once && observed.repeats(destination.event_spec(), &delivered, receipt);
         if !stands {
             // trace:BUG-2564 | ai:claude — a one-shot, thread-local test fault:
             // the filing fails, as in production.
@@ -358,9 +357,9 @@ fn record_verdict_with(
                 ))
             })?;
         }
-        return destination.append(&delivered, Some(&standing), once);
+        return destination.append(&delivered, Some(&standing), once, receipt);
     }
-    Destination::resolve(&root, &key, record, spec)?.append(record, None, once)
+    Destination::resolve(&root, &key, record, spec)?.append(record, None, once, receipt)
 }
 
 /// Where a verdict record for a canonical key lands: on a change's ledger
@@ -447,13 +446,15 @@ impl Destination {
 
     /// Append `record`. With `standing`, only while the history holds no
     /// verdict record that was not standing when it was read; with `once`, as
-    /// one act of review ([`store::ReviewRule::once`]). Either is decided
-    /// under the destination's locks ([`store::append_review`]).
+    /// one act of review ([`store::ReviewRule::once`]); with `receipt`, naming
+    /// the receipt settled there. Each is decided under the destination's
+    /// locks ([`store::append_review`]).
     fn append(
         &self,
         record: &crate::gate::review_verdict::JsonObj,
         standing: Option<&store::Standing>,
         once: bool,
+        receipt: Option<&dyn store::Receipt>,
     ) -> std::io::Result<Delivered> {
         match self {
             Self::Change {
@@ -463,11 +464,12 @@ impl Destination {
                 bind,
             } => {
                 let event = event::verdict_event(store, *change, record, spec.as_ref());
-                let delivered = if standing.is_some() || once {
+                let delivered = if standing.is_some() || once || receipt.is_some() {
                     let rule = store::ReviewRule {
                         standing,
                         once,
                         bind: spec.as_ref().filter(|_| *bind),
+                        receipt,
                     };
                     store::append_review(store, Some(*change), event, &rule)?
                 } else {
@@ -487,17 +489,27 @@ impl Destination {
                     .map(|s| vec![s.label.clone()])
                     .unwrap_or_default();
                 if record.get("sweep_pending").and_then(|v| v.as_bool()) != Some(true) {
-                    super::review_publication::publish_reported(store, *change, record, &labels);
+                    // The record as appended: it names the receipt settled
+                    // under the locks. trace:BUG-2662 | ai:claude
+                    let mut appended = record.clone();
+                    if let Some(attestation) = receipt.and_then(|r| r.issued()) {
+                        appended.insert(
+                            crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
+                            attestation,
+                        );
+                    }
+                    super::review_publication::publish_reported(store, *change, &appended, &labels);
                 }
                 Ok(delivered)
             }
             Self::Unbound { store, spec } => {
-                if standing.is_some() || once {
+                if standing.is_some() || once || receipt.is_some() {
                     let event = event::verdict_event_unbound(store, spec, record);
                     let rule = store::ReviewRule {
                         standing,
                         once,
                         bind: None,
+                        receipt,
                     };
                     store::append_review(store, None, event, &rule)
                 } else {
@@ -506,30 +518,6 @@ impl Destination {
             }
         }
     }
-}
-
-/// The record of the act of review standing where a verdict for the
-/// canonical key `path` names, recorded for `spec`, would land: the newest
-/// verdict event of that change's ledger (or of the spec's unbound ledger),
-/// when it carries the same spec label. Read strictly, without locks; the
-/// append decides again under them. A contained caller has no ledger.
-// trace:BUG-2662 | ai:claude
-pub(crate) fn standing_review_act(
-    path: &Path,
-    record: &crate::gate::review_verdict::JsonObj,
-    spec: Option<&GateSpec>,
-) -> std::io::Result<Option<crate::gate::review_verdict::JsonObj>> {
-    let Some((root, key)) = crate::gate::review_verdict::canonical_verdict_key(path) else {
-        return Ok(None);
-    };
-    if crate::session::process_contained() {
-        return Ok(None);
-    }
-    let destination = Destination::resolve(&root, &key, record, spec)?;
-    Ok(destination
-        .observe()?
-        .current_act(destination.event_spec())
-        .cloned())
 }
 
 /// A verdict file written outside the record path (the review skill's

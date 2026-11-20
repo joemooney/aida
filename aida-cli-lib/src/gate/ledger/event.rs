@@ -219,6 +219,17 @@ impl GateEvent {
             _ => None,
         }
     }
+
+    /// Name `attestation` as this verdict event's recorder, in its record and
+    /// in the actor derived from it ([`verdict_event`]). Other events are left
+    /// as they are.
+    // trace:BUG-2662 | ai:claude
+    pub(crate) fn attest(&mut self, attestation: serde_json::Value) {
+        if let EventBody::Verdict { record } = &mut self.body {
+            self.actor = serde_json::from_value(attestation.clone()).ok();
+            record.insert(ATTESTATION_KEY.to_string(), attestation);
+        }
+    }
 }
 
 /// The patch identity of the change at `head`, taken in `repo`: the protected

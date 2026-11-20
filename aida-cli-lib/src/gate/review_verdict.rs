@@ -4325,42 +4325,41 @@ pub(crate) fn reusable_human_receipt(
         .then(|| id.to_string())
 }
 
-/// BUG-2662: the act of review standing where [`record_review_act`] would
-/// land `obj` for `spec` ([`crate::gate::ledger::standing_review_act`]).
-/// `None` for a hand-off file (a contained seat, a non-canonical path).
-// trace:BUG-2662 | ai:claude
-pub(crate) fn standing_review_act(
-    path: &Path,
-    obj: &JsonObj,
-    spec: &str,
-) -> std::io::Result<Option<JsonObj>> {
-    let Some((root, _)) = canonical_verdict_key(path) else {
-        return Ok(None);
-    };
-    let spec = crate::gate::ledger::GateSpec::resolve(&root, spec);
-    crate::gate::ledger::standing_review_act(path, obj, Some(&spec))
-}
-
 /// BUG-2662: [`write_verdict_object_for_spec`] for one act of review: one
 /// act is one verdict event ([`crate::gate::ledger::record_review_act_at`]).
 /// `Unchanged` when the act already stands and nothing was written. A
 /// hand-off file (a contained seat, a non-canonical path) is always written.
+/// A `receipt` is settled with the write: the record as written names the
+/// receipt the settlement reports, and none is left behind by a write that
+/// did not land.
 // trace:BUG-2662 | ai:claude
 pub(crate) fn record_review_act(
     path: &Path,
     obj: &JsonObj,
     spec: &str,
+    receipt: Option<&dyn crate::gate::ledger::store::Receipt>,
 ) -> std::io::Result<crate::gate::ledger::Delivered> {
     let Some((root, _)) = canonical_verdict_key(path).filter(|_| !crate::gate::ledger::contained())
     else {
-        hand_off_verdict_file(path, obj)?;
+        // No ledger decides here: the hand-off names its own receipt.
+        let mut obj = obj.clone();
+        if let Some(receipt) = receipt {
+            obj.insert(ATTESTATION_KEY.to_string(), receipt.issue()?);
+        }
+        if let Err(e) = hand_off_verdict_file(path, &obj) {
+            if let Some(receipt) = receipt {
+                receipt.revoke();
+            }
+            return Err(e);
+        }
         return Ok(crate::gate::ledger::Delivered::Appended);
     };
     refuse_unsafe_legacy_history(path, round_sha(obj).as_deref())?;
     let mut obj = obj.clone();
     carry_unarchived_rounds(path, &mut obj);
     let spec = crate::gate::ledger::GateSpec::resolve(&root, spec);
-    crate::gate::ledger::record_review_act_at(path, &obj, Some(&spec))
+    // The append issues the receipt and takes it back if it does not land.
+    crate::gate::ledger::record_review_act_at(path, &obj, Some(&spec), receipt)
 }
 
 /// BUG-2662: `handshake` names the same gate-ledger record as `path` (same

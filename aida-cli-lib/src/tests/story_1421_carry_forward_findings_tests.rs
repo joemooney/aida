@@ -590,6 +590,137 @@ fn bug_2662_differently_labelled_refusal_during_delivery_refuses_the_approval() 
     }
 }
 
+/// A verdict event is a physical event, not its body: a refusal the history
+/// already held, appended again while the approval's findings were filed
+/// (under a sibling spec by a collector, onto the change by a binding
+/// writer, or onto the spec's unbound ledger), is a new event that refuses
+/// the approval. Its body was standing; the event was not.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_identical_body_joining_during_delivery_refuses_the_approval() {
+    use crate::gate::ledger::{store, ChangeKey, GateSpec};
+    use bug_2662_store::*;
+    for concurrent in [
+        "sibling-spec",
+        "change-key",
+        "unbound",
+        "bound-from-unbound",
+    ] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _guard =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        let own = Some("STORY-9835");
+        let spec = GateSpec::resolve(root, "STORY-9835");
+        let refusal = body("request-changes", "reviewer-a");
+        if concurrent == "bound-from-unbound" {
+            // The refusal stands only on the unbound ledger; an earlier
+            // approval stands on the change.
+            store::append_unbound(root, &spec, &refusal).unwrap();
+            seed(root, &body("approved", "reviewer-a"), own);
+        } else {
+            seed(root, &refusal, own);
+        }
+        let standing = standing(root, own);
+        match concurrent {
+            "sibling-spec" => seed(root, &refusal, Some("STORY-9836")),
+            "change-key" => seed(root, &refusal, None),
+            "unbound" => {
+                store::append_unbound(root, &spec, &refusal).unwrap();
+            }
+            _ => {
+                let mut copy = evt(root, &refusal, own);
+                copy.at = chrono::Utc::now().to_rfc3339();
+                store::append(root, ChangeKey::pr(CHANGE), vec![copy]).unwrap();
+            }
+        }
+        let before = ledger_bytes(root);
+        let error = approve(root, &body("approved", "reviewer-c"), own, &standing)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("another review was recorded"),
+            "{concurrent}: {error}"
+        );
+        assert_eq!(ledger_bytes(root), before, "{concurrent}");
+        if concurrent != "unbound" {
+            assert_eq!(newest(root), "request-changes", "{concurrent}");
+        }
+        // Observed afresh, the same history admits the approval.
+        let fresh = bug_2662_store::standing(root, own);
+        approve(root, &body("approved", "reviewer-c"), own, &fresh).unwrap();
+    }
+}
+
+/// An unbound append decides from one bounded, validated read of the spec's
+/// ledger: an oversized or damaged ledger refuses before anything is parsed
+/// without limit or written, for a review append and a plain one alike, and
+/// the next sequence number follows the validated events.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_unbound_append_reads_within_the_checked_budget() {
+    use crate::gate::ledger::{self, checked, store, GateSpec};
+    use bug_2662_store::*;
+    use std::io::Write as _;
+    for damage in ["oversized", "malformed-line", "torn-line"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _guard =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        let spec = GateSpec::resolve(root, "STORY-9837");
+        for by in ["reviewer-a", "reviewer-b"] {
+            store::append_unbound(root, &spec, &body("request-changes", by)).unwrap();
+        }
+        let seqs: Vec<u64> = store::read_unbound(root, &spec.label)
+            .iter()
+            .map(|e| e.seq)
+            .collect();
+        assert_eq!(seqs, [1, 2]);
+        let file = store::unbound_file(root, &spec.label);
+        let mut out = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&file)
+            .unwrap();
+        match damage {
+            // Blank lines carry no event: only the byte cap can refuse them.
+            "oversized" => out
+                .write_all(&vec![b'\n'; checked::MAX_LEDGER_BYTES as usize])
+                .unwrap(),
+            "malformed-line" => out.write_all(b"not an event\n").unwrap(),
+            _ => out.write_all(b"{\"v\":1,\"seq\":").unwrap(),
+        }
+        drop(out);
+        let before = std::fs::metadata(&file).unwrap().len();
+        let approval = body("approved", "reviewer-c");
+        for once in [true, false] {
+            let error = if once {
+                let rule = store::ReviewRule {
+                    once: true,
+                    ..Default::default()
+                };
+                let event = ledger::event::verdict_event_unbound(root, &spec, &approval);
+                store::append_review(root, None, event, &rule)
+            } else {
+                store::append_unbound(root, &spec, &approval)
+            }
+            .unwrap_err()
+            .to_string();
+            assert!(
+                error.contains("could not be read whole"),
+                "{damage} once={once}: {error}"
+            );
+            if damage == "oversized" {
+                assert!(error.contains("per-file cap"), "{error}");
+            }
+            assert_eq!(
+                std::fs::metadata(&file).unwrap().len(),
+                before,
+                "{damage} once={once}: nothing was appended"
+            );
+        }
+    }
+}
+
 /// A history that cannot be read whole refuses, at the snapshot and at the
 /// final read alike: a malformed line or an unreadable by-spec ledger is
 /// never read as a shorter history that admits the approval.

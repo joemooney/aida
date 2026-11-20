@@ -3371,53 +3371,30 @@ fn handle_review_record_context_with_policy_at(
             crate::gate::ledger::project::PHASE3_MODE.into(),
         );
     }
-    // trace:BUG-2662 | ai:claude — a human-at-TTY approval that repeats the
-    // act standing for this spec at its destination answers with that act's
-    // receipt, when the receipt still vouches for it. Otherwise (no standing
-    // act, another act, a missing or invalid receipt) a new receipt is
-    // written, and the record that names it is a new round. Nothing is
-    // allocated before this point, so no receipt is left unreferenced.
-    let standing_receipt = if needs_receipt {
-        crate::gate::review_verdict::standing_review_act(&path, &verdict_obj, spec)
-            .map_err(|e| anyhow::anyhow!("could not write the review verdict: {e}"))?
-            .and_then(|standing| {
-                let id = crate::gate::review_verdict::reusable_human_receipt(
-                    &standing,
-                    resolved_sha.as_deref().unwrap_or_default(),
-                    spec,
-                    &recorder.tokens,
-                    solo_human,
-                    !no_carry,
-                )?;
-                Some((standing, id))
-            })
-    } else {
-        None
-    };
+    // trace:BUG-2662 | ai:claude — a human-at-TTY approval names a receipt.
+    // Which one is settled by the write itself, under the ledger's locks and
+    // after any follow-up findings are filed: a repeat of the act standing
+    // for this spec answers with that act's receipt while it still vouches
+    // for it; any other approval gets a new receipt as its record is
+    // appended, and loses it if the append does not land. Nothing is
+    // allocated here, so a refused or failed recording leaves no receipt.
     // trace:BUG-1918 | ai:claude
-    let mut attestation = attest(standing_receipt.as_ref().map(|(_, id)| id.clone()))?;
+    let mut attestation = attest(None)?;
     verdict_obj.insert(
         crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
         attestation.clone(),
     );
-    let reuses_receipt = standing_receipt.as_ref().is_some_and(|(standing, _)| {
-        crate::gate::review_verdict::repeats_recorded_act(standing, &verdict_obj)
-    });
-    if needs_receipt && !reuses_receipt {
-        let receipt_id = crate::gate::review_authority::write_human_receipt(
-            resolved_sha.as_deref().unwrap_or_default(),
+    let receipt_sha = resolved_sha.clone().unwrap_or_default();
+    let receipt = needs_receipt.then(|| {
+        crate::gate::review_authority::HumanReceiptSettlement::new(
+            &attest,
+            &receipt_sha,
             spec,
             &recorder.tokens,
             solo_human,
             !no_carry,
         )
-        .context("could not write the human-review receipt")?;
-        attestation = attest(Some(receipt_id))?;
-        verdict_obj.insert(
-            crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
-            attestation.clone(),
-        );
-    }
+    });
     let recorded_sha = verdict_obj
         .get("reviewed_sha")
         .and_then(|v| v.as_str())
@@ -3427,9 +3404,24 @@ fn handle_review_record_context_with_policy_at(
     // locks and against the act standing for this spec at its destination,
     // whether this is a repeat. A repeat writes nothing and emits no event;
     // a mixed refusal's repeat still retries filing its deferred follow-ups.
-    let repeat = crate::gate::review_verdict::record_review_act(&path, &verdict_obj, spec)
-        .map_err(|e| anyhow::anyhow!("could not write the review verdict: {e}"))?
+    let repeat = crate::gate::review_verdict::record_review_act(
+        &path,
+        &verdict_obj,
+        spec,
+        receipt
+            .as_ref()
+            .map(|r| r as &dyn crate::gate::ledger::store::Receipt),
+    )
+    .map_err(|e| anyhow::anyhow!("could not write the review verdict: {e}"))?
         == crate::gate::ledger::Delivered::Unchanged;
+    // The record as it stands names the receipt the write settled on.
+    if let Some(settled) = receipt.as_ref().and_then(|r| r.settled(repeat)) {
+        attestation = settled;
+        verdict_obj.insert(
+            crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
+            attestation.clone(),
+        );
+    }
     let outcome = if repeat {
         crate::gate::review_verdict::RecordOutcome::Unchanged
     } else {
@@ -3705,7 +3697,7 @@ fn handle_review_record_context_with_policy_at(
         } else {
             // trace:BUG-2662 | ai:claude — a repeated refusal reconciles the
             // protection it finds missing and writes nothing when its hold
-            // already stands with a synced label.
+            // already stands and the forge still carries its labels.
             let placed = if repeat {
                 crate::gate::merge_hold_core::ensure_hold(&project_root, &hold)
             } else {
@@ -3724,14 +3716,13 @@ fn handle_review_record_context_with_policy_at(
                     resolved_sha.clone(),
                 );
             }
-            let label = if placed
-                || crate::gate::merge_hold_core::read_label_state(&project_root, n)
-                    != crate::gate::merge_hold_core::LabelState::Synced
-            {
+            // A hold that already stood is checked against the forge as it is
+            // now: a hold label removed there since is restored, and labels
+            // still in place cost no forge write and no ledger event.
+            let label = if placed {
                 merge_hold::sync_label(&project_root, n, true)
             } else {
-                // The hold and its label stand as this refusal left them.
-                Ok(())
+                merge_hold::reconcile_held_label(&project_root, n)
             };
             if let Err(err) = label {
                 eprintln!(

@@ -1457,6 +1457,133 @@ pub(crate) fn write_human_receipt_policy(
     Ok(id)
 }
 
+/// Remove receipt `id` from `dir`: the record that would have named it was
+/// never appended. Absence is success.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn remove_human_receipt_in(dir: &Path, id: &str) -> std::io::Result<()> {
+    let Some(path) = receipt_path(dir, id) else {
+        return Ok(());
+    };
+    match std::fs::remove_file(path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
+/// BUG-2662: the human-review receipt of one human-at-TTY approval, settled
+/// with the approval's ledger append ([`crate::gate::ledger::store::Receipt`]).
+/// Nothing is persisted when it is built. Under the append's locks a repeat
+/// of the standing act answers with that act's receipt
+/// ([`crate::gate::review_verdict::reusable_human_receipt`]); any other
+/// approval gets a new receipt only once every refusal is behind it, and
+/// loses it again when its record does not land. `attest` builds the
+/// recorder attestation that names a receipt id.
+// trace:BUG-2662 | ai:claude
+pub(crate) struct HumanReceiptSettlement<'a, F> {
+    pub(crate) attest: F,
+    pub(crate) sha: &'a str,
+    pub(crate) subject: &'a str,
+    pub(crate) identity: &'a [String],
+    pub(crate) solo_human: bool,
+    pub(crate) carry_eligible: bool,
+    /// The receipt this act issued, and the attestation naming it.
+    issued: std::cell::RefCell<Option<(String, serde_json::Value)>>,
+    /// The attestation that last answered with a standing act's receipt.
+    reused: std::cell::RefCell<Option<serde_json::Value>>,
+}
+
+impl<'a, F: Fn(Option<String>) -> anyhow::Result<serde_json::Value>> HumanReceiptSettlement<'a, F> {
+    pub(crate) fn new(
+        attest: F,
+        sha: &'a str,
+        subject: &'a str,
+        identity: &'a [String],
+        solo_human: bool,
+        carry_eligible: bool,
+    ) -> Self {
+        Self {
+            attest,
+            sha,
+            subject,
+            identity,
+            solo_human,
+            carry_eligible,
+            issued: Default::default(),
+            reused: Default::default(),
+        }
+    }
+
+    /// The attestation the act was settled with: the one naming its own
+    /// receipt, else (`repeat`: nothing was appended) the standing act's.
+    pub(crate) fn settled(&self, repeat: bool) -> Option<serde_json::Value> {
+        match self.issued.borrow().as_ref() {
+            Some((_, attestation)) => Some(attestation.clone()),
+            None if repeat => self.reused.borrow().clone(),
+            None => None,
+        }
+    }
+}
+
+impl<F: Fn(Option<String>) -> anyhow::Result<serde_json::Value>> crate::gate::ledger::store::Receipt
+    for HumanReceiptSettlement<'_, F>
+{
+    fn reuse(&self, standing: &crate::gate::review_verdict::JsonObj) -> Option<serde_json::Value> {
+        let id = crate::gate::review_verdict::reusable_human_receipt(
+            standing,
+            self.sha,
+            self.subject,
+            self.identity,
+            self.solo_human,
+            self.carry_eligible,
+        )?;
+        let attestation = (self.attest)(Some(id)).ok()?;
+        *self.reused.borrow_mut() = Some(attestation.clone());
+        Some(attestation)
+    }
+
+    fn issue(&self) -> std::io::Result<serde_json::Value> {
+        // One act issues at most one receipt.
+        self.revoke();
+        let failed = |e: anyhow::Error| {
+            std::io::Error::other(format!("could not write the human-review receipt: {e:#}"))
+        };
+        let id = write_human_receipt(
+            self.sha,
+            self.subject,
+            self.identity,
+            self.solo_human,
+            self.carry_eligible,
+        )
+        .map_err(failed)?;
+        // Tracked before anything else can fail, so `revoke` finds it.
+        *self.issued.borrow_mut() = Some((id.clone(), serde_json::Value::Null));
+        let attestation = (self.attest)(Some(id.clone())).map_err(failed)?;
+        *self.issued.borrow_mut() = Some((id, attestation.clone()));
+        Ok(attestation)
+    }
+
+    fn revoke(&self) {
+        let Some((id, _)) = self.issued.borrow_mut().take() else {
+            return;
+        };
+        let removed = receipt_dir()
+            .ok_or_else(|| std::io::Error::other("cannot locate the AIDA home"))
+            .and_then(|dir| remove_human_receipt_in(&dir, &id));
+        if let Err(e) = removed {
+            eprintln!(
+                "warning: human-review receipt {id} names no recorded review and could not be removed: {e}"
+            );
+        }
+    }
+
+    fn issued(&self) -> Option<serde_json::Value> {
+        self.issued
+            .borrow()
+            .as_ref()
+            .map(|(_, attestation)| attestation.clone())
+    }
+}
+
 /// Receipt `id`, when it exists and vouches for exactly `sha`.
 pub(crate) fn human_receipt_for(id: &str, sha: &str) -> Option<HumanReviewReceipt> {
     receipt_dir().and_then(|dir| human_receipt_in(&dir, id, sha))

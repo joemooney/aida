@@ -1393,6 +1393,105 @@ mod standalone_review_verdict_parent_tests {
         assert_eq!(event_receipts(&f), four);
         assert_eq!(receipts(&f).len(), count);
     }
+    /// Run `f` as the operator at a terminal (the PR #4218 recorder).
+    // trace:BUG-2662 | ai:claude
+    fn as_operator<R>(f: impl FnOnce() -> R) -> R {
+        let source = ra::IdentitySource {
+            session_ids: vec!["operator-terminal-session".into()],
+            ..Default::default()
+        };
+        ra::with_identity_source(source, || {
+            crate::gate::solo_review::with_test_human_terminal("", f)
+        })
+    }
+    /// A human-at-TTY approval that is not recorded leaves no receipt: not
+    /// when its follow-up findings cannot be filed (the receipt is not yet
+    /// issued), and not when the ledger write fails after the receipt was
+    /// issued under the lock (it is removed again). The retry that lands
+    /// names the one receipt that exists.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_unrecorded_operator_approval_leaves_no_receipt() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let approve = |findings: &[String]| {
+            as_operator(|| f.record_as("STORY-77", "approved", "first pass", findings, None))
+        };
+        for findings in [vec![deferred(1)], vec![]] {
+            if !findings.is_empty() {
+                crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
+                let error = approve(&findings).unwrap_err().to_string();
+                assert!(
+                    error.contains("deferred findings were not filed"),
+                    "{error}"
+                );
+                assert!(receipts(&f).is_empty(), "a failed filing issues no receipt");
+            }
+            let before = verdict_events(&f);
+            let kept = receipts(&f);
+            crate::gate::ledger::store::FAIL_NEXT_REVIEW_WRITE.with(|c| c.set(true));
+            let error = approve(&findings).unwrap_err().to_string();
+            assert!(error.contains("injected review write failure"), "{error}");
+            assert_eq!(
+                verdict_events(&f),
+                before,
+                "the failed write appended nothing"
+            );
+            assert_eq!(receipts(&f), kept, "its receipt was removed again");
+        }
+        assert!(verdict_events(&f).is_empty());
+        approve(&[deferred(1)]).unwrap();
+        let named = event_receipts(&f);
+        assert_eq!(named.len(), 1);
+        assert_eq!(receipts(&f), named, "the one receipt is the one on record");
+        assert!(ra::human_receipt_for(&named[0], &f.head).is_some());
+        let recorded = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(
+            recorded.attestation.unwrap().receipt_id.as_deref(),
+            Some(named[0].as_str())
+        );
+    }
+    /// Two identical human-at-TTY approvals at once: the second lands after
+    /// the first made its reads and before it takes the ledger locks. The
+    /// receipt is chosen under those locks, so the later one answers with the
+    /// receipt already on record: one event, one receipt.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_simultaneous_operator_approvals_share_one_receipt() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let (root, head) = (f.root.clone(), f.head.clone());
+        let _race = race_next_append(move || {
+            crate::handle_review_record_context_at(
+                root.clone(),
+                "STORY-77",
+                "approved",
+                Some(&head),
+                Some("feature"),
+                Some("first pass"),
+                &[],
+                &[],
+                Some(59),
+                false,
+                |_, _| Ok(head.clone()),
+                None,
+            )
+            .unwrap();
+        });
+        as_operator(|| f.record_as("STORY-77", "approved", "first pass", &[], None)).unwrap();
+        let named = event_receipts(&f);
+        assert_eq!(named.len(), 1, "one verdict event for both");
+        assert_eq!(receipts(&f), named, "and one receipt, the one it names");
+        assert_eq!(announced(&f), 1, "the later repeat announces nothing");
+    }
     /// A completed request-changes draft whose p2 finding the `["p1"]` list
     /// deferred was recorded as an approval. Replaying that same launch after
     /// the list became invalid, unreadable or newly blocking re-decides the
