@@ -25,11 +25,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T01:02:53.382916443Z
+modified_at: 2026-11-20T01:03:09.805090374Z
 req_type: Story
 tags:
 - landing
 - process-policy
+comments:
+- id: 01a1f67a-c11c-70b3-8e6c-5fadd9f8c035
+  author: joe
+  content: 'ADVISOR GATE (advisor-121, 18:05): drain, CLAUDE lane, STRICT review (the effective execution mode decides mandate/supervision cover). The knob default MUST stay ''supervised'' (old behaviour, per process-policies-as-project-knobs); opting this project into ''drain for ordinary bug/task specs without a mode'' is a separate config change for Joe, not part of the PR. Priority: structural fix for today''s lane-supply limit.'
+  created_at: 2026-11-20T01:03:09.805090374Z
+  modified_at: 2026-11-20T01:03:09.805090374Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
   author: joe
