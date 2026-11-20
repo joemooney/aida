@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T22:46:44.229403810Z
+modified_at: 2026-11-20T22:46:58.877265389Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -582,6 +582,31 @@ comments:
   created_at: 2026-11-20T22:46:38.053471524Z
   modified_at: 2026-11-20T22:46:38.053471524Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb24-6d50-72c2-a76e-3f25ccd5c458
+  author: joe
+  content: |-
+    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 15:46):
+    # Rework brief: BUG-2629 FRESH / PR #4380, round 3 of 4, STRICT
+
+    Advisor: claude-advisor-121, 2026-11-20 15:55 MST. Head reviewed: 8777c40. Lane: CLAUDE+Fable. COMMIT your work.
+    ONE PRINCIPLE fixes most of these: in recovery, every read, parse, iteration or verification ERROR is UNKNOWN, and UNKNOWN REFUSES rework
+    with a named refusal. Nothing that failed to read is ever "absent", and no synthesized verdict is ever "signed".
+     1 [P1 authority] :331 checked_legacy_record errors (refused or malformed legacy file) refuse; never treat them as absent.
+     2 [P1] :491 a failed lost-binding scan when the inventory may be incomplete refuses (named), not "ownership failure, visit nothing".
+     3 [P1] :401/:422 directory-iteration and ledger-read errors in the uncertified fallback refuse; only a store PROVEN absent is empty.
+     4 [P1 ac] :115 the budget covers the actual bytes read (bounded reader, no stat-then-read_to_string), and Recovered::take charges retained bodies
+       and parsed findings against one aggregate budget.
+     5 [P1] :324 a publication verification error is a distinct error (refuse), never a synthesized request-changes treated as signed.
+     6 [P1] :224 deduplicate unbound against bound copies only AFTER ownership verification of the bound copy.
+     7 [P2 CI red] move the cross-layer assertion out of gate/tests/story_2492_publication_tests.rs to queue-side tests (gate downward-dependency
+       ratchet).
+     8 [test-gap] a contention regression: during `queue work` pickup discovery, another process can acquire the store write lock (the 15:37 live
+       repro: launcher pid 54386 held it for 30 min at 98% CPU). Rework preparation must not hold the writer lock across discovery.
+    cargo fmt; check-store-writers.py; ratchets (gate downward!); targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-20T22:46:58.877265389Z
+  modified_at: 2026-11-20T22:46:58.877265389Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
