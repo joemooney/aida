@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T20:25:56.334739126Z
+modified_at: 2026-11-20T20:56:22.524872930Z
 req_type: Bug
 tags:
 - dell1
@@ -885,6 +885,28 @@ comments:
   modified_at: 2026-11-20T20:25:56.334739126Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fabe-fafc-7af0-8223-e1e33e7d4206
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6b9dc7f819 (PR #4364, round 3; origin/main merged)
+
+    Round-3 findings addressed:
+    - P3 reader.rs `lease_processes_proven_gone`: a lease in a pid namespace this host cannot observe is now unverifiable regardless of age. Regression `bug_2684_unverifiable_review_holder_is_never_proven_dead` first asserts `lease_owner_gone == Some(true)` (the age backstop alone), then that the lease is kept.
+    - P3 session_start.rs: the persistent no-human acknowledgement no longer suppresses the conflict prompt; only this invocation's `--no-human`, `AIDA_HEADLESS`, or a non-tty stdin do.
+    - Test gaps: unreadable ownership record and `OwnerVerdict::Alive` on a record naming this session both refuse (same test). The `--no-human` conflict is driven through session start's conflict loop at a forced attended terminal (third case of `bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease`). Mutation check: ignoring the flag makes that test fail at the prompt.
+    - Style: `NO_HUMAN_SETUP` AtomicBool removed; `no_human` is an argument of `session_start_with_receipt`.
+
+    Evidence: `cargo test -p aida-cli-lib --lib -- bug2450 bug_2684 bug_home_024 finished_lease story_2315`: 62 passed, 1 failed. The failure, `prc_safe_end_retires_dead_pushed_seat_without_force`, fails identically with this round's changes stashed (mail writer-admission scan inside the lane job sandbox). Ratchets run individually and green: ownership liveness, git maintenance, executable fixture, ExecContext, structural guards, gate dependency, portability, glyph lint, trace headers, removed flags, store writers.
+
+    Residual risks:
+    - `make check-ci-fast` was not run end to end: it exceeds this lane's 60 s tool cap. CI at the PR head is the full evidence.
+    - The queue-work to session-start hand-off of `--no-human` is covered by a source-level assertion, not an end-to-end `queue work --no-human` run; admission refuses live conflicting leases before setup, so only the session-start level reaches the prompt decision in a test.
+    - The four `bug_2169_bwrap_*` tests fail in the lane job sandbox (nested bwrap); not run on the pre-change tree.
+  created_at: 2026-11-20T20:56:22.524872930Z
+  modified_at: 2026-11-20T20:56:22.524872930Z
+  session_id: 01a1fa7dad31
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
