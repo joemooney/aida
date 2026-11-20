@@ -22,7 +22,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-20T01:01:35.439925714Z
+modified_at: 2026-11-20T01:02:05.525295346Z
 req_type: Bug
 tags:
 - landing
@@ -35,6 +35,13 @@ comments:
   content: 'advisor-121 2026-11-19 14:30: live instance. Main 7d36925 went green at ~14:10 and contains 9bc8c6d (BUG-2696, the completion-lifecycle fix), but autopromote never promoted it: train #4332 landed 3f6aa9d and fd4018a on top before the next tick, so the tip was never green. The live binary stays 4f2d07f, and three full-trailer landings (BUG-2696, BUG-2653, BUG-2621) needed manual completion calls as a direct cost. Suggested fix: promote the NEWEST GREEN commit on main''s first-parent line when it is newer than live, instead of requiring the tip to be green.'
   created_at: 2026-11-19T21:26:52.683853144Z
   modified_at: 2026-11-19T21:26:52.683853144Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f679-ca0a-7923-becc-e38ca56fd5bb
+  author: joe
+  content: 'ADVISOR GATE (advisor-121, 18:05): APPROVED, drain, CLAUDE lane (promotion path), STRICT review. Promote the newest green first-parent commit (bounded to 20) newer than live; the guard becomes ''HEAD = chosen green commit, an ancestor of origin/main''; AC5 applies the same rule to scripts/aida-autobuild.sh.'
+  created_at: 2026-11-20T01:02:05.525295346Z
+  modified_at: 2026-11-20T01:02:05.525295346Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
