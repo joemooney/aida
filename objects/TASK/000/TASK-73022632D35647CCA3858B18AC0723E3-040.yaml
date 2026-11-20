@@ -1,0 +1,32 @@
+id: 01a1fab9-8f26-7ec3-95b4-aaf4911d05aa
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-040
+title: 'Throughput guard: name the cause on a STUCK-REVIEW line (watcher admission busy, or a stale reviewer tree or lease)'
+description: |
+  The advisor's 11:58 note on TASK-3827 kept one enhancement from the 11:55 note in that spec: a STUCK-REVIEW line should name why no reviewer was launched ("watcher admission is busy" in the review-watch log, or a stale aida-pr-N reviewer tree or lease). The 12:55 brief did not list it and the TASK-3827 change does not do it.
+
+  Why it was left out: the watcher prints "watcher admission is busy" to its own stderr (aida-cli-lib/src/review_watch.rs:2902 and :3115). No record of it exists that the guard can read, so naming it means the watcher first has to write one, in the reviewer admission path. The stale reviewer lease half is readable today (pr_lease_takeover::reviewer_target on this clone's leases) and could be added to the STUCK-REVIEW summary in land_stalls.rs classify_pr.
+
+  Raised by the implementer while working TASK-3827.
+  Branch: task-b6b1278890774ef993d2ebc327862470-1136  ·  Commit: dc2c2ee634  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T20:50:27.238506959Z
+modified_at: 2026-11-20T20:50:27.238506959Z
+req_type: Task
+tags:
+- from-implementer:TASK-3827
+- kind:deviation
+- landing
+- severity:minor
+- throughput
+filed_at:
+  code_sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30
+  branch: task-b6b1278890774ef993d2ebc327862470-1136
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d
+  vendor: claude
+  session: 01a1fa8a98f8
+  harness_version: 2.1.319 (Claude Code)
