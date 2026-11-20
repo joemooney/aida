@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T18:34:15.641034171Z
+modified_at: 2026-11-20T18:47:47.301257326Z
 req_type: Story
 tags:
 - area:ci
@@ -340,6 +340,11 @@ comments:
   modified_at: 2026-11-20T18:34:15.641034171Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa49-4165-7113-ae87-442d90ab3fdf
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-618` at head `b39d82ae3c102d38531c4a760f550ff80b24e9ba`.'
+  created_at: 2026-11-20T18:47:47.301253994Z
+  modified_at: 2026-11-20T18:47:47.301253994Z
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
