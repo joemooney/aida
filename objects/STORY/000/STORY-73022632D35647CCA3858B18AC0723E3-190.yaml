@@ -1,0 +1,31 @@
+id: 01a1faa7-0e8c-7681-8ec5-774d43c05540
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-190
+title: 'Review PR-4380: [AI:claude] fix(queue): bound rework review discovery and keep withheld waits refused (BUG-2629)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1fa73`) for branch `bug-2629-fresh`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4380>
+  - Branch: `bug-2629-fresh` → `main`
+
+  ## Covers
+
+  - BUG-2629
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4380` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T20:30:14.668361198Z
+modified_at: 2026-11-20T20:30:14.668361198Z
+req_type: Story
+filed_at:
+  code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d
