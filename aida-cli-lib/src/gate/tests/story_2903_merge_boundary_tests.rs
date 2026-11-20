@@ -162,7 +162,7 @@ fn only_the_landing_boundary_calls_merge_change() {
 fn a_bypass_in_any_merge_caller_is_caught() {
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     for file in [
-        "pr_cmd.rs",
+        "pr_cmd/mod.rs",
         "phase_driver_trait.rs",
         "burndown_run.rs",
         "upgrade_release.rs",
