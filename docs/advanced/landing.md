@@ -3,10 +3,13 @@
 <!-- trace:STORY-2809 | ai:claude -->
 <!-- trace:STORY-b6b1278890774ef993d2ebc327862470-732.Docs | ai:claude -->
 
-A pull request reaches the default branch through a merge train
-(`aida pr train`), which tests the combined result before it merges. This page
-describes the CI a pull request must pass before a train admits it. The train
-itself is described in the
+How a pull request reaches the default branch depends on the landing mode.
+In `ci-gated` mode (the default) it lands through a merge train
+(`aida pr train`), which tests the combined result before it merges. In
+`review-gated` mode it merges on an independent approval at its exact head,
+and CI runs after the merge. This page describes both modes, the CI a pull
+request must pass before a train admits it in `ci-gated` mode, and what
+happens when main goes red. The train itself is described in the
 [git lifecycle reference](../cli/04-git-lifecycle.md).
 
 ## Landing modes
@@ -15,7 +18,7 @@ itself is described in the
 
 `[landing] mode` in `.aida/config.toml` chooses what a merge into the default branch waits for: `ci-gated` (the default) or `review-gated`. AIDA reads it from the default branch only, so a pull request cannot relax it with its own copy. A value it does not recognise falls back to `ci-gated`, with a warning.
 
-In `ci-gated` mode, which is the rest of this page, `aida pr ship` waits for CI on the head, and the train admits only a green full-tier head.
+In `ci-gated` mode, `aida pr ship` waits for CI on the head, and the train admits only a green full-tier head. Choose it (the default) when a broken main is expensive: many changes land at once, a revert is slow, or nobody watches main after a merge. The CI sections below describe this mode.
 
 In `review-gated` mode, a change merges as soon as it has an independent approval at its exact head and no hold. Nothing waits for CI; CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the advisor seat (or the operator at a terminal) performs the merge, and only for a change it authored none of.
 

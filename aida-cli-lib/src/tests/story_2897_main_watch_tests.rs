@@ -1291,3 +1291,48 @@ fn two_failing_jobs_in_one_run_both_get_their_evidence() {
     let body = fake.mail(&format!("main-red-{}", sha(2)));
     assert_eq!(body.matches("test foo ... FAILED").count(), 2, "{body}");
 }
+
+/// Final review F2: the status line never says green while an episode is
+/// open, however quiet the pass was.
+#[test]
+fn a_steady_confirmed_red_never_reports_green() {
+    let (dir, mut fake) = confirmed();
+    fake.at(40);
+    let notes = run(dir.path(), &mut fake);
+    assert!(notes.iter().all(|n| !n.contains("green")), "{notes:?}");
+    let line = status_line(dir.path()).unwrap();
+    assert!(!line.contains("green"), "{line}");
+    assert!(
+        line.contains("red") && line.contains("confirmed; fix BUG-9000"),
+        "{line}"
+    );
+    let (dir, mut fake) = red_on_green();
+    run(dir.path(), &mut fake);
+    assert!(status_line(dir.path())
+        .unwrap()
+        .contains("waiting for its re-run"));
+    let dir = tempfile::tempdir().unwrap();
+    let mut fake = Fake::default();
+    fake.push(1, "a (#1)", green("1"));
+    run(dir.path(), &mut fake);
+    assert!(status_line(dir.path()).unwrap().contains("main is green"));
+}
+
+/// Final review F3: durations display without loss.
+#[test]
+fn durations_display_without_loss() {
+    use crate::landing_policy::duration_text;
+    let d = std::time::Duration::from_secs;
+    assert_eq!(duration_text(d(90)), "1m30s");
+    assert_eq!(duration_text(d(7200)), "2h");
+    assert_eq!(duration_text(d(5400)), "1h30m");
+    assert_eq!(duration_text(d(45)), "45s");
+    assert_eq!(duration_text(d(3661)), "1h1m1s");
+    for secs in [60, 90, 5400, 3661, 7 * 24 * 3600] {
+        assert_eq!(
+            crate::presence::parse_duration_secs(&duration_text(d(secs))),
+            Some(secs),
+            "round-trips"
+        );
+    }
+}

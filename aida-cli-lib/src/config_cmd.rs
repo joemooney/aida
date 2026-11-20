@@ -3384,7 +3384,7 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
                 // trace:STORY-2897 | ai:claude
                 row(
                     "red_main.fix_window",
-                    format!("{}m", policy.red_main_fix_window.as_secs() / 60),
+                    crate::landing_policy::duration_text(policy.red_main_fix_window),
                 ),
             ],
         }

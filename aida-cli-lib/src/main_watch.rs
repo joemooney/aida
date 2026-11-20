@@ -1159,6 +1159,27 @@ fn close(
     Ok(())
 }
 
+/// The watch's state in one line, read from its state file: red (and
+/// whether confirmed) while an episode is open, green only when none is.
+pub(crate) fn status_line(root: &Path) -> Result<String> {
+    let state = read_state(root)?;
+    Ok(match (&state.episode, &state.last_green) {
+        (Some(episode), _) => format!(
+            "red-main watch: main is red at {} since {} ({}); {}",
+            short(&episode.red_sha),
+            episode.opened_at.format("%Y-%m-%d %H:%M UTC"),
+            match (&episode.confirmed_at, &episode.fix_spec) {
+                (Some(_), Some(id)) => format!("confirmed; fix {id}"),
+                (Some(_), None) => "confirmed; fix spec not filed yet".to_string(),
+                (None, _) => "waiting for its re-run or 30 minutes".to_string(),
+            },
+            names(episode)
+        ),
+        (None, Some(green)) => format!("red-main watch: main is green at {}", short(green)),
+        (None, None) => "red-main watch: main's CI is not known yet".to_string(),
+    })
+}
+
 /// `aida dev build` saw the build of `sha` fail its smoke test: when `sha`
 /// belongs to the open episode, record it as a revert trigger. Never waits
 /// on a running pass for long: a busy watch is reported, not awaited.

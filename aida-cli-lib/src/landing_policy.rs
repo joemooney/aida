@@ -324,6 +324,25 @@ fn fix_window(value: &toml::Value) -> Result<std::time::Duration, String> {
     Ok(std::time::Duration::from_secs(secs))
 }
 
+/// PURE: a duration as the settings write it, without losing any part:
+/// `2h`, `1h30m`, `1m30s`, `45s`.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn duration_text(duration: std::time::Duration) -> String {
+    let secs = duration.as_secs();
+    let (h, m, s) = (secs / 3600, secs % 3600 / 60, secs % 60);
+    let mut out = String::new();
+    if h > 0 {
+        out.push_str(&format!("{h}h"));
+    }
+    if m > 0 {
+        out.push_str(&format!("{m}m"));
+    }
+    if s > 0 || out.is_empty() {
+        out.push_str(&format!("{s}s"));
+    }
+    out
+}
+
 /// A required-check list: non-empty strings, no duplicates, and always
 /// containing `merge-hold-gate` (advisor condition C1).
 fn check_list(value: &toml::Value) -> Result<Vec<String>, String> {

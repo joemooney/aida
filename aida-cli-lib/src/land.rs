@@ -1573,12 +1573,11 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
         land_args::LandCommand::Watch => {
             let root = crate::find_project_root()?;
             let notes = crate::main_watch::live_pass(&root)?;
-            if notes.is_empty() {
-                println!("red-main watch: main is green");
-            }
             for note in notes {
                 println!("{note}");
             }
+            // The state after the pass, never inferred from an empty pass.
+            println!("{}", crate::main_watch::status_line(&root)?);
             Ok(())
         }
     }
