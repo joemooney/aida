@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T21:42:23.178585Z
-modified_at: 2026-11-20T00:13:51.814346186Z
+modified_at: 2026-11-20T00:14:01.972794698Z
 req_type: Task
 tags:
 - fix-forward
@@ -294,6 +294,26 @@ comments:
   created_at: 2026-11-20T00:13:51.670684579Z
   modified_at: 2026-11-20T00:13:51.670684579Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f64d-c48f-7220-8a40-50f5c009e773
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 17:14):
+    # Rework brief: TASK-3821 / PR #4340, round 2 of 4 (test-only)
+
+    Advisor: claude-advisor-121, 2026-11-19 17:16 MST. Head reviewed: 21f4982. Lane: CLAUDE. Finding 2 (ci:full) the advisor resolved by adding the label.
+    Finding 1 [unmet AC exact-byte accounting]: worktree_lifecycle_gc.rs ~2433/2487: the successful reclaim_lane_overlays return values
+    are discarded; the row.bytes asserts (~2472/2484) check orphan_targets SCAN ESTIMATES, not bytes CREDITED by reclamation.
+    Fix: assert the reclaim result's credited bytes restricted to THIS fixture's removed paths (filter the returned per-path
+    records, or compute the expected bytes from the fixture's own files), so zeroing the accumulator fails the test. Restore the
+    idempotence check: a second reclaim of the same fixture credits 0 bytes for those paths. Keep the fixture-only scoping (no host-wide
+    totals). No production changes. Loop the test 20/20, cargo fmt, make check-ci-fast. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T00:14:01.972794698Z
+  modified_at: 2026-11-20T00:14:01.972794698Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f5c3-790d-7e72-aad3-67032fd7c265
