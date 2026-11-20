@@ -547,13 +547,16 @@ pub(super) fn sweep_probe_refs(root: &Path) -> usize {
             .is_none()
             .then(|| loose_ref_mtime(root, name))
             .flatten();
-        // Fetch-worker artifacts are not work ownership. Legacy PID-only
-        // ref names still need the worker's process-death check to be swept.
-        // This restored artifact-only compatibility site is inventoried in
-        // proc_identity_legacy_baseline.json as well as the ownership ratchet.
-        // trace:STORY-2325 | ai:codex
+        // PID-only fetch artifacts supply no complete identity. Retain an
+        // unknown observer verdict, including inaccessible or foreign procfs;
+        // only shared positive death evidence permits legacy ref cleanup.
+        // Timestamped refs retain their separate age policy below.
+        // trace:TASK-3367 | ai:codex
         if probe_ref_in_use(&probe, now, mtime, |pid| {
-            crate::process_probe::pid_is_alive(pid)
+            !matches!(
+                aida_core::proc_identity::observe_legacy_registry(pid, None, None),
+                aida_core::proc_identity::Verdict::Dead(_)
+            )
         }) {
             continue;
         }

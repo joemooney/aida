@@ -1,7 +1,6 @@
 """Inventory legacy lease readers in aida-cli-lib/src; new sites belong in ownership/.
 
-This ratchet does not scan aida-core or aida-cli. Fetch-worker artifact PID
-checks do not judge work ownership and have one explicit exception below.
+This ratchet does not scan aida-core or aida-cli.
 """
 # trace:STORY-2325 | ai:codex
 import importlib.util
@@ -61,11 +60,6 @@ def inventory():
         if "/ownership/" in rel or "/tests/" in rel:
             continue
         for site, count in sites(path.read_text()).items():
-            # Fetch refs belong to watcher processes, not lease holders. Keep
-            # this one pre-existing artifact check without growing the lease
-            # baseline; a second probe at the site still trips the ratchet.
-            if rel == "aida-cli-lib/src/review_watch_forge.rs" and site == "sweep_probe_refs:pid_is_alive":
-                count -= 1
             if count:
                 result[f"{rel}:{site}"] = count
     return result

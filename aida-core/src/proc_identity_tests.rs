@@ -236,3 +236,24 @@ fn proc_identity_retained_child_can_be_recorded_after_exit() {
         "reaped child is not recordable"
     );
 }
+
+// PID-only cleanup must distinguish unproven liveness from proven death.
+// It must never capture a new identity for a persisted legacy PID.
+// trace:TASK-3367 | ai:codex
+#[test]
+fn task_3367_legacy_artifact_observation_retains_unknown() {
+    let me = ProcIdentity::capture(std::process::id()).unwrap();
+    assert_eq!(
+        observe_legacy_registry(me.pid, None, Some(me.pidns_inode)),
+        Verdict::ForeignUnknown(UnknownReason::MissingIdentity)
+    );
+    // An absent PID in another namespace is not local death evidence.
+    assert_eq!(
+        observe_legacy_registry(4194304, None, Some(me.pidns_inode ^ 1)),
+        Verdict::ForeignUnknown(UnknownReason::NamespaceMismatch)
+    );
+    assert_eq!(
+        observe_legacy_registry(4194304, None, Some(me.pidns_inode)),
+        Verdict::Dead(DeadReason::Absent)
+    );
+}

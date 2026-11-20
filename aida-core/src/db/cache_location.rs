@@ -270,7 +270,17 @@ fn sweep_stale_migration_temps(aida_dir: &Path) {
             .ok()
             .and_then(|m| m.elapsed().ok())
             .is_some_and(|age| age >= MIGRATION_TEMP_MIN_AGE);
-        if meta.file_type().is_file() && old_enough && !crate::liveness::pid_is_alive(pid) {
+        // PID-only artifact names cannot attest an owner. Sweep only on a
+        // shared observer's positive death evidence; a restricted/foreign
+        // procfs view retains the artifact. No legacy PID is upgraded.
+        // trace:TASK-3367 | ai:codex
+        if meta.file_type().is_file()
+            && old_enough
+            && matches!(
+                crate::proc_identity::observe_legacy_registry(pid, None, None),
+                crate::proc_identity::Verdict::Dead(_)
+            )
+        {
             let _ = std::fs::remove_file(entry.path());
         }
     }
