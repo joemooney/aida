@@ -6338,8 +6338,11 @@ fn no_setup(_: &Fixture, _: &Path) -> Vec<(&'static str, Option<String>)> {
 
 // Empty-rework routing: the rework PR is unchanged and still conflicting,
 // so the lane is routed back; its result line names the seat only when the
-// seat holds work.
+// seat holds work. A clean exit's leftover edits get the host post-exit
+// commit (BUG-2705), so the dirty seat's child holds the index lock: the host
+// commit is refused and the work stays retained in the seat.
 // trace:BUG-2607 | ai:claude
+// trace:BUG-2705 | ai:claude
 #[test]
 fn bug_2607_empty_rework_reports_only_a_dirty_retained_seat() {
     if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
@@ -6348,7 +6351,13 @@ fn bug_2607_empty_rework_reports_only_a_dirty_retained_seat() {
     for dirty in [true, false] {
         let lane = started_lane(
             dirty,
-            |_, _| String::new(),
+            |_, clone| {
+                if dirty {
+                    format!("cd '{}' && : > .git/index.lock", clone.display())
+                } else {
+                    String::new()
+                }
+            },
             |fx, clone| {
                 let config = fx.main.join(".aida/config.toml");
                 let mut body = std::fs::read_to_string(&config).unwrap();
