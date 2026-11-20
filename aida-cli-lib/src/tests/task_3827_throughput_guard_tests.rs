@@ -100,8 +100,9 @@ fn no_review_evidence() -> review_cause::Evidence {
         pass: Some(Err(
             "no review-watch log at .aida/review-watch/service.log".into()
         )),
-        tree_roots: Vec::new(),
-        stale_leases: Some(Ok(Vec::new())),
+        leases: Some(Ok(Vec::new())),
+        worktrees: Some(Ok(Vec::new())),
+        ..review_cause::Evidence::default()
     }
 }
 
@@ -160,7 +161,7 @@ fn a_change_whose_spec_a_reporting_lane_on_another_host_holds_is_not_stuck() {
             let lane = held.foreign_lane.clone().expect("the lane holds it");
             assert_eq!(
                 (lane.host.as_str(), lane.reported_mins_ago, lane.reporting),
-                ("dell1", 4, true)
+                ("dell1", Some(4), true)
             );
             assert_eq!(classified(&held), None, "{standing:?} held through {scope}");
         }
@@ -206,66 +207,446 @@ fn a_change_whose_spec_a_reporting_lane_on_another_host_holds_is_not_stuck() {
     assert_eq!(report.changes[0].class, Class::Moving);
 }
 
-// A record that was never released and went silent is neither a live lane
-// nor "no lane": the stall is reported and says the lane's state is unknown.
+fn report_of(prs: Vec<PrFact>) -> Report {
+    build_report(
+        &Facts {
+            prs,
+            ..Facts::default()
+        },
+        &Policy::default(),
+        &mut Memory::default(),
+        now(),
+    )
+}
+
+// A lane's launcher writes its claim once. After the claim's 30-minute
+// expiry a running lane has no heartbeat to show, so a 45-minute-old claim
+// stands for a lane that may be live: rework of its change is not routed,
+// the report says the lane's state is unknown, and the host's line counts
+// it as such instead of showing no lane.
 #[test]
-fn a_silent_lane_on_another_host_does_not_hide_the_stall_and_is_named_as_unknown() {
-    let silent = [lane_record("dell1", "TASK-7", 65)];
-    let held = observed(7, rework(), &silent);
+fn a_claim_past_its_expiry_with_no_heartbeat_is_unknown_and_never_routes_rework() {
+    let old_claim = [lane_record("dell1", "TASK-7", 45)];
+    let held = observed(7, rework(), &old_claim);
     let lane = held.foreign_lane.clone().expect("on record");
-    assert!(!lane.reporting);
-    let item = classified(&held).expect("still a stall");
-    assert_eq!(item.class, Class::StuckRework);
     assert_eq!(
-        item.summary,
-        "#7 has changes requested at 00000000 (round 2) and no lane or session known to be live on it for 65 min; a lane on host dell1 (lease-TASK-7) still holds it on record but last reported 65 min ago, past its expiry: whether it runs is unknown"
+        (lane.reporting, lane.reported_mins_ago, lane.invalid.clone()),
+        (false, Some(45), None)
+    );
+    assert_eq!(classified(&held), None, "rework is not routed");
+    let report = report_of(vec![held.clone()]);
+    assert!(report.stuck.is_empty());
+    assert_eq!(
+        report.unknown,
+        ["#7: changes are requested, for 65 min, and rework is not routed: a lane on host dell1 (lease-TASK-7) may be live: no heartbeat for 45 min, past its expiry, so whether it runs is unknown"]
+    );
+    // Inside the rework threshold there is nothing to say yet.
+    let mut recent = held.clone();
+    recent.since = Some(ago(10));
+    assert!(report_of(vec![recent]).unknown.is_empty());
+    // Nothing is routed for it, however long the change has waited.
+    let mut waited = held.clone();
+    waited.since = Some(ago(20 * 60));
+    assert_eq!(classified(&waited), None);
+    let plan = plan_routes(
+        &report_of(vec![waited]),
+        &Memory::default(),
+        &Policy::default(),
+        now(),
+    );
+    assert!(plan.seats.is_empty());
+    // With CI red on the requested changes too.
+    let red = Standing::ChangesRequested {
+        lane: None,
+        round: 3,
+        red: true,
+    };
+    assert_eq!(classified(&observed(7, red, &old_claim)), None);
+
+    // The host's line: no live lane is claimed, and none is denied.
+    let others = view_of(&old_claim).hosts(now(), span(SILENT_LANE_HORIZON_HOURS * 60));
+    let lines = host_lines_with(
+        "imac",
+        0,
+        &others,
+        &Policy::default(),
+        &|| "unknown".to_string(),
+        &|_| Err("not probed".to_string()),
+    );
+    let dell1 = lines.iter().find(|line| line.host == "dell1").unwrap();
+    assert_eq!(
+        dell1.lanes_text(),
+        "0 lane(s) by the host's own records, newest report 45 min ago, and 1 more that may be live: no heartbeat since their expiry (state unknown)"
     );
 
-    let item = classified(&observed(7, unreviewed(None), &silent)).expect("stuck");
+    // The other stalls are still reported, and say the same about the lane.
+    let item = classified(&observed(7, unreviewed(None), &old_claim)).expect("stuck");
     assert_eq!(item.class, Class::StuckReview);
+    let said = "; a lane on host dell1 (lease-TASK-7) may be live: no heartbeat for 45 min, past its expiry, so whether it runs is unknown";
     assert!(
         item.summary
             .contains("no verdict and no reviewer for 65 min")
-            && item.summary.ends_with("whether it runs is unknown"),
+            && item.summary.ends_with(said),
         "{}",
         item.summary
     );
-    let item = classified(&observed(7, unreviewed(Some("Test")), &silent)).expect("stuck");
+    let item = classified(&observed(7, unreviewed(Some("Test")), &old_claim)).expect("stuck");
     assert!(
         item.summary
-            .contains("no reviewer and no lane known to be live for 65 min"),
+            .contains("no reviewer and no lane known to be live for 65 min")
+            && item.summary.ends_with(said),
         "{}",
         item.summary
     );
     let item =
-        classified(&observed(7, Standing::Conflict { owner: None }, &silent)).expect("stuck");
-    assert!(
-        item.summary.contains("a lane on host dell1"),
-        "{}",
-        item.summary
+        classified(&observed(7, Standing::Conflict { owner: None }, &old_claim)).expect("stuck");
+    assert_eq!(item.class, Class::StuckConflict);
+    assert!(item.summary.ends_with(said), "{}", item.summary);
+    // An approved red head: with and without its CI detail read.
+    let approved_red = Standing::Approved {
+        approval: "approved".into(),
+        red: Some("Test (full)".into()),
+        hold: None,
+        lane: None,
+        stacked: false,
+    };
+    let mut red = observed(7, approved_red, &old_claim);
+    let item = classified(&red).expect("stuck");
+    assert_eq!(item.class, Class::StuckMergeRed);
+    assert_eq!(
+        item.summary,
+        format!("#7 is approved at 00000000 but its CI is red (Test (full)), for 65 min; the cause was not examined{said}")
     );
+    red.red = Some(RedFact {
+        checks: vec![FailedCheck {
+            name: "Test (full)".into(),
+            id: 1,
+            tests: Ok(vec!["queue::tests::drains".into()]),
+            base: BaseCheck::Pass,
+        }],
+        changed_paths: Ok(vec!["docs/readme.md".into()]),
+        rerun_routed: None,
+        unread: None,
+    });
+    let item = classified(&red).expect("stuck");
+    assert!(
+        item.key.ends_with(":rerun") && item.summary.contains("probable flake"),
+        "{item:?}"
+    );
+    assert!(item.summary.ends_with(said), "{}", item.summary);
 
-    // A reporting lane on one host outranks a silent record on another.
+    // A reporting lane on one host outranks an expired record on another.
     let both = observed(
         7,
         rework(),
         &[
-            lane_record("dell1", "TASK-7", 65),
+            lane_record("dell1", "TASK-7", 45),
             lane_record("dell2", "TASK-7", 2),
         ],
     );
     assert_eq!(classified(&both), None);
+    assert!(report_of(vec![both]).unknown.is_empty());
 
-    // A record silent for longer than a day is a leftover: the plain wording.
+    // A record silent for longer than a day is a leftover: it holds nothing,
+    // and rework is routed in the plain wording.
     let leftover = observed(7, rework(), &[lane_record("dell1", "TASK-7", 3 * 24 * 60)]);
     assert_eq!(leftover.foreign_lane, None);
     let item = classified(&leftover).expect("stuck");
+    assert_eq!(item.class, Class::StuckRework);
     assert!(
         item.summary
             .ends_with("no lane or session on it for 65 min"),
         "{}",
         item.summary
     );
+}
+
+// A record of another host that parses but is not a usable report (no
+// usable heartbeat, a heartbeat far ahead, an expiry no date holds) is not
+// dropped: the same reading names its file, counts it on its host, and makes
+// the lane on its spec unknown. A host never shows "no lane" while its
+// record decides a stall.
+#[test]
+fn an_invalid_record_is_unknown_for_the_stall_and_for_its_hosts_count_alike() {
+    let mut garbled = lane_record("dell1", "TASK-7", 4);
+    garbled.heartbeat_at = "not a time".into();
+    let mut future = lane_record("dell1", "TASK-8", 4);
+    future.heartbeat_at = (now() + Duration::hours(3)).to_rfc3339();
+    // The largest expiry a TOML record can carry.
+    let mut endless = lane_record("dell2", "TASK-9", 4);
+    endless.ttl_secs = i64::MAX as u64;
+    let mut hostless = lane_record("", "TASK-10", 4);
+    hostless.lease_id = None;
+    let store = tempfile::tempdir().unwrap();
+    let dir = crate::coordination::leases_dir(store.path());
+    std::fs::create_dir_all(&dir).unwrap();
+    for (name, record) in [
+        ("garbled.toml", &garbled),
+        ("future.toml", &future),
+        ("endless.toml", &endless),
+        ("hostless.toml", &hostless),
+    ] {
+        std::fs::write(dir.join(name), toml::to_string(record).unwrap()).unwrap();
+    }
+    let view = crate::lane_hosts::read_store(store.path(), "imac", now());
+    assert_eq!((view.lanes.len(), view.invalid.len()), (0, 4));
+    assert_eq!(view.unreadable.len(), 1);
+    for name in [
+        "garbled.toml",
+        "future.toml",
+        "endless.toml",
+        "hostless.toml",
+    ] {
+        assert!(view.unreadable[0].contains(name), "{}", view.unreadable[0]);
+    }
+
+    // Ownership and the count are answered by the one reading.
+    let mut prs: Vec<PrFact> = (7..=11).map(|n| fact(n, rework())).collect();
+    let changes: Vec<Pr> = (7..=11).map(change).collect();
+    attach_evidence(&mut prs, &changes, &view, &no_review_evidence(), now());
+    for fact in &prs[..4] {
+        let lane = fact.foreign_lane.as_ref().expect("held as unknown");
+        assert!(!lane.reporting && lane.invalid.is_some(), "{lane:?}");
+        assert_eq!(classified(fact), None, "#{} is not routed", fact.number);
+    }
+    assert_eq!(
+        classified(&prs[4]).map(|item| item.class),
+        Some(Class::StuckRework)
+    );
+    let report = report_of(prs);
+    assert_eq!(report.stuck.len(), 1);
+    assert_eq!(
+        report.unknown[0],
+        "#7: changes are requested, for 65 min, and rework is not routed: a lane on host dell1 (lease-TASK-7) may be live: its record is not a usable report (garbled.toml: its heartbeat is not a time), so whether it runs is unknown"
+    );
+    assert!(
+        report.unknown[3].contains("a lane on an unnamed host (no lease id) may be live")
+            && report.unknown[3].contains("hostless.toml: it names no host"),
+        "{}",
+        report.unknown[3]
+    );
+    let others = view.hosts(now(), span(SILENT_LANE_HORIZON_HOURS * 60));
+    assert_eq!(others.len(), 2, "{others:?}");
+    let lines = host_lines_with(
+        "imac",
+        0,
+        &others,
+        &Policy::default(),
+        &|| "unknown".to_string(),
+        &|_| Err("not probed".to_string()),
+    );
+    let line = |host: &str| lines.iter().find(|line| line.host == host).unwrap();
+    assert_eq!(
+        line("dell1").lanes_text(),
+        "0 lane(s), and 2 record(s) that are not a usable report (state unknown)"
+    );
+    assert_eq!(line("dell1").invalid_lanes, 2);
+    assert_eq!(line("dell2").invalid_lanes, 1);
+    // An unreviewed head says the same in its stall.
+    let mut unreviewed_prs = vec![fact(7, unreviewed(None))];
+    attach_evidence(
+        &mut unreviewed_prs,
+        &[change(7)],
+        &view,
+        &no_review_evidence(),
+        now(),
+    );
+    let item = classified(&unreviewed_prs[0]).expect("stuck");
+    assert!(
+        item.summary
+            .contains("its record is not a usable report (garbled.toml"),
+        "{}",
+        item.summary
+    );
+}
+
+// A claim covers a change by its whole spec ID or branch, never by a prefix:
+// a live lane on TASK-7 does not hide the unreviewed head of task-70-work,
+// and a lane on TASK-70 does not hold task-7-work.
+#[test]
+fn a_lane_on_a_spec_whose_id_is_a_prefix_of_anothers_holds_only_its_own_change() {
+    for (number, other) in [
+        (70u64, "TASK-7"),
+        (7, "TASK-70"),
+        (70, "task-7"),
+        (7, "task-70"),
+    ] {
+        let fact = observed(number, unreviewed(None), &[lane_record("dell1", other, 2)]);
+        assert_eq!(fact.foreign_lane, None, "{other} does not hold #{number}");
+        assert_eq!(
+            classified(&fact).map(|item| item.class),
+            Some(Class::StuckReview),
+            "#{number} with a live lane on {other}"
+        );
+    }
+    for (number, own) in [
+        (70u64, "TASK-70"),
+        (70, "task-70"),
+        (70, "task-70-work"),
+        (7, "TASK-7"),
+    ] {
+        let fact = observed(number, unreviewed(None), &[lane_record("dell1", own, 2)]);
+        assert!(fact.foreign_lane.is_some(), "{own} holds #{number}");
+        assert_eq!(classified(&fact), None);
+    }
+    // A change whose title names no spec is held through its branch alone.
+    let mut untitled = change(70);
+    untitled.title = "a change".into();
+    for (scope, holds) in [("TASK-7", false), ("TASK-70", true)] {
+        let mut prs = vec![fact(70, unreviewed(None))];
+        attach_evidence(
+            &mut prs,
+            std::slice::from_ref(&untitled),
+            &view_of(&[lane_record("dell1", scope, 2)]),
+            &no_review_evidence(),
+            now(),
+        );
+        assert_eq!(prs[0].foreign_lane.is_some(), holds, "{scope}");
+    }
+}
+
+/// Evidence in which the reconciler's lane (any host's claim) and the lane
+/// this host can vouch for differ.
+struct ForeignClaimOnly;
+
+impl crate::land::Evidence for ForeignClaimOnly {
+    fn conflict(&self, _: &Pr) -> std::result::Result<bool, String> {
+        Ok(false)
+    }
+    fn reviewing(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+        Ok(None)
+    }
+    fn ci(&self, _: &Pr) -> std::result::Result<Ci, String> {
+        Ok(Ci::Green)
+    }
+    fn head_red(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+        Ok(None)
+    }
+    fn approval(&self, _: &Pr) -> std::result::Result<Approval, String> {
+        Ok(Approval::Refused("changes requested".into()))
+    }
+    fn hold(&self, _: &Pr) -> std::result::Result<Option<Hold>, String> {
+        Ok(None)
+    }
+    fn rounds(&self, _: &Pr) -> std::result::Result<crate::land::Rounds, String> {
+        Ok(crate::land::Rounds {
+            at_content: true,
+            content_rounds: 1,
+            since: Some(ago(65).to_rfc3339()),
+        })
+    }
+    fn lane(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+        Ok(Some("implementer@dell1".into()))
+    }
+    fn lane_on_this_host(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+        Ok(None)
+    }
+    fn head_at(&self, _: &Pr) -> Option<String> {
+        Some(ago(65).to_rfc3339())
+    }
+    fn approved_at(&self, _: &Pr) -> Option<String> {
+        None
+    }
+    fn conflict_since(&self, _: &Pr) -> Option<String> {
+        None
+    }
+}
+
+// Another host's claim never enters a change's standing through the
+// reconciler's own partition of the claims (which keeps a claim whose
+// heartbeat it cannot read): what such a record means is decided by the one
+// reading of the lane records.
+#[test]
+fn another_hosts_claim_reaches_the_standing_only_through_the_lane_records() {
+    let pr = change(7);
+    let row = crate::land::derive(&pr, &ForeignClaimOnly);
+    let fact = pr_fact(&pr, &row, &ForeignClaimOnly);
+    assert!(
+        matches!(fact.standing, Standing::ChangesRequested { lane: None, .. }),
+        "{:?}",
+        fact.standing
+    );
+    // No record of it at all: it is stuck. A usable, fresh record: moving.
+    assert_eq!(
+        classified(&fact).map(|item| item.class),
+        Some(Class::StuckRework)
+    );
+    let mut prs = vec![fact];
+    attach_evidence(
+        &mut prs,
+        &[pr],
+        &view_of(&[lane_record("dell1", "TASK-7", 3)]),
+        &no_review_evidence(),
+        now(),
+    );
+    assert_eq!(classified(&prs[0]), None);
+}
+
+// The guard's reads of shared records never block and never follow a link:
+// a FIFO, a symlink or a directory where a claim, a session lease or the
+// guard's own state is expected is skipped or refused at once.
+#[cfg(unix)]
+#[test]
+fn the_guards_reads_of_shared_records_do_not_block_on_a_fifo() {
+    let fifo = |path: &std::path::Path| {
+        let c = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0);
+    };
+    let (done, finished) = std::sync::mpsc::channel();
+    let worker = std::thread::spawn(move || {
+        let project = tempfile::tempdir().unwrap();
+        let root = project.path();
+        // The shared claims, as the reconciler's pass lists them.
+        let store = root.join(".aida-store");
+        let claims = crate::coordination::leases_dir(&store);
+        std::fs::create_dir_all(&claims).unwrap();
+        std::fs::write(
+            claims.join("good.toml"),
+            toml::to_string(&lane_record("dell1", "TASK-7", 4)).unwrap(),
+        )
+        .unwrap();
+        fifo(&claims.join("pipe.toml"));
+        std::os::unix::fs::symlink(claims.join("good.toml"), claims.join("link.toml")).unwrap();
+        std::fs::create_dir(claims.join("dir.toml")).unwrap();
+        let listed = crate::coordination::list_claims(&store);
+        assert_eq!(listed.len(), 1, "{listed:?}");
+        assert_eq!(listed[0].scope, "TASK-7");
+        // The same directory through the lane records: each is named.
+        let view = crate::lane_hosts::read_store(&store, "imac", now());
+        assert_eq!(view.lanes.len(), 1);
+        for name in ["pipe.toml", "link.toml", "dir.toml"] {
+            assert!(view.unreadable[0].contains(name), "{:?}", view.unreadable);
+        }
+        // This clone's session leases: a FIFO is an unreadable lease, and
+        // the strict listing says so instead of waiting on it.
+        let sessions = crate::leases::leases_dir(root);
+        std::fs::create_dir_all(&sessions).unwrap();
+        let count = |root: &std::path::Path| {
+            crate::leases::list_leases_strict_all(root).map(|leases| leases.len())
+        };
+        assert_eq!(count(root), Ok(0));
+        fifo(&sessions.join("0f0f0f0f-pipe.toml"));
+        assert!(count(root).is_err(), "{:?}", count(root));
+        let evidence = review_cause::Evidence::read(root, false);
+        assert!(
+            matches!(&evidence.leases, Some(Err(_))),
+            "{:?}",
+            evidence.leases
+        );
+        assert!(evidence.cause(7, now()).starts_with("unknown ("));
+        // The guard's own state.
+        let state = memory_path(root);
+        std::fs::create_dir_all(state.parent().unwrap()).unwrap();
+        fifo(&state);
+        assert_eq!(load_memory(root), Memory::default());
+        done.send(()).unwrap();
+    });
+    let outcome = finished.recv_timeout(std::time::Duration::from_secs(30));
+    assert!(
+        outcome.is_ok(),
+        "a read blocked or a check failed: {outcome:?}"
+    );
+    worker.join().unwrap();
 }
 
 // The live evidence of 2026-11-20: "2 lane(s)" was shown while seven lanes
@@ -312,7 +693,7 @@ fn another_hosts_lanes_are_counted_from_its_own_records_with_their_age() {
     );
     assert_eq!(
         dell1.lanes_text(),
-        "7 lane(s) by the host's own records, newest report 2 min ago, and 1 more on record with no report since their expiry (state unknown)"
+        "7 lane(s) by the host's own records, newest report 2 min ago, and 1 more that may be live: no heartbeat since their expiry (state unknown)"
     );
     assert_eq!(dell1.memory, "3.0 GiB available of 16.0 GiB");
     // This host's lanes are counted here, not read from a record.
@@ -321,7 +702,7 @@ fn another_hosts_lanes_are_counted_from_its_own_records_with_their_age() {
     // A host with only a silent record: no live lane is claimed for it.
     assert_eq!(
         line("dell3").lanes_text(),
-        "0 lane(s) by the host's own records, newest report 200 min ago, and 1 more on record with no report since their expiry (state unknown)"
+        "0 lane(s) by the host's own records, newest report 200 min ago, and 1 more that may be live: no heartbeat since their expiry (state unknown)"
     );
     assert_eq!(line("dell3").memory, NO_REMOTE_MEMORY);
     // A named host with nothing on record is listed and measured.
@@ -369,6 +750,13 @@ fn another_hosts_lanes_are_counted_from_its_own_records_with_their_age() {
 fn a_head_nobody_reviews_names_the_observed_cause_or_says_it_is_unknown() {
     let trees = tempfile::tempdir().unwrap();
     std::fs::create_dir_all(trees.path().join("aida-pr-8")).unwrap();
+    let lease = |scope: &str, id: &str, liveness| review_cause::LeaseSeen {
+        scope: scope.into(),
+        id: id.into(),
+        branch: String::new(),
+        worktree: std::path::PathBuf::new(),
+        liveness,
+    };
     let pass = review_cause::Pass {
         at: ago(1),
         lines: vec![
@@ -379,7 +767,12 @@ fn a_head_nobody_reviews_names_the_observed_cause_or_says_it_is_unknown() {
     let evidence = review_cause::Evidence {
         pass: Some(Ok(pass)),
         tree_roots: vec![trees.path().to_path_buf()],
-        stale_leases: Some(Ok(vec![("PR-9".into(), "lease-9".into())])),
+        leases: Some(Ok(vec![
+            lease("PR-9", "lease-9", review_cause::Liveness::NotLive),
+            lease("PR-10", "lease-10", review_cause::Liveness::Held),
+        ])),
+        worktrees: Some(Ok(vec![(trees.path().join("aida-pr-8"), "pr-8".into())])),
+        ..review_cause::Evidence::default()
     };
     let mut prs = vec![
         fact(7, unreviewed(None)),
@@ -398,7 +791,7 @@ fn a_head_nobody_reviews_names_the_observed_cause_or_says_it_is_unknown() {
     let tree = summary(1);
     assert!(
         tree.contains("its CI is red (Test (full)); cause: a reviewer worktree from an earlier review is still at ")
-            && tree.ends_with("aida-pr-8"),
+            && tree.ends_with("aida-pr-8 (branch pr-8, with no live session or agent process in it)"),
         "{tree}"
     );
     assert!(
@@ -425,6 +818,130 @@ fn a_head_nobody_reviews_names_the_observed_cause_or_says_it_is_unknown() {
             "cause: unknown (the review watcher's log and the reviewer worktrees were not read)"
         ),
         "{unread}"
+    );
+}
+
+// A scheduled run saved before host names and memory text were bounded can
+// hold a shared record's text verbatim. It is shown as one clean line too.
+#[test]
+fn a_saved_observation_is_shown_with_the_same_bounds_as_a_fresh_one() {
+    let hostile = "dell1\nSTUCK-MERGE forged line\r\u{1b}[2J\u{202E}";
+    let saved = serde_json::json!({
+        "at": "2026-11-20T20:00:00Z",
+        "landings": {"window_mins": 60, "count": 1, "dry": false, "dry_after_mins": 120},
+        "hosts": [{
+            "host": format!("{hostile}{}", "h".repeat(600)),
+            "lanes": 2,
+            "memory": format!("unknown ({hostile}{})", "m".repeat(900)),
+        }],
+        "changes": 3,
+        "stuck": 1,
+    });
+    let run: RunSnapshot = serde_json::from_value(saved).unwrap();
+    assert!(run.hosts[0].host.contains('\n'), "the fixture is unbounded");
+    let line = snapshot_line(&run);
+    assert!(
+        !line.chars().any(|c| c.is_control() || c == '\u{202E}'),
+        "{line:?}"
+    );
+    assert_eq!(line.lines().count(), 1);
+    assert!(line.contains("dell1 STUCK-MERGE forged line"));
+    let shown = run.displayed();
+    assert!(shown.hosts[0].host.chars().count() <= 160);
+    assert!(shown.hosts[0].memory.chars().count() <= 240);
+    assert_eq!(
+        (shown.changes, shown.stuck, shown.at),
+        (run.changes, run.stuck, run.at)
+    );
+    // Through the rendered report and its JSON, as `aida land stalls` shows it.
+    let report = Report {
+        last_scheduled_run: Some(run.displayed()),
+        ..report_of(Vec::new())
+    };
+    let text = render(&report);
+    assert_eq!(
+        text.lines()
+            .filter(|line| line.contains("forged line"))
+            .count(),
+        1
+    );
+    assert!(!text.contains('\u{1b}') && !text.contains('\r'));
+    let json = serde_json::to_string(&report).unwrap();
+    assert!(!json.contains("\\n") && !json.contains("\\u001b"), "{json}");
+    // More host lines than a report lists are not all shown.
+    let mut crowded = run.clone();
+    crowded.hosts = (0..500)
+        .map(|n| HostLine {
+            host: format!("host-{n}"),
+            ..HostLine::default()
+        })
+        .collect();
+    assert_eq!(crowded.displayed().hosts.len(), 33);
+}
+
+// Through the production reader, in a real repository: a reviewer worktree
+// git lists on branch pr-N is a leftover; a plain directory of the same
+// name is not.
+#[test]
+fn the_production_evidence_tells_a_reviewer_worktree_from_a_directory_of_that_name() {
+    let parent = tempfile::tempdir().unwrap();
+    let root = parent.path().join("proj");
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q", "-b", "main"]);
+    std::fs::write(root.join("file"), "x").unwrap();
+    git(&root, &["add", "file"]);
+    git(&root, &["commit", "-q", "-m", "one"]);
+    let trees = crate::dispatch::worktrees_root(&root);
+    std::fs::create_dir_all(&trees).unwrap();
+    let review_tree = trees.join("aida-pr-31");
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "pr-31",
+            review_tree.to_str().unwrap(),
+        ],
+    );
+    std::fs::create_dir_all(trees.join("aida-pr-32")).unwrap();
+    let other_tree = parent.path().join("aida-pr-33");
+    git(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "someones-branch",
+            other_tree.to_str().unwrap(),
+        ],
+    );
+
+    let evidence = review_cause::Evidence::read(&root, false);
+    assert!(matches!(&evidence.worktrees, Some(Ok(listed)) if listed.len() == 3));
+    assert!(matches!(&evidence.leases, Some(Ok(leases)) if leases.is_empty()));
+    let cause = evidence.cause(31, now());
+    assert!(
+        cause.contains("a reviewer worktree from an earlier review is still at ")
+            && cause
+                .contains("aida-pr-31 (branch pr-31, with no live session or agent process in it)"),
+        "{cause}"
+    );
+    for n in [32, 33] {
+        let cause = evidence.cause(n, now());
+        assert!(
+            cause.starts_with("unknown (")
+                && cause.contains(&format!(
+                    "aida-pr-{n} exists but is not a worktree of this project on branch pr-{n}"
+                )),
+            "{cause}"
+        );
+    }
+    assert!(
+        !evidence.cause(34, now()).contains("aida-pr-34"),
+        "nothing is there"
     );
 }
 

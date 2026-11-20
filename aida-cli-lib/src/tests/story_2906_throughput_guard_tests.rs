@@ -1580,6 +1580,7 @@ fn host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown() {
             crate::lane_hosts::HostCount {
                 reporting: 2,
                 silent: 0,
+                invalid: 0,
                 newest_report_mins: Some(3),
             },
         ),
@@ -1588,6 +1589,7 @@ fn host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown() {
             crate::lane_hosts::HostCount {
                 reporting: 1,
                 silent: 0,
+                invalid: 0,
                 newest_report_mins: Some(0),
             },
         ),

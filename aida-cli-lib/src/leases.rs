@@ -2302,6 +2302,14 @@ pub(crate) fn list_leases_strict_all(
     list_leases_strict_inner(project_root, &[], true)
 }
 
+/// A lease file's text, read as a bounded regular file and never through a
+/// symlink: a FIFO or a device in the lease directory is an unreadable lease
+/// (the strict listing then fails closed), not a read that blocks.
+// trace:TASK-3827 | ai:claude
+fn read_lease_bounded(path: &std::path::Path) -> std::io::Result<String> {
+    aida_core::seat_clone_detect::read_regular_file_result_with_limit(path, 1024 * 1024)
+}
+
 fn list_leases_strict_inner(
     project_root: &std::path::Path,
     spec_ids: &[&str],
@@ -2329,13 +2337,13 @@ fn list_leases_strict_inner(
         // trace:TASK-2813 | ai:claude
         if any_unparseable_is_unknown
             && name.starts_with(crate::worktree_lock::LOCK_ONLY_PREFIX)
-            && std::fs::read_to_string(&p)
+            && read_lease_bounded(&p)
                 .is_ok_and(|body| crate::worktree_lock::parse_lock_only_entry(&body).is_ok())
         {
             continue;
         }
         let label = p.display().to_string();
-        match read_lease_file_for_gate(&label, || std::fs::read_to_string(&p), spec_ids) {
+        match read_lease_file_for_gate(&label, || read_lease_bounded(&p), spec_ids) {
             LeaseFileRead::Lease(lease) => out.push(*lease),
             LeaseFileRead::OtherScope if !any_unparseable_is_unknown => {}
             LeaseFileRead::OtherScope => {

@@ -216,15 +216,36 @@ else:
   and an approved change with red CI is not `STUCK-MERGE-RED`. An approved,
   green change that does not land is still `STUCK-MERGE`, since no lane is what
   it waits for.
-- A record that was never released and is past its expiry says nothing certain:
-  the lane may run with a launcher that stopped reporting, or it may be gone.
-  The stall is still reported, and its line names the host, the lease and how
-  long ago the lane last reported, instead of saying that no lane is on it.
-  A record silent for more than 24 hours is a leftover and is ignored.
+- A record that was never released and is past its expiry says nothing certain.
+  A launcher writes the record once when the lane starts, so a lane that runs
+  longer than the expiry (30 minutes) looks exactly like one that is gone: the
+  lane may be live. Rework of that change is not routed, so no second lane is
+  sent onto it; once the change has waited past `rework_mins` the report says
+  under `Not read` that rework is withheld, with
+  the host, the lease and how long ago the lane last reported. Every other
+  stall of the change (`STUCK-REVIEW`, `STUCK-CONFLICT`, `STUCK-MERGE-RED`) is
+  still reported, and its line says the same about the lane instead of saying
+  that no lane is on it. A record silent for more than 24 hours is a leftover
+  and is ignored.
+- A record that parses but is not a usable report (it names no host, its
+  heartbeat is not a time or is more than five minutes ahead of this host's
+  clock, or its expiry is not a time) is treated the same way: the lane it
+  stands for may be live. It is listed under `Not read` by its file name with
+  what is wrong, counted on its host's line, and it withholds rework of its
+  change until someone removes or repairs it.
 - A record that cannot be read (not a regular file, larger than 64 KiB, or not
   a lane record) is listed under `Not read` by its file name. A project with no
   shared store directory has no such records; the report says so and creates
   nothing.
+- A record holds a change when its scope is one of the change's specs or is
+  the change's branch up to a delimiter: `TASK-7` holds `task-7-work` and does
+  not hold `task-70-work`.
+
+Which change a lane on another host holds and how many lanes that host has are
+taken from one reading of these records. Lanes on the host the guard runs on
+come from its own lease table and process checks. Every shared record, session
+lease and state file the guard reads is read as a bounded regular file: a
+FIFO, a device or a symlink in its place is refused at once.
 
 **Why a head has no review.** A `STUCK-REVIEW` line ends with `cause:` and what
 this host can observe:
@@ -233,20 +254,27 @@ this host can observe:
   end of `.aida/review-watch/service.log`, for example `watcher admission is
   busy`, a refusal or a deferral. A pass older than 15 minutes is reported as
   the watcher having logged no pass for that long.
-- a reviewer worktree `aida-pr-N` left from an earlier review, with its path;
-- a session lease on `PR-N` that is still recorded although its session is not
-  live.
+- a session lease on the change's key (`PR-N`, or `MR-N` on GitLab) that is
+  still recorded although its session is not live. The leases are listed once
+  and each lease's liveness is judged on that listing, so a reviewer that
+  starts while the guard runs is not taken for a dead session;
+- a reviewer worktree `aida-pr-N` left from an earlier review, with its path.
+  A path of that name counts only when git lists it as a worktree of this
+  project on branch `pr-N` and no live session lease or agent process is in
+  it.
 
 When none of these is found the line says `cause: unknown` and what was looked
-at, or what could not be read.
+at, or what could not be established: a lease whose liveness is unknown, a
+path named `aida-pr-N` that is a file, an unrelated directory or a worktree on
+another branch, or a path that could not be inspected.
 
 The report also counts landings on the default branch in the last
 `landings_window_mins` and lists the lanes per host. For the host the command
 runs on, the lanes are counted in its own lease table and its memory is
 measured. For every other host the count is the number of its lane records
 inside their expiry, shown with the age of the newest one (`7 lane(s) by the
-host's own records, newest report 2 min ago`), and any silent records are
-counted apart as state unknown. Another lane host's memory is measured when the
+host's own records, newest report 2 min ago`). Records past their expiry and
+records that are not a usable report are counted apart as state unknown. Another lane host's memory is measured when the
 project names the host under `[throughput_guard.remote_hosts]`: one read-only
 SSH call (`cat /proc/meminfo`, non-interactive, nothing forwarded, at most 8
 seconds) to the alias given for it, on every run, also when the host has no
@@ -258,7 +286,8 @@ never contacted, and its memory reads `unknown (no remote memory source)`.
 
 Text that comes from the forge, a shared record, a log or an error is put on
 one line before it is shown or routed: control and invisible characters are
-dropped and long text is cut.
+dropped and long text is cut. The same is done to the saved observation of the
+last scheduled run each time it is shown.
 
 The scheduled `throughput-guard` job runs `aida doctor check throughput-guard`,
 which computes the same report. On the scheduler's tick each stall not routed

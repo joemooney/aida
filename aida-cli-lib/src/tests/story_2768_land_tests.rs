@@ -580,6 +580,38 @@ fn a_claim_covers_a_change_by_spec_or_branch() {
     ));
     assert!(!claim_covers("BUG-2547", &change));
     assert!(!claim_covers("", &change));
+    // TASK-3827: the branch is matched by its whole ID, in both directions.
+    let seventy = Pr {
+        title: "[AI:claude] fix(x): y (TASK-70)".into(),
+        ..pr("main", "task-70-work")
+    };
+    assert!(claim_covers("TASK-70", &seventy));
+    assert!(claim_covers("task-70", &seventy));
+    assert!(claim_covers("task-70-work", &seventy));
+    assert!(!claim_covers("TASK-7", &seventy));
+    assert!(!claim_covers("task-7", &seventy));
+    assert!(!claim_covers("TASK-700", &seventy));
+    // A bare prefix or a scope cut at a delimiter is not an ID.
+    assert!(!claim_covers("task", &seventy));
+    assert!(!claim_covers("task-", &seventy));
+    assert!(!claim_covers("task-70-", &seventy));
+    let seven = Pr {
+        title: "[AI:claude] fix(x): y (TASK-7)".into(),
+        ..pr("main", "task-7")
+    };
+    assert!(claim_covers("TASK-7", &seven));
+    assert!(!claim_covers("TASK-70", &seven));
+    // An origin ID's counter is part of the ID.
+    assert!(!claim_covers(
+        "BUG-b6b1278890774ef993d2ebc327862470-31",
+        &change
+    ));
+    // A scope ending inside a multi-byte character is not a match or a panic.
+    let accented = Pr {
+        title: "t".into(),
+        ..pr("main", "tâsk-7")
+    };
+    assert!(!claim_covers("t\u{c3}", &accented));
 }
 
 #[test]

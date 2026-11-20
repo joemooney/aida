@@ -21,8 +21,13 @@
 //! Lanes on other hosts are read from the records those hosts keep on the
 //! shared store ([`crate::lane_hosts`]): a change whose spec such a lane holds
 //! is moving, and each host's lane count is shown with the age of its last
-//! report. A head with no review names the cause that can be observed here
-//! ([`review_cause`]).
+//! report. Ownership and the counts come from that one reading; this host's
+//! own lanes come from its lease table and process probes. A record past its
+//! expiry, or one that is not a usable report, stands for a lane that may be
+//! live (a launcher that writes its claim once looks the same while its lane
+//! runs): rework of that change is not routed, and the report says the
+//! lane's state is unknown. A head with no review names the cause that can
+//! be observed here ([`review_cause`]).
 //!
 //! The scheduled check does nothing unless `[throughput_guard] enabled =
 //! true` is set in `.aida/config.toml`.
@@ -74,6 +79,8 @@ const MAX_ROUTED_KEY_CHARS: usize = 160;
 /// A lane record that went silent this long ago is a leftover, not a lane
 /// whose state is in question.
 const SILENT_LANE_HORIZON_HOURS: i64 = 24;
+/// Longest memory text of one host line.
+const MAX_MEMORY_CHARS: usize = 240;
 /// Other hosts one report lists.
 const MAX_OTHER_HOSTS: usize = 32;
 /// Bound on one memory probe of another lane host.
@@ -383,11 +390,15 @@ pub(crate) struct PrFact {
 pub(crate) struct ForeignLane {
     pub host: String,
     pub lease: String,
-    /// Minutes since the host last reported the lane.
-    pub reported_mins_ago: i64,
+    /// Minutes since the host last reported the lane. `None` for a record
+    /// that is not a usable report.
+    pub reported_mins_ago: Option<i64>,
     /// The report is inside its expiry: the lane is live. Otherwise the
-    /// record was never released and went silent: its state is unknown.
+    /// record was never released and went silent, or is not a usable
+    /// report: the lane may be live, and its state is unknown.
     pub reporting: bool,
+    /// For a record that is not a usable report: its file and what is wrong.
+    pub invalid: Option<String>,
 }
 
 impl ForeignLane {
@@ -395,18 +406,79 @@ impl ForeignLane {
         Self {
             host: routed(&lane.claim.host, 80),
             lease: routed(lane.lease(), 80),
-            reported_mins_ago: lane.age_mins(now),
+            reported_mins_ago: Some(lane.age_mins(now)),
             reporting: lane.state == crate::lane_hosts::State::Reporting,
+            invalid: None,
+        }
+    }
+
+    pub(crate) fn of_invalid(record: &crate::lane_hosts::Invalid) -> Self {
+        let claim = &record.claim;
+        let lease = claim.lease_id.as_deref().or(claim.claim_id.as_deref());
+        Self {
+            host: routed(&claim.host, 80),
+            lease: routed(lease.unwrap_or("no lease id"), 80),
+            reported_mins_ago: None,
+            reporting: false,
+            invalid: Some(format!(
+                "{}: {}",
+                routed(&record.file, 120),
+                routed(&record.why, 120)
+            )),
+        }
+    }
+
+    pub(crate) fn of_holder(holder: crate::lane_hosts::Holder, now: DateTime<Utc>) -> Self {
+        match holder {
+            crate::lane_hosts::Holder::Lane(lane) => Self::of(lane, now),
+            crate::lane_hosts::Holder::Invalid(record) => Self::of_invalid(record),
+        }
+    }
+
+    /// What is known of a lane whose state is unknown.
+    fn unknown_text(&self) -> String {
+        let host = if self.host.is_empty() {
+            "an unnamed host".to_string()
+        } else {
+            format!("host {}", self.host)
+        };
+        match (&self.invalid, self.reported_mins_ago) {
+            (Some(what), _) => format!(
+                "a lane on {host} ({}) may be live: its record is not a usable report ({what}), so whether it runs is unknown",
+                self.lease
+            ),
+            (None, mins) => format!(
+                "a lane on {host} ({}) may be live: no heartbeat for {} min, past its expiry, so whether it runs is unknown",
+                self.lease,
+                mins.unwrap_or(0)
+            ),
         }
     }
 
     /// The clause a stall carries when the lane's state is unknown.
     fn unknown_clause(&self) -> String {
-        format!(
-            "; a lane on host {} ({}) still holds it on record but last reported {} min ago, past its expiry: whether it runs is unknown",
-            self.host, self.lease, self.reported_mins_ago
-        )
+        format!("; {}", self.unknown_text())
     }
+}
+
+/// Why rework of a change is not routed although it has waited past the
+/// threshold with no lane known to be on it: a lane on another host may be.
+/// Said in the report instead of a stall.
+// trace:TASK-3827 | ai:claude
+pub(crate) fn rework_withheld(
+    fact: &PrFact,
+    policy: &Policy,
+    now: DateTime<Utc>,
+) -> Option<String> {
+    let lane = fact.foreign_lane.as_ref().filter(|lane| !lane.reporting)?;
+    let waited = mins_since(fact.since, now).filter(|age| *age > policy.rework_mins)?;
+    matches!(fact.standing, Standing::ChangesRequested { lane: None, .. }).then(|| {
+        format!(
+            "#{}: changes are requested, for {waited} min, and rework is not routed: {}",
+            fact.number,
+            lane.unknown_text()
+        )
+    })
 }
 
 impl PrFact {
@@ -443,7 +515,7 @@ pub(crate) fn standing(
     match evidence.conflict(pr) {
         Err(why) => return unknown("mergeability", why),
         Ok(true) => {
-            return match evidence.lane(pr) {
+            return match evidence.lane_on_this_host(pr) {
                 Ok(owner) => Standing::Conflict { owner },
                 Err(why) => unknown("lane liveness", why),
             }
@@ -471,7 +543,9 @@ pub(crate) fn standing(
             _ => return unknown("CI", why),
         },
     };
-    let lane = match evidence.lane(pr) {
+    // Another host's record is not read here: see `attach_evidence`.
+    // trace:TASK-3827 | ai:claude
+    let lane = match evidence.lane_on_this_host(pr) {
         Ok(lane) => lane,
         Err(why) => return unknown("lane liveness", why),
     };
@@ -784,7 +858,13 @@ fn pr_item(
     }
 }
 
-fn merge_red_item(fact: &PrFact, names: &str, waited: &str, now: DateTime<Utc>) -> Item {
+fn merge_red_item(
+    fact: &PrFact,
+    names: &str,
+    waited: &str,
+    foreign_unknown: &str,
+    now: DateTime<Utc>,
+) -> Item {
     let pr = fact.number;
     let head = short(&fact.head);
     let inspect = format!("read the failed job on #{pr}: rerun it once if the failure is unrelated to the change, otherwise route rework");
@@ -794,7 +874,7 @@ fn merge_red_item(fact: &PrFact, names: &str, waited: &str, now: DateTime<Utc>) 
             fact,
             ":inspect",
             now,
-            format!("#{pr} is approved at {head} but its CI is red ({names}), for {waited}; the cause was not examined"),
+            format!("#{pr} is approved at {head} but its CI is red ({names}), for {waited}; the cause was not examined{foreign_unknown}"),
             inspect,
         );
     };
@@ -860,7 +940,7 @@ fn merge_red_item(fact: &PrFact, names: &str, waited: &str, now: DateTime<Utc>) 
         &suffix,
         now,
         format!(
-            "#{pr} is approved at {head} but its CI is red ({names}), for {waited}; {tests}; {label}: {}",
+            "#{pr} is approved at {head} but its CI is red ({names}), for {waited}; {tests}; {label}: {}{foreign_unknown}",
             verdict.reasons.join("; ")
         ),
         action,
@@ -883,9 +963,10 @@ pub(crate) fn classify_pr(fact: &PrFact, policy: &Policy, now: DateTime<Utc>) ->
         }
     };
     // A lane on another host that reports inside its expiry holds the change
-    // like a lane here: the change is moving. One that went silent without
-    // releasing its record does not hide the stall, and the stall says that
-    // the lane's state is unknown instead of "no lane".
+    // like a lane here: the change is moving. One whose record is past its
+    // expiry or is not a usable report may be live. Rework is then not
+    // routed (`rework_withheld` says why in the report); every other stall
+    // is reported and says the lane's state is unknown instead of "no lane".
     // trace:TASK-3827 | ai:claude
     let foreign_live = fact
         .foreign_lane
@@ -932,7 +1013,7 @@ pub(crate) fn classify_pr(fact: &PrFact, policy: &Policy, now: DateTime<Utc>) ->
         } => {
             // A lane already on the red head is moving it.
             (lane.is_none() && past(policy.merge_mins))
-                .then(|| merge_red_item(fact, names, &waited, now))
+                .then(|| merge_red_item(fact, names, &waited, &foreign_unknown, now))
         }
         Standing::Approved {
             hold: None,
@@ -977,6 +1058,9 @@ pub(crate) fn classify_pr(fact: &PrFact, policy: &Policy, now: DateTime<Utc>) ->
                 ),
             },
         }),
+        // A second lane on a change another host may still be working
+        // would collide with it: rework waits until that is known.
+        Standing::ChangesRequested { .. } if !foreign_unknown.is_empty() => None,
         Standing::ChangesRequested { lane, round, red } => {
             (lane.is_none() && past(policy.rework_mins)).then(|| {
                 pr_item(
@@ -985,13 +1069,8 @@ pub(crate) fn classify_pr(fact: &PrFact, policy: &Policy, now: DateTime<Utc>) ->
                     "",
                     now,
                     format!(
-                        "#{pr} has changes requested at {head} (round {round}{}) and no {} on it for {waited}{foreign_unknown}",
+                        "#{pr} has changes requested at {head} (round {round}{}) and no lane or session on it for {waited}",
                         if *red { ", CI red" } else { "" },
-                        if foreign_unknown.is_empty() {
-                            "lane or session"
-                        } else {
-                            "lane or session known to be live"
-                        }
                     ),
                     remedy(format!("route rework of #{pr} to a lane")),
                 )
@@ -1063,9 +1142,12 @@ pub(crate) struct HostLine {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reported_mins_ago: Option<i64>,
     /// Another host: lanes whose record was never released and is past its
-    /// expiry. Whether they run is unknown.
+    /// expiry. They may be live; whether they run is unknown.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub silent_lanes: usize,
+    /// Another host: records naming it that are not a usable report.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub invalid_lanes: usize,
     /// Available memory: measured here for the host the run is on, from a
     /// record of the host for another, else unknown with the reason.
     pub memory: String,
@@ -1083,21 +1165,38 @@ impl HostLine {
         if self.here {
             return format!("{} lane(s), counted here now", self.lanes);
         }
-        let silent = if self.silent_lanes == 0 {
-            String::new()
-        } else {
-            format!(
-                ", and {} more on record with no report since their expiry (state unknown)",
+        let mut unknown = String::new();
+        if self.silent_lanes > 0 {
+            unknown.push_str(&format!(
+                ", and {} more that may be live: no heartbeat since their expiry (state unknown)",
                 self.silent_lanes
-            )
-        };
+            ));
+        }
+        if self.invalid_lanes > 0 {
+            unknown.push_str(&format!(
+                ", and {} record(s) that are not a usable report (state unknown)",
+                self.invalid_lanes
+            ));
+        }
         match self.reported_mins_ago {
             Some(mins) => format!(
-                "{} lane(s) by the host's own records, newest report {mins} min ago{silent}",
+                "{} lane(s) by the host's own records, newest report {mins} min ago{unknown}",
                 self.lanes
             ),
-            None if self.lanes == 0 && self.silent_lanes == 0 => "no lane on record".to_string(),
-            None => format!("{} lane(s){silent}", self.lanes),
+            None if self.lanes == 0 && unknown.is_empty() => "no lane on record".to_string(),
+            None => format!("{} lane(s){unknown}", self.lanes),
+        }
+    }
+
+    /// The line as it is shown: the host and the memory text as one bounded
+    /// line each. Applied to what a run observed and again to what an
+    /// earlier run saved, since a saved line may predate the bound.
+    // trace:TASK-3827 | ai:claude
+    pub(crate) fn displayed(&self) -> Self {
+        Self {
+            host: routed(&self.host, MAX_ROUTED_KEY_CHARS),
+            memory: routed(&self.memory, MAX_MEMORY_CHARS),
+            ..self.clone()
         }
     }
 }
@@ -1121,6 +1220,23 @@ pub(crate) struct RunSnapshot {
     pub hosts: Vec<HostLine>,
     pub changes: usize,
     pub stuck: usize,
+}
+
+impl RunSnapshot {
+    /// A saved observation as it is shown. One saved before host names and
+    /// memory text were bounded can hold a shared record's text verbatim.
+    // trace:TASK-3827 | ai:claude
+    pub(crate) fn displayed(&self) -> Self {
+        Self {
+            hosts: self
+                .hosts
+                .iter()
+                .take(MAX_OTHER_HOSTS + 1)
+                .map(HostLine::displayed)
+                .collect(),
+            ..self.clone()
+        }
+    }
 }
 
 /// Everything one run found.
@@ -1202,6 +1318,7 @@ pub(crate) fn build_report(
     let mut changes = Vec::new();
     for fact in &facts.prs {
         let item = classify_pr(fact, policy, now);
+        unknown.extend(rework_withheld(fact, policy, now));
         match &fact.standing {
             Standing::Unknown(what) => unknown.push(format!("#{}: {what}", fact.number)),
             Standing::Landing | Standing::Reviewing(_) => {}
@@ -1246,15 +1363,7 @@ pub(crate) fn build_report(
     for line in &mut unknown {
         *line = routed(line, MAX_ROUTED_FIELD_CHARS);
     }
-    let hosts: Vec<HostLine> = facts
-        .hosts
-        .iter()
-        .map(|line| HostLine {
-            host: routed(&line.host, MAX_ROUTED_KEY_CHARS),
-            memory: routed(&line.memory, 240),
-            ..line.clone()
-        })
-        .collect();
+    let hosts: Vec<HostLine> = facts.hosts.iter().map(HostLine::displayed).collect();
     let window = span(policy.landings_window_mins);
     let dry_window = span(policy.escalate_after_mins);
     let (count, dry) = match &facts.landings {
@@ -1302,6 +1411,7 @@ pub(crate) fn record_run(memory: &mut Memory, report: &Report) {
 }
 
 fn snapshot_line(run: &RunSnapshot) -> String {
+    let run = &run.displayed();
     let hosts = run
         .hosts
         .iter()
@@ -1703,6 +1813,7 @@ pub(crate) fn host_lines_with(
         here: true,
         reported_mins_ago: None,
         silent_lanes: 0,
+        invalid_lanes: 0,
         memory: local_memory(),
     }];
     // The named hosts first, then the others by the lanes they report: a
@@ -1727,6 +1838,7 @@ pub(crate) fn host_lines_with(
             here: false,
             reported_mins_ago: count.newest_report_mins,
             silent_lanes: count.silent,
+            invalid_lanes: count.invalid,
             memory: remote_memory(policy, host, probe)
                 .unwrap_or_else(|| NO_REMOTE_MEMORY.to_string()),
         });
@@ -1763,11 +1875,19 @@ fn memory_path(root: &Path) -> PathBuf {
     root.join(".aida").join(CATEGORY).join("state.json")
 }
 
+/// The guard's state is read as a bounded regular file, like every other
+/// file an observation reads.
+// trace:TASK-3827 | ai:claude
+const MAX_STATE_BYTES: u64 = 16 * 1024 * 1024;
+
 fn load_memory(root: &Path) -> Memory {
-    std::fs::read_to_string(memory_path(root))
-        .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default()
+    aida_core::seat_clone_detect::read_regular_file_result_with_limit(
+        &memory_path(root),
+        MAX_STATE_BYTES,
+    )
+    .ok()
+    .and_then(|text| serde_json::from_str(&text).ok())
+    .unwrap_or_default()
 }
 
 fn save_memory(root: &Path, memory: &Memory) {
@@ -1788,7 +1908,7 @@ fn save_memory(root: &Path, memory: &Memory) {
 /// Gives each change the lane another host holds it with and, for a head
 /// nobody reviews, the cause that can be observed. A record that went silent
 /// longer ago than [`SILENT_LANE_HORIZON_HOURS`] is a leftover and holds
-/// nothing.
+/// nothing. `view` is the reading the host lines are counted from.
 // trace:TASK-3827 | ai:claude
 pub(crate) fn attach_evidence(
     prs: &mut [PrFact],
@@ -1801,12 +1921,8 @@ pub(crate) fn attach_evidence(
     for fact in prs.iter_mut() {
         if let Some(pr) = changes.iter().find(|pr| pr.id == fact.number) {
             fact.foreign_lane = view
-                .holder(|scope| super::claim_covers(scope, pr))
-                .filter(|lane| {
-                    lane.state == crate::lane_hosts::State::Reporting
-                        || now.signed_duration_since(lane.heartbeat) <= horizon
-                })
-                .map(|lane| ForeignLane::of(lane, now));
+                .holder(now, horizon, |scope| super::claim_covers(scope, pr))
+                .map(|holder| ForeignLane::of_holder(holder, now));
         }
         if matches!(fact.standing, Standing::Unreviewed { .. }) {
             fact.review_cause = Some(review.cause(fact.number, now));
@@ -1846,11 +1962,6 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
             .iter()
             .map(|why| format!("lanes on other hosts: {why}")),
     );
-    let live_leases: Vec<String> = pass
-        .local_lanes
-        .iter()
-        .map(|lease| lease.id.clone())
-        .collect();
     let other_hosts = lane_view
         .hosts(now, span(SILENT_LANE_HORIZON_HOURS * 60))
         .len();
@@ -1859,7 +1970,7 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
             "lanes on other hosts: records name {other_hosts} hosts; {MAX_OTHER_HOSTS} are listed"
         ));
     }
-    let review_evidence = review_cause::Evidence::read(&root, &live_leases);
+    let review_evidence = review_cause::Evidence::read(&root, pass.gitlab);
     attach_evidence(&mut prs, &pass.changes, &lane_view, &review_evidence, now);
     let branch = crate::forge::default_branch_of(&root);
     let red_heads: Vec<(String, String)> = prs
@@ -1922,7 +2033,7 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
 pub(crate) fn run(start: &Path, json: bool) -> Result<()> {
     let policy = Policy::load(&crate::main_worktree_root_from(start));
     let (mut report, memory, _root) = observe(start, &policy, Utc::now())?;
-    report.last_scheduled_run = memory.runs.last().cloned();
+    report.last_scheduled_run = memory.runs.last().map(RunSnapshot::displayed);
     if json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {

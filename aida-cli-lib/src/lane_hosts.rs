@@ -7,14 +7,24 @@
 //! (`aida land stalls`) and the review watcher's deferral behind a lane
 //! (BUG-2706). Neither keeps a second copy of these rules.
 //!
-//! A record says one of two things about a lane on another host:
+//! A record says one of three things about a lane on another host:
 //!
 //! - **reporting**: the heartbeat is inside its expiry. The lane is live as of
 //!   that heartbeat, and the heartbeat's age is how old the observation is.
 //! - **silent**: the claim was never released and the heartbeat is past its
-//!   expiry. The lane may be running with a launcher that stopped reporting,
-//!   or it may be gone. Its state is unknown, and a caller must say so rather
-//!   than call it live or absent.
+//!   expiry. A launcher that writes its claim once and never refreshes it
+//!   looks exactly like this while its lane runs, so the lane may be live:
+//!   its state is unknown, and a caller must say so rather than call it live
+//!   or absent.
+//! - **invalid**: the record parses but its host, heartbeat or expiry cannot
+//!   be used (no host, an unreadable or far-future heartbeat, an expiry no
+//!   date can hold). It is kept, with the file's name and the reason: the
+//!   lane it stands for may be live, so its state is unknown too.
+//!
+//! A record that says nothing about another host (this host's own claim, a
+//! process lock) is the only kind left out. Callers take ownership and the
+//! per-host counts from the same [`View`], so the two cannot disagree about a
+//! record.
 //!
 //! Everything here is read-only. Records are read as bounded regular files; a
 //! record that cannot be read is listed as unreadable, never dropped.
@@ -80,22 +90,55 @@ impl Lane {
     }
 }
 
-/// What `claim` says about a lane on another host at `now`, or `None` when it
-/// says nothing: it is this host's own, it is a process lock, it names no
-/// host, or its heartbeat is unreadable or further in the future than a clock
-/// difference explains.
-pub(crate) fn standing(claim: &Claim, now: DateTime<Utc>, our_host: &str) -> Option<Lane> {
-    if claim.process_backed || claim.host.trim().is_empty() || claim.host == our_host {
-        return None;
+/// What one parsed record says about another host.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Judged {
+    /// Not a record of a lane on another host: this host's own claim, or a
+    /// process lock. Nothing is concluded from it here.
+    NotForeign,
+    Lane(Lane),
+    /// A record of another host that cannot be used as a report, and why.
+    Invalid(String),
+}
+
+/// A parsed record of another host that is not a usable report. The lane it
+/// stands for may be live.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Invalid {
+    pub claim: Claim,
+    /// The record's file name, for the operator who has to look at it.
+    pub file: String,
+    pub why: String,
+}
+
+/// What `claim` says about a lane on another host at `now`.
+pub(crate) fn judge(claim: &Claim, now: DateTime<Utc>, our_host: &str) -> Judged {
+    if claim.process_backed {
+        return Judged::NotForeign;
     }
-    let heartbeat = DateTime::parse_from_rfc3339(claim.heartbeat_at.trim())
-        .ok()?
-        .with_timezone(&Utc);
-    if heartbeat > now.checked_add_signed(Duration::seconds(CLOCK_SKEW_SECS))? {
-        return None;
+    if claim.host.trim().is_empty() {
+        return Judged::Invalid("it names no host".into());
     }
-    let ttl = Duration::try_seconds(i64::try_from(claim.ttl_secs).ok()?)?;
-    let expires = heartbeat.checked_add_signed(ttl)?;
+    if claim.host == our_host {
+        return Judged::NotForeign;
+    }
+    let Ok(heartbeat) = DateTime::parse_from_rfc3339(claim.heartbeat_at.trim()) else {
+        return Judged::Invalid("its heartbeat is not a time".into());
+    };
+    let heartbeat = heartbeat.with_timezone(&Utc);
+    let ahead = now.checked_add_signed(Duration::seconds(CLOCK_SKEW_SECS));
+    if ahead.is_none_or(|limit| heartbeat > limit) {
+        return Judged::Invalid(format!(
+            "its heartbeat is more than {CLOCK_SKEW_SECS}s ahead of this host's clock"
+        ));
+    }
+    let expires = i64::try_from(claim.ttl_secs)
+        .ok()
+        .and_then(Duration::try_seconds)
+        .and_then(|ttl| heartbeat.checked_add_signed(ttl));
+    let Some(expires) = expires else {
+        return Judged::Invalid("its expiry is not a time".into());
+    };
     // The same expiry rule every other reader of a claim applies. A lane on
     // another host has no process this host could look at.
     let state =
@@ -106,12 +149,21 @@ pub(crate) fn standing(claim: &Claim, now: DateTime<Utc>, our_host: &str) -> Opt
         } else {
             State::Silent
         };
-    Some(Lane {
+    Judged::Lane(Lane {
         claim: claim.clone(),
         state,
         heartbeat,
         expires,
     })
+}
+
+/// The lane `claim` is a usable report of, if it is one.
+#[cfg(test)]
+pub(crate) fn standing(claim: &Claim, now: DateTime<Utc>, our_host: &str) -> Option<Lane> {
+    match judge(claim, now, our_host) {
+        Judged::Lane(lane) => Some(lane),
+        Judged::NotForeign | Judged::Invalid(_) => None,
+    }
 }
 
 /// The lanes one host reports.
@@ -122,15 +174,26 @@ pub(crate) struct HostCount {
     /// Unreleased lanes whose record is past its expiry, not older than the
     /// horizon asked for.
     pub silent: usize,
+    /// Records naming this host that are not a usable report.
+    pub invalid: usize,
     /// Age in minutes of the host's newest report: how old this view of the
     /// host is. `None` when it has never reported inside the horizon.
     pub newest_report_mins: Option<i64>,
+}
+
+/// Who holds something on another host, as far as the records say.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Holder<'a> {
+    Lane(&'a Lane),
+    Invalid(&'a Invalid),
 }
 
 /// Every lane other hosts have on record, and what could not be read.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct View {
     pub lanes: Vec<Lane>,
+    /// Records of other hosts that parse but are not a usable report.
+    pub invalid: Vec<Invalid>,
     /// One line per problem: the store, the directory, or a record.
     pub unreadable: Vec<String>,
 }
@@ -157,19 +220,36 @@ impl View {
             let mins = lane.age_mins(now);
             host.newest_report_mins = Some(host.newest_report_mins.map_or(mins, |m| m.min(mins)));
         }
+        // A record that names no host is on no host's line; it is listed
+        // with the records that are not usable.
+        for record in &self.invalid {
+            if !record.claim.host.trim().is_empty() {
+                hosts.entry(record.claim.host.clone()).or_default().invalid += 1;
+            }
+        }
         hosts
     }
 
-    /// The implementer lane on another host that holds what `covers` accepts
-    /// (given the claim's scope): a reporting one first, else the silent one
-    /// that reported last.
-    pub(crate) fn holder(&self, covers: impl Fn(&str) -> bool) -> Option<&Lane> {
-        let mut on_it = self
-            .lanes
-            .iter()
-            .filter(|lane| !lane.is_review() && covers(&lane.claim.scope));
+    /// Who on another host holds what `covers` accepts (given a record's
+    /// scope), reviewers' claims left out: a reporting lane first, else the
+    /// silent lane that reported last (unless that was longer ago than
+    /// `silent_horizon`: a leftover holds nothing), else an invalid record.
+    pub(crate) fn holder(
+        &self,
+        now: DateTime<Utc>,
+        silent_horizon: Duration,
+        covers: impl Fn(&str) -> bool,
+    ) -> Option<Holder<'_>> {
         let mut best: Option<&Lane> = None;
-        for lane in &mut on_it {
+        for lane in &self.lanes {
+            if lane.is_review() || !covers(&lane.claim.scope) {
+                continue;
+            }
+            if lane.state == State::Silent
+                && now.signed_duration_since(lane.heartbeat) > silent_horizon
+            {
+                continue;
+            }
             let better = match best {
                 None => true,
                 Some(held) => match (lane.state, held.state) {
@@ -182,7 +262,13 @@ impl View {
                 best = Some(lane);
             }
         }
-        best
+        let invalid = || {
+            self.invalid
+                .iter()
+                .find(|record| !record.claim.review_verb && covers(&record.claim.scope))
+                .map(Holder::Invalid)
+        };
+        best.map(Holder::Lane).or_else(invalid)
     }
 }
 
@@ -214,8 +300,8 @@ pub(crate) fn read(root: &Path, our_host: &str, now: DateTime<Utc>) -> View {
     match store_root(root) {
         Ok(store) => read_store(&store, our_host, now),
         Err(why) => View {
-            lanes: Vec::new(),
             unreadable: vec![why],
+            ..View::default()
         },
     }
 }
@@ -279,7 +365,15 @@ pub(crate) fn read_store(store: &Path, our_host: &str, now: DateTime<Utc>) -> Vi
             }
         };
         match toml::from_str::<Claim>(&raw) {
-            Ok(claim) => view.lanes.extend(standing(&claim, now, our_host)),
+            Ok(claim) => match judge(&claim, now, our_host) {
+                Judged::NotForeign => {}
+                Judged::Lane(lane) => view.lanes.push(lane),
+                Judged::Invalid(why) => view.invalid.push(Invalid {
+                    claim,
+                    file: name,
+                    why,
+                }),
+            },
             Err(error) => bad.push(format!(
                 "{name} (not a lane record: {})",
                 routed(&error.message().to_string(), 120)
@@ -308,6 +402,25 @@ pub(crate) fn read_store(store: &Path, our_host: &str, now: DateTime<Utc>) -> Vi
         (a.claim.host.as_str(), a.claim.scope.as_str())
             .cmp(&(b.claim.host.as_str(), b.claim.scope.as_str()))
     });
+    view.invalid.sort_by(|a, b| a.file.cmp(&b.file));
+    if !view.invalid.is_empty() {
+        let named: Vec<String> = view
+            .invalid
+            .iter()
+            .take(MAX_NAMED_UNREADABLE)
+            .map(|record| format!("{} ({})", record.file, record.why))
+            .collect();
+        let more = view.invalid.len().saturating_sub(MAX_NAMED_UNREADABLE);
+        view.unreadable.push(format!(
+            "lane record(s) not usable as a report, so the lane each stands for may be live: {}{}",
+            named.join("; "),
+            if more > 0 {
+                format!("; and {more} more")
+            } else {
+                String::new()
+            }
+        ));
+    }
     view
 }
 
@@ -398,21 +511,27 @@ mod tests {
     }
 
     #[test]
-    fn task_3827_a_record_that_is_no_evidence_is_not_a_lane() {
+    fn task_3827_a_record_is_not_foreign_or_invalid_and_never_silently_dropped() {
         let now = Utc::now();
         let good = claim("lane-host", "TASK-1", now);
-        // This host's own lanes are read from its own lease table.
-        assert!(standing(&good, now, "lane-host").is_none());
-        let mut hostless = good.clone();
-        hostless.host = "  ".into();
-        assert!(standing(&hostless, now, "here").is_none());
+        // This host's own lanes are read from its own lease table, and a
+        // process lock is not a lane: nothing is concluded from either.
+        assert_eq!(judge(&good, now, "lane-host"), Judged::NotForeign);
         let mut lock = good.clone();
         lock.process_backed = true;
-        assert!(standing(&lock, now, "here").is_none());
+        assert_eq!(judge(&lock, now, "here"), Judged::NotForeign);
+        // Every other record that cannot be used is invalid, with the reason.
+        let invalid = |claim: &Claim| match judge(claim, now, "here") {
+            Judged::Invalid(why) => why,
+            other => panic!("expected invalid, got {other:?}"),
+        };
+        let mut hostless = good.clone();
+        hostless.host = "  ".into();
+        assert_eq!(invalid(&hostless), "it names no host");
         let mut garbled = good.clone();
         garbled.heartbeat_at = "yesterday".into();
-        assert!(standing(&garbled, now, "here").is_none());
-        // A little ahead is another host's clock; far ahead is not evidence.
+        assert_eq!(invalid(&garbled), "its heartbeat is not a time");
+        // A little ahead is another host's clock; far ahead is not a report.
         let ahead = claim(
             "lane-host",
             "TASK-1",
@@ -424,11 +543,69 @@ mod tests {
             "TASK-1",
             now + Duration::seconds(CLOCK_SKEW_SECS + 1),
         );
-        assert!(standing(&future, now, "here").is_none());
+        assert!(invalid(&future).contains("ahead of this host's clock"));
         // An expiry no date can hold is refused, not a panic.
         let mut endless = good;
         endless.ttl_secs = u64::MAX;
-        assert!(standing(&endless, now, "here").is_none());
+        assert_eq!(invalid(&endless), "its expiry is not a time");
+    }
+
+    // An invalid record of another host is kept with its file name, counted
+    // on its host, and holds its spec as a lane whose state is unknown: the
+    // host cannot show "no lane" while the record decides a stall.
+    #[test]
+    fn task_3827_an_invalid_record_is_named_counted_and_holds_its_spec_as_unknown() {
+        let now = Utc::now();
+        let mut garbled = claim("dell1", "TASK-5", now);
+        garbled.heartbeat_at = "soon".into();
+        let future = claim("dell1", "TASK-6", now + Duration::hours(2));
+        // The largest expiry a TOML record can carry.
+        let mut endless = claim("dell2", "TASK-7", now);
+        endless.ttl_secs = i64::MAX as u64;
+        let mut review = claim("dell2", "PR-9", now);
+        review.review_verb = true;
+        review.heartbeat_at = "never".into();
+        let store = store_with(&[
+            ("garbled.toml", toml::to_string(&garbled).unwrap()),
+            ("future.toml", toml::to_string(&future).unwrap()),
+            ("endless.toml", toml::to_string(&endless).unwrap()),
+            ("review.toml", toml::to_string(&review).unwrap()),
+        ]);
+        let view = read_store(store.path(), "here", now);
+        assert!(view.lanes.is_empty());
+        assert_eq!(view.invalid.len(), 4);
+        assert_eq!(view.unreadable.len(), 1);
+        let line = &view.unreadable[0];
+        for name in [
+            "garbled.toml (its heartbeat is not a time)",
+            "future.toml",
+            "endless.toml (its expiry is not a time)",
+        ] {
+            assert!(line.contains(name), "{name} missing from: {line}");
+        }
+        let hosts = view.hosts(now, Duration::hours(24));
+        assert_eq!(
+            hosts["dell1"],
+            HostCount {
+                invalid: 2,
+                ..HostCount::default()
+            }
+        );
+        assert_eq!(hosts["dell2"].invalid, 2);
+        let day = Duration::hours(24);
+        for (scope, file) in [
+            ("TASK-5", "garbled.toml"),
+            ("TASK-6", "future.toml"),
+            ("TASK-7", "endless.toml"),
+        ] {
+            match view.holder(now, day, |held| held == scope) {
+                Some(Holder::Invalid(record)) => assert_eq!(record.file, file),
+                other => panic!("{scope}: {other:?}"),
+            }
+        }
+        // A reviewer's record is not an implementer lane on the change.
+        assert_eq!(view.holder(now, day, |held| held == "PR-9"), None);
+        assert_eq!(view.holder(now, day, |held| held == "TASK-8"), None);
     }
 
     #[test]
@@ -468,6 +645,7 @@ mod tests {
             HostCount {
                 reporting: 7,
                 silent: 1,
+                invalid: 0,
                 newest_report_mins: Some(1)
             }
         );
@@ -492,22 +670,34 @@ mod tests {
             .iter()
             .filter_map(|c| standing(c, now, "here"))
             .collect(),
-            unreadable: Vec::new(),
+            ..View::default()
         };
-        let held = view.holder(|scope| scope == "TASK-1").unwrap();
+        let day = Duration::hours(24);
+        let lane = |scope: &'static str| match view.holder(now, day, move |held| held == scope) {
+            Some(Holder::Lane(lane)) => Some(lane),
+            Some(Holder::Invalid(record)) => panic!("{record:?}"),
+            None => None,
+        };
+        let held = lane("TASK-1").unwrap();
         assert_eq!(
             (held.claim.host.as_str(), held.state),
             ("dell2", State::Reporting)
         );
-        let held = view.holder(|scope| scope == "TASK-2").unwrap();
+        let held = lane("TASK-2").unwrap();
         assert_eq!(
             (held.claim.host.as_str(), held.state),
             ("dell2", State::Silent)
         );
         assert_eq!(held.age_mins(now), 70);
-        assert!(view.holder(|scope| scope == "TASK-3").is_none());
+        assert!(lane("TASK-3").is_none());
         // A reviewer's claim is not an implementer lane on the change.
-        assert!(view.holder(|scope| scope == "PR-7").is_none());
+        assert!(lane("PR-7").is_none());
+        // A silent record older than the horizon is a leftover: with only
+        // such records, nobody holds the spec.
+        assert_eq!(
+            view.holder(now, Duration::minutes(60), |held| held == "TASK-2"),
+            None
+        );
     }
 
     #[cfg(unix)]
