@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587336Z
-modified_at: 2026-11-20T04:45:49.949879562Z
+modified_at: 2026-11-20T04:46:26.901681061Z
 req_type: Bug
 tags:
 - admission
@@ -53,6 +53,13 @@ comments:
   content: 'Product 21:47 CORRECTION to the 21:43 workaround: ''aida pr train <PR>'' from a human terminal is ALSO refused while the loops run. admission_owner.rs:252-258 serializes trains: a CooperativeTrain (or legacy auto-train) is refused whenever any receipt has purpose ''legacy auto-train'' or ''cooperative manual train'', and the auto-train worker holds its ''legacy auto-train'' receipt for its lifetime. Net effect: while the loop workers run, the ONLY thing that can land a PR is auto-train itself; no human ship or manual train can. Seen with Joe''s ''aida pr train 4324'' at 21:45. Add an AC: a human-initiated single-PR ship or train must be able to run (or queue into auto-train) while the loops are up.'
   created_at: 2026-11-20T04:45:49.949879562Z
   modified_at: 2026-11-20T04:45:49.949879562Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f747-2c66-71c3-a514-a5a909247c83
+  author: joe
+  content: 'Product 21:50: options for landing an exclusive-starved PR while the loops run (2026-11-19, promotion 23 #4324). (A) advisor-121''s race: after any in-flight train finishes, in ONE command ''pkill -TERM -f "aida advisor loops (worker|train-worker)"; sleep 3; aida pr ship <PR>''. Dead holders don''t block, and the supervisor respawns within ~2-4 min. Product''s caveats: Exclusive mode also runs review_watch::admission_quiescent (admission_owner.rs:275), so in-flight review attempts can still refuse it; killing review-watch mid-pass can leave unsettled attempts; and it races the respawn. (B) wait for the mandate-cover fix (BUG-2702) so auto-train lands it. Both are workarounds for exactly what this bug must fix.'
+  created_at: 2026-11-20T04:46:26.901681061Z
+  modified_at: 2026-11-20T04:46:26.901681061Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
