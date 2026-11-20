@@ -48,6 +48,26 @@ comments:
   modified_at: 2026-11-20T04:31:21.565802133Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f73f-b7d3-7231-9353-25509aaea74c
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (unit):** new `pr_ship::extract_branch_spec_ids` keeps only ids whose leading segment is a built-in spec-type prefix (`RequirementType::ALL` default prefixes; node-local `BUG-<hex>-N` keeps its BUG head). Unit tests: `promote/integration-23`, `train/<uuid>-1` yield nothing; `bug-2702-x`, `bug-<node>-464`, `story-1-foo` keep their id. Gate-feeding branch sites switch to it: `pr_gate_subject`, `ship_gate_known_ids`, train member ids, forge merge chokepoint hints, release --after-pr.
+    - **AC2 (unit + fixture):** in `collect_mandate_cover`, a NAMED spec with no current record whose id came only from the branch (not the forge PR title, not a commit trailer) is demoted to non-named, so it is judged like a trace-derived id (history/ledger still sticky; dangling passes). Forge unreadable -> no demotion (fail closed).
+    - **AC3 (fixture, production path):** `mandate_ship_cover` driven end-to-end with a gh stub: head `promote/integration-23`, title `(Refs STORY-1 STORY-2)`, ids from `ship_gate_known_ids` -> named specs are exactly STORY-1/STORY-2, all resolve and pass exclusion judging. Control: title naming an unknown `STORY-999` still yields SpecsUnresolved.
+
+    ### Expected files
+    - `aida-cli-lib/src/pr_ship.rs`, `pr_service.rs`, `pr_train.rs`, `forge.rs`, `upgrade_release.rs`, `pr_service.rs` (title-bearing forge read), `gate/mandate_ship.rs`
+    - tests: `gate/tests/story_1698_mandate_tests.rs` (or a new bug_2702 test module), pr_ship unit tests
+
+    ### Ambiguities / conflicts as questions
+    - Store-defined custom type prefixes are not consulted (built-in types only); acceptable?
+  created_at: 2026-11-20T04:38:30.611358910Z
+  modified_at: 2026-11-20T04:38:30.611358910Z
+  session_id: 01a1f73a92b0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f73a-c324-7321-9f94-4127ab5cc9cb
   author: aida-session-start
