@@ -1,0 +1,38 @@
+id: 01a1f9ac-913f-7442-ad5e-aeff02a2babc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1134
+agreed_id: TASK-3825
+title: 'Fix-forward: make TASK-3792 deadline tests load-tolerant (bounded wait for descendant exit; elapsed grace) without weakening them'
+description: |
+  Fix-forward for recurring CI-load flakes in TASK-3792's deadline tests (story_2824_train_check_tests.rs).
+
+  Evidence: task_3792_train_check_bounds_discovery_and_member_subprocesses failed on main at b41fd68 (2026-11-20 03:59, "fetch: timed-out
+  descendant still running", :638), and task_3792_approval_local_git_reads_share_the_deadline failed on #4344's full tier 44751169717
+  (07:12, :973). Both passed on rerun. The descendant-death and deadline assertions race the process-group kill and CI load.
+  Acceptance:
+  1. Where a test asserts a timed-out descendant is gone, poll with a bounded wait (e.g. up to 5 s, short interval) for the process to exit
+     before asserting; where a test asserts elapsed-under-deadline, give a load-tolerant upper bound that still proves the deadline applied
+     (e.g. deadline plus a fixed grace, far below the unbounded case).
+  2. Assertions keep their meaning: an unbounded or unkilled child still fails the test (state the mutation in a comment).
+  3. No production changes. Loop each test 20/20 locally.
+  Test-only, codex (gpt-6.2-astra), FASTTRACK review.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T15:56:38.591487997Z
+modified_at: 2026-11-20T15:56:38.591487997Z
+req_type: Task
+tags:
+- fix-forward
+- flaky-test
+- linked:STORY-2695
+- linked:TASK-3792
+filed_at:
+  code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 78b437097cb
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
