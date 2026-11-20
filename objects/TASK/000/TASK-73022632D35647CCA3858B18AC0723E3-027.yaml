@@ -12,12 +12,12 @@ description: |
   2. Every class (a) test is made hermetic: it builds its own temp AIDA home, grant store, mailbox and git roots, and never reads the operator's live ones. The test asserts nothing about the invoking host's seats or grants.
   3. After the fix, the same filtered command passes 3 consecutive runs in a dell1 lane job and 3 on the primary host, with no class (a) failures. Post the job ids here.
   4. Class (b) failures are linked to BUG-2623, not fixed here.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T19:12:22.864842445Z
+modified_at: 2026-11-20T19:13:24.284029122Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -356,6 +356,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fa60-b65c-7af0-a3fc-fc5b37cc5c5b
+  author: dirtlab
+  timestamp: 2026-11-20T19:13:24.572273617Z
+  session_id: 01a1fa5f8f3f
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
@@ -363,3 +372,9 @@ filed_at:
   vendor: codex
   session: 01a1e1976efb
   harness_version: codex-cli 0.167.0
+attention_reason:
+  category: design-fork
+  detail: 'PR #4365 conflict in aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs at story_2640_fast_gate_real_lane_exit_paths_settle_reservations. Both sides change the behavior of the same disk-headroom preflight: HEAD injects 100 GiB available, while the staged base writes project configuration lowering the floor to 1 GiB. The conflict-only brief requires a punt on behavioral overlap.'
+  lean: Keep both fixture settings to preserve the base configuration and deterministic available-space evidence.
+  raised_by: implementer
+  raised_at: 2026-11-20T19:13:24.284029122Z
