@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T20:38:04.883718894Z
+modified_at: 2026-11-20T20:52:32.802663345Z
 req_type: Story
 tags:
 - landing
@@ -982,6 +982,11 @@ history:
   timestamp: 2026-11-20T19:59:35.241066042Z
   session_id: 01a1fa84e9ac
   changes: []
+- id: 01a1fabb-7a71-7a62-a97b-c1a3f2d78fd4
+  author: joe
+  timestamp: 2026-11-20T20:52:33.009974985Z
+  session_id: 01a1fab6f682
+  changes: []
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
@@ -995,16 +1000,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: |-
-    Request changes: STORY-2897 completing Docs AC is unmet (F1); two additional non-blocking reporting findings (F2-F3) are retained in full. Reviewed all 32 changed files against integration at exact SHA 4578245cc962948b515060262c736c792fda87ad. Generated worksheet used; STORY-2897 maps to canonical STORY-b6b1278890774ef993d2ebc327862470-797. Other worksheet specs are inherited ancestry context, not completing claims of this PR title. Recorded advisor amendments were read, including the scheduled-only watch ruling. No local Cargo/build/test commands run. Existing failed FAST aggregate job 136523312126 reports GATES=cancelled and COMPILE=cancelled after FULL relabel; FULL run 44804073474 has contracts, cli-0, cli-1, lib-1 and rest passing, gates and lib-0 still running at review time. CI pending is not the reason for request changes.
-
-    Acceptance audit (source evidence, not a claim of fresh test execution):
-    AC1 acb5725d (review-gated ship/mandate; exact-head independent approval, holds, authorship, protected coverage and completion): verified by source evidence in pr_cmd.rs, landing_policy.rs and gate/, and existing story_2903_review_gated_base_tests.rs / story_2905_train_recheck_tests.rs. These prior slices are present at the reviewed head; no local execution claimed.
-    AC2 ac3ac6ae (mode set/reconcile, before/after, reversibility, operator/mandate restriction): verified by land_mode.rs and existing story_2897_land_mode_tests.rs, including reconcile_sets_reads_back_and_reports_before_and_after, a_mismatched_read_back_restores_and_verifies_the_previous_checks, a_guest_may_read_but_not_change_the_landing_mode and the authority-lapse cases. No local execution claimed.
-    AC3 acaf82b5 (first-red alert and specs, action routing, red-main metrics): verified by main_watch.rs and source assertions in a_red_opens_one_episode_mails_once_with_evidence_and_files_nothing_yet, a_red_that_survives_its_rerun_files_one_fix_spec_with_evidence, each_revert_trigger_is_escalated_once_after_confirmation, a_window_strictly_inside_an_episode_counts_only_its_own_slice and the close/replay tests. Apply the recorded fix-forward-first, flake-damping and scheduled-only amendments; the original 15-minute revert clock and per-landing-pass trigger are superseded. F2 is a separate reporting defect.
-    AC4 acfe023a (live promotion refuses non-green main and names last green; worktree activation unaffected): verified by existing dev_build.rs green_main_refusal/plan_promotion_at and story2897_green_main_tests (only_a_green_commit_allows_promotion, green_main_promotes_only_the_clean_build_of_the_checked_commit, the_last_green_note_keeps_none_apart_from_unreadable). The promotion-policy amendments and STORY-2912 remain separate context. No local execution claimed.
-    AC5 Docs (two-seat protocol AND landing docs describe both modes and when to choose each): unverified. Landing and configuration docs cover the modes, but aida-core/templates/.aida/discipline/two-seat-protocol.md and its installed copy still mandate green Build and train routing universally, with no ci-gated/review-gated explanation. This completing trailer claims the whole criterion; see F1.
-    AC6 Tests (ship gates per mode, mocked required-check reconcile, red-main alert routing and promotion refusal): verified by source inspection of the existing mode/ship/promotion suites above and the 43 main_watch tests added here, including mocked ports, real queue/human persistence, lock contention, incomplete-log retry and torn-journal replay. No Cargo, build or local tests run; FULL CI remains partly pending.
+  detail: 'Full integration-relative sweep at the exact requested SHA: REQUEST CHANGES for a journal replay/append boundary mismatch that permanently loses transitions after a short final-line write (data-loss/unmet-claimed-ac). Complete actionable list also includes lost failed rerun retries, discarded busy-lock smoke failures, missing jobs pagination, and false fixed attribution. STORY-2897 criterion status: AC1 verified by inherited ship/recheck source fixtures; AC2 verified by inherited forge-reconcile/authority fixtures; AC3 unverified due to recovery/remediation defects (using advisor-amended flake damping and scheduled-only scope); AC4 verified by inherited promotion-guard source fixtures; Docs verified in both protocol copies and landing docs; Tests unverified for the missing recovery regressions. No local tests/builds run per policy. Existing aggregate CI failure had GATES=cancelled and COMPILE=cancelled; other CI was pending, which does not drive this verdict. Per-criterion statuses for all 133 worksheet entries and detailed evidence are in .aida/review-assessment-pr-4362.md; unrelated integration-history criteria are explicitly N/A to this PR delta.'
   recovery_hint: address the review findings, move STORY-2897 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-20T19:59:28.428246853Z
+  shelved_at: 2026-11-20T20:52:32.802663345Z
