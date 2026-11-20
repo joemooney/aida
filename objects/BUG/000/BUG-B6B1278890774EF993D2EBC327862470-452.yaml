@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-20T15:11:00.219480338Z
+modified_at: 2026-11-20T15:18:51.576268153Z
 req_type: Bug
 tags:
 - conflicts
@@ -741,6 +741,13 @@ comments:
   created_at: 2026-11-20T15:11:00.219480338Z
   modified_at: 2026-11-20T15:11:00.219480338Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f98a-295f-7ca0-97ab-109a344fc1e8
+  author: joe
+  content: 'advisor-121 2026-11-20 08:24: related rework-routing defect. TASK-3786''s lanes twice ran as reworks of its finished #4309 review: once on the spec''s canonical (merged) branch, and once even on a fresh --branch, because queue work hands the lane the spec''s stored ''authoritative round-2 task'' (a resolved #4309 finding) and treats the newer advisor brief as older context. Both lanes punted no-change. Workaround: completed TASK-3786 and moved the remaining scope to TASK-3822. Fix direction: a stored rework round should only drive a lane while its PR is open; once the PR is merged or closed, the next pickup is fresh work with the newest brief.'
+  created_at: 2026-11-20T15:18:51.576268153Z
+  modified_at: 2026-11-20T15:18:51.576268153Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
