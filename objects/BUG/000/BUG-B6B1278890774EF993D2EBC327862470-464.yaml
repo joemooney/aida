@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:25:22.503984255Z
-modified_at: 2026-11-20T05:34:45.701592531Z
+modified_at: 2026-11-20T05:35:20.251029861Z
 req_type: Bug
 tags:
 - landing
@@ -88,6 +88,22 @@ comments:
     cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
   created_at: 2026-11-20T05:34:45.701592531Z
   modified_at: 2026-11-20T05:34:45.701592531Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f773-be04-7c60-a50a-c59558b3526d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2702):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e5faadc10c51
+    Recorded: 2026-11-20T05:33:58.086915782+00:00
+    Findings:
+    1. [P1] Do not infer branch-only provenance from an unreadable commit range. aida-cli-lib/src/pr_service.rs:461-492 trusts forge_resolved plus trailer_ids, but review_pr_subject_from_forge_transport (review_commands.rs:3905 onward) returns Ok with an empty commit_subjects list when both local git-log attempts fail. collect_mandate_cover gathers this subject before fetching missing refs (mandate_ship.rs:668-714). On an unfetched head, branch story-998-promo, title (Refs STORY-1), and an actual commit trailer (STORY-998), the missing trailer becomes indistinguishable from absence; after refs are fetched for trace collection, STORY-998 is demoted and may pass as dangling instead of refusing SpecsUnresolved. This newly weakens AC ace0f89c's authoritative commit/trailer behavior. Carry explicit successful, complete commit-read evidence, read the pinned range after fetching, and refuse demotion on missing/failed evidence; add a production transport regression with an initially missing head and an unknown trailer matching the branch ID.
+    2. [P1] Resolve numeric ID aliases before demoting a branch subject. aida-cli-lib/src/gate/mandate_ship.rs:192 newly treats req.is_none() as proof that an ID does not resolve, although the lookup at lines 144-156 compares only exact case-insensitive spellings. With an excluded current STORY-1, branch story-0001-promo and a title naming a separate ordinary STORY-2, STORY-0001 resolves to STORY-1 under AIDA numeric identity but this lookup misses it and marks it non-named. History and ledger queries also use exact uppercase keys/object filenames (mandate.rs:StoreHistoryBatch and store_history_alias_map), so if only STORY-1 was stored, the padded subject has no history/ledger entry and judge_exclusion_spec drops it as dangling. Before this change it refused as a missing named spec. Use unambiguous canonical store resolution, preserve canonical IDs/aliases for history and ledger checks, and refuse ambiguity/errors before permitting demotion. Add regression coverage proving a padded branch ID retains the canonical spec's exclusion.
+    3. [P2] Exercise the actual mandate ship-cover entry point required by AC ac2518fd. aida-cli-lib/src/gate/tests/bug_2702_promotion_cover_tests.rs:148-175 calls collect_mandate_cover with a custom spec_cover callback (lines 38-55) and record_exclusions=false. The callback duplicates only part of hold_cover and never runs ship_decision; it returns a fabricated 'covered STORY-1 STORY-2' identifier rather than approval by the active mandate. The test also injects ReviewPrSubject, bypassing production commit transport, which conceals finding 1. Consequently the claimed regression can pass without a valid ship approval or the real mandate decision succeeding. Add a regression through mandate_ship_cover_for_ship (the entry used by ship), using real fixture commits, valid reviewer/shipper evidence and the active mandate; assert the real mandate ID for the promotion and SpecsUnresolved for unknown title/trailer controls.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T05:35:20.068579202Z
+  modified_at: 2026-11-20T05:35:20.068579202Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
