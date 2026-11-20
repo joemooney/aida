@@ -1,0 +1,41 @@
+id: 01a1f873-4929-7be2-8bde-20874c4661ce
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-467
+agreed_id: BUG-2705
+title: 'Seat-clone lanes exit unpublished: ''fast gate needs a clean committed seat'' because the host post-exit commit of the lane''s uncommitted edits did not run'
+description: |
+  Seat-clone lanes exit unpublished with "fast_gate=fail: fast gate needs a clean committed seat": the host post-exit commit did not run.
+
+  Evidence (product seat, 2026-11-19/20): three lane rounds lost to the same cause: STORY-2884 DOCFIX (19:19), STORY-2884 r4 (02:03, +24/-31
+  uncommitted), BUG-2697 r2 (02:04, +225/-38 uncommitted). Lanes are instructed to leave edits uncommitted for host publication
+  ("Native seats must leave edits uncommitted for host publication", lane_fast_gate.rs:779); the host is meant to commit them after exit via
+  ship_from_seat::post_exit_commit_reported (lane_fast_gate.rs:~500) before snapshot() requires a clean committed seat (:509-525). In these
+  seat-clone lanes that commit did not happen, so the gate refused, and the lane log shows only "fast_gate=fail" with no reason.
+
+  Acceptance:
+  1. When a lane exits with uncommitted edits in its seat, the host post-exit commit runs before the clean-seat check; if it is skipped or
+     fails, the gate reports the exact reason (which condition skipped it, or the git error) in the lane log and the publication record,
+     not a bare fast_gate=fail.
+  2. Root-cause the skipped commit in these runs (e.g. the `clean` argument, lease/spec mismatch, a seat-clone path that bypasses it) and fix it.
+  3. Regression through the real lane exit path (scripts/lane-run.sh-driven or its Rust entry): a seat-clone lane exits with uncommitted
+     edits, the host commits them, the fast gate runs on the committed tree, and the head publishes.
+  Lane-publication path: Claude lane, STRICT review. High priority (costs a lane round per occurrence).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T10:14:27.369204398Z
+modified_at: 2026-11-20T10:14:27.369204398Z
+req_type: Bug
+tags:
+- fast-gate
+- lanes
+- publication
+filed_at:
+  code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 888f8b76a6d
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
