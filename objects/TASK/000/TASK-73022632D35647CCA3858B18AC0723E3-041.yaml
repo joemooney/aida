@@ -1,5 +1,6 @@
 id: 01a1fab9-a64b-7a43-808a-b9d51338d87a
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-041
+agreed_id: TASK-3183
 title: 'Throughput guard: LANE-OUTCOME sees only the lanes launched from the host it runs on'
 description: |
   LANE-OUTCOME reads the lane receipts under .aida/lane-results/ of the checkout the guard runs in (aida-cli-lib/src/land_stalls_lanes.rs lane_outcome_facts). Receipts are host-local, so a lane launched on dell1 is reported only by a scheduled throughput-guard run on dell1. If only the primary host runs the scheduler, exits of lanes on other hosts are never reported.
@@ -23,6 +24,13 @@ tags:
 - landing
 - severity:minor
 - throughput
+history:
+- id: 01a1fb44-8728-7fd3-91fb-619a683e9163
+  author: joe
+  timestamp: 2026-11-20T23:22:14.696310823Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30
   branch: task-b6b1278890774ef993d2ebc327862470-1136

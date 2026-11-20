@@ -1,5 +1,6 @@
 id: 01a1fab9-8f26-7ec3-95b4-aaf4911d05aa
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-040
+agreed_id: TASK-3181
 title: 'Throughput guard: name the cause on a STUCK-REVIEW line (watcher admission busy, or a stale reviewer tree or lease)'
 description: |
   The advisor's 11:58 note on TASK-3827 kept one enhancement from the 11:55 note in that spec: a STUCK-REVIEW line should name why no reviewer was launched ("watcher admission is busy" in the review-watch log, or a stale aida-pr-N reviewer tree or lease). The 12:55 brief did not list it and the TASK-3827 change does not do it.
@@ -21,6 +22,13 @@ tags:
 - landing
 - severity:minor
 - throughput
+history:
+- id: 01a1fb44-2806-71d0-aef2-92e4a5f5a921
+  author: joe
+  timestamp: 2026-11-20T23:21:50.342374997Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30
   branch: task-b6b1278890774ef993d2ebc327862470-1136

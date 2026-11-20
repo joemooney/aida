@@ -1,5 +1,6 @@
 id: 01a1faf1-fdb9-71e2-9ec5-0eb891bc3ccf
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1167
+agreed_id: TASK-3185
 title: 'Review follow-up: The episode can name the wrong first red commit and never corrects it. A commit older than'
 description: |-
   From STORY-2897
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T21:52:05.561100673Z
+history:
+- id: 01a1fb44-e654-7b22-ad0c-9d07f2c5b4cf
+  author: joe
+  timestamp: 2026-11-20T23:22:39.060560387Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362

@@ -1,5 +1,6 @@
 id: 01a1faed-18c2-7b90-8e66-286c765cf017
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-042
+agreed_id: TASK-3184
 title: Drain-driven implementer lanes do not refresh their shared claim heartbeat
 description: |
   BUG-2706 made the standalone implementer launcher (aida-cli-lib/src/standalone_implementer.rs run()) refresh its session claim's heartbeat every 10 minutes, so a review watcher on another host defers for the whole lane. The drain's implementer phase (aida-cli-lib/src/phase_driver_trait.rs, spawn_and_wait_watched around line 579) does not: the child session mints the lease, so the launcher has no lease id to refresh by until the child exits. A drain implementer on a foreign lane host is therefore deferred only for the claim TTL plus `[review] lane_unknown_defer_mins` (50 minutes by default).
@@ -19,6 +20,13 @@ tags:
 - from-implementer:BUG-2706
 - kind:followup-suggestion
 - severity:minor
+history:
+- id: 01a1fb44-b6dc-7640-988c-604e1de1ea2d
+  author: joe
+  timestamp: 2026-11-20T23:22:26.908954474Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 9a5565b17c8552116a9ba459a9f8a31a7011af43
   branch: bug-b6b1278890774ef993d2ebc327862470-468
