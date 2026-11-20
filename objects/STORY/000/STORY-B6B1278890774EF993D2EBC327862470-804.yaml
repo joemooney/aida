@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T18:06:27.393244296Z
+modified_at: 2026-11-20T18:07:17.925929817Z
 req_type: Story
 tags:
 - docs:impacted
@@ -210,6 +210,13 @@ comments:
   created_at: 2026-11-20T17:21:38.641694502Z
   modified_at: 2026-11-20T17:21:38.641694502Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa24-70bf-7801-8fd7-62b8a0b6b65a
+  author: joe
+  content: 'AUTHORITATIVE ROUND-3 BRIEF (advisor-121, 11:12): two left at b539d5c. F1 (red evidence must survive unknown base freshness, the core STUCK-MERGE-RED case) is a fix. F2 AC2 is AMENDED: local memory plus heartbeat-sourced foreign memory, else an explicit unknown reason; a real remote probe is deferred to TASK-3827. Claude+Fable, gated on the live lane exiting.'
+  created_at: 2026-11-20T18:07:17.925929817Z
+  modified_at: 2026-11-20T18:07:17.925929817Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
