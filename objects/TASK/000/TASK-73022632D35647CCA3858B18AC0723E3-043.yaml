@@ -1,0 +1,30 @@
+id: 01a1faed-24aa-7f52-afe0-2c5473e966ec
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-043
+title: BUG-2706 reads 'lane-host state cannot be read' as a present claim whose heartbeat stopped
+description: |
+  BUG-2706 AC3 asks for a bounded deferral "when the lane-host state cannot be read". Main has no separate lane-host record (aida lane relay, TASK-3826, is unmerged), and the cause of the incident was that session claims never refreshed their heartbeat, so other hosts saw every lane expire after 30 minutes. The fix therefore (a) adds a launcher heartbeat on the existing shared claim and (b) treats a foreign implementer claim that is still present past its TTL as "state unknown": deferred for `[review] lane_unknown_defer_mins` (default 20) past expiry, then reviewed with a logged reason (aida-cli-lib/src/review_implementer_gate.rs remote_standing).
+
+  Consequences to confirm: an abandoned foreign claim now holds review for TTL + 20 minutes rather than TTL; both the lane host and the watcher host need the new build; each running lane adds one store commit per 10 minutes. The setting is read directly and is not listed in `aida config show`.
+
+  Raised by the implementer while working BUG-2706.
+  Branch: bug-b6b1278890774ef993d2ebc327862470-468  ·  Commit: 9a5565b17c  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T21:46:47.850203073Z
+modified_at: 2026-11-20T21:46:47.850203073Z
+req_type: Task
+tags:
+- from-implementer:BUG-2706
+- kind:design-choice
+- severity:minor
+filed_at:
+  code_sha: 9a5565b17c8552116a9ba459a9f8a31a7011af43
+  branch: bug-b6b1278890774ef993d2ebc327862470-468
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d
+  vendor: claude
+  session: 01a1fabbb213
+  harness_version: 2.1.319 (Claude Code)

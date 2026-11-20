@@ -89,6 +89,35 @@ comments:
   modified_at: 2026-11-20T21:39:43.446462002Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1faec-dff9-7a12-86df-f590d4b8bdd4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9a5565b17c (git diff origin/main...HEAD; 7 files).
+
+    Acceptance evidence
+    - AC1 [evidence: behavioral-test] coordination::heartbeat::tests::bug2706_heartbeat_refreshes_and_publishes_only_the_lanes_own_claim (real bare-origin store: a 45-min-old claim is refreshed, committed and pushed; a second lane's claim is untouched), bug2706_guard_beats_while_held_and_stops_on_drop, and review_implementer_gate::tests::bug2706_foreign_lane_defers_past_claim_ttl_until_it_exits (fake host lane-host-fixture, live at 45 min and 4 h). Launcher wiring: standalone_implementer.rs run().
+    - AC2 [evidence: behavioral-test] same gate test: deferral is independent of the head; after the claim is released nothing defers and no forge lookup is made. review_watch::tests::story2705_parked_merge_head_is_unreserved_then_admitted_once_after_lease_ends covers admitting the then-current head once.
+    - AC3 [evidence: behavioral-test] bug2706_unreadable_foreign_lane_defers_for_the_bound_then_reviews_with_a_reason and bug2706_unknown_defer_setting_defaults_to_twenty_minutes_and_bounds_the_wait.
+    - Runs: lane job j20261120T211638426-3-0, 155 passed 0 failed (filters bug2706 story2705 standalone_implementer session_start_default_role_claim coordination::). make check-ci-fast via lane job j20261120T212324044-11-0 exit 0. check-store-writers.py passes (6 new sink rows, all blocked like their heartbeat_lock_claim siblings).
+
+    Probe findings
+    - Consistency: claim matched by lease id + host + not-review; spec match stays case-insensitive. No mismatch found.
+    - Format: heartbeat RFC 3339; unparseable or more than 5 min in the future is no evidence (unchanged intent, skew tolerance added). Setting accepts integers 0..=1440 only; anything else keeps 20.
+    - Multiplicity: several lanes on one change: live outranks unknown, longest unknown bound is named; zero claims short-circuits before the forge lookup.
+    - Authority/fail-open: an unreadable config keeps the 20-min bound rather than 0. One existing assertion changed on purpose (story2705_cross_host...: an expired unreleased claim now defers for the bound before it stops deferring, per AC3); no test removed or ignored.
+
+    Fixes during review: heartbeat guard now stops at once on drop (was up to 1 s per launcher exit); lapse log is once per change and lane, not once per pass.
+
+    Residual risks
+    - Both hosts need this build: the lane host to send heartbeats, the watcher host for the bounded unknown state. With only the watcher updated a long lane is deferred 50 min instead of 30.
+    - Drain-driven implementers (phase driver) do not heartbeat: their lease id is unknown until the child exits. They get the bounded deferral only.
+    - Each running lane adds one store commit per 10 minutes.
+    - AC3 read as 'claim present, heartbeat stopped'; no separate lane-host record exists on main.
+  created_at: 2026-11-20T21:46:30.265841688Z
+  modified_at: 2026-11-20T21:46:30.265841688Z
+  session_id: 01a1fabbb213
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
