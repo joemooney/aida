@@ -14,12 +14,12 @@ description: |
   Impact: anything that reads the ledger before the last write lands sees request-changes for an approval the operator recorded, and the round counter inflates ("round 6").
 
   Acceptance: (1) one `review record --verdict approved` produces exactly one verdict ledger event for the spec. (2) A no-op "unchanged" record writes no ledger event. (3) Regression test covering a prior sweep_pending barrier.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-20T23:17:09.002687799Z
+modified_at: 2026-11-20T23:19:37.876673952Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -613,6 +613,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1fb42-2294-7520-a00b-732c8cfea043
+  author: aida-orchestrator
+  timestamp: 2026-11-20T23:19:37.876687227Z
+  session_id: 01a1fb3f2daf
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2
@@ -623,3 +631,11 @@ filed_at:
   vendor: claude
   session: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2662 has regression coverage for one approval over a pending barrier and for an identical repeat. Blocking durability defect: a human approval is reported and published after a failed ledger sync. Additional findings concern duplicate or lost coordination announcements and orphaned receipts. FAST CI passed; merge-hold-gate awaits clearance.'
+  recovery_hint: address the review findings, move BUG-2662 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-20T23:19:37.876673952Z
