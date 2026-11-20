@@ -1081,11 +1081,14 @@ pub(crate) fn main_worktree_root_from(start: &std::path::Path) -> std::path::Pat
         }
         crate::seat_clone::MainFor::NotAClone => {}
     }
-    let out = std::process::Command::new("git")
-        .arg("-C")
+    // A scoped read deadline (`train --check --timeout`) bounds the listing;
+    // a listing it cuts off falls back to `start` like any failed one.
+    // trace:TASK-3792 | ai:claude
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C")
         .arg(start)
-        .args(["worktree", "list", "--porcelain"])
-        .output();
+        .args(["worktree", "list", "--porcelain"]);
+    let out = crate::forge_lookup::deadline_output(cmd, std::process::Command::output);
     if let Ok(o) = out {
         if o.status.success() {
             for line in String::from_utf8_lossy(&o.stdout).lines() {

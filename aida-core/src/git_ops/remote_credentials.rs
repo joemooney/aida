@@ -85,7 +85,18 @@ pub fn configure_remote_credentials_with(
 ) {
     let is_named_remote = !remote.is_empty() && !remote.contains("://") && !remote.contains('@');
     let stored_urls = if is_named_remote {
-        configured_remote_urls(dir, remote)
+        match configured_remote_urls(dir, remote) {
+            Some(urls) => urls,
+            // TASK-3792: the stored URLs could not be read before the scoped
+            // deadline, so whether they carry a token is unknown. Fail closed:
+            // this invocation may use no transport at all, never the stored
+            // URL with its token in a helper's argv.
+            // trace:TASK-3792 | ai:claude
+            None => {
+                cmd.env("GIT_ALLOW_PROTOCOL", "");
+                return;
+            }
+        }
     } else {
         Vec::new()
     };
@@ -312,26 +323,86 @@ fn append_git_config_env(cmd: &mut Command, key: &str, value: &str) {
     cmd.env("GIT_CONFIG_COUNT", (current_count + 1).to_string());
 }
 
+thread_local! {
+    static CONFIG_READ_DEADLINE: std::cell::Cell<Option<std::time::Instant>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Run `f` with every stored-URL read [`configure_remote_credentials`] makes
+/// on this thread bounded by `deadline` (tightened by any outer one). A read
+/// that does not finish in time leaves the command unable to use any
+/// transport. `None` adds no bound.
+// trace:TASK-3792 | ai:claude
+pub fn with_config_read_deadline<T>(
+    deadline: Option<std::time::Instant>,
+    f: impl FnOnce() -> T,
+) -> T {
+    struct Restore(Option<std::time::Instant>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            CONFIG_READ_DEADLINE.with(|cell| cell.set(self.0));
+        }
+    }
+    let outer = CONFIG_READ_DEADLINE.with(std::cell::Cell::get);
+    let deadline = match (deadline, outer) {
+        (Some(inner), Some(outer)) => Some(inner.min(outer)),
+        (inner, outer) => inner.or(outer),
+    };
+    let _restore = Restore(CONFIG_READ_DEADLINE.with(|cell| cell.replace(deadline)));
+    f()
+}
+
 /// Every `remote.<name>.url` and `remote.<name>.pushurl` value exactly as
-/// configured (before any `insteadOf` rewrite), in git's order.
+/// configured (before any `insteadOf` rewrite), in git's order. `None` only
+/// under [`with_config_read_deadline`], when the read did not finish in time.
 // trace:BUG-2119 | ai:claude
 // remote-creds-ok(TASK-2001): `git config --get-regexp` reads the local
 // configuration only; it never contacts the remote.
-fn configured_remote_urls(dir: &Path, remote: &str) -> Vec<String> {
-    let out = super::host_git_command(dir)
-        .args([
-            "config",
-            "--get-regexp",
-            &format!("^remote\\.{}\\.(url|pushurl)$", regex_escape(remote)),
-        ])
-        .output();
-    let Ok(out) = out else {
-        return Vec::new();
+fn configured_remote_urls(dir: &Path, remote: &str) -> Option<Vec<String>> {
+    let mut cmd = super::host_git_command(dir);
+    cmd.args([
+        "config",
+        "--get-regexp",
+        &format!("^remote\\.{}\\.(url|pushurl)$", regex_escape(remote)),
+    ]);
+    let stdout = match CONFIG_READ_DEADLINE.with(std::cell::Cell::get) {
+        None => match cmd.output() {
+            Ok(out) if out.status.success() => out.stdout,
+            _ => return Some(Vec::new()),
+        },
+        Some(deadline) => bounded_config_read(cmd, deadline)?,
     };
-    if !out.status.success() {
-        return Vec::new();
+    Some(stored_urls_from(&stdout))
+}
+
+/// `git config` under a deadline: its whole process group is killed when the
+/// deadline passes, and an expired deadline never spawns it. `None` when it
+/// did not finish; a finished read with no match is empty.
+// trace:TASK-3792 | ai:claude
+#[cfg(all(unix, feature = "native"))]
+fn bounded_config_read(cmd: Command, deadline: std::time::Instant) -> Option<Vec<u8>> {
+    if std::time::Instant::now() >= deadline {
+        return None;
     }
-    String::from_utf8_lossy(&out.stdout)
+    let (status, stdout) = crate::transport_policy::bounded(cmd, &[], 1 << 20, deadline).ok()?;
+    Some(if status.success() { stdout } else { Vec::new() })
+}
+
+#[cfg(not(all(unix, feature = "native")))]
+fn bounded_config_read(mut cmd: Command, deadline: std::time::Instant) -> Option<Vec<u8>> {
+    if std::time::Instant::now() >= deadline {
+        return None;
+    }
+    let out = cmd.output().ok()?;
+    Some(if out.status.success() {
+        out.stdout
+    } else {
+        Vec::new()
+    })
+}
+
+fn stored_urls_from(stdout: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(stdout)
         .lines()
         .filter_map(|line| line.split_once(' ').map(|(_, v)| v.trim().to_string()))
         .filter(|v| !v.is_empty())

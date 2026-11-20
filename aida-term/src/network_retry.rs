@@ -233,11 +233,25 @@ pub fn run_with_retry_checked(
     sink: &mut dyn RetrySink,
     mut build: impl FnMut() -> std::io::Result<Command>,
 ) -> std::io::Result<Output> {
+    retry_output(label, config, sink, None, || {
+        build()?.output_retrying_etxtbsy()
+    })
+}
+
+/// Retry a caller-owned transport without sleeping past its shared deadline.
+// trace:TASK-3792 | ai:codex
+pub fn retry_output(
+    label: &str,
+    config: &RetryConfig,
+    sink: &mut dyn RetrySink,
+    deadline: Option<std::time::Instant>,
+    mut output: impl FnMut() -> std::io::Result<Output>,
+) -> std::io::Result<Output> {
     let mut attempt: u32 = 0;
     loop {
         attempt += 1;
         // trace:BUG-1735 | ai:claude
-        let out = build()?.output_retrying_etxtbsy()?;
+        let out = output()?;
         if out.status.success() || attempt >= config.max_attempts {
             return Ok(out);
         }
@@ -248,6 +262,11 @@ pub fn run_with_retry_checked(
         let backoff = config
             .base_delay
             .saturating_mul(config.factor.saturating_pow(attempt - 1));
+        if deadline
+            .is_some_and(|d| d.saturating_duration_since(std::time::Instant::now()) <= backoff)
+        {
+            return Ok(out);
+        }
         sink.on_retry(&RetryEvent {
             label: label.to_string(),
             attempt,

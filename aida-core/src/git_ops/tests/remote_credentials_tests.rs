@@ -88,3 +88,46 @@ fn task_1924_each_host_gets_its_own_token() {
     );
     assert!(!b.contains("token-a"), "{b}");
 }
+
+/// The `GIT_*` environment `configure_remote_credentials` put on `cmd`.
+fn git_env(cmd: &Command) -> Vec<(String, String)> {
+    cmd.get_envs()
+        .filter_map(|(k, v)| Some((k.to_str()?.to_string(), v?.to_str()?.to_string())))
+        .filter(|(k, _)| k.starts_with("GIT_"))
+        .collect()
+}
+
+// TASK-3792: under a read deadline the stored-URL read is bounded. A read
+// the deadline cut off leaves the token's presence unknown, so the command
+// may use no transport at all; a read in time rewrites as before.
+// trace:TASK-3792 | ai:claude
+#[cfg(all(unix, feature = "native"))]
+#[test]
+fn task_3792_an_unread_stored_url_under_a_deadline_allows_no_transport() {
+    use std::time::{Duration, Instant};
+    let dir = repo_with_origin(&[("url", "https://u:secret-token@host.example/p.git")]);
+    let configure = |deadline: Option<Instant>| {
+        let mut cmd = Command::new("git");
+        with_config_read_deadline(deadline, || {
+            configure_remote_credentials(&mut cmd, dir.path(), "origin")
+        });
+        git_env(&cmd)
+    };
+    let expired = configure(Some(Instant::now()));
+    assert_eq!(
+        expired,
+        vec![("GIT_ALLOW_PROTOCOL".to_string(), String::new())],
+        "an expired deadline must refuse every transport"
+    );
+    let in_time = configure(Some(Instant::now() + Duration::from_secs(30)));
+    assert_eq!(in_time, configure(None));
+    assert!(
+        in_time
+            .iter()
+            .any(|(_, v)| v == "https://u:secret-token@host.example/p.git"),
+        "{in_time:?}"
+    );
+    assert!(!in_time.iter().any(|(k, _)| k == "GIT_ALLOW_PROTOCOL"));
+    // The scope restores the previous (absent) deadline.
+    assert_eq!(configure(None), in_time);
+}

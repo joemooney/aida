@@ -1770,12 +1770,13 @@ pub fn forge_cli_status(project_root: &Path) -> (ForgeKind, String) {
 
 /// Read `origin`'s URL via `git remote get-url origin`.
 pub fn origin_url(project_root: &Path) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
+    // A scoped read deadline (`train --check --timeout`) bounds the read.
+    // trace:TASK-3792 | ai:claude
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(project_root)
-        .args(["remote", "get-url", "origin"])
-        .output()
-        .ok()?;
+        .args(["remote", "get-url", "origin"]);
+    let out = crate::forge_lookup::deadline_output(cmd, Command::output).ok()?;
     if !out.status.success() {
         return None;
     }
@@ -2223,10 +2224,9 @@ impl GitHubForge {
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
-        Command::new(&gh)
-            .current_dir(&self.project_root)
-            .args(args)
-            .output_retrying_etxtbsy()
+        let mut cmd = Command::new(&gh);
+        cmd.current_dir(&self.project_root).args(args);
+        crate::forge_lookup::deadline_output(cmd, Command::output_retrying_etxtbsy)
             .context("could not invoke `gh` — is the GitHub CLI installed?")
     }
 
@@ -2962,22 +2962,34 @@ impl Forge for GitHubForge {
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
         let label = format!("gh pr view {id} --json metadata");
         let project_root = self.project_root.clone();
-        let out = crate::network_retry::run_with_retry_checked(&label, &cfg, sink, || {
-            // The final verified-train gate also uses this legacy reader.
-            // Checkpoint every attempt, including retries after transport errors.
-            // trace:STORY-2401 | ai:codex
-            crate::pr_train::before_train_forge_call("GitHub metadata attempt")
-                .map_err(std::io::Error::other)?;
-            let mut c = Command::new(&gh);
-            c.current_dir(&project_root).args([
-                "pr",
-                "view",
-                &id_str,
-                "--json",
-                "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
-            ]);
-            Ok(c)
-        })
+        // A scoped read deadline (`train --check --timeout`, whose approval
+        // gate reads the base through here) bounds every attempt and the
+        // backoff between them. trace:TASK-3792 | ai:claude
+        let out = crate::network_retry::retry_output(
+            &label,
+            &cfg,
+            sink,
+            crate::forge_lookup::forge_lookup_deadline(),
+            || {
+                // The final verified-train gate also uses this legacy reader.
+                // Checkpoint every attempt, including retries after transport errors.
+                // trace:STORY-2401 | ai:codex
+                crate::pr_train::before_train_forge_call("GitHub metadata attempt")
+                    .map_err(std::io::Error::other)?;
+                let mut c = Command::new(&gh);
+                c.current_dir(&project_root).args([
+                    "pr",
+                    "view",
+                    &id_str,
+                    "--json",
+                    "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+                ]);
+                crate::forge_lookup::deadline_output(
+                    c,
+                    crate::process_retry::command_output_retrying_etxtbsy,
+                )
+            },
+        )
         .context("could not invoke `gh pr view`")?;
         anyhow::ensure!(
             out.status.success(),
