@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T15:21:14.685652012Z
+modified_at: 2026-11-20T15:39:47.252300291Z
 req_type: Bug
 tags:
 - dell1
@@ -783,6 +783,24 @@ comments:
   created_at: 2026-11-20T15:18:32.365081435Z
   modified_at: 2026-11-20T15:18:32.365081435Z
   session_id: 01a1f9528de5
+- id: 01a1f99d-22b4-77d0-a7cf-6821e1dda88b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d0c1679176 (PR #4364, round 2 rework of both advisor P1s).
+
+    Fixes:
+    - P1-1: recorded_review_lease_finished now requires ownership::reader::review_holder_proven_dead. Unreadable record, record naming a different session (replacement holder), or no holder => kept. journal_recorded_review_retirement re-checks and refuses instead of returning Ok on a foreign holder.
+    - P1-2: legacy/Unknown path (lease_processes_proven_gone) requires worker dead, lease_owner_gone==Some(true), AND creator_pid Dead via proc_identity::observe_legacy_registry (pid+start). Live creator outside the tree => kept. No recorded process => kept. stale_review_lease_ended (gone-tree release) uses the same proof.
+    - Pickup refusal now names a kept recorded reviewer lease and why.
+
+    Evidence: lane job cargo test -p aida-cli-lib --lib: bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup (pid-less kept; live creator kept; replacement holder kept + journal refuses; dead holder retired) and bug_2684_stale_review_lease_with_gone_tree_is_released_without_prompt (pid-less, replacement holder, live legacy creator all kept). 117 passed incl. all lib ratchet groups, review_repickup_tests, bug_home_024. check-store-writers.py OK; aida-ci-guards ratchets 51/51 (liveness-primitive ratchet initially caught a non-proc_identity creator probe; fixed).
+
+    Residual risks: make check-ci-fast stopped at 'Containment conformance evidence tests' because this sandbox denies socket creation (PermissionError on socket()), so later source gates did not run locally; CI covers them. aida-cli bug_1502 integration ratchet and verify-manual not run locally (no CLI output change). Behavior change by design: pid-less stale reviewer leases are no longer auto-retired (Unknown => keep, reported).
+  created_at: 2026-11-20T15:39:47.252300291Z
+  modified_at: 2026-11-20T15:39:47.252300291Z
+  session_id: 01a1f98ba669
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
