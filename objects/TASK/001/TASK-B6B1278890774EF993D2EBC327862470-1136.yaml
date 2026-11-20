@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T21:36:09.186268150Z
+modified_at: 2026-11-20T21:36:45.165260394Z
 req_type: Task
 tags:
 - landing
@@ -125,6 +125,37 @@ comments:
   modified_at: 2026-11-20T21:23:20.940595270Z
   session_id: 01a1fa8a98f8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fae4-23ec-70a0-8869-a72189fc67dd
+  author: joe
+  content: |-
+    ADVISOR SCOPE RULING (advisor-121, 14:45): #4381 r1 had 24 findings, too broad. TASK-3827 becomes 4 sequential PRs (A foundation and safety = #4381 r2; B AC7b; C AC7c; D AC7d), each carrying its own findings (numbered in the brief). No new specs.
+
+    # Rework brief: TASK-3827 / PR #4381, round 2: SCOPE SPLIT (advisor ruling)
+
+    Advisor: claude-advisor-121, 2026-11-20 14:45 MST. Head reviewed: dc2c2ee (24 findings; too broad to converge). Lane: CLAUDE+Fable. COMMIT your work.
+    TASK-3827 now lands as FOUR sequential PRs, all with (Refs TASK-3827), the last one with (TASK-3827):
+      PR-A (THIS PR #4381): foundation. AC2 foreign-host lane visibility, STUCK-REVIEW cause naming, and the safety findings.
+      PR-B: AC7b MAIN-FLAKE-RECURRENCE (findings 3-7 and 21: attempts history, flake confirmation ordering, event-time windows, pagination
+            and checkpoints, test identity independent of the display excerpt, unknown timestamps).
+      PR-C: AC7c LANE-OUTCOME (findings 8-12 and 24: remote finished attempts, retain unresolved exits, rotated events and
+            ReclassifiedNeedsHuman, unreadable is not absent, the launching seat preserved, bounded and indexed receipt ingestion).
+      PR-D: AC7d STALE-CLAIM (findings 13-17: real paths and read status, the actual admission decision, the shared healer and lock decisions,
+            remote owners unknown).
+    For THIS PR: REMOVE the AC7b/c/d classifier code (it returns in PR-B/C/D). Fix:
+     1 AC2: lane count and ownership per host from a FRESH lane-host record (lease/lane records the lane relay and launcher write), with
+       observation age shown; a spec held by a live foreign lane is never STUCK-REWORK or STUCK-REVIEW "no lane". Coordinate: BUG-2706
+       (review-watch foreign-lane deferral) needs the SAME reader. Put it in one shared module; whichever PR lands first owns it, the other rebases.
+     2 STUCK-REVIEW cause: name the observed cause ("watcher admission is busy" from the review-watch log; a stale aida-pr-N tree or lease), else "unknown".
+     3 SECURITY: the SSH destination comes only from trusted default-branch config (or the operator's host registry), never the working tree.
+     4 other_stalls must never create store files: resolve the existing backend read-only; refuse on a legacy layout.
+     5 bounded regular-file reads for lane and receipt records; invalid ones surface as unreadable.
+     6 policy durations validated or checked arithmetic (no overflow panic).
+     7 sanitize and bound every routed field (IDs, error text, paths) to a single line.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-20T21:36:45.165260394Z
+  modified_at: 2026-11-20T21:36:45.165260394Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
