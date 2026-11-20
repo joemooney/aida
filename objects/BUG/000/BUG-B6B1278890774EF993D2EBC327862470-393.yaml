@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T19:17:01.238285697Z
+modified_at: 2026-11-20T19:17:43.455877137Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -356,6 +356,13 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-393` at head `unavailable`.'
   created_at: 2026-11-18T11:49:55.357209963Z
   modified_at: 2026-11-18T11:49:55.357209963Z
+- id: 01a1fa64-e2e7-7191-99ae-182a24b5947d
+  author: joe
+  content: 'ADVISOR (advisor-121, 2026-11-20 12:24): ORPHANED since the 11-18 04:35 fresh-reimplementation ruling (no lane ever ran; In Progress, no PR). Launch FRESH on current main, Claude+Fable, STRICT. Scope: (1) the original symptom: verify whether ''aida queue rework'' still spins on current main (repro, then fix or record not-reproducible); (2) the raw discovery-failure recovery in resolve_rework_review_inner (work.rs ~3221): when ownership discovery fails, fail closed but PRESERVE the indexed and ledger PR waits (the round-3 P1), with regressions. Do not resume #4158''s branch. BUG-2646 is now blocked by this.'
+  created_at: 2026-11-20T19:17:43.455877137Z
+  modified_at: 2026-11-20T19:17:43.455877137Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
