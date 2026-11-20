@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T20:27:12.454303800Z
+modified_at: 2026-11-20T20:28:17.812122841Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -418,6 +418,12 @@ comments:
   content: Implementer push ccb4768ffb5c declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-20T20:27:12.454302817Z
   modified_at: 2026-11-20T20:27:12.454302817Z
+  session_id: 01a1fa738e48
+- id: 01a1faa5-4614-7013-ae77-43dbdac6a710
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2629-fresh` at head `ccb4768ffb5cdc991267cc009deb368679d1fca2`.'
+  created_at: 2026-11-20T20:28:17.812116138Z
+  modified_at: 2026-11-20T20:28:17.812116138Z
   session_id: 01a1fa738e48
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
