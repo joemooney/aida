@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-20T01:15:47.177480009Z
+modified_at: 2026-11-20T14:16:17.827298834Z
 req_type: Bug
 tags:
 - bwrap
@@ -76,6 +76,20 @@ comments:
   created_at: 2026-11-20T01:15:47.177480009Z
   modified_at: 2026-11-20T01:15:47.177480009Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f950-eda1-7693-8f4a-41814c1f1b8e
+  author: joe
+  content: |-
+    Product 07:16: codex lane queued on dell1 (advisor 07:15 scope), brief:
+    # Brief: BUG-2676 (advisor-121 07:15: scoped remainder, approved + drain; codex)
+
+    Scope (advisor 11-19 11:42 and 18:20 reopen): ONLY the bug_2415 explicit-refspec session-end test that fails deterministically on dell1 but passes in hosted CI. #4316 fixed only task_2712 (it skips with a named reason when the extra-root sandbox is unsupported). Make bug_2415 hermetic or correctly skip with a named reason on unsupported hosts, without weakening it in hosted CI. Trailer: (Refs BUG-2676) unless you prove BOTH tests green on dell1 in the PR body.
+
+    Implement ONLY this remaining scope; earlier slices are on main (3c527fa4b72  ).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T14:16:17.827298834Z
+  modified_at: 2026-11-20T14:16:17.827298834Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ed07-d146-7933-8d9c-342df690cc7a
