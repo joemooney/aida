@@ -1,0 +1,41 @@
+id: 01a1f806-8cbe-7a63-9cf8-40df6b3f3059
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-466
+agreed_id: BUG-2704
+title: 'Mandate cover refuses promotion 23: a historical store version of STORY-2642 has committed conflict markers, so its history is unreadable and treated as excluded'
+description: |
+  Mandate ship cover refuses promotion 23 (#4324) because a historical store version contains committed git conflict markers.
+
+  Evidence (advisor-121, 2026-11-20 01:15): after BUG-2702 is live (888f8b7), `aida pr train 4324 --dry-run` refuses: "STORY-2642's store history
+  could not be read (STORY-...-565 at 7124c0f1a7fa: unparseable version: could not find expected ':' at line 32), so it is treated as
+  excluded." The store commit 7124c0f (2026-11-07 17:00, "reviewer: commit 2 store changes from the contained session") contains
+  `<<<<<<< Updated upstream / ======= / >>>>>>> Stashed changes` around modified_at in objects/STORY/000/STORY-...-565.yaml. Shared store
+  history cannot be rewritten, so every mandate decision touching STORY-2642 fails closed.
+
+  Acceptance:
+  1. The mandate history reader parses a version with git conflict markers by evaluating BOTH sides; the spec counts as excluded if EITHER
+     side shows an exclusion state (fail-closed preserved). A version unparseable for any other reason still treats the spec as excluded.
+  2. Regression: a history containing a conflict-marked version whose sides differ only in non-exclusion fields is covered; one where a side
+     is excluded is refused.
+  3. Root cause: find what committed conflict markers into the store from a contained reviewer session (stash pop in the store worktree) and
+     make store writers refuse to commit a file containing conflict markers. Regression for the writer guard.
+  Authority path (mandate cover): Claude lane, STRICT review. Unblocks promotion 23 (#4324 @95edb31).
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T08:15:41.246362956Z
+modified_at: 2026-11-20T08:15:41.246362956Z
+req_type: Bug
+tags:
+- mandate
+- promotion
+- store
+filed_at:
+  code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 888f8b76a6d
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
