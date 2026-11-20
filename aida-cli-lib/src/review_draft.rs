@@ -261,7 +261,7 @@ pub(crate) fn unconsumed_draft_retention(worktree: &Path) -> Option<String> {
     }
 }
 
-fn full_sha(sha: &str) -> bool {
+pub(crate) fn full_sha(sha: &str) -> bool {
     sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit())
 }
 

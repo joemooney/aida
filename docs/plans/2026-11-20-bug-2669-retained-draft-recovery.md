@@ -8,6 +8,8 @@ AIDA home, with a test that a contained lane cannot create or modify a
 receipt. D3: 24 hours. Slice 1 (receipt, seal, `aida review draft list`) is
 implemented in `aida-cli-lib/src/review_handoff.rs`; recovery (slices 2 and 3)
 is not, so a retained draft is still not recorded after a launcher restart.
+Slice-1 receipts are version 1 and are never eligible for automatic recovery
+(see "Receipt versions").
 
 <!-- trace:BUG-2669 | ai:claude -->
 
@@ -59,14 +61,47 @@ the reviewer ran. It does not continue the dead launch.
 Before spawning the reviewer, the launcher writes a receipt to
 `~/.aida/review-handoffs/<draft-uuid>.json`, beside `session-grants/`
 (exclusive create, mode 0600, same lock and atomic-write helpers as grants).
-A lane sandbox cannot write there.
+A lane sandbox cannot write there: the lane write profile refuses a writable
+leaf inside that directory or `~/.aida/review-handoff-locks/` (those two
+resolved directories only, not any directory that shares a name).
 
 Fields: version, draft launch id, project root, canonical review worktree,
 the draft directory's device and inode, PR number, full head SHA, routed
 reviewer session id, launcher grant id, principal, creation time, state
-(`open`, `consumed`, `superseded`, `discarded`). The reviewer child grant id is
-added at seal time, when the spawn has returned it; it is evidence, not a
-precondition.
+(`open`, `consumed`, `unused`, `superseded`, `discarded`). The reviewer child
+grant id is added at seal time, when the spawn has returned it; it is
+evidence, not a precondition.
+
+`consumed` means the launcher recorded the verdict from this slot's validated
+draft. `unused` means the launcher found no draft to read and collected a
+verdict the reviewer recorded itself; nothing was recorded from a draft, and
+a sealed receipt is never closed this way.
+
+The receipt is staged under a private name and published by a no-replace
+rename, so it has exactly one name from the moment it exists. A reader
+rejects a receipt that fails any field rule (full 40-hex head, absolute
+paths, a non-empty reviewer session, a well-formed seal digest) as a whole.
+
+#### Receipt versions
+
+Version 1 is what slice 1 writes. A slice-1 launcher does not supersede the
+earlier drafts of a review checkout (section 4), so an unsealed version-1
+draft has no protection against a later vendor session launched in the same
+checkout. A version-1 receipt is therefore ineligible for automatic recovery
+whatever its seal, age or state: `automatic_recovery_eligible` is `false` for
+it in the code and in `aida review draft list --json`. Slice 2 raises the
+version its launchers write when it adds supersession, and automatic recovery
+accepts only that version or later. A version-1 draft stays a manual case,
+like a draft written before receipts existed.
+
+#### Receipt maintenance
+
+Receipts past 30 days whose draft directory holds no `draft.json` are removed
+with their locks. This runs after a review launch has finished, never before
+a reviewer is spawned. Each run examines at most 16 receipts within 200 ms,
+starts at a random point so successive runs cover the store, never waits for
+a receipt lock, and leaves unreadable receipts and unreadable draft
+directories alone.
 
 The receipt holds no secret and is not a capability: reading or copying it
 grants nothing. It is the record that a launcher with reviewer delegation
@@ -191,7 +226,8 @@ draft unrecorded and retained.
 3. Teardown trigger, `recover` and `discard` commands, `docs/lifecycle.md` and
    the review skill.
 
-Drafts written before slice 1 have no receipt and stay a manual case.
+Drafts written before slice 1 have no receipt and stay a manual case, and so
+do drafts registered by a slice-1 launcher (version-1 receipts).
 
 ## Tests required
 

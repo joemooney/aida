@@ -63,6 +63,8 @@ VERIFIED = {
     # trace:STORY-2243 | ai:claude
     "aida goal advisor show": "goal advisor show",
     "aida goal advisor history": "goal advisor history",
+    # trace:BUG-2669 | ai:claude
+    "aida review draft list": "review draft list",
 }
 
 # Documented top-level fields of JSON leaves the hermetic audit cannot run.

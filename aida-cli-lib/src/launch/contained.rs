@@ -291,14 +291,11 @@ impl WriteProfile {
                         || p.as_os_str() == "session-grant-locks"),
                 "canonical grants are host-only; directory-leaf refusal"
             );
-            // Launch receipts share the grant store's trust root.
-            // trace:BUG-2669 | ai:claude
+            // Launch receipts share the grant store's trust root: no
+            // writable leaf inside the host's receipt or receipt-lock
+            // directory. trace:BUG-2669 | ai:claude
             anyhow::ensure!(
-                !path.components().any(|p| {
-                    crate::review_handoff::HOST_ONLY_DIRS
-                        .iter()
-                        .any(|dir| p.as_os_str() == *dir)
-                }),
+                !crate::review_handoff::inside_host_only_root(path),
                 "review handoff receipts are host-only; directory-leaf refusal"
             );
         }

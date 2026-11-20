@@ -33,17 +33,36 @@ fn task_2707_directory_leaf_refuses_session_grants() {
 // trace:BUG-2669 | ai:claude
 #[test]
 fn bug_2669_directory_leaf_refuses_review_handoff_receipts() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = tempfile::tempdir().unwrap();
+    let home = tmp.path().join("home");
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(home.to_str().unwrap()))]);
     for name in ["review-handoffs", "review-handoff-locks"] {
-        let dir = tmp.path().join(".aida").join(name);
+        // The host's receipt store and its lock directory, in the user's
+        // AIDA home, are never a writable lane leaf.
+        let dir = home.join(".aida").join(name);
         std::fs::create_dir_all(dir.join("nested")).unwrap();
         for path in [dir.clone(), dir.join("nested")] {
             let mut profile = WriteProfile::new();
-            assert!(profile.add(&path, true).is_err(), "{}", path.display());
+            let refused = profile.add(&path, true).unwrap_err();
+            assert!(
+                format!("{refused:#}").contains("review handoff receipts are host-only"),
+                "{}: {refused:#}",
+                path.display()
+            );
             assert!(!profile.native().contains(name));
         }
         // Read-only visibility stays available.
         WriteProfile::new().add(&dir, false).unwrap();
+        // The refusal is scoped to those two directories: an unrelated
+        // directory of the same name stays an ordinary writable leaf.
+        let unrelated = tmp.path().join("project/.aida").join(name);
+        std::fs::create_dir_all(&unrelated).unwrap();
+        let mut profile = WriteProfile::new();
+        profile.add(&unrelated, true).unwrap();
+        assert!(profile.native().contains(name));
     }
 }
 
@@ -928,7 +947,15 @@ Path('.aida/grant-notices/11111111-1111-4111-8111-111111111111/notice.json').wri
     std::fs::write(notice.join("staged.json"), "forged").unwrap();
     plan.profile.add(&authority, false).unwrap();
     plan.profile.add(&notice, true).unwrap();
-    assert!(plan.profile.add(&receipts, true).is_err());
+    {
+        // The lane's home is this state directory, so these are the host's
+        // receipt store for the write-profile refusal.
+        let home = plan._state.path().to_path_buf();
+        let _env =
+            crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(home.to_str().unwrap()))]);
+        assert!(plan.profile.add(&receipts, true).is_err());
+        assert!(plan.profile.add(&locks, true).is_err());
+    }
     let args: Vec<_> = plan.command.get_args().map(|a| a.to_os_string()).collect();
     let mut cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
     cfg["bwrap"] = serde_json::json!(plan.profile.args(plan._state.path()));

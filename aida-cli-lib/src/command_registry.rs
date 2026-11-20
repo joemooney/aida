@@ -13,7 +13,7 @@ use clap::{ArgMatches, CommandFactory, FromArgMatches};
 use crate::cli::{Cli, Command, GlobalArgs};
 // Framework types live in cmdkit; consumers import them from there directly.
 // trace:TASK-3448 | ai:claude
-use crate::cmdkit::{CommandReg, DispatchCtx, Flow, Invocation};
+use crate::cmdkit::{CmdPolicy, CommandReg, DispatchCtx, Flow, Handler, Invocation};
 
 /// Every registered command, sorted by command name (byte order) so parallel
 /// additions rarely touch the same line.
@@ -193,6 +193,60 @@ pub(crate) static REGISTRY: &[&CommandReg] = &[
 
 pub(crate) fn lookup(name: &str) -> Option<&'static CommandReg> {
     REGISTRY.iter().copied().find(|reg| reg.name == name)
+}
+
+/// Subcommands registered from their own module under a registered parent:
+/// `("review", &DRAFT)` is `aida review draft`. Sorted by parent, then by
+/// name. The parent's registration attaches them with [`with_nested`],
+/// answers policy through [`nested_policy`] and dispatches through
+/// [`run_nested`], so the parent's own clap types never name them.
+// trace:BUG-2669 | ai:claude
+pub(crate) static NESTED: &[(&str, &CommandReg)] = &[("review", &crate::review_draft_cmd::DRAFT)];
+
+fn nested<'a>(
+    parent: &str,
+    matches: &'a ArgMatches,
+) -> Option<(&'static CommandReg, &'a ArgMatches)> {
+    let (name, sub) = matches.subcommand()?;
+    NESTED
+        .iter()
+        .find(|(of, reg)| *of == parent && reg.name == name)
+        .map(|(_, reg)| (*reg, sub))
+}
+
+/// `command` with every subcommand registered under `parent` attached.
+// trace:BUG-2669 | ai:claude
+pub(crate) fn with_nested(parent: &str, mut command: clap::Command) -> clap::Command {
+    for (_, reg) in NESTED.iter().filter(|(of, _)| *of == parent) {
+        command = command.subcommand((reg.command)());
+    }
+    command
+}
+
+/// The policy of the nested registration `matches` selects, if it selects one.
+// trace:BUG-2669 | ai:claude
+pub(crate) fn nested_policy(parent: &str, matches: &ArgMatches) -> Option<CmdPolicy> {
+    nested(parent, matches).map(|(reg, sub)| (reg.policy)(sub))
+}
+
+/// Run the nested registration `matches` selects; `None` when the parent's
+/// own handler should carry on. An early nested handler finishes at the
+/// parent's early dispatch point, before any store is opened.
+// trace:BUG-2669 | ai:claude
+pub(crate) fn run_nested(
+    parent: &str,
+    matches: &ArgMatches,
+    ctx: &DispatchCtx,
+) -> Option<Result<Flow>> {
+    let (reg, sub) = nested(parent, matches)?;
+    Some(match reg.run {
+        Handler::Early(run) if ctx.store.is_none() => run(sub, ctx).map(|()| Flow::Return),
+        Handler::Early(_) => Err(anyhow::anyhow!(
+            "`aida {parent} {}` finishes before storage init",
+            reg.name
+        )),
+        Handler::Store(run) => run(sub, ctx),
+    })
 }
 
 /// The full CLI clap tree: the legacy derived `Cli` plus every registered

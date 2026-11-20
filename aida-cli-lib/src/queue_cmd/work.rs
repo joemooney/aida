@@ -8019,10 +8019,15 @@ pub(crate) fn run_standalone_reviewer(
             }
         }
     })();
+    // Whether the verdict was recorded from this launch's validated draft,
+    // as opposed to collected by the stamped-source path with no draft to
+    // read. trace:BUG-2669 | ai:claude
+    let mut recorded_from_draft = false;
     let collected = draft_recorded
         .map_err(|e| format!("reviewer draft handoff refused: {e:#}"))
         .and_then(|recorded| {
             if let Some(recorded) = recorded {
+                recorded_from_draft = true;
                 return Ok(recorded);
             }
             crate::gate::review_verdict::collect_standalone_verdict(
@@ -8037,20 +8042,33 @@ pub(crate) fn run_standalone_reviewer(
     if collected.is_ok() {
         if let Some(draft) = &draft {
             // trace:BUG-2669 | ai:claude — close the receipt only once the
-            // draft itself is marked consumed.
+            // draft itself is marked consumed, and as consumed only when the
+            // verdict was recorded from that draft. A verdict collected with
+            // no draft to read closes it as unused instead.
             match draft.consumed() {
                 Err(e) => eprintln!(
                     "warning: verdict is durable but draft consumption marker failed: {e:#}"
                 ),
                 Ok(()) => {
                     if let Some(receipt) = &receipt {
-                        if let Err(e) = crate::review_handoff::mark_consumed(&receipt.launch) {
+                        let closed = if recorded_from_draft {
+                            crate::review_handoff::mark_consumed(&receipt.launch)
+                        } else {
+                            crate::review_handoff::mark_unused(&receipt.launch)
+                        };
+                        if let Err(e) = closed {
                             eprintln!("warning: verdict is durable but its launch receipt was not closed: {e:#}");
                         }
                     }
                 }
             }
         }
+    }
+    // Receipt maintenance runs here, after the review, never before the
+    // reviewer is spawned; it is bounded in time and work.
+    // trace:BUG-2669 | ai:claude
+    if receipt.is_some() {
+        crate::review_handoff::sweep();
     }
     match &collected {
         Ok(c) if c.collected_from_worktree && !quiet => eprintln!(

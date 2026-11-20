@@ -292,12 +292,6 @@ pub enum ReviewCommand {
         #[clap(subcommand)]
         action: BlockingTiersCommand,
     },
-    /// Inspect reviewer drafts a launcher was handed but has not recorded.
-    // trace:BUG-2669 | ai:claude
-    Draft {
-        #[command(subcommand)]
-        command: ReviewDraftCommand,
-    },
 }
 
 /// What `aida review blocking-tiers` does.
@@ -321,26 +315,6 @@ pub enum BlockingTiersCommand {
         /// security-authority-bypass, unmet-claimed-ac, test-gap, style.
         #[clap(required = true, num_args = 1.., value_name = "CLASS")]
         classes: Vec<String>,
-    },
-}
-
-/// Reviewer draft handoffs a launcher registered before spawning a reviewer.
-// trace:BUG-2669 | ai:claude
-#[derive(Subcommand, Debug)]
-pub enum ReviewDraftCommand {
-    /// List this project's registered reviewer draft handoffs.
-    ///
-    /// Each row names the pull request and head the reviewer was launched
-    /// for, whether the launcher sealed the draft, and whether the draft is
-    /// still unrecorded. Read-only.
-    List {
-        /// Include handoffs registered for every project on this host.
-        #[clap(long)]
-        all: bool,
-
-        /// Emit the handoffs as JSON.
-        #[clap(long)]
-        json: bool,
     },
 }
 

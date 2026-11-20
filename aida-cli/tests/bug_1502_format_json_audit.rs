@@ -702,6 +702,8 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         // trace:STORY-2243 | ai:claude
         ("aida goal advisor show", &["goal", "advisor", "show"]),
         ("aida goal advisor history", &["goal", "advisor", "history"]),
+        // trace:BUG-2669 | ai:claude
+        ("aida review draft list", &["review", "draft", "list"]),
     ];
     for (path, args) in probes {
         let mut via_format = args.to_vec();

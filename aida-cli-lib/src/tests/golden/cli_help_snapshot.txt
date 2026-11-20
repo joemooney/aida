@@ -22281,7 +22281,7 @@ Commands:
                   refusal gets (merge hold + Needs Attention)
   mode            Turn a temporary review mode on or off, or show its state
   blocking-tiers  Show or change which review finding classes block a merge
-  draft           Inspect reviewer drafts a launcher was handed but has not recorded
+  draft           Inspect the reviewer draft handoffs launchers have registered
   help            Print this message or the help of the given subcommand(s)
 
 Arguments:
@@ -23138,7 +23138,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida review draft
-Inspect reviewer drafts a launcher was handed but has not recorded
+Inspect the reviewer draft handoffs launchers have registered
 
 Usage: aida review draft [OPTIONS] <COMMAND>
 
@@ -23166,8 +23166,8 @@ Options:
 ===== aida review draft list
 List this project's registered reviewer draft handoffs.
 
-Each row names the pull request and head the reviewer was launched for, whether the launcher sealed
-the draft, and whether the draft is still unrecorded. Read-only.
+Each row names the pull request and head the reviewer was launched for, the receipt's state, whether
+the launcher sealed it, and which files the draft directory holds now. Read-only.
 
 Usage: aida review draft list [OPTIONS]
 
@@ -56457,7 +56457,7 @@ Working on aida itself
       "review",
       "draft"
     ],
-    "about": "Inspect reviewer drafts a launcher was handed but has not recorded",
+    "about": "Inspect the reviewer draft handoffs launchers have registered",
     "flags": [
       {
         "name": "canonical-ids",

@@ -7,6 +7,9 @@
 //! durable record that a launcher holding reviewer delegation registered
 //! this slot for this PR, head and reviewer session. Recording a draft from
 //! a receipt is a separate, later step; nothing in this module records.
+//!
+//! A version-1 receipt (the only version written so far) is never eligible
+//! for automatic recovery: see [`VERSION`].
 //! Design: `docs/plans/2026-11-20-bug-2669-retained-draft-recovery.md`.
 // trace:BUG-2669 | ai:claude
 use crate::gate::seat_authority as sa;
@@ -17,14 +20,26 @@ use serde::{Deserialize, Serialize};
 use std::io::{Read, Write};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 const RECEIPT_DIR: &str = "review-handoffs";
 const LOCK_DIR: &str = "review-handoff-locks";
-/// Directory names a contained lane must never be given write access to.
-pub(crate) const HOST_ONLY_DIRS: [&str; 2] = [RECEIPT_DIR, LOCK_DIR];
+/// The receipt format this build writes and reads. Version 1 receipts are
+/// written by launchers that do not yet supersede the earlier drafts of a
+/// review checkout, so nothing protects an unsealed version-1 draft from a
+/// later vendor session launched there. They are therefore ineligible for
+/// automatic recovery whatever else they say; only a later version, written
+/// once supersession exists, can be eligible.
 const VERSION: u32 = 1;
+/// The first receipt version automatic recovery may act on.
+const FIRST_AUTO_RECOVERY_VERSION: u32 = 2;
 const RECEIPT_LIMIT: u64 = 64 * 1024;
-const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+/// How long one seal or close waits for its own receipt's lock.
+const LOCK_WAIT: Duration = Duration::from_secs(2);
+/// Receipt maintenance examines at most this many receipts per run, within
+/// [`SWEEP_BUDGET`], and never waits for a lock.
+const SWEEP_BATCH: usize = 16;
+const SWEEP_BUDGET: Duration = Duration::from_millis(200);
 /// How long a receipt is kept once nothing waits on it.
 const RETENTION: chrono::Duration = chrono::Duration::days(30);
 /// A draft older than this is outside the automatic recovery window.
@@ -37,6 +52,9 @@ pub(crate) enum State {
     Consumed,
     Superseded,
     Discarded,
+    /// The launch's verdict was collected without this draft slot: the
+    /// launcher found no draft to read. Nothing was recorded from a draft.
+    Unused,
 }
 
 impl State {
@@ -46,6 +64,7 @@ impl State {
             State::Consumed => "consumed",
             State::Superseded => "superseded",
             State::Discarded => "discarded",
+            State::Unused => "unused",
         }
     }
 }
@@ -122,8 +141,9 @@ fn lock_path(launch: &str) -> Result<PathBuf> {
     Ok(aida_dir()?.join(LOCK_DIR).join(name))
 }
 
-/// The per-receipt lock, beside (never inside) the receipt directory.
-fn lock(launch: &str) -> Result<std::fs::File> {
+/// The per-receipt lock, beside (never inside) the receipt directory. A
+/// zero `wait` tries once.
+fn lock(launch: &str, wait: Duration) -> Result<std::fs::File> {
     use fs2::FileExt;
     let path = lock_path(launch)?;
     create_private_dir(path.parent().context("lock path has no parent")?)?;
@@ -135,15 +155,12 @@ fn lock(launch: &str) -> Result<std::fs::File> {
         .custom_flags(libc::O_NOFOLLOW)
         .open(path)
         .context("cannot open the review handoff receipt lock")?;
-    let deadline = std::time::Instant::now() + LOCK_WAIT;
+    let deadline = Instant::now() + wait;
     loop {
         match file.try_lock_exclusive() {
             Ok(()) => return Ok(file),
-            Err(e)
-                if e.kind() == std::io::ErrorKind::WouldBlock
-                    && std::time::Instant::now() < deadline =>
-            {
-                std::thread::sleep(std::time::Duration::from_millis(10));
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock && Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(10));
             }
             Err(e) => return Err(e).context("the review handoff receipt lock stayed busy"),
         }
@@ -196,7 +213,52 @@ fn parse(path: &Path, launch: &str) -> Result<Receipt> {
         receipt.launch == launch,
         "review handoff receipt does not match its file name"
     );
+    validate(&receipt)?;
     Ok(receipt)
+}
+
+fn sha256_hex(text: &str) -> bool {
+    text.len() == 64
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// Field rules every reader relies on, so a receipt that breaks one is
+/// unreadable as a whole instead of being shown or acted on in part.
+fn validate(receipt: &Receipt) -> Result<()> {
+    ensure!(
+        crate::review_draft::full_sha(&receipt.head),
+        "review handoff receipt does not name a full head SHA"
+    );
+    ensure!(
+        receipt.pr > 0,
+        "review handoff receipt names no pull request"
+    );
+    ensure!(
+        receipt.project_root.is_absolute() && receipt.worktree.is_absolute(),
+        "review handoff receipt paths are not absolute"
+    );
+    ensure!(
+        !receipt.reviewer_session.trim().is_empty()
+            && !receipt.launcher_grant.trim().is_empty()
+            && !receipt.principal.trim().is_empty(),
+        "review handoff receipt is missing its reviewer session, launcher grant or principal"
+    );
+    ensure!(
+        receipt
+            .seal
+            .as_ref()
+            .is_none_or(|seal| sha256_hex(&seal.sha256)),
+        "review handoff receipt carries an invalid seal digest"
+    );
+    Ok(())
+}
+
+/// Whether automatic recovery may ever act on this receipt. Always `false`
+/// for the version-1 receipts this build writes: see [`VERSION`].
+pub(crate) fn automatic_recovery_eligible(receipt: &Receipt) -> bool {
+    receipt.version >= FIRST_AUTO_RECOVERY_VERSION
 }
 
 /// The receipt registered for `launch` (`draft-<uuid>`).
@@ -207,8 +269,9 @@ pub(crate) fn load(launch: &str) -> Result<Receipt> {
 /// Register the draft slot before the reviewer is spawned. `Ok(None)` when
 /// this process holds no grant delegating `reviewer`: only a launcher with
 /// that delegation may register a slot, and the spawn itself reports the
-/// missing authority. The receipt is created exclusively; an existing one is
-/// an error, never an overwrite.
+/// missing authority. The receipt is published under its one name by a
+/// no-replace rename: an existing one is an error, never an overwrite, and
+/// the returned receipt is the one read back from that name.
 pub(crate) fn register(
     project_root: &Path,
     worktree: &Path,
@@ -240,53 +303,119 @@ pub(crate) fn register(
         child_grant: None,
         seal: None,
     };
-    let name = file_name(&receipt.launch)?;
+    validate(&receipt)?;
     let dir = receipt_dir()?;
+    let dest = dir.join(file_name(&receipt.launch)?);
     create_private_dir(&dir)?;
     let tmp = stage(&dir, &receipt)?;
-    // A hard link fails when the name exists: exclusive and never partial.
-    let linked = std::fs::hard_link(&tmp, dir.join(name));
-    let _ = std::fs::remove_file(&tmp);
-    linked.context("cannot create the review handoff receipt")?;
-    sweep(receipt.created_at);
-    Ok(Some(receipt))
+    // The staged file moves to its final name only when that name is free,
+    // and never has a second link once this returns `Ok`.
+    if let Err(e) = crate::gate::review_verdict::publish_verdict_no_replace(&tmp, &dest) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e).context("cannot create the review handoff receipt");
+    }
+    let published = parse(&dest, &receipt.launch)
+        .context("the review handoff receipt could not be read back after it was written")?;
+    ensure!(
+        published == receipt,
+        "the review handoff receipt on disk is not the one this launch wrote"
+    );
+    Ok(Some(published))
 }
 
-/// Past retention, and no draft waits on this receipt to be recorded.
+/// Past retention, and the draft directory holds no draft (and can be read
+/// well enough to say so).
 fn expired(receipt: &Receipt, now: DateTime<Utc>) -> bool {
     now - receipt.created_at > RETENTION
-        && !matches!(draft_status(receipt), "unrecorded" | "unreadable")
+        && !matches!(
+            draft_files(receipt),
+            DraftFiles::Present | DraftFiles::Unreadable
+        )
 }
 
-/// Best effort: drop expired receipts and their locks so one file per review
-/// launch does not accumulate for ever. Unreadable files are left alone.
-fn sweep(now: DateTime<Utc>) {
-    let Ok((receipts, _)) = list() else {
-        return;
+/// The canonical id of a receipt file name (`<uuid>.json`).
+fn receipt_id(name: &str) -> Option<&str> {
+    name.strip_suffix(".json")
+        .filter(|_| !name.starts_with('.'))
+}
+
+/// Bounded maintenance, called after a review launch has finished and never
+/// before a reviewer is spawned: drop expired receipts and their locks so
+/// one file per launch does not accumulate for ever. Each run examines at
+/// most [`SWEEP_BATCH`] receipts within [`SWEEP_BUDGET`], starting at a
+/// random point so successive runs cover the whole store, and skips a
+/// receipt whose lock is busy. Returns how many receipts it removed.
+pub(crate) fn sweep() -> usize {
+    sweep_from(
+        Utc::now(),
+        &uuid::Uuid::new_v4().to_string(),
+        SWEEP_BATCH,
+        Instant::now() + SWEEP_BUDGET,
+    )
+}
+
+fn sweep_from(now: DateTime<Utc>, pivot: &str, batch: usize, deadline: Instant) -> usize {
+    let Ok(dir) = receipt_dir() else {
+        return 0;
     };
-    for receipt in receipts.iter().filter(|r| expired(r, now)) {
-        let _ = (|| -> Result<()> {
-            let held = lock(&receipt.launch)?;
-            let path = receipt_dir()?.join(file_name(&receipt.launch)?);
-            // Decide again on what the receipt says under its lock.
-            if expired(&parse(&path, &receipt.launch)?, now) {
-                std::fs::remove_file(&path)?;
-                std::fs::remove_file(lock_path(&receipt.launch)?)?;
-            }
-            drop(held);
-            Ok(())
-        })();
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return 0;
+    };
+    // Names only: no receipt is opened until it is one of this run's batch.
+    let mut ids = Vec::new();
+    for entry in entries.flatten() {
+        if Instant::now() >= deadline {
+            break;
+        }
+        let name = entry.file_name().to_string_lossy().to_string();
+        if let Some(id) = receipt_id(&name) {
+            ids.push(id.to_string());
+        }
     }
+    ids.sort_unstable();
+    let start = ids.partition_point(|id| id.as_str() < pivot);
+    let mut removed = 0;
+    for id in ids.iter().cycle().skip(start).take(batch.min(ids.len())) {
+        if Instant::now() >= deadline {
+            break;
+        }
+        if sweep_one(&dir, &format!("draft-{id}"), now).unwrap_or(false) {
+            removed += 1;
+        }
+    }
+    removed
+}
+
+/// Remove one receipt when it is expired. An unreadable receipt, a busy
+/// lock or a failed removal leaves it in place.
+fn sweep_one(dir: &Path, launch: &str, now: DateTime<Utc>) -> Result<bool> {
+    let path = dir.join(file_name(launch)?);
+    if !expired(&parse(&path, launch)?, now) {
+        return Ok(false);
+    }
+    let held = lock(launch, Duration::ZERO)?;
+    // Decide again on what the receipt says under its lock.
+    if !expired(&parse(&path, launch)?, now) {
+        return Ok(false);
+    }
+    std::fs::remove_file(&path)?;
+    let _ = std::fs::remove_file(lock_path(launch)?);
+    drop(held);
+    Ok(true)
 }
 
 /// Read-modify-write under the receipt's lock. `change` returns whether
 /// there is anything to write.
 fn update(launch: &str, change: impl FnOnce(&mut Receipt) -> Result<bool>) -> Result<Receipt> {
     let name = file_name(launch)?;
-    let held = lock(launch)?;
     let dir = receipt_dir()?;
+    // No lock file is created for a launch that was never registered.
+    std::fs::symlink_metadata(dir.join(&name))
+        .context("review handoff receipt is missing or unreadable")?;
+    let held = lock(launch, LOCK_WAIT)?;
     let mut receipt = parse(&dir.join(&name), launch)?;
     if change(&mut receipt)? {
+        validate(&receipt)?;
         let tmp = stage(&dir, &receipt)?;
         if let Err(e) = std::fs::rename(&tmp, dir.join(name)) {
             let _ = std::fs::remove_file(&tmp);
@@ -301,13 +430,7 @@ fn update(launch: &str, change: impl FnOnce(&mut Receipt) -> Result<bool>) -> Re
 /// validated. Sealing again with the same digest is a no-op; a different
 /// digest, or a receipt that is no longer open, is refused.
 pub(crate) fn seal(launch: &str, sha256: &str, child_grant: Option<&str>) -> Result<Receipt> {
-    ensure!(
-        sha256.len() == 64
-            && sha256
-                .bytes()
-                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)),
-        "invalid draft digest"
-    );
+    ensure!(sha256_hex(sha256), "invalid draft digest");
     update(launch, |receipt| {
         ensure!(
             receipt.state == State::Open,
@@ -330,12 +453,31 @@ pub(crate) fn seal(launch: &str, sha256: &str, child_grant: Option<&str>) -> Res
     })
 }
 
-/// The launcher recorded the draft and renamed it: close the receipt.
+/// The launcher recorded the verdict from this slot's validated draft and
+/// renamed the draft: close the receipt.
 pub(crate) fn mark_consumed(launch: &str) -> Result<Receipt> {
     update(launch, |receipt| match receipt.state {
         State::Consumed => Ok(false),
         State::Open => {
             receipt.state = State::Consumed;
+            Ok(true)
+        }
+        other => bail!("review handoff receipt is {}, not open", other.label()),
+    })
+}
+
+/// The launch's verdict was collected without a draft (the launcher found
+/// none to read): close the receipt as unused. A sealed receipt is refused,
+/// because sealing means a draft was read and validated.
+pub(crate) fn mark_unused(launch: &str) -> Result<Receipt> {
+    update(launch, |receipt| match receipt.state {
+        State::Unused => Ok(false),
+        State::Open => {
+            ensure!(
+                receipt.seal.is_none(),
+                "review handoff receipt is sealed with a draft; it cannot be closed as unused"
+            );
+            receipt.state = State::Unused;
             Ok(true)
         }
         other => bail!("review handoff receipt is {}, not open", other.label()),
@@ -354,10 +496,7 @@ pub(crate) fn list() -> Result<(Vec<Receipt>, Vec<(String, String)>)> {
     let (mut receipts, mut unreadable) = (Vec::new(), Vec::new());
     for entry in entries {
         let name = entry?.file_name().to_string_lossy().to_string();
-        let Some(id) = name
-            .strip_suffix(".json")
-            .filter(|_| !name.starts_with('.'))
-        else {
+        let Some(id) = receipt_id(&name) else {
             continue;
         };
         let launch = format!("draft-{id}");
@@ -371,28 +510,107 @@ pub(crate) fn list() -> Result<(Vec<Receipt>, Vec<(String, String)>)> {
     Ok((receipts, unreadable))
 }
 
-/// What the receipt's draft directory holds now. Read-only and advisory:
-/// nothing is authorized from this answer.
-pub(crate) fn draft_status(receipt: &Receipt) -> &'static str {
+/// Which files the receipt's draft directory holds now. This is file state
+/// only: it says nothing about the launcher or the gate ledger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DraftFiles {
+    /// `draft.json` is there.
+    Present,
+    /// No `draft.json`; `recorded.json`, the name a launcher gives a draft
+    /// once it has recorded it, is there.
+    MarkedRecorded,
+    /// Neither file is there.
+    Absent,
+    DirectoryMissing,
+    /// The path is no longer the directory the receipt registered.
+    DirectoryReplaced,
+    /// A lookup failed for a reason other than the entry not existing.
+    Unreadable,
+}
+
+impl DraftFiles {
+    pub(crate) fn label(self) -> &'static str {
+        match self {
+            DraftFiles::Present => "present",
+            DraftFiles::MarkedRecorded => "marked-recorded",
+            DraftFiles::Absent => "absent",
+            DraftFiles::DirectoryMissing => "directory-missing",
+            DraftFiles::DirectoryReplaced => "directory-replaced",
+            DraftFiles::Unreadable => "unreadable",
+        }
+    }
+}
+
+/// `Ok(false)` only when the entry does not exist; any other failed lookup
+/// is an error, never "absent".
+fn entry_exists(path: &Path) -> std::io::Result<bool> {
+    match std::fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+/// Read-only and advisory: nothing is authorized from this answer.
+pub(crate) fn draft_files(receipt: &Receipt) -> DraftFiles {
     let dir = receipt
         .worktree
         .join(".aida/review-verdicts")
         .join(&receipt.launch);
     let meta = match std::fs::symlink_metadata(&dir) {
         Ok(meta) => meta,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return "directory-missing",
-        Err(_) => return "unreadable",
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return DraftFiles::DirectoryMissing,
+        Err(_) => return DraftFiles::Unreadable,
     };
     if !meta.is_dir() || meta.dev() != receipt.dir_dev || meta.ino() != receipt.dir_ino {
-        return "directory-replaced";
+        return DraftFiles::DirectoryReplaced;
     }
-    let present = |name: &str| std::fs::symlink_metadata(dir.join(name)).is_ok();
-    if present("draft.json") {
-        "unrecorded"
-    } else if present("recorded.json") {
-        "recorded"
-    } else {
-        "not-written"
+    match (
+        entry_exists(&dir.join("draft.json")),
+        entry_exists(&dir.join("recorded.json")),
+    ) {
+        (Ok(true), _) => DraftFiles::Present,
+        (Err(_), _) | (_, Err(_)) => DraftFiles::Unreadable,
+        (Ok(false), Ok(true)) => DraftFiles::MarkedRecorded,
+        (Ok(false), Ok(false)) => DraftFiles::Absent,
+    }
+}
+
+/// Whether a writable lane mount at `path` would lie inside the host's
+/// receipt store or its lock directory. Scoped to those two resolved
+/// directories: an unrelated directory that merely shares a name is not
+/// refused. When the user's AIDA home cannot be resolved there is no store
+/// to compare against, and any path with a component of either name is
+/// refused instead.
+pub(crate) fn inside_host_only_root(path: &Path) -> bool {
+    let Ok(home) = aida_dir() else {
+        return path
+            .components()
+            .any(|p| p.as_os_str() == RECEIPT_DIR || p.as_os_str() == LOCK_DIR);
+    };
+    let resolved = resolve(path);
+    [RECEIPT_DIR, LOCK_DIR].iter().any(|name| {
+        let root = home.join(name);
+        path.starts_with(&root) || resolved.starts_with(resolve(&root))
+    })
+}
+
+/// `path` with its longest existing prefix canonicalized, so a directory
+/// that does not exist yet still compares by its real location.
+fn resolve(path: &Path) -> PathBuf {
+    let mut rest = Vec::new();
+    let mut cur = path;
+    loop {
+        if let Ok(real) = cur.canonicalize() {
+            return rest.iter().rev().fold(real, |acc, part| acc.join(part));
+        }
+        match (cur.parent(), cur.file_name()) {
+            (Some(parent), Some(name)) => {
+                rest.push(name.to_os_string());
+                cur = parent;
+            }
+            _ => return path.to_path_buf(),
+        }
     }
 }
 
@@ -405,25 +623,51 @@ fn age_label(age: chrono::Duration) -> String {
     }
 }
 
-/// `aida review draft list`.
+/// `aida review draft list`. Without `all`, the receipts of this project:
+/// the main checkout the launcher registers them under, resolved the same
+/// way from a linked checkout.
 pub(crate) fn handle_list(all: bool, json: bool) -> Result<()> {
+    let project = if all {
+        None
+    } else {
+        Some(crate::find_main_worktree_root()?)
+    };
+    print!("{}", list_report(project.as_deref(), json, Utc::now())?);
+    Ok(())
+}
+
+/// The listing for one project's main checkout, or for every project.
+fn list_report(project: Option<&Path>, json: bool, now: DateTime<Utc>) -> Result<String> {
     let (mut receipts, unreadable) = list()?;
-    if !all {
-        let root = crate::find_project_root()?;
-        let root = root.canonicalize().unwrap_or(root);
+    if let Some(project) = project {
+        let root = project
+            .canonicalize()
+            .unwrap_or_else(|_| project.to_path_buf());
         receipts.retain(|r| r.project_root == root);
     }
-    let now = Utc::now();
+    render_list(&receipts, &unreadable, project.is_none(), json, now)
+}
+
+fn render_list(
+    receipts: &[Receipt],
+    unreadable: &[(String, String)],
+    all: bool,
+    json: bool,
+    now: DateTime<Utc>,
+) -> Result<String> {
+    use std::fmt::Write as _;
+    let mut out = String::new();
     if json {
         let rows: Vec<_> = receipts
             .iter()
             .map(|r| {
                 let age = now - r.created_at;
                 let mut row = serde_json::to_value(r)?;
-                row["draft"] = draft_status(r).into();
+                row["draft"] = draft_files(r).label().into();
                 row["sealed"] = r.seal.is_some().into();
                 row["age_seconds"] = age.num_seconds().max(0).into();
                 row["within_automatic_window"] = (age <= AUTO_RECOVERY_WINDOW).into();
+                row["automatic_recovery_eligible"] = automatic_recovery_eligible(r).into();
                 Ok(row)
             })
             .collect::<Result<_>>()?;
@@ -431,54 +675,63 @@ pub(crate) fn handle_list(all: bool, json: bool) -> Result<()> {
             .iter()
             .map(|(file, error)| serde_json::json!({"file": file, "error": error}))
             .collect();
-        println!(
+        writeln!(
+            out,
             "{}",
             serde_json::to_string_pretty(
                 &serde_json::json!({"receipts": rows, "unreadable": unreadable})
             )?
-        );
-        return Ok(());
+        )?;
+        return Ok(out);
     }
     if receipts.is_empty() {
-        println!(
+        writeln!(
+            out,
             "No reviewer draft handoffs are registered{}.",
             if all { "" } else { " for this project" }
-        );
+        )?;
     }
-    for r in &receipts {
+    for r in receipts {
         let age = now - r.created_at;
-        println!(
+        let recovery = if r.state != State::Open {
+            ""
+        } else if !automatic_recovery_eligible(r) {
+            " (not eligible for automatic recovery)"
+        } else if age > AUTO_RECOVERY_WINDOW {
+            " (past the 24h automatic window)"
+        } else {
+            ""
+        };
+        writeln!(
+            out,
             "{}  PR-{} @ {}  {}  {}  draft: {}  age {}{}",
             r.launch,
             r.pr,
-            &r.head[..r.head.len().min(12)],
+            r.head.get(..12).unwrap_or(&r.head),
             r.state.label(),
             if r.seal.is_some() {
                 "sealed"
             } else {
                 "unsealed"
             },
-            draft_status(r),
+            draft_files(r).label(),
             age_label(age),
-            if r.state == State::Open && age > AUTO_RECOVERY_WINDOW {
-                " (past the 24h automatic window)"
-            } else {
-                ""
-            },
-        );
-        println!(
+            recovery,
+        )?;
+        writeln!(
+            out,
             "    worktree {}  reviewer session {}",
             r.worktree.display(),
             r.reviewer_session
-        );
+        )?;
         if all {
-            println!("    project {}", r.project_root.display());
+            writeln!(out, "    project {}", r.project_root.display())?;
         }
     }
-    for (file, error) in &unreadable {
-        println!("unreadable receipt {file}: {error}");
+    for (file, error) in unreadable {
+        writeln!(out, "unreadable receipt {file}: {error}")?;
     }
-    Ok(())
+    Ok(out)
 }
 
 #[cfg(test)]

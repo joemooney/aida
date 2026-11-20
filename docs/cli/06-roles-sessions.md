@@ -1882,24 +1882,43 @@ launcher starts the reviewer it registers the draft in a launch receipt under
 full head, the review checkout, the draft directory's identity and the
 reviewer session. When the reviewer has exited and the draft has passed
 validation, the launcher seals the receipt with the draft's SHA-256 before it
-first tries to record, and closes the receipt once the verdict is recorded.
+first tries to record. Once the verdict is recorded from that draft the
+launcher renames `draft.json` to `recorded.json` and closes the receipt as
+`consumed`. When it found no draft to read and collected a verdict the
+reviewer recorded itself, it closes the receipt as `unused`.
 
 A receipt holds no secret and authorizes nothing. It is written only by a
 launcher whose grant delegates the reviewer seat, and a contained lane cannot
 create or change one, because the AIDA home is read-only inside it.
 
+Receipts written today are version 1. A version-1 receipt is never eligible
+for automatic recovery of its draft, because the launchers that write it do
+not yet retire the earlier drafts of a review checkout when they start a new
+review there.
+
 ```bash
 aida review draft list [--all] [--json]
 ```
 
-`list` shows this project's receipts, or every project's with `--all`. Each
-row gives the state (`open`, `consumed`, `superseded` or `discarded`), whether
-the receipt is sealed, its age, and what the draft directory holds now:
-`unrecorded` (a draft the launcher never recorded), `recorded`, `not-written`,
-`directory-missing` or `directory-replaced`. An open receipt with an
-unrecorded draft is a review whose launcher exited before recording. The
-listing is read-only. A draft written before receipts existed has none and
-does not appear.
+`list` shows this project's receipts, or every project's with `--all`; run it
+from the main checkout or any linked checkout. It reports two things per
+receipt and nothing else:
+
+- What the receipt says: its state (`open`, `consumed`, `unused`,
+  `superseded` or `discarded`), whether it is sealed, and its age.
+- Which files the draft directory holds now: `present` (`draft.json` is
+  there), `marked-recorded` (`recorded.json` is there and `draft.json` is
+  not), `absent` (neither), `directory-missing`, `directory-replaced` (the
+  path is no longer the directory the receipt registered) or `unreadable`
+  (a lookup failed for a reason other than the entry not existing).
+
+An open receipt whose directory holds `draft.json` is exactly that file
+state. The listing does not check whether the launcher is still running, and
+it does not read the gate ledger; use `aida review verdict` for what was
+recorded. A receipt file that cannot be read in full, including one whose
+head is not a full SHA, is listed as unreadable with the reason, in the text
+and the JSON output alike. The listing is read-only. A draft written before
+receipts existed has none and does not appear.
 
 ### Project review blocking tiers
 

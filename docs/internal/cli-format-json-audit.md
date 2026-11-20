@@ -650,6 +650,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida review blocking-tiers` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review blocking-tiers show` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida review blocking-tiers set` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review draft` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review draft list` | JSON honoured | review draft list |
 | `aida report` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida report bug` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida report idea` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
