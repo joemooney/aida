@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-10-16T00:52:42.111598429Z
-modified_at: 2026-10-16T22:29:06.954730573Z
+modified_at: 2026-11-20T04:24:42.898259800Z
 req_type: Story
 tags:
 - docs:impacted
@@ -89,6 +89,25 @@ comments:
   created_at: 2026-10-16T02:55:51.941821986Z
   modified_at: 2026-10-16T02:55:51.941821986Z
   session_id: 4be6f69d-3d6a-4fba-b6e3-41190732a1be
+- id: 01a1f733-469d-7472-b7d4-1355a4838aab
+  author: joe
+  content: |
+    Finding (2026-11-19, implementer seat; read-only diagnosis of the mandate refusal "what the PR ships could not be resolved to specs in the store" on promotion PR #4324 at head 95edb31).
+
+    Root cause: the head BRANCH NAME is parsed as a spec ID. In `pr_gate_subject` (pr_service.rs), the forge's head ref `promote/integration-23` goes through `pr_ship::extract_spec_ids_from_text`. Its regex `[a-z][a-z0-9]*(?:-[a-z0-9]+)*-\d+` accepts any word-dash-number token, so it yields `INTEGRATION-23`. That ID joins the NAMED gate ids: the trailer-coverage filter keeps it, since branch and lease name no claim and coverage is unknown. In `resolve_exclusion_specs` it has no store record, so `judge_exclusion_spec` (gate/mandate.rs) refuses `named && current.is_none()` → `MandateRefusal::SpecsUnresolved`.
+
+    Evidence: I reproduced the production computation in a temporary uncommitted test. It used the real repo, the real `git_log_messages(origin/main..95edb31)` (506 subjects) and the real store. Result: 49 named ids, forge_resolved=true, store loaded=true, and exactly one unresolved named id: INTEGRATION-23. The other 48 (inherited commit-trailer ids, BUG-2521…TASK-3818) all resolve. The title's `(Refs STORY-2897 STORY-2903 STORY-2905)` are authorship-only (refs_ids) and are not involved.
+
+    Scope: every promotion PR whose head is `promote/integration-N` is affected, and so is any branch containing a word-dash-number token that isn't a spec. The same ids also feed verdict lookup in pr_gate_subject.
+
+    Fix options (owner's call):
+    (1) Branch-derived ids count as named only when they resolve in the store; an unresolved branch token is dropped like a dangling trace id (TASK-1800). Title and commit trailers stay fail-closed.
+    (2) Extract branch ids only from the AIDA branch conventions (a known spec prefix), not any word-number token.
+    Workaround today: an operator ship at a terminal (floor authority), or a promotion head branch without a trailing -N token (for example `promote/integration-p23`), which needs a new PR and therefore re-review.
+  created_at: 2026-11-20T04:24:42.898259800Z
+  modified_at: 2026-11-20T04:24:42.898259800Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a14232-9634-7ff2-9397-aecbc5be8cd4
   author: joe
