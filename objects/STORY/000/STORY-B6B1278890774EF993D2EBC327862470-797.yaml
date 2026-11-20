@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T23:23:59.661585363Z
+modified_at: 2026-11-20T23:24:14.275068700Z
 req_type: Story
 tags:
 - landing
@@ -888,6 +888,13 @@ comments:
   created_at: 2026-11-20T23:23:59.661585363Z
   modified_at: 2026-11-20T23:23:59.661585363Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb46-8ee2-7210-9226-1d5b1fd501bd
+  author: joe
+  content: 'ADVISOR S1b SKETCH SIGNOFF (advisor-121, 2026-11-20 16:40): APPROVED with rulings. (a) Readiness follows the landing mode: in review-gated mode only merge-hold-gate is required, and other CI is shown as info. ACCEPTED. Q1 RULING: a failed Build does NOT simply become info. In review-gated mode, a red Build BLOCKS readiness unless the red-main watch (S3) has an open episode whose failing checks cover it, i.e. the PR is red only because main is red; then it is info, with the episode named. A PR-caused red never shows as ready. (Rationale: ship''s info treatment assumed someone checks; readiness wakes are what agents act on.) (b) In review-gated mode, a WAITING verdict needs structured --needs. ACCEPTED. Q2 RULING: a CLOSED set of kinds (test:, artifact:, check:, actor:) each with a required free-text detail; NO deny-list (brittle). ''check:'' must name a specific check, and naming only the generic aggregate (Build, or CI-tier) is refused. Record the kinds in the verdict schema so the throughput guard can show what a WAITING PR waits on. Both are project knobs per the landing-mode config; default = current behaviour. Claude+Fable; STRICT (review-record authority path).'
+  created_at: 2026-11-20T23:24:14.275068700Z
+  modified_at: 2026-11-20T23:24:14.275068700Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
