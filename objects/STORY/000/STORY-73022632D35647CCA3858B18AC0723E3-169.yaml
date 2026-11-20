@@ -1,0 +1,47 @@
+id: 01a1f644-b9b3-7ef1-8d61-e686d776bbac
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-169
+title: 'Review PR-4340: [AI:claude] test(gc): scope overlay reclaim assertions to fixtures (TASK-3821)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f61e`) for branch `task-b6b1278890774ef993d2ebc327862470-1127`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4340>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1127` → `main`
+
+  ## Covers
+
+  - TASK-3821
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4340` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T00:04:21.555850870Z
+modified_at: 2026-11-20T00:04:28.573537017Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1f5c2-beca-7222-959d-3870de1bf6f2
+  created_at: 2026-11-20T00:04:28.573468495Z
+  created_by: dirtlab
+history:
+- id: 01a1f644-e3e7-7e71-a621-98ddea52a48c
+  author: dirtlab
+  timestamp: 2026-11-20T00:04:32.359692799Z
+  session_id: 01a1f61e0ef3
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 21f4982d70e0191186824e76e39026e06b50cd35
+  branch: task-b6b1278890774ef993d2ebc327862470-1127
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: be435bcf38
+  vendor: claude
+  session: 01a1f61e0ef3
+  harness_version: 2.1.319 (Claude Code)
