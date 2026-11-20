@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T17:23:34.588680802Z
+modified_at: 2026-11-20T18:33:06.095877309Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -278,6 +278,13 @@ comments:
     A reference merge (commit 861eb515765a, `(Refs BUG-2697)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-20T17:23:34.588675767Z
   modified_at: 2026-11-20T17:23:34.588675767Z
+- id: 01a1fa3b-ff05-7e40-bffe-54b9139a36e2
+  author: joe
+  content: "Product 11:33: claude lane queued on dell1 (advisor 11:19 batch), brief:\n# Brief: BUG-2697 (fresh start; advisor-121 11:19 batch: approved, drain; claude)\n\nScope: the remaining ACs: AC1/AC2 (leases AND shared claims record the host node identity from the launcher, not the sandbox UTS hostname; any sandbox hostname goes in a separate field), AC4 (doctor check/heal sees expired sandbox-hostname claims on this node), AC5 (annotate legacy records). AC3 (pre-spawn release) landed in #4344. Lease/admission code: fail closed.\n\nImplement ONLY the still-unmet acceptance criteria on origin/main; earlier slices on main: 861eb515765  \nTrailer (BUG-2697) only if your PR plus main meets every AC; otherwise (Refs BUG-2697). If every AC is already met, make no change: punt with per-AC evidence.\nBefore pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`."
+  created_at: 2026-11-20T18:33:06.095877309Z
+  modified_at: 2026-11-20T18:33:06.095877309Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe
