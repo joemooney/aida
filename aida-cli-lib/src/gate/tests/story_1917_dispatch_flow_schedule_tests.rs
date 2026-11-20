@@ -1911,12 +1911,25 @@ fn hold_record(pr: u64) -> crate::gate::merge_hold_core::MergeHoldRecord {
 /// short page of effective rules, and a silent success for the train's own
 /// `gh pr view/edit` body refresh. Never the operator's real `gh`.
 // trace:STORY-1917 trace:BUG-2401 | ai:claude
-fn put_fake_gh_on_path(f: &mut FlowFixture) {
+fn put_fake_gh_on_path(f: &mut FlowFixture, script: &str) -> std::path::PathBuf {
     let bin = f._tmp.path().join("fake-bin");
     std::fs::create_dir_all(&bin).unwrap();
-    crate::test_exec::write_executable(
-        &bin.join("gh"),
-        r#"#!/bin/sh
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(&gh, script);
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    f.ambient.set_key("PATH", &path);
+    f.ambient
+        .set_key("AIDA_TEST_GH_BINARY", gh.to_str().unwrap());
+    gh
+}
+
+/// The train's hermetic `gh` script (see [`put_fake_gh_on_path`]).
+// trace:STORY-1917 trace:BUG-2401 | ai:claude
+const TRAIN_FAKE_GH: &str = r#"#!/bin/sh
 case "$*" in
   'pr view '*' --json headRefOid,baseRefName,state')
     echo '{"headRefOid":"7121a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1","baseRefName":"main","state":"OPEN"}' ;;
@@ -1925,17 +1938,7 @@ case "$*" in
   'api repos/{owner}/{repo}/rules/branches/main?'*) echo '[]' ;;
 esac
 exit 0
-"#,
-    );
-    let path = format!(
-        "{}:{}",
-        bin.display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
-    f.ambient.set_key("PATH", &path);
-    f.ambient
-        .set_key("AIDA_TEST_GH_BINARY", bin.join("gh").to_str().unwrap());
-}
+"#;
 
 /// HELD member: the original mandate is stopped and a replacement started
 /// while the real hold-gate wait runs after the real release. The real
@@ -1947,7 +1950,7 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
         return;
     }
     let mut f = native_fixture(true);
-    put_fake_gh_on_path(&mut f);
+    put_fake_gh_on_path(&mut f, TRAIN_FAKE_GH);
     let mandate_a = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9701]);
     let hold_root = crate::pr_cmd::pr_ship_hold_root(&f.root);
@@ -2025,7 +2028,7 @@ fn story_1917_native_train_unheld_member_grant_revoked_before_merge_never_merges
         return;
     }
     let mut f = native_fixture(false);
-    put_fake_gh_on_path(&mut f);
+    put_fake_gh_on_path(&mut f, TRAIN_FAKE_GH);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9702]);
     let forge = NetForge::default();
@@ -2067,7 +2070,7 @@ fn story_1917_native_train_authority_lost_after_merge_names_the_cause() {
         return;
     }
     let mut f = native_fixture(false);
-    put_fake_gh_on_path(&mut f);
+    put_fake_gh_on_path(&mut f, TRAIN_FAKE_GH);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9705]);
     let forge = NetForge::default();
@@ -2107,7 +2110,7 @@ fn story_1917_native_train_human_gate_or_claim_change_during_ci_wait_refuses() {
     }
     for case in ["human-gate", "claim"] {
         let mut f = native_fixture(false);
-        put_fake_gh_on_path(&mut f);
+        put_fake_gh_on_path(&mut f, TRAIN_FAKE_GH);
         f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
         let ctx = establish_train_ctx(&f, vec![9703]);
         let forge = NetForge::default();
@@ -3302,18 +3305,8 @@ sys.exit(1)
             if moved {
                 std::fs::write(&first_head, &h1).unwrap();
             }
-            let bin = f._tmp.path().join("fake-bin");
-            std::fs::create_dir_all(&bin).unwrap();
-            let gh = bin.join("gh");
-            crate::test_exec::write_executable(&gh, &moving_head_gh(&calls, &view, &first_head));
-            let path = format!(
-                "{}:{}",
-                bin.display(),
-                std::env::var("PATH").unwrap_or_default()
-            );
-            f.ambient.set_key("PATH", &path);
-            f.ambient
-                .set_key("AIDA_TEST_GH_BINARY", gh.to_str().unwrap());
+            // trace:STORY-2884 | ai:claude
+            put_fake_gh_on_path(&mut f, &moving_head_gh(&calls, &view, &first_head));
             f.ambient
                 .set_key("AIDA_SESSION_ID", "advisor-shipper-session");
             // The approval and CI are valid for the PR's (final) head.
