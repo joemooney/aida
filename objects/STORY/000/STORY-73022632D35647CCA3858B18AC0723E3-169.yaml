@@ -1,5 +1,6 @@
 id: 01a1f644-b9b3-7ef1-8d61-e686d776bbac
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-169
+agreed_id: STORY-2976
 title: 'Review PR-4340: [AI:claude] test(gc): scope overlay reclaim assertions to fixtures (TASK-3821)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f61e`) for branch `task-b6b1278890774ef993d2ebc327862470-1127`.
@@ -35,6 +36,12 @@ history:
   timestamp: 2026-11-20T00:04:32.359692799Z
   session_id: 01a1f61e0ef3
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f65b-3324-7380-942e-f4902e990b7d
+  author: joe
+  timestamp: 2026-11-20T00:28:54.436858255Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 21f4982d70e0191186824e76e39026e06b50cd35
