@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T20:11:30.084671904Z
+modified_at: 2026-11-20T21:15:38.704942495Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -228,6 +228,33 @@ comments:
   modified_at: 2026-11-20T20:09:15.902233092Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fad0-9f50-7211-8204-cf4bf1be4fd4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: db59d813f9 (slice 1, round 2 of 4; PR #4376; Refs-only, spec stays open for slices 2 and 3).
+
+    Acceptance evidence (the 12 round-2 findings):
+    1. [behavioral-test] scripts/ci-structural-exclusions.json classifies both containment tests (tests.test_ci_structural_guards OK); ci.yml required-live step selects bug_2669_contained_lane_ and fails unless every such test reports ok.
+    2. [behavioral-test] aida review draft registers from review_draft_cmd.rs via command_registry::NESTED; ReviewCommand has no Draft variant. bug_2669_review_draft_is_registered_from_its_own_module_under_review; help_surface_matches_golden_snapshot ok.
+    3. [behavioral-test] audit rows plus the review draft list probe in aida-cli/tests/bug_1502_format_json_audit.rs (run still building at comment time; see PR for the result).
+    4. [behavioral-test] draft_files: only NotFound is absent; bug_2669_a_failed_draft_lookup_is_unreadable_and_never_swept.
+    5. [behavioral-test] list resolves find_main_worktree_root; bug_2669_list_from_a_linked_checkout_shows_the_projects_receipts.
+    6. [behavioral-test] legacy collection closes the receipt as unused (mark_unused), consumed only when recorded from the draft; unit test passes, the end-to-end test bug_2669_legacy_collection_without_a_draft_closes_the_receipt_as_unused needs the built CLI (pending).
+    7. [behavioral-test] publish_verdict_no_replace then read-back; nlink 1 and no staging file asserted.
+    8. [behavioral-test] validate(): full 40-hex head and other fields; malformed rows listed unreadable in text and JSON (load_refuses test).
+    9. [documentation-inspection] docs/cli/06-roles-sessions.md and help text describe file state only.
+    10. [behavioral-test] sweep left register; runs after the review, 16 receipts / 200 ms, random start, zero lock wait (sweep test).
+    11. [behavioral-test + documentation-inspection] version 1 ineligible: automatic_recovery_eligible false, listing field, plan doc section Receipt versions.
+    12. [behavioral-test] inside_host_only_root scoped to the resolved roots; unrelated same-name directory stays writable (leaf test and host_only_roots test).
+
+    Probe findings and fixes: executable-fixture ratchet flagged a from_mode(0o700) restore in a test (fixed: restore saved permissions). Fail-open check: an unresolvable AIDA home falls back to the by-name refusal. No existing test weakened; the structured reviewer test was refactored into a shared helper with the same assertions.
+
+    Residual risks: a writable lane leaf that is an ANCESTOR of the receipt store is not refused by the profile (same as session-grants; protection is the read-only overlay, proven by the live test). The legacy-collection path still renames a draft.json that appears after the launcher looked (pre-existing BUG-2564 behaviour). Local fast gates: all source gates pass here except three that need AF_UNIX or /tmp writes this sandbox denies (containment conformance, store mutation channel, self-hosted routing), which this change does not touch; cargo-based ratchets left to CI.
+  created_at: 2026-11-20T21:15:38.704942495Z
+  modified_at: 2026-11-20T21:15:38.704942495Z
+  session_id: 01a1fa95a139
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
