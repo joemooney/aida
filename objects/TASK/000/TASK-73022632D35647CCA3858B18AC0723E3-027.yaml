@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T19:08:48.079425998Z
+modified_at: 2026-11-20T19:09:30.383679810Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -235,6 +235,13 @@ comments:
     Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
   created_at: 2026-11-20T19:08:48.079425998Z
   modified_at: 2026-11-20T19:08:48.079425998Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa5d-60f2-7170-85f7-3f0e5b10f9c2
+  author: joe
+  content: 'Product 12:09: CONFLICT lane queued on dell1 (codex), branch task-73022632d35647cca3858b18ac0723e3-027. Scope = the AUTHORITATIVE CONFLICT BRIEF in the previous comment.'
+  created_at: 2026-11-20T19:09:30.383679810Z
+  modified_at: 2026-11-20T19:09:30.383679810Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
