@@ -1,0 +1,31 @@
+id: 01a1fabc-bbf3-7260-8728-f518efd81d3f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1154
+title: 'Review follow-up: admission_drain.rs:226: A drain issued just before a backward host-clock adjustment remain'
+description: |-
+  From BUG-2703
+  Reviewed sha: 1fb82107b586e3d1239b32d9505e3070faeb6ed8
+
+  admission_drain.rs:226: A drain issued just before a backward host-clock adjustment remains active for the entire rollback plus its requested duration. The journal validates the issue-to-expiry interval only. An otherwise valid 24-hour drain can suppress both workers and supervisor respawn for longer than the documented maximum. Bound remaining lifetime against the observer clock as for admission intents and cover rollback.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T20:53:55.315474341Z
+modified_at: 2026-11-20T20:53:55.315474341Z
+req_type: Task
+tags:
+- carried-from:BUG-2703
+- finding-hash:8a6d9b5c
+- from-review:BUG-2703
+relationships:
+- rel_type: References
+  target_id: 01a1f73c-f2d4-7ad3-85a1-7b10d07388d2
+  created_at: 2026-11-20T20:54:07.989451571Z
+filed_at:
+  code_sha: 1fb82107b586e3d1239b32d9505e3070faeb6ed8
+  branch: pr-4363
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1fab9c85e
