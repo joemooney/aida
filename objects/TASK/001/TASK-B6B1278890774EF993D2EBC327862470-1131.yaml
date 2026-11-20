@@ -10,12 +10,12 @@ description: |
   2. Mechanical move only: no logic changes; existing tests pass unchanged; trace comments move with their code.
   3. Ratchets (store-writers, ExecContext, crate-glob, gate inventory) pass without growing any baseline.
   Codex lane, FASTTRACK-sized review if the diff is a pure move.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:16:46.260567298Z
-modified_at: 2026-11-20T15:55:03.454318935Z
+modified_at: 2026-11-20T16:14:05.655442783Z
 req_type: Task
 tags:
 - crate-split
@@ -55,6 +55,12 @@ comments:
   modified_at: 2026-11-20T15:55:03.454318935Z
   session_id: 01a1f98f2065
   harness_version: codex-cli 0.167.0
+- id: 01a1f9bc-8b57-7300-b17b-b89498fddba9
+  author: aida-publication-done
+  content: Implementer push 3301620b15e4 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T16:14:05.655442171Z
+  modified_at: 2026-11-20T16:14:05.655442171Z
+  session_id: 01a1f98f2065
 history:
 - id: 01a1f988-cecb-7802-bfe2-064cda85d46d
   author: joe
@@ -84,6 +90,14 @@ history:
   session_id: 01a1f98f2065
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a1f9bc-8b57-7300-b17b-b88999a80a62
+  author: aida-publication-done
+  timestamp: 2026-11-20T16:14:05.655439094Z
+  session_id: 01a1f98f2065
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
