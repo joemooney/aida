@@ -8,8 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T04:31:20.159152225Z
-modified_at: 2026-11-20T18:17:27.057109580Z
+modified_at: 2026-11-20T18:18:39.907923688Z
 req_type: Bug
+comments:
+- id: 01a1fa2e-d289-7250-af88-722dec7fe8c5
+  author: joe
+  content: 'advisor-121 11:22: drain, Claude+Fable, STRICT (rework admission).'
+  created_at: 2026-11-20T18:18:39.907923688Z
+  modified_at: 2026-11-20T18:18:39.907923688Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e7c6-40ba-7180-99c5-2c906894848b
   author: joe
