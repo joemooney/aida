@@ -38,6 +38,16 @@ mod commit_ci;
 mod throughput;
 pub(crate) use commit_ci::*;
 
+/// One CI job as [`Forge::run_job_report`] reads it; the log is an error
+/// string when it could not be read.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct RunJobReport {
+    pub link: String,
+    pub failed_steps: Vec<String>,
+    pub log: std::result::Result<String, String>,
+}
+
 /// A supervised merge-hold deliberately refused a merge.
 ///
 /// Keep this as a typed error so orchestrator callers can distinguish a human
@@ -1056,6 +1066,13 @@ pub trait Forge {
     // trace:STORY-2912 | ai:claude
     fn run_job_failed_steps(&self, run_id: &str, job: &str) -> Result<Vec<String>> {
         anyhow::bail!("this forge cannot list the steps of job `{job}` in CI run {run_id}")
+    }
+
+    /// Job `job` of CI run `run_id` (its latest attempt): its link, its
+    /// failed steps and its log. Forges without job logs always err.
+    // trace:STORY-2897 | ai:claude
+    fn run_job_report(&self, run_id: &str, job: &str) -> Result<RunJobReport> {
+        anyhow::bail!("this forge cannot report job `{job}` of CI run {run_id}")
     }
 
     /// Ask the forge to re-run the failed jobs of CI run `run_id` (the
@@ -3192,6 +3209,47 @@ impl Forge for GitHubForge {
         })?;
         let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
         github_run_job_failed_steps("{owner}/{repo}", run_id, job, &mut api)
+    }
+
+    // trace:STORY-2897 | ai:claude
+    fn run_job_report(&self, run_id: &str, job: &str) -> Result<RunJobReport> {
+        anyhow::ensure!(
+            !run_id.is_empty() && run_id.bytes().all(|b| b.is_ascii_digit()),
+            "invalid CI run id `{run_id}`"
+        );
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        let jobs = commit_ci_api(
+            &gh,
+            &self.project_root,
+            &format!(
+                "repos/{{owner}}/{{repo}}/actions/runs/{run_id}/jobs?filter=latest&per_page=100"
+            ),
+        )?;
+        let value: serde_json::Value =
+            serde_json::from_slice(&jobs).context("invalid workflow jobs JSON")?;
+        let jobs = value["jobs"]
+            .as_array()
+            .context("the workflow run lists no jobs")?;
+        let failed_steps = failed_steps_of(jobs, job)?;
+        let found = jobs
+            .iter()
+            .find(|j| j["name"].as_str() == Some(job))
+            .with_context(|| format!("job `{job}` is not in CI run {run_id}"))?;
+        let id = found["id"].as_u64().context("the job has no id")?;
+        let log = commit_ci_api(
+            &gh,
+            &self.project_root,
+            &format!("repos/{{owner}}/{{repo}}/actions/jobs/{id}/logs"),
+        )
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .map_err(|e| format!("{e:#}"));
+        Ok(RunJobReport {
+            link: found["html_url"].as_str().unwrap_or_default().to_string(),
+            failed_steps,
+            log,
+        })
     }
 
     // trace:STORY-2897 | ai:claude

@@ -5,20 +5,32 @@
 //!
 //! An episode opens on the first red commit after the last green one. Its
 //! opening is journaled and mailed (urgent, advisor and product) at once, and
-//! the failed jobs are re-run once. The fix spec and the operator notice wait
-//! until the red is confirmed: it survives that re-run, or 30 minutes pass.
-//! A red that a green re-run clears first is a flake: no spec, no notice.
+//! the failed jobs are re-run once. The fix spec, the operator notice and the
+//! `aida human` attention item wait until the red is confirmed: it survives
+//! that re-run, or 30 minutes pass. A red that a green re-run clears first is
+//! a flake: no spec, no notice.
 //!
-//! State: `.aida/land/main-watch.json` (one episode at most), journal:
-//! `.aida/land/main-watch.jsonl` (append-only, read by `aida land metrics`).
+//! Durability: every transition is written to the state file first, carrying
+//! a transition id, and then appended to the journal; a pass replays any
+//! transition the journal lacks, so a crash at either boundary neither loses
+//! nor duplicates an event. Notices wait in a persistent outbox until they
+//! are delivered, and are retried every pass, also after the episode closes.
+//!
+//! Boundedness: every git and forge call the live watch makes has null stdin
+//! and a timeout, the whole pass runs under a scoped deadline, and the watch
+//! lock is only ever tried, so a stalled fetch makes the watch report and
+//! return; it never stalls the land loop, the train tick or a dev build.
+//!
+//! State: `.aida/land/main-watch.json`; journal: `.aida/land/main-watch.jsonl`
+//! (append-only, read by `aida land metrics`).
 // trace:STORY-2897 | ai:claude
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::forge::{CheckOutcome, CommitChecks};
 
@@ -31,30 +43,55 @@ pub(crate) const SEARCH: usize = 50;
 pub(crate) const CONFIRM_AFTER_MINUTES: i64 = 30;
 /// CI steps that compile: a red failing in one of these is unbuildable.
 pub(crate) const COMPILE_STEPS: &[&str] = &["Build ", "Check aida-cli"];
+/// The ceiling on one git or forge call the live watch makes.
+pub(crate) const CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+/// The ceiling on a whole live pass (the TASK-3792 scoped deadline).
+pub(crate) const PASS_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
+/// How long the dev-build smoke hook tries for the watch lock.
+const SMOKE_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+/// The tail of a job log the excerpt is taken from.
+const LOG_CAP: u64 = 1024 * 1024;
 
-/// One default-branch commit, newest first in a history read.
+/// One default-branch commit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Commit {
     pub sha: String,
     pub subject: String,
 }
 
-/// What the watch reads and does outside the repository's state files.
-/// [`Live`] is the real one; tests use a fake.
+/// What one failed CI job shows: where to look, the failed steps, and the
+/// error lines of its log.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Evidence {
+    pub check: String,
+    pub link: String,
+    pub failed_steps: Vec<String>,
+    pub excerpt: String,
+}
+
+/// What the watch reads and does outside its own state files. [`Live`] is
+/// the real one; tests use a fake.
 pub(crate) trait Ports {
     fn now(&self) -> DateTime<Utc>;
     /// First-parent commits of the freshly fetched default branch, newest
     /// first, stopping before `stop` (exclusive) and after `max`.
     fn history(&mut self, stop: Option<&str>, max: usize) -> Result<Vec<Commit>>;
+    /// First-parent commits in `(from, to]`, newest first.
+    fn range(&mut self, from: &str, to: &str) -> Result<Vec<Commit>>;
     fn checks(&mut self, sha: &str) -> Result<CommitChecks>;
-    fn failed_steps(&mut self, run_id: &str, job: &str) -> Result<Vec<String>>;
+    /// The link, failed steps and log excerpt of job `job` in CI run `run_id`.
+    fn evidence(&mut self, run_id: &str, job: &str) -> Result<Evidence>;
     fn rerun_failed(&mut self, run_id: &str) -> Result<()>;
     /// Urgent mail to the advisor and product seats; idempotent by `key`.
     fn mail(&mut self, key: &str, subject: &str, body: &str) -> Result<()>;
-    /// The operator's direct notice; idempotent by `key`.
+    /// The operator's optional push notice.
     fn notify_operator(&mut self, key: &str, title: &str, body: &str) -> Result<()>;
-    /// File the fix spec (once per red commit) and queue it at the top of
-    /// the implementer queue; returns its id.
+    /// Create or update the durable `aida human` item for `red_sha`.
+    fn human_open(&mut self, red_sha: &str, title: &str, body: &str) -> Result<String>;
+    /// Resolve the `aida human` item for `red_sha`, if there is one.
+    fn human_resolve(&mut self, red_sha: &str) -> Result<()>;
+    /// File the fix spec (once per red commit) and make sure it is queued at
+    /// the top of the implementer queue; returns its id.
     fn file_fix_spec(&mut self, fix: &FixSpec) -> Result<String>;
     fn fix_spec_state(&mut self, id: &str) -> Result<FixState>;
 }
@@ -79,6 +116,19 @@ pub(crate) struct FixState {
 pub(crate) struct State {
     pub last_green: Option<String>,
     pub episode: Option<Episode>,
+    /// Notices not yet delivered; they outlive the episode.
+    #[serde(default)]
+    pub outbox: Vec<Notice>,
+    /// Transitions written here first and not yet confirmed in the journal.
+    #[serde(default)]
+    pub pending: Vec<Event>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct FailedCheck {
+    pub name: String,
+    pub run_id: Option<String>,
+    pub attempt: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,29 +137,61 @@ pub(crate) struct Episode {
     pub subject: String,
     pub pr: Option<u64>,
     pub specs: Vec<String>,
-    /// Required checks failing on the red commit when the episode opened.
-    pub failing: Vec<String>,
+    /// The checks failing on the red commit, as last seen.
+    pub failed: Vec<FailedCheck>,
     pub opened_at: DateTime<Utc>,
+    /// The newest green commit before the red: the live binary stays there.
+    pub held_green: Option<String>,
     /// Owning CI run id -> its attempt when the episode opened.
     pub attempts: BTreeMap<String, u64>,
     pub rerun_requested: bool,
     pub confirmed_at: Option<DateTime<Utc>>,
     pub fix_spec: Option<String>,
+    /// Failure evidence per failing check.
+    #[serde(default)]
+    pub evidence: Vec<Evidence>,
+    /// The run attempt the evidence was read for; `None` until a read of
+    /// every failing job succeeded, so an unknown read is retried.
+    #[serde(default)]
+    pub evidence_attempt: Option<u64>,
     /// `Some(why)` when a failing check failed at a compile step.
     pub unbuildable: Option<String>,
     /// The episode commit whose staged build failed the smoke test.
     pub smoke_failed: Option<String>,
-    /// Later red commits (merges that landed while red).
+    /// Every later commit that landed while the episode was open, whatever
+    /// its CI said.
     pub red_merges: Vec<String>,
     /// Revert reasons already escalated (one escalation per reason).
     pub recommended: Vec<String>,
 }
 
+/// One outstanding notice.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Notice {
+    pub key: String,
+    pub channel: Channel,
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub(crate) enum Channel {
+    Mail,
+    Operator,
+    HumanOpen { red_sha: String },
+    HumanResolve { red_sha: String },
+}
+
 /// One journal line.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Event {
+    /// The transition id; the journal holds each id at most once.
+    #[serde(default)]
+    pub id: String,
     pub at: DateTime<Utc>,
-    /// `red_start`, `red_merge`, `confirmed`, `revert_recommended` or `red_end`.
+    /// `red_start`, `red_merge`, `confirmed`, `fix_filed`,
+    /// `revert_recommended` or `red_end`.
     pub event: String,
     pub red_sha: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -127,16 +209,9 @@ pub(crate) struct Event {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Verdict {
     Green,
-    Red(Vec<Failed>),
+    Red(Vec<FailedCheck>),
     /// Pending, cancelled-only, missing or unreadable: never a transition.
     Unknown(String),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Failed {
-    pub name: String,
-    pub run_id: Option<String>,
-    pub attempt: Option<u64>,
 }
 
 /// PURE: judge a default-branch commit for the watch. Red means a required
@@ -154,17 +229,17 @@ pub(crate) fn judge(checks: Result<CommitChecks>, required: &[String]) -> Verdic
         .map(String::as_str)
         .filter(|n| *n != crate::landing_policy::MERGE_HOLD_GATE)
         .collect();
-    let failed: Vec<Failed> = latest
+    let failed: Vec<FailedCheck> = latest
         .iter()
         .filter(|c| c.outcome == CheckOutcome::Failed && !c.cancelled)
-        .map(|c| Failed {
+        .map(|c| FailedCheck {
             name: c.name.clone(),
             run_id: c.run_id.clone(),
             attempt: c.run_attempt,
         })
         .collect();
-    // A required check that failed makes the commit red; any other failed
-    // check is reported beside it but alone it is not red.
+    // A required check that failed makes the commit red; other failed checks
+    // are carried as evidence beside it, but alone are not red.
     if failed.iter().any(|f| required.contains(&f.name.as_str())) {
         return Verdict::Red(failed);
     }
@@ -195,6 +270,34 @@ pub(crate) fn subject_pr(subject: &str) -> Option<u64> {
     number.parse().ok()
 }
 
+/// PURE: the median, averaging the two central values of an even count.
+pub(crate) fn median(sorted: &[i64]) -> Option<i64> {
+    match sorted.len() {
+        0 => None,
+        n if n % 2 == 1 => Some(sorted[n / 2]),
+        n => Some((sorted[n / 2 - 1] + sorted[n / 2]) / 2),
+    }
+}
+
+// Fault injection at each durability boundary (tests only).
+#[cfg(test)]
+thread_local! {
+    pub(crate) static FAIL_AT: std::cell::RefCell<Option<&'static str>> = const { std::cell::RefCell::new(None) };
+}
+#[cfg(test)]
+pub(crate) fn failpoint(name: &str) -> Result<()> {
+    FAIL_AT.with(|f| {
+        if *f.borrow() == Some(name) {
+            anyhow::bail!("injected failure at {name}")
+        }
+        Ok(())
+    })
+}
+#[cfg(not(test))]
+pub(crate) fn failpoint(_name: &str) -> Result<()> {
+    Ok(())
+}
+
 fn read_state(root: &Path) -> Result<State> {
     match std::fs::read(root.join(STATE)) {
         Ok(bytes) => serde_json::from_slice(&bytes)
@@ -205,6 +308,7 @@ fn read_state(root: &Path) -> Result<State> {
 }
 
 fn write_state(root: &Path, state: &State) -> Result<()> {
+    failpoint("state")?;
     let path = root.join(STATE);
     let temp = path.with_extension("json.tmp");
     std::fs::write(&temp, serde_json::to_vec_pretty(state)?)?;
@@ -212,6 +316,7 @@ fn write_state(root: &Path, state: &State) -> Result<()> {
 }
 
 fn append(root: &Path, event: &Event) -> Result<()> {
+    failpoint("journal")?;
     let mut file = std::fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -224,28 +329,53 @@ fn append(root: &Path, event: &Event) -> Result<()> {
     Ok(())
 }
 
-/// Every journal event, oldest first.
+/// Every journal event, oldest first, each transition id once.
 pub(crate) fn read_journal(root: &Path) -> Result<Vec<Event>> {
-    match std::fs::read_to_string(root.join(JOURNAL)) {
+    let events: Vec<Event> = match std::fs::read_to_string(root.join(JOURNAL)) {
         Ok(text) => text
             .lines()
             .filter(|l| !l.trim().is_empty())
             .map(|l| serde_json::from_str(l).with_context(|| format!("invalid line in {JOURNAL}")))
-            .collect(),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
-        Err(e) => Err(e.into()),
-    }
+            .collect::<Result<_>>()?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(e.into()),
+    };
+    let mut seen = BTreeSet::new();
+    Ok(events
+        .into_iter()
+        .filter(|e| e.id.is_empty() || seen.insert(e.id.clone()))
+        .collect())
 }
 
-struct WatchLock(std::fs::File);
-impl Drop for WatchLock {
-    fn drop(&mut self) {
-        let _ = fs2::FileExt::unlock(&self.0);
+/// Append every pending transition the journal does not hold yet, then
+/// clear the pending list. Safe to repeat at any point.
+fn flush(root: &Path, state: &mut State) -> Result<()> {
+    if state.pending.is_empty() {
+        return Ok(());
     }
+    let journaled: BTreeSet<String> = read_journal(root)?.into_iter().map(|e| e.id).collect();
+    for event in &state.pending {
+        if !journaled.contains(&event.id) {
+            append(root, event)?;
+        }
+    }
+    failpoint("flushed")?;
+    state.pending.clear();
+    write_state(root, state)
+}
+
+/// Commit a transition: the state (with every in-memory change the caller
+/// made) and the event are written first, then the event is journaled.
+fn record(root: &Path, state: &mut State, mut event: Event) -> Result<()> {
+    event.id = uuid::Uuid::new_v4().to_string();
+    state.pending.push(event);
+    write_state(root, state)?;
+    flush(root, state)
 }
 
 fn event(at: DateTime<Utc>, kind: &str, red_sha: &str) -> Event {
     Event {
+        id: String::new(),
         at,
         event: kind.into(),
         red_sha: red_sha.into(),
@@ -256,158 +386,343 @@ fn event(at: DateTime<Utc>, kind: &str, red_sha: &str) -> Event {
     }
 }
 
+/// Queue a notice; a newer one with the same key replaces the older.
+fn notify(state: &mut State, key: String, channel: Channel, title: String, body: String) {
+    state.outbox.retain(|n| n.key != key);
+    state.outbox.push(Notice {
+        key,
+        channel,
+        title,
+        body,
+    });
+}
+
+/// Try every outstanding notice once; delivered ones leave the outbox. The
+/// `aida human` notices of one red commit are delivered in order: after one
+/// fails, its later ones wait for the next pass.
+fn deliver(
+    root: &Path,
+    state: &mut State,
+    ports: &mut dyn Ports,
+    notes: &mut Vec<String>,
+) -> Result<()> {
+    if state.outbox.is_empty() {
+        return Ok(());
+    }
+    let mut kept = Vec::new();
+    let mut blocked: BTreeSet<String> = BTreeSet::new();
+    for notice in std::mem::take(&mut state.outbox) {
+        let result = match &notice.channel {
+            Channel::Mail => ports.mail(&notice.key, &notice.title, &notice.body),
+            Channel::Operator => ports.notify_operator(&notice.key, &notice.title, &notice.body),
+            Channel::HumanOpen { red_sha } | Channel::HumanResolve { red_sha }
+                if blocked.contains(red_sha) =>
+            {
+                Err(anyhow::anyhow!(
+                    "an earlier attention update is still outstanding"
+                ))
+            }
+            Channel::HumanOpen { red_sha } => ports
+                .human_open(red_sha, &notice.title, &notice.body)
+                .map(|_| ()),
+            Channel::HumanResolve { red_sha } => ports.human_resolve(red_sha),
+        };
+        if let Err(e) = result {
+            if let Channel::HumanOpen { red_sha } | Channel::HumanResolve { red_sha } =
+                &notice.channel
+            {
+                blocked.insert(red_sha.clone());
+            }
+            notes.push(format!(
+                "red-main watch: notice `{}` not delivered yet; retried next pass: {e:#}",
+                notice.key
+            ));
+            kept.push(notice);
+        }
+    }
+    state.outbox = kept;
+    write_state(root, state)
+}
+
+struct WatchLock(std::fs::File);
+impl Drop for WatchLock {
+    fn drop(&mut self) {
+        let _ = fs2::FileExt::unlock(&self.0);
+    }
+}
+
+/// Try the watch lock for up to `wait`; `None` when another pass holds it.
+fn try_lock(root: &Path, wait: std::time::Duration) -> Result<Option<WatchLock>> {
+    use fs2::FileExt;
+    let lock = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .write(true)
+        .open(root.join(LOCK))?;
+    let until = std::time::Instant::now() + wait;
+    loop {
+        if lock.try_lock_exclusive().is_ok() {
+            return Ok(Some(WatchLock(lock)));
+        }
+        if std::time::Instant::now() >= until {
+            return Ok(None);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
 /// One watch pass. `required` is the CI-gated check set, `window` the fix
-/// window. Returns what it observed and did, one line each. Only one pass
-/// runs at a time; a second one returns at once.
+/// window. Returns what it observed and did, one line each.
 pub(crate) fn pass(
     root: &Path,
     required: &[String],
     window: std::time::Duration,
     ports: &mut dyn Ports,
 ) -> Result<Vec<String>> {
-    use fs2::FileExt;
-    let dir = root.join(".aida/land");
-    std::fs::create_dir_all(&dir)?;
-    let lock = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(root.join(LOCK))?;
-    if lock.try_lock_exclusive().is_err() {
-        return Ok(vec!["red-main watch: another pass is running".into()]);
-    }
-    let _lock = WatchLock(lock);
+    std::fs::create_dir_all(root.join(".aida/land"))?;
+    let Some(_lock) = try_lock(root, std::time::Duration::ZERO)? else {
+        return Ok(vec![
+            "red-main watch: another pass is running; skipped".into()
+        ]);
+    };
     let mut state = read_state(root)?;
-    let now = ports.now();
     let mut notes = Vec::new();
+    // Replay transitions a crash left unjournaled, and retry notices.
+    flush(root, &mut state)?;
+    deliver(root, &mut state, ports, &mut notes)?;
+    let now = ports.now();
 
-    // Newest first, until the first green commit (older history no longer
-    // decides anything) or past the open episode's red commit.
+    // Newest first. With no open episode, history older than the newest
+    // green commit decides nothing; with one open, every commit since the
+    // last green one is read again, so a green re-run or an intervening
+    // green commit is seen.
     let commits = ports.history(state.last_green.as_deref(), SEARCH)?;
     let mut seen: Vec<(Commit, Verdict)> = Vec::new();
     for commit in commits {
         let verdict = judge(ports.checks(&commit.sha), required);
-        let stop = verdict == Verdict::Green
-            || state
-                .episode
-                .as_ref()
-                .is_some_and(|e| e.red_sha == commit.sha);
+        let stop = state.episode.is_none() && verdict == Verdict::Green;
         seen.push((commit, verdict));
         if stop {
             break;
         }
     }
-    let newest = seen
-        .iter()
-        .position(|(_, v)| !matches!(v, Verdict::Unknown(_)));
+    if seen.iter().all(|(_, v)| matches!(v, Verdict::Unknown(_))) {
+        let why = seen
+            .first()
+            .map(|(c, v)| match v {
+                Verdict::Unknown(why) => format!("{}: {why}", short(&c.sha)),
+                _ => String::new(),
+            })
+            .unwrap_or_else(|| "no new commits".into());
+        notes.push(format!("red-main watch: main CI unknown ({why})"));
+    }
 
-    match newest.map(|i| &seen[i]) {
-        Some((green, Verdict::Green)) => {
-            if let Some(episode) = state.episode.take() {
-                close(root, episode, &green.sha, &seen, now, ports, &mut notes)?;
+    // Oldest first: open at the first red, close at a green, and record each
+    // commit that lands while an episode is open. Commits older than the
+    // episode's red commit (read again because the scan starts at the last
+    // green one) neither close it nor join it; when the red commit is past
+    // the scan's reach, every commit read is newer.
+    let mut past_red = state
+        .episode
+        .as_ref()
+        .is_none_or(|e| !seen.iter().any(|(c, _)| c.sha == e.red_sha));
+    for (commit, verdict) in seen.iter().rev() {
+        let Some(episode) = state.episode.clone() else {
+            match verdict {
+                Verdict::Green => {
+                    if state.last_green.as_deref() != Some(commit.sha.as_str()) {
+                        state.last_green = Some(commit.sha.clone());
+                        write_state(root, &state)?;
+                    }
+                }
+                Verdict::Red(failed) => {
+                    open(root, &mut state, commit, failed, now, ports, &mut notes)?;
+                    past_red = true;
+                }
+                Verdict::Unknown(_) => {}
             }
-            state.last_green = Some(green.sha.clone());
-            write_state(root, &state)?;
-        }
-        Some((_, Verdict::Red(_))) => {
-            let start = newest.unwrap_or(0);
-            // The oldest red commit after the newest green one.
-            let reds: Vec<&(Commit, Verdict)> = seen[start..]
-                .iter()
-                .take_while(|(_, v)| *v != Verdict::Green)
-                .filter(|(_, v)| matches!(v, Verdict::Red(_)))
-                .collect();
-            match state.episode.as_mut() {
-                None => {
-                    let (commit, verdict) = reds.last().copied().unwrap_or(&seen[start]);
-                    let episode = open(root, commit, verdict, now, ports, &mut notes)?;
+            continue;
+        };
+        if commit.sha == episode.red_sha {
+            past_red = true;
+            match verdict {
+                Verdict::Green => close(root, &mut state, commit, &seen, now, ports, &mut notes)?,
+                Verdict::Red(failed) if *failed != episode.failed => {
+                    let mut episode = episode;
+                    episode.failed = failed.clone();
                     state.episode = Some(episode);
                     write_state(root, &state)?;
                 }
-                Some(episode) => {
-                    for (commit, _) in reds.iter().rev() {
-                        if commit.sha != episode.red_sha
-                            && !episode.red_merges.contains(&commit.sha)
-                        {
-                            episode.red_merges.push(commit.sha.clone());
-                            let mut e = event(now, "red_merge", &episode.red_sha);
-                            e.sha = Some(commit.sha.clone());
-                            append(root, &e)?;
-                        }
-                    }
-                    write_state(root, &state)?;
-                }
+                _ => {}
             }
-        }
-        _ => {
-            let why = seen
-                .first()
-                .map(|(c, v)| match v {
-                    Verdict::Unknown(why) => format!("{}: {why}", short(&c.sha)),
-                    _ => String::new(),
-                })
-                .unwrap_or_else(|| "no new commits".into());
-            notes.push(format!("red-main watch: main CI unknown ({why})"));
+        } else if !past_red {
+            continue;
+        } else if *verdict == Verdict::Green {
+            close(root, &mut state, commit, &seen, now, ports, &mut notes)?;
+        } else if !episode.red_merges.contains(&commit.sha) {
+            let red_sha = episode.red_sha.clone();
+            let mut episode = episode;
+            episode.red_merges.push(commit.sha.clone());
+            state.episode = Some(episode);
+            let mut e = event(now, "red_merge", &red_sha);
+            e.sha = Some(commit.sha.clone());
+            record(root, &mut state, e)?;
         }
     }
 
-    let red_now = state.episode.as_ref().and_then(|episode| {
-        seen.iter()
-            .find(|(c, _)| c.sha == episode.red_sha)
-            .map(|(_, v)| v.clone())
-    });
-    advance(
-        root,
-        &mut state,
-        red_now.as_ref(),
-        window,
-        now,
-        ports,
-        &mut notes,
-    )?;
+    if state.episode.is_some() {
+        advance(root, &mut state, window, now, ports, &mut notes)?;
+    }
+    deliver(root, &mut state, ports, &mut notes)?;
     Ok(notes)
 }
 
-fn open(
-    root: &Path,
-    commit: &Commit,
-    verdict: &Verdict,
-    now: DateTime<Utc>,
-    ports: &mut dyn Ports,
-    notes: &mut Vec<String>,
-) -> Result<Episode> {
-    let failed = match verdict {
-        Verdict::Red(failed) => failed.clone(),
-        _ => Vec::new(),
-    };
-    let mut unbuildable = None;
-    for f in &failed {
+/// Read the failure evidence of every failing job of the episode, unless it
+/// was already read for the current run attempt. Returns whether it read
+/// anything; a failed read leaves the evidence to be retried next pass.
+fn probe(episode: &mut Episode, ports: &mut dyn Ports, notes: &mut Vec<String>) -> bool {
+    let attempt = episode
+        .failed
+        .iter()
+        .filter_map(|f| f.attempt)
+        .max()
+        .or(Some(0));
+    if episode.evidence_attempt == attempt {
+        return false;
+    }
+    let mut complete = true;
+    for f in &episode.failed {
         let Some(run) = f.run_id.as_deref() else {
             continue;
         };
-        match ports.failed_steps(run, &f.name) {
-            Ok(steps) => {
-                if let Some(step) = steps
+        match ports.evidence(run, &f.name) {
+            Ok(mut found) => {
+                found.check = f.name.clone();
+                if let Some(step) = found
+                    .failed_steps
                     .iter()
                     .find(|s| COMPILE_STEPS.iter().any(|p| s.starts_with(p)))
                 {
-                    unbuildable = Some(format!("`{}` failed at step `{step}`", f.name));
-                    break;
+                    episode.unbuildable = Some(format!("`{}` failed at step `{step}`", f.name));
+                }
+                episode.evidence.retain(|e| e.check != found.check);
+                episode.evidence.push(found);
+            }
+            Err(e) => {
+                complete = false;
+                notes.push(format!(
+                    "red-main watch: the failure evidence of `{}` could not be read; retried next pass: {e:#}",
+                    f.name
+                ));
+            }
+        }
+    }
+    if complete {
+        episode.evidence_attempt = attempt;
+    }
+    true
+}
+
+fn evidence_text(episode: &Episode) -> String {
+    let mut out = String::new();
+    for f in &episode.failed {
+        match episode.evidence.iter().find(|e| e.check == f.name) {
+            Some(e) => {
+                out.push_str(&format!("- {} ({})\n", f.name, e.link));
+                if !e.failed_steps.is_empty() {
+                    out.push_str(&format!("  failed steps: {}\n", e.failed_steps.join(", ")));
+                }
+                for line in e.excerpt.lines() {
+                    out.push_str(&format!("  | {line}\n"));
                 }
             }
-            Err(e) => notes.push(format!(
-                "red-main watch: the steps of `{}` could not be read: {e:#}",
-                f.name
+            None => out.push_str(&format!(
+                "- {} (evidence not read yet{})\n",
+                f.name,
+                f.run_id
+                    .as_deref()
+                    .map(|r| format!("; CI run {r}"))
+                    .unwrap_or_default()
             )),
         }
     }
-    let episode = Episode {
+    out
+}
+
+fn held_text(episode: &Episode) -> String {
+    match &episode.held_green {
+        Some(sha) => format!(
+            "The live binary stays on the last green commit, {}.",
+            short(sha)
+        ),
+        None => "No green commit is known before it; the live binary stays where it is.".into(),
+    }
+}
+
+fn names(episode: &Episode) -> String {
+    episode
+        .failed
+        .iter()
+        .map(|f| f.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// The `aida human` item's current text.
+fn attention_body(episode: &Episode) -> String {
+    let mut body = format!(
+        "Main is red at {} ({}).\nFailing:\n{}{}\n",
+        episode.red_sha,
+        episode.subject,
+        evidence_text(episode),
+        held_text(episode)
+    );
+    match &episode.fix_spec {
+        Some(id) => body.push_str(&format!(
+            "Fix forward: {id}, top of the implementer queue.\n"
+        )),
+        None => body.push_str("The fix spec is being filed.\n"),
+    }
+    if !episode.recommended.is_empty() {
+        body.push_str(&format!(
+            "Revert recommended ({}): git revert --no-edit {}, as an ordinary reviewed PR.\n",
+            episode.recommended.join(", "),
+            episode.red_sha
+        ));
+    }
+    body
+}
+
+fn attention(state: &mut State, episode: &Episode) {
+    notify(
+        state,
+        format!("human-{}", episode.red_sha),
+        Channel::HumanOpen {
+            red_sha: episode.red_sha.clone(),
+        },
+        format!("Main is red at {}", short(&episode.red_sha)),
+        attention_body(episode),
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn open(
+    root: &Path,
+    state: &mut State,
+    commit: &Commit,
+    failed: &[FailedCheck],
+    now: DateTime<Utc>,
+    ports: &mut dyn Ports,
+    notes: &mut Vec<String>,
+) -> Result<()> {
+    let mut episode = Episode {
         red_sha: commit.sha.clone(),
         subject: commit.subject.clone(),
         pr: subject_pr(&commit.subject),
         specs: crate::pr_ship::extract_authorship_spec_ids_from_subject(&commit.subject),
-        failing: failed.iter().map(|f| f.name.clone()).collect(),
+        failed: failed.to_vec(),
         opened_at: now,
+        held_green: state.last_green.clone(),
         attempts: failed
             .iter()
             .filter_map(|f| Some((f.run_id.clone()?, f.attempt?)))
@@ -415,49 +730,55 @@ fn open(
         rerun_requested: false,
         confirmed_at: None,
         fix_spec: None,
-        unbuildable,
+        evidence: Vec::new(),
+        evidence_attempt: None,
+        unbuildable: None,
         smoke_failed: None,
         red_merges: Vec::new(),
         recommended: Vec::new(),
     };
+    probe(&mut episode, ports, notes);
     let body = format!(
-        "Main is red at {} ({}).\nPR: {}\nSpecs: {}\nFailing: {}\n\nThe failed jobs are re-run once. \
-         If the red survives that re-run or 30 minutes, a fix spec is filed at the top of the \
-         implementer queue and the operator is notified. Merging continues meanwhile.",
+        "Main is red at {} ({}).\nPR: {}\nSpecs: {}\nFailing:\n{}{}\n\nThe failed jobs are re-run \
+         once. If the red survives that re-run or 30 minutes, a fix spec is filed at the top of \
+         the implementer queue and the operator is notified. Merging continues meanwhile.",
         episode.red_sha,
         episode.subject,
         episode.pr.map_or("unknown".into(), |n| format!("#{n}")),
-        if episode.specs.is_empty() { "none named".into() } else { episode.specs.join(", ") },
-        episode.failing.join(", "),
+        if episode.specs.is_empty() {
+            "none named".into()
+        } else {
+            episode.specs.join(", ")
+        },
+        evidence_text(&episode),
+        held_text(&episode),
     );
-    ports.mail(
-        &format!("main-red-{}", episode.red_sha),
-        &format!(
+    notify(
+        state,
+        format!("main-red-{}", episode.red_sha),
+        Channel::Mail,
+        format!(
             "main is red at {}: {}",
             short(&episode.red_sha),
-            episode.failing.join(", ")
+            names(&episode)
         ),
-        &body,
-    )?;
-    // Journaled only once the alert is out: a failed mail leaves nothing
-    // recorded, and the next pass opens (and mails, idempotently) again.
-    append(root, &event(now, "red_start", &episode.red_sha))?;
+        body,
+    );
     notes.push(format!(
         "red-main watch: main went red at {} ({})",
         short(&episode.red_sha),
-        episode.failing.join(", ")
+        names(&episode)
     ));
-    Ok(episode)
+    let start = event(now, "red_start", &episode.red_sha);
+    state.episode = Some(episode);
+    record(root, state, start)
 }
 
-/// Move an open episode on: the confirming re-run, confirmation, the fix
-/// spec and the revert triggers. Each step is persisted before the next
-/// external effect, and a failed notice or filing is retried on a later pass
-/// rather than undoing the steps already taken.
+/// Move an open episode on: the confirming re-run, the evidence, the
+/// confirmation, the fix spec and the revert triggers.
 fn advance(
     root: &Path,
     state: &mut State,
-    red_now: Option<&Verdict>,
     window: std::time::Duration,
     now: DateTime<Utc>,
     ports: &mut dyn Ports,
@@ -466,11 +787,8 @@ fn advance(
     let Some(mut episode) = state.episode.clone() else {
         return Ok(());
     };
-    let persist = |state: &mut State, episode: &Episode| {
-        state.episode = Some(episode.clone());
-        write_state(root, state)
-    };
-    // One confirming re-run of the failed jobs.
+    // One confirming re-run of the failed jobs. A re-run asked twice after a
+    // crash is harmless.
     if !episode.rerun_requested {
         for run in episode.attempts.keys() {
             if let Err(e) = ports.rerun_failed(run) {
@@ -480,28 +798,50 @@ fn advance(
             }
         }
         episode.rerun_requested = true;
-        persist(state, &episode)?;
+        state.episode = Some(episode.clone());
+        write_state(root, state)?;
+    }
+    // Evidence (and the unbuildable trigger) is read again until it is
+    // complete, and again for each new run attempt.
+    if probe(&mut episode, ports, notes) {
+        state.episode = Some(episode.clone());
+        write_state(root, state)?;
     }
     if episode.confirmed_at.is_none() {
-        let rerun_failed_again = matches!(red_now, Some(Verdict::Red(failed)) if failed.iter().any(|f| {
-            match (f.run_id.as_ref().and_then(|r| episode.attempts.get(r)), f.attempt) {
+        let rerun_failed_again = episode.failed.iter().any(|f| {
+            match (
+                f.run_id.as_ref().and_then(|r| episode.attempts.get(r)),
+                f.attempt,
+            ) {
                 (Some(before), Some(now)) => now > *before,
                 _ => false,
             }
-        }));
+        });
         let aged = now - episode.opened_at >= Duration::minutes(CONFIRM_AFTER_MINUTES);
         if !(rerun_failed_again || aged) {
             return Ok(());
         }
         episode.confirmed_at = Some(now);
-        persist(state, &episode)?;
+        notify(
+            state,
+            format!("main-red-{}-confirmed", episode.red_sha),
+            Channel::Operator,
+            "aida: main is red".into(),
+            format!(
+                "Main is red at {} ({}); the red survived its re-run or 30 minutes. See `aida human`.",
+                short(&episode.red_sha),
+                names(&episode)
+            ),
+        );
+        attention(state, &episode);
+        state.episode = Some(episode.clone());
         let mut e = event(now, "confirmed", &episode.red_sha);
         e.reason = Some(if rerun_failed_again {
             "re-run failed".into()
         } else {
             "30 minutes".into()
         });
-        append(root, &e)?;
+        record(root, state, e)?;
         notes.push(format!(
             "red-main watch: the red at {} is confirmed",
             short(&episode.red_sha)
@@ -513,42 +853,33 @@ fn advance(
             title: format!(
                 "main red at {}: {}",
                 short(&episode.red_sha),
-                episode.failing.join(", ")
+                names(&episode)
             ),
             description: format!(
-                "The red-main watch confirmed that main's CI is red at {} ({}).\n\
-                 Failing: {}\n\nScope: make the failing checks green on main; no unrelated \
-                 change. Revert instead only if the operator or advisor recommends it.",
+                "The red-main watch confirmed that main's CI is red at {} ({}).\n\nFailing:\n{}\n{}\n\n\
+                 Scope: make the failing checks green on main; no unrelated change. Revert \
+                 instead only if the operator or advisor recommends it.",
                 episode.red_sha,
                 episode.subject,
-                episode.failing.join(", ")
+                evidence_text(&episode),
+                held_text(&episode)
             ),
             fixes: episode.specs.clone(),
         };
-        // Filing is idempotent per red commit (its tag), so a failure here
-        // is retried on the next pass.
+        // Filing is idempotent per red commit and reconciles the queue entry,
+        // so a failure here is retried on the next pass.
         match ports.file_fix_spec(&fix) {
             Ok(id) => {
                 notes.push(format!("red-main watch: filed {id} to fix main"));
                 episode.fix_spec = Some(id.clone());
-                persist(state, &episode)?;
+                attention(state, &episode);
+                state.episode = Some(episode.clone());
                 let mut e = event(now, "fix_filed", &episode.red_sha);
-                e.fix_spec = Some(id.clone());
-                append(root, &e)?;
-                if let Err(e) = ports.notify_operator(
-                    &format!("main-red-{}", episode.red_sha),
-                    "aida: main is red",
-                    &format!(
-                        "Main is red at {} ({}); fix spec {id} is at the top of the implementer queue.",
-                        short(&episode.red_sha),
-                        episode.failing.join(", ")
-                    ),
-                ) {
-                    notes.push(format!("red-main watch: the operator was not notified: {e:#}"));
-                }
+                e.fix_spec = Some(id);
+                record(root, state, e)?;
             }
             Err(e) => notes.push(format!(
-                "red-main watch: the fix spec was not filed; the next pass retries: {e:#}"
+                "red-main watch: the fix spec was not filed; retried next pass: {e:#}"
             )),
         }
     }
@@ -560,7 +891,7 @@ fn advance(
         }),
         None => FixState::default(),
     };
-    let window_chrono = Duration::from_std(window).unwrap_or(Duration::hours(2));
+    let window = Duration::from_std(window).unwrap_or(Duration::hours(2));
     let mut reasons = Vec::new();
     if let Some(why) = &episode.unbuildable {
         reasons.push(("unbuildable", format!("main does not build: {why}")));
@@ -571,12 +902,12 @@ fn advance(
             format!("the build of {} failed the smoke test", short(sha)),
         ));
     }
-    if now - episode.opened_at >= window_chrono {
+    if now - episode.opened_at >= window {
         reasons.push((
             "fix-window-elapsed",
             format!(
                 "no fix landed within the fix window ({} min)",
-                window_chrono.num_minutes()
+                window.num_minutes()
             ),
         ));
     }
@@ -590,67 +921,83 @@ fn advance(
         if episode.recommended.iter().any(|r| r == key) {
             continue;
         }
+        episode.recommended.push(key.into());
         let body = format!(
             "Revert recommended for main's red at {} ({}): {why}.\nRevert with an ordinary \
-             reviewed PR: git revert --no-edit {}",
-            episode.red_sha, episode.subject, episode.red_sha
+             reviewed PR: git revert --no-edit {}\n\nFailing:\n{}",
+            episode.red_sha,
+            episode.subject,
+            episode.red_sha,
+            evidence_text(&episode)
         );
-        let mail_key = format!("main-red-{}-revert-{key}", episode.red_sha);
-        // Not recorded as escalated until the mail is out: a failed mail is
-        // retried on the next pass.
-        if let Err(e) = ports.mail(&mail_key, &format!("revert recommended: {why}"), &body) {
-            notes.push(format!(
-                "red-main watch: the revert recommendation was not mailed: {e:#}"
-            ));
-            continue;
-        }
-        if let Err(e) = ports.notify_operator(&mail_key, "aida: revert recommended on main", &body)
-        {
-            notes.push(format!(
-                "red-main watch: the operator was not notified: {e:#}"
-            ));
-        }
-        episode.recommended.push(key.into());
-        persist(state, &episode)?;
+        let notice = format!("main-red-{}-revert-{key}", episode.red_sha);
+        notify(
+            state,
+            notice.clone(),
+            Channel::Mail,
+            format!("revert recommended: {why}"),
+            body.clone(),
+        );
+        notify(
+            state,
+            format!("{notice}-operator"),
+            Channel::Operator,
+            "aida: revert recommended on main".into(),
+            body,
+        );
+        attention(state, &episode);
+        state.episode = Some(episode.clone());
         let mut e = event(now, "revert_recommended", &episode.red_sha);
         e.reason = Some(key.into());
-        append(root, &e)?;
+        record(root, state, e)?;
         notes.push(format!("red-main watch: revert recommended ({key})"));
     }
-    persist(state, &episode)
+    Ok(())
 }
 
 fn close(
     root: &Path,
-    episode: Episode,
-    green: &str,
+    state: &mut State,
+    green: &Commit,
     seen: &[(Commit, Verdict)],
     now: DateTime<Utc>,
     ports: &mut dyn Ports,
     notes: &mut Vec<String>,
 ) -> Result<()> {
-    let red_sha_green = seen
-        .iter()
-        .any(|(c, v)| c.sha == episode.red_sha && *v == Verdict::Green);
+    let Some(episode) = state.episode.clone() else {
+        return Ok(());
+    };
+    let rerun_green = green.sha == episode.red_sha;
+    // A revert is found in the commits that closed the episode, read on
+    // their own; the CI scan may have stopped short of them.
     let revert_subject = format!("Revert \"{}", episode.subject);
-    let reverted = seen
-        .iter()
-        .any(|(c, _)| c.subject.starts_with(&revert_subject));
-    let outcome = if episode.confirmed_at.is_none() {
-        if red_sha_green {
-            "flake"
-        } else {
-            "cleared"
-        }
-    } else if reverted {
-        "reverted"
+    let closing = if rerun_green {
+        Vec::new()
     } else {
-        "fixed"
+        match ports.range(&episode.red_sha, &green.sha) {
+            Ok(commits) => commits,
+            Err(e) => {
+                notes.push(format!(
+                    "red-main watch: the closing commits could not be read; using the scanned ones: {e:#}"
+                ));
+                seen.iter().map(|(c, _)| c.clone()).collect()
+            }
+        }
+    };
+    let reverted = closing
+        .iter()
+        .any(|c| c.subject.starts_with(&revert_subject));
+    let confirmed = episode.confirmed_at.is_some();
+    let outcome = match (confirmed, rerun_green) {
+        (true, _) if reverted => "reverted",
+        (false, true) => "flake",
+        (false, false) | (true, true) => "cleared",
+        (true, false) => "fixed",
     };
     let minutes = (now - episode.opened_at).num_minutes();
     let mut body = format!(
         "Main is green again at {} after {minutes} min red (first red: {}). Outcome: {outcome}.",
-        short(green),
+        short(&green.sha),
         short(&episode.red_sha)
     );
     if outcome == "reverted" {
@@ -660,46 +1007,52 @@ fn close(
             ));
         }
     }
-    ports.mail(
-        &format!("main-red-{}-green", episode.red_sha),
-        &format!("main is green again at {}", short(green)),
-        &body,
-    )?;
-    // Journaled once the mail is out, so a failed mail retries the close.
+    notify(
+        state,
+        format!("main-red-{}-green", episode.red_sha),
+        Channel::Mail,
+        format!("main is green again at {}", short(&green.sha)),
+        body.clone(),
+    );
+    if confirmed {
+        notify(
+            state,
+            format!("main-red-{}-green-operator", episode.red_sha),
+            Channel::Operator,
+            "aida: main is green again".into(),
+            body.clone(),
+        );
+        notify(
+            state,
+            format!("human-{}-resolve", episode.red_sha),
+            Channel::HumanResolve {
+                red_sha: episode.red_sha.clone(),
+            },
+            String::new(),
+            body.clone(),
+        );
+    }
+    state.episode = None;
+    state.last_green = Some(green.sha.clone());
     let mut e = event(now, "red_end", &episode.red_sha);
-    e.sha = Some(green.to_string());
+    e.sha = Some(green.sha.clone());
     e.outcome = Some(outcome.into());
     e.fix_spec = episode.fix_spec.clone();
-    append(root, &e)?;
-    if episode.fix_spec.is_some() {
-        if let Err(e) = ports.notify_operator(
-            &format!("main-red-{}-green", episode.red_sha),
-            "aida: main is green again",
-            &body,
-        ) {
-            notes.push(format!(
-                "red-main watch: the operator was not notified: {e:#}"
-            ));
-        }
-    }
+    record(root, state, e)?;
     notes.push(format!("red-main watch: {body}"));
     Ok(())
 }
 
 /// `aida dev build` saw the build of `sha` fail its smoke test: when `sha`
-/// belongs to the open episode, record it as a revert trigger.
+/// belongs to the open episode, record it as a revert trigger. Never waits
+/// on a running pass for long: a busy watch is reported, not awaited.
 pub(crate) fn note_smoke_failure(root: &Path, sha: &str) -> Result<bool> {
-    use fs2::FileExt;
     if !root.join(STATE).exists() {
         return Ok(false);
     }
-    let lock = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .write(true)
-        .open(root.join(LOCK))?;
-    lock.lock_exclusive()?;
-    let _lock = WatchLock(lock);
+    let Some(_lock) = try_lock(root, SMOKE_LOCK_WAIT)? else {
+        anyhow::bail!("the red-main watch is busy; the smoke failure of {sha} was not recorded");
+    };
     let mut state = read_state(root)?;
     let Some(episode) = state.episode.as_mut() else {
         return Ok(false);
@@ -714,7 +1067,9 @@ pub(crate) fn note_smoke_failure(root: &Path, sha: &str) -> Result<bool> {
     Ok(true)
 }
 
-/// The red-main block of `aida land metrics` for `[since, until)`.
+/// The red-main block of `aida land metrics` for `[since, until)`. Only what
+/// happened inside the window counts; an episode that ends at or after
+/// `until` is still open at the cutoff.
 pub(crate) fn metrics(
     events: &[Event],
     since: DateTime<Utc>,
@@ -725,8 +1080,9 @@ pub(crate) fn metrics(
         start: Option<DateTime<Utc>>,
         end: Option<DateTime<Utc>>,
         outcome: Option<String>,
-        merges: usize,
+        merges: Vec<DateTime<Utc>>,
     }
+    let inside = |at: DateTime<Utc>| at >= since && at < until;
     let mut episodes: Vec<(String, Ep)> = Vec::new();
     for e in events {
         let slot = match episodes
@@ -742,7 +1098,7 @@ pub(crate) fn metrics(
         };
         match e.event.as_str() {
             "red_start" => slot.start = Some(e.at),
-            "red_merge" => slot.merges += 1,
+            "red_merge" => slot.merges.push(e.at),
             "red_end" => {
                 slot.end = Some(e.at);
                 slot.outcome = e.outcome.clone();
@@ -759,18 +1115,21 @@ pub(crate) fn metrics(
     let mut resolved = 0usize;
     for (_, ep) in &episodes {
         let Some(start) = ep.start else { continue };
-        let end = ep.end.unwrap_or(until);
+        // Ended inside the window, or still open at its cutoff.
+        let ended = ep.end.filter(|end| *end < until);
+        let end = ended.unwrap_or(until);
         if end <= since || start >= until {
             continue;
         }
         count += 1;
-        red_seconds += (end.min(until) - start.max(since)).num_seconds().max(0);
-        if ep.outcome.as_deref() == Some("flake") {
+        red_seconds += (end - start.max(since)).num_seconds().max(0);
+        if ended.is_some() && ep.outcome.as_deref() == Some("flake") {
             flakes += 1;
             continue;
         }
-        red_merges += 1 + ep.merges;
-        if let (Some(end), Some(outcome)) = (ep.end, ep.outcome.as_deref()) {
+        red_merges +=
+            usize::from(inside(start)) + ep.merges.iter().filter(|at| inside(**at)).count();
+        if let (Some(end), Some(outcome)) = (ended, ep.outcome.as_deref()) {
             latencies.push((end - start).num_seconds());
             resolved += 1;
             if outcome == "reverted" {
@@ -779,14 +1138,13 @@ pub(crate) fn metrics(
         }
     }
     latencies.sort_unstable();
-    let median = (!latencies.is_empty()).then(|| latencies[latencies.len() / 2]);
     serde_json::json!({
         "source": "red-main watch journal",
         "episodes": count,
         "flakes": flakes,
         "red_minutes": red_seconds / 60,
         "red_merges": red_merges,
-        "fix_latency_seconds_median": median,
+        "fix_latency_seconds_median": median(&latencies),
         "fix_latency_seconds_max": latencies.last(),
         "reverted": reverted,
         "resolved": resolved,
@@ -795,56 +1153,44 @@ pub(crate) fn metrics(
 
 /// The production ports.
 pub(crate) struct Live {
-    pub root: std::path::PathBuf,
+    pub root: PathBuf,
     pub forge: Box<dyn crate::forge::Forge>,
+    /// The ceiling on each git or gh call.
+    pub call_timeout: std::time::Duration,
 }
 
-impl Ports for Live {
-    fn now(&self) -> DateTime<Utc> {
-        Utc::now()
+impl Live {
+    /// Run a bounded subprocess with null stdin and no terminal prompt.
+    fn run(&self, mut cmd: std::process::Command, cap: u64) -> Result<Vec<u8>> {
+        cmd.current_dir(&self.root)
+            .stdin(std::process::Stdio::null())
+            .env("GIT_TERMINAL_PROMPT", "0");
+        let shown = format!("{:?}", cmd.get_program());
+        match crate::command_output_with_timeout_capped(cmd, self.call_timeout, cap) {
+            crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(out.stdout),
+            crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+                "{shown} failed ({}): {}",
+                out.status,
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+            crate::BoundedCommandOutput::TimedOut => {
+                anyhow::bail!("{shown} timed out after {:?}", self.call_timeout)
+            }
+            crate::BoundedCommandOutput::SpawnFailed => anyhow::bail!("{shown} could not start"),
+        }
     }
 
-    fn history(&mut self, stop: Option<&str>, max: usize) -> Result<Vec<Commit>> {
-        let branch = aida_core::git_ops::default_branch_name(&self.root);
-        let git = |args: &[&str]| {
-            std::process::Command::new("git")
-                .arg("-C")
-                .arg(&self.root)
-                .args(args)
-                .output()
-        };
-        let fetched = git(&["fetch", "--quiet", "origin", &branch]).context("git fetch")?;
-        anyhow::ensure!(
-            fetched.status.success(),
-            "fetching origin/{branch} failed: {}",
-            String::from_utf8_lossy(&fetched.stderr).trim()
-        );
-        let tip = format!("origin/{branch}");
-        let max = format!("--max-count={max}");
-        let mut args = vec![
-            "log",
-            "--first-parent",
-            &max,
-            "--format=%H%x09%s",
-            tip.as_str(),
-        ];
-        // A recorded green commit no longer in history (rewritten) is ignored.
-        let exclude;
-        if let Some(stop) = stop {
-            let known =
-                git(&["merge-base", "--is-ancestor", stop, &tip]).context("git merge-base")?;
-            if known.status.success() {
-                exclude = format!("^{stop}");
-                args.push(&exclude);
-            }
-        }
-        let out = git(&args).context("git log")?;
-        anyhow::ensure!(
-            out.status.success(),
-            "reading {tip} failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-        Ok(String::from_utf8_lossy(&out.stdout)
+    fn git(&self, args: &[&str]) -> Result<String> {
+        let mut cmd = std::process::Command::new("git");
+        cmd.args(args);
+        Ok(String::from_utf8_lossy(&self.run(cmd, 16 * 1024 * 1024)?).into_owned())
+    }
+
+    fn log(&self, args: &[&str]) -> Result<Vec<Commit>> {
+        let mut full = vec!["log", "--first-parent", "--format=%H%x09%s"];
+        full.extend_from_slice(args);
+        Ok(self
+            .git(&full)?
             .lines()
             .filter_map(|l| l.split_once('\t'))
             .map(|(sha, subject)| Commit {
@@ -854,12 +1200,69 @@ impl Ports for Live {
             .collect())
     }
 
+    fn store(&self) -> aida_core::Storage {
+        aida_core::Storage::new(
+            crate::detect_distributed_store_from(&self.root)
+                .unwrap_or_else(|| self.root.join(".aida-store")),
+        )
+    }
+}
+
+impl Ports for Live {
+    fn now(&self) -> DateTime<Utc> {
+        Utc::now()
+    }
+
+    fn history(&mut self, stop: Option<&str>, max: usize) -> Result<Vec<Commit>> {
+        let branch = aida_core::git_ops::default_branch_name(&self.root);
+        self.git(&["fetch", "--quiet", "origin", &branch])?;
+        let tip = format!("origin/{branch}");
+        let max = format!("--max-count={max}");
+        let mut args = vec![max.as_str(), tip.as_str()];
+        // A recorded green commit no longer in history (rewritten) is ignored.
+        let exclude;
+        if let Some(stop) = stop {
+            if self
+                .git(&["merge-base", "--is-ancestor", stop, &tip])
+                .is_ok()
+            {
+                exclude = format!("^{stop}");
+                args.push(&exclude);
+            }
+        }
+        self.log(&args)
+    }
+
+    fn range(&mut self, from: &str, to: &str) -> Result<Vec<Commit>> {
+        self.log(&[&format!("{from}..{to}")])
+    }
+
     fn checks(&mut self, sha: &str) -> Result<CommitChecks> {
         self.forge.commit_checks(sha)
     }
 
-    fn failed_steps(&mut self, run_id: &str, job: &str) -> Result<Vec<String>> {
-        self.forge.run_job_failed_steps(run_id, job)
+    fn evidence(&mut self, run_id: &str, job: &str) -> Result<Evidence> {
+        let report = self.forge.run_job_report(run_id, job)?;
+        let excerpt = match &report.log {
+            Ok(log) => {
+                let cut = log.len().min(LOG_CAP as usize);
+                let start = log.len() - cut;
+                let start = (start..log.len())
+                    .find(|i| log.is_char_boundary(*i))
+                    .unwrap_or(log.len());
+                excerpt(
+                    &log[start..],
+                    report.failed_steps.first().map(String::as_str),
+                )
+            }
+            Err(e) => format!("(the job log could not be read: {e})"),
+        };
+        Ok(Evidence {
+            check: job.to_string(),
+            link: report.link,
+            failed_steps: report.failed_steps,
+            excerpt,
+        })
     }
 
     fn rerun_failed(&mut self, run_id: &str) -> Result<()> {
@@ -903,35 +1306,75 @@ impl Ports for Live {
     }
 
     fn notify_operator(&mut self, key: &str, title: &str, body: &str) -> Result<()> {
-        crate::notify::send_direct_bounded(
-            &self.root,
-            key,
-            title,
-            body,
-            Some(std::time::Duration::from_secs(10)),
-        )
-        .map(|_| ())
+        crate::notify::send_direct_bounded(&self.root, key, title, body, Some(self.call_timeout))
+            .map(|_| ())
+    }
+
+    fn human_open(&mut self, red_sha: &str, title: &str, body: &str) -> Result<String> {
+        human_open(&self.store(), red_sha, title, body)
+    }
+
+    fn human_resolve(&mut self, red_sha: &str) -> Result<()> {
+        human_resolve(&self.store(), red_sha)
     }
 
     fn file_fix_spec(&mut self, fix: &FixSpec) -> Result<String> {
-        file_fix_spec(&self.root, fix)
+        file_fix_spec(&self.store(), fix)
     }
 
     fn fix_spec_state(&mut self, id: &str) -> Result<FixState> {
-        let store = crate::detect_distributed_store_from(&self.root)
-            .unwrap_or_else(|| self.root.join(".aida-store"));
-        let store = aida_core::Storage::new(store).load()?;
+        let store = self.store().load()?;
         let req = store
             .get_requirement_unambiguous(id)?
             .with_context(|| format!("{id} is not in the store"))?;
-        Ok(FixState {
-            completed: req.status == aida_core::RequirementStatus::Completed,
-            needs_design: req.tags.iter().any(|t| t == "needs-design")
-                || req
-                    .comments
-                    .iter()
-                    .any(|c| c.content.contains("#needs-design")),
+        Ok(fix_state_of(req))
+    }
+}
+
+/// PURE: the error lines of a job log: the step's own error line, then the
+/// last lines naming an error, a failed test or a panic.
+pub(crate) fn excerpt(log: &str, step: Option<&str>) -> String {
+    let mut lines: Vec<String> = Vec::new();
+    if let Some(step) = step {
+        let line = crate::landing_health::error_line(log, step);
+        if !line.starts_with("unknown") {
+            lines.push(line);
+        }
+    }
+    let marked: Vec<String> = log
+        .lines()
+        .filter(|l| {
+            l.to_ascii_lowercase().contains("error")
+                || l.contains("FAILED")
+                || l.contains("panicked")
         })
+        .map(|l| l.chars().take(300).collect())
+        .collect();
+    let tail = marked.len().saturating_sub(12);
+    lines.extend(marked.into_iter().skip(tail));
+    if lines.is_empty() {
+        "(no error lines in the job log)".into()
+    } else {
+        lines.join("\n")
+    }
+}
+
+/// PURE: what a fix spec says about the episode: whether it is completed,
+/// and whether its fix needs a design decision (a `needs-design` tag or
+/// comment, or a lane's recorded design-fork punt).
+pub(crate) fn fix_state_of(req: &aida_core::Requirement) -> FixState {
+    let design_punt = req
+        .attention_reason
+        .as_ref()
+        .is_some_and(|r| r.category == aida_core::PuntCategory::DesignFork);
+    FixState {
+        completed: req.status == aida_core::RequirementStatus::Completed,
+        needs_design: design_punt
+            || req.tags.iter().any(|t| t == "needs-design")
+            || req
+                .comments
+                .iter()
+                .any(|c| c.content.contains("#needs-design")),
     }
 }
 
@@ -940,89 +1383,182 @@ pub(crate) fn fix_tag(red_sha: &str) -> String {
     format!("main-red:{}", short(red_sha))
 }
 
-/// File the fix spec: Approved, high priority, tagged with its red commit,
-/// linked `fixes` to the red commit's specs, at the top of the implementer
-/// queue. An existing spec with the same tag is returned instead, so a pass
-/// that crashed after filing never files twice.
-fn file_fix_spec(root: &Path, fix: &FixSpec) -> Result<String> {
-    use aida_core::{Requirement, RequirementStatus, RequirementType};
-    let store_path =
-        crate::detect_distributed_store_from(root).unwrap_or_else(|| root.join(".aida-store"));
-    let storage = aida_core::Storage::new(store_path);
-    let tag = fix_tag(&fix.red_sha);
-    let mut store = storage.load()?;
-    let display = |r: &Requirement| {
-        r.agreed_id
-            .clone()
-            .or_else(|| r.spec_id.clone())
-            .unwrap_or_else(|| r.id.to_string())
-    };
-    if let Some(existing) = store.requirements.iter().find(|r| r.tags.contains(&tag)) {
-        return Ok(display(existing));
-    }
-    let mut req = Requirement::new(fix.title.clone(), fix.description.clone());
-    req.req_type = RequirementType::Bug;
-    req.status = RequirementStatus::Approved;
-    req.priority = aida_core::RequirementPriority::High;
-    req.owner = crate::get_default_author();
-    req.tags.extend(["main-red".to_string(), tag]);
-    aida_core::provenance::stamp_if_absent(&mut req);
-    let prefix = store.get_type_prefix(&req.req_type);
-    store.add_requirement_with_id(req, None, prefix.as_deref());
-    let new = store
+/// The tag that keys the `aida human` attention item to its red commit.
+pub(crate) fn human_tag(red_sha: &str) -> String {
+    format!("main-red-human:{}", short(red_sha))
+}
+
+fn display(r: &aida_core::Requirement) -> String {
+    r.agreed_id
+        .clone()
+        .or_else(|| r.spec_id.clone())
+        .unwrap_or_else(|| r.id.to_string())
+}
+
+fn tagged(store: &aida_core::RequirementsStore, tag: &str) -> Option<(uuid::Uuid, String)> {
+    store
         .requirements
-        .last()
-        .context("the store did not add the fix spec")?;
-    let (new_id, shown) = (new.id, display(new));
-    for spec in &fix.fixes {
-        if let Ok(Some(target)) = store
-            .get_requirement_unambiguous(spec)
-            .map(|r| r.map(|r| r.id))
-        {
-            let _ = store.add_relationship(
-                &new_id,
-                aida_core::RelationshipType::Custom("fixes".into()),
-                &target,
-                false,
-            );
-        }
-    }
-    storage.save(&store)?;
+        .iter()
+        .find(|r| r.tags.iter().any(|t| t == tag))
+        .map(|r| (r.id, display(r)))
+}
+
+/// Queue `id` at the top for `role`, unless the user already has it queued.
+fn ensure_queued(
+    storage: &aida_core::Storage,
+    id: uuid::Uuid,
+    role: &str,
+    note: &str,
+) -> Result<()> {
     let user = crate::current_user_id(None);
-    let top = storage
-        .queue_list(&user, true)?
-        .first()
-        .map(|e| e.position - 1000)
-        .unwrap_or(1000);
+    let entries = storage.queue_list(&user, true)?;
+    if entries.iter().any(|e| e.requirement_id == id) {
+        return Ok(());
+    }
+    failpoint("queue_add")?;
     storage.queue_add(aida_core::models::QueueEntry {
         user_id: user.clone(),
-        requirement_id: new_id,
-        position: top,
+        requirement_id: id,
+        position: entries.first().map(|e| e.position - 1000).unwrap_or(1000),
         added_by: user,
-        note: Some("main is red: fix forward first".into()),
+        note: Some(note.into()),
         added_at: Utc::now(),
-        for_role: Some("implementer".into()),
+        for_role: Some(role.into()),
         for_scope: None,
         for_session: None,
         added_by_machine: None,
-    })?;
+    })
+}
+
+/// File the fix spec: Approved, high priority, tagged with its red commit,
+/// linked `fixes` to the red commit's specs, at the top of the implementer
+/// queue. An existing spec with the same tag is reused, and its queue entry
+/// is restored if a crash or a failed queue write left it out.
+pub(crate) fn file_fix_spec(storage: &aida_core::Storage, fix: &FixSpec) -> Result<String> {
+    use aida_core::{Requirement, RequirementStatus, RequirementType};
+    let tag = fix_tag(&fix.red_sha);
+    let mut store = storage.load()?;
+    let (id, shown) = match tagged(&store, &tag) {
+        Some(found) => found,
+        None => {
+            let mut req = Requirement::new(fix.title.clone(), fix.description.clone());
+            req.req_type = RequirementType::Bug;
+            req.status = RequirementStatus::Approved;
+            req.priority = aida_core::RequirementPriority::High;
+            req.owner = aida_core::provenance::default_author_in(Some(storage.path()));
+            req.tags.extend(["main-red".to_string(), tag.clone()]);
+            aida_core::provenance::stamp_if_absent(&mut req);
+            let prefix = store.get_type_prefix(&req.req_type);
+            store.add_requirement_with_id(req, None, prefix.as_deref());
+            let (id, shown) = tagged(&store, &tag).context("the store did not add the fix spec")?;
+            for spec in &fix.fixes {
+                if let Ok(Some(target)) = store
+                    .get_requirement_unambiguous(spec)
+                    .map(|r| r.map(|r| r.id))
+                {
+                    let _ = store.add_relationship(
+                        &id,
+                        aida_core::RelationshipType::Custom("fixes".into()),
+                        &target,
+                        false,
+                    );
+                }
+            }
+            storage.save(&store)?;
+            (id, shown)
+        }
+    };
+    ensure_queued(storage, id, "implementer", "main is red: fix forward first")?;
     Ok(shown)
 }
 
-/// One pass with the production ports, for the land loop, the auto-train
-/// worker and `aida land watch`.
-pub(crate) fn live_pass(root: &Path) -> Result<Vec<String>> {
-    let policy = crate::landing_policy::load(root);
-    let mut ports = Live {
-        root: root.to_path_buf(),
-        forge: crate::forge::forge_for(root),
+/// Create or update the human-only attention item for `red_sha`, routed to
+/// the human queue.
+pub(crate) fn human_open(
+    storage: &aida_core::Storage,
+    red_sha: &str,
+    title: &str,
+    body: &str,
+) -> Result<String> {
+    use aida_core::{Requirement, RequirementStatus, RequirementType};
+    let tag = human_tag(red_sha);
+    let mut store = storage.load()?;
+    match store
+        .requirements
+        .iter_mut()
+        .find(|r| r.tags.contains(&tag))
+    {
+        Some(existing) => {
+            if existing.description != body {
+                existing.description = body.to_string();
+                existing.modified_at = Utc::now();
+                storage.save(&store)?;
+            }
+        }
+        None => {
+            let mut req = Requirement::new(title.to_string(), body.to_string());
+            req.req_type = RequirementType::Task;
+            req.status = RequirementStatus::Approved;
+            req.priority = aida_core::RequirementPriority::High;
+            req.human_only = true;
+            req.owner = aida_core::provenance::default_author_in(Some(storage.path()));
+            req.tags.extend(["main-red".to_string(), tag.clone()]);
+            aida_core::provenance::stamp_if_absent(&mut req);
+            let prefix = store.get_type_prefix(&req.req_type);
+            store.add_requirement_with_id(req, None, prefix.as_deref());
+            storage.save(&store)?;
+        }
+    }
+    let (id, shown) = tagged(&store, &tag).context("the attention item is not in the store")?;
+    ensure_queued(storage, id, "human", "main is red")?;
+    Ok(shown)
+}
+
+/// Complete the attention item for `red_sha` and take it off the queue.
+pub(crate) fn human_resolve(storage: &aida_core::Storage, red_sha: &str) -> Result<()> {
+    let tag = human_tag(red_sha);
+    let mut store = storage.load()?;
+    let Some(item) = store
+        .requirements
+        .iter_mut()
+        .find(|r| r.tags.contains(&tag))
+    else {
+        return Ok(());
     };
-    pass(
-        root,
-        &policy.ci_gated_checks,
-        policy.red_main_fix_window,
-        &mut ports,
-    )
+    let id = item.id;
+    if item.status != aida_core::RequirementStatus::Completed {
+        item.status = aida_core::RequirementStatus::Completed;
+        item.modified_at = Utc::now();
+        storage.save(&store)?;
+    }
+    let user = crate::current_user_id(None);
+    if storage
+        .queue_list(&user, true)?
+        .iter()
+        .any(|e| e.requirement_id == id)
+    {
+        storage.queue_remove(&user, &id)?;
+    }
+    Ok(())
+}
+
+/// One pass with the production ports, for the land loop, the auto-train
+/// worker and `aida land watch`, bounded by [`PASS_BUDGET`].
+pub(crate) fn live_pass(root: &Path) -> Result<Vec<String>> {
+    crate::forge_lookup::with_forge_lookup_deadline(PASS_BUDGET, || {
+        let policy = crate::landing_policy::load(root);
+        let mut ports = Live {
+            root: root.to_path_buf(),
+            forge: crate::forge::forge_for(root),
+            call_timeout: CALL_TIMEOUT,
+        };
+        pass(
+            root,
+            &policy.ci_gated_checks,
+            policy.red_main_fix_window,
+            &mut ports,
+        )
+    })
 }
 
 #[cfg(test)]

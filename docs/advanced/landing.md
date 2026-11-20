@@ -66,9 +66,9 @@ A commit is red when a check the CI-gated mode requires concludes as a failure o
 
 When main goes red:
 
-1. AIDA mails the advisor and product seats at once, as urgent. The mail names the first red commit, its pull request and specs, and the failing checks. AIDA also re-runs the failed jobs once.
+1. AIDA mails the advisor and product seats at once, as urgent. The mail names the first red commit, its pull request and specs, and the failing checks with their links and the error lines of their logs. It also names the last green commit, where the live binary stays. AIDA re-runs the failed jobs once.
 2. If a green re-run clears the red first, the episode is recorded as a flake. Nobody else is alerted and no spec is filed.
-3. If the red survives the re-run, or 30 minutes pass, the red is confirmed. AIDA files a bug ("main red at <commit>: <checks>"), links it to the red commit's specs, queues it at the top of the implementer queue, and notifies the operator.
+3. If the red survives the re-run, or 30 minutes pass, the red is confirmed. AIDA files a bug ("main red at <commit>: <checks>") carrying the same evidence. It links the bug to the red commit's specs and queues it at the top of the implementer queue. It also opens an `aida human` item, which it keeps up to date and completes when main is green again, and sends the operator a push notice if one is configured.
 4. Merging continues while main is red. The live binary stays on the newest green commit.
 
 AIDA fixes forward by default. After confirmation it recommends a revert of the red commit, once per reason, only when:
@@ -76,9 +76,11 @@ AIDA fixes forward by default. After confirmation it recommends a revert of the 
 - main does not build (a compile step failed);
 - the build of a red commit fails `aida dev build`'s smoke test;
 - no fix has landed within `[landing] red_main.fix_window` (default `2h`);
-- the fix spec is tagged `needs-design`.
+- the fix spec is tagged `needs-design`, or its lane stopped on a design fork.
 
-A revert is an ordinary pull request with a normal review. The first green commit ends the episode, and AIDA mails that main is green again.
+A revert is an ordinary pull request with a normal review. The first green commit ends the episode, and AIDA mails that main is green again. A notice that cannot be delivered is retried on every pass until it is.
+
+Each watch call to git or the forge has a time limit, and so does the whole pass. A stalled fetch is reported, and the land loop or auto-train carries on.
 
 `aida land metrics` reports, from `.aida/land/main-watch.jsonl`:
 
