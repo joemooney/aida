@@ -730,6 +730,12 @@ pub(crate) fn exited_holder_is_dead(holder: &Claim, now: DateTime<Utc>) -> bool 
         {
             return false;
         }
+    } else if crate::lane_liveness::claim_worker_never_recorded(holder) {
+        // An admission that failed before its agent spawned leaves no lease
+        // and no lane record: there is no worker to wait for. The dead
+        // creator and expired heartbeat above are the remaining evidence.
+        // trace:BUG-2697 | ai:claude
+        return true;
     }
     crate::lane_liveness::claim_worker_has_exited(holder, now)
 }
@@ -744,6 +750,10 @@ fn salvage_exited_claim(holder: &Claim) -> Result<()> {
         .context("claim has no lease binding")?;
     let tree = match crate::leases::read_exact_lease(root, id)? {
         Some(lease) => lease.worktree_path,
+        // No agent ever ran for this generation, so it wrote nothing to
+        // salvage. Healing removes only the claim; any seat is kept.
+        // trace:BUG-2697 | ai:claude
+        None if crate::lane_liveness::claim_worker_never_recorded(holder) => return Ok(()),
         None => crate::lane_liveness::exited_claim_seat(holder)
             .context("cannot establish generation-bound seat; shared claim retained")?,
     };
@@ -2430,6 +2440,232 @@ mod tests {
             contains_patch(&patches),
             "dirty work saved before claim release"
         );
+    }
+
+    // The 01a1f4f93790 record shape: an implementer admission that failed
+    // before its agent spawned. Bound claim, process_backed = false, TTL 1800,
+    // heartbeat long expired, creator pid gone, recorded on this host, and NO
+    // local lease and NO lane record for its lease id.
+    // trace:BUG-2697 | ai:claude
+    fn bug2697_never_spawned_fixture(root: &Path) -> (PathBuf, Claim) {
+        let (store, mut holder) = bug2655_fixture(root);
+        let clone = PathBuf::from(&holder.clone_path);
+        std::fs::remove_file(clone.join(".aida/lanes/headless-old-lease.json")).unwrap();
+        holder.claim_id = Some("f750a6d1-0000-4000-8000-000000000000".into());
+        holder.lease_id = Some("01a1f4f93790".into());
+        holder.agent = "implementer".into();
+        assert!(!holder.process_backed);
+        assert_eq!(holder.ttl_secs, DEFAULT_TTL_SECS);
+        std::fs::write(
+            claim_path(&store, &holder.scope),
+            toml::to_string(&holder).unwrap(),
+        )
+        .unwrap();
+        aida_core::git_ops::add(&store, &[LEASES_SUBDIR]).unwrap();
+        aida_core::git_ops::commit(&store, "abandoned admission claim").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+        (store, holder)
+    }
+
+    #[test]
+    // trace:BUG-2697 | ai:claude
+    fn bug2697_doctor_reports_and_heals_a_claim_whose_admission_never_spawned() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, holder) = bug2697_never_spawned_fixture(dir.path());
+        assert!(exited_holder_is_dead(&holder, Utc::now()));
+        let findings = crate::doctor_root::collect_doctor_findings_at(
+            dir.path(),
+            &aida_core::RequirementsStore::default(),
+            Some("leases"),
+            Path::new("/proc"),
+        )
+        .unwrap();
+        let id = format!("shared-{}", holder.claim_id.as_deref().unwrap());
+        let finding = findings
+            .iter()
+            .find(|f| f.id == id)
+            .expect("an abandoned admission claim is reported");
+        assert!(finding.safe_heal);
+        assert!(finding.action.contains(&format!("--id {id} --yes")));
+        assert!(heal_exited_claim(&store, &holder).unwrap());
+        assert!(!claim_path(&store, &holder.scope).exists());
+    }
+
+    #[test]
+    // trace:BUG-2697 | ai:claude
+    fn bug2697_force_claim_replaces_a_claim_whose_admission_never_spawned() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, holder) = bug2697_never_spawned_fixture(dir.path());
+        // Without --force-claim admission still refuses, naming the heal.
+        let error = acquire_claim_bound(
+            &store,
+            &holder.scope,
+            dir.path(),
+            "claude",
+            false,
+            false,
+            Some("new-lease"),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("holder state Unknown"), "{error}");
+        let (_, receipt) = acquire_claim_bound(
+            &store,
+            &holder.scope,
+            dir.path(),
+            "claude",
+            false,
+            true,
+            Some("new-lease"),
+        )
+        .unwrap();
+        assert_eq!(
+            read_claim(&claim_path(&store, &holder.scope)),
+            Some(receipt.unwrap())
+        );
+    }
+
+    #[test]
+    // trace:BUG-2697 | ai:claude
+    fn bug2697_failed_start_without_rollback_releases_only_its_own_claim() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, _) = bug2655_fixture(dir.path());
+        let (_, receipt) = acquire_claim_bound(
+            &store,
+            "TASK-2697",
+            dir.path(),
+            "implementer",
+            false,
+            false,
+            Some("unleased"),
+        )
+        .unwrap();
+        let claim = receipt.expect("a fresh claim has a receipt");
+        assert!(claim_path(&store, "TASK-2697").exists());
+        // A start that wrote its lease disarms the guard: the claim stays.
+        {
+            let mut guard =
+                crate::session_start::UnleasedClaimRelease::new(dir.path(), "TASK-2697");
+            guard.claim = Some(claim.clone());
+            guard.claim = None;
+        }
+        assert_eq!(
+            read_claim(&claim_path(&store, "TASK-2697")),
+            Some(claim.clone())
+        );
+        // A claim another invocation replaced is never deleted.
+        let mut other = claim.clone();
+        other.claim_id = Some("someone-else".into());
+        {
+            let mut guard =
+                crate::session_start::UnleasedClaimRelease::new(dir.path(), "TASK-2697");
+            guard.claim = Some(other);
+        }
+        assert_eq!(
+            read_claim(&claim_path(&store, "TASK-2697")),
+            Some(claim.clone())
+        );
+        // A start that failed before its lease releases exactly its claim,
+        // on the shared store's origin too.
+        {
+            let mut guard =
+                crate::session_start::UnleasedClaimRelease::new(dir.path(), "TASK-2697");
+            guard.claim = Some(claim);
+        }
+        assert!(!claim_path(&store, "TASK-2697").exists());
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(crate::test_git::git_command()
+            .current_dir(&store)
+            .args(["fetch", "-q", "origin"])
+            .status()
+            .unwrap()
+            .success());
+        let out = crate::test_git::git_command()
+            .current_dir(&store)
+            .args(["ls-tree", "-r", "--name-only", &format!("origin/{branch}")])
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+        let listed = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            !listed.contains(&sanitize_scope("TASK-2697")),
+            "released on origin: {listed}"
+        );
+    }
+
+    #[test]
+    // trace:BUG-2697 | ai:claude
+    fn bug2697_never_spawned_heal_refuses_without_complete_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let (store, holder) = bug2697_never_spawned_fixture(dir.path());
+        let clone = PathBuf::from(&holder.clone_path);
+        let refused = |changed: &Claim| !exited_holder_is_dead(changed, Utc::now());
+        // Heartbeat still inside its TTL.
+        let mut changed = holder.clone();
+        changed.heartbeat_at = Utc::now().to_rfc3339();
+        assert!(refused(&changed));
+        // Creator still running.
+        changed = holder.clone();
+        changed.pid = std::process::id();
+        changed.pid_start_time = crate::process_probe::process_start_identity(changed.pid);
+        assert!(refused(&changed));
+        // Creator in a PID namespace this process cannot observe.
+        changed = holder.clone();
+        changed.pid_namespace = Some(crate::agent_registry::current_pid_namespace().unwrap() ^ 1);
+        assert!(refused(&changed));
+        // Another host, a process-backed lock, a reviewer claim, no lease binding.
+        changed = holder.clone();
+        changed.host = "other-host".into();
+        assert!(refused(&changed));
+        changed = holder.clone();
+        changed.process_backed = true;
+        assert!(refused(&changed));
+        changed = holder.clone();
+        changed.review_verb = true;
+        assert!(refused(&changed));
+        changed = holder.clone();
+        changed.lease_id = None;
+        assert!(refused(&changed));
+        // A clone that is not present here proves nothing.
+        changed = holder.clone();
+        changed.clone_path = dir.path().join("absent-clone").display().to_string();
+        assert!(refused(&changed));
+        // A lane record means a worker was spawned: its exit is required.
+        let record = clone.join(".aida/lanes/headless-01a1f4f93790.json");
+        std::fs::write(
+            &record,
+            serde_json::json!({
+                "lease_id": "01a1f4f93790", "spec": holder.scope, "vendor": "claude",
+                "pid": u32::MAX, "log_path": "unused", "claim": holder,
+                "started_at": "2000-01-01T00:00:01Z"
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(refused(&holder));
+        std::fs::remove_file(&record).unwrap();
+        // A local lease for the claim's lease id means a session stands.
+        let sessions = clone.join(".aida/sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(
+            sessions.join("01a1f4f93790.toml"),
+            format!(
+                "id = \"01a1f4f93790\"\nscope = {}\nslug = \"s\"\nowner = \"o\"\n\
+                 worktree_path = {}\nbranch = \"b\"\n\
+                 started_at = \"2000-01-01T00:00:00Z\"\nhostname = {}\n",
+                aida_core::toml_quote::toml_string(&holder.scope),
+                aida_core::toml_quote::toml_string(&clone.display().to_string()),
+                aida_core::toml_quote::toml_string(&holder.host)
+            ),
+        )
+        .unwrap();
+        assert!(crate::leases::read_exact_lease(&clone, "01a1f4f93790")
+            .unwrap()
+            .is_some());
+        assert!(refused(&holder));
+        assert!(!heal_exited_claim(&store, &holder).unwrap());
+        assert_eq!(read_claim(&claim_path(&store, &holder.scope)), Some(holder));
     }
 
     #[test]
