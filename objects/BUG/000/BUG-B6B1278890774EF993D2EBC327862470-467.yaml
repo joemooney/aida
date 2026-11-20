@@ -161,6 +161,26 @@ comments:
   modified_at: 2026-11-20T11:15:21.582659077Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f8ab-60b8-7f20-b014-d51eca7a21f6
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 04:15):
+    # Rework brief: BUG-2705 / PR #4358, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 04:20 MST. Head reviewed: a12563e. Lane: CLAUDE, STRICT. COMMIT YOUR OWN WORK BEFORE FINISHING.
+    1. [unmet AC] standalone_implementer.rs:1929-1978: the post-exit skip/failure diagnostics (leftover_note, gate reason) are appended only after
+       empty_rework::inspect/route and only for Kind::FailedAfterStart. Persist them on EVERY terminal publication path, including when
+       empty_rework returns early because the old PR head is still blocked (review/check/conflict, lines ~1959-1965) and when a lane pushed and
+       then failed. Regression: a refused host commit plus a blocked old PR, with the reason present in the lane log and the publication record.
+    2. [unmet AC, test gap] bug_2705_seat_clone_leftover_tests.rs:50-146 injects post_exit/publish/republished closures and a hard-coded gate pass.
+       Add a regression through the ACTUAL exit driver (standalone_implementer::run or the entry lane-run.sh uses) with a real seat that has
+       uncommitted edits and the configured fast gate (pushed()/snapshot()): the host commits the edits, the gate runs on the committed tree, and
+       the head publishes; plus a case where the commit is refused and the reason is reported.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T11:15:31.170222863Z
+  modified_at: 2026-11-20T11:15:31.170222863Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f874-487d-7913-ba35-94353334404c
   author: joe
