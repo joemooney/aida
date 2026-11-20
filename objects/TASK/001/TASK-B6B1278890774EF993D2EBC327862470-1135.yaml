@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-20T17:03:36.231737460Z
+modified_at: 2026-11-20T17:13:51.066757875Z
 req_type: Task
 tags:
 - codify
@@ -58,6 +58,38 @@ comments:
   modified_at: 2026-11-20T16:12:17.977941626Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9f3-40da-7683-905e-570c20cfab50
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 7067fe5dced832ff8ffa0a83353f2ced2e8cad59 (PR #4373, `(Refs TASK-3826)`)
+
+    **Acceptance evidence** (tests in aida-cli-lib/src/tests/task_3826_lane_relay_tests.rs unless noted)
+    - AC1 [evidence: behavioral-test] `the_command_parses_its_documented_form`; help golden regenerated; docs in docs/cli/03-work-autonomy.md. Registered through the existing `lane` registration (lane_cmd_args.rs), not the legacy enum.
+    - AC2 [evidence: behavioral-test] `head_moved_while_waiting_is_skipped_and_reported`, `pr_closed_or_merged_while_waiting_is_skipped`, `an_unreadable_pr_before_launch_fails_closed`: nothing spawned, no brief delivered, spec comment and advisor mail carry the typed reason.
+    - AC3 [evidence: behavioral-test] `the_brief_reaches_each_vendor_through_its_own_mailbox_and_an_explicit_path` (read back through the real pickup reader). Advisor addition: `a_newer_brief_supersedes_an_old_stored_round_brief` and `a_merged_or_closed_last_pr_launches_fresh_work_not_a_rework`.
+    - AC4 [evidence: behavioral-test] `vendor_model_and_launcher_come_from_config_and_flags`. No model, vendor or host literal in the code.
+    - AC5 [evidence: behavioral-test] `a_host_below_its_memory_floor_is_waited_for_within_the_bound`, `a_lane_still_queued_for_a_host_slot_is_reported_after_the_bound`. The floor is `lane_admission::memory_floor_shortfall` (same settings and measurement); the cold-start cap is applied by the launched lane.
+    - AC6 [evidence: behavioral-test] `an_admission_refusal_is_recorded_on_the_spec_and_mailed`, `a_launcher_that_dies_without_an_attempt_is_reported_with_its_log` (real `lane_result` receipts).
+    - AC7 [evidence: behavioral-test] the tests above; 16 pass.
+    - AC8 [evidence: documentation-inspection] aida-core/templates/.aida/discipline/two-seat-protocol.md "Relaying an advisor launch" (mirror synced). NOT met in full: `.aida/tmp/relay-rework.sh` is an untracked file on the product seat's machine and still has to be retired there. Hence `(Refs)`.
+
+    **Probe findings and fixes**
+    - Authority: a tracked config key chose the launcher program and SSH host. Moved both to `~/.aida/lane-relay.toml`; `[lane_relay]` keeps policy keys only and refuses others (tested).
+    - Fail-open: an unreadable `/proc` meant "no lane running"; now it means running. A probe reply without `running` is treated as running. An unreadable change stops the relay.
+    - Format: a spec id starting with `-` could become a launcher option; ids must start alphanumeric. Branch and model values are refused if they look like options. The brief passed to `launch` must be inside this host's vendor mailbox (tested).
+    - Cross-reference: the heading the relay writes and `is_brief_comment` agree through one matcher; a `SUPERSEDED` lead no longer matches (tested).
+    - Ratchets hit and resolved: vendor literals (now the launch registry), raw `gh` (now `Forge::change_metadata`), config-trust inventory, store-writer inventory (nine sites classified host_only), time-bound flag (`--launched-at`).
+
+    **Residual risks**
+    - No live run: SSH hop, `setsid --fork` detach and `/proc` lane detection are unexercised against a real host. A seat sandbox hides host processes, so detection could not be checked against a running lane.
+    - Two concurrent relays for one spec are not serialised.
+    - Fresh mode omits `--branch`; stored review state on the host can still steer `aida queue work` toward a rework.
+    - `make check-ci-fast` was run gate by gate (60-second tool limit): 42 of 48 source gates pass, three fail on the sandbox denying AF_UNIX sockets, and the full `ExecContext environment ratchet` unit suite did not fit the limit.
+  created_at: 2026-11-20T17:13:51.066757875Z
+  modified_at: 2026-11-20T17:13:51.066757875Z
+  session_id: 01a1f9bec9c2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
   author: joe
