@@ -7,14 +7,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-11
-  requirement_id: 01a1eaa9-ac38-71b2-9fa2-43c1105fe5c5
-  position: 3000
-  added_by: claude-product-11
-  note: 'unset-mode project knob; replaces per-spec drain routine (operator yes 2026-11-17). Gate code: supervised merge. Held until WIP < cap.'
-  added_at: 2026-11-17T18:11:32.029051187Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-11
   requirement_id: 01a1eabe-d6e1-7153-871f-ba3460860c3a
   position: 4000
   added_by: claude-product-11
