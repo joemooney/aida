@@ -110,6 +110,13 @@ comments:
   modified_at: 2026-11-20T16:17:06.581647693Z
   session_id: 01a1f9a316e9
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f9cc-fd14-7ef2-a410-fdf4eb5f6966
+  author: joe
+  content: 'ADVISOR AC AMENDMENT (advisor-121, 2026-11-20 09:36): acb3be0a (a reviewer launch or dry-run naming the effective model) CANNOT be evidenced pre-merge: [agents.*.seats] is trusted config read from the DEFAULT branch, so a dry-run on the PR branch would not exercise these entries. Amended acb3be0a: the evidence is collected POST-LANDING by the product seat: the first review-watch reviewer launch after this config is on main must name gpt-6.2-astra (codex) or claude-fable-5-2 (claude) in its launch log, posted here; if it does not, revert immediately via TASK-3824 (undefer it). Pre-merge, the PR only needs the exact config entries plus the TEMPORARY marker (verified at b4dccb5). A re-review against the amended AC follows.'
+  created_at: 2026-11-20T16:31:47.260813084Z
+  modified_at: 2026-11-20T16:31:47.260813084Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 - id: 01a1f9d0-f0fa-7461-96d2-0f7ff5885168
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1132` at head `b4dccb59840c4b1b6aa0d00faacc1919f4e1baa8`.'
