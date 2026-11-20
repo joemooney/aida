@@ -23,12 +23,12 @@ description: |
      c. LANE-OUTCOME: a lane exit of failed-after-start, punted, no-change or refused-before-start with no relaunch or routing within N min. Route it to the seat that launched the lane, with the exit line and reason.
      d. STALE-CLAIM: a shared claim or lease that blocks admission and that `aida doctor heal stale-leases` cannot heal. Route it to the advisor with the record path and liveness evidence.
   8. Seed `.aida/config.toml` with the job enabled by default for this project; thresholds are project settings (process-policy knobs, default = current behaviour).
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T17:05:46.254948094Z
+modified_at: 2026-11-20T17:09:59.531487450Z
 req_type: Story
 tags:
 - docs:impacted
@@ -209,6 +209,14 @@ history:
   - field_name: tags
     old_value: landing, operator-ask, product-intake, scheduler, throughput
     new_value: docs:impacted, landing, operator-ask, product-intake, scheduler, throughput
+- id: 01a1f9ef-b86b-7df2-82c0-186a0cb67850
+  author: fast-gate
+  timestamp: 2026-11-20T17:09:59.531486797Z
+  session_id: 01a1f9bb04bf
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
