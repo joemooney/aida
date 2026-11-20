@@ -1533,6 +1533,24 @@ pub(crate) fn remove_human_receipt_in(dir: &Path, id: &str) -> std::io::Result<(
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// BUG-2662 test seam: the next removal of an unreferenced reserved
+    /// receipt on this thread fails, as a transient unlink error would.
+    pub(crate) static FAIL_NEXT_RESERVED_RECEIPT_REMOVAL: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
+/// Remove the reserved receipt `id` another act left and no record names.
+// trace:BUG-2662 | ai:claude
+fn remove_unreferenced_receipt(dir: &Path, id: &str) -> std::io::Result<()> {
+    #[cfg(test)]
+    if FAIL_NEXT_RESERVED_RECEIPT_REMOVAL.with(|f| f.replace(false)) {
+        return Err(std::io::Error::other("injected receipt removal failure"));
+    }
+    remove_human_receipt_in(dir, id)
+}
+
 /// The receipt one act issued: its id, the attestation naming it and the
 /// attempt slot it is reserved under (none for a hand-off file).
 struct IssuedReceipt {
@@ -1601,7 +1619,10 @@ impl<'a, F: Fn(Option<String>) -> anyhow::Result<serde_json::Value>> HumanReceip
     /// The receipt id `attempt` records under: the one a stopped recording
     /// of the same act reserved at its slot, else a new one. A reserved
     /// receipt no record of the history names, left by another act, is
-    /// removed; one a record names is left alone.
+    /// removed; one a record names is left alone. When that removal fails
+    /// the reserved id is adopted instead: this act's receipt replaces the
+    /// old one under the same id, so the slot's reservation still points at
+    /// the only receipt of the slot and nothing is orphaned.
     fn receipt_id(
         &self,
         dir: &Path,
@@ -1613,11 +1634,8 @@ impl<'a, F: Fn(Option<String>) -> anyhow::Result<serde_json::Value>> HumanReceip
         match reserved {
             Some((a, reserved)) if reserved.act == a.act => return reserved.receipt_id,
             Some((_, reserved)) => {
-                if let Err(e) = remove_human_receipt_in(dir, &reserved.receipt_id) {
-                    eprintln!(
-                        "warning: human-review receipt {} names no recorded review and could not be removed: {e}",
-                        reserved.receipt_id
-                    );
+                if remove_unreferenced_receipt(dir, &reserved.receipt_id).is_err() {
+                    return reserved.receipt_id;
                 }
             }
             None => {}

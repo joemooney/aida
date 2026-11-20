@@ -2086,7 +2086,9 @@ mod bug_2201_handshake_fallback_tests {
 /// `aida review record` — emit the seat-tagged `ReviewVerdictRecorded` event
 /// naming the spec (as `Event.spec`), PR, verdict and reviewed sha. Split out
 /// for direct unit testing, same rationale as BUG-1423's `emit_ship_pr_merged`
-/// in `pr_cmd.rs`. Best-effort: `events::emit` never fails the command.
+/// in `pr_cmd.rs`. Reports whether the event was appended (BUG-2662): the
+/// caller never fails the command on it, but marks the act announced only
+/// once it was.
 // trace:TASK-1450 | ai:claude
 pub(crate) fn emit_review_verdict_recorded(
     project_root: &std::path::Path,
@@ -2094,7 +2096,7 @@ pub(crate) fn emit_review_verdict_recorded(
     pr: Option<u32>,
     verdict: String,
     reviewed_sha: Option<String>,
-) {
+) -> Result<(), String> {
     let mut ev = events::Event::new(
         Some(spec_display.to_string()),
         "",
@@ -2105,21 +2107,22 @@ pub(crate) fn emit_review_verdict_recorded(
         },
     );
     ev.seat = events::active_seat();
-    events::emit(project_root, &ev);
+    events::emit_recorded(project_root, &ev)
 }
 
 /// BUG-2662: where the announcement of one recorded act of review is marked:
 /// a file beside the gate ledger, named by a digest of the verdict key, the
 /// spec and the `recorded_at` of the record standing in `body`. `None` when
 /// no shared ledger decides here (a contained seat's hand-off) or the record
-/// carries no timestamp: such an act is announced as it is written.
+/// carries no timestamp: such an act is announced as it is written. Returns
+/// the store root whose ledger lock guards the mark, and the mark.
 // trace:BUG-2662 | ai:claude
 fn review_announcement_mark(
     project_root: &std::path::Path,
     path: &std::path::Path,
     spec: &str,
     body: &str,
-) -> Option<std::path::PathBuf> {
+) -> Option<(std::path::PathBuf, std::path::PathBuf)> {
     use sha2::Digest as _;
     if crate::gate::ledger::contained() {
         return None;
@@ -2145,23 +2148,158 @@ fn review_announcement_mark(
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    Some(
-        store
-            .join(".aida")
-            .join("review-announced")
-            .join(format!("{name}.json")),
-    )
+    let mark = store
+        .join(".aida")
+        .join("review-announced")
+        .join(format!("{name}.json"));
+    Some((store, mark))
 }
 
-/// Write the mark [`review_announcement_mark`] names.
+/// BUG-2662: announce one recorded act of review once. The act's mark
+/// ([`review_announcement_mark`]) has two phases, both decided under the
+/// ledger-wide lock of `store` and the exclusive announcement lock beside
+/// the marks, so no two recorders of the same act announce it together:
+///
+/// 1. *pending*: the mark is claimed with an exclusive create before `emit`
+///    runs. A mark that cannot be claimed announces nothing.
+/// 2. *done*: the mark carries `announced_at`, written only after `emit`
+///    reported the event appended.
+///
+/// A mark found pending was claimed by a recorder whose emit is not
+/// confirmed (it stopped between the claim and the emit, or the append
+/// failed), so the act is announced again; a failed `emit` leaves the mark
+/// pending for the retry. Returns whether this call announced the act.
 // trace:BUG-2662 | ai:claude
-fn mark_review_announced(mark: &std::path::Path) -> anyhow::Result<()> {
-    if let Some(dir) = mark.parent() {
-        std::fs::create_dir_all(dir)?;
+fn announce_review_once(
+    store: &std::path::Path,
+    mark: &std::path::Path,
+    emit: impl FnOnce() -> Result<(), String>,
+) -> std::io::Result<bool> {
+    use std::io::Write as _;
+    let dir = mark
+        .parent()
+        .ok_or_else(|| std::io::Error::other("the announcement mark has no directory"))?;
+    std::fs::create_dir_all(dir)?;
+    crate::gate::ledger::store::with_lock(store, &dir.join("announce.lock"), || {
+        let done = std::fs::read(mark)
+            .ok()
+            .and_then(|body| serde_json::from_slice::<serde_json::Value>(&body).ok())
+            .is_some_and(|body| body.get("announced_at").is_some());
+        if done {
+            return Ok(false);
+        }
+        let claim = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(mark);
+        match claim {
+            Ok(mut file) => {
+                let body = serde_json::json!({ "pending_since": chrono::Utc::now().to_rfc3339() });
+                file.write_all(body.to_string().as_bytes())?;
+                file.sync_all()?;
+                std::fs::File::open(dir)?.sync_all()?;
+            }
+            // Claimed, and its emit never confirmed: announce it now.
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(e) => return Err(e),
+        }
+        emit().map_err(std::io::Error::other)?;
+        let body = serde_json::json!({ "announced_at": chrono::Utc::now().to_rfc3339() });
+        aida_core::write_atomic(mark, body.to_string()).map_err(|e| {
+            std::io::Error::new(
+                e.kind(),
+                format!("it was announced, but its mark could not be completed: {e}"),
+            )
+        })?;
+        Ok(true)
+    })
+}
+
+/// BUG-2662: the two-phase announcement mark.
+// trace:BUG-2662 | ai:claude
+#[cfg(test)]
+mod bug_2662_announce_once_tests {
+    use super::announce_review_once;
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    fn mark(root: &std::path::Path) -> std::path::PathBuf {
+        root.join(".aida/review-announced/act.json")
     }
-    let body = serde_json::json!({ "announced_at": chrono::Utc::now().to_rfc3339() });
-    aida_core::write_atomic(mark, body.to_string())?;
-    Ok(())
+
+    /// A claimed mark whose emit is not confirmed (the recorder stopped
+    /// before it, or the append failed) is announced by the next recorder;
+    /// a completed one never again.
+    #[test]
+    fn pending_mark_is_announced_again_and_a_done_mark_never() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _guard =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        let mark = mark(root);
+        let emitted = AtomicUsize::new(0);
+        let emit = || {
+            emitted.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        };
+
+        let failed = announce_review_once(root, &mark, || Err("feed is down".to_string()));
+        assert!(failed.unwrap_err().to_string().contains("feed is down"));
+        assert!(mark.exists(), "the claim stands, pending");
+        assert!(!std::fs::read_to_string(&mark)
+            .unwrap()
+            .contains("announced_at"));
+
+        assert!(announce_review_once(root, &mark, emit).unwrap());
+        assert!(std::fs::read_to_string(&mark)
+            .unwrap()
+            .contains("announced_at"));
+        assert!(!announce_review_once(root, &mark, emit).unwrap());
+        assert_eq!(emitted.load(Ordering::SeqCst), 1);
+
+        // A claim torn by a crash (an empty file) reads as pending.
+        let torn = root.join(".aida/review-announced/torn.json");
+        std::fs::write(&torn, "").unwrap();
+        assert!(announce_review_once(root, &torn, emit).unwrap());
+        assert_eq!(emitted.load(Ordering::SeqCst), 2);
+    }
+
+    /// A second recorder of the same act arrives while the first is between
+    /// its claim and its completed mark: it waits for the lock and then
+    /// finds the act announced.
+    #[test]
+    fn two_recorders_of_one_act_announce_it_once() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        let _guard =
+            crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
+        let mark = mark(&root);
+        let emitted = Arc::new(AtomicUsize::new(0));
+        let second_done = Arc::new(AtomicBool::new(false));
+        let mut second = None;
+        let first = announce_review_once(&root, &mark, || {
+            emitted.fetch_add(1, Ordering::SeqCst);
+            let (root, mark) = (root.clone(), mark.clone());
+            let (emitted, done) = (emitted.clone(), second_done.clone());
+            second = Some(std::thread::spawn(move || {
+                let announced = announce_review_once(&root, &mark, || {
+                    emitted.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
+                });
+                done.store(true, Ordering::SeqCst);
+                announced
+            }));
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            assert!(
+                !second_done.load(Ordering::SeqCst),
+                "the second recorder waits for the first"
+            );
+            Ok(())
+        });
+        assert!(first.unwrap());
+        assert!(!second.unwrap().join().unwrap().unwrap());
+        assert_eq!(emitted.load(Ordering::SeqCst), 1);
+    }
 }
 
 /// STORY-1436: refusal recording seams that live in this module.
@@ -2344,7 +2482,8 @@ mod task_1450_review_verdict_event_tests {
             Some(2119),
             "approved".to_string(),
             Some("abc123def".to_string()),
-        );
+        )
+        .unwrap();
 
         let events = events::read_all(tmp.path());
         assert_eq!(events.len(), 1);
@@ -3514,25 +3653,52 @@ fn handle_review_record_context_with_policy_at(
     // filing failed after the refusal was on record). Whether a hold stands
     // or was released since has no part in it.
     // trace:BUG-2662 | ai:claude
-    let announcement = review_announcement_mark(&project_root, &path, spec, &current.body);
-    let unannounced = announcement.as_deref().is_some_and(|mark| !mark.exists())
-        && crate::gate::review_verdict::parse_recorded_verdict(&current.body)
-            .is_some_and(|standing| standing.kind == kind);
-    if !repeat || unannounced {
-        emit_review_verdict_recorded(
+    //
+    // The mark is claimed before the event is emitted and completed only
+    // once the event was appended, both under the ledger lock
+    // ([`announce_review_once`]): recorders of one act announce it once
+    // between them, and an emit that failed or never ran leaves the mark
+    // pending, so repeating the record announces it. A new act's mark is
+    // named by the record this command appended; a repeat's by the act it
+    // found standing.
+    let announcement = if repeat {
+        Some(current.body.clone())
+            .filter(|body| {
+                crate::gate::review_verdict::parse_recorded_verdict(body)
+                    .is_some_and(|standing| standing.kind == kind)
+            })
+            .map(|body| review_announcement_mark(&project_root, &path, spec, &body))
+    } else {
+        Some(review_announcement_mark(
             &project_root,
-            &spec.to_ascii_uppercase(),
-            pr.map(|n| n as u32),
-            kind.label().to_string(),
-            resolved_sha.clone(),
-        );
-        if let Some(mark) = announcement.as_deref() {
-            if let Err(e) = mark_review_announced(mark) {
-                eprintln!(
-                    "  {} could not mark this review as announced ({e}); repeating the record announces it again",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
-                );
-            }
+            &path,
+            spec,
+            &serde_json::Value::Object(verdict_obj.clone()).to_string(),
+        ))
+    };
+    // No feed, nothing to announce and nothing to mark: a later record with
+    // the feed enabled finds the act unannounced.
+    if let Some(mark) = announcement.filter(|_| !events::events_disabled()) {
+        let emit = || {
+            emit_review_verdict_recorded(
+                &project_root,
+                &spec.to_ascii_uppercase(),
+                pr.map(|n| n as u32),
+                kind.label().to_string(),
+                resolved_sha.clone(),
+            )
+        };
+        let announced = match mark {
+            Some((store, mark)) => announce_review_once(&store, &mark, emit).map(|_| ()),
+            // No shared ledger decides here: announced as it is written.
+            None if !repeat => emit().map_err(std::io::Error::other),
+            None => Ok(()),
+        };
+        if let Err(e) = announced {
+            eprintln!(
+                "  {} the review is recorded, but its announcement on the event feed is not confirmed ({e}); repeating the record announces it",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            );
         }
     }
     // BUG-2136: state the outcome explicitly — a new round, or an identical

@@ -1506,8 +1506,8 @@ fn story_2913_custom_list_auto_files_followups() {
 /// A receipt is settled with what the ledger write did, under the append's
 /// locks, on the unbound ledger and on a change alike: a write that failed
 /// before it began proves the record absent, a write whose sync failed left
-/// the record on the ledger (appended, receipt kept), and a recorder that
-/// exits after the receipt settles nothing.
+/// the record on the ledger unconfirmed (an error, receipt kept), and a
+/// recorder that exits after the receipt settles nothing.
 // trace:BUG-2662 | ai:claude
 #[test]
 fn bug_2662_receipt_is_settled_by_what_the_write_did() {
@@ -1589,7 +1589,11 @@ fn bug_2662_receipt_is_settled_by_what_the_write_did() {
         );
 
         store::NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::Unsynced)));
-        assert_eq!(append().unwrap(), Delivered::Appended, "bound={bound}");
+        let unconfirmed = append().unwrap_err().to_string();
+        assert!(
+            unconfirmed.contains("not confirmed durable"),
+            "bound={bound}: {unconfirmed}"
+        );
         assert_eq!(store::NEXT_REVIEW_FAULT.with(|c| c.get()), None);
         assert_eq!(verdicts(), 1, "bound={bound}: the event is on the ledger");
         assert_eq!(settled(), [Settled::Kept], "bound={bound}: in doubt, kept");
@@ -1607,5 +1611,34 @@ fn bug_2662_receipt_is_settled_by_what_the_write_did() {
             "probe"
         );
         assert_eq!(probe.issued.get(), 3, "bound={bound}");
+
+        // Without a receipt the same holds: a failed sync is an error, and
+        // the retry syncs the ledger before it answers as a repeat.
+        let later = body("request-changes", "reviewer-b");
+        let again = || {
+            let rule = store::ReviewRule {
+                once: true,
+                ..Default::default()
+            };
+            if bound {
+                let event = evt(root, &later, Some("STORY-9840"));
+                store::append_review(root, Some(ChangeKey::pr(CHANGE)), event, &rule)
+            } else {
+                let event = ledger::event::verdict_event_unbound(root, &spec, &later);
+                store::append_review(root, None, event, &rule)
+            }
+        };
+        store::NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::Unsynced)));
+        assert!(again().is_err(), "bound={bound}");
+        assert_eq!(verdicts(), 2, "bound={bound}: written, unconfirmed");
+        store::NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::Unsynced)));
+        let unsynced = again().unwrap_err().to_string();
+        assert!(
+            unsynced.contains("could not be synced"),
+            "bound={bound}: {unsynced}"
+        );
+        assert_eq!(store::NEXT_REVIEW_FAULT.with(|c| c.get()), None);
+        assert_eq!(again().unwrap(), Delivered::Unchanged, "bound={bound}");
+        assert_eq!(verdicts(), 2, "bound={bound}: the retry appended nothing");
     }
 }

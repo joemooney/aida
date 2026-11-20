@@ -1527,11 +1527,14 @@ mod standalone_review_verdict_parent_tests {
         assert_eq!(receipts(&f).len(), 1);
     }
     /// The ledger write completes and its sync reports an I/O error: the
-    /// event is on the ledger, so it was appended and its receipt is kept.
-    /// The retry is a repeat of that act: no second event, no second receipt.
+    /// event may be on the ledger, but it is not confirmed durable, so the
+    /// recording is refused, nothing is announced and its receipt is kept.
+    /// The retry is a repeat of that act: it syncs the ledger before it
+    /// answers (and is refused again while the sync fails), appends no second
+    /// event, issues no second receipt and announces the act once.
     // trace:BUG-2662 | ai:claude
     #[test]
-    fn bug_2662_approval_on_the_ledger_after_a_failed_sync_keeps_its_receipt() {
+    fn bug_2662_approval_whose_sync_failed_is_unconfirmed_until_a_retry_syncs_it() {
         use crate::gate::ledger::store::{ReviewFault, NEXT_REVIEW_FAULT};
         if crate::test_env::run_path_isolated_test() {
             return;
@@ -1542,24 +1545,129 @@ mod standalone_review_verdict_parent_tests {
         let approve =
             |summary: &str| as_operator(|| f.record_as("STORY-77", "approved", summary, &[], None));
         NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::Unsynced)));
-        approve("first pass").unwrap();
+        let error = format!("{:#}", approve("first pass").unwrap_err());
+        assert!(error.contains("not confirmed durable"), "{error}");
         assert_eq!(NEXT_REVIEW_FAULT.with(|c| c.get()), None, "the fault fired");
         let named = event_receipts(&f);
         assert_eq!(named.len(), 1, "the event is on the ledger");
         assert_eq!(receipts(&f), named, "and its receipt was not removed");
         assert!(ra::human_receipt_for(&named[0], &f.head).is_some());
-        assert_eq!(announced(&f), 1);
+        assert_eq!(announced(&f), 0, "an unconfirmed act is not announced");
         let ledger = ledger_bytes(&f);
+
+        // The retry's own sync fails: still unconfirmed, still refused.
+        NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::Unsynced)));
+        let error = format!("{:#}", approve("first pass").unwrap_err());
+        assert!(error.contains("could not be synced"), "{error}");
+        assert_eq!(
+            NEXT_REVIEW_FAULT.with(|c| c.get()),
+            None,
+            "the retry synced"
+        );
+        assert_eq!(ledger_bytes(&f), ledger);
+        assert_eq!(receipts(&f), named);
+        assert_eq!(announced(&f), 0);
+
         approve("first pass").unwrap();
         assert_eq!(ledger_bytes(&f), ledger, "the retry appends nothing");
         assert_eq!(receipts(&f), named, "and issues no second receipt");
-        assert_eq!(announced(&f), 1);
+        assert_eq!(announced(&f), 1, "the confirmed act is announced");
+        approve("first pass").unwrap();
+        assert_eq!(announced(&f), 1, "once");
         // A later act leaves the kept receipt alone: a record names it.
         approve("second pass").unwrap();
         let two = event_receipts(&f);
         assert_eq!(two.len(), 2);
         assert_eq!(two[0], named[0]);
         assert_eq!(receipts(&f).len(), 2);
+        assert!(ra::human_receipt_for(&named[0], &f.head).is_some());
+        assert_eq!(reservations(&f), 0);
+    }
+    /// The event feed cannot be appended to while a review is recorded: the
+    /// record stands, its announcement stays pending, and repeating the
+    /// record announces it, once.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_announcement_whose_emit_failed_stays_pending_for_the_retry() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let approve =
+            || as_operator(|| f.record_as("STORY-77", "approved", "first pass", &[], None));
+        let marks = || -> Vec<serde_json::Value> {
+            let store = crate::gate::ledger::store_root(&f.root).unwrap();
+            std::fs::read_dir(store.join(".aida/review-announced"))
+                .map(|entries| {
+                    entries
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+                        .map(|e| serde_json::from_slice(&std::fs::read(e.path()).unwrap()).unwrap())
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        // A directory where the feed's file belongs: every append fails.
+        let feed = crate::events::events_path(&f.root);
+        let aside = feed.with_extension("aside");
+        let had_feed = feed.exists();
+        if had_feed {
+            std::fs::rename(&feed, &aside).unwrap();
+        }
+        std::fs::create_dir_all(&feed).unwrap();
+        approve().unwrap();
+        std::fs::remove_dir(&feed).unwrap();
+        if had_feed {
+            std::fs::rename(&aside, &feed).unwrap();
+        }
+        assert_eq!(verdict_events(&f).len(), 1, "the review is on record");
+        assert_eq!(announced(&f), 0);
+        let pending = marks();
+        assert_eq!(pending.len(), 1, "the announcement was claimed");
+        assert!(pending[0].get("announced_at").is_none(), "{pending:?}");
+
+        approve().unwrap();
+        assert_eq!(verdict_events(&f).len(), 1);
+        assert_eq!(announced(&f), 1, "the retry announces the pending act");
+        let done = marks();
+        assert_eq!(done.len(), 1);
+        assert!(done[0].get("announced_at").is_some(), "{done:?}");
+        approve().unwrap();
+        assert_eq!(announced(&f), 1, "and only once");
+    }
+    /// The next act at a destination cannot remove the receipt a stopped
+    /// recording of another act reserved there: it adopts that receipt's id
+    /// rather than reserve a new one over it, so the slot never loses track
+    /// of a receipt. One receipt exists, the one on record.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_reserved_receipt_that_cannot_be_removed_is_adopted_not_orphaned() {
+        use crate::gate::ledger::store::{ReviewFault, NEXT_REVIEW_FAULT};
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let approve =
+            |summary: &str| as_operator(|| f.record_as("STORY-77", "approved", summary, &[], None));
+        NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::ExitAfterReceipt)));
+        approve("first pass").unwrap_err();
+        let orphan = receipts(&f);
+        assert_eq!(orphan.len(), 1, "the receipt was persisted");
+        assert_eq!(reservations(&f), 1);
+
+        ra::FAIL_NEXT_RESERVED_RECEIPT_REMOVAL.with(|c| c.set(true));
+        approve("another pass").unwrap();
+        assert!(
+            !ra::FAIL_NEXT_RESERVED_RECEIPT_REMOVAL.with(|c| c.get()),
+            "the removal was attempted"
+        );
+        let named = event_receipts(&f);
+        assert_eq!(named, orphan, "the reserved id was adopted");
+        assert_eq!(receipts(&f), named, "no second receipt, no orphan");
         assert!(ra::human_receipt_for(&named[0], &f.head).is_some());
         assert_eq!(reservations(&f), 0);
     }

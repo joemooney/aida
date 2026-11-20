@@ -896,8 +896,9 @@ impl Attempt<'_> {
 pub(crate) enum Settled {
     /// The record is on the ledger and was synced.
     Landed,
-    /// The record is on the ledger unsynced, or the ledger could not be read
-    /// back: the receipt and its reservation stay, and a retry reconciles.
+    /// The record is on the ledger and its sync is unconfirmed, or the
+    /// ledger could not be read back: the recording is refused, the receipt
+    /// and its reservation stay, and a retry reconciles.
     Kept,
     /// The ledger was read whole and does not hold the record.
     Absent,
@@ -971,7 +972,8 @@ pub(crate) enum ReviewFault {
     /// The recorder exits once its receipt is persisted, before the ledger
     /// write: nothing after that point runs, no settlement either.
     ExitAfterReceipt,
-    /// The ledger write completes and its sync reports an I/O error.
+    /// The ledger write completes and its sync reports an I/O error. The
+    /// same fault fails the sync a repeat confirms a standing record with.
     Unsynced,
 }
 
@@ -994,6 +996,36 @@ fn sync_appended(file: &std::fs::File) -> std::io::Result<()> {
         return Err(std::io::Error::other("injected review sync failure"));
     }
     file.sync_data()
+}
+
+/// Confirm the ledger a repeated record stands on is durable before the
+/// repeat is answered: sync the destination ledger file, then its directory
+/// (the entry of a ledger this record created). An earlier recording of the
+/// same act may have written the record and failed its sync; that recording
+/// was refused as unconfirmed, and this is where its retry confirms it.
+// trace:BUG-2662 | ai:claude
+fn resync(root: &Path, change: Option<ChangeKey>, spec: Option<&str>) -> std::io::Result<()> {
+    let file = match (change, spec) {
+        (Some(change), _) => ledger_file(root, change),
+        (None, Some(spec)) => unbound_file(root, spec),
+        (None, None) => return Err(std::io::Error::other("no ledger to sync")),
+    };
+    let synced = (|| {
+        sync_appended(&std::fs::File::open(&file)?)?;
+        match file.parent() {
+            Some(dir) => std::fs::File::open(dir)?.sync_all(),
+            None => Ok(()),
+        }
+    })();
+    synced.map_err(|e| {
+        std::io::Error::new(
+            e.kind(),
+            format!(
+                "this review is already on the gate ledger {}, but the ledger could not be synced ({e}), so it is not confirmed durable; retry `aida review record`",
+                file.display()
+            ),
+        )
+    })
 }
 
 #[cfg(test)]
@@ -1019,9 +1051,10 @@ fn review_check(
 ) -> std::io::Result<Option<Delivered>> {
     #[cfg(test)]
     review_append_hook(root, true);
-    #[cfg(not(test))]
-    let _ = root;
     if rule.once && now.repeats(spec, record, rule.receipt) {
+        // Never answered from the page cache alone: the first recording of
+        // this act may have stopped at a failed sync.
+        resync(root, now.change, spec)?;
         return Ok(Some(Delivered::Unchanged));
     }
     if let Some(standing) = rule.standing {
@@ -1114,10 +1147,14 @@ fn seal(
 }
 
 /// Settle the receipt of a sealed review append with what its write did,
-/// still under the append's locks. A write that reported an error is read
-/// back strictly: a record that is on the ledger was appended (its sync is
-/// what failed) and keeps its receipt; one proved absent loses it; and when
-/// the ledger cannot be read back the receipt is kept for the retry.
+/// still under the append's locks. A write that reported an error is never
+/// answered as appended. It is read back strictly: a record that is on the
+/// ledger (its sync is what failed, and a read back can be served from the
+/// page cache) is unconfirmed, so the error is returned, nothing is
+/// published, and its receipt is kept for the retry that syncs the ledger
+/// ([`resync`]); one proved absent loses its receipt; and when the ledger
+/// cannot be read back the receipt is kept for the retry. A record the
+/// ledger already held is synced before it is answered.
 // trace:BUG-2662 | ai:claude
 fn settle(
     root: &Path,
@@ -1127,6 +1164,11 @@ fn settle(
     rule: &ReviewRule<'_>,
     wrote: std::io::Result<Delivered>,
 ) -> std::io::Result<Delivered> {
+    // The exact record was already there: confirm it durable, or refuse.
+    // A receipt it names stays as it is either way.
+    if matches!(wrote, Ok(Delivered::Unchanged)) {
+        resync(root, change, spec)?;
+    }
     let Some(receipt) = rule.receipt else {
         return wrote;
     };
@@ -1151,10 +1193,12 @@ fn settle(
             if let (Some(change), Some(spec)) = (change, spec) {
                 let _ = super::project::index_spec(root, spec, change);
             }
-            eprintln!(
-                "warning: the review verdict is on the gate ledger, but its write reported an error ({error}); its human-review receipt is kept"
-            );
-            Ok(Delivered::Appended)
+            Err(std::io::Error::new(
+                error.kind(),
+                format!(
+                    "the review verdict was written to the gate ledger, but its write reported an error ({error}), so it is not confirmed durable and is not reported as recorded; its human-review receipt is kept; retry `aida review record` to confirm it"
+                ),
+            ))
         }
         Ok(false) => {
             receipt.settle(Settled::Absent);
