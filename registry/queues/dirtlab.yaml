@@ -76,9 +76,9 @@
   added_by_machine: disrad-dvp98b3puw
 - user_id: dirtlab
   requirement_id: 01a1f76b-23a7-7cb1-8487-529067137cda
-  position: 890000
+  position: 889000
   added_by: dirtlab
-  note: auto-queue retry reused canonical review story; covers 2 specs
-  added_at: 2026-11-20T05:26:21.657517296Z
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-20T06:16:24.614423785Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
