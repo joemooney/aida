@@ -121,6 +121,19 @@ comment. Disabled projects retain their existing result output.
 - `user` — writes `~/.aida/preferences.toml` (preferred node id, fallback email). Machine-global, not per-project — it seeds defaults for future `init`s.
 - `menu` — a navigable TUI listing every configurable item — per row the knob's name, current value, built-in default, where it was set (scope: `.aida/config.toml` / env / built-in default), and a one-line explanation. The visual companion to `config show`: same resolved surface (it reuses the same policy registry), one scrollable screen, arrow-key navigation (↑/↓ or j/k, PgUp/PgDn, g/G, q/Esc). Read-only for now — edit knobs with the matching `config` subcommand or your `config.toml`. Needs a TTY; without one it prints a pointer to `config show` and exits cleanly.
 
+<!-- trace:BUG-2706 | ai:claude -->
+**Review deferral behind an unreadable lane.** `[review]
+lane_unknown_defer_mins` in `.aida/config.toml` bounds how long a review waits
+for an implementer lane on another host whose shared claim is still present
+but has stopped reporting (see
+[Roles and sessions](06-roles-sessions.md)). It is a whole number of minutes
+from 0 to 1440; unset or outside that range, the default of 20 applies.
+
+```toml
+[review]
+lane_unknown_defer_mins = 20   # default
+```
+
 <!-- trace:STORY-2821 | ai:claude -->
 **Reviewer stale-base policy.** `[review] stale_base` in `.aida/config.toml`
 decides which stale change heads a reviewer launch refuses. It is listed by

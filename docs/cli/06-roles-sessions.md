@@ -1048,12 +1048,27 @@ Review-watch and explicit `aida queue work PR-N --role reviewer` pickups defer
 while a live implementer lane owns the change's branch or a linked spec. The
 watcher prints `deferred: implementer lane live (host, lease)` and records the
 reason for `aida awaiting`, without reserving a review attempt. Local leases
-require positive process liveness; cross-host claims use their existing heartbeat
-expiry. Dormant, dead and expired records do not defer review. This also covers
-merge-only heads after a changes-requested verdict. Once the lane ends, the next
-pass admits the current head through ordinary review deduplication; merge-only
-history alone never blocks review indefinitely.
+require positive process liveness. Dormant and dead local records do not defer
+review. This also covers merge-only heads after a changes-requested verdict.
+Once the lane ends, the next pass admits the current head through ordinary
+review deduplication; merge-only history alone never blocks review indefinitely.
 <!-- trace:STORY-2705 | ai:codex -->
+
+A lane on another host is judged by the heartbeat on its shared claim. The
+launcher of a headless implementer lane (`aida queue work <spec-id>`, which
+`scripts/lane-run.sh` runs) refreshes that heartbeat every 10 minutes for as
+long as it runs, so the lane defers review however long it works. When the
+lane ends, its claim is released and the head is reviewed. A claim that is
+still present with a heartbeat older than its 30-minute lifetime means the
+lane's state cannot be read: its launcher stopped without releasing the claim,
+its host runs a build that does not refresh the heartbeat, or this host's copy
+of the store is out of date. The watcher then prints `deferred: implementer
+lane state unknown (host, lease)` with the time it will stop waiting, defers
+for `[review] lane_unknown_defer_mins` more minutes (default 20, at most
+1440; 0 reviews at once), and then reviews the head, printing why. Both the
+lane host and the watcher's host need a build with this behaviour for a long
+lane to be deferred throughout.
+<!-- trace:BUG-2706 | ai:claude -->
 
 For an advisor service that follows grant rotation, start the operator's
 `aida deputy shell run` in its ordinary advisor terminal, then launch the

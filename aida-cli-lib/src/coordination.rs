@@ -578,6 +578,11 @@ pub(crate) fn sanitize_scope(scope: &str) -> String {
     format!("{stem}-{hash:016x}")
 }
 
+// trace:BUG-2706 | ai:claude
+#[path = "coordination_heartbeat.rs"]
+mod heartbeat;
+pub(crate) use heartbeat::SessionClaimHeartbeat;
+
 /// Best-effort store refresh for a coordination write. An unreachable store
 /// keeps the local-only path (`Ok`); a store-sync refusal (hypothesis evidence
 /// or allocation claims) is the one failure that stops the write and its
@@ -958,7 +963,9 @@ fn build_claim(
         pid_start_time: aida_core::liveness::process_start_identity(std::process::id()),
         agent: agent.to_string(),
         started_at: now.clone(),
-        // Slice 1: heartbeat == started_at. Slice 2 refreshes periodically.
+        // A lane's launcher refreshes this while it runs
+        // (`SessionClaimHeartbeat`); every other claim keeps its start time.
+        // trace:BUG-2706 | ai:claude
         heartbeat_at: now,
         ttl_secs: DEFAULT_TTL_SECS,
         // A session lease is worktree-backed, not process-backed: the pid above
