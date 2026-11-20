@@ -10,12 +10,12 @@ description: |
   2. Mechanical move only: no logic changes; existing tests pass unchanged; trace comments move with their code.
   3. Ratchets (store-writers, ExecContext, crate-glob, gate inventory) pass without growing any baseline.
   Codex lane, FASTTRACK-sized review if the diff is a pure move.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:16:46.260567298Z
-modified_at: 2026-11-20T16:16:02.322072216Z
+modified_at: 2026-11-20T18:01:57.894579412Z
 req_type: Task
 tags:
 - crate-split
@@ -115,6 +115,20 @@ history:
   timestamp: 2026-11-20T16:14:52.651019320Z
   session_id: 01a1f98f2065
   changes: []
+- id: 01a1fa1f-4d17-7211-a1e3-9534258eeb8e
+  author: aida-auto-bump
+  timestamp: 2026-11-20T18:01:57.783728339Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1fa1f-4d86-7c11-873b-a27c41db9551
+  timestamp: 2026-11-20T18:01:57.894575041Z
+  agent: aida
+  commit_sha: c2322a5e532f217d9b5380af2a5e5db3214f85f9
+  summary: 'APPROVED: no actionable defects found in the full pinned landed diff for PR 4367. Reviewed original head 3301620b15e4b33783aa350de7ff9f5aec9fa724 against protected main 78b437097cbccc7025e7529f2f06ff0f092c8495 using landed tree a7f00e685d951d456f434d607972b3a95c71e23b. Read the generated worksheet and all 870,934 bytes of the supplied diff; verified byte equality with the pinned no-renames diff. The landed tree has no content differences from the original head. Completing spec TASK-b6b1278890774ef993d2ebc327862470-1131 (current display ID TASK-3822), every acceptance criterion: pr_cmd: pr_cmd.rs becomes pr_cmd/mod.rs plus cohesive submodules, with public paths unchanged and no caller/CLI behavior changes — verified by source comparison: seven cohesive child modules, all 79 original crate-visible declarations retained or re-exported through pr_cmd, valid relocated source includes, and unchanged production bodies. Existing hold/rebase/GC/cleanup/ship and help-golden coverage is reported passing in the implementer''s spec self-review. ac1663b1: Mechanical move only, no logic changes, existing tests pass unchanged, trace comments move with their code — verified by item-by-item comparison of all 143 original top-level items: none removed; production bodies unchanged apart from necessary parent visibility and signature formatting; item attributes and trace preambles retained. All original trace lines survive. Test changes resolve relocated includes and strengthen the cleanup-order source assertion to check both actual worker-launch branches. The implementer''s recorded evidence reports 479 focused Rust tests passing; this reviewer did not run local tests or builds. accabd13: Store-writers, ExecContext, crate-glob and gate inventory ratchets pass without growing a baseline — verified by successful CI fast-gates job 136409584976 in run 44771342772: 1,199 exact ExecContext sites, zero crate glob imports, 150 gate dependency edges, each with zero additions; 3,817 writer sites and 297 operation mappings reconciled; all 51 Rust structural guards passed. Independent source-data comparison confirms writer policy fields, operation mappings, mediated routes and environment ledger entries are identical after path normalization. Raw Git, forge and launch allowances retain their aggregate budgets. The supplied untraced-criteria list was assessed against these existing tests and direct source/inventory evidence; no criterion was left uncovered and no new behavior was introduced. No deferred or N/A criteria. CI pending at review time: fast gates and merge-hold status succeeded, while CI (fast compile) remains in progress. Approval does not assert that pending compilation or the full test suite has completed.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
@@ -125,3 +139,7 @@ filed_at:
   vendor: claude
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-20T18:01:57.783710171Z
+  completion_sha: c2322a5e532f217d9b5380af2a5e5db3214f85f9
