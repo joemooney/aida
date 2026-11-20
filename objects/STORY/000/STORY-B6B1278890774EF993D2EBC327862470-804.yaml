@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T18:07:39.279843383Z
+modified_at: 2026-11-20T18:08:41.915377946Z
 req_type: Story
 tags:
 - docs:impacted
@@ -236,6 +236,21 @@ comments:
     Nothing else. cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
   created_at: 2026-11-20T18:07:39.279843383Z
   modified_at: 2026-11-20T18:07:39.279843383Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa25-76ab-7a10-81b7-d18c3286a653
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2906):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: b539d5c86058
+    Recorded: 2026-11-20T18:06:18.511888726+00:00
+    Findings:
+    1. F1 [severity=p2; blocking_tier=unmet-claimed-ac] aida-cli-lib/src/land_stalls.rs:324-327 (STORY-2906 AC7a): Preserve red-check evidence independently of CI base freshness. standing() recognizes only Ci::Red; Live::ci calls land_ci_base::observe, whose verify() replaces even a red result with Ci::StaleBase whenever its run tested an older base (land_ci_base.rs:109-115). Therefore an approved, ownerless head with failed required/full CI becomes an ordinary STUCK-MERGE after main advances, wants_red_detail() is false, and the routed item says to land it without naming failing tests or distinguishing flake/rework. This reproduces through the existing stale-red-base fixture in land_ci_base.rs, combined with this new standing match. Read raw head check failures separately from the freshness verdict and add a regression exercising both together. This depends on existing CI behavior present in the pinned base, not on the two newer base commits or scripts/store-writers.toml.
+    2. F2 [severity=p2; blocking_tier=unmet-claimed-ac] aida-cli-lib/src/land_stalls.rs:1379-1407 (STORY-2906 AC2; residual of prior F3): Supply the required per-host memory observation. host_lines() still unconditionally substitutes unknown for every foreign host, while state.json is clone-local and no loader reads or combines another host's saved observations. Merely asserting that another host's scheduled run records its memory does not provide that evidence in this guard's report or saved per-host observation. The added persistence fixes the lost-run half of F3, but its foreign-memory half remains unresolved. Obtain timestamped foreign-host telemetry (with explicit unavailable/stale handling), or secure an explicit scope ruling narrowing AC2 before claiming completion; the round-2 ruling defers only AC7b-d. Add coverage through the telemetry loader rather than only injecting prebuilt HostLine values. This finding is unchanged by the newer protected-base commits.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T18:08:41.643440823Z
+  modified_at: 2026-11-20T18:08:41.643440823Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
