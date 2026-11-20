@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T18:39:10.076142338Z
+modified_at: 2026-11-20T18:40:31.640762697Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -290,6 +290,12 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-461` at head `unavailable`.'
   created_at: 2026-11-20T18:36:47.172990360Z
   modified_at: 2026-11-20T18:36:47.172990360Z
+- id: 01a1fa42-9b98-7ff0-b01f-5ecd7e34ad9a
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-461` at head `76f73aa148eb0bea15ee1009a3079687fc40670c`.'
+  created_at: 2026-11-20T18:40:31.640759343Z
+  modified_at: 2026-11-20T18:40:31.640759343Z
+  session_id: 01a1fa3f6aa2
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe
