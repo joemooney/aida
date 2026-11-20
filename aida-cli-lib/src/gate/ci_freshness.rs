@@ -136,3 +136,21 @@ pub(crate) fn behind_base_gate_on(
     });
     behind_base_refusal(pr_number, base_branch, staleness, override_stale_check)
 }
+
+/// Fetch `base_branch` and `ship_branch` from `origin` into their remote
+/// refs, for a gate decision that must judge them as they are now. The
+/// gate's one route to the command layer's fetch (promotion 23 review F3).
+// trace:STORY-2903 | ai:claude
+pub(crate) fn fetch_refs(
+    project_root: &std::path::Path,
+    base_branch: &str,
+    ship_branch: &str,
+) -> std::result::Result<(), String> {
+    crate::pr_cmd::fetch_ship_refs(project_root, base_branch, ship_branch)
+}
+
+/// The base branch change `pr` targets, as the ship flow resolves it.
+// trace:STORY-2903 | ai:claude
+pub(crate) fn target_branch(pr: u64) -> String {
+    crate::pr_cmd::pr_ship_target_branch(pr)
+}

@@ -44,8 +44,13 @@ mod train;
 #[path = "review_watch_train_service.rs"]
 pub(crate) mod train_service;
 
+#[path = "review_watch_pause.rs"]
+mod pause;
+
 #[derive(Args, Debug, Clone)]
 pub struct ReviewWatchArgs {
+    #[command(subcommand)]
+    control: Option<pause::Control>,
     /// Discover and dispatch once, then leave admitted reviews running.
     #[arg(long)]
     pub once: bool,
@@ -1646,6 +1651,10 @@ fn select_with_coverage(
     // Whether this head's staleness keeps it from review under the project's
     // `[review] stale_base` policy. trace:STORY-2821 | ai:claude
     let overlap = stale_refused(&store.root, change)?;
+    // The pause is a record read before, never a lock held inside, the
+    // admission transaction: it cannot block train reservations.
+    // trace:BUG-2650 | ai:claude
+    let paused = pause::current(store, chrono::Utc::now()).context(GlobalState)?;
     store.transaction(&key, |state| {
         // trace:STORY-2571 | ai:codex
         service::check_controller_locked(&store.root, &store.dir)?;
@@ -1781,6 +1790,10 @@ fn select_with_coverage(
         }
         if history.blocking() >= store.max_rounds { return Ok(Action::Skip(store.round_cap_reason())); }
         if total >= usize::from(max) { return Ok(Action::Skip(format!("global reviewer capacity ({max}) is held by {holders}; a running review frees its slot when it exits, and an ambiguous one (dispatcher lost) stays reserved until an operator confirms it ended: check its log in .aida/review-watch/logs/ and `aida session leases --all`"))); }
+        // Launch point: a pause skips only the new reservation; running
+        // reviews, notices and reconciliation above are unaffected.
+        // trace:BUG-2650 | ai:claude
+        if let Some(paused) = &paused { return Ok(Action::Skip(paused.to_string())); }
         // Exited->Failed setup conversions have a claimed dispatcher identity
         // and a diagnostic. Unclaimed cancellations retain diagnostics alone.
         // Preflight and spawn failures preserve the inherited review budget.
@@ -1960,22 +1973,39 @@ fn hold_cause(key: &str, attempt: &Attempt) -> String {
     )
 }
 
-// Local watcher coverage only; absence is unknown, never a zero forge backlog.
+// Count only reviews assigned to this exact local process, via the reviewer
+// receipt. Dispatcher/worker receipts and skipped changes carry no such assignment.
 // trace:BUG-2631 | ai:codex
-pub(crate) fn pending_verdict_count(root: &Path) -> Option<usize> {
+pub(crate) fn pending_verdict_count(
+    root: &Path,
+    seat: &crate::agent_registry::AgentRegistryEntry,
+) -> Option<usize> {
+    use crate::gate::review_verdict::{read_verdict_for_sha, VerdictKind};
+
+    let identity = seat.process_identity()?;
     let state = read_only_state(root)?;
+    if state.version != 1 {
+        return None;
+    }
     Some(
         state
             .entries
-            .values()
-            .filter(|entry| {
-                entry.skipped.is_some()
-                    || entry.attempts.last().is_some_and(|attempt| {
-                        matches!(
-                            attempt.phase,
-                            Phase::Reserved | Phase::Running | Phase::RemoteHeld
-                        )
-                    })
+            .iter()
+            .filter(|(key, entry)| {
+                let Some(attempt) = entry.attempts.last() else {
+                    return false;
+                };
+                attempt.phase == Phase::Running
+                    && attempt
+                        .reviewer
+                        .as_ref()
+                        .and_then(Identity::process_identity)
+                        .as_ref()
+                        == Some(&identity)
+                    && parse_key(key).is_ok()
+                    && valid_sha(&attempt.head)
+                    && read_verdict_for_sha(root, key, &attempt.head)
+                        .is_none_or(|verdict| verdict.kind == VerdictKind::Waiting)
             })
             .count(),
     )
@@ -2378,7 +2408,9 @@ fn child_with_program(
                     "head changed before review dispatch"
                 );
                 round.set(store.round_for(key, attempt)?);
-                Ok::<_, anyhow::Error>(())
+                // A pause recorded after admission still stops this launch.
+                // trace:BUG-2650 | ai:claude
+                pause::check_launch(&store)
             })();
             if let Err(error) = checked {
                 if let Err(cancel) = admission::transition(
@@ -2506,6 +2538,10 @@ fn execute_reservation(
             return Ok(());
         }
         retry_busy(|| store.transition(key, token, Phase::Failed))?;
+        if error.is::<pause::Paused>() {
+            eprintln!("{key}: {error}");
+            return Ok(());
+        }
         return Err(error);
     }
     if let Err(error) = work(&attempt) {
@@ -2780,6 +2816,18 @@ pub(crate) fn run_with_program(
 ) -> Result<Vec<Child>> {
     let root = forge::main_root(start)?;
     let repo = forge::Repository::load(&root)?;
+    if let Some(control) = &args.control {
+        anyhow::ensure!(
+            !args.once
+                && args.interval == 10
+                && args.max_concurrent.is_none()
+                && args.vendor.is_none()
+                && args.release.is_none()
+                && args.launch_reservation.is_none(),
+            "review-watch controls cannot be combined with watcher options"
+        );
+        return pause::run(&Store::open(&root, &repo.identity)?, control).map(|()| Vec::new());
+    }
     crate::gate::seat_authority::validate_child_delegation(&root, "reviewer")?;
     if let Some(reservation) = args.launch_reservation.as_deref() {
         let program = program

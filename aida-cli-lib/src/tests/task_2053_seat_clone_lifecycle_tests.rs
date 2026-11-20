@@ -417,6 +417,7 @@ fn task_2053_bwrap_destroy_salvages_then_removes_clone_target_and_pin() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = seat(&fx, "end", "c0ffee000003");
     let target = target_dir(&fx, &clone);
@@ -477,6 +478,7 @@ fn task_2053_bwrap_t7_planted_config_never_runs_on_the_host() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = seat(&fx, "t7", "c0ffee000004");
     let canaries = fx.root.join("canaries");
@@ -661,6 +663,7 @@ fn task_2053_bwrap_dismiss_removes_a_seat_clone_and_its_lease() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let id = "c0ffee000006";
     let clone = seat(&fx, "dismiss", id);
@@ -760,6 +763,7 @@ fn task_2053_bwrap_reap_keeps_a_clone_a_live_process_is_using() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = seat(&fx, "busy", "c0ffee000012");
     let head = known(probe(&fx.main, &clone)).head.unwrap();
@@ -1106,6 +1110,7 @@ fn task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let upstream = submodule_upstream(&fx);
     let id = "c0ffee000028";
@@ -1501,6 +1506,7 @@ fn task_2053_bwrap_session_end_and_dismiss_run_no_host_git_and_never_follow_a_cl
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let id = "c0ffee000031";
     let ended = seat(&fx, "end-shim", id);
@@ -1671,6 +1677,7 @@ fn task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = seat(&fx, "reap", "c0ffee000024");
     let lease = || {
@@ -1736,6 +1743,7 @@ fn bug_2224_bwrap_inherited_refs_end_cleanly_but_seat_only_work_refuses() {
     if !bwrap_live() {
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     git_ok(&fx.main, &["checkout", "-q", "-b", "wip/local"]);
     std::fs::write(fx.main.join("local.txt"), "main only\n").unwrap();
@@ -2153,6 +2161,9 @@ fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin(
     if !bwrap_live() {
         return;
     }
+    // Supply writer admission for the fixture mailbox independently of host processes.
+    // trace:TASK-3133 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let id = "c0ffee000051";
     let clone = ancestor_of_origin_seat(&fx, "bug051a", id);
@@ -2303,6 +2314,7 @@ fn bug_b6b_049_bwrap_destroy_drops_the_clone_trust_entry_only_when_on() {
         return;
     }
     use crate::claude_trust::{ensure_seat_trusted_in, TrustWrite, ENV_OVERRIDE};
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let home = crate::home_dir().expect("hermetic test home");
     let read_projects = || -> serde_json::Value {
@@ -2901,6 +2913,7 @@ fn bug_2491_pushed_slice_tags_are_not_unpushed_work() {
         return;
     }
     assert!(bwrap_live(), "requires live sandbox coverage");
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = seat(&fx, "slice-tags", "b2491c0ffee1");
     seat_commit(&clone, "published.txt");
@@ -3037,6 +3050,7 @@ fn bug_2491_published_checkpoints_need_no_salvage() {
         return;
     }
     assert!(bwrap_live(), "requires live sandbox coverage");
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = seat(&fx, "published-checkpoints", "b2491c0ffee3");
     seat_commit(&clone, "published.txt");

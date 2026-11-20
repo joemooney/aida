@@ -322,6 +322,7 @@ mod tests {
             &repo,
             &store,
             &ReviewWatchArgs {
+                control: None,
                 once: true,
                 interval: 10,
                 max_concurrent: Some(2),
@@ -1083,6 +1084,7 @@ mod tests {
         let repo = forge::Repository::load(root).unwrap();
         let store = Store::open(root, &repo.identity).unwrap();
         let args = ReviewWatchArgs {
+            control: None,
             once: true,
             interval: 10,
             max_concurrent: Some(2),

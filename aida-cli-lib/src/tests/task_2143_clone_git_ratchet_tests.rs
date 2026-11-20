@@ -30,7 +30,8 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-mcp/src/mcp.rs", 1),
     ("aida-cli-lib/src/orchestrator_leases.rs", 5),
     ("aida-cli-lib/src/phase_driver.rs", 1),
-    ("aida-cli-lib/src/pr_cmd.rs", 47),
+    ("aida-cli-lib/src/pr_cmd.rs", 44),
+    ("aida-cli-lib/src/pr_service.rs", 3),
     ("aida-cli-lib/src/queue_cmd/done.rs", 1),
     ("aida-cli-lib/src/queue_cmd/recover.rs", 2),
     ("aida-cli-lib/src/queue_cmd/work.rs", 1),
@@ -62,6 +63,7 @@ const ALWAYS_SCANNED: &[&str] = &[
     "aida-cli-lib/src/ship.rs",
     "aida-cli-lib/src/doctor_cmd.rs",
     "aida-cli-lib/src/review_git_evidence.rs",
+    "aida-cli-lib/src/pr_service.rs",
 ];
 
 // Split queue and doctor modules retain their original file scan boundaries.

@@ -2892,6 +2892,32 @@ fn t1458_fixture() -> (
     let older = git(&root, &["rev-parse", "HEAD"]);
     write_commit(&root, "a.txt", "b", "head");
     let head = git(&root, &["rev-parse", "HEAD"]);
+    // The merge boundary refreshes the base and the default branch before
+    // the merge (STORY-2903), so the origin URL resolves to a local bare
+    // clone. trace:STORY-2903 | ai:claude
+    let served = tmp.path().join("served.git");
+    git(
+        tmp.path(),
+        &["clone", "-q", "--bare", "repo", served.to_str().unwrap()],
+    );
+    // `insteadOf` rewrites the remote URL the forge is detected from, so
+    // the forge is named in config, as in the ship fixtures.
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let config = root.join(".aida/config.toml");
+    let existing = std::fs::read_to_string(&config).unwrap_or_default();
+    std::fs::write(
+        &config,
+        format!("[forge]\nprovider = \"github\"\n{existing}"),
+    )
+    .unwrap();
+    git(
+        &root,
+        &[
+            "config",
+            &format!("url.{}.insteadOf", served.display()),
+            "https://github.com/acme/repo.git",
+        ],
+    );
     let bin = tmp.path().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
     let calls = tmp.path().join("gh-calls");
@@ -3510,4 +3536,65 @@ fn story_2326_auto_punt_uses_phase_driver_control_fixture() {
     );
     driver.aida_exe = root.join("missing-control");
     assert!(driver.auto_punt_text_question(root, "session").is_none());
+}
+
+/// STORY-2903 round 2 (finding 1): a review-gated drain on a hosted forge
+/// skips the CI wait yet still binds the review to the PR's exact head, so
+/// the real driver passes from its CI phase into the review entry checks
+/// (which refused this state before), marked as a CI skip.
+// trace:STORY-2903 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_review_gated_drain_skips_ci_and_still_enters_review_at_the_exact_head() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, gh, _calls, head, _) = t1458_fixture();
+    // The default branch's policy: review-gated.
+    let config = root.join(".aida/config.toml");
+    let existing = std::fs::read_to_string(&config).unwrap_or_default();
+    std::fs::write(
+        &config,
+        format!("{existing}[landing]\nmode = \"review-gated\"\n"),
+    )
+    .unwrap();
+    git(&root, &["add", ".aida/config.toml"]);
+    git(&root, &["commit", "-q", "-m", "review-gated"]);
+    let inherited = aida_core::exec_context::Environment::capture()
+        .get("PATH")
+        .map(|p| p.to_os_string())
+        .unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(gh.parent().unwrap().to_path_buf())
+            .chain(std::env::split_paths(&inherited)),
+    )
+    .unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "implementer",
+        &[],
+        &[
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+            ("PATH", Some(path.to_str().unwrap())),
+        ],
+    );
+    let mut d = driver(&root, "TASK-1458");
+    d.phase_done_pr = Some(77);
+    d.phase_done_head = Some(head.clone());
+    d.branch = Some("task-1458".into());
+    d.finish_ci()
+        .expect("the CI phase passes without waiting for CI");
+    assert_eq!(
+        d.ci_skipped,
+        Some(crate::phase_driver_trait::CI_SKIPPED_REVIEW_GATED)
+    );
+    assert_eq!(d.ci_terminal_sha.as_deref(), Some(head.as_str()));
+    assert!(
+        d.landing_entry
+            .as_ref()
+            .is_some_and(|e| !e.policy.waits_for_ci()),
+        "the merge will run under the snapshot that skipped CI"
+    );
+    d.verify_ci_for_review()
+        .expect("the review entry check passes at the bound head");
 }

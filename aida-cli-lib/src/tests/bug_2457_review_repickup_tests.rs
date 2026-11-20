@@ -235,6 +235,152 @@ fn bug_2457_two_heads_through_queue_pickup_preserve_holds_and_refuse_unsafe_tree
     assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), second_head);
     assert!(crate::gate::merge_hold_core::read_hold(&fx.main, 2457).is_some());
     assert!(!markers.join("PR-2457").exists());
+
+    // A finished default review with no verdict still tears down. Collect the
+    // legacy marker before removal and verify the branch went with the tree.
+    // trace:BUG-2684 | ai:codex
+    let marker = markers.join("PR-2457");
+    std::fs::create_dir_all(&markers).unwrap();
+    std::fs::write(&marker, "hold from finished review\n").unwrap();
+    assert!(crate::queue_cmd::end_finished_review(
+        &fx.main,
+        "PR-2457",
+        &tree,
+        "another-review",
+        false,
+    )
+    .is_empty());
+    assert!(tree.exists());
+    let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, &lease.id, false);
+    assert!(ended[0].1.is_ok(), "{ended:?}");
+    assert!(!tree.exists());
+    assert!(!crate::lease_path(&fx.main, &lease.id).exists());
+    assert!(!git_ok(&fx.main, &["branch", "--list", "pr-2457"]).contains("pr-2457"));
+    assert_eq!(
+        crate::gate::merge_hold_core::read_hold_record(&fx.main, 2457)
+            .unwrap()
+            .detail,
+        "hold from finished review"
+    );
+
+    // A former standard placement can remain registered after placement
+    // changes. Reclaim it at the real queue entry, even without a lease.
+    let legacy_parent = crate::dispatch::worktrees_root(&fx.main);
+    std::fs::create_dir_all(&legacy_parent).unwrap();
+    let legacy = legacy_parent.join(tree.file_name().unwrap());
+    assert_ne!(legacy, tree);
+    git_ok(
+        &fx.main,
+        &[
+            "worktree",
+            "add",
+            "-qb",
+            "pr-2457",
+            legacy.to_str().unwrap(),
+            &second_head,
+        ],
+    );
+    status(aida_core::RequirementStatus::Approved);
+    std::fs::write(legacy.join("local-review-fix"), "keep this commit").unwrap();
+    git_ok(&legacy, &["add", "local-review-fix"]);
+    git_ok(&legacy, &["commit", "-qm", "local reviewer fix"]);
+    let error = queue_work(&storage).unwrap_err().to_string();
+    assert!(error.contains("unpublished commits"), "{error}");
+    assert!(legacy.join("local-review-fix").exists());
+    git_ok(&legacy, &["reset", "--hard", &second_head]);
+    queue_work(&storage).unwrap();
+    assert!(!legacy.exists());
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), second_head);
+}
+
+/// A reviewer wrote its complete draft, but the parent failed to record it.
+/// The gitignored draft is the only copy of the findings, so neither exit
+/// teardown nor next-head pickup may remove the checkout until it is
+/// recorded; once consumed, the ordinary retirement proceeds.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_unrecorded_reviewer_draft_survives_exit_teardown_and_next_pickup() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+    let gh = fx.root.join("fake-gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let store = fx.main.join(".aida-store");
+    git_ok(&store, &["config", "user.email", "test@example.com"]);
+    git_ok(&store, &["config", "user.name", "AIDA Test"]);
+    let (storage, status) = review_story(&fx.main);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    queue_work(&storage).unwrap();
+    let lease = crate::list_leases(&fx.main).remove(0);
+    let tree = lease.worktree_path.clone();
+    let head = git_ok(&tree, &["rev-parse", "HEAD"]);
+
+    // The launch's real handoff, written in full by the reviewer.
+    let launch = crate::review_draft::LaunchDraft::prepare(&tree, 2457, head.clone()).unwrap();
+    let body = serde_json::json!({
+        "version": 1,
+        "pr": 2457,
+        "reviewed_sha": head,
+        "verdict": "request-changes",
+        "summary": "complete summary of the review",
+        "findings": ["[P1] first complete finding", "[P2] second complete finding"],
+    })
+    .to_string();
+    std::fs::write(launch.path(), &body).unwrap();
+    assert!(launch.read().is_ok());
+    assert_eq!(git_ok(&tree, &["status", "--porcelain"]), "");
+
+    // Exit with a failed collection: the tree, lease and draft are kept,
+    // and the outcome names the draft for recovery.
+    let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, &lease.id, false);
+    let why = ended[0].1.as_ref().unwrap_err();
+    assert!(why.contains("unrecorded reviewer draft"), "{why}");
+    assert!(why.contains(&launch.path().display().to_string()), "{why}");
+    assert_eq!(std::fs::read_to_string(launch.path()).unwrap(), body);
+    // Any later reap attempt of this lease refuses the same way.
+    let reaped = crate::session_reap::reap_finished_review(&fx.main, &lease);
+    assert!(reaped.unwrap_err().contains("unrecorded reviewer draft"));
+    assert_eq!(std::fs::read_to_string(launch.path()).unwrap(), body);
+    // The launcher has exited: its pinned draft directory is closed.
+    let draft = launch.path().to_path_buf();
+    drop(launch);
+    // Its lease is released later, leaving a clean, unleased, process-free
+    // checkout: exactly what next-head pickup would otherwise reclaim.
+    std::fs::remove_file(crate::lease_path(&fx.main, &lease.id)).unwrap();
+
+    // Next-head pickup cannot discard the retained handoff either.
+    std::fs::write(fx.main.join("README.md"), "second head\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "second head"]);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    status(aida_core::RequirementStatus::Approved);
+    let error = queue_work(&storage).unwrap_err().to_string();
+    assert!(error.contains("unrecorded reviewer draft"), "{error}");
+    assert_eq!(std::fs::read_to_string(&draft).unwrap(), body);
+    assert_eq!(
+        crate::review_draft::unconsumed_drafts(&tree).unwrap(),
+        vec![draft.clone()]
+    );
+
+    // Once the draft is recorded (consumed), retirement proceeds.
+    // (the same rename `LaunchDraft::consumed` performs)
+    std::fs::rename(&draft, draft.with_file_name("recorded.json")).unwrap();
+    assert!(crate::review_draft::unconsumed_drafts(&tree)
+        .unwrap()
+        .is_empty());
+    queue_work(&storage).unwrap();
+    assert!(crate::review_draft::unconsumed_drafts(&tree)
+        .unwrap()
+        .is_empty());
+    assert!(!tree.join(".aida/review-verdicts").exists());
 }
 
 // trace:BUG-2469 | ai:codex
@@ -509,7 +655,10 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
     // Observed production state: clean, pushed, witness-less, no verdict.
     // The real supervisor exit path must still record completion.
     // trace:BUG-2498 | ai:codex
-    crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, false);
+    std::fs::write(tree.join("pending"), "keep incomplete review notes").unwrap();
+    let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, &lease.id, false);
+    assert!(ended[0].1.is_err());
+    std::fs::remove_file(tree.join("pending")).unwrap();
     assert!(crate::ownership::reader::review_lease_ended(
         &fx.main, &lease
     ));
@@ -539,7 +688,7 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
         .unwrap();
     assert_eq!(after.generation, before.generation);
     std::fs::write(tree.join("pending"), "keep completed review notes").unwrap();
-    let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
+    let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, &lease.id, true);
     assert!(ended[0].1.is_err());
     assert!(crate::ownership::reader::review_lease_ended(
         &fx.main, &lease
@@ -571,7 +720,8 @@ fn bug_2469_dead_review_reclaimed_only_when_new_head_covers_recorded_and_actual_
         || queue_work(&storage),
         || {
             // Use the real supervisor completion path, not dual::lease_released.
-            let ended = crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, true);
+            let ended =
+                crate::queue_cmd::end_finished_review(&fx.main, "PR-2457", &tree, &lease.id, true);
             assert!(ended[0].1.is_err()); // dirty work is still retained
             assert!(lease_file.exists());
             assert!(crate::ownership::reader::review_lease_ended(

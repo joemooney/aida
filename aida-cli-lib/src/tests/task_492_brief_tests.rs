@@ -878,7 +878,8 @@ fn setup_block_reuses_existing_branch_with_commits_ahead() {
 #[test]
 fn setup_block_fresh_branch_matches_work_convention() {
     let temp = tempfile::tempdir().unwrap();
-    let root = temp.path();
+    let root = &temp.path().join("project");
+    std::fs::create_dir(root).unwrap();
     brief_init_repo(root);
 
     let store = store_with_related();
@@ -892,6 +893,20 @@ fn setup_block_fresh_branch_matches_work_convention() {
             && setup_block.contains("-b task-492-work origin/main"),
         "fresh Setup block must use the <spec>-work naming convention, got:\n{setup_block}"
     );
+
+    // trace:BUG-2211 | ai:codex
+    brief_git(root, &["remote", "add", "origin", "."]);
+    brief_git(root, &["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    brief_git(root, &["config", "branch.autoSetupMerge", "always"]);
+    let add = setup_block
+        .lines()
+        .find(|line| line.starts_with("git worktree add "))
+        .unwrap();
+    let config_path = root.join(".git/config");
+    let before = std::fs::read(&config_path).unwrap();
+    let args: Vec<_> = add.split_whitespace().skip(1).collect();
+    brief_git(root, &args);
+    assert_eq!(std::fs::read(config_path).unwrap(), before);
 }
 
 #[test]

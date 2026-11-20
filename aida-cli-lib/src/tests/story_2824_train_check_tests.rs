@@ -78,7 +78,7 @@ fn each_refusal_names_the_gate_that_stopped_it() {
         ("approval", "no approval is recorded", |c| c.pin = None),
         ("approval", "pinned to", |c| c.pin = Some("c".repeat(40))),
         ("spec-policy", "never auto-merges a supervised spec", |c| {
-            c.records = vec![("TASK-9".into(), Vec::new(), None)]
+            c.records = vec![("TASK-9".into(), Vec::new(), None.into())]
         }),
     ];
     for (gate, reason, setup) in cases {
@@ -200,20 +200,18 @@ fn every_gate_has_a_name_and_a_remedy() {
 // once however often it is named.
 #[test]
 fn the_time_budget_stops_new_checks_and_reports_the_rest_unchecked() {
-    let mut polls = 0;
+    let checks_started = std::cell::Cell::new(0);
     let mut gated = Vec::new();
     let rows = check_all(
         &[5, 3, 5, 9, 2],
-        || {
-            polls += 1;
-            polls > 2
-        },
+        || checks_started.get() >= 3,
         |pr| {
             gated.push(pr);
+            checks_started.set(checks_started.get() + 1);
             eligible(pr)
         },
     );
-    assert_eq!(gated, vec![5, 3]);
+    assert_eq!(gated, vec![5, 3, 9]);
     assert_eq!(
         rows.iter().map(|r| r.pr).collect::<Vec<_>>(),
         vec![5, 3, 9, 2]
@@ -232,7 +230,7 @@ fn the_report_is_one_line_per_pr_and_json_says_whether_all_are_eligible() {
     let mut c = FakeChecks::new();
     c.pin = None;
     let rows = vec![eligible(40), checked(&mut c)];
-    let text = render_text("main", &rows);
+    let text = render_text(Some("main"), &rows);
     let lines: Vec<&str> = text.lines().collect();
     assert_eq!(lines.len(), 4, "{text}");
     assert!(lines[1].starts_with("  #40  yes  head aaaaaaa"), "{text}");
@@ -242,7 +240,7 @@ fn the_report_is_one_line_per_pr_and_json_says_whether_all_are_eligible() {
     );
     assert_eq!(lines[3], "1 of 2 eligible");
 
-    let json = render_json("main", &rows);
+    let json = render_json(Some("main"), &rows);
     assert_eq!(json["eligible"], false);
     assert_eq!(json["base"], "main");
     assert_eq!(json["prs"][0]["pr"], 40);
@@ -255,8 +253,8 @@ fn the_report_is_one_line_per_pr_and_json_says_whether_all_are_eligible() {
         .as_str()
         .unwrap()
         .contains("aida pr review 41"));
-    assert_eq!(render_json("main", &rows[..1])["eligible"], true);
-    assert_eq!(render_json("main", &[])["eligible"], true);
+    assert_eq!(render_json(Some("main"), &rows[..1])["eligible"], true);
+    assert_eq!(render_json(Some("main"), &[])["eligible"], true);
 }
 
 #[test]
@@ -450,4 +448,727 @@ fn check_dispatch_carries_full_ci_override_without_writes() {
         c.full_tier = Some(crate::full_tier::FullTier::Missing);
         assert!(!checked(&mut c).eligible, "override leaked past dispatch");
     }
+}
+
+// trace:TASK-3792 | ai:codex
+// trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3792_train_check_bounds_discovery_and_member_subprocesses() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::pr_train::check::{collect_report, CheckOptions};
+    use std::time::{Duration, Instant};
+
+    let root = repo();
+    let r = root.path();
+    git(
+        r,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/project.git",
+        ],
+    );
+    // Every stall records the pid of a descendant holding the pipes in
+    // `child-<stall>`: `hold` keeps the leader waiting on it, `orphan` exits
+    // the leader at once and leaves it behind.
+    crate::test_exec::write_executable(
+        &r.join("git"),
+        &r#"#!/bin/sh
+S='@S@'
+# aida-core bounds its stored-URL read with its own deadline transport,
+# which the `config` stall below proves; every other spawn is marked.
+case "$*" in
+  *'config --get-regexp ^remote'*) ;;
+  *) [ -n "$@G@" ] || echo "git $*" >> "$S/unbounded" ;;
+esac
+stall=$(cat "$S/stall")
+hold() { sleep 20 & echo "$!" > "$S/child-$stall"; wait; }
+orphan() { sleep 20 & echo "$!" > "$S/child-$stall"; }
+case "$*" in
+  *'worktree list --porcelain'*)
+    if [ "$stall" = worktree ]; then hold; fi
+    exec /usr/bin/git "$@" ;;
+  *'remote get-url origin'*)
+    if [ "$stall" = origin ]; then hold; fi
+    exec /usr/bin/git "$@" ;;
+  *'config --get-regexp ^remote'*)
+    if [ "$stall" = config ]; then hold; fi
+    exec /usr/bin/git "$@" ;;
+  *'ls-remote --symref origin HEAD'*)
+    echo "$stall" >> "$S/ls-remote"
+    if [ "$stall" = base ]; then hold; fi
+    if [ "$stall" = orphan ]; then orphan; fi
+    if [ "$stall" = shared ]; then sleep 0.65; fi
+    printf 'ref: refs/heads/main\tHEAD\n'
+    ;;
+  *'fetch --quiet --no-tags origin'*)
+    if [ "$stall" = fetch ]; then
+      echo fetch > "$S/entered"
+      hold
+    fi
+    exit 1 ;;
+  *'fetch --no-tags --no-write-fetch-head'*)
+    if [ "$stall" = confirm ]; then
+      echo confirm > "$S/confirm-entered"
+      hold
+    fi
+    exit 1 ;;
+  *) exec /usr/bin/git "$@" ;;
+esac
+"#
+        .replace("@S@", &r.display().to_string())
+        .replace(
+            "@G@",
+            crate::bounded_process::test_hooks::SCOPED_DEADLINE_SPAWN_ENV,
+        ),
+    );
+    crate::test_exec::write_executable(
+        &r.join("gh"),
+        &r#"#!/bin/sh
+[ -n "$@G@" ] || echo "gh $*" >> '@S@/unbounded'
+case "$*" in
+  --version) echo fixture ;;
+  *'number,headRefName,body'*)
+    case "$(cat stall)" in
+      trains|known-open) exec sleep 20 ;;
+      shared) sleep 0.65 ;;
+    esac
+    echo '[]'
+    ;;
+  *'--limit 1000'*)
+    if [ "$(cat stall)" = known-open ]; then
+      echo '[{"number":41,"headRefName":"fixture","baseRefName":"main","state":"OPEN"}]'
+    else
+      exec sleep 20
+    fi
+    ;;
+  *'view 50 '*'isCrossRepository,headRepository,isDraft'*)
+    echo '{"state":"CLOSED","title":"Train","author":{"login":"fixture"},"mergedAt":null,"baseRefName":"main","headRefName":"train","headRefOid":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","isCrossRepository":false,"headRepository":{"name":"project"},"isDraft":false}'
+    ;;
+  *'isCrossRepository,headRepository,isDraft'*)
+    if [ "$(cat stall)" = member ]; then exec sleep 20; fi
+    echo '{"state":"OPEN","title":"Fixture","author":{"login":"fixture"},"mergedAt":null,"baseRefName":"main","headRefName":"fixture","headRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","isCrossRepository":false,"headRepository":{"name":"project"},"isDraft":false}'
+    ;;
+  *'url,state,headRefOid,labels'*)
+    if [ "$(cat stall)" = labels ]; then exec sleep 20; fi
+    echo '{"url":"https://github.com/example/project/pull/41","state":"OPEN","headRefOid":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","labels":[]}'
+    ;;
+  *) exit 1 ;;
+esac
+"#
+        .replace("@S@", &r.display().to_string())
+        .replace("@G@", crate::bounded_process::test_hooks::SCOPED_DEADLINE_SPAWN_ENV),
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(r);
+    let unmarked = std::cell::RefCell::new(Vec::<String>::new());
+    let run = |stall: &str, all_open, timeout| {
+        std::fs::write(r.join("stall"), stall).unwrap();
+        let opts = CheckOptions {
+            prs: if all_open { &[] } else { &[41, 42, 41] },
+            all_open,
+            skip_full_check: false,
+            json: true,
+            timeout,
+        };
+        let _ = std::fs::remove_file(r.join("unbounded"));
+        let started = Instant::now();
+        let result = collect_report(&opts, || {
+            assert!(!timeout.is_zero(), "zero budget attempted discovery");
+            Ok((r.to_owned(), crate::main_worktree_root_from(r)))
+        });
+        assert!(started.elapsed() < Duration::from_secs(5), "{stall}");
+        // Guard: under the check's deadline no git or gh ran without it.
+        let unbounded = std::fs::read_to_string(r.join("unbounded")).unwrap_or_default();
+        for line in unbounded.lines() {
+            unmarked.borrow_mut().push(format!("{stall}: {line}"));
+        }
+        result
+    };
+    let stopped = |stall: &str| {
+        let child = std::fs::read_to_string(r.join(format!("child-{stall}")))
+            .unwrap_or_else(|_| panic!("{stall}: the stalled subprocess never ran"));
+        let proc_stat = format!("/proc/{}/stat", child.trim());
+        let gone = || {
+            std::fs::read_to_string(&proc_stat)
+                .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
+                .unwrap_or(true)
+        };
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !gone() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        gone()
+    };
+    let all_unchecked = |stall: &str, rows: &[Row]| {
+        assert_eq!(rows.iter().map(|row| row.pr).collect::<Vec<_>>(), [41, 42]);
+        assert!(
+            rows.iter()
+                .all(|row| !row.eligible && row.evidence == Evidence::NotChecked),
+            "{stall}: {rows:?}"
+        );
+    };
+    for (stall, timeout, expected_base) in [
+        ("base", Duration::ZERO, None),
+        ("base", Duration::from_secs(1), None),
+        // The leader prints the answer and exits; its child keeps the pipes.
+        ("orphan", Duration::from_secs(1), None),
+        ("worktree", Duration::from_secs(1), None),
+        ("origin", Duration::from_secs(1), None),
+        ("config", Duration::from_secs(1), None),
+        ("trains", Duration::from_secs(1), Some("main")),
+        ("shared", Duration::from_secs(1), Some("main")),
+        ("member", Duration::from_secs(1), Some("main")),
+        ("labels", Duration::from_secs(1), Some("main")),
+        ("fetch", Duration::from_secs(1), Some("main")),
+    ] {
+        let (base, rows) = run(stall, false, timeout).unwrap();
+        assert_eq!(base.as_deref(), expected_base, "{stall}");
+        all_unchecked(stall, &rows);
+        if timeout.is_zero() {
+            assert!(!r.join("child-base").exists());
+            let json = render_json(base.as_deref(), &rows);
+            assert!(json["base"].is_null());
+            assert_eq!(json["eligible"], false);
+            assert_eq!(json["prs"][0]["evidence"], "not-checked");
+        } else if !matches!(stall, "trains" | "shared" | "member" | "labels") {
+            assert!(
+                stopped(stall),
+                "{stall}: timed-out descendant still running"
+            );
+        }
+    }
+    assert_eq!(
+        std::fs::read_to_string(r.join("entered")).unwrap().trim(),
+        "fetch"
+    );
+    // An unread credential config is unknown: the remote command it was
+    // preparing never ran.
+    let ls_remote = std::fs::read_to_string(r.join("ls-remote")).unwrap();
+    assert!(!ls_remote.lines().any(|l| l == "config"), "{ls_remote}");
+    let (base, rows) = run("known-open", true, Duration::from_secs(1)).unwrap();
+    assert_eq!(base.as_deref(), Some("main"));
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].pr, 41);
+    assert_eq!(rows[0].evidence, Evidence::NotChecked);
+    let err = run("all-open", true, Duration::from_secs(1)).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("before open PR discovery completed"),
+        "{err:#}"
+    );
+
+    // PR 41 rides train #50, which the forge reports CLOSED: confirming that
+    // fetches the base independently, and that fetch shares the budget.
+    crate::ownership::dual::enable_for_test();
+    crate::ownership::dual::train_opened(r, 50, &[41]);
+    assert!(matches!(
+        crate::ownership::reader::load(
+            r,
+            &crate::ownership::WorkKey::Change {
+                change: crate::ownership::dual::change(41),
+            }
+        )
+        .unwrap()
+        .unwrap()
+        .phase,
+        crate::ownership::Phase::Training { .. }
+    ));
+    let (base, rows) = run("confirm", false, Duration::from_secs(1)).unwrap();
+    assert_eq!(base.as_deref(), Some("main"));
+    all_unchecked("confirm", &rows);
+    assert_eq!(
+        std::fs::read_to_string(r.join("confirm-entered"))
+            .unwrap()
+            .trim(),
+        "confirm"
+    );
+    assert!(stopped("confirm"), "confirmation fetch still running");
+    let unmarked = unmarked.into_inner();
+    assert!(
+        unmarked.is_empty(),
+        "spawned without the check's deadline:\n{}",
+        unmarked.join("\n")
+    );
+}
+
+// The approval-timestamp fetch for a reviewed commit missing locally shares
+// the scoped deadline: a stalled fetch (leader waiting, or leader gone with a
+// child holding its pipes) is killed with its descendants, and the unknown
+// timestamp grants no authority. A fetch that finishes supplies the date.
+// trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3792_approval_timestamp_fetch_is_bounded_and_fails_closed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    use crate::gate::ship::{approval_authority_refusal, ApprovalAuthorityRefusal};
+    use std::time::{Duration, Instant};
+
+    // The reviewed commit exists only on origin.
+    let origin = repo();
+    write(origin.path(), "reviewed.txt", "reviewed\n");
+    git(origin.path(), &["checkout", "--quiet", "-b", "reviewed"]);
+    let reviewed = commit(origin.path(), "reviewed work");
+    git(origin.path(), &["checkout", "--quiet", "main"]);
+    git(
+        origin.path(),
+        &["config", "uploadpack.allowAnySHA1InWant", "true"],
+    );
+    let root = repo();
+    let r = root.path();
+    let url = format!("file://{}", origin.path().display());
+    git(r, &["remote", "add", "origin", &url]);
+    assert!(crate::pr_cmd::commit_committed_at(r, &reviewed).is_none());
+
+    let bin = tempfile::tempdir().unwrap();
+    crate::test_exec::write_executable(
+        &bin.path().join("git"),
+        &r#"#!/bin/sh
+S='@S@'
+stall=$(cat "$S/stall")
+case "$*" in
+  *'fetch --quiet --no-tags origin'*)
+    echo "$stall" >> "$S/fetches"
+    case "$stall" in
+      hold) sleep 20 & echo "$!" > "$S/child-$stall"; wait ;;
+      orphan) sleep 20 & echo "$!" > "$S/child-$stall"; exit 0 ;;
+    esac
+    exec /usr/bin/git "$@" ;;
+  *) exec /usr/bin/git "$@" ;;
+esac
+"#
+        .replace("@S@", &bin.path().display().to_string()),
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(bin.path());
+
+    let approval = RecordedVerdict {
+        kind: VerdictKind::Approved,
+        raw: "approved".into(),
+        reviewed_sha: Some(reviewed.clone()),
+        // Recorded long after the commit, so a known date admits it.
+        recorded_at: Some((chrono::Utc::now() + chrono::Duration::seconds(5)).to_rfc3339()),
+        recorded_by: Some("aida review record (operator)".into()),
+        attestation: Some(RecorderAttestation {
+            sha: reviewed.clone(),
+            human_at_tty: true,
+            receipt_id: Some("rcpt-1".into()),
+            identity: vec!["session:independent-reviewer".into()],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let v = [approval];
+    let decide = |stall: &str| {
+        std::fs::write(bin.path().join("stall"), stall).unwrap();
+        let started = Instant::now();
+        let read = crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(1), || {
+            crate::gate::approval::ship_approval_policy(r, &[], None, &v)
+        });
+        assert!(started.elapsed() < Duration::from_secs(4), "{stall}");
+        // Isolate the timestamp: vouch for the attestation as its store would.
+        let mut policy = read.clone();
+        let a = v[0].attestation.as_ref().unwrap();
+        let key = a.authority_key(v[0].recorded_at.as_deref()).unwrap();
+        policy.verified_authority.insert(key, a.identity.clone());
+        (
+            read.reviewed_committed_at,
+            approval_authority_refusal(&v, &policy),
+        )
+    };
+    let stopped = |stall: &str| {
+        let child = std::fs::read_to_string(bin.path().join(format!("child-{stall}"))).unwrap();
+        let proc_stat = format!("/proc/{}/stat", child.trim());
+        let gone = || {
+            std::fs::read_to_string(&proc_stat)
+                .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
+                .unwrap_or(true)
+        };
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !gone() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        gone()
+    };
+    for stall in ["hold", "orphan"] {
+        let (at, refusal) = decide(stall);
+        assert_eq!(at, None, "{stall}: a timed-out fetch supplied a date");
+        assert!(
+            matches!(
+                &refusal,
+                Some(ApprovalAuthorityRefusal::Unattested { reason, .. })
+                    if reason.contains("date could not be read")
+            ),
+            "{stall}: {refusal:?}"
+        );
+        assert!(stopped(stall), "{stall}: fetch descendant still running");
+        assert!(crate::pr_cmd::commit_committed_at(r, &reviewed).is_none());
+    }
+    // Control: the same fetch, finishing, supplies the date and admits it.
+    let (at, refusal) = decide("none");
+    assert_eq!(
+        at,
+        crate::pr_cmd::commit_committed_at(origin.path(), &reviewed)
+    );
+    assert!(at.is_some());
+    assert_eq!(refusal, None);
+    assert_eq!(
+        std::fs::read_to_string(bin.path().join("fetches")).unwrap(),
+        "hold\norphan\nnone\n"
+    );
+}
+
+/// True once the pid recorded in `file` is gone or a zombie, waiting up to 2s.
+#[cfg(target_os = "linux")]
+fn task_3792_recorded_child_stopped(file: &std::path::Path) -> bool {
+    use std::time::{Duration, Instant};
+    let child = std::fs::read_to_string(file)
+        .unwrap_or_else(|_| panic!("{}: the stalled subprocess never ran", file.display()));
+    let proc_stat = format!("/proc/{}/stat", child.trim());
+    let gone = || {
+        std::fs::read_to_string(&proc_stat)
+            .map(|stat| stat.rsplit_once(") ").unwrap().1.starts_with('Z'))
+            .unwrap_or(true)
+    };
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !gone() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    gone()
+}
+
+// The member gate's full-ci step reads commit checks through `gh api`, whose
+// own per-request ceiling is 30s. Under the check's deadline a stalled read
+// is killed with its descendants at the deadline, and once the deadline has
+// passed no request is spawned at all.
+// trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3792_full_ci_commit_reader_shares_the_deadline() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::pr_train::{LiveChecks, MemberChecks};
+    use std::time::{Duration, Instant};
+
+    let root = repo();
+    let r = root.path();
+    let bin = tempfile::tempdir().unwrap();
+    let s = bin.path();
+    crate::test_exec::write_executable(
+        &s.join("gh"),
+        &r#"#!/bin/sh
+S='@S@'
+case "$*" in
+  --version) echo fixture ;;
+  api*)
+    echo api >> "$S/api"
+    sleep 20 & echo "$!" > "$S/child-api"; wait ;;
+  *) exit 1 ;;
+esac
+"#
+        .replace("@S@", &s.display().to_string()),
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(s);
+    let forge = crate::forge::forge_for_kind(r, crate::forge::ForgeKind::GitHub);
+    let mut checks = LiveChecks {
+        project_root: r,
+        main_worktree: r,
+        forge: forge.as_ref(),
+        base: "main",
+        named: true,
+        read_only: true,
+        actor_probe: None,
+        request_full: false,
+        released_member: None,
+    };
+    let head = "a".repeat(40);
+    let started = Instant::now();
+    let tier = crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(1), || {
+        checks.full_tier(&head)
+    });
+    assert!(tier.is_err(), "a stalled CI read judged the tier: {tier:?}");
+    assert!(
+        started.elapsed() < Duration::from_secs(4),
+        "the CI read outlived the deadline: {:?}",
+        started.elapsed()
+    );
+    assert!(
+        task_3792_recorded_child_stopped(&s.join("child-api")),
+        "the stalled CI read's descendant is still running"
+    );
+    // An expired deadline spawns no further request.
+    let tier =
+        crate::forge_lookup::with_forge_lookup_deadline(Duration::ZERO, || checks.full_tier(&head));
+    assert!(tier.is_err(), "{tier:?}");
+    assert_eq!(std::fs::read_to_string(s.join("api")).unwrap(), "api\n");
+}
+
+// The approval gate's local reads — the reviewed commit's date (`git log`),
+// carry-over merge-base and patch-id, and the ancestry probe — have no
+// deadline of their own; under the check's deadline a stalled one is killed
+// with its descendants and reads as unavailable evidence. With no stall the
+// same reads answer.
+// trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3792_approval_local_git_reads_share_the_deadline() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::gate::review_carryover::{patch_id, single_merge_base};
+    use std::time::{Duration, Instant};
+
+    let root = repo();
+    let r = root.path();
+    let base = git(r, &["rev-parse", "HEAD"]).trim().to_string();
+    write(r, "work.txt", "work\n");
+    let tip = commit(r, "work");
+    let bin = tempfile::tempdir().unwrap();
+    let s = bin.path();
+    crate::test_exec::write_executable(
+        &s.join("git"),
+        &r#"#!/bin/sh
+S='@S@'
+stall=$(cat "$S/stall")
+hold() { sleep 20 & echo "$!" > "$S/child-$stall"; wait; }
+case "$*" in
+  *'log -1 --format=%cI'*) [ "$stall" = log ] && hold ;;
+  *'merge-base --all'*) [ "$stall" = merge-base ] && hold ;;
+  *'merge-base --is-ancestor'*) [ "$stall" = ancestry ] && hold ;;
+  *'patch-id --verbatim'*) [ "$stall" = patch-id ] && hold ;;
+  *'diff --no-color'*) [ "$stall" = diff ] && hold ;;
+esac
+exec /usr/bin/git "$@"
+"#
+        .replace("@S@", &s.display().to_string()),
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(s);
+    let reads = |stall: &str| {
+        std::fs::write(s.join("stall"), stall).unwrap();
+        let started = Instant::now();
+        let got =
+            crate::forge_lookup::with_forge_lookup_deadline(
+                Duration::from_secs(1),
+                || match stall {
+                    "log" => crate::gate::kernel_deps::commit_committed_at(r, &tip).is_some(),
+                    "merge-base" => single_merge_base(r, &base, &tip).is_ok(),
+                    "ancestry" => {
+                        crate::gate::kernel_deps::is_ancestor_commit(r, &base, &tip).is_some()
+                    }
+                    "patch-id" | "diff" => patch_id(r, &base, &tip).is_ok(),
+                    other => unreachable!("{other}"),
+                },
+            );
+        assert!(started.elapsed() < Duration::from_secs(4), "{stall}");
+        got
+    };
+    for stall in ["log", "merge-base", "ancestry", "patch-id", "diff"] {
+        assert!(!reads(stall), "{stall}: a stalled read supplied evidence");
+        assert!(
+            task_3792_recorded_child_stopped(&s.join(format!("child-{stall}"))),
+            "{stall}: the stalled read's descendant is still running"
+        );
+    }
+    // Control: the same reads, unstalled, answer.
+    std::fs::write(s.join("stall"), "none").unwrap();
+    for stall in ["log", "merge-base", "ancestry", "patch-id"] {
+        std::fs::write(s.join("stall"), "none").unwrap();
+        let got =
+            crate::forge_lookup::with_forge_lookup_deadline(
+                Duration::from_secs(5),
+                || match stall {
+                    "log" => crate::gate::kernel_deps::commit_committed_at(r, &tip).is_some(),
+                    "merge-base" => single_merge_base(r, &base, &tip).is_ok(),
+                    "ancestry" => {
+                        crate::gate::kernel_deps::is_ancestor_commit(r, &base, &tip) == Some(true)
+                    }
+                    _ => patch_id(r, &base, &tip).is_ok(),
+                },
+            );
+        assert!(got, "{stall}: the unstalled read failed");
+    }
+}
+
+// trace:STORY-2893 | ai:codex
+#[test]
+fn story_2893_actor_follows_the_train_gate() {
+    use crate::gate::mandate::MandateRefusal;
+    use crate::pr_train::check::{next_actor, ActorProbe};
+
+    let mut missing = FakeChecks::new();
+    missing.pin = None;
+    let mut stale = FakeChecks::new();
+    stale.pin = Some("c".repeat(40));
+    for checks in [&mut missing, &mut stale] {
+        let next = next_actor(checked(checks), ActorProbe::default());
+        assert_eq!((next.actor, next.gate), ("reviewer", "approval"));
+    }
+
+    let mut ci = FakeChecks::new();
+    ci.full_tier = Some(crate::full_tier::FullTier::Missing);
+    let next = next_actor(checked(&mut ci), ActorProbe::default());
+    assert_eq!((next.actor, next.gate), ("CI", "full-ci"));
+
+    let mut supervised =
+        FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    supervised.mandate_active = true;
+    supervised.mandate = Ok(fake_cover());
+    let next = next_actor(checked(&mut supervised), ActorProbe::default());
+    assert_eq!((next.actor, next.gate), ("train", "train-eligible"));
+
+    let next = next_actor(
+        check_one(
+            &mut FakeChecks::new(),
+            "main",
+            41,
+            Ok(Some("riding #900".into())),
+        ),
+        ActorProbe::default(),
+    );
+    assert_eq!((next.actor, next.gate), ("train", "riding-train"));
+
+    let row = Row {
+        pr: 41,
+        eligible: false,
+        head: None,
+        gate: Some("mandate"),
+        reason: Some("mandate excludes TASK-9".into()),
+        remedy: None,
+        evidence: Evidence::Read,
+    };
+    let next = next_actor(
+        row.clone(),
+        ActorProbe {
+            mandate_refusal: Some(MandateRefusal::Excluded {
+                spec: "TASK-9".into(),
+                why: "excluded execution mode".into(),
+            }),
+            ..ActorProbe::default()
+        },
+    );
+    assert_eq!((next.actor, next.gate), ("operator", "mandate"));
+    assert!(next.reason.contains("excludes TASK-9"));
+    let next = next_actor(
+        row.clone(),
+        ActorProbe {
+            mandate_refusal: Some(MandateRefusal::LedgerUnreadable("malformed ledger".into())),
+            ..ActorProbe::default()
+        },
+    );
+    assert_eq!(next.actor, "unverified");
+    assert_eq!(next_actor(row, ActorProbe::default()).actor, "unverified");
+
+    let mut unavailable = FakeChecks::new();
+    unavailable.labels = Err("unreadable".into());
+    assert_eq!(
+        next_actor(checked(&mut unavailable), ActorProbe::default()).actor,
+        "unverified"
+    );
+}
+
+// STORY-2884: a spec on the project's unset-mode drain default makes the
+// member gate read the change's files (`git diff`). Under the check's
+// deadline a stalled diff is killed with its descendants, and the unknown
+// files withdraw the default (the spec holds, supervised). Unstalled, the
+// same read answers and an ordinary change keeps the default.
+// trace:STORY-2884 trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn story_2884_defaulted_spec_diff_read_shares_the_deadline() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::gate::unset_mode::{ModeSource, UnsetModePolicy};
+    use crate::pr_train::{LiveChecks, MemberChecks};
+    use std::time::{Duration, Instant};
+
+    let root = repo();
+    let r = root.path();
+    let base = git(r, &["rev-parse", "HEAD"]).trim().to_string();
+    git(r, &["update-ref", "refs/remotes/origin/main", &base]);
+    write(r, "work.txt", "work\n");
+    let tip = commit(r, "work");
+    let bin = tempfile::tempdir().unwrap();
+    let s = bin.path();
+    crate::test_exec::write_executable(
+        &s.join("git"),
+        &r#"#!/bin/sh
+S='@S@'
+stall=$(cat "$S/stall")
+case "$*" in
+  *'diff --name-only'*)
+    [ -n "$@G@" ] || echo "git $*" >> "$S/unbounded"
+    if [ "$stall" = diff ]; then sleep 20 & echo "$!" > "$S/child-diff"; wait; fi ;;
+esac
+exec /usr/bin/git "$@"
+"#
+        .replace("@S@", &s.display().to_string())
+        .replace(
+            "@G@",
+            crate::bounded_process::test_hooks::SCOPED_DEADLINE_SPAWN_ENV,
+        ),
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(s);
+    let policy = UnsetModePolicy::from_body(Some(
+        "[gate.unset_mode]\ndefault = \"drain\"\ndrain_types = [\"bug\"]\n",
+    ));
+    let mut bug = aida_core::Requirement::new("fix the sort".into(), "d".into());
+    bug.req_type = aida_core::RequirementType::Bug;
+    let defaulted = || vec![("BUG-1".to_string(), Vec::new(), policy.resolve(None, &bug))];
+    assert!(defaulted()[0].2.is_project_default());
+    let forge = crate::forge::forge_for_kind(r, crate::forge::ForgeKind::GitHub);
+    let mut checks = LiveChecks {
+        project_root: r,
+        main_worktree: r,
+        forge: forge.as_ref(),
+        base: "main",
+        named: true,
+        read_only: true,
+        actor_probe: None,
+        request_full: false,
+        released_member: None,
+    };
+
+    std::fs::write(s.join("stall"), "diff").unwrap();
+    let mut records = defaulted();
+    let started = Instant::now();
+    crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(1), || {
+        checks.withdraw_unset_defaults(&mut records, &tip)
+    });
+    assert!(
+        started.elapsed() < Duration::from_secs(4),
+        "the diff read outlived the deadline: {:?}",
+        started.elapsed()
+    );
+    assert!(
+        task_3792_recorded_child_stopped(&s.join("child-diff")),
+        "the stalled diff's descendant is still running"
+    );
+    let mode = &records[0].2;
+    assert!(mode.requires_supervision(), "{mode:?}");
+    assert!(
+        matches!(&mode.source, ModeSource::Unset { withheld: Some(why) }
+            if why.contains("could not be read")),
+        "{mode:?}"
+    );
+
+    // Control: unstalled, the files are read and an ordinary change keeps
+    // the default.
+    std::fs::write(s.join("stall"), "none").unwrap();
+    let mut records = defaulted();
+    crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(5), || {
+        checks.withdraw_unset_defaults(&mut records, &tip)
+    });
+    assert!(records[0].2.is_project_default(), "{:?}", records[0].2);
+    assert!(
+        !s.join("unbounded").exists(),
+        "a diff spawned without the check's deadline: {}",
+        std::fs::read_to_string(s.join("unbounded")).unwrap_or_default()
+    );
 }

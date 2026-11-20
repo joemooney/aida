@@ -1068,6 +1068,8 @@ struct FakeChecks {
     asked: Vec<String>,
     /// STORY-2824: the gate runs as a read-only report.
     read_only: bool,
+    /// STORY-2884: the files the member changes (`None`: unreadable).
+    paths: Option<Vec<String>>,
     /// STORY-2809: full-tier CI at the head; `None` is an untiered repository.
     full_tier: Option<crate::full_tier::FullTier>,
     /// STORY-2809: the PRs a full-tier run was requested for.
@@ -1093,6 +1095,7 @@ impl FakeChecks {
             mandate_active: false,
             asked: Vec::new(),
             read_only: false,
+            paths: Some(Vec::new()),
             full_tier: None,
             full_requests: Vec::new(),
             workflow_error: None,
@@ -1106,7 +1109,7 @@ impl FakeChecks {
         c.records = vec![(
             id.to_string(),
             tags.iter().map(|t| t.to_string()).collect(),
-            mode,
+            mode.into(),
         )];
         c
     }
@@ -1176,6 +1179,14 @@ impl MemberChecks for FakeChecks {
         self.calls.push("specs");
         self.asked = ids.to_vec();
         self.records.clone()
+    }
+    fn withdraw_unset_defaults(
+        &mut self,
+        records: &mut [crate::pr_cmd::ShipGateSpecRecord],
+        _head: &str,
+    ) {
+        let paths = self.paths.clone();
+        crate::pr_cmd::withdraw_unset_defaults(records, || paths);
     }
     fn interactive_tty(&self) -> bool {
         self.tty
@@ -1348,6 +1359,46 @@ fn live_gate_lands_a_drain_spec_unattended() {
         !c.calls.contains(&"mandate"),
         "no mandate read for a drain spec"
     );
+}
+
+/// STORY-2884: a member whose only spec takes the project's unset-mode drain
+/// default lands unattended, as a drain spec does — unless its diff touches
+/// a protected gate path or cannot be read; then it is supervised and the
+/// refusal names the effective mode and why.
+// trace:STORY-2884 | ai:claude
+#[test]
+fn live_gate_lands_a_project_default_drain_spec_only_off_protected_paths() {
+    use crate::gate::unset_mode::{EffectiveMode, ModeSource};
+    let defaulted = || EffectiveMode {
+        mode: Some(aida_core::ExecutionMode::Drain),
+        source: ModeSource::ProjectDefault {
+            req_type: "bug".into(),
+            protected: crate::gate::mandate_gates::ProtectedPaths::floor(),
+        },
+    };
+    let member = |paths: Option<Vec<String>>| {
+        let mut c = FakeChecks::shipping("BUG-9", &[], None);
+        c.records[0].2 = defaulted();
+        c.paths = paths;
+        c
+    };
+    let mut c = member(Some(vec!["aida-cli-lib/src/list.rs".into()]));
+    assert!(gate_member_with(&mut c, "main", 41).is_ok());
+    assert!(!c.calls.contains(&"mandate"), "{:?}", c.calls);
+    for (paths, needle) in [
+        (
+            Some(vec!["aida-cli-lib/src/gate/ship.rs".to_string()]),
+            "aida-cli-lib/src/gate/ship.rs",
+        ),
+        (None, "could not be read"),
+    ] {
+        let mut c = member(paths);
+        let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+        assert!(why.contains("BUG-9 is marked unset (supervised: "), "{why}");
+        assert!(why.contains(needle), "{why}");
+    }
+    // The label of a default that stands names its source.
+    assert_eq!(defaulted().label(), "drain (project default for unset bug)");
 }
 
 #[test]
@@ -3851,8 +3902,12 @@ fn bug_2413_a_superseded_unset_spec_gates_on_its_drain_carrier() {
     let mode = crate::gate::ship::gating_execution_mode(&store, &bundled);
     assert_eq!(mode, Some(ExecutionMode::Drain));
     let records = vec![
-        ("TASK-2731".to_string(), Vec::new(), carrier.execution_mode),
-        ("TASK-2737".to_string(), Vec::new(), mode),
+        (
+            "TASK-2731".to_string(),
+            Vec::new(),
+            carrier.execution_mode.into(),
+        ),
+        ("TASK-2737".to_string(), Vec::new(), mode.into()),
     ];
     assert_eq!(
         member_spec_policy_refusal(records, false, || Err(None)),
@@ -4294,14 +4349,18 @@ fn pr_train_journal_killed_merge_and_eject_resume_without_replay() {
         .to_string();
     for stage in ["merge", "retire"] {
         let dir = tempfile::tempdir().unwrap();
-        let mut child = std::process::Command::new(crate::aida_exe_path())
-            .args(["--exact", &name, "--nocapture"])
-            .env(CHILD, stage)
-            .env("AIDA_TRAIN_JOURNAL_TEST_DIR", dir.path())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .unwrap();
+        // The crash child is this test image, not the installed `aida`
+        // (which `aida_exe_path` prefers on a developer host).
+        // trace:STORY-2905 | ai:claude
+        let mut child =
+            std::process::Command::new(crate::aida_bin::current_executable_path().unwrap())
+                .args(["--exact", &name, "--nocapture"])
+                .env(CHILD, stage)
+                .env("AIDA_TRAIN_JOURNAL_TEST_DIR", dir.path())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while !dir.path().join("ready").exists() && std::time::Instant::now() < deadline {
             if let Some(status) = child.try_wait().unwrap() {
@@ -4902,6 +4961,7 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         base: "main",
         named: false,
         read_only: false,
+        actor_probe: None,
         request_full: false,
         released_member: None,
     };
@@ -6132,7 +6192,7 @@ fn mandate_include_gate_paths_audits_train_member() {
         vec![(
             "TASK-1".into(),
             Vec::new(),
-            Some(aida_core::ExecutionMode::Guided),
+            Some(aida_core::ExecutionMode::Guided).into(),
         )]
     };
     assert!(member_spec_policy_refusal(records(), false, || Ok(())).is_none());

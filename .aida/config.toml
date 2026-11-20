@@ -607,6 +607,9 @@ enabled = true
 format = "cargo fmt --all -- --check"
 test = "make test-touched"
 fast_check = "make check-ci-fast"
+# Host compile gate for conflict repairs: runs on a read-only snapshot of the
+# merged tree before the host commits or publishes it. trace:TASK-3804
+repair_check = "cargo check --profile agent --workspace --tests --locked"
 
 # Refuse AIDA head moves after approval or train reservation. trace:BUG-2618
 [pr-head]

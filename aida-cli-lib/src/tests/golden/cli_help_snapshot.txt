@@ -12653,10 +12653,11 @@ Options:
           Wait for a live drain wave pinned to the current binary to finish instead of refusing
 
       --if-main-green
-          For a schedule: promote only when origin/main has moved past the live binary and every CI
-          check on that commit passed. Fetches, fast-forwards a clean primary `main`, and launches
-          the build in the background; skips quietly otherwise. Acts only from the checkout the live
-          binary was built from
+          For a schedule: promote the newest commit on origin/main's first-parent line (up to 20
+          back) that is newer than the live binary and whose CI checks all passed, so a tip whose CI
+          is still running never blocks an older green commit. Fetches, fast-forwards a clean
+          primary `main` to that commit, and launches the build in the background; skips quietly
+          otherwise. Acts only from the checkout the live binary was built from
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -13149,6 +13150,9 @@ Options:
       --lane-host
           Check this machine before running automated lanes
 
+      --lane-binaries <HOST>
+          Compare lane hosts' launcher binaries with local origin/main (repeat for each SSH alias)
+
       --lane-codegraph
           Report the host codegraph snapshot age as seen from this lane
 
@@ -13164,12 +13168,6 @@ Options:
       --json
           Emit machine-readable JSON
 
-      --lane-capacity
-          Read-only typed local lane capacity and reservations (not readiness admission)
-
-      --force
-          Permit riskier destructive fixes such as branch deletion
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -13180,12 +13178,18 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --all
-          Show older completed-without-commit findings individually
+      --lane-capacity
+          Read-only typed local lane capacity and reservations (not readiness admission)
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --force
+          Permit riskier destructive fixes such as branch deletion
+
+      --all
+          Show older completed-without-commit findings individually
 
       --since <DATE_OR_REF>
           Exempt specs completed before this point from the completed-without-commit integrity
@@ -16581,6 +16585,11 @@ Options:
           Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or
           --from-seat --commit-pending
 
+      --partial-slice
+          With a native -m declaration: this publication is one slice of the spec, not all of it.
+          The commit trailer becomes `(Refs ID)` and the spec is not marked Done. Without it, the
+          publication completes the spec unless child slices are still outstanding
+
   -h, --help
           Print help (see a summary with '-h')
 ===== aida pr
@@ -17149,8 +17158,8 @@ Options:
           With --check: every open PR on the default branch
 
       --timeout <SECS>
-          With --check: stop starting new PR checks after this many seconds, checked between
-          candidates (not during subprocesses); the PRs not reached are reported as not checked
+          With --check, discovery and member checks share this budget. Unfinished PR checks are
+          reported as not checked
           
           [default: 45]
 
@@ -22525,7 +22534,13 @@ Options:
 ===== aida review watch
 Discover new heads and dispatch attested reviews without waiting for CI
 
-Usage: aida review watch [OPTIONS]
+Usage: aida review watch [OPTIONS] [COMMAND]
+
+Commands:
+  pause   Pause new review launches for a bounded time
+  resume  Clear the active review-watch pause
+  status  Show the launch pause and outstanding review reservations
+  help    Print this message or the help of the given subcommand(s)
 
 Options:
       --once
@@ -22540,11 +22555,84 @@ Options:
       --vendor <VENDOR>
           Vendor: claude, codex, or agy; omit for ordinary queue-work selection
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
       --release <KEY>
           Operator recovery: forget every recorded attempt for one change (`PR-N` or `MR-N`) so its
           current head can be reviewed again, after confirming no reviewer for it is still running.
           Refused while any recorded process for it is alive
 
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review watch pause
+Pause new review launches for a bounded time
+
+Usage: aida review watch pause [OPTIONS] --reason <REASON>
+
+Options:
+      --reason <REASON>
+          Reason to record in the audit history
+
+      --for <DURATION>
+          Pause duration, e.g. 3600, 30m or 2h (default and maximum come from `[review]
+          watch_pause_default` / `watch_pause_max`: 1h / 24h)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review watch resume
+Clear the active review-watch pause
+
+Usage: aida review watch resume [OPTIONS]
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review watch status
+Show the launch pause and outstanding review reservations
+
+Usage: aida review watch status [OPTIONS]
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -45472,7 +45560,7 @@ Working on aida itself
       {
         "name": "if-main-green",
         "takes_value": false,
-        "help": "For a schedule: promote only when origin/main has moved past the live binary and every CI check on that commit passed. Fetches, fast-forwards a clean primary `main`, and launches the build in the background; skips quietly otherwise. Acts only from the checkout the live binary was built from"
+        "help": "For a schedule: promote the newest commit on origin/main's first-parent line (up to 20 back) that is newer than the live binary and whose CI checks all passed, so a tip whose CI is still running never blocks an older green commit. Fetches, fast-forwards a clean primary `main` to that commit, and launches the build in the background; skips quietly otherwise. Acts only from the checkout the live binary was built from"
       },
       {
         "name": "install-links",
@@ -46046,6 +46134,11 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit machine-readable JSON"
+      },
+      {
+        "name": "lane-binaries",
+        "takes_value": true,
+        "help": "Compare lane hosts' launcher binaries with local origin/main (repeat for each SSH alias)"
       },
       {
         "name": "lane-capacity",
@@ -49507,6 +49600,11 @@ Working on aida itself
         "name": "no-trailer-check",
         "takes_value": false,
         "help": "Bypass the client-side trailer spec-ID check before shipping"
+      },
+      {
+        "name": "partial-slice",
+        "takes_value": false,
+        "help": "With a native -m declaration: this publication is one slice of the spec, not all of it. The commit trailer becomes `(Refs ID)` and the spec is not marked Done. Without it, the publication completes the spec unless child slices are still outstanding"
       }
     ],
     "hidden": false
@@ -50011,7 +50109,7 @@ Working on aida itself
       {
         "name": "timeout",
         "takes_value": true,
-        "help": "With --check: stop starting new PR checks after this many seconds, checked between candidates (not during subprocesses); the PRs not reached are reported as not checked"
+        "help": "With --check, discovery and member checks share this budget. Unfinished PR checks are reported as not checked"
       }
     ],
     "hidden": false
@@ -55660,6 +55758,97 @@ Working on aida itself
         "name": "vendor",
         "takes_value": true,
         "help": "Vendor: claude, codex, or agy; omit for ordinary queue-work selection"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "watch",
+      "pause"
+    ],
+    "about": "Pause new review launches for a bounded time",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "for",
+        "takes_value": true,
+        "help": "Pause duration, e.g. 3600, 30m or 2h (default and maximum come from `[review] watch_pause_default` / `watch_pause_max`: 1h / 24h)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Reason to record in the audit history"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "watch",
+      "resume"
+    ],
+    "about": "Clear the active review-watch pause",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "watch",
+      "status"
+    ],
+    "about": "Show the launch pause and outstanding review reservations",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false

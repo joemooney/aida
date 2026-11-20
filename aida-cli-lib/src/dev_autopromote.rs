@@ -1,5 +1,8 @@
-//! `aida dev build --if-main-green`: promote the live dev binary when
-//! `origin/main` has moved past it and CI on that exact commit is green.
+//! `aida dev build --if-main-green`: promote the live dev binary to the
+//! newest commit on `origin/main`'s first-parent line whose CI is green and
+//! that is newer than the live binary. Merges land faster than CI finishes,
+//! so the tip is rarely green when a tick looks; an in-progress or red tip
+//! never blocks an older green commit (BUG-2687).
 //!
 //! A scheduled substrate job runs the tick side, which only decides and
 //! launches: the build itself takes minutes, longer than a scheduled child
@@ -25,6 +28,12 @@ use std::time::{Duration, Instant};
 pub(crate) const LOCK_FILE: &str = ".autopromote.lock";
 /// The state of the last launched build, beside the live pair.
 pub(crate) const STATE_FILE: &str = "autopromote.json";
+/// The last tick's newest-green scan, beside the live pair, for
+/// `aida dev status`. trace:BUG-2687 | ai:claude
+pub(crate) const SCAN_FILE: &str = "autopromote-scan.json";
+/// How many first-parent commits, from origin/main back, are searched for
+/// the newest green one. trace:BUG-2687 | ai:claude
+pub(crate) const GREEN_SEARCH: usize = 20;
 /// Bound on `git fetch origin main`.
 const FETCH_TIMEOUT: Duration = Duration::from_secs(40);
 /// Bound on `git merge-base --is-ancestor`.
@@ -80,6 +89,9 @@ pub(crate) enum Skip {
     WavePinned(String),
     /// Too little of the tick's budget is left to fast-forward and launch.
     OutOfTime(String),
+    /// The newest green commit is not newer than the live binary.
+    // trace:BUG-2687 | ai:claude
+    NotNewer(String),
 }
 
 impl Skip {
@@ -100,6 +112,7 @@ impl Skip {
             Skip::CiUnknown(_) => "ci-unknown",
             Skip::WavePinned(_) => "wave-pinned",
             Skip::OutOfTime(_) => "out-of-time",
+            Skip::NotNewer(_) => "not-newer",
         }
     }
 
@@ -118,9 +131,106 @@ impl Skip {
             | Skip::CiRed(d)
             | Skip::CiUnknown(d)
             | Skip::WavePinned(d)
-            | Skip::OutOfTime(d) => d.clone(),
+            | Skip::OutOfTime(d)
+            | Skip::NotNewer(d) => d.clone(),
         }
     }
+
+    /// The same kind of skip with another detail.
+    // trace:BUG-2687 | ai:claude
+    fn with_detail(&self, d: String) -> Skip {
+        match self {
+            Skip::CiPending(_) => Skip::CiPending(d),
+            Skip::CiRed(_) => Skip::CiRed(d),
+            Skip::CiUnknown(_) => Skip::CiUnknown(d),
+            Skip::FailedSha(_) => Skip::FailedSha(d),
+            Skip::OutOfTime(_) => Skip::OutOfTime(d),
+            _ => Skip::CiUnknown(d),
+        }
+    }
+}
+
+/// What the newest-green walk found on origin/main's first-parent line.
+// trace:BUG-2687 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct GreenWalk {
+    /// The newest green commit newer than the live binary, if any.
+    pub chosen: Option<String>,
+    /// The newer commits passed over, newest first, each with why.
+    pub passed_over: Vec<Skip>,
+    /// Why the walk stopped before finding a green commit, when it did not
+    /// simply reach the live binary, HEAD or the search bound.
+    pub stopped: Option<Skip>,
+    /// The walk searched [`GREEN_SEARCH`] commits without reaching the live
+    /// binary or HEAD.
+    pub exhausted: bool,
+}
+
+impl GreenWalk {
+    /// One line per passed-over commit: `<short>: <why>`.
+    pub(crate) fn passed_lines(&self) -> Vec<String> {
+        self.passed_over
+            .iter()
+            .map(|s| format!("{} ({})", s.detail(), s.reason()))
+            .collect()
+    }
+
+    /// The skip when no green commit was chosen.
+    fn no_green_skip(&self) -> Skip {
+        let mut parts = self.passed_lines();
+        if let Some(stop) = &self.stopped {
+            parts.push(stop.detail());
+        }
+        if self.exhausted {
+            parts.push(format!(
+                "none of the {GREEN_SEARCH} newest first-parent commits of origin/main is green"
+            ));
+        }
+        let detail = format!(
+            "no green commit newer than the live binary: {}",
+            if parts.is_empty() {
+                "origin/main lists no commit newer than the live binary".to_string()
+            } else {
+                parts.join("; ")
+            }
+        );
+        // The reason token is the newest commit's (usually the tip's), so a
+        // pending tip still logs `ci-pending`.
+        match (self.passed_over.first(), &self.stopped) {
+            (Some(first), _) => first.with_detail(detail),
+            (None, Some(stop)) => stop.with_detail(detail),
+            (None, None) => Skip::CiUnknown(detail),
+        }
+    }
+}
+
+/// `<live>/autopromote-scan.json`: the last tick's walk.
+// trace:BUG-2687 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct GreenScan {
+    /// RFC 3339 time of the scan.
+    pub at: String,
+    /// origin/main when scanned.
+    pub tip: String,
+    /// The newest green commit newer than live, if one was found.
+    #[serde(default)]
+    pub newest_green: Option<String>,
+    /// Newer commits passed over, `<short> ... (<reason>)`.
+    #[serde(default)]
+    pub passed_over: Vec<String>,
+}
+
+pub(crate) fn read_scan(live: &Path) -> Option<GreenScan> {
+    let raw = std::fs::read_to_string(live.join(SCAN_FILE)).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+fn write_scan(live: &Path, scan: &GreenScan) -> Result<()> {
+    let tmp = live.join(format!("{SCAN_FILE}.tmp"));
+    std::fs::write(&tmp, serde_json::to_string_pretty(scan)?)
+        .with_context(|| format!("writing {}", tmp.display()))?;
+    std::fs::rename(&tmp, live.join(SCAN_FILE))
+        .with_context(|| format!("writing {}", live.join(SCAN_FILE).display()))
 }
 
 /// What one tick did.
@@ -131,6 +241,8 @@ pub(crate) enum TickOutcome {
     Launched {
         sha: String,
         how: String,
+        /// Newer commits passed over, each with why (BUG-2687).
+        passed_over: Vec<String>,
     },
     /// A failed build is reported now, once; the caller exits non-zero.
     Failure {
@@ -252,6 +364,9 @@ pub(crate) trait AutopromoteSteps {
     fn fetch(&mut self, repo: &Path) -> Result<()>;
     /// The full SHA `rev` resolves to.
     fn rev_parse(&mut self, repo: &Path, rev: &str) -> Result<String>;
+    /// Up to `max` commits of `tip`'s first-parent line, newest first,
+    /// starting with `tip` itself. trace:BUG-2687 | ai:claude
+    fn first_parent(&mut self, repo: &Path, tip: &str, max: usize) -> Result<Vec<String>>;
     /// `git merge-base --is-ancestor ancestor descendant`.
     fn is_ancestor(&mut self, repo: &Path, ancestor: &str, descendant: &str) -> Result<bool>;
     /// The judged CI on `sha`, with the forge's required checks.
@@ -531,6 +646,15 @@ pub(crate) fn run_tick(
         return Ok(outcome);
     }
     let skipped = |s: Skip| Ok(TickOutcome::Skipped(s));
+    let build_lock = if repo.join(".git").is_dir() {
+        let Some(lock) = crate::dev_build::try_checkout_build_lock(repo)? else {
+            return skipped(Skip::InFlight("build in progress in this checkout".into()));
+        };
+        Some(lock)
+    } else {
+        // The host cron only accepts a checkout with an in-tree Git directory.
+        None
+    };
     let checkout = match steps.probe(repo) {
         Ok(c) => c,
         Err(e) => return skipped(Skip::Dirty(format!("could not read the checkout: {e:#}"))),
@@ -556,18 +680,6 @@ pub(crate) fn run_tick(
     if !live_sha.is_empty() && live_sha == target {
         return skipped(Skip::Unchanged);
     }
-    if let Some(prev) = read_state(live) {
-        if prev.phase == Phase::Failed && prev.sha == target {
-            // trace:TASK-2272 | ai:claude
-            return skipped(Skip::FailedSha(
-                if prev.error.as_deref() == Some(ROLLED_BACK_ERROR) {
-                    format!("{ROLLED_BACK_ERROR} ({target}); waiting for origin/main to move")
-                } else {
-                    format!("the build of {target} already failed; waiting for origin/main to move")
-                },
-            ));
-        }
-    }
     if let Some(skip) = budget_skip(
         deadline,
         REV_PARSE_TIMEOUT + IS_ANCESTOR_TIMEOUT,
@@ -588,12 +700,58 @@ pub(crate) fn run_tick(
         }
         Err(e) => return skipped(Skip::NonFf(format!("{e:#}"))),
     }
-    if let Some(skip) = budget_skip(deadline, CI_READ_RESERVE, "read CI") {
-        return skipped(skip);
+    // trace:BUG-2687 | ai:claude — the newest green commit, not the tip.
+    let failed = read_state(live).filter(|p| p.phase == Phase::Failed);
+    let walk = match newest_green(
+        repo,
+        steps,
+        &target,
+        &live_sha,
+        &head,
+        failed.as_ref(),
+        deadline,
+    ) {
+        Ok(walk) => walk,
+        Err(skip) => return skipped(skip),
+    };
+    let scan = GreenScan {
+        at: at.to_rfc3339(),
+        tip: target.clone(),
+        newest_green: walk.chosen.clone(),
+        passed_over: walk.passed_lines(),
+    };
+    if let Err(e) = write_scan(live, &scan) {
+        eprintln!("warning: could not record the newest-green scan: {e:#}");
     }
-    if let Some(skip) = ci_skip(&target, steps.commit_ci(repo, &target)) {
-        return skipped(skip);
+    let Some(chosen) = walk.chosen.clone() else {
+        return skipped(walk.no_green_skip());
+    };
+    // Never a downgrade: the chosen commit must contain the live one.
+    if !live_sha.is_empty() {
+        match steps.is_ancestor(repo, &live_sha, &chosen) {
+            Ok(true) => {}
+            Ok(false) => {
+                return skipped(Skip::NotNewer(format!(
+                    "the newest green commit {chosen} does not contain the live binary's \
+                     commit {live_sha}"
+                )))
+            }
+            Err(e) => return skipped(Skip::NonFf(format!("{e:#}"))),
+        }
     }
+    if chosen != head {
+        match steps.is_ancestor(repo, &head, &chosen) {
+            Ok(true) => {}
+            Ok(false) => {
+                return skipped(Skip::NonFf(format!(
+                    "HEAD {head} cannot fast-forward to the newest green commit {chosen}"
+                )))
+            }
+            Err(e) => return skipped(Skip::NonFf(format!("{e:#}"))),
+        }
+    }
+    let passed_over = walk.passed_lines();
+    let target = chosen;
     if let Err(e) = steps.wave_guard(repo, &layout.live("aida")) {
         return skipped(Skip::WavePinned(format!("{e:#}")));
     }
@@ -637,8 +795,14 @@ pub(crate) fn run_tick(
                     write_state(live, &state)?;
                 }
             }
+            // The child takes the state lock before the checkout lock.
+            drop(build_lock);
             drop(lock);
-            Ok(TickOutcome::Launched { sha: target, how })
+            Ok(TickOutcome::Launched {
+                sha: target,
+                how,
+                passed_over,
+            })
         }
         Err(e) => {
             state.phase = Phase::Failed;
@@ -649,6 +813,75 @@ pub(crate) fn run_tick(
                 .map(|o| o.unwrap_or(TickOutcome::Skipped(Skip::FailedSha(target))))
         }
     }
+}
+
+/// Walk origin/main's first-parent line from `tip`, newest first, for the
+/// newest commit whose CI is green. The walk ends at the live binary's
+/// commit (nothing older is newer than live), after HEAD (nothing older can
+/// be fast-forwarded to), at a commit whose build failed or was rolled back
+/// (not retried until origin/main moves past it), or after
+/// [`GREEN_SEARCH`] commits. Red, pending, missing and unreadable CI all
+/// count as not green. `Err` is a skip before any commit could be judged.
+// trace:BUG-2687 | ai:claude
+pub(crate) fn newest_green(
+    repo: &Path,
+    steps: &mut dyn AutopromoteSteps,
+    tip: &str,
+    live_sha: &str,
+    head: &str,
+    failed: Option<&State>,
+    deadline: Instant,
+) -> std::result::Result<GreenWalk, Skip> {
+    let line = steps
+        .first_parent(repo, tip, GREEN_SEARCH)
+        .map_err(|e| Skip::CiUnknown(format!("could not list origin/main's history: {e:#}")))?;
+    let mut walk = GreenWalk {
+        chosen: None,
+        passed_over: Vec::new(),
+        stopped: None,
+        exhausted: false,
+    };
+    let same = |a: &str, b: &str| !a.is_empty() && a.eq_ignore_ascii_case(b);
+    let mut reached_end = false;
+    for sha in line.iter().take(GREEN_SEARCH) {
+        if same(live_sha, sha) {
+            reached_end = true;
+            break;
+        }
+        if let Some(f) = failed.filter(|f| same(&f.sha, sha)) {
+            walk.stopped = Some(Skip::FailedSha(
+                if f.error.as_deref() == Some(ROLLED_BACK_ERROR) {
+                    format!("{ROLLED_BACK_ERROR} ({sha}); waiting for origin/main to move past it")
+                } else {
+                    format!("the build of {sha} already failed; waiting for origin/main to move past it")
+                },
+            ));
+            reached_end = true;
+            break;
+        }
+        if let Some(skip) = budget_skip(deadline, CI_READ_RESERVE, "read CI") {
+            if walk.passed_over.is_empty() {
+                return Err(skip);
+            }
+            walk.stopped = Some(skip);
+            reached_end = true;
+            break;
+        }
+        match ci_skip(sha, steps.commit_ci(repo, sha)) {
+            None => {
+                walk.chosen = Some(sha.clone());
+                reached_end = true;
+                break;
+            }
+            Some(skip) => walk.passed_over.push(skip),
+        }
+        if same(head, sha) {
+            reached_end = true;
+            break;
+        }
+    }
+    walk.exhausted = !reached_end && line.len() >= GREEN_SEARCH;
+    Ok(walk)
 }
 
 /// The detached child: build and promote `sha` through the unchanged
@@ -674,6 +907,14 @@ pub(crate) fn run_child(
     state.pid = Some(pid);
     write_state(live, &state)?;
     let result = (|| -> Result<BuildOutcome> {
+        let _build_lock = if layout.repo.join(".git").is_dir() {
+            let lock = crate::dev_build::try_checkout_build_lock(&layout.repo)?;
+            Some(lock.ok_or_else(|| {
+                crate::dev_build::PromotionRefused("build in progress in this checkout".into())
+            })?)
+        } else {
+            None
+        };
         let head = build_steps.probe(&layout.repo)?.head.unwrap_or_default();
         if head != sha {
             return Err(crate::dev_build::PromotionRefused(format!(
@@ -683,6 +924,8 @@ pub(crate) fn run_child(
         }
         let opts = DevBuildOptions {
             autopromote_target: Some(sha.to_owned()),
+            // trace:BUG-2687 | ai:claude
+            green_commit: Some(sha.to_owned()),
             ..DevBuildOptions::default()
         };
         run_dev_build(layout, &opts, build_steps, out)
@@ -728,7 +971,11 @@ pub(crate) fn log_outcome(log: &Path, outcome: &TickOutcome) -> Result<()> {
             format!("skip {}", skip.reason()),
             format!("skip {}: {}", skip.reason(), skip.detail()),
         ),
-        TickOutcome::Launched { sha, how } => ("launch".into(), format!("launch {sha}: {how}")),
+        TickOutcome::Launched {
+            sha,
+            how,
+            passed_over,
+        } => ("launch".into(), launch_line(sha, how, passed_over)),
         TickOutcome::Failure { sha, .. } => ("failed".into(), format!("failed {sha}")),
     };
     if matches!(outcome, TickOutcome::Skipped(_)) {
@@ -744,6 +991,19 @@ pub(crate) fn log_outcome(log: &Path, outcome: &TickOutcome) -> Result<()> {
         }
     }
     append_line(log, &line)
+}
+
+/// PURE: the launch report: the chosen SHA, then the newer SHAs passed over
+/// and why. trace:BUG-2687 | ai:claude
+pub(crate) fn launch_line(sha: &str, how: &str, passed_over: &[String]) -> String {
+    if passed_over.is_empty() {
+        format!("launch {sha}: {how}")
+    } else {
+        format!(
+            "launch {sha}: {how}; newer commits passed over: {}",
+            passed_over.join("; ")
+        )
+    }
 }
 
 fn append_line(log: &Path, line: &str) -> Result<()> {
@@ -808,6 +1068,28 @@ impl AutopromoteSteps for RealAutopromoteSteps {
             "`{rev}` did not resolve to a commit"
         );
         Ok(sha)
+    }
+
+    fn first_parent(&mut self, repo: &Path, tip: &str, max: usize) -> Result<Vec<String>> {
+        anyhow::ensure!(
+            crate::git_arg_guard::is_hex_sha(tip),
+            "`{tip}` is not a commit SHA"
+        );
+        let mut cmd = git(repo);
+        cmd.args([
+            "rev-list",
+            "--first-parent",
+            &format!("--max-count={max}"),
+            tip,
+            "--",
+        ]);
+        let out = git_ok(cmd, "git rev-list --first-parent", REV_PARSE_TIMEOUT)?;
+        let line: Vec<String> = out.lines().map(|l| l.trim().to_string()).collect();
+        anyhow::ensure!(
+            line.iter().all(|s| crate::git_arg_guard::is_hex_sha(s)),
+            "`git rev-list` listed something that is not a commit"
+        );
+        Ok(line)
     }
 
     fn is_ancestor(&mut self, repo: &Path, ancestor: &str, descendant: &str) -> Result<bool> {
@@ -948,8 +1230,16 @@ pub(crate) fn handle_if_main_green() -> Result<()> {
             println!("skip {}: {}", skip.reason(), skip.detail());
             Ok(())
         }
-        TickOutcome::Launched { sha, how } => {
+        TickOutcome::Launched {
+            sha,
+            how,
+            passed_over,
+        } => {
             println!("launched the build of {sha} ({how})");
+            // trace:BUG-2687 | ai:claude
+            for line in passed_over {
+                println!("  passed over: {line}");
+            }
             Ok(())
         }
         TickOutcome::Failure { message, .. } => {

@@ -345,7 +345,7 @@ fn finished_review_with_a_collected_verdict_is_reaped_at_exit() {
     );
     write_lease(&root, &other);
 
-    let ended = crate::queue_cmd::end_finished_review(&root, "pr-3107", &review, true);
+    let ended = crate::queue_cmd::end_finished_review(&root, "pr-3107", &review, &lease.id, true);
     assert_eq!(ended.len(), 1, "{ended:?}");
     assert_eq!(ended[0].0, lease.id);
     assert!(ended[0].1.is_ok(), "{ended:?}");
@@ -370,7 +370,7 @@ fn review_kept_at_exit_keeps_its_lease_and_is_reaped_after_merge() {
     let (_tmp, root, review, lease) = finished_review(3108);
 
     // No verdict collected: the recovery text points at the tree.
-    let ended = crate::queue_cmd::end_finished_review(&root, "PR-3108", &review, false);
+    let ended = crate::queue_cmd::end_finished_review(&root, "PR-3108", &review, &lease.id, false);
     assert!(ended[0].1.is_err(), "{ended:?}");
     assert!(review.exists());
     assert!(lease_path(&root, &lease.id).exists());
@@ -394,7 +394,7 @@ fn dirty_review_tree_is_never_reaped_at_exit() {
     let (_tmp, root, review, lease) = finished_review(3109);
     std::fs::write(review.join("notes.txt"), "unsaved\n").unwrap();
 
-    let ended = crate::queue_cmd::end_finished_review(&root, "PR-3109", &review, true);
+    let ended = crate::queue_cmd::end_finished_review(&root, "PR-3109", &review, &lease.id, true);
     let why = ended[0].1.as_ref().unwrap_err();
     assert!(why.contains("uncommitted"), "{why}");
     assert!(review.join("notes.txt").exists());

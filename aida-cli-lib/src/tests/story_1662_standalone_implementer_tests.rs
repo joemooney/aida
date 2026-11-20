@@ -600,7 +600,11 @@ fn burndown_and_release_merges_refuse_under_the_marker() {
         branch: "claude/story-9".into(),
     };
     assert!(
-        !crate::burndown_run::merge_wave_pr(tmp.path(), &pr),
+        !crate::burndown_run::merge_wave_pr(
+            tmp.path(),
+            &pr,
+            &crate::gate::landing_merge::Entry::capture(tmp.path())
+        ),
         "a wave merge does not run"
     );
     let err =

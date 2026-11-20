@@ -179,12 +179,12 @@ pub(crate) fn main_worktree_root(start: &Path) -> Result<PathBuf> {
 /// repository; any other failure is an error (fail closed).
 pub(crate) fn main_worktree_root_opt(start: &Path) -> Result<Option<PathBuf>> {
     // external-prose-classifier: seat_occupancy::store::main_worktree_root_opt
-    let out = std::process::Command::new("git")
-        .arg("-C")
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C")
         .arg(start)
         .args(["rev-parse", "--path-format=absolute", "--git-common-dir"])
-        .env("LC_ALL", "C")
-        .output()
+        .env("LC_ALL", "C"); // a scoped read deadline bounds it. trace:TASK-3792 | ai:claude
+    let out = crate::forge_lookup::deadline_output(cmd, |cmd| cmd.output())
         .context("seat occupancy needs git to locate the main worktree")?;
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);

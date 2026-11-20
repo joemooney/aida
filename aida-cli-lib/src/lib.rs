@@ -206,6 +206,7 @@ pub(crate) mod landing_policy;
 // trace:STORY-2897 | ai:claude
 // trace:STORY-2897 | ai:claude
 mod land_bindings;
+// trace:STORY-2903 | ai:claude
 pub(crate) mod land_mode;
 mod project_checks;
 
@@ -282,6 +283,7 @@ mod machine_readiness;
 mod mcp_cmd;
 mod orchestrator_cmd;
 mod pr_cmd;
+mod pr_service;
 // trace:STORY-2732 | ai:codex
 mod integration_cmd;
 mod pr_emergency_land;
@@ -675,7 +677,8 @@ pub(crate) use aida_core::liveness::{
     SpecLiveness, StaleLeaseRecovery,
 };
 mod native_publication;
-// trace:TASK-3325 | ai:codex
+mod publication_completion; // trace:BUG-2696 | ai:claude
+                            // trace:TASK-3325 | ai:codex
 mod prompt_select;
 mod prompts;
 mod ship;

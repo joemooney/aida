@@ -1563,6 +1563,17 @@ fn fire(hook: &Hook) {
 }
 
 impl crate::forge::Forge for NetForge {
+    // A single-attempt test fake: the guard runs once. trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &crate::forge::ChangeRef,
+        opts: &crate::forge::MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> anyhow::Result<()>,
+    ) -> anyhow::Result<crate::forge::MergeResult> {
+        guard()?;
+        self.merge_change(c, opts, sink)
+    }
     fn kind(&self) -> crate::forge::ForgeKind {
         crate::forge::ForgeKind::GitHub
     }
@@ -1911,12 +1922,25 @@ fn hold_record(pr: u64) -> crate::gate::merge_hold_core::MergeHoldRecord {
 /// short page of effective rules, and a silent success for the train's own
 /// `gh pr view/edit` body refresh. Never the operator's real `gh`.
 // trace:STORY-1917 trace:BUG-2401 | ai:claude
-fn put_fake_gh_on_path(f: &mut FlowFixture) {
+fn put_fake_gh_on_path(f: &mut FlowFixture, script: &str) -> std::path::PathBuf {
     let bin = f._tmp.path().join("fake-bin");
     std::fs::create_dir_all(&bin).unwrap();
-    crate::test_exec::write_executable(
-        &bin.join("gh"),
-        r#"#!/bin/sh
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(&gh, script);
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    f.ambient.set_key("PATH", &path);
+    f.ambient
+        .set_key("AIDA_TEST_GH_BINARY", gh.to_str().unwrap());
+    gh
+}
+
+/// The train's hermetic `gh` script (see [`put_fake_gh_on_path`]).
+// trace:STORY-1917 trace:BUG-2401 | ai:claude
+const TRAIN_FAKE_GH: &str = r#"#!/bin/sh
 case "$*" in
   'pr view '*' --json headRefOid,baseRefName,state')
     echo '{"headRefOid":"7121a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1","baseRefName":"main","state":"OPEN"}' ;;
@@ -1925,17 +1949,7 @@ case "$*" in
   'api repos/{owner}/{repo}/rules/branches/main?'*) echo '[]' ;;
 esac
 exit 0
-"#,
-    );
-    let path = format!(
-        "{}:{}",
-        bin.display(),
-        std::env::var("PATH").unwrap_or_default()
-    );
-    f.ambient.set_key("PATH", &path);
-    f.ambient
-        .set_key("AIDA_TEST_GH_BINARY", bin.join("gh").to_str().unwrap());
-}
+"#;
 
 /// HELD member: the original mandate is stopped and a replacement started
 /// while the real hold-gate wait runs after the real release. The real
@@ -1947,7 +1961,7 @@ fn story_1917_native_train_held_member_mandate_replaced_during_hold_gate_wait_ne
         return;
     }
     let mut f = native_fixture(true);
-    put_fake_gh_on_path(&mut f);
+    put_fake_gh_on_path(&mut f, TRAIN_FAKE_GH);
     let mandate_a = f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9701]);
     let hold_root = crate::pr_cmd::pr_ship_hold_root(&f.root);
@@ -2025,7 +2039,7 @@ fn story_1917_native_train_unheld_member_grant_revoked_before_merge_never_merges
         return;
     }
     let mut f = native_fixture(false);
-    put_fake_gh_on_path(&mut f);
+    put_fake_gh_on_path(&mut f, TRAIN_FAKE_GH);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9702]);
     let forge = NetForge::default();
@@ -2067,7 +2081,7 @@ fn story_1917_native_train_authority_lost_after_merge_names_the_cause() {
         return;
     }
     let mut f = native_fixture(false);
-    put_fake_gh_on_path(&mut f);
+    put_fake_gh_on_path(&mut f, TRAIN_FAKE_GH);
     f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
     let ctx = establish_train_ctx(&f, vec![9705]);
     let forge = NetForge::default();
@@ -2107,7 +2121,7 @@ fn story_1917_native_train_human_gate_or_claim_change_during_ci_wait_refuses() {
     }
     for case in ["human-gate", "claim"] {
         let mut f = native_fixture(false);
-        put_fake_gh_on_path(&mut f);
+        put_fake_gh_on_path(&mut f, TRAIN_FAKE_GH);
         f.start_mandate(&[Scope::ShipHeld, Scope::Dispatch], false);
         let ctx = establish_train_ctx(&f, vec![9703]);
         let forge = NetForge::default();
@@ -2277,9 +2291,9 @@ fn story_1917_pr_ship_checkpoints_are_wired_in_order_around_every_wait() {
     assert!(body.find("ShipCheckpoint::UnderMergeLease)").unwrap() > lease);
     let pre_merge = body.find("ShipCheckpoint::PreMerge)").unwrap();
     assert!(pre_merge > body.find("wait_hold_gate_green(").unwrap());
-    assert!(pre_merge < body.find(".merge_change(").unwrap());
+    assert!(pre_merge < body.find("landing_merge::merge(").unwrap());
     // Unheld PRs are never told to re-place a hold they never had.
-    let window = &body[pre_merge..body.find(".merge_change(").unwrap()];
+    let window = &body[pre_merge..body.find("landing_merge::merge(").unwrap()];
     assert!(window.contains("if mandate_release.is_some() {"));
     assert!(window.contains("NO_HOLD_RELEASED_NOTE"));
     assert!(window.contains("Some(err) => err.context(refusal)"));
@@ -2630,6 +2644,11 @@ sys.exit(1)
 /// independent reviewer seat: bound to a live reviewer grant that the ship
 /// gate re-validates against the grant store.
 fn write_attested_approval(root: &Path, pr: u64, head: &str) {
+    write_attested_approval_for(root, pr, head, "TASK-100");
+}
+
+/// [`write_attested_approval`] for the spec `spec`.
+fn write_attested_approval_for(root: &Path, pr: u64, head: &str, spec: &str) {
     let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
         root,
         crate::test_env::HERMETIC_TEST_USER,
@@ -2653,7 +2672,7 @@ fn write_attested_approval(root: &Path, pr: u64, head: &str) {
         "recorded_by": "reviewer",
         "recorded_at": (Utc::now() + Duration::seconds(1)).to_rfc3339(),
         "summary": format!("approved at {head}"),
-        "spec_ids": ["TASK-100"],
+        "spec_ids": [spec],
         "findings": [],
         crate::gate::review_verdict::ATTESTATION_KEY: attestation,
     });
@@ -3135,4 +3154,292 @@ fn ungranted_artifact_requires_fresh_authorized_review_in_namespace() {
         "both modes must invoke fresh review"
     );
     assert!(calls.contains("authorized"));
+}
+
+// STORY-2884: an unset execution mode admitted under the project's drain
+// default is admitted for the head whose files were checked. These tests
+// drive the real `pr ship` (`pr_ship_with_method_and_dispatch_ctx`) on the
+// STORY-1917 native-ship fixture: a GitHub `gh` stand-in, a pushed feature
+// branch, an attested independent approval and green CI.
+//
+// Mutation contract: deleting `unset_default_heads.record(&head)` in the
+// ship's `change_paths` closure, or the `moved_refusal` block after
+// `ship_preflight_gates`, in `pr_cmd.rs` lets the moved-head ship below
+// reach `gh pr merge` and fails
+// `story_2884_native_ship_refuses_a_head_that_moved_after_the_default_check`.
+mod story_2884_ship_head_race_tests {
+    // trace:STORY-2884 | ai:claude
+
+    use super::*;
+
+    const PR: u64 = 9884;
+    const BRANCH: &str = "claude/bug-100";
+    const SUBJECT: &str = "fix(x): change (BUG-100)";
+
+    /// The `--json` fields of the GitHub forge's `change_status` read, which is
+    /// what `pr ship` reads the PR head with.
+    const STATUS_FIELDS: &str = "state,mergeable,reviewDecision,headRefOid";
+
+    /// [`native_ship_gh`], except that while the file `first_head` exists, the
+    /// next head read (`change_status`) answers with its SHA and removes it: the
+    /// head the ship's default check sees. Every later read, and every other
+    /// call, answers with the PR's head in `view`.
+    fn moving_head_gh(calls: &Path, view: &Path, first_head: &Path) -> String {
+        format!(
+            r#"#!/usr/bin/env python3
+import json, os, subprocess, sys
+a = sys.argv[1:]
+open({calls:?}, "a").write(" ".join(a) + "\n")
+def opt(name):
+    for i, x in enumerate(a):
+        if x == name and i + 1 < len(a):
+            return a[i + 1]
+    return None
+def emit(doc):
+    q = opt("-q") or opt("--jq")
+    text = json.dumps(doc)
+    if q:
+        r = subprocess.run(["jq", "-r", q], input=text, capture_output=True, text=True)
+        sys.stdout.write(r.stdout)
+        sys.exit(r.returncode)
+    print(text)
+    sys.exit(0)
+verb = " ".join(a[:2])
+doc0 = json.load(open({view:?}))
+if verb == "pr view":
+    doc = dict(doc0)
+    if opt("--json") == {STATUS_FIELDS:?} and os.path.exists({first_head:?}):
+        doc["headRefOid"] = open({first_head:?}).read().strip()
+        os.remove({first_head:?})
+        open({calls:?}, "a").write("served first head " + doc["headRefOid"] + "\n")
+    emit(doc)
+if verb == "pr list":
+    # The PR itself is the one open change; nothing is stacked on its branch.
+    if opt("--base") is not None:
+        emit([])
+    emit([{{"number": doc0["number"], "url": doc0["url"],
+            "headRefName": doc0["headRefName"], "baseRefName": doc0["baseRefName"]}}])
+if verb == "pr checks":
+    emit([{{"name": "ci", "state": "SUCCESS", "bucket": "pass", "link": "", "workflow": "ci"}}])
+if verb in ("pr merge", "pr edit", "label create"):
+    sys.exit(0)
+sys.exit(1)
+"#
+        )
+    }
+
+    /// An unset-mode ordinary bug, BUG-100, on a project whose trusted default
+    /// branch sets the drain default for bugs, shipped through the stand-in `gh`.
+    struct UnsetShip {
+        f: FlowFixture,
+        calls: PathBuf,
+        first_head: PathBuf,
+    }
+
+    /// Commit `path` with `body` on the current branch; returns the new SHA.
+    fn commit_file(f: &FlowFixture, path: &str, body: &str) -> String {
+        let file = f.root.join(path);
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+        std::fs::write(&file, body).unwrap();
+        git(&f.root, &["add", path]);
+        git(&f.root, &["commit", "-qm", SUBJECT]);
+        git_out(&f.root, &["rev-parse", "HEAD"])
+    }
+
+    impl UnsetShip {
+        /// The PR's branch carries commit H1 (an ordinary file, or with
+        /// `protected_h1` a protected gate path). With `moved`, a second commit
+        /// H2 touching a protected gate path sits on top, and the ship's first
+        /// head read (its default check) sees H1 while every later one sees H2.
+        /// Returns the fixture and `(H1, PR head)`.
+        fn new(protected_h1: bool, moved: bool) -> (Self, String, String) {
+            let mut f = native_fixture(true);
+            let mut bug = plain_req("BUG-100");
+            bug.req_type = aida_core::RequirementType::Bug;
+            bug.execution_mode = None;
+            write_spec(&f.store, "BUG-100", &bug);
+            git(&f.store, &["add", "-A"]);
+            git(&f.store, &["commit", "-qm", "BUG-100"]);
+            std::fs::write(
+                f.root.join(".aida/config.toml"),
+                "store_path = \".aida-store\"\n\n[forge]\nprovider = \"github\"\n\n\
+                 [gate.unset_mode]\ndefault = \"drain\"\ndrain_types = [\"bug\", \"task\"]\n",
+            )
+            .unwrap();
+            std::fs::create_dir_all(f.root.join(".github/workflows")).unwrap();
+            std::fs::write(f.root.join(".github/workflows/ci.yml"), "name: ci\n").unwrap();
+            git(&f.root, &["add", "-A"]);
+            git(&f.root, &["commit", "-qm", "forge config, drain default"]);
+            git(&f.root, &["push", "-q", "origin", "main"]);
+            git(&f.root, &["fetch", "-q", "origin"]);
+
+            git(&f.root, &["checkout", "-qb", BRANCH]);
+            let h1 = if protected_h1 {
+                commit_file(
+                    &f,
+                    "aida-cli-lib/src/gate/relaxed.rs",
+                    "// trace:BUG-100\nfn relaxed() {}\n",
+                )
+            } else {
+                commit_file(&f, "code.rs", "// trace:BUG-100\nfn x() {}\n")
+            };
+            let head = if moved {
+                commit_file(
+                    &f,
+                    "aida-cli-lib/src/gate/relaxed.rs",
+                    "// trace:BUG-100\nfn relaxed() {}\n",
+                )
+            } else {
+                h1.clone()
+            };
+            git(&f.root, &["push", "-q", "origin", BRANCH]);
+            git(&f.root, &["checkout", "-q", "main"]);
+            let origin = format!(
+                "file://localhost{}",
+                f._tmp.path().join("origin.git").display()
+            );
+            git(&f.root, &["remote", "set-url", "origin", &origin]);
+
+            let view = f._tmp.path().join("pr-view.json");
+            let doc = serde_json::json!({
+                "number": PR,
+                "url": format!("https://github.com/fixture/project/pull/{PR}"),
+                "state": "OPEN", "isDraft": false, "mergedAt": null,
+                "headRefOid": head, "headRefName": BRANCH, "baseRefName": "main",
+                "title": SUBJECT, "body": "", "labels": [],
+                "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN",
+                "author": {"login": "implementer"},
+            });
+            std::fs::write(&view, doc.to_string()).unwrap();
+            let calls = f._tmp.path().join("gh-calls");
+            let first_head = f._tmp.path().join("first-head");
+            if moved {
+                std::fs::write(&first_head, &h1).unwrap();
+            }
+            // trace:STORY-2884 | ai:claude
+            put_fake_gh_on_path(&mut f, &moving_head_gh(&calls, &view, &first_head));
+            f.ambient
+                .set_key("AIDA_SESSION_ID", "advisor-shipper-session");
+            // The approval and CI are valid for the PR's (final) head.
+            write_attested_approval_for(&f.root, PR, &head, "BUG-100");
+            (
+                Self {
+                    f,
+                    calls,
+                    first_head,
+                },
+                h1,
+                head,
+            )
+        }
+
+        /// The real, unattended `pr ship` (no mandate, no terminal).
+        fn ship(&self) -> anyhow::Result<()> {
+            crate::with_review_pr_subject(
+                crate::ReviewPrSubject {
+                    head_ref: BRANCH.into(),
+                    commit_subjects: vec![SUBJECT.into()],
+                },
+                || {
+                    crate::pr_cmd::pr_ship_with_method_and_dispatch_ctx(
+                        Some(PR),
+                        true,
+                        true,
+                        false,
+                        false,
+                        None,
+                        None,
+                        true,
+                        false,
+                        false,
+                        Some(60),
+                        false,
+                        crate::forge::MergeMethod::Squash,
+                        false,
+                        false,
+                        None,
+                    )
+                },
+            )
+        }
+
+        fn calls(&self) -> String {
+            std::fs::read_to_string(&self.calls).unwrap_or_default()
+        }
+
+        fn merges(&self) -> usize {
+            self.calls()
+                .lines()
+                .filter(|l| l.starts_with("pr merge "))
+                .count()
+        }
+    }
+
+    /// Control: with the head unchanged, the unset bug takes the drain default
+    /// and the real ship merges it once.
+    #[test]
+    fn story_2884_native_ship_merges_an_unset_bug_whose_head_did_not_move() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let (s, _, _) = UnsetShip::new(false, false);
+        s.ship()
+            .unwrap_or_else(|e| panic!("{e:#}\ngh calls:\n{}", s.calls()));
+        assert_eq!(s.merges(), 1, "gh calls:\n{}", s.calls());
+    }
+
+    /// Control: the ship does check the head's files. The same unchanged-head
+    /// ship, whose head touches a protected gate path, is held for review.
+    #[test]
+    fn story_2884_native_ship_holds_an_unset_bug_whose_head_touches_a_protected_path() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let (s, _, _) = UnsetShip::new(true, false);
+        let err = s
+            .ship()
+            .expect_err("a protected path withdraws the default");
+        let text = format!("{err:#}");
+        assert!(
+            text.contains("awaiting independent review"),
+            "{text}\ngh calls:\n{}",
+            s.calls()
+        );
+        assert_eq!(s.merges(), 0, "gh calls:\n{}", s.calls());
+    }
+
+    /// The race: the default check reads H1 (an ordinary file), then the PR head
+    /// moves to H2, which touches a protected gate path, before preflight. H2
+    /// carries a valid approval and green CI. The ship must refuse at preflight,
+    /// naming both heads, with no hold release and no merge call.
+    #[test]
+    fn story_2884_native_ship_refuses_a_head_that_moved_after_the_default_check() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let (s, h1, h2) = UnsetShip::new(false, true);
+        assert_ne!(h1, h2);
+        let err = s
+            .ship()
+            .expect_err("the head moved after the default check; ship must refuse");
+        let text = format!("{err:#}");
+        let calls = s.calls();
+        assert!(
+            !s.first_head.exists(),
+            "the default check read the PR head (H1): {text}\ngh calls:\n{calls}"
+        );
+        assert!(
+            text.contains(
+                "head moved after its unset execution mode took the project's drain default"
+            ),
+            "{text}\ngh calls:\n{calls}"
+        );
+        assert!(text.contains(&h1[..12]), "names the checked head: {text}");
+        assert!(text.contains(&h2[..12]), "names the preflight head: {text}");
+        assert_eq!(s.merges(), 0, "no merge call:\n{calls}");
+        assert!(
+            !calls.contains("--remove-label"),
+            "no hold release:\n{calls}"
+        );
+    }
 }

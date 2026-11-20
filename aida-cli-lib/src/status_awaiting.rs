@@ -1263,7 +1263,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
     // it has a session id, all of them in the operator's shell. File reads
     // only, so cheap on the notice path too.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
-    let deputy_failed = {
+    let (deputy_failed, dead_deputies) = {
         let session = std::env::var("AIDA_SESSION_ID")
             .ok()
             .filter(|s| !s.trim().is_empty());
@@ -1275,7 +1275,22 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
             &main,
             session.as_deref(),
         ));
-        jobs
+        let dead = if notice_fast {
+            Vec::new()
+        } else {
+            crate::deputy_shell::base_dir().map_or_else(
+                |_| Vec::new(),
+                |base| {
+                    crate::deputy_shell::dead_deputies_in(
+                        &base,
+                        &main,
+                        session.as_deref(),
+                        aida_core::pid_observer::PidObserver::current(),
+                    )
+                },
+            )
+        };
+        (jobs, dead)
     };
 
     awaiting_you::AwaitingReport {
@@ -1307,6 +1322,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         idle_in_progress,
         blocked_seats,
         deputy_failed,
+        dead_deputies,
         // trace:BUG-1530 | ai:claude — the seat this session reads as, so the
         // headline (render) and per-turn compact line can scope themselves
         // to channels this seat can act on.
