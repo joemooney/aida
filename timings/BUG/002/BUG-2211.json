@@ -5,6 +5,10 @@
     {
       "at": "2026-10-23T22:01:48.125115140Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-20T00:38:13.121470891Z",
+      "closed_by": "edit"
     }
   ],
   "events": [
@@ -62,6 +66,120 @@
         "event": "SpecCompleted",
         "commit": "4aa9aea412a5418bc7cc92e607a3175eedd17372",
         "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-19T14:05:21.599035334Z",
+      "spec": "BUG-2211",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T20:26:19.052157376Z",
+      "spec": "BUG-2211",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-11-19T21:32:11.607917142Z",
+      "spec": "BUG-2211",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4333,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "165c6f83ec9fb235762197ec6a0717162b1ebd5a"
+      }
+    },
+    {
+      "ts": "2026-11-19T21:32:20.214280926Z",
+      "spec": "BUG-2211",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes: one P1 regression in existing-local-branch session startup. Reviewed all nine files of the full supplied binary diff against protected main fd4018a2b2fada46b4d110d11cd446d7fe65d293 and landing tree f4a7b11958fc0c2e01e00ff302dbe3c72d212714; attestation target is original PR head 165c6f83ec9fb235762197ec6a0717162b1ebd5a. The finding is present in both original head and landing tree, with no dependency on intervening protected-base changes. No other actionable defects found.\n\nCovered spec: BUG-2211. There is no formal Acceptance/Verify section. The following enumerates its description criteria and later authoritative refinements; verified means source/evidence inspection, not reviewer-executed tests.\nBUG-2211 criterion 1, reopened advisor criterion: avoid the upstream config write in sandboxed seat/worktree creation OR safely recover the stale zero-byte lock — verified by --no-track in fresh session, pooled checkout, dispatch reset/new worktree, epic worktree and rendered brief paths, plus existing aida-core/src/git_ops/config_lock.rs output_healing_config_lock. Added tests assert unchanged config under branch.autoSetupMerge=always: cargo test -p aida-cli-lib setup_block_fresh_branch_matches_work_convention and cargo test -p aida-cli-lib add_creates_worktree_with_focus_then_is_idempotent (commands identified only, not run). Existing-local-branch compatibility has the blocking regression described in findings.\nBUG-2211 criterion 2, doctor detects and offers/performs safe placeholder removal — verified by aida-cli-lib/src/sandbox_config_lock.rs scan, doctor/sandbox.rs heal_doctor_sandbox_config_lock, and existing reports_the_placeholder_as_safe_to_heal, ignores_a_real_or_writable_lock and heal_removes_only_the_placeholder test definitions. The helper requires a non-symlink regular file, zero length and exact mode 0444.\nBUG-2211 criterion 3, launch/worktree creation uses shared recovery before config writes — verified by session_start.rs transactional_worktree_add using output_healing_config_lock, agent_launch.rs calling session_start_with_receipt, and worktree_gc.rs ensure_epic_worktree_core using the same helper; pooled and dispatch branch creation now suppress tracking writes directly. Existing aida-core/src/git_ops/config_lock.rs tests include placeholder_is_removed_and_worktree_add_succeeds and placeholder_recreated_after_the_pre_clear_is_cleared_and_retried_once.\nBUG-2211 criterion 4, initial age/no-holder heuristic — not-applicable-because later root-cause guidance replaces it with the empty exact-mode-0444 placeholder signature, and reopened advisor guidance permits prevention or recovery.\nBUG-2211 criterion 5, original sandbox-primary Git-write warning/refusal hook direction — not-applicable-because the subsequent reopened advisor instruction accepts avoiding upstream writes or cleaning the stale lock instead; no new hook behavior is claimed.\nType protocol BUG-2211 (bug protocol: touches at least one test file): met; aida-cli-lib/src/tests/task_492_brief_tests.rs and aida-cli-lib/src/tests/worktree_handler_tests.rs are modified.\n\nCI pending at review time: exact-head CI (fast gates) and merge-hold-gate passed; CI (fast compile) completed cargo check --profile dev --workspace --tests and was still running Ratchet set. No local test/build commands were run under reviewer policy. Pending CI is not the reason for request-changes. The existing-branch failure is established by source inspection and Git 2.43.0's add implementation, https://github.com/git/git/blob/v2.43.0/builtin/worktree.c#L852-L868. Reviewed trace comments, documentation/templates, fresh/remote-only/local-existing branch choices, pooled creation, dispatch reset, rollback argument handling and both changed tests. No branch updates, fixes, merge, or canonical recording performed.",
+        "recovery_hint": "address the review findings, move BUG-2211 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T21:34:25.008272909Z",
+      "spec": "BUG-2211",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-19T22:18:04.323208725Z",
+      "spec": "BUG-2211",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4333,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "261abcc88d55e329e87b4a43c3838165ee134dd6"
+      }
+    },
+    {
+      "ts": "2026-11-19T22:18:07.308222525Z",
+      "spec": "BUG-2211",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Request changes: one P1 regression still prevents session startup on existing local branches. Read all nine files of the full supplied diff against protected main ed269f3a819819fcea25b4d1e20d6aa4d265006c and landed tree 7d801415e27461be20b8d408dd83c9f2e0142e9e; attestation target is original PR head 261abcc88d55e329e87b4a43c3838165ee134dd6. BUG-2211 prevention is present for fresh branch creation, but the prior local-branch attachment finding remains unchanged. The latest implementer self-review describes pending edits absent from this committed head. The finding exists in both the reviewed head and landed tree and does not depend on intervening protected-base changes. Exact-head FAST gates, FAST compile and Build (ubuntu-latest) succeeded; merge-hold-gate remains pending. Used source and existing evidence only; no local builds or tests were run. No other actionable defects found.",
+        "recovery_hint": "address the review findings, move BUG-2211 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-19T22:28:33.297870384Z",
+      "spec": "BUG-2211",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4333,
+        "verdict": "APPROVED",
+        "reviewed_sha": "484438b9c559a5c76a805835f601d609401f1772"
+      }
+    },
+    {
+      "ts": "2026-11-20T00:37:06.919451448Z",
+      "spec": "BUG-2211",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4333
+      }
+    },
+    {
+      "ts": "2026-11-20T00:38:12.815310002Z",
+      "spec": "BUG-2211",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-20T00:38:12.878287711Z",
+      "spec": "BUG-2211",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
       }
     }
   ]
