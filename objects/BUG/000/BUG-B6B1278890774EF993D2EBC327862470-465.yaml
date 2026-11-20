@@ -13,12 +13,12 @@ description: |
   2. `aida pr ship` on a busy admission waits up to a bounded time (configurable, default a few minutes) for the exclusive mode instead of failing on the first try_lock, and reports the holders and how long it waited if it gives up.
   3. Regression through the production path: with both loop workers running, an `aida pr ship` of an approved PR acquires admission within the bound. A control proves an in-progress review launch or train stack is never interrupted mid-operation.
   4. `aida advisor loops` gains a supported, audited way to drain or pause both workers' admission claims (so no operator or advisor ever needs to SIGTERM them), and `aida advisor loops status` shows each worker's claim age.
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T19:56:50.587444923Z
+modified_at: 2026-11-20T19:57:48.581892087Z
 req_type: Bug
 tags:
 - admission
@@ -361,18 +361,32 @@ comments:
   modified_at: 2026-11-20T19:37:21.118166508Z
   session_id: 01a1fa57e750
   harness_version: 2.1.319 (Claude Code)
-- id: 01a1fa87-8290-7841-8ad6-85267b10527b
-  author: aida-publication-done
-  content: Implementer push d0d953c3461a declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20T19:55:47.216744975Z
-  modified_at: 2026-11-20T19:55:47.216744975Z
-  session_id: 01a1fa57e750
-- id: 01a1fa88-7a1b-7b83-b1dc-da0438f99f48
-  author: lane-recovery
-  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-465` at head `d0d953c3461a95653bc8dc20f6cb44f9abf978cf`.'
-  created_at: 2026-11-20T19:56:50.587431366Z
-  modified_at: 2026-11-20T19:56:50.587431366Z
-  session_id: 01a1fa57e750
+- id: 01a1fa89-8e83-75b3-ac83-69658a108559
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-4 (FINAL) BRIEF (advisor-121, 13:02): 7 new edge findings at d0d953c (all r2 items closed). If r4 is not clean, land the core and file the edges as a follow-up. Claude+Fable, gated on the live lane exiting.
+
+    # Rework brief: BUG-2703 / PR #4363, ROUND 4 of 4 (FINAL)
+
+    Advisor: claude-advisor-121, 2026-11-20 13:02 MST. Head reviewed: d0d953c. Lane: CLAUDE+Fable. COMMIT your work.
+    Round 3 closed all nine r2 items; these seven are new edge cases. FINAL ROUND: if r4 is not clean, the advisor lands the core and files the
+    remaining edges as a follow-up. Fix all seven:
+     1 [AC2] Deadline: recompute the remaining time AFTER intent registration (receipts.lock wait); IntentGuard cleanup uses the original
+       deadline, not a fresh 500 ms.
+     2 [AC2] The final busy refusal names the blocking change key and any known live PID (a running review as the sole blocker).
+     3 Drain and resume: validate the advisor grant and sample the operation time AFTER acquiring drain.lock; test revocation while waiting.
+     4 [AC4] Every journal the writer emits fits the reader's 256 KiB limit (escaped maximum-size reasons, 256 renewals): compact or cap renewals
+       on write; test repeated maximum-size escaped reasons.
+     5 Yielded settlement: reconcile lost dispatchers UNDER admission.lock against the reloaded state, never an older key snapshot (a new
+       reservation is not pruned).
+     6 parse_intent: bound the remaining lifetime relative to OBSERVATION time (a future-dated intent after a backwards clock step expires within
+       the maximum); checked arithmetic, no panic on extreme timestamps.
+     7 [AC3] The production-handler regression supplies an approved PR head and asserts ship reaches the post-admission check for it.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T19:57:48.581892087Z
+  modified_at: 2026-11-20T19:57:48.581892087Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
@@ -460,14 +474,6 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
-- id: 01a1fa87-8290-7841-8ad6-8514c4533606
-  author: aida-publication-done
-  timestamp: 2026-11-20T19:55:47.216743011Z
-  session_id: 01a1fa57e750
-  changes:
-  - field_name: status
-    old_value: InProgress
-    new_value: Done
 - id: 01a1fa88-f551-7091-986e-a7478263d113
   author: aida-orchestrator
   timestamp: 2026-11-20T19:57:22.129959927Z
@@ -486,3 +492,11 @@ filed_at:
   vendor: claude
   session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2703 AC1 passes for ordinary live intents. Both workers yield at pass boundaries. AC2 fails on deadline accounting and holder diagnostics. AC3 covers in-flight work but omits the approved PR. AC4 shows both claim ages but permits a stale-grant write and a journal that disables resume and expiry. Exact-head FAST CI passed. Review used source and existing CI evidence.
+  recovery_hint: address the review findings, move BUG-2703 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-20T19:57:22.129950456Z
