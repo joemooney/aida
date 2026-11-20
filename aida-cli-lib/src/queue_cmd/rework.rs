@@ -754,27 +754,46 @@ pub(crate) fn handle_queue_rework(
     if let Ok(root) = find_project_root() {
         // BUG-2430: a review keyed by the spec's open PR counts too.
         // trace:BUG-2430 | ai:claude
-        let open_change = crate::forge_lookup::with_forge_lookup_deadline(
-            std::time::Duration::from_secs(15),
+        // BUG-2629: neither lookup may run silently for minutes; a slow one
+        // names itself on stderr. trace:BUG-2629 | ai:claude
+        let say = |line: String| eprintln!("  {line}");
+        let open_change = super::rework_bindings::announce_slow_phase(
+            &format!("looking up the open change of {display_id} on the forge"),
+            super::rework_bindings::SLOW_PHASE_NOTICE,
+            say,
             || {
-                let change = spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
-                anyhow::ensure!(
-                    crate::forge_lookup::forge_lookup_deadline()
-                        .is_some_and(|deadline| std::time::Instant::now() < deadline),
-                    "{display_id}: open-change lookup timed out; retry queue rework"
-                );
-                Ok::<_, anyhow::Error>(change)
+                crate::forge_lookup::with_forge_lookup_deadline(
+                    std::time::Duration::from_secs(15),
+                    || {
+                        let change =
+                            spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+                        anyhow::ensure!(
+                            crate::forge_lookup::forge_lookup_deadline()
+                                .is_some_and(|deadline| std::time::Instant::now() < deadline),
+                            "{display_id}: open-change lookup timed out; retry queue rework"
+                        );
+                        Ok::<_, anyhow::Error>(change)
+                    },
+                )
             },
         )?;
         // Use the same selected evidence for waiting and findings. A second
         // scan can be expensive and can disagree if a review arrives mid-command.
         // trace:STORY-2690 BUG-2500 | ai:codex
-        let findings = match super::work::resolve_rework_review(
-            &root,
-            &display_id,
-            &spec_id,
-            open_change.as_deref(),
-        ) {
+        let review = super::rework_bindings::announce_slow_phase(
+            &format!("reading the reviews of {display_id} from the gate ledger"),
+            super::rework_bindings::SLOW_PHASE_NOTICE,
+            say,
+            || {
+                super::work::resolve_rework_review(
+                    &root,
+                    &display_id,
+                    &spec_id,
+                    open_change.as_deref(),
+                )
+            },
+        );
+        let findings = match review {
             Ok(crate::rework_direction::ReviewResult::Available(block)) => Some(block),
             Ok(_) => None,
             Err(super::work::ReworkReviewError::Waiting(why))

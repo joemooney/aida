@@ -126,7 +126,7 @@ pub(crate) fn changes_for_spec(root: &Path, spec: &str) -> Vec<ChangeKey> {
 /// [`changes_for_spec`], telling an absent or unreadable index (`None`)
 /// from one that names no change.
 // trace:BUG-2531 | ai:claude
-fn index_changes(root: &Path, spec: &str) -> Option<Vec<ChangeKey>> {
+pub(crate) fn index_changes(root: &Path, spec: &str) -> Option<Vec<ChangeKey>> {
     let path = index_file(root, spec)?;
     // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
     store::read_regular(&path)
@@ -291,7 +291,7 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
 
 // A spec-scoped closure cannot replace the PR review or another spec review.
 // trace:BUG-2525 | ai:codex
-fn terminal_annotation_matches(event: &GateEvent, key: &str) -> bool {
+pub(crate) fn terminal_annotation_matches(event: &GateEvent, key: &str) -> bool {
     event
         .verdict_record()
         .and_then(|r| r.get("terminal_wait_key"))
