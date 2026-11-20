@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 /// `git -C dir args…` through the test helper (auto-maintenance off); its
 /// trimmed stdout. Panics on failure.
-fn git_ok(dir: &Path, args: &[&str]) -> String {
+pub(crate) fn git_ok(dir: &Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
@@ -407,7 +407,7 @@ fn seat_with_commit(
 
 /// The handler's bundle step without bwrap: test git bundles the branch in
 /// the clone against main's `origin/main`.
-fn test_bundle(main: &Path, clone: &Path, branch: &str) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn test_bundle(main: &Path, clone: &Path, branch: &str) -> anyhow::Result<Vec<u8>> {
     let base = git_ok(main, &["rev-parse", "origin/main"]);
     let out = crate::test_git::git_command()
         .arg("-C")
@@ -426,11 +426,15 @@ fn test_bundle(main: &Path, clone: &Path, branch: &str) -> anyhow::Result<Vec<u8
 /// The handler's commit step for a run without `--commit-pending`: never
 /// reached.
 // trace:TASK-2712 | ai:claude
-fn no_commit(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<String>> {
+pub(crate) fn no_commit(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<String>> {
     panic!("the commit step ran without --commit-pending")
 }
 
-fn opts(clone: &Path, dry_run: bool, no_pr: bool) -> crate::ship_from_seat::FromSeatOptions {
+pub(crate) fn opts(
+    clone: &Path,
+    dry_run: bool,
+    no_pr: bool,
+) -> crate::ship_from_seat::FromSeatOptions {
     crate::ship_from_seat::FromSeatOptions {
         clone: clone.to_path_buf(),
         spec: Some("BUG-1".into()),
@@ -743,14 +747,19 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
 /// A leased seat clone on `branch` with one uncommitted file (the shape a
 /// native Codex lane leaves behind).
 // trace:TASK-2712 | ai:claude
-fn seat_with_pending(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBuf {
+pub(crate) fn seat_with_pending(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBuf {
     let clone = super::s4_host_git_tests::leased_clone_on(fx, name, id, branch);
     std::fs::write(clone.join(format!("{name}.txt")), "pending\n").unwrap();
     clone
 }
 
 // trace:TASK-2902 | ai:codex
-fn seat_with_publication_pending(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBuf {
+pub(crate) fn seat_with_publication_pending(
+    fx: &Fixture,
+    name: &str,
+    id: &str,
+    branch: &str,
+) -> PathBuf {
     let clone = seat_with_pending(fx, name, id, branch);
     // trace:TASK-2902 | ai:codex — use a live spec belonging to this lease.
     let lease_path = crate::lease_path(&fx.main, id);
@@ -777,7 +786,7 @@ fn commit_never(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<S
 /// A commit step without bwrap: test git commits the clone's pending work
 /// (hooks off) with the host's message, as the sandboxed commit would.
 // trace:TASK-2712 | ai:claude
-fn test_commit(
+pub(crate) fn test_commit(
     _: &Path,
     clone: &Path,
     branch: &str,

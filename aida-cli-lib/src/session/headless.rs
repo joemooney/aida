@@ -2124,7 +2124,8 @@ pub(crate) fn run_vendor_headless_to_exit(
                         )?;
                         eprintln!(
                             "fast_gate={}",
-                            crate::lane_fast_gate::marker(&main_root, branch)
+                            // trace:BUG-2705 | ai:claude
+                            crate::lane_fast_gate::marker_with_reason(&main_root, branch)
                         );
                         anyhow::ensure!(
                             !queued,

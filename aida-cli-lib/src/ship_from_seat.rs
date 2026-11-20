@@ -454,6 +454,37 @@ pub(crate) fn post_exit_commit(
     clean_exit: bool,
     commit: &dyn Fn(&Path, &Path, &str, &str) -> Result<Option<String>>,
 ) -> PostExitCommit {
+    post_exit_commit_as(main, tree, spec, lane, clean_exit, None, commit)
+}
+
+/// The host's default post-exit message carries the `[AI:<tool>]` tag of the
+/// lane it was built for; a lane of another vendor re-tags it as itself.
+// trace:BUG-2705 | ai:claude
+fn retag_post_exit_message(message: String, tool: Option<&str>) -> String {
+    let Some(tool) = tool else {
+        return message;
+    };
+    match message
+        .strip_prefix("[AI:")
+        .and_then(|rest| rest.split_once(']'))
+    {
+        Some((_, rest)) => format!("[AI:{tool}]{rest}"),
+        None => message,
+    }
+}
+
+/// [`post_exit_commit`] for a lane whose host default message is tagged
+/// `[AI:<tool>]` (`None` keeps the default tag).
+// trace:BUG-2705 | ai:claude
+pub(crate) fn post_exit_commit_as(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+    tool: Option<&str>,
+    commit: &dyn Fn(&Path, &Path, &str, &str) -> Result<Option<String>>,
+) -> PostExitCommit {
     let main = crate::main_worktree_root_from(main);
     aida_core::seat_clone_detect::note_host_main(&main);
     // TASK-2032: anchored on the host main the lane recorded, never the cwd.
@@ -532,7 +563,7 @@ pub(crate) fn post_exit_commit(
         clean_exit,
         completing,
     ) {
-        Ok(message) => message,
+        Ok(message) => retag_post_exit_message(message, tool),
         Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
     };
     match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
@@ -581,6 +612,20 @@ pub(crate) fn post_exit_commit_reported(
     lane: &str,
     clean_exit: bool,
 ) -> PostExitCommit {
+    post_exit_commit_reported_as(main, tree, spec, lane, clean_exit, None)
+}
+
+/// [`post_exit_commit_reported`] tagged `[AI:<tool>]` (see
+/// [`post_exit_commit_as`]).
+// trace:BUG-2705 | ai:claude
+pub(crate) fn post_exit_commit_reported_as(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+    tool: Option<&str>,
+) -> PostExitCommit {
     #[cfg(test)]
     if let Some(outcome) = POST_EXIT_STEP.with(|s| {
         s.borrow()
@@ -589,12 +634,13 @@ pub(crate) fn post_exit_commit_reported(
     }) {
         return outcome;
     }
-    let outcome = post_exit_commit(
+    let outcome = post_exit_commit_as(
         main,
         tree,
         spec,
         lane,
         clean_exit,
+        tool,
         &crate::seat_clone::commit_pending,
     );
     match &outcome {

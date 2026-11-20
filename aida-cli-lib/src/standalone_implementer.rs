@@ -1219,6 +1219,128 @@ pub(crate) fn publish_unpushed(
     }
 }
 
+/// What the host did with uncommitted edits a self-publishing seat-clone
+/// lane left behind (BUG-2705).
+// trace:BUG-2705 | ai:claude
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum LeftoverCommit {
+    /// The seat had nothing uncommitted, or the lane published this round.
+    NotNeeded,
+    /// The host did not try, for this reason; the edits stay uncommitted.
+    Skipped(String),
+    /// The host ran its post-exit commit with this result.
+    Ran(crate::ship_from_seat::PostExitCommit),
+}
+
+impl LeftoverCommit {
+    /// The reason the seat is still dirty, if it is, for the lane's log and
+    /// its result record.
+    pub(crate) fn unresolved(&self) -> Option<String> {
+        use crate::ship_from_seat::PostExitCommit;
+        match self {
+            Self::NotNeeded | Self::Ran(PostExitCommit::Committed(_) | PostExitCommit::Clean) => {
+                None
+            }
+            Self::Skipped(why) => Some(format!("host post-exit commit skipped: {why}")),
+            Self::Ran(PostExitCommit::NotASeat) => Some(
+                "host post-exit commit skipped: the seat is not a clone this checkout recorded"
+                    .into(),
+            ),
+            Self::Ran(PostExitCommit::Failed(why)) => {
+                Some(format!("host post-exit commit failed: {why}"))
+            }
+        }
+    }
+}
+
+/// BUG-2705: a self-publishing lane in a seat clone that exits cleanly
+/// without publishing, its edits still uncommitted, gets the same host
+/// post-exit commit a host-published lane gets, before its seat is published
+/// and before the fast gate requires a clean committed seat. A punt, hold or
+/// declared no-change, a failed exit, a lane that already published this
+/// round, and a seat whose state cannot be read are left alone, each with
+/// its reason.
+// trace:BUG-2705 | ai:claude
+pub(crate) fn commit_leftovers(
+    outcome: &Outcome,
+    success: bool,
+    seat: &SeatState,
+    launch_head: Option<&str>,
+    commit: impl FnOnce() -> crate::ship_from_seat::PostExitCommit,
+) -> LeftoverCommit {
+    match seat.uncommitted {
+        Some(0) => return LeftoverCommit::NotNeeded,
+        None => {
+            return LeftoverCommit::Skipped("the seat's uncommitted state could not be read".into())
+        }
+        Some(_) => {}
+    }
+    if !matches!(outcome, Outcome::NoPr | Outcome::PrOpened { .. }) {
+        return LeftoverCommit::NotNeeded;
+    }
+    if seat.pushed_since(launch_head) == Some(true) {
+        return LeftoverCommit::Skipped(
+            "the lane already published this round; its later edits stay uncommitted".into(),
+        );
+    }
+    if !success {
+        return LeftoverCommit::Skipped(
+            "the lane exited non-zero; a failed exit is not published".into(),
+        );
+    }
+    LeftoverCommit::Ran(commit())
+}
+
+/// The effects a self-publishing seat-clone lane's exit needs, injected so
+/// the exit sequence itself is the one tests run.
+// trace:BUG-2705 | ai:claude
+pub(crate) struct SeatExit<'a> {
+    pub(crate) read_seat: &'a dyn Fn() -> SeatState,
+    pub(crate) post_exit: &'a dyn Fn() -> crate::ship_from_seat::PostExitCommit,
+    pub(crate) publish: &'a dyn Fn() -> Result<()>,
+    pub(crate) republished: &'a dyn Fn() -> Outcome,
+    pub(crate) no_change: &'a dyn Fn(Outcome) -> Result<Outcome>,
+}
+
+/// A self-publishing lane's exit from a seat clone: the host commits the
+/// edits it left uncommitted ([`commit_leftovers`]), publishes what it
+/// committed and did not push ([`publish_unpushed`], BUG-2580), and calls a
+/// clean seat with nothing new "no change". Returns the settled outcome and,
+/// when the seat stayed dirty, the reason, for the lane's log and result.
+// trace:BUG-2705 | ai:claude
+pub(crate) fn self_published_seat_exit(
+    outcome: Outcome,
+    success: bool,
+    launch_seat: &LaunchSeat<'_>,
+    exit: &SeatExit<'_>,
+) -> Result<(Outcome, Option<String>)> {
+    let leftovers = commit_leftovers(
+        &outcome,
+        success,
+        &(exit.read_seat)(),
+        launch_seat.head,
+        exit.post_exit,
+    );
+    let note = leftovers.unresolved().map(|why| {
+        eprintln!("implementer: {why}");
+        // One line on the launcher's result line.
+        why.split_whitespace().collect::<Vec<_>>().join(" ")
+    });
+    let before = (exit.read_seat)();
+    let (_, unshipped) = settle_outcome(outcome.clone(), launch_seat, &before);
+    let outcome = publish_unpushed(
+        outcome,
+        success,
+        unshipped.as_ref(),
+        exit.publish,
+        exit.republished,
+    );
+    // Only a clean seat can be "no change": uncommitted work stays the
+    // stall it is today.
+    let outcome = no_change_only_when_clean(outcome, &(exit.read_seat)(), exit.no_change)?;
+    Ok((outcome, note))
+}
+
 /// Apply the no-change classification only to a seat read as clean. A seat
 /// with uncommitted paths, or one git could not read, keeps its outcome.
 // trace:BUG-2580 | ai:claude
@@ -1720,40 +1842,51 @@ fn run(
     let seat_clone =
         !host_published && crate::seat_clone::host_recorded_clone(&main_root, &worktree).is_some();
     let publish_failed = std::cell::Cell::new(false);
+    let mut leftover_note = None;
     if seat_clone {
-        let before = bg::SeatState::read(&worktree, launch.branch);
-        let (_, unshipped) = settle_outcome(outcome.clone(), &launch_seat, &before);
         let publish_failed = &publish_failed;
-        outcome = publish_unpushed(
+        // trace:BUG-2705 | ai:claude
+        (outcome, leftover_note) = self_published_seat_exit(
             outcome,
             status.success(),
-            unshipped.as_ref(),
-            || {
-                publish_failed.set(true);
-                crate::ship_from_seat::run_at(
-                    &main_root,
-                    crate::ship_from_seat::FromSeatOptions {
-                        clone: worktree.clone(),
-                        spec: Some(crate::native_publication::resolve_scope(
-                            &main_root,
-                            launch.spec,
-                        )?),
-                        no_pr: false,
-                        dry_run: false,
-                        commit_pending: None,
-                    },
-                )?;
-                publish_failed.set(false);
-                Ok(())
+            &launch_seat,
+            &SeatExit {
+                read_seat: &|| bg::SeatState::read(&worktree, launch.branch),
+                post_exit: &|| {
+                    crate::ship_from_seat::post_exit_commit_reported_as(
+                        &main_root,
+                        &worktree,
+                        launch.spec,
+                        launch.lease_id,
+                        true,
+                        Some(launch.vendor.as_str()),
+                    )
+                },
+                publish: &|| {
+                    publish_failed.set(true);
+                    crate::ship_from_seat::run_at(
+                        &main_root,
+                        crate::ship_from_seat::FromSeatOptions {
+                            clone: worktree.clone(),
+                            spec: Some(crate::native_publication::resolve_scope(
+                                &main_root,
+                                launch.spec,
+                            )?),
+                            no_pr: false,
+                            dry_run: false,
+                            commit_pending: None,
+                        },
+                    )?;
+                    publish_failed.set(false);
+                    Ok(())
+                },
+                republished: &|| {
+                    classify(None, None, || lookup_pr(launch.project_root, launch.branch))
+                },
+                no_change: &|outcome| {
+                    classify_seat_no_change(outcome, status.success(), &main_root, &worktree)
+                },
             },
-            || classify(None, None, || lookup_pr(launch.project_root, launch.branch)),
-        );
-        // Only a clean seat can be "no change": uncommitted work stays the
-        // stall it is today.
-        outcome = no_change_only_when_clean(
-            outcome,
-            &bg::SeatState::read(&worktree, launch.branch),
-            |outcome| classify_seat_no_change(outcome, status.success(), &main_root, &worktree),
         )?;
     }
 
@@ -1835,6 +1968,15 @@ fn run(
     let (_, mut code) = report(&outcome, status.code(), unshipped.as_ref());
     // trace:STORY-2690 | ai:codex
     let kind = attempt.finish_outcome(&outcome, status.success(), unshipped.is_some(), untested)?;
+    // The lane's result record names why its seat stayed unpublished.
+    // trace:BUG-2705 | ai:claude
+    if kind == crate::lane_result::Kind::FailedAfterStart {
+        let gate = crate::lane_fast_gate::reason(&main_root, launch.branch)
+            .map(|why| format!("fast gate: {why}"));
+        for note in leftover_note.iter().chain(gate.iter()) {
+            attempt.append_detail(note)?;
+        }
+    }
     if kind == crate::lane_result::Kind::FailedAfterStart && code == 0 {
         code = NO_PR_EXIT_CODE;
     }
@@ -1871,6 +2013,11 @@ fn run(
         }
     }
     let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
+    // trace:BUG-2705 | ai:claude
+    let line = match &leftover_note {
+        Some(note) => format!("{line} (host: {note})"),
+        None => line,
+    };
     // BUG-2434: an untested lane that ran without os_wrap (no job runner)
     // says so on the line its launcher reads. trace:BUG-2434 | ai:claude
     let os_wrap_off = untested
