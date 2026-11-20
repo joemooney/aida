@@ -2,24 +2,24 @@ id: 01a1f2db-5301-7ad2-8755-c6d418659f65
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-036
 agreed_id: TASK-3153
 title: 'dell1 autobuild has never promoted: ff-only fails on the config.toml skip-workt…'
-description: |-
+description: |
   dell1 autobuild has never promoted: ff-only fails on the config.toml skip-worktree override, and tip-only CI starves
 
-  Verified 2026-11-19 from ~/.aida/autobuild.log on dell1: every */30 tick on 2026-11-18 skipped, and no line reads "promoted". The live binary moved only by hand (e207f1f at 07:01, cfbc140 at 23:50). Native `aida dev build --if-main-green` is not running on dell1 either (no ~/.aida/dev-autopromote.log).
+  Verified 2026-11-19 from ~/.aida/autobuild.log on dell1: every */30 tick on 2026-11-18 skipped, and no line reads "promoted". The live binary moved only by hand (e207f1f at 07:01, cfbc140 at 23:50, fd4018a at 2026-11-19 15:14 by product-14).
 
-  Cause 1, "main cannot fast-forward" (13 ticks): the primary checkout keeps `.aida/config.toml` as skip-worktree (standalone_implementer_cap = 8). `git merge --ff-only` refuses whenever an incoming commit changes that file. On 2026-11-18 that was 2edf9a4, 64468cd, 85ec930, 4abdfe5 and cfbc140. The tick stays stuck until someone resolves it by hand.
-  Fix (host script ~/bin/aida-autobuild.sh): before merging, save the override as a patch with `diff -u <(git show HEAD:.aida/config.toml) .aida/config.toml`. Dry-run that patch against `git show $target:.aida/config.toml`; if it does not apply, skip and log. Then run `git update-index --no-skip-worktree`, `git checkout -- .aida/config.toml`, `git merge --ff-only $target`, re-apply the patch, and `git update-index --skip-worktree`. Never commit or discard the override. Build only after the merge, so the binary is built from the checkout's own new HEAD and is never older than its config (brief constraint).
+  Update 2026-11-19 (product-14): the CODE fixes for both causes shipped in #4327 (TASK-3812, ed269f3a8) as scripts/aida-autobuild.sh: skip-worktree override save/re-apply around the ff-only merge, plus a bounded wait for the tip's CI. The newest-green promotion rule (the real fix for cause 2) is BUG-2687. What remains here is HOST work, not lane code.
 
-  Cause 2, "CI is in_progress" (most other ticks): the script requires green CI on the exact origin/main tip. Merges land about every 30 min and CI takes longer, so the tip almost never has a finished run when the tick fires. `aida dev build` promotes only when main == origin/main, so promoting an older green commit is not an option.
-  Fix: when the tip's run is queued or in_progress, wait for it under the flock, polling every 60s and capped at about 25 min. Then re-fetch: if origin/main moved, exit and let the next tick decide; otherwise promote on green.
-
-  The launcher side ships in the TASK-3812 PR. `scripts/lane-run.sh` now runs `aida dev check-fresh` and refuses lanes more than 10 changes or 6h behind origin/main, which makes this failure visible instead of silent.
+  Acceptance criteria (host/operator task; not for a code lane):
+  1. dell1's cron runs the repo's scripts/aida-autobuild.sh (from the dell1 primary checkout, per docs/advanced/lane-host-checklist.md) instead of the old ~/bin/aida-autobuild.sh; the old script is moved aside, not deleted.
+  2. The skip-worktree override `standalone_implementer_cap = 8` survives at least one fast-forward that changes .aida/config.toml (verify with `git ls-files -v .aida/config.toml` showing the S flag and the value intact).
+  3. ~/.aida/autobuild.log on dell1 shows at least one "promoted" line, and `aida doctor` per-host binary reporting (#4327) shows dell1 live within 10 changes of origin/main.
+  4. Record the deploy and the first promotion as comments here, then complete.
 status: Draft
 priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-19T08:10:22.337973035Z
-modified_at: 2026-11-19T08:10:22.337973035Z
+modified_at: 2026-11-20T00:59:40.178029258Z
 req_type: Task
 tags:
 - from-advisor:TASK-3812
@@ -33,6 +33,37 @@ history:
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1f677-5d12-70e2-aa72-1d426c3abda3
+  author: joe
+  timestamp: 2026-11-20T00:59:40.178028460Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: description
+    old_value: |-
+      dell1 autobuild has never promoted: ff-only fails on the config.toml skip-worktree override, and tip-only CI starves
+
+      Verified 2026-11-19 from ~/.aida/autobuild.log on dell1: every */30 tick on 2026-11-18 skipped, and no line reads "promoted". The live binary moved only by hand (e207f1f at 07:01, cfbc140 at 23:50). Native `aida dev build --if-main-green` is not running on dell1 either (no ~/.aida/dev-autopromote.log).
+
+      Cause 1, "main cannot fast-forward" (13 ticks): the primary checkout keeps `.aida/config.toml` as skip-worktree (standalone_implementer_cap = 8). `git merge --ff-only` refuses whenever an incoming commit changes that file. On 2026-11-18 that was 2edf9a4, 64468cd, 85ec930, 4abdfe5 and cfbc140. The tick stays stuck until someone resolves it by hand.
+      Fix (host script ~/bin/aida-autobuild.sh): before merging, save the override as a patch with `diff -u <(git show HEAD:.aida/config.toml) .aida/config.toml`. Dry-run that patch against `git show $target:.aida/config.toml`; if it does not apply, skip and log. Then run `git update-index --no-skip-worktree`, `git checkout -- .aida/config.toml`, `git merge --ff-only $target`, re-apply the patch, and `git update-index --skip-worktree`. Never commit or discard the override. Build only after the merge, so the binary is built from the checkout's own new HEAD and is never older than its config (brief constraint).
+
+      Cause 2, "CI is in_progress" (most other ticks): the script requires green CI on the exact origin/main tip. Merges land about every 30 min and CI takes longer, so the tip almost never has a finished run when the tick fires. `aida dev build` promotes only when main == origin/main, so promoting an older green commit is not an option.
+      Fix: when the tip's run is queued or in_progress, wait for it under the flock, polling every 60s and capped at about 25 min. Then re-fetch: if origin/main moved, exit and let the next tick decide; otherwise promote on green.
+
+      The launcher side ships in the TASK-3812 PR. `scripts/lane-run.sh` now runs `aida dev check-fresh` and refuses lanes more than 10 changes or 6h behind origin/main, which makes this failure visible instead of silent.
+    new_value: |
+      dell1 autobuild has never promoted: ff-only fails on the config.toml skip-worktree override, and tip-only CI starves
+
+      Verified 2026-11-19 from ~/.aida/autobuild.log on dell1: every */30 tick on 2026-11-18 skipped, and no line reads "promoted". The live binary moved only by hand (e207f1f at 07:01, cfbc140 at 23:50, fd4018a at 2026-11-19 15:14 by product-14).
+
+      Update 2026-11-19 (product-14): the CODE fixes for both causes shipped in #4327 (TASK-3812, ed269f3a8) as scripts/aida-autobuild.sh: skip-worktree override save/re-apply around the ff-only merge, plus a bounded wait for the tip's CI. The newest-green promotion rule (the real fix for cause 2) is BUG-2687. What remains here is HOST work, not lane code.
+
+      Acceptance criteria (host/operator task; not for a code lane):
+      1. dell1's cron runs the repo's scripts/aida-autobuild.sh (from the dell1 primary checkout, per docs/advanced/lane-host-checklist.md) instead of the old ~/bin/aida-autobuild.sh; the old script is moved aside, not deleted.
+      2. The skip-worktree override `standalone_implementer_cap = 8` survives at least one fast-forward that changes .aida/config.toml (verify with `git ls-files -v .aida/config.toml` showing the S flag and the value intact).
+      3. ~/.aida/autobuild.log on dell1 shows at least one "promoted" line, and `aida doctor` per-host binary reporting (#4327) shows dell1 live within 10 changes of origin/main.
+      4. Record the deploy and the first promotion as comments here, then complete.
 filed_at:
   code_sha: 4d6994869def49bf5179328a9d1a7f6c9752315a
   branch: task-b6b1278890774ef993d2ebc327862470-1095
