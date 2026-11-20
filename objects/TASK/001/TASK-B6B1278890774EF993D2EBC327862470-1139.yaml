@@ -1,0 +1,31 @@
+id: 01a1fa6f-641e-7012-b882-2e9069c7fe34
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1139
+title: 'Review follow-up: Standing::admit does a linear Vec::contains search for each historical record, with deep J'
+description: |-
+  From BUG-2662
+  Reviewed sha: ccaa61189ceee258f860e576bd59e662a859f618
+
+  Standing::admit does a linear Vec::contains search for each historical record, with deep JSON comparisons under the per-change writer lock. An unchanged history takes quadratic comparisons, and records themselves retain round history. Use a linear check or indexed event identities with a bounded snapshot.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T19:29:26.558167004Z
+modified_at: 2026-11-20T19:29:26.558167004Z
+req_type: Task
+tags:
+- carried-from:BUG-2662
+- finding-hash:d4b3eb2b
+- from-review:BUG-2662
+relationships:
+- rel_type: References
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-20T19:29:49.417820449Z
+filed_at:
+  code_sha: ccaa61189ceee258f860e576bd59e662a859f618
+  branch: pr-4378
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 012b95ef890
+  vendor: claude
+  session: 01a1fa6bfc78

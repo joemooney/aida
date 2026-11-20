@@ -1,0 +1,31 @@
+id: 01a1fa6f-bfa0-7591-a768-7666e58eb88c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1140
+title: 'Review follow-up: At a human terminal a new persistent receipt is allocated before detecting an identical re'
+description: |-
+  From BUG-2662
+  Reviewed sha: ccaa61189ceee258f860e576bd59e662a859f618
+
+  At a human terminal a new persistent receipt is allocated before detecting an identical repeat. The repeat discards its ID and leaves an unreferenced receipt per invocation. Validate and reuse the standing receipt for the same act before allocating a replacement.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T19:29:49.984468114Z
+modified_at: 2026-11-20T19:29:49.984468114Z
+req_type: Task
+tags:
+- carried-from:BUG-2662
+- finding-hash:dce28417
+- from-review:BUG-2662
+relationships:
+- rel_type: References
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-20T19:30:09.755589218Z
+filed_at:
+  code_sha: ccaa61189ceee258f860e576bd59e662a859f618
+  branch: pr-4378
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 012b95ef890
+  vendor: claude
+  session: 01a1fa6bfc78
