@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: c778a0e587ee0ff8abc1553be5b9d64bcfd33211
 
   [P2] Replace the nonexistent documentation path in the follow-up fixture. The literal docs/plans/p.md at publication_completion.rs:546 is treated as a tracked documentation reference by the Documentation audience coverage guard. Exact-head CI job 135693254023 reports this location as missing and exits 2; aggregate Build job 135702227564 fails because GATES=failure while COMPILE=success. Use a fixture value outside the docs path namespace, such as plan-fixture.md, preserving the followup-src: prefix and both assertions. This is a concrete fixture/CI defect, with no observed runtime completion defect; it is nonblocking under the configured p2 policy. Evidence is the existing CI log and source inspection; no local test or build was run.
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T16:26:44.973890478Z
-modified_at: 2026-11-20T02:23:41.457390800Z
+modified_at: 2026-11-20T02:34:34.557373184Z
 req_type: Task
 tags:
 - carried-from:BUG-2696
@@ -67,6 +67,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f6ce-40bd-7d70-9587-05e436ca60db
+  author: aida-session-start
+  timestamp: 2026-11-20T02:34:34.557371432Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: c778a0e587ee0ff8abc1553be5b9d64bcfd33211
