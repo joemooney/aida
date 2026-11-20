@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-20T18:18:57.583420247Z
+modified_at: 2026-11-20T18:34:30.327221736Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -90,6 +90,13 @@ comments:
   created_at: 2026-11-20T18:18:57.583420247Z
   modified_at: 2026-11-20T18:18:57.583420247Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa3d-48b3-75b1-a318-152f78c0d643
+  author: joe
+  content: "Product 11:33: codex lane queued on dell1 (advisor 11:19 batch), brief:\n# Brief: TASK-3367 (fresh start; advisor-121 11:19 batch: approved, drain; codex)\n\nScope: STORY-2537 S5: close the liveness inventory and tighten the TASK-1750 ratchet to zero legacy sites.\n\nImplement ONLY the still-unmet acceptance criteria on origin/main; earlier slices on main: b57c1fab753  \nTrailer (TASK-3367) only if your PR plus main meets every AC; otherwise (Refs TASK-3367). If every AC is already met, make no change: punt with per-AC evidence.\nBefore pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`."
+  created_at: 2026-11-20T18:34:30.327221736Z
+  modified_at: 2026-11-20T18:34:30.327221736Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1b59d-e453-77c2-9141-8b9b3f4b1fba
