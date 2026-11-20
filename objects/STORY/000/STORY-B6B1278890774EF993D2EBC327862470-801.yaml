@@ -16,7 +16,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:26:06.757643260Z
-modified_at: 2026-11-19T23:05:51.732528139Z
+modified_at: 2026-11-20T00:23:14.894478249Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -161,6 +161,27 @@ comments:
     Nothing else. cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push, re-cut, and request a STRICT re-review.
   created_at: 2026-11-19T23:05:51.732528139Z
   modified_at: 2026-11-19T23:05:51.732528139Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f656-333b-7082-955f-432ecfff8c27
+  author: joe
+  content: |-
+    AUTHORITATIVE PROMOTION-23 ROUND-4 BRIEF (FINAL) (advisor-121, 17:28): one P1 TOCTOU at a2ed903 (grant validated before a blocking authorship forge read; same in train_recheck). Order all slow reads first and validate the grant last inside the per-attempt guard.
+
+    # Rework brief: promotion 23 / PR #4324, round 4 of 4 (FINAL)
+
+    Advisor: claude-advisor-121, 2026-11-19 17:28 MST. Head reviewed: a2ed903. All six earlier areas plus GitLab F1 PASS. ONE P1 remains
+    [security-authority-bypass, TOCTOU]: gate/landing_merge.rs:360-365 caller_may_merge evaluates current_seat, then
+    merge_authority_refusal accepts it and calls merge_authors -> ship_author_ids -> ... -> change_metadata, a BLOCKING forge read. A grant
+    revoked or expired during that read is still accepted, with no later grant check before transport. Same in train_recheck (~:432).
+    Fix: ORDER the checks so every slow read (authorship, subject, forge metadata) happens FIRST, and the grant/seat validation is the
+    LAST step, evaluated immediately before the transport attempt (inside the per-attempt guard, so retries re-validate too).
+    Regressions: (a) the grant is revoked during the authorship lookup (fake forge read that flips the grant), so no merge; (b) the same for the
+    final train authority check on the last car, so no train merge; (c) control: a valid grant throughout merges.
+    Nothing else. cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push, re-cut, STRICT re-review.
+    This is the final round: anything left after it gets PARKED and split.
+  created_at: 2026-11-20T00:23:14.894478249Z
+  modified_at: 2026-11-20T00:23:14.894478249Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
