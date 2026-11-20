@@ -1,0 +1,31 @@
+id: 01a1faf4-cd12-7623-8726-a729ba6606ad
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1174
+title: 'Review follow-up: SessionClaimHeartbeat::drop joins a thread that may be inside a fetch or push using an unb'
+description: |-
+  From BUG-2706
+  Reviewed sha: 9a5565b17c8552116a9ba459a9f8a31a7011af43
+
+  SessionClaimHeartbeat::drop joins a thread that may be inside a fetch or push using an unbounded Git subprocess. A stalled remote during a refresh can keep an otherwise finished launcher from returning, and a stalled pull holds the shared writer lock. Bound or cancel the refresh I/O and join on shutdown within a defined deadline.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T21:55:09.714589697Z
+modified_at: 2026-11-20T21:55:09.714589697Z
+req_type: Task
+tags:
+- carried-from:BUG-2706
+- finding-hash:cba49608
+- from-review:BUG-2706
+relationships:
+- rel_type: References
+  target_id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
+  created_at: 2026-11-20T21:55:22.355490718Z
+filed_at:
+  code_sha: 9a5565b17c8552116a9ba459a9f8a31a7011af43
+  branch: pr-4382
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1faf2763e
