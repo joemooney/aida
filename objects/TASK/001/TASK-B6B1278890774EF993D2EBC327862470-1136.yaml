@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T18:39:16.764127759Z
+modified_at: 2026-11-20T18:41:36.240235472Z
 req_type: Task
 tags:
 - landing
@@ -32,6 +32,13 @@ comments:
   content: 'advisor-121 11:55, scope addition (codify, don''t remember): two more stall classes the guard must detect, all seen today with no wake event. (a) UNREVIEWED-HEAD: an open main PR whose head has had no review verdict for 30 min or more (#4365 3h, #4363 2h20m, #4364 3h), with the cause named: ''watcher admission is busy'' in the review-watch log, or a stale aida-pr-N reviewer tree or lease. (b) UNROUTED-CR: a changes-requested verdict at the exact head, no rework queued and no live lane for 20 min or more (#4373 unrouted 2h). Route both to the advisor seat.'
   created_at: 2026-11-20T18:39:16.764127759Z
   modified_at: 2026-11-20T18:39:16.764127759Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa43-ccea-7423-9c70-57f88200693a
+  author: joe
+  content: 'advisor-121 11:58 CORRECTION: the two classes in my 11:55 note are already STORY-2906 AC1 (STUCK-REVIEW and STUCK-REWORK), so #4372 covers them. Drop them from this slice; only the CAUSE naming below stays here as an enhancement.'
+  created_at: 2026-11-20T18:41:36.240235472Z
+  modified_at: 2026-11-20T18:41:36.240235472Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
