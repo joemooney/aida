@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-20T21:35:27.531745383Z
+modified_at: 2026-11-20T21:49:48.651380418Z
 req_type: Task
 tags:
 - codify
@@ -266,6 +266,13 @@ comments:
   modified_at: 2026-11-20T21:35:27.531745383Z
   session_id: 01a1fab3bd8d
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1faf0-1847-7fd1-80dc-be8627765a5e
+  author: joe
+  content: 'Product 14:52: relay feature in use (for `aida lane relay` AC parity): per-spec pending ADDENDA. Rulings that arrive while a lane is live (it can''t be told mid-run) are stored and appended automatically to that spec''s NEXT relayed brief. Today: TASK-3827 (shared lane-visibility reader from #4382) and BUG-2706.'
+  created_at: 2026-11-20T21:49:48.651380418Z
+  modified_at: 2026-11-20T21:49:48.651380418Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
   author: joe
