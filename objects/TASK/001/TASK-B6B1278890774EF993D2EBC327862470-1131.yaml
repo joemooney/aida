@@ -1,0 +1,32 @@
+id: 01a1f988-1034-7d12-9151-898da686b2d5
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1131
+agreed_id: TASK-3822
+title: 'Crate-split: move pr_cmd.rs into a pr_cmd/ directory module (mechanical, no behaviour change)'
+description: |
+  Crate-split follow-up (split out of TASK-3786, whose #4309 pr_service extraction landed): move aida-cli-lib/src/pr_cmd.rs into a pr_cmd/ directory module.
+
+  Acceptance:
+  1. pr_cmd.rs becomes pr_cmd/mod.rs plus cohesive submodules (e.g. ship, review, list or train glue), with public paths unchanged (re-exports), so no caller or CLI behaviour changes.
+  2. Mechanical move only: no logic changes; existing tests pass unchanged; trace comments move with their code.
+  3. Ratchets (store-writers, ExecContext, crate-glob, gate inventory) pass without growing any baseline.
+  Codex lane, FASTTRACK-sized review if the diff is a pure move.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T15:16:46.260567298Z
+modified_at: 2026-11-20T15:16:46.260567298Z
+req_type: Task
+tags:
+- crate-split
+- linked:TASK-3786
+- refactor
+filed_at:
+  code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 78b437097cb
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
