@@ -18,12 +18,12 @@ description: |
   3. Regression with the production gate path: a promotion PR on promote/integration-N with resolvable inherited ids is covered by an active
      mandate; a PR whose TITLE names an unknown spec still refuses as unresolved.
   Authority path (mandate cover): Claude lane, STRICT review.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:25:22.503984255Z
-modified_at: 2026-11-20T06:01:27.624933140Z
+modified_at: 2026-11-20T06:15:32.856916895Z
 req_type: Bug
 tags:
 - landing
@@ -192,6 +192,12 @@ comments:
   modified_at: 2026-11-20T06:01:27.624933140Z
   session_id: 01a1f77a1ea9
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f798-8ef8-70f1-a31c-d1916fe102b9
+  author: aida-publication-done
+  content: Implementer push 8655779c7017 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T06:15:32.856916346Z
+  modified_at: 2026-11-20T06:15:32.856916346Z
+  session_id: 01a1f77a1ea9
 history:
 - id: 01a1f73a-c324-7321-9f94-4127ab5cc9cb
   author: aida-session-start
@@ -227,6 +233,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f798-8ef8-70f1-a31c-d18b4baaaea9
+  author: aida-publication-done
+  timestamp: 2026-11-20T06:15:32.856914810Z
+  session_id: 01a1f77a1ea9
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: ccd9832894397b0541985d2e6ebfb8d97f0705ba
   branch: main
