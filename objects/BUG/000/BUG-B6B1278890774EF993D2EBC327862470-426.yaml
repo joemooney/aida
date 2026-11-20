@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-20T22:39:12.420600366Z
+modified_at: 2026-11-20T22:58:33.601806960Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -448,6 +448,31 @@ comments:
   modified_at: 2026-11-20T22:19:15.677556Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb2e-d801-70c2-a540-96b00357f4c1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0ab2fa424e (round 4)
+
+    Acceptance evidence (targeted run, cargo test --profile agent -p aida-cli-lib --lib -- bug_2662: 24 passed, 0 failed):
+    - Finding 1: bug_2662_binding_and_first_approval_land_together_or_not_at_all. Existing unbound verdict + first PR approval; receipt issuance failure and post-issuance write failure both leave the change ledger without events and no receipt; success writes the bound copy and the one approval in one append.
+    - Finding 2: bug_2662_approval_on_the_ledger_after_a_failed_sync_keeps_its_receipt (fault after write_all) and bug_2662_receipt_is_settled_by_what_the_write_did (bound and unbound, probe receipt).
+    - Finding 3: bug_2662_receipt_of_a_recorder_that_exited_is_recovered_by_the_next_attempt (same act adopts the receipt; another act removes it).
+    - Finding 4: bug_2662_refusal_is_announced_once_whatever_its_hold (released hold on repeat: no second announcement; failed mixed filing with an equal standing hold: announced once by the retry).
+    - Finding 5: aida-review skill template wording.
+    Other checks: cargo fmt clean; check-store-writers.py reconciled; tests/test_store_writer_inventory.py, test_ratchet_set, test_ci_structural_guards, test_verify_manual pass; aida-ci-guards 51 passed; library ratchet tests pass.
+
+    Not run / failing locally: make check-ci-fast cannot finish inside this lane's 60s tool cap (stopped in the containment conformance gate; earlier gates passed). make sync-templates refused (.claude/skills is read-only here); the skill mirror is a symlink and check-templates reported the mirrors current up to the cargo-backed agent-skills step. In wider filtered runs 6 tests failed for lane reasons: 5 need the built aida CLI binary, and reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant fails on the mail writer-admission scan. None touch this diff; CI is the evidence for them.
+
+    Residual risks:
+    - A sync error with the event readable on the ledger is reported as recorded, with a warning; the receipt and its reservation are kept.
+    - A verdict recorded before this change has no announcement mark, so its first identical repeat announces it once more.
+    - The announcement mark is written after the event is emitted and outside the ledger locks: a crash between the two, or two simultaneous repeats, can announce twice.
+    - A torn ledger line keeps the receipt and refuses further recording until the ledger is repaired (strict reader), as before.
+  created_at: 2026-11-20T22:58:33.601806960Z
+  modified_at: 2026-11-20T22:58:33.601806960Z
+  session_id: 01a1fb1ceb86
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
