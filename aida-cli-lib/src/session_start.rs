@@ -110,6 +110,56 @@ pub(crate) fn review_anchor_matches_change(
         })
 }
 
+/// Set once a `--no-human` pickup begins setup in this process; read by the
+/// review lease-conflict handling, which must never prompt for such a run.
+// trace:BUG-2684 | ai:claude
+static NO_HUMAN_SETUP: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Mark this process as running a `--no-human` pickup.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn mark_no_human_setup() {
+    NO_HUMAN_SETUP.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Whether a review lease conflict must be decided without a prompt: a
+/// `--no-human` pickup, `AIDA_HEADLESS` (`headless_env`), an acknowledged
+/// no-human run, an agent-mode caller, or no terminal on stdin.
+// trace:BUG-1205 | ai:claude
+// trace:BUG-2684 | ai:claude
+pub(crate) fn review_conflict_cannot_prompt(headless_env: bool) -> bool {
+    review_conflict_cannot_prompt_from(
+        NO_HUMAN_SETUP.load(std::sync::atomic::Ordering::SeqCst),
+        headless_env,
+        crate::drain_gate::no_human_ack_source().is_some(),
+        crate::output_policy::non_interactive_confirm(),
+    )
+}
+
+/// Pure core of [`review_conflict_cannot_prompt`].
+// trace:BUG-2684 | ai:claude
+pub(crate) fn review_conflict_cannot_prompt_from(
+    no_human_setup: bool,
+    headless_env: bool,
+    no_human_acknowledged: bool,
+    non_interactive: bool,
+) -> bool {
+    no_human_setup || headless_env || no_human_acknowledged || non_interactive
+}
+
+/// Release an earlier reviewer's lease blocking a review pickup when its
+/// holder is proven dead by the ownership reader (not only by the
+/// process-table heuristic [`review_branch_conflicts`] applies) and its
+/// worktree is gone. Such a lease holds nothing a human could choose to
+/// keep, so it never prompts. Other roles keep the guarded `session end`.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn release_dead_gone_tree_conflict(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+) -> bool {
+    crate::ownership::reader::stale_review_lease_ended(project_root, lease)
+        && crate::session_reap::release_proven_dead_gone_worktree_lease(project_root, lease)
+}
+
 /// How a reviewer pickup meets the lease holding the PR's source branch. The
 /// change title (a forge round trip) is fetched only once every other
 /// coexistence condition holds; the branch is the source branch the caller
@@ -2961,10 +3011,23 @@ pub(crate) fn session_start_with_receipt(
                 // automatically (the option a human would pick); a LIVE lease
                 // refuses with a typed message instead of a silent cancel.
                 // trace:BUG-1205 | ai:claude
-                let headless = std::env::var_os("AIDA_HEADLESS").is_some()
-                    || !std::io::IsTerminal::is_terminal(&std::io::stdin());
+                let headless =
+                    review_conflict_cannot_prompt(std::env::var_os("AIDA_HEADLESS").is_some());
                 // trace:TASK-3420 | ai:codex
                 let is_live = crate::ownership::reader::lease_retained(&project_root, l);
+                // A provably dead lease whose tree is gone holds nothing a
+                // human could choose to keep: release it, never prompt.
+                // trace:BUG-2684 | ai:claude
+                if !is_live && release_dead_gone_tree_conflict(&project_root, l) {
+                    eprintln!(
+                        "{} released lease {} on `{}`: its worktree {} is gone and its session has ended",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                        &l.id[..l.id.len().min(8)],
+                        l.branch,
+                        l.worktree_path.display()
+                    );
+                    continue;
+                }
                 // BUG-2150: an explicit reviewer pickup coexists with the
                 // implementer's lease; another reviewer's lease still conflicts.
                 // trace:BUG-2150 | ai:claude

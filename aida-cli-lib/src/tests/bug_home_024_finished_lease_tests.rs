@@ -500,3 +500,163 @@ fn missing_session_id_is_reported_as_an_id_not_a_branch() {
         .to_string();
     assert!(err.contains("No lease found for branch"), "{err}");
 }
+
+/// BUG-2684: a finished reviewer's stale lease whose tree is gone is
+/// released by the review pickup with no prompt, although it records no pid
+/// for the process-table heuristic. A live owner or a present tree is kept.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_stale_review_lease_with_gone_tree_is_released_without_prompt() {
+    use crate::ownership::{dual, store::Expect, Ownership, Phase, WorkKey};
+    let repo = committed_repo();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(repo.path(), "reviewer", &[]);
+    let holder = tempfile::tempdir().unwrap();
+    let head = String::from_utf8(git(repo.path(), &["rev-parse", "HEAD"]).stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    let path = deleted_worktree(repo.path(), holder.path(), "pr-4354");
+    let mut lease = lease_at("01a1f76fcee1", "PR-4354", &path, "pr-4354", None);
+    lease.review_verb = true;
+    lease.pr_head_sha = Some(head.clone());
+    write_lease(repo.path(), &lease);
+    let key = WorkKey::Review {
+        change: dual::change(4354),
+        head: head.clone(),
+    };
+    let mut owner = dual::holder_for_lease(&lease, &dual::WriterFacts::here(), chrono::Utc::now());
+    owner.witnesses.clear();
+    crate::ownership::store::OwnershipStore::for_project(repo.path())
+        .unwrap()
+        .unwrap()
+        .update(&key, "fixture", Expect::Any, |_| {
+            Some((
+                Ownership {
+                    key: key.clone(),
+                    generation: 0,
+                    phase: Phase::Reviewing { head: head.clone() },
+                    holder: Some(owner),
+                },
+                None,
+            ))
+        })
+        .unwrap();
+
+    // The observed stale reviewer lease: witness-less and pid-less. The
+    // process-table heuristic keeps it (no pid to prove dead), so the old
+    // pickup prompted at a terminal; the ownership reader judges it ended,
+    // so the pickup now releases it without asking.
+    assert!(!release_gone(repo.path(), &lease));
+    assert!(lease_path(repo.path(), &lease.id).exists());
+    assert!(!crate::ownership::reader::lease_retained(
+        repo.path(),
+        &lease
+    ));
+    assert!(crate::session_start::release_dead_gone_tree_conflict(
+        repo.path(),
+        &lease
+    ));
+    assert!(!lease_path(repo.path(), &lease.id).exists());
+    let again = holder.path().join("wt-again");
+    let readd = git(
+        repo.path(),
+        &["worktree", "add", "-q", again.to_str().unwrap(), "pr-4354"],
+    );
+    assert!(readd.status.success(), "{readd:?}");
+
+    // A live owner keeps its lease even with its tree gone.
+    let gone = deleted_worktree(repo.path(), holder.path(), "pr-8");
+    let mut live = lease_at(
+        "01a1f76fcee3",
+        "PR-8",
+        &gone,
+        "pr-8",
+        Some(std::process::id()),
+    );
+    live.review_verb = true;
+    write_lease(repo.path(), &live);
+    assert!(!crate::session_start::release_dead_gone_tree_conflict(
+        repo.path(),
+        &live
+    ));
+    assert!(lease_path(repo.path(), &live.id).exists());
+
+    // A provably dead lease whose tree still exists is not released here.
+    let present = holder.path().join("wt-present");
+    std::fs::create_dir_all(&present).unwrap();
+    let mut kept = lease_at("01a1f76fcee2", "PR-7", &present, "pr-7", Some(reaped_pid()));
+    kept.review_verb = true;
+    write_lease(repo.path(), &kept);
+    assert!(!crate::session_start::release_dead_gone_tree_conflict(
+        repo.path(),
+        &kept
+    ));
+    assert!(lease_path(repo.path(), &kept.id).exists());
+
+    // A dead implementer lease keeps the guarded `session end` path.
+    let implementer_tree = deleted_worktree(repo.path(), holder.path(), "feature-z");
+    let mut implementer = lease_at(
+        "01a1f76fcee4",
+        "BUG-9",
+        &implementer_tree,
+        "feature-z",
+        Some(reaped_pid()),
+    );
+    implementer.role = Some("implementer".into());
+    write_lease(repo.path(), &implementer);
+    assert!(!crate::session_start::release_dead_gone_tree_conflict(
+        repo.path(),
+        &implementer
+    ));
+    assert!(lease_path(repo.path(), &implementer.id).exists());
+}
+
+/// BUG-2684: the review lease-conflict prompt is never offered to a
+/// `--no-human` pickup or a headless/no-human/agent environment, even when a
+/// terminal is attached.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_no_human_review_pickup_never_prompts() {
+    use crate::session_start::review_conflict_cannot_prompt_from as cannot;
+    assert!(
+        !cannot(false, false, false, false),
+        "an attended terminal may prompt"
+    );
+    assert!(
+        cannot(true, false, false, false),
+        "--no-human never prompts"
+    );
+    assert!(
+        cannot(false, true, false, false),
+        "AIDA_HEADLESS never prompts"
+    );
+    assert!(
+        cannot(false, false, true, false),
+        "an acknowledged no-human run never prompts"
+    );
+    assert!(
+        cannot(false, false, false, true),
+        "agent mode or no TTY never prompts"
+    );
+    // A no-human decision for a live reviewer lease refuses; a dead one ends.
+    assert_eq!(
+        crate::leases::review_source_branch_conflict_decision(
+            cannot(true, false, false, false),
+            true,
+            Some("reviewer"),
+            Some("reviewer"),
+            None,
+        ),
+        crate::leases::LeaseConflictDecision::Refuse
+    );
+    assert_eq!(
+        crate::leases::review_source_branch_conflict_decision(
+            cannot(true, false, false, false),
+            false,
+            Some("reviewer"),
+            Some("reviewer"),
+            None,
+        ),
+        crate::leases::LeaseConflictDecision::AutoEnd
+    );
+}

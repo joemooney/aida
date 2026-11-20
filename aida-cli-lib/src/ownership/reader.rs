@@ -531,6 +531,47 @@ pub(crate) fn journal_review_reclaim(root: &Path, lease: &crate::SessionLease) -
     journal_reclaim(root, lease)
 }
 
+/// Whether an earlier reviewer's lease has ended for a review pickup: the
+/// pickup ownership rule does not retain it, and no recorded owner or worker
+/// process is still alive (the pickup's legacy rule consults only agent
+/// sessions, so a live non-agent pid must veto here).
+// trace:BUG-2684 | ai:claude
+pub(crate) fn stale_review_lease_ended(root: &Path, lease: &crate::SessionLease) -> bool {
+    crate::pr_lease_takeover::reviewer_target(lease).is_some()
+        && !lease_retained(root, lease)
+        && crate::leases::lease_owner_gone(lease) != Some(false)
+        && finished_review_worker_is_gone(lease)
+}
+
+/// Journal retirement of a review whose verdict the caller found recorded at
+/// the lease's head, when the holder's death has no positive proof. A record
+/// that no longer names this lease has nothing to release; a provably live
+/// holder refuses; otherwise the recorded verdict is the completion evidence,
+/// written as the same lease-bound completion receipt the supervisor writes.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn journal_recorded_review_retirement(
+    root: &Path,
+    lease: &crate::SessionLease,
+) -> Result<()> {
+    let Some(record) = lease_record(root, lease)? else {
+        return Ok(());
+    };
+    if record
+        .holder
+        .as_ref()
+        .is_none_or(|holder| holder.session != lease.id)
+    {
+        return Ok(());
+    }
+    match lease_owner(root, lease) {
+        OwnerVerdict::Alive { witness } => {
+            anyhow::bail!("review holder is still alive ({witness}); retirement refused")
+        }
+        OwnerVerdict::Dead { .. } => journal_reclaim(root, lease),
+        OwnerVerdict::Unknown { .. } => review_finished(root, lease),
+    }
+}
+
 /// Record a reclaim attempt with positive death proof before guarded retirement. CAS refuses a
 /// replacement during preflight; the holder remains until session_end succeeds.
 /// This journal entry grants no permission to discard a tree or pending mail.

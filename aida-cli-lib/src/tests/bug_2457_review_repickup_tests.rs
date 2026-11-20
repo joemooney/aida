@@ -383,6 +383,158 @@ fn bug_2684_unrecorded_reviewer_draft_survives_exit_teardown_and_next_pickup() {
     assert!(!tree.join(".aida/review-verdicts").exists());
 }
 
+/// A finished reviewer whose verdict is recorded at its head, but whose
+/// lifecycle close was never written and whose owner cannot be proven dead
+/// (the 2026-11-20 stall that held the next head's review for hours), is
+/// retired by the next head's pickup. No verdict, a WAITING verdict, or a
+/// verdict at another head leaves it in place.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+    let gh = fx.root.join("fake-gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let store = fx.main.join(".aida-store");
+    git_ok(&store, &["config", "user.email", "test@example.com"]);
+    git_ok(&store, &["config", "user.name", "AIDA Test"]);
+    let (storage, status) = review_story(&fx.main);
+    let base = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    std::fs::write(fx.main.join("README.md"), "first PR head\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "first PR head"]);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    queue_work(&storage).unwrap();
+    let mut lease = crate::list_leases(&fx.main).remove(0);
+    let tree = lease.worktree_path.clone();
+    let first_head = git_ok(&tree, &["rev-parse", "HEAD"]);
+    // The observed stale lease: exact session, Reviewing, no witnesses and no
+    // pids, so ownership is Unknown rather than provably dead.
+    lease.pr_head_sha = Some(first_head.clone());
+    lease.active_pid = None;
+    lease.creator_pid = None;
+    lease.holder_record = None;
+    lease.active_pid_start_time = None;
+    lease.creator_pid_start_time = None;
+    lease.pid_namespace = crate::agent_registry::current_pid_namespace();
+    let lease_file = crate::lease_path(&fx.main, &lease.id);
+    {
+        use crate::ownership::{Ownership, Phase, WorkKey};
+        let key = WorkKey::Review {
+            change: crate::ownership::dual::change(2457),
+            head: first_head.clone(),
+        };
+        let mut holder = crate::ownership::dual::holder_for_lease(
+            &lease,
+            &crate::ownership::dual::WriterFacts::here(),
+            chrono::Utc::now(),
+        );
+        holder.witnesses.clear();
+        crate::ownership::store::OwnershipStore::for_project(&fx.main)
+            .unwrap()
+            .unwrap()
+            .update(
+                &key,
+                "fixture",
+                crate::ownership::store::Expect::Any,
+                |_| {
+                    Some((
+                        Ownership {
+                            key: key.clone(),
+                            generation: 0,
+                            phase: Phase::Reviewing {
+                                head: first_head.clone(),
+                            },
+                            holder: Some(holder),
+                        },
+                        None,
+                    ))
+                },
+            )
+            .unwrap();
+    }
+    std::fs::write(&lease_file, toml::to_string(&lease).unwrap()).unwrap();
+    assert!(matches!(
+        crate::ownership::reader::lease_owner(&fx.main, &lease),
+        crate::ownership::OwnerVerdict::Unknown { .. }
+    ));
+    assert!(!crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
+
+    std::fs::write(fx.main.join("README.md"), "next PR head\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "next PR head"]);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    let next_head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    status(aida_core::RequirementStatus::Approved);
+
+    let verdicts = fx.main.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    let verdict = verdicts.join("PR-2457.json");
+    let record = |kind: &str, sha: &str| {
+        std::fs::write(
+            &verdict,
+            serde_json::json!({
+                "verdict": kind,
+                "reviewed_sha": sha,
+                "recorded_by": "reviewer-fixture",
+                "summary": "fixture review",
+                "findings": ["[P2] fixture finding"],
+            })
+            .to_string(),
+        )
+        .unwrap();
+    };
+    let retained = |why: &str| {
+        let before = std::fs::read(&lease_file).unwrap();
+        let err = queue_work(&storage).unwrap_err().to_string();
+        assert!(err.contains("held by worktree"), "{why}: {err}");
+        assert_eq!(std::fs::read(&lease_file).unwrap(), before, "{why}");
+        assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), first_head, "{why}");
+    };
+    let recorded = |sha: &str| {
+        crate::queue_cmd::conclusive_review_recorded_at(
+            &fx.main,
+            crate::session_start::ReviewForge::GitHub,
+            2457,
+            sha,
+        )
+    };
+
+    retained("no verdict");
+    record("waiting", &first_head);
+    assert!(!recorded(&first_head));
+    retained("a WAITING verdict is not conclusive");
+    record("request-changes", &base);
+    assert!(!recorded(&first_head));
+    retained("a verdict at another head");
+
+    record("request-changes", &first_head);
+    assert!(recorded(&first_head));
+    assert!(!recorded(&next_head), "only the reviewed head is covered");
+    queue_work(&storage).unwrap();
+    assert!(!lease_file.exists());
+    let new_lease = crate::list_leases(&fx.main).remove(0);
+    assert_ne!(new_lease.id, lease.id);
+    assert_eq!(new_lease.worktree_path, tree);
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), next_head);
+    // The retirement wrote the lease-bound completion receipt.
+    let old = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    assert!(old.holder.is_none());
+    assert!(matches!(old.phase, crate::ownership::Phase::Closed { .. }));
+}
+
 // trace:BUG-2469 | ai:codex
 // trace:BUG-2469.acec8dd7 | ai:codex
 // trace:BUG-2469.ac5829b2 | ai:codex
