@@ -782,10 +782,9 @@ mod standalone_review_verdict_parent_tests {
         launch.read().unwrap()
     }
     /// The p18 shape (PR #4218, 2026-11-17): APPROVED with two deferred P3s
-    /// whose delivery failed after the barrier was written. Retrying the same
-    /// handoff completes the approval at the head; it never re-records the
-    /// barrier.
-    // trace:BUG-2564 | ai:claude
+    /// whose delivery failed. The failed attempt records nothing (BUG-2662),
+    /// and retrying the same handoff records the approval at the head.
+    // trace:BUG-2564 trace:BUG-2662 | ai:claude
     #[test]
     fn standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery() {
         if crate::test_env::run_path_isolated_test() {
@@ -796,16 +795,19 @@ mod standalone_review_verdict_parent_tests {
         let draft = approved_with_deferred(&f, &launch);
         let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
         crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
-        assert!(f
+        let error = f
             .record(&draft.verdict, &draft.findings, Some(&reviewer))
-            .is_err());
-        let pending = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
-        assert_eq!(
-            pending.kind,
-            rv::VerdictKind::RequestChanges,
-            "barrier stands"
+            .unwrap_err();
+        // The top-level message names the cause, not only the failed step.
+        let error = error.to_string();
+        assert!(
+            error.contains("deferred findings were not filed"),
+            "{error}"
         );
-        // The launch's own barrier is replay evidence, not a legacy conflict.
+        assert!(
+            crate::gate::ledger::project::verdict_records(&f.root, "PR-59").is_empty(),
+            "a failed approval records no verdict"
+        );
         rv::check_draft_legacy_conflicts(
             &f.root,
             &f.root,
@@ -836,6 +838,144 @@ mod standalone_review_verdict_parent_tests {
             crate::gate::ledger::project::verdict_records(&f.root, "PR-59").len(),
             before
         );
+    }
+    /// Every verdict event on PR-59's ledger, oldest first.
+    // trace:BUG-2662 | ai:claude
+    fn verdict_events(f: &Fixture) -> Vec<rv::JsonObj> {
+        let store = crate::gate::ledger::store_root(&f.root).unwrap();
+        crate::gate::ledger::store::read_file(&store, crate::gate::ledger::ChangeKey::pr(59))
+            .iter()
+            .filter_map(|e| e.verdict_record().cloned())
+            .collect()
+    }
+    /// Append `record` to PR-59's ledger for STORY-77, as another seat's
+    /// earlier write.
+    fn seed_verdict(f: &Fixture, record: serde_json::Value) {
+        let store = crate::gate::ledger::store_root(&f.root).unwrap();
+        let change = crate::gate::ledger::ChangeKey::pr(59);
+        let spec = crate::gate::ledger::GateSpec::resolve(&f.root, "STORY-77");
+        let event = crate::gate::ledger::event::verdict_event(
+            &store,
+            change,
+            record.as_object().unwrap(),
+            Some(&spec),
+        );
+        crate::gate::ledger::store::append(&store, change, vec![event]).unwrap();
+    }
+    fn word(record: &rv::JsonObj) -> &str {
+        record["verdict"].as_str().unwrap()
+    }
+    /// One `review record --verdict approved` is exactly one verdict event,
+    /// and an identical repeat adds none.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_one_approval_is_one_verdict_event_and_a_repeat_adds_none() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let reviewer = f.reviewer().unwrap();
+        f.record("approved", &[], Some(&reviewer)).unwrap();
+        let events = verdict_events(&f);
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert_eq!(word(&events[0]), "approved");
+        // The one record is the handshake the orchestrator reads.
+        assert_eq!(events[0]["mode"], crate::gate::ledger::project::PHASE3_MODE);
+        assert!(events[0]["release_grant"].is_object());
+        f.record("approved", &[], Some(&reviewer)).unwrap();
+        assert_eq!(
+            verdict_events(&f),
+            events,
+            "an unchanged record writes nothing"
+        );
+    }
+    /// The PR #4218 shape: the standing record is another reviewer's
+    /// delivery-pending barrier (shown as CHANGES REQUESTED) carrying a
+    /// deferred finding. One approval that inherits the finding appends one
+    /// approved event and no request-changes event; a repeat adds none.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_approval_over_pending_barrier_writes_one_approved_event() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let finding: serde_json::Value = serde_json::from_str(&deferred(1)).unwrap();
+        seed_verdict(
+            &f,
+            serde_json::json!({"verdict":"request-changes","sweep_pending":true,
+                "reviewed_sha":f.head,"recorded_by":"codex reviewer seat",
+                "recorded_at":"2026-11-17T17:40:00+00:00","summary":"barrier",
+                "findings":[finding["text"]],
+                "finding_dispositions":[{"severity":finding["severity"],
+                    "disposition":finding["disposition"],"rationale":finding["rationale"]}]}),
+        );
+        assert_eq!(
+            rv::read_recorded_verdict(&f.root, "PR-59").unwrap().kind,
+            rv::VerdictKind::RequestChanges
+        );
+        let reviewer = f.reviewer().unwrap();
+        f.record("approved", &[], Some(&reviewer)).unwrap();
+        let events = verdict_events(&f);
+        assert_eq!(events.len(), 2, "{events:?}");
+        assert_eq!(word(&events[1]), "approved");
+        assert_ne!(events[1].get("sweep_pending"), Some(&true.into()));
+        assert_eq!(events[1]["findings"], serde_json::json!(["P3 follow-up 1"]));
+        let recorded = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(recorded.kind, rv::VerdictKind::Approved);
+        f.record("approved", &[], Some(&reviewer)).unwrap();
+        assert_eq!(
+            verdict_events(&f),
+            events,
+            "an unchanged record writes nothing"
+        );
+    }
+    /// The PR #4290 shape: a reviewer's request-changes stands at the head and
+    /// an approval carrying a deferred finding cannot file it. The refused
+    /// approval writes no event (the refusal on record is still the other
+    /// reviewer's), the error names the cause, and a retry records once.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_refused_approval_over_standing_refusal_writes_nothing() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        seed_verdict(
+            &f,
+            serde_json::json!({"verdict":"request-changes","reviewed_sha":f.head,
+                "recorded_by":"codex reviewer seat",
+                "recorded_at":"2026-11-19T13:00:00+00:00","summary":"one blocker",
+                "findings":["blocker"]}),
+        );
+        let seeded = verdict_events(&f);
+        let reviewer = f.reviewer().unwrap();
+        crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
+        let error = f
+            .record("approved", &[deferred(1)], Some(&reviewer))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("could not write the review verdict"),
+            "{error}"
+        );
+        assert!(
+            error.contains("deferred findings were not filed"),
+            "{error}"
+        );
+        assert_eq!(
+            verdict_events(&f),
+            seeded,
+            "a refused approval writes nothing"
+        );
+        let standing = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(standing.kind, rv::VerdictKind::RequestChanges);
+        assert_eq!(standing.recorded_by.as_deref(), Some("codex reviewer seat"));
+        f.record("approved", &[deferred(1)], Some(&reviewer))
+            .unwrap();
+        let events = verdict_events(&f);
+        assert_eq!(events.len(), 2, "{events:?}");
+        assert_eq!(word(&events[1]), "approved");
     }
     /// A completed request-changes draft whose p2 finding the `["p1"]` list
     /// deferred was recorded as an approval. Replaying that same launch after

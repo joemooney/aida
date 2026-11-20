@@ -1444,12 +1444,16 @@ blocking evidence. The prior round stays in history. An all-deferred verdict bec
 APPROVED. Mixed findings remain CHANGES REQUESTED; rejected and waiting retain
 their existing semantics.
 
-Before publishing approval, the host persists the complete record with
-`sweep_pending: true`, files its deferred findings into the open sweep under the
-store writer lock, then records approval. Contained reviewers hand this work to
-the collecting launcher. Failed delivery leaves a blocking pending record and
-returns an error. After repairing the reported store problem, repeat the review
-record command (or retry launcher collection with the original handoff); delivery
-is deduplicated by source and finding hash. Completion-time carry-forward remains
+Before recording approval, `aida review record` files the deferred findings
+into the open sweep under the store writer lock, then appends the approval as
+one verdict record. A failed filing records nothing and the error names the
+cause; an approval is also refused, with nothing recorded, when another review
+lands while the findings are filed. Contained reviewers hand this work to the
+collecting launcher, which persists the complete record with
+`sweep_pending: true` first, so its failed delivery leaves a blocking pending
+record. After repairing the reported store problem, repeat the review record
+command (or retry launcher collection with the original handoff); delivery is
+deduplicated by source and finding hash. Repeating a record that is already on
+file unchanged writes nothing. Completion-time carry-forward remains
 a retry fallback. This slice changes no risk tier, review depth, hold-clearance
 or train eligibility policy.

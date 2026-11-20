@@ -236,7 +236,8 @@ pub(crate) fn record_verdict_at(
                 .map(|(_, text)| text.clone())
                 .collect();
             if !deferred.is_empty() {
-                let delivered = record_verdict_at_inner(path, record, spec, None)?;
+                let delivered =
+                    Destination::resolve(&root, &key, record, spec)?.append(record, None)?;
                 let store_path = crate::detect_distributed_store_from(&root).ok_or_else(|| {
                     std::io::Error::other("deferred findings pending: no canonical store")
                 })?;
@@ -262,124 +263,159 @@ pub(crate) fn record_verdict_at(
         }
     }
     if let Some(mut verdict) = parsed.filter(|v| v.kind.approves() && !v.findings.is_empty()) {
-        // Inherited deferred findings still need durable delivery if an earlier
-        // approval attempt failed. Hash deduplication makes retries harmless.
+        // trace:BUG-2662 | ai:claude — one approval is one verdict event. The
+        // follow-up findings are filed first (the sink deduplicates by source
+        // and hash, so a retry is harmless) and the approval is appended only
+        // once they are durable. A failed filing records nothing: no
+        // request-changes barrier stands in for an approval that was refused.
         verdict.inherited_findings = false;
-        let (root, key) = crate::gate::review_verdict::canonical_verdict_key(path)
-            .ok_or_else(|| std::io::Error::other("approval has no canonical verdict key"))?;
         let source = spec.map(|s| s.label.as_str()).unwrap_or(&key);
-        let mut pending = record.clone();
-        // Explicit delivery state: readiness blocks, refusal history skips it.
-        pending.insert("sweep_pending".into(), true.into());
-        pending.insert("verdict".into(), "request-changes".into());
-        record_verdict_at_inner(path, &pending, spec, None)?;
+        let destination = Destination::resolve(&root, &key, record, spec)?;
+        let standing = destination.standing();
         // trace:BUG-2564 | ai:claude — a one-shot, thread-local test fault:
-        // the barrier is durable and the delivery fails, as in production.
+        // the filing fails, as in production.
         #[cfg(test)]
         if FAIL_NEXT_FINDING_DELIVERY.with(|f| f.replace(false)) {
             return Err(std::io::Error::other(
-                "deferred findings pending: injected test failure; retry review record after recovery",
+                "deferred findings were not filed: injected test failure; nothing was recorded; retry review record after recovery",
             ));
         }
         let store_path = crate::detect_distributed_store_from(&root).ok_or_else(|| {
             std::io::Error::other(
-                "deferred findings pending: no canonical store; retry review record after recovery",
+                "deferred findings were not filed: no canonical store; nothing was recorded; retry review record after recovery",
             )
         })?;
         crate::findings_gate::emit_verdict_findings(&root, &store_path, source, "", None, &verdict)
             .map_err(|e| {
                 std::io::Error::other(format!(
-                    "deferred findings pending: {e:#}; retry review record after recovery"
+                    "deferred findings were not filed: {e:#}; nothing was recorded; retry review record after recovery"
                 ))
             })?;
         let mut delivered = record.clone();
         delivered.insert("sweep_pending".into(), false.into());
         delivered.insert("verdict".into(), "approved".into());
-        return record_verdict_at_inner(path, &delivered, spec, Some(&pending));
+        return destination.append(&delivered, Some(&standing));
     }
-    record_verdict_at_inner(path, record, spec, None)
+    Destination::resolve(&root, &key, record, spec)?.append(record, None)
 }
 
+/// Where a verdict record for a canonical key lands: on a change's ledger
+/// (indexed by a spec when one is named), or on the unbound ledger of a spec
+/// no change has been recorded against yet.
 // trace:STORY-2698 | ai:codex
-fn append_review_delivery(
-    root: &Path,
-    change: ChangeKey,
-    record: &crate::gate::review_verdict::JsonObj,
-    spec: Option<&GateSpec>,
-    pending: Option<&crate::gate::review_verdict::JsonObj>,
-) -> std::io::Result<Delivered> {
-    let event = event::verdict_event(root, change, record, spec);
-    if let Some(pending) = pending {
-        let pending = event::verdict_event(root, change, pending, spec);
-        let appended = store::append_delivered(root, change, vec![event], &[pending])?;
-        Ok(if appended.is_empty() {
-            Delivered::Unchanged
+// trace:BUG-2662 | ai:claude
+enum Destination {
+    Change {
+        store: std::path::PathBuf,
+        change: ChangeKey,
+        spec: Option<GateSpec>,
+        /// A change key copies the spec's unbound records onto the change.
+        bind: bool,
+    },
+    Unbound {
+        store: std::path::PathBuf,
+        spec: GateSpec,
+    },
+}
+
+impl Destination {
+    /// Reads only. A contained caller is refused.
+    fn resolve(
+        root: &Path,
+        key: &str,
+        record: &crate::gate::review_verdict::JsonObj,
+        spec: Option<&GateSpec>,
+    ) -> std::io::Result<Self> {
+        if crate::session::process_contained() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "a contained seat cannot write the gate ledger; the launcher that started it collects its verdict",
+            ));
+        }
+        let store = store_root(root)?;
+        if let Some(change) = ChangeKey::parse(key) {
+            return Ok(Self::Change {
+                store,
+                change,
+                spec: spec.cloned(),
+                bind: true,
+            });
+        }
+        let spec = GateSpec::resolve(root, key);
+        // trace:BUG-2517 | ai:codex
+        let changes = if record.get("change_binding").and_then(|v| v.as_str()) == Some("unbound") {
+            Vec::new()
         } else {
-            Delivered::Appended
+            project::changes_for_spec(&store, &spec.label)
+        };
+        Ok(match changes.last() {
+            Some(change) => Self::Change {
+                store,
+                change: *change,
+                spec: Some(spec),
+                bind: false,
+            },
+            None => Self::Unbound { store, spec },
         })
-    } else {
-        store::append_one(root, event)
     }
-}
 
-// trace:STORY-2698 | ai:codex
-fn record_verdict_at_inner(
-    path: &Path,
-    record: &crate::gate::review_verdict::JsonObj,
-    spec: Option<&GateSpec>,
-    pending: Option<&crate::gate::review_verdict::JsonObj>,
-) -> std::io::Result<Delivered> {
-    let (root, key) =
-        crate::gate::review_verdict::canonical_verdict_key(path).ok_or_else(|| {
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("{} is not a verdict key path", path.display()),
-            )
-        })?;
-    if crate::session::process_contained() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::PermissionDenied,
-            "a contained seat cannot write the gate ledger; the launcher that started it collects its verdict",
-        ));
+    /// The spec label a verdict event here carries ([`event::verdict_event`]).
+    fn event_spec(spec: Option<&GateSpec>) -> Option<&str> {
+        spec.map(|s| s.label.as_str())
+            .filter(|l| !l.is_empty() && ChangeKey::parse(l).is_none())
     }
-    let store = store_root(&root)?;
-    if let Some(change) = ChangeKey::parse(&key) {
-        if let Some(spec) = spec {
-            store::bind_unbound(&store, spec, change)?;
+
+    // trace:BUG-2662 | ai:claude
+    fn standing(&self) -> store::Standing {
+        match self {
+            Self::Change {
+                store,
+                change,
+                spec,
+                ..
+            } => store::standing(store, Some(*change), Self::event_spec(spec.as_ref())),
+            Self::Unbound { store, spec } => store::standing(store, None, Some(&spec.label)),
         }
-        let delivered = append_review_delivery(&store, change, record, spec, pending)?;
-        // trace:STORY-2492 | ai:codex
-        // The verdict is durable: publication failure is a reported pending state.
-        let labels = spec.map(|s| vec![s.label.clone()]).unwrap_or_default();
-        if record.get("sweep_pending").and_then(|v| v.as_bool()) != Some(true) {
-            super::review_publication::publish_reported(&store, change, record, &labels);
-        }
-        return Ok(delivered);
     }
-    let spec = GateSpec::resolve(&root, &key);
-    // trace:BUG-2517 | ai:codex
-    let changes = if record.get("change_binding").and_then(|v| v.as_str()) == Some("unbound") {
-        Vec::new()
-    } else {
-        project::changes_for_spec(&store, &spec.label)
-    };
-    match changes.last() {
-        Some(change) => {
-            let result = append_review_delivery(&store, *change, record, Some(&spec), pending)?;
-            if record.get("sweep_pending").and_then(|v| v.as_bool()) != Some(true) {
-                super::review_publication::publish_reported(
-                    &store,
-                    *change,
-                    record,
-                    &[spec.label.clone()],
-                );
+
+    /// Append `record`; with `standing`, only while the spec holds no verdict
+    /// record that was not standing when it was read.
+    fn append(
+        &self,
+        record: &crate::gate::review_verdict::JsonObj,
+        standing: Option<&store::Standing>,
+    ) -> std::io::Result<Delivered> {
+        match self {
+            Self::Change {
+                store,
+                change,
+                spec,
+                bind,
+            } => {
+                if let Some(spec) = spec.as_ref().filter(|_| *bind) {
+                    store::bind_unbound(store, spec, *change)?;
+                }
+                let event = event::verdict_event(store, *change, record, spec.as_ref());
+                let delivered = match standing {
+                    Some(standing) => store::append_one_standing(store, *change, event, standing)?,
+                    None => store::append_one(store, event)?,
+                };
+                // trace:STORY-2492 | ai:codex
+                // The verdict is durable: publication failure is a reported pending state.
+                let labels = spec
+                    .as_ref()
+                    .map(|s| vec![s.label.clone()])
+                    .unwrap_or_default();
+                if record.get("sweep_pending").and_then(|v| v.as_bool()) != Some(true) {
+                    super::review_publication::publish_reported(store, *change, record, &labels);
+                }
+                Ok(delivered)
             }
-            Ok(result)
+            Self::Unbound { store, spec } => match standing {
+                Some(standing) => store::append_unbound_standing(store, spec, record, standing),
+                None => store::append_unbound(store, spec, record),
+            },
         }
-        None => match pending {
-            Some(pending) => store::append_unbound_expected(&store, &spec, record, Some(pending)),
-            None => store::append_unbound(&store, &spec, record),
-        },
     }
 }
 

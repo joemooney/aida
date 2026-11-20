@@ -3347,7 +3347,9 @@ fn handle_review_record_context_with_policy_at(
             Some(!no_carry),
             policy,
         )
-        .with_context(|| "could not write the review verdict")?
+        // trace:BUG-2662 | ai:claude — the message itself names the cause:
+        // agent output shows only the top of an error chain.
+        .map_err(|e| anyhow::anyhow!("could not write the review verdict: {e}"))?
     };
     // trace:BUG-2517 | ai:codex
     // A local spec-only review has no change binding. Never route it via the
@@ -3374,14 +3376,42 @@ fn handle_review_record_context_with_policy_at(
     if let Some(stamp) = launch_context.and_then(|c| c.handoff_stamp()) {
         verdict_obj.insert("reviewer_draft".into(), stamp);
     }
-    let outcome = crate::gate::review_verdict::record_outcome(record_before.as_ref(), &verdict_obj);
+    // trace:BUG-2662 | ai:claude — one act of review is one verdict event.
+    // When the `--pr` handshake anchor is this same ledger record, the record
+    // carries the handshake's mode and is written once, below.
+    let handshake_anchor = pr.map(|_| review_pr_handshake_path(&project_root, &key));
+    let single_record = handshake_anchor
+        .as_deref()
+        .is_some_and(|anchor| crate::gate::review_verdict::same_ledger_record(&path, anchor));
+    if single_record {
+        verdict_obj.insert(
+            "mode".to_string(),
+            crate::gate::ledger::project::PHASE3_MODE.into(),
+        );
+    }
+    // trace:BUG-2662 | ai:claude — a repeat of the act already on record
+    // writes nothing and emits no event. A refusal that still has deferred
+    // follow-ups to file is written through, so a failed filing is retried.
+    let repeat = record_before.as_ref().is_some_and(|before| {
+        crate::gate::review_verdict::record_outcome(Some(before), &verdict_obj)
+            == crate::gate::review_verdict::RecordOutcome::Unchanged
+            && crate::gate::review_verdict::repeats_recorded_act(before, &verdict_obj)
+            && (kind.approves() || !crate::gate::review_verdict::has_deferred_finding(&verdict_obj))
+    });
+    let outcome = if repeat {
+        crate::gate::review_verdict::RecordOutcome::Unchanged
+    } else {
+        crate::gate::review_verdict::recorded_round(&verdict_obj)
+    };
     let recorded_sha = verdict_obj
         .get("reviewed_sha")
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .or_else(|| resolved_sha.clone());
-    crate::gate::review_verdict::write_verdict_object_for_spec(&path, &verdict_obj, Some(spec))
-        .with_context(|| "could not write the review verdict")?;
+    if !repeat {
+        crate::gate::review_verdict::write_verdict_object_for_spec(&path, &verdict_obj, Some(spec))
+            .map_err(|e| anyhow::anyhow!("could not write the review verdict: {e}"))?;
+    }
     // PRIN-5 / BUG-1571: never report a record this process has not itself
     // just read back. M1 slice 2: read back from where the gates read it —
     // the gate ledger (or a contained seat's hand-off file).
@@ -3404,13 +3434,15 @@ fn handle_review_record_context_with_policy_at(
     // the write above lands, so a failed record never produces a phantom
     // event. Best-effort: `events::emit` never fails the command.
     // trace:TASK-1450 | ai:claude
-    emit_review_verdict_recorded(
-        &project_root,
-        &spec.to_ascii_uppercase(),
-        pr.map(|n| n as u32),
-        kind.label().to_string(),
-        resolved_sha.clone(),
-    );
+    if !repeat {
+        emit_review_verdict_recorded(
+            &project_root,
+            &spec.to_ascii_uppercase(),
+            pr.map(|n| n as u32),
+            kind.label().to_string(),
+            resolved_sha.clone(),
+        );
+    }
     // BUG-2136: state the outcome explicitly — a new round, or an identical
     // re-recording — instead of leaving it to be inferred from the
     // "previously on record" block printed before the write.
@@ -3461,7 +3493,9 @@ fn handle_review_record_context_with_policy_at(
                 hook(&project_root, spec);
             }
         });
-        let handshake = review_pr_handshake_path(&project_root, &key);
+        let handshake = handshake_anchor
+            .clone()
+            .unwrap_or_else(|| review_pr_handshake_path(&project_root, &key));
         // trace:BUG-1743 | ai:claude
         #[cfg(test)]
         assert_handshake_anchor_is_pinned(&project_root, &handshake);
@@ -3478,113 +3512,121 @@ fn handle_review_record_context_with_policy_at(
         // trace:BUG-2403 | ai:claude
         crate::gate::review_verdict::read_recorded_verdict(&project_root, &key)
             .ok_or_else(|| anyhow::anyhow!("the verdict was written but could not be read back"))?;
-        let origin_field = |k: &str| verdict_obj.get(k).and_then(|v| v.as_str());
-        // BUG-1571: build the full handshake object (base fields + the
-        // orchestrator's `mode`/`recorded_at` overlay) in memory and commit
-        // it with exactly ONE durable, verified write. The previous code
-        // wrote the base record, read it back, patched two fields, and wrote
-        // AGAIN — two separate `fs::write`s to the same path, each a window
-        // where the artefact could fail to land while the command still
-        // walked forward as if it had. `write_verdict_object` verifies the
-        // bytes are actually readable back before this function is allowed
-        // to claim the handshake exists.
-        // trace:BUG-1581 | ai:codex
-        // trace:BUG-1571 | ai:claude
-        let mut handshake_obj = if replay_record.is_some() {
-            verdict_obj.clone()
+        // trace:BUG-2662 | ai:claude — the record written above is the
+        // handshake when both name one ledger record; otherwise the handshake
+        // is its own artifact (a hand-off file, or another store).
+        let handshake = if single_record {
+            handshake
         } else {
-            crate::gate::review_verdict::build_verdict_object_with_effective(
-                &project_root,
-                &handshake,
-                Some(kind.label()),
-                origin_field("reviewed_sha"),
-                origin_field("reviewed_branch"),
-                summary,
-                findings,
-                origin_field("recorded_by").unwrap_or(&recorded_by),
-                Some(!no_carry),
-                policy,
-            )
-            .with_context(|| format!("could not prepare {}", handshake.display()))?
-        };
-        // trace:STORY-1417 | ai:claude
-        review_classes::apply_finding_classes(&mut handshake_obj, findings, &classes);
-        // The two artifacts describe the same act of review, so retain the
-        // spec record's timestamp byte-for-byte while preserving any displaced
-        // PR-keyed round through the shared writer above.
-        // trace:BUG-1918 | ai:claude
-        handshake_obj.insert(
-            crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
-            attestation.clone(),
-        );
-        handshake_obj.insert(
-            "mode".to_string(),
-            serde_json::Value::String("orchestrator-phase-3".to_string()),
-        );
-        if let Some(recorded_at) = origin_field("recorded_at") {
+            let origin_field = |k: &str| verdict_obj.get(k).and_then(|v| v.as_str());
+            // BUG-1571: build the full handshake object (base fields + the
+            // orchestrator's `mode`/`recorded_at` overlay) in memory and commit
+            // it with exactly ONE durable, verified write. The previous code
+            // wrote the base record, read it back, patched two fields, and wrote
+            // AGAIN — two separate `fs::write`s to the same path, each a window
+            // where the artefact could fail to land while the command still
+            // walked forward as if it had. `write_verdict_object` verifies the
+            // bytes are actually readable back before this function is allowed
+            // to claim the handshake exists.
+            // trace:BUG-1581 | ai:codex
+            // trace:BUG-1571 | ai:claude
+            let mut handshake_obj = if replay_record.is_some() {
+                verdict_obj.clone()
+            } else {
+                crate::gate::review_verdict::build_verdict_object_with_effective(
+                    &project_root,
+                    &handshake,
+                    Some(kind.label()),
+                    origin_field("reviewed_sha"),
+                    origin_field("reviewed_branch"),
+                    summary,
+                    findings,
+                    origin_field("recorded_by").unwrap_or(&recorded_by),
+                    Some(!no_carry),
+                    policy,
+                )
+                .with_context(|| format!("could not prepare {}", handshake.display()))?
+            };
+            // trace:STORY-1417 | ai:claude
+            review_classes::apply_finding_classes(&mut handshake_obj, findings, &classes);
+            // The two artifacts describe the same act of review, so retain the
+            // spec record's timestamp byte-for-byte while preserving any displaced
+            // PR-keyed round through the shared writer above.
+            // trace:BUG-1918 | ai:claude
             handshake_obj.insert(
-                "recorded_at".to_string(),
-                serde_json::Value::String(recorded_at.to_string()),
+                crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
+                attestation.clone(),
             );
-        }
-        handshake_obj.remove("reviewer_draft");
-        if let Some(stamp) = verdict_obj.get("reviewer_draft") {
-            handshake_obj.insert("reviewer_draft".into(), stamp.clone());
-        }
-        // BUG-2403: carry the origin's record-time receipt, stamped once
-        // above after the authority check — never re-stamped here under later
-        // ambient authority, and never filled when the origin has none. The
-        // builder's clearing for a new review stays as it is.
-        // trace:BUG-2403 | ai:claude
-        if let Some(receipt) =
-            crate::gate::review_verdict::same_origin_receipt(&verdict_obj, &handshake_obj)
-        {
-            handshake_obj.insert("release_grant".to_string(), receipt);
-        }
-        // BUG-2201 / TASK-2040: a contained reviewer cannot write the
-        // launcher's anchor in the primary checkout. Its launcher collects
-        // the handshake from the reviewer's worktree (BUG-2149), so land it
-        // there instead of failing the record. trace:BUG-2201 | ai:claude
-        // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-        let handshake = match crate::gate::review_verdict::write_verdict_object_for_spec(
-            &handshake,
-            &handshake_obj,
-            Some(spec),
-        ) {
-            Ok(()) => handshake,
-            Err(err) => {
-                // Only a boundary refusal falls back; ENOSPC or a read-back
-                // mismatch fails with its real cause.
-                let refused = matches!(
-                    err.kind(),
-                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::ReadOnlyFilesystem
+            handshake_obj.insert(
+                "mode".to_string(),
+                serde_json::Value::String("orchestrator-phase-3".to_string()),
+            );
+            if let Some(recorded_at) = origin_field("recorded_at") {
+                handshake_obj.insert(
+                    "recorded_at".to_string(),
+                    serde_json::Value::String(recorded_at.to_string()),
                 );
-                // trace:BUG-2522 | ai:codex
-                let contained = refused && launcher_collects_review;
-                let Some(fallback) =
-                    contained_handshake_fallback(&project_root, &handshake, contained)
-                else {
-                    return Err(anyhow::Error::new(err).context(format!(
-                        "the phase-3 handshake was NOT written to {} — the orchestrator will not see this verdict; re-run `aida review record`",
+            }
+            handshake_obj.remove("reviewer_draft");
+            if let Some(stamp) = verdict_obj.get("reviewer_draft") {
+                handshake_obj.insert("reviewer_draft".into(), stamp.clone());
+            }
+            // BUG-2403: carry the origin's record-time receipt, stamped once
+            // above after the authority check — never re-stamped here under later
+            // ambient authority, and never filled when the origin has none. The
+            // builder's clearing for a new review stays as it is.
+            // trace:BUG-2403 | ai:claude
+            if let Some(receipt) =
+                crate::gate::review_verdict::same_origin_receipt(&verdict_obj, &handshake_obj)
+            {
+                handshake_obj.insert("release_grant".to_string(), receipt);
+            }
+            // BUG-2201 / TASK-2040: a contained reviewer cannot write the
+            // launcher's anchor in the primary checkout. Its launcher collects
+            // the handshake from the reviewer's worktree (BUG-2149), so land it
+            // there instead of failing the record. trace:BUG-2201 | ai:claude
+            // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+            match crate::gate::review_verdict::write_verdict_object_for_spec(
+                &handshake,
+                &handshake_obj,
+                Some(spec),
+            ) {
+                Ok(()) => handshake,
+                Err(err) => {
+                    // Only a boundary refusal falls back; ENOSPC or a read-back
+                    // mismatch fails with its real cause.
+                    let refused = matches!(
+                        err.kind(),
+                        std::io::ErrorKind::PermissionDenied
+                            | std::io::ErrorKind::ReadOnlyFilesystem
+                    );
+                    // trace:BUG-2522 | ai:codex
+                    let contained = refused && launcher_collects_review;
+                    let Some(fallback) =
+                        contained_handshake_fallback(&project_root, &handshake, contained)
+                    else {
+                        return Err(anyhow::Error::new(err).context(format!(
+                            "the phase-3 handshake was NOT written to {} — the orchestrator will not see this verdict; re-run `aida review record`",
+                            handshake.display()
+                        )));
+                    };
+                    crate::gate::review_verdict::write_verdict_object_for_spec(&fallback, &handshake_obj, Some(spec)).with_context(
+                        || {
+                            format!(
+                                "the phase-3 handshake was NOT written to {} ({err}) nor to {} — the orchestrator will not see this verdict; re-run `aida review record`",
+                                handshake.display(),
+                                fallback.display()
+                            )
+                        },
+                    )?;
+                    println!(
+                        "  {} {} is outside this contained session's write boundary ({err}); \
+                         wrote the handshake in the worktree for the launcher to collect",
+                        crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
                         handshake.display()
-                    )));
-                };
-                crate::gate::review_verdict::write_verdict_object_for_spec(&fallback, &handshake_obj, Some(spec)).with_context(
-                    || {
-                        format!(
-                            "the phase-3 handshake was NOT written to {} ({err}) nor to {} — the orchestrator will not see this verdict; re-run `aida review record`",
-                            handshake.display(),
-                            fallback.display()
-                        )
-                    },
-                )?;
-                println!(
-                    "  {} {} is outside this contained session's write boundary ({err}); \
-                     wrote the handshake in the worktree for the launcher to collect",
-                    crate::glyph(crate::glyphs::Glyph::SubArrow).dimmed(),
-                    handshake.display()
-                );
-                fallback
+                    );
+                    fallback
+                }
             }
         };
         // Belt-and-suspenders: only ever print a path this process has just

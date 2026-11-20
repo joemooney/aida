@@ -4246,6 +4246,12 @@ pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> Recor
     if identical {
         return RecordOutcome::Unchanged;
     }
+    recorded_round(after)
+}
+
+/// The outcome of appending `after`: a new round on top of those it retains.
+// trace:BUG-2136 trace:BUG-2662 | ai:claude
+pub(crate) fn recorded_round(after: &JsonObj) -> RecordOutcome {
     let retained = after
         .get("rounds")
         .and_then(|v| v.as_array())
@@ -4257,6 +4263,94 @@ pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> Recor
     RecordOutcome::Recorded {
         round: retained + unarchived + 1,
     }
+}
+
+/// BUG-2662: `after`, the record a `review record` call built on `before`
+/// (the record standing for its key), repeats the act `before` already
+/// records, so appending it would add a verdict event that says nothing new.
+///
+/// Stricter than equal [`recording_key`]s, which compare review signal only:
+/// every field must be present-or-absent alike and equal, so a changed
+/// summary, authority (seat grant, receipt, identity), binding, draft stamp
+/// or a close/annotation the builder cleared is a new record. The only
+/// differences allowed are the ones every repeat has: its timestamp, the
+/// retained round history, the inherited-findings marker, a completed
+/// delivery marker and, between two human-at-TTY approvals, the receipt id
+/// when the standing record's own receipt still vouches for its commit.
+/// A standing delivery-pending barrier never matches.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn repeats_recorded_act(before: &JsonObj, after: &JsonObj) -> bool {
+    if delivery_pending(&serde_json::Value::Object(before.clone())) {
+        return false;
+    }
+    let human = |m: &JsonObj| {
+        m.get(ATTESTATION_KEY)
+            .and_then(|a| a.get("human_at_tty"))
+            .and_then(|v| v.as_bool())
+            == Some(true)
+    };
+    let receipt_stands = human(before)
+        && human(after)
+        && before
+            .get(ATTESTATION_KEY)
+            .and_then(|a| a.get("receipt_id"))
+            .and_then(|v| v.as_str())
+            .zip(round_sha(before))
+            .is_some_and(|(id, sha)| {
+                crate::gate::review_authority::human_receipt_for(id, &sha).is_some()
+            });
+    let comparable = |m: &JsonObj| {
+        let mut m = m.clone();
+        for key in [
+            "recorded_at",
+            "rounds",
+            "unarchived_rounds",
+            "inherited_findings",
+        ] {
+            m.remove(key);
+        }
+        if m.get("sweep_pending").and_then(|v| v.as_bool()) == Some(false) {
+            m.remove("sweep_pending");
+        }
+        if receipt_stands {
+            if let Some(attestation) = m.get_mut(ATTESTATION_KEY).and_then(|a| a.as_object_mut()) {
+                attestation.remove("receipt_id");
+            }
+        }
+        m
+    };
+    comparable(before) == comparable(after)
+}
+
+/// BUG-2662: `handshake` names the same gate-ledger record as `path` (same
+/// key, same store), so the `--pr` handshake of `aida review record` is that
+/// one record rather than a second event for the same act. `false` whenever
+/// that is not proved: a contained seat, a hand-off file, another store.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn same_ledger_record(path: &Path, handshake: &Path) -> bool {
+    if crate::gate::ledger::contained() {
+        return false;
+    }
+    let (Some((root, key)), Some((other_root, other_key))) = (
+        canonical_verdict_key(path),
+        canonical_verdict_key(handshake),
+    ) else {
+        return false;
+    };
+    key == other_key
+        && matches!(
+            (crate::gate::ledger::store_root(&root), crate::gate::ledger::store_root(&other_root)),
+            (Ok(a), Ok(b)) if a == b
+        )
+}
+
+/// Whether `record` carries a finding dispositioned as deferred.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn has_deferred_finding(record: &JsonObj) -> bool {
+    record
+        .get("finding_dispositions")
+        .and_then(|v| v.as_array())
+        .is_some_and(|a| a.iter().any(finding_is_deferred))
 }
 
 /// First 12 chars of a sha (or the whole string when shorter) — enough to

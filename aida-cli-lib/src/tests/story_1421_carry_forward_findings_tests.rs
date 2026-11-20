@@ -397,24 +397,97 @@ fn story_2698_approval_delivery_is_durable_and_retry_deduplicates() {
     assert_eq!(sweep[0].description.matches("deferred bug").count(), 1);
 }
 
+/// A direct approval whose follow-up findings cannot be filed records
+/// nothing: no request-changes barrier stands in for it, whether or not a
+/// verdict already stood, and the error names the cause.
 // trace:STORY-2698 | ai:codex
+// trace:BUG-2662 | ai:claude
 #[test]
-fn story_2698_failed_delivery_leaves_pending_refusal() {
+fn bug_2662_failed_approval_delivery_records_nothing() {
     use crate::gate::{ledger, review_verdict as rv};
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path();
     let _guard =
         crate::test_env::AmbientGuard::hermetic_and(project, None, &[("AIDA_CONTAINED", None)]);
-    let path = rv::verdict_path(project, "STORY-9821");
     let record = serde_json::json!({"verdict":"approved", "findings":["deferred bug"],
         "finding_dispositions":[{"severity":"minor", "disposition":"deferred", "rationale":"safe follow-up"}],
         "recorded_by":"reviewer", "recorded_at":"2026-11-09T00:00:00Z"});
-    assert!(ledger::record_verdict_at(&path, record.as_object().unwrap(), None).is_err());
-    let current = rv::current_verdict_at(&path).expect("pending payload is durable");
-    assert!(current.body.contains("sweep_pending"));
+    for key in ["STORY-9821", "PR-9821"] {
+        let path = rv::verdict_path(project, key);
+        let error = ledger::record_verdict_at(&path, record.as_object().unwrap(), None)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("no canonical store"), "{error}");
+        assert!(error.contains("nothing was recorded"), "{error}");
+        assert!(rv::current_verdict_at(&path).is_none(), "{key}");
+        // A standing refusal is left exactly as it was.
+        let refusal = serde_json::json!({"verdict":"request-changes", "findings":["blocker"],
+            "recorded_by":"reviewer-a", "recorded_at":"2026-11-08T00:00:00Z"});
+        ledger::record_verdict_at(&path, refusal.as_object().unwrap(), None).unwrap();
+        let before = ledger::project::verdict_records(project, key);
+        assert_eq!(before.len(), 1);
+        assert!(ledger::record_verdict_at(&path, record.as_object().unwrap(), None).is_err());
+        assert_eq!(ledger::project::verdict_records(project, key), before);
+    }
+}
+
+/// An approval is appended only while its spec holds no verdict record that
+/// was not standing when its follow-up findings began to be filed.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_approval_is_refused_when_another_review_lands_during_delivery() {
+    use crate::gate::ledger::{self, event, store, GateSpec};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+    let change = ledger::ChangeKey::pr(8);
+    let body = |verdict: &str, by: &str| {
+        serde_json::json!({"verdict":verdict,"recorded_by":by})
+            .as_object()
+            .unwrap()
+            .clone()
+    };
+    let evt = |record: &crate::gate::review_verdict::JsonObj| {
+        event::verdict_event(root, change, record, None)
+    };
+    store::append(
+        root,
+        change,
+        vec![evt(&body("request-changes", "reviewer-a"))],
+    )
+    .unwrap();
+    let standing = store::standing(root, Some(change), None);
+    // Nothing joined the standing records: appended once, then unchanged.
+    let approval = body("approved", "reviewer-a");
+    for expected in [ledger::Delivered::Appended, ledger::Delivered::Unchanged] {
+        assert_eq!(
+            store::append_one_standing(root, change, evt(&approval), &standing).unwrap(),
+            expected
+        );
+    }
+    // A review recorded after the snapshot refuses the approval.
+    let standing = store::standing(root, Some(change), None);
+    store::append(root, change, vec![evt(&body("rejected", "reviewer-b"))]).unwrap();
+    let late = body("approved", "reviewer-c");
+    let error = store::append_one_standing(root, change, evt(&late), &standing)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("nothing was recorded"), "{error}");
     assert_eq!(
-        rv::parse_recorded_verdict(&current.body).unwrap().kind,
-        VerdictKind::RequestChanges
+        ledger::project::newest_verdict(root, "PR-8").unwrap()["verdict"],
+        "rejected"
+    );
+    // The same holds on a spec's unbound ledger.
+    let spec = GateSpec::resolve(root, "STORY-9830");
+    store::append_unbound(root, &spec, &body("request-changes", "reviewer-a")).unwrap();
+    let standing = store::standing(root, None, Some(&spec.label));
+    store::append_unbound(root, &spec, &body("rejected", "reviewer-b")).unwrap();
+    assert!(store::append_unbound_standing(root, &spec, &late, &standing).is_err());
+    let standing = store::standing(root, None, Some(&spec.label));
+    assert_eq!(
+        store::append_unbound_standing(root, &spec, &late, &standing).unwrap(),
+        ledger::Delivered::Appended
     );
 }
 
