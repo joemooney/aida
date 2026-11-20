@@ -1,5 +1,6 @@
 id: 01a1f971-aa96-7ce2-8704-f2e827f0d160
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-179
+agreed_id: STORY-2985
 title: 'Review PR-4363: [AI:claude] fix(admission): loop workers yield shared claims to a waiting land/ship; bounded admission wait; audited loops drain (BUG-2703)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f94f`) for branch `bug-b6b1278890774ef993d2ebc327862470-465`.
@@ -35,6 +36,12 @@ history:
   timestamp: 2026-11-20T14:52:27.919765371Z
   session_id: 01a1f94f7ef5
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f98a-b9f7-7253-b1fc-d15f8b8a2ec5
+  author: joe
+  timestamp: 2026-11-20T15:19:40.791097164Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 36e1d02a7af0338feb8ff4c6de2f1ef92ecc5171
