@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T01:01:50.632944878Z
+modified_at: 2026-11-20T01:06:40.269790049Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -70,6 +70,19 @@ comments:
   created_at: 2026-11-20T01:01:50.632944878Z
   modified_at: 2026-11-20T01:01:50.632944878Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f67e-047b-7e62-a36e-9ac2ca092e8d
+  author: joe
+  content: |-
+    Product 18:05: Claude fresh-start lane queued on dell1 (advisor gate 18:02), brief:
+    # Brief: BUG-2697 (fresh start; advisor-121 gate 2026-11-19 ~18:02: APPROVED, drain, CLAUDE, STRICT review)
+
+    Implement the acceptance criteria in the spec description. AC3 (a pre-spawn admission failure releases the shared claim it created) is the PRIORITY; then AC1/AC2 (node identity, not sandbox UTS hostname, for leases and shared claims), AC4 (doctor check/heal sees expired sandbox-host claims on this node; regression test of the 01a1f4f93790 record shape), AC5 (annotate legacy records). Evidence and record paths are in the spec comments.
+    Only unmet ACs. Trailer: (BUG-2697) only if your PR plus main meets every AC; otherwise (Refs BUG-2697). STRICT review follows.
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T01:06:40.269790049Z
+  modified_at: 2026-11-20T01:06:40.269790049Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
