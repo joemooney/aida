@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T19:44:33.076539143Z
+modified_at: 2026-11-20T20:02:06.954072077Z
 req_type: Story
 tags:
 - area:ci
@@ -436,6 +436,28 @@ comments:
   created_at: 2026-11-20T19:41:30.903369Z
   modified_at: 2026-11-20T19:41:30.903369Z
   session_id: 01a1fa4a92e2
+- id: 01a1fa8d-4dea-7ea0-abb1-3b049a131220
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 03e78ae805 (round 2 of 4, PR #4377, Refs slice; routing stays off).
+
+    Round-2 findings, each with a fixture:
+    1. Class label: build runs-on requests self-hosted/Linux/X64/aida-dell1 plus MAIN or TRAIN. test_runs_on_requests_the_class_label_only_for_heavy_shards and test_a_job_can_only_reach_a_runner_registered_for_its_own_class (requested labels vs the labels rearm.py registers).
+    2. Case-sensitive routing before the matrix: new tier step 'Select dell1 route' (shell, exact compares, inputs via env). test_route_step_admits_only_exact_main_pushes_and_train_pull_requests runs the real body over 9216 contexts; test_mixed_case_train_branch_stays_hosted_end_to_end covers Train/x, TRAIN/X, base Main, refs/heads/Main; hostile-context test covers output injection.
+    3. Stale reports: adopt step removes test-run.log, test-timings.json, changed-files.txt and nextest/ from the seeded target before linking and refuses if any survives. Every adopt fixture now starts from a warm target; a refused adoption exposes nothing to the budget/upload globs; linked reports are removed without following.
+    4. Exact source: git status --porcelain --ignored --untracked-files=all. Refusal fixtures: ignored .env, ignored directory, .git/info/exclude-hidden file.
+    5. cargo-nextest: read install-action main.sh at the pinned commit 83ac0ad: with cargo outside CARGO_HOME/bin it installs to $HOME/.install-action/bin and adds that to GITHUB_PATH. Removed the CARGO_HOME/bin PATH edit; added 'Verify self-hosted cargo-nextest location' (7-case fixture); runbook contract and acceptance check updated.
+    6. heavy_self_hosted_steps evaluates each whole condition with the GitLab adapter's evaluator for the four shards x event x failed x cancelled; OR-branch mutations are detected, an unevaluable expression raises.
+    7. run-upstream.py validate_selection: exactly one reviewed producer for paths and changes, each before its first reader; 12 mutation cases plus the real workflow with either producer removed.
+
+    Validation in the lane: tests/test_gdma_ci.py 36 pass; tests.test_self_hosted_runner Routing/LauncherRefusals/AptBounds pass. Fast-tier gates run one by one (a tool call is capped at 60 s): 44 of 48 pass, including the store-writer inventory (no new writer site). Not green here: 'Self-hosted routing security fixtures' (16 errors, all in tests/test_dell1_controller.py, identical on the parent commit), 'Containment conformance evidence tests' and 'Store mutation channel tests' fail on AF_UNIX socket creation denied by this seat's sandbox; 'Rust structural ratchets' and check-ratchets need cargo and were not run. No Rust changed.
+
+    Residual risks: (a) ci.yml bytes changed, so the operator must re-pin workflow_sha256 after merge. (b) AIDA_DELL1_CI must now be exactly lower-case 'true'; 'TRUE' no longer routes. (c) Label dispatch, install-action's real install directory and artifact upload through the linked target are runner behaviour the fixtures model but cannot execute; the runbook acceptance section lists each check. (d) AC1/AC2 live evidence still needs the operator install.
+  created_at: 2026-11-20T20:02:06.954072077Z
+  modified_at: 2026-11-20T20:02:06.954072077Z
+  session_id: 01a1fa7d073d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
