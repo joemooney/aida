@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T22:50:19.199633162Z
+modified_at: 2026-11-20T22:51:18.063945941Z
 req_type: Bug
 tags:
 - lanes
@@ -282,6 +282,13 @@ comments:
   modified_at: 2026-11-20T22:39:26.575947847Z
   session_id: 01a1faee627d
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fb28-61db-70b2-a555-54e5c452a43b
+  author: joe
+  content: 'advisor-121 15:52: HELD, blocked by BUG-2629: its rework launch spins in rework discovery (2 of 2 attempts). r2 brief stays authoritative; relaunch after #4380 lands.'
+  created_at: 2026-11-20T22:51:18.063945941Z
+  modified_at: 2026-11-20T22:51:18.063945941Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
