@@ -1,0 +1,37 @@
+id: 01a1f9c0-1c04-72f1-8efa-7e549eec0f34
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-039
+title: No CLI surface names the resolved per-seat agent model; TASK-3823 AC1 verified by config parse and code path only
+description: |
+  TASK-3823 acceptance 1 asks for verification "by `aida config show` and one dry-run or launch log line naming the model". Neither exists today:
+
+  - `aida config show` renders no `[agents.<vendor>]` model, tiers or `seats.<seat>.{model,effort}` values.
+  - `aida queue work <SPEC> --role reviewer --vendor <v> --dry-run` prints `vendor:` and `exec:` but not the model or effort the launch would pass.
+
+  What shipped instead: the committed `.aida/config.toml` was parsed and the resolution path read in code (`aida-core/src/agents_config.rs` `tuning_from_file`; `aida-cli-lib/src/session/headless.rs` `resolve_agent_tuning`). The first real reviewer launch after merge is the remaining confirmation that the vendor CLIs accept `gpt-6.2-astra` and `claude-fable-5-2`.
+
+  Related trap found while checking: `AIDA_AGENT_MODEL` / `AIDA_AGENT_EFFORT` in the launching environment override the seat config (headless.rs:880), so a dry-run from a seat launched with `--model` would name the env model, not the configured one.
+
+  Suggested follow-up: show resolved model/effort per vendor and seat, with its source (env, agents.toml, config.toml, vendor default), in `aida config show` and in the `queue work --dry-run` plan.
+
+  Raised by the implementer while working TASK-3823.
+  Branch: task-b6b1278890774ef993d2ebc327862470-1132  ·  Commit: b4dccb5984  ·  PR-4369
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T16:17:59.300202085Z
+modified_at: 2026-11-20T16:17:59.300202085Z
+req_type: Task
+tags:
+- from-implementer:TASK-3823
+- kind:deviation
+- severity:minor
+filed_at:
+  code_sha: b4dccb59840c4b1b6aa0d00faacc1919f4e1baa8
+  branch: task-b6b1278890774ef993d2ebc327862470-1132
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 78b437097c
+  vendor: claude
+  session: 01a1f9a316e9
+  harness_version: 2.1.319 (Claude Code)
