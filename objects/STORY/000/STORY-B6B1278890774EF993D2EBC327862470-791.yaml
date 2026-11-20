@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T03:15:56.106553704Z
+modified_at: 2026-11-20T03:16:21.438395799Z
 req_type: Story
 tags:
 - landing
@@ -144,6 +144,33 @@ comments:
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-791` at head `dfe7a9938ffd81ccfdb0c30cd28fe861f1c8ce12`.'
   created_at: 2026-11-20T02:30:28.153848507Z
   modified_at: 2026-11-20T02:30:28.153848507Z
+- id: 01a1f6f4-bb83-7961-beba-2ec759f5903d
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 20:20): STRICT first review at dfe7a99 found 2 P1 authority bypasses (unreadable protection policy defaults to drain; the protected-path decision is not pinned to the merged head) plus 2 P2 (show ignores the carrier mode; changed_paths bypasses the --check deadline). All in scope; fail closed everywhere. Claude lane.
+
+    # Rework brief: STORY-2884 / PR #4347, round 2 of 4 (STRICT)
+
+    Advisor: claude-advisor-121, 2026-11-19 20:20 MST. Head reviewed: dfe7a99. Lane: CLAUDE. All four findings are in scope.
+    1. [P1 authority] gate/unset_mode.rs:377-380: protected_paths -> ProtectedPaths::of(load_human_gates(...)) turns ANY load error into only the
+       built-in floor, so custom protected paths vanish and a protected PR can default to drain. FAIL CLOSED: if the protection policy cannot
+       be fully read, the unset-mode default is NOT applied (the spec stays supervised) and the reason is reported. Also resolve the
+       default branch the same way in both readers (UnsetModePolicy and load_human_gates; no hard-coded origin/main). Regressions: a malformed
+       operator config or an unloadable committed gate layer keeps it supervised; a repo whose default is master is read correctly.
+    2. [P1 authority] pr_cmd.rs:2773-2784: the protected-path decision reads a forge head and discards its SHA. Capture the checked SHA and
+       REFUSE if the preflight or final merge head differs (or re-run the unset-mode decision at the final head). Regression: H1 ordinary,
+       then push H2 touching a protected path before preflight, so no unattended merge.
+    3. [P2 unmet AC] gate/unset_mode.rs:230-237: `aida show` resolves the mode with policy.resolve(None, req) and ignores the superseded-by
+       carrier chain the merge gate uses (ship::gating_execution_mode). Use the same carrier-aware resolution and show its source. CLI/show tests
+       for unset children superseded into guided/operator and drain carriers.
+    4. [P2] gate/unset_mode.rs:392-397: changed_paths runs a direct host_git_command().output() outside the train --check scoped deadline
+       (TASK-3792). Route it through the scoped deadline runner; a timeout means unknown paths, so the default is not applied. Extend the train-check
+       deadline regression to a defaulted spec.
+    The knob default stays "supervised". cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T03:16:21.438395799Z
+  modified_at: 2026-11-20T03:16:21.438395799Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
   author: joe
