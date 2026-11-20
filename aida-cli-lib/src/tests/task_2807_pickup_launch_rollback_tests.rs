@@ -43,6 +43,58 @@ fn launching_setup(scope: &str) -> crate::session_start::SessionStartReceipt {
     receipt
 }
 
+/// A shared `.aida-store` for `fx.main` with a bare `origin`, so session
+/// start writes and pushes a real shared claim. Returns (store, origin).
+fn distributed_store(fx: &super::tests::Fixture) -> (PathBuf, PathBuf) {
+    use super::tests::git_ok;
+    let store = fx.main.join(".aida-store");
+    std::fs::create_dir_all(&store).unwrap();
+    git_ok(&store, &["init", "-q", "-b", "aida-store"]);
+    git_ok(&store, &["config", "user.email", "test@example.com"]);
+    git_ok(&store, &["config", "user.name", "AIDA Test"]);
+    git_ok(&store, &["add", "-A"]);
+    let seed = crate::test_git::git_command()
+        .current_dir(&store)
+        .args(["commit", "--allow-empty", "-qm", "seed"])
+        .output()
+        .unwrap();
+    assert!(
+        seed.status.success(),
+        "{}",
+        String::from_utf8_lossy(&seed.stderr)
+    );
+    let origin = fx.root.join("store-origin.git");
+    git_ok(
+        &fx.root,
+        &[
+            "clone",
+            "-q",
+            "--bare",
+            store.to_str().unwrap(),
+            origin.to_str().unwrap(),
+        ],
+    );
+    git_ok(
+        &store,
+        &["remote", "add", "origin", origin.to_str().unwrap()],
+    );
+    (store, origin)
+}
+
+/// Whether `scope`'s shared claim stands in the local store.
+fn local_claim(store: &Path, scope: &str) -> bool {
+    crate::coordination::list_claims(store)
+        .iter()
+        .any(|claim| claim.scope == scope)
+}
+
+/// Whether `scope`'s shared claim stands on the store's `origin`.
+fn origin_claim(store: &Path, origin: &Path, scope: &str) -> bool {
+    let path = crate::coordination::claim_path(store, scope);
+    let rel = path.strip_prefix(store).unwrap().to_str().unwrap();
+    !super::tests::git_ok(origin, &["ls-tree", "--name-only", "aida-store", "--", rel]).is_empty()
+}
+
 fn lease_tree(main: &Path, scope: &str) -> Option<(String, PathBuf)> {
     crate::list_leases(main)
         .into_iter()
@@ -224,6 +276,167 @@ fn bug_2697_an_admission_refusal_after_the_mark_rolls_back() {
     ));
 }
 
+/// BUG-2697 (ADR-76): the real drain launch boundary. A pickup whose setup
+/// (`session_start_with_receipt`) owns the rollback guard reaches
+/// `run_vendor_headless_to_exit`, whose host admission refuses at the memory
+/// floor before any agent spawns. The shared claim it pushed is released,
+/// locally and on the store's origin, together with the lease and tree. It
+/// stays behind if that launcher stops marking its admission errors as
+/// before-spawn or if the setup stops owning the claim.
+// trace:BUG-2697 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2697_a_memory_floor_refusal_at_the_drain_launcher_releases_the_shared_claim() {
+    use crate::lane_admission::{TestHost, TEST_HOST};
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let (store, origin) = distributed_store(&fx);
+    let scope = "TASK-926972";
+    let receipt = launching_setup(scope);
+    let (lease_id, tree) = lease_tree(&fx.main, scope).expect("setup minted a lease");
+    assert!(local_claim(&store, scope), "the setup holds a shared claim");
+    assert!(origin_claim(&store, &origin, scope), "the claim was pushed");
+    let branch = super::tests::git_ok(&tree, &["branch", "--show-current"]);
+    // The disk floor is a separate preflight; keep it out of the way.
+    let config = fx.main.join(".aida/config.toml");
+    let mut body = std::fs::read_to_string(&config).unwrap_or_default();
+    body.push_str("\n[doctor.disk_headroom]\nmin_free_gib = 1\n");
+    std::fs::write(&config, body).unwrap();
+    TEST_HOST.with(|h| {
+        *h.borrow_mut() = Some(TestHost {
+            max_concurrent_cold_starts: 1,
+            min_memory_headroom_gib: 4,
+            prefix: TestHost::prefix(),
+            memory_gib: std::rc::Rc::new(std::cell::Cell::new(1)),
+            on_wait: Box::new(|| panic!("a free slot does not queue")),
+        })
+    });
+    let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
+        cause: "bug-2697 fixture".into(),
+    };
+    let tee = crate::headless_tee::TeeOptions {
+        enabled: false,
+        label: None,
+    };
+    let log = fx.root.join("child.jsonl");
+
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |agent: &AgentLaunchMark| {
+        // The drain marks its agent before the launcher's admission runs.
+        agent.starting();
+        crate::session::run_vendor_headless_to_exit(
+            Some(&fx.main),
+            crate::session::HeadlessVendor::Claude,
+            &format!("/aida-pickup {scope}"),
+            "019e0000-0000-7000-8000-000000002697",
+            &log,
+            &tee,
+            false,
+            Some(&lease_id),
+            "implementer",
+            &grant,
+            Some((&tree, &branch)),
+            false,
+            None,
+        )
+        .map(|_| unreachable!("the launch is refused before the agent"))
+    });
+    TEST_HOST.with(|h| h.borrow_mut().take());
+
+    let error = result.unwrap_err();
+    assert!(
+        format!("{error:#}").contains("below the 4 GiB floor"),
+        "{error:#}"
+    );
+    assert!(rolled_back, "the refused launch started no agent");
+    assert_gone(&fx.main, &tree, scope);
+    assert!(!local_claim(&store, scope), "the local claim is released");
+    assert!(
+        !origin_claim(&store, &origin, scope),
+        "the shared claim is released on origin"
+    );
+}
+
+/// BUG-2697: a claim push that errors after the remote accepted it still
+/// returns the exact claim. A start without the launch rollback that then
+/// fails before its lease is written releases that claim on origin.
+// trace:BUG-2697 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2697_an_errored_claim_push_is_released_when_an_unrolled_start_fails() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let (store, origin) = distributed_store(&fx);
+    // One-shot: the next push lands on origin, then its transport fails.
+    // The receive-pack argument is the remote repository path.
+    let wrapper = fx.root.join("flaky-receive-pack");
+    crate::test_exec::write_executable(
+        &wrapper,
+        "#!/bin/sh\ngit receive-pack \"$1\"\nrc=$?\n\
+         if [ -e \"$1/fail-next-push\" ]; then rm -f \"$1/fail-next-push\"; exit 1; fi\n\
+         exit $rc\n",
+    );
+    std::fs::write(origin.join("fail-next-push"), "").unwrap();
+    super::tests::git_ok(
+        &store,
+        &[
+            "config",
+            "remote.origin.receivepack",
+            wrapper.to_str().unwrap(),
+        ],
+    );
+    let scope = "TASK-926973";
+
+    crate::seat_clone::failpoint::fail_before_lease(true);
+    let result = crate::session_start::session_start_with_receipt(
+        scope,
+        None,
+        None,
+        false,
+        None,
+        None,
+        "auto",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        None,
+        /* force_claim */ false,
+        /* use_pool */ Some(false),
+        /* self_claim */ true,
+        /* review_coexistence */ None,
+        /* contained_seat */ false,
+        /* rollback_failed_setup */ false,
+        crate::session_start::PathReentry::None,
+        None,
+        /* done_rework_admitted */ false,
+    );
+    crate::seat_clone::failpoint::fail_before_lease(false);
+
+    let error = result.err().expect("injected setup failure");
+    assert!(
+        format!("{error:#}").contains("injected failure before the lease write"),
+        "{error:#}"
+    );
+    assert!(
+        !origin.join("fail-next-push").exists(),
+        "the claim push errored"
+    );
+    let subjects = super::tests::git_ok(&origin, &["log", "--format=%s", "aida-store"]);
+    assert!(
+        subjects.contains(&format!("claim lease {scope}")),
+        "origin accepted the claim before the push errored: {subjects}"
+    );
+    assert!(
+        !origin_claim(&store, &origin, scope),
+        "the failed start released its claim on origin: {subjects}"
+    );
+    assert!(lease_tree(&fx.main, scope).is_none());
+}
+
 /// TASK-2807: a panic after the agent ran unwinds through a disarmed setup,
 /// so its uncommitted work and lease survive; the panic still propagates.
 #[test]
@@ -272,44 +485,13 @@ fn a_panic_before_the_agent_started_rolls_back() {
 // trace:STORY-2705 | ai:codex
 #[test]
 fn session_start_default_role_claim_defers_cross_host_review_implementer_gate() {
-    use super::tests::git_ok;
     for inherited in ["", "advisor", "reviewer"] {
         let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
         let fx = fixture();
         let mut ambient =
             crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
         ambient.set_key("AIDA_SESSION_ROLE", inherited);
-        let store = fx.main.join(".aida-store");
-        std::fs::create_dir_all(&store).unwrap();
-        git_ok(&store, &["init", "-q", "-b", "aida-store"]);
-        git_ok(&store, &["config", "user.email", "test@example.com"]);
-        git_ok(&store, &["config", "user.name", "AIDA Test"]);
-        git_ok(&store, &["add", "-A"]);
-        let seed = crate::test_git::git_command()
-            .current_dir(&store)
-            .args(["commit", "--allow-empty", "-qm", "seed"])
-            .output()
-            .unwrap();
-        assert!(
-            seed.status.success(),
-            "{}",
-            String::from_utf8_lossy(&seed.stderr)
-        );
-        let origin = fx.root.join("store-origin.git");
-        git_ok(
-            &fx.root,
-            &[
-                "clone",
-                "-q",
-                "--bare",
-                store.to_str().unwrap(),
-                origin.to_str().unwrap(),
-            ],
-        );
-        git_ok(
-            &store,
-            &["remote", "add", "origin", origin.to_str().unwrap()],
-        );
+        let (store, _origin) = distributed_store(&fx);
         let scope = "STORY-928079";
         let _receipt = launching_setup(scope);
         let mut claim = crate::coordination::list_claims(&store)
