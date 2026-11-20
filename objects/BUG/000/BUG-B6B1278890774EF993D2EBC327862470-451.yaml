@@ -17,12 +17,12 @@ description: |
   4. Red commits are never promoted; an in-progress tip never blocks an older green one; a commit whose CI run is missing counts as not green.
   5. scripts/aida-autobuild.sh (lane hosts and operator cron) uses the same newest-green rule instead of waiting on the tip, and keeps #4327's skip-worktree override handling.
   6. Tests: tip in-progress with an older green commit → promote the older one; tip red → promote the newest green before it; nothing newer than live is green → skip; origin/main moves mid-check → the chosen green commit is still promoted.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-20T02:01:40.722646152Z
+modified_at: 2026-11-20T02:01:44.679787810Z
 req_type: Bug
 tags:
 - landing
@@ -243,6 +243,13 @@ history:
   author: dirtlab
   timestamp: 2026-11-20T02:01:42.592897818Z
   changes: []
+- id: 01a1f6b0-31e7-78e0-b6d3-ca35b6a768cd
+  author: aida-pr-open
+  timestamp: 2026-11-20T02:01:44.679787027Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
