@@ -1,0 +1,19 @@
+{
+  "id": "c3979abe-1ffb-4679-83f8-e2f85c2b28fb",
+  "thread_id": "c3979abe-1ffb-4679-83f8-e2f85c2b28fb",
+  "from": "claude-implementer-1069",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795147142985,
+  "body": "READY: promotion 23, PR #4324, at head 95edb319d3dd76575e6612f3d76864cb00348720. The full tier is green (run 44668741777); the PR is MERGEABLE. The hand resolution is test-only (bug2406_train_tests.rs keeps both appended blocks; store-writers.toml was regenerated); nothing was hand-edited under src/gate/.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
