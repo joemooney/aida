@@ -44,6 +44,16 @@ mirror_remotes = ["gitlab"]
 [agents]
 vendor = "codex"
 
+# TEMPORARY (TASK-3823, 2026-11-20): reviewer seats run on stronger models to
+# move faster until the ~2026-11-22 token reset. Revert task: TASK-3824
+# (deferred to 2026-11-22) removes both reviewer entries below unless the boost
+# is extended. Key shape: docs/advanced/autonomous-drain.md "Tuning model per seat".
+[agents.codex.seats]
+reviewer = { model = "gpt-6.2-astra" }
+
+[agents.claude.seats]
+reviewer = { model = "claude-fable-5-2", effort = "high" }
+
 [drain]
 # STORY-975: retry a transient phase failure before parking NeedsAttention.
 # BUG-1485 (2026-09-20): raised 1 -> 2 as an interim mitigation. The orchestrator's
@@ -645,6 +655,42 @@ name = "landing-health-guard-route"
 seats = ["advisor"]
 on = ["CronJobFailed:landing-health-guard"]
 prompt = "Diagnose the shared CI cause first (finding 2): several PRs failing the same check and step probably share infrastructure or base breakage. Run `aida doctor check landing-health` to re-run the checks and read the routed trip evidence. Repair or route that shared cause before treating PRs individually, then address the landing gap and step timeout headroom. Escalate human-only blockers to the operator. Finish with `aida schedule done landing-health-guard-route`."
+enabled = true
+
+# The throughput guard: every 20 minutes, no model. It classifies every open,
+# non-draft change as STUCK-MERGE, STUCK-MERGE-RED, STUCK-REVIEW, STUCK-REWORK,
+# STUCK-CONFLICT or moving, from the approval, the review history, the hold, CI
+# and who is working it, each read on its own. Each new stall is routed once,
+# as one `throughput-guard-route-<seat>` due job per seat plus a short mail, so
+# every vendor's seat receives the same work. When nothing has landed for
+# escalate_after_mins while something is stuck, the operator gets
+# `throughput-guard-route-operator`. The route jobs are built in; they need no
+# entry here. Every scheduled run saves the landings and each host's lanes and
+# memory in `.aida/throughput-guard/state.json`. `aida land stalls` prints the
+# same classification on demand.
+# The guard ships off: both `enabled` lines below turn it on for this project.
+# trace:STORY-2906 | ai:claude
+[throughput_guard]
+enabled = true
+# Minutes a change may wait before it counts as stuck: from the approval
+# (merge), the head's commit (review), the verdict (rework), and the base
+# commit that first conflicted (conflict).
+merge_mins = 20
+review_mins = 30
+rework_mins = 30
+conflict_mins = 30
+# Landings are counted over this window; no landing for escalate_after_mins
+# while something is stuck goes to the operator.
+landings_window_mins = 60
+escalate_after_mins = 120
+# Red approved changes whose job logs one run reads; a log read once is kept,
+# so the rest are read on the following runs.
+max_red_logs = 6
+
+[[schedule.jobs]]
+name = "throughput-guard"
+command = "doctor check throughput-guard"
+every = "20m"
 enabled = true
 
 # Blocked seats must reach the operator without waiting for another model turn.

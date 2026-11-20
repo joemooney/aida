@@ -2247,7 +2247,7 @@ fn story_1917_native_pr_ship_entry_checkpoint_refuses_before_any_side_effect() {
 /// pre-merge refusal re-arms only a hold this ship released.
 #[test]
 fn story_1917_pr_ship_checkpoints_are_wired_in_order_around_every_wait() {
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     let body = src
         .split("pub(crate) fn pr_ship_with_method_and_dispatch_ctx(")
         .nth(1)

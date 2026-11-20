@@ -307,6 +307,19 @@ impl Attempt {
         Ok(())
     }
 
+    /// Add why a finished lane stayed unpublished to its recorded detail.
+    // trace:BUG-2705 | ai:claude
+    pub(crate) fn append_detail(&self, note: &str) -> Result<()> {
+        {
+            let mut r = self.receipt.borrow_mut();
+            r.detail = Some(match r.detail.take() {
+                Some(detail) if !detail.is_empty() => format!("{detail}; {note}"),
+                _ => note.to_owned(),
+            });
+        }
+        self.persist()
+    }
+
     pub(crate) fn kind(&self) -> Option<Kind> {
         self.receipt.borrow().result
     }

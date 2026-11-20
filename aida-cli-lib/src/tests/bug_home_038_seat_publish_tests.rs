@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 
 /// `git -C dir args…` through the test helper (auto-maintenance off); its
 /// trimmed stdout. Panics on failure.
-fn git_ok(dir: &Path, args: &[&str]) -> String {
+pub(crate) fn git_ok(dir: &Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
@@ -407,7 +407,7 @@ fn seat_with_commit(
 
 /// The handler's bundle step without bwrap: test git bundles the branch in
 /// the clone against main's `origin/main`.
-fn test_bundle(main: &Path, clone: &Path, branch: &str) -> anyhow::Result<Vec<u8>> {
+pub(crate) fn test_bundle(main: &Path, clone: &Path, branch: &str) -> anyhow::Result<Vec<u8>> {
     let base = git_ok(main, &["rev-parse", "origin/main"]);
     let out = crate::test_git::git_command()
         .arg("-C")
@@ -426,11 +426,15 @@ fn test_bundle(main: &Path, clone: &Path, branch: &str) -> anyhow::Result<Vec<u8
 /// The handler's commit step for a run without `--commit-pending`: never
 /// reached.
 // trace:TASK-2712 | ai:claude
-fn no_commit(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<String>> {
+pub(crate) fn no_commit(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<String>> {
     panic!("the commit step ran without --commit-pending")
 }
 
-fn opts(clone: &Path, dry_run: bool, no_pr: bool) -> crate::ship_from_seat::FromSeatOptions {
+pub(crate) fn opts(
+    clone: &Path,
+    dry_run: bool,
+    no_pr: bool,
+) -> crate::ship_from_seat::FromSeatOptions {
     crate::ship_from_seat::FromSeatOptions {
         clone: clone.to_path_buf(),
         spec: Some("BUG-1".into()),
@@ -743,14 +747,19 @@ fn task_2712_native_codex_seat_commit_ships_from_seat_without_seat_hooks() {
 /// A leased seat clone on `branch` with one uncommitted file (the shape a
 /// native Codex lane leaves behind).
 // trace:TASK-2712 | ai:claude
-fn seat_with_pending(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBuf {
+pub(crate) fn seat_with_pending(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBuf {
     let clone = super::s4_host_git_tests::leased_clone_on(fx, name, id, branch);
     std::fs::write(clone.join(format!("{name}.txt")), "pending\n").unwrap();
     clone
 }
 
 // trace:TASK-2902 | ai:codex
-fn seat_with_publication_pending(fx: &Fixture, name: &str, id: &str, branch: &str) -> PathBuf {
+pub(crate) fn seat_with_publication_pending(
+    fx: &Fixture,
+    name: &str,
+    id: &str,
+    branch: &str,
+) -> PathBuf {
     let clone = seat_with_pending(fx, name, id, branch);
     // trace:TASK-2902 | ai:codex — use a live spec belonging to this lease.
     let lease_path = crate::lease_path(&fx.main, id);
@@ -777,7 +786,7 @@ fn commit_never(_: &Path, _: &Path, _: &str, _: &str) -> anyhow::Result<Option<S
 /// A commit step without bwrap: test git commits the clone's pending work
 /// (hooks off) with the host's message, as the sandboxed commit would.
 // trace:TASK-2712 | ai:claude
-fn test_commit(
+pub(crate) fn test_commit(
     _: &Path,
     clone: &Path,
     branch: &str,
@@ -6089,15 +6098,15 @@ pub(crate) fn assert_retention_notice(lines: &[String], kind: &str, clone: &Path
 
 // trace:BUG-2607 | ai:claude
 // Fields drop in order: the guards before the fixture they point into.
-struct RefusedLaunch {
+pub(super) struct RefusedLaunch {
     _cwd: crate::session::contained_cwd_seam::CwdGuard,
     _env: crate::test_env::AmbientGuard,
-    clone: PathBuf,
-    fx: Fixture,
+    pub(super) clone: PathBuf,
+    pub(super) fx: Fixture,
 }
 
-const REFUSED_LEASE: &str = "c0ffee260701";
-const REFUSED_BRANCH: &str = "early-refusal";
+pub(super) const REFUSED_LEASE: &str = "c0ffee260701";
+pub(super) const REFUSED_BRANCH: &str = "early-refusal";
 
 // A leased seat clone whose launch is refused because its vendor is missing.
 // `dirty` keeps the seat's pending file; otherwise the clone is clean.
@@ -6118,12 +6127,24 @@ fn lane_seat(
     dirty: bool,
     setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
 ) -> RefusedLaunch {
+    lane_seat_configured(dirty, "", setup)
+}
+
+// [`lane_seat`] whose trusted default-branch config also carries `config_extra`
+// (e.g. a `[validation]` table), committed before the seat is cloned.
+// trace:BUG-2705 | ai:claude
+fn lane_seat_configured(
+    dirty: bool,
+    config_extra: &str,
+    setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
+) -> RefusedLaunch {
     let fx = fixture();
     // Reach the vendor spawn on a host short of the default disk floor.
     let config = fx.main.join(".aida/config.toml");
     std::fs::create_dir_all(config.parent().unwrap()).unwrap();
     let mut body = std::fs::read_to_string(&config).unwrap_or_default();
     body.push_str("\n[doctor.disk_headroom]\nmin_free_gib = 1\n");
+    body.push_str(config_extra);
     std::fs::write(&config, body).unwrap();
     git_ok(&fx.main, &["add", ".aida/config.toml"]);
     git_ok(&fx.main, &["commit", "-qm", "disk floor"]);
@@ -6256,7 +6277,18 @@ fn started_lane(
     body: impl FnOnce(&Fixture, &Path) -> String,
     setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
 ) -> RefusedLaunch {
-    lane_seat(dirty, |fx, clone| {
+    started_lane_configured(dirty, "", body, setup)
+}
+
+// [`started_lane`] with `config_extra` in the trusted default-branch config.
+// trace:BUG-2705 | ai:claude
+pub(super) fn started_lane_configured(
+    dirty: bool,
+    config_extra: &str,
+    body: impl FnOnce(&Fixture, &Path) -> String,
+    setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
+) -> RefusedLaunch {
+    lane_seat_configured(dirty, config_extra, |fx, clone| {
         let vendor = fx.root.join("mock-claude");
         crate::test_exec::write_executable(
             &vendor,
@@ -6306,8 +6338,11 @@ fn no_setup(_: &Fixture, _: &Path) -> Vec<(&'static str, Option<String>)> {
 
 // Empty-rework routing: the rework PR is unchanged and still conflicting,
 // so the lane is routed back; its result line names the seat only when the
-// seat holds work.
+// seat holds work. A clean exit's leftover edits get the host post-exit
+// commit (BUG-2705), so the dirty seat's child holds the index lock: the host
+// commit is refused and the work stays retained in the seat.
 // trace:BUG-2607 | ai:claude
+// trace:BUG-2705 | ai:claude
 #[test]
 fn bug_2607_empty_rework_reports_only_a_dirty_retained_seat() {
     if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
@@ -6316,7 +6351,13 @@ fn bug_2607_empty_rework_reports_only_a_dirty_retained_seat() {
     for dirty in [true, false] {
         let lane = started_lane(
             dirty,
-            |_, _| String::new(),
+            |_, clone| {
+                if dirty {
+                    format!("cd '{}' && : > .git/index.lock", clone.display())
+                } else {
+                    String::new()
+                }
+            },
             |fx, clone| {
                 let config = fx.main.join(".aida/config.toml");
                 let mut body = std::fs::read_to_string(&config).unwrap();
@@ -6520,7 +6561,7 @@ fn self_push(clone: &Path, branch: &str, subject: &str) {
 // Shell for a mock lane child that commits `subject` in its seat and pushes
 // its own branch to origin, as a self-publishing Claude lane does.
 // trace:BUG-2696 | ai:claude
-fn self_push_body(clone: &Path, subject: &str) -> String {
+pub(super) fn self_push_body(clone: &Path, subject: &str) -> String {
     format!(
         "cd '{clone}' && printf '%s\\n' '{subject}' > self-pushed.txt && \
          git -c maintenance.auto=false -c gc.auto=0 add -A && \
@@ -6549,7 +6590,7 @@ fn lane_bug_1_status(fx: &Fixture) -> aida_core::RequirementStatus {
 // hermetic host reads the distributed store, as the empty-rework lane test
 // does.
 // trace:BUG-2696 | ai:claude
-fn seed_lane_spec(fx: &Fixture, status: aida_core::RequirementStatus) {
+pub(super) fn seed_lane_spec(fx: &Fixture, status: aida_core::RequirementStatus) {
     crate::test_env::enroll_synthetic_home(&fx.main).unwrap();
     let mut req = title_spec("Repair seat publication");
     req.status = status.clone();

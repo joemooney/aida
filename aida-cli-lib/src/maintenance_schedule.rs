@@ -2004,10 +2004,15 @@ fn builtin_routed_seat_task(store: &Path, name: &str) -> Option<Task> {
     // trace:TASK-B6B1278890774EF993D2EBC327862470-134 | ai:claude
     let (seat, prompt) = match crate::lane_liveness::route_for_job(name) {
         Some(route) => (route.seat.to_string(), route.prompt.to_string()),
-        None => {
-            let seat = crate::mail_backlog::known_route_seat(store, name)?;
-            (seat.to_string(), crate::mail_backlog::route_prompt(seat))
-        }
+        // `throughput-guard-route-<seat>`: only a route the guard raised.
+        // trace:STORY-2906 | ai:claude
+        None => match crate::land::stalls::known_route_seat(store, name) {
+            Some(seat) => (seat.to_string(), crate::land::stalls::route_prompt(seat)),
+            None => {
+                let seat = crate::mail_backlog::known_route_seat(store, name)?;
+                (seat.to_string(), crate::mail_backlog::route_prompt(seat))
+            }
+        },
     };
     Some(Task {
         name: name.to_string(),
@@ -2051,7 +2056,11 @@ fn scheduled_due(project_root: &Path, seat: Option<&str>, include_substrate: boo
         .chain(
             ledgers
                 .keys()
-                .filter(|name| crate::mail_backlog::seat_for_job(name).is_some())
+                // trace:STORY-2906 | ai:claude
+                .filter(|name| {
+                    crate::mail_backlog::seat_for_job(name).is_some()
+                        || crate::land::stalls::seat_for_job(name).is_some()
+                })
                 .cloned(),
         )
         .collect::<Vec<_>>();
@@ -3762,6 +3771,18 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // The throughput guard classifies stuck changes and routes each new
+        // stall itself, so like lane-liveness it exits 0 rather than failing
+        // as a gate. Off the per-turn hook path: it runs a landing pass.
+        // trace:STORY-2906 | ai:claude
+        (
+            &["doctor check throughput-guard", "throughput-guard"],
+            ScheduledCommand {
+                display: "doctor check throughput-guard",
+                args: &["doctor", "check", "throughput-guard", "--json"],
+                hook_allowed: false,
+            },
+        ),
         // BUG-1746: mirror fan-out runs on a substrate cadence, independent of
         // which seat made the store writes; keep it off the per-turn hook path.
         // trace:BUG-1746 | ai:codex
@@ -3899,7 +3920,9 @@ fn command_timeout(command: &ScheduledCommand) -> std::time::Duration {
     // trace:TASK-1222 | ai:codex — lifecycle scans emit partial counts before this ceiling.
     if matches!(
         command.display,
-        "session hygiene" | "worktree gc --fail-on-findings"
+        // The throughput guard runs a landing pass and reads CI logs; its
+        // own budget stops the log reads first. trace:STORY-2906 | ai:claude
+        "session hygiene" | "worktree gc --fail-on-findings" | "doctor check throughput-guard"
     ) {
         HYGIENE_COMMAND_TIMEOUT
     } else {
