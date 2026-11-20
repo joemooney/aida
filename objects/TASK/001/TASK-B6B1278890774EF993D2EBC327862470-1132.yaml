@@ -1,0 +1,38 @@
+id: 01a1f99c-9c75-7a33-b419-667d975fdc7b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1132
+agreed_id: TASK-3823
+title: 'Temporary: review-watch reviewers use gpt-6.2-astra (codex) and claude-fable-5-2 (claude) via [agents.*.seats] reviewer models'
+description: |
+  Temporary reviewer-model boost (Joe 2026-11-20 08:36/08:38: use Fable 5.2 and codex gpt-6.2-astra to move faster until the ~2026-11-22 token reset).
+
+  Change .aida/config.toml only:
+    [agents.codex.seats]
+    reviewer = { model = "gpt-6.2-astra" }
+    [agents.claude.seats]
+    reviewer = { model = "claude-fable-5-2", effort = "high" }
+  (Use the exact key shape documented in docs/advanced/autonomous-drain.md:282-296; if the trusted-config registry needs entries (config-trust.toml), add them.)
+  Acceptance:
+  1. review-watch's reviewer launches (queue work --role reviewer) pick these models for their vendor; verified by `aida config show` and one dry-run or launch log line naming the model.
+  2. A config comment marks this TEMPORARY with a pointer to the revert task.
+  3. No other config changes. check-ci-fast green.
+  Protected path (.aida/config.toml): ships under the active mandate (includes protected paths). Claude lane, light review.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T15:39:12.885207714Z
+modified_at: 2026-11-20T15:39:12.885207714Z
+req_type: Task
+tags:
+- config
+- review
+- temporary
+filed_at:
+  code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 78b437097cb
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
