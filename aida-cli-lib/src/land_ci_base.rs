@@ -35,6 +35,27 @@ pub(super) fn observe(
     .map_err(|error| format!("{error:#}"))
 }
 
+/// CI at the exact head from the rollup alone: what the checks concluded,
+/// whatever base their runs tested.
+// trace:STORY-2906 | ai:claude
+pub(super) fn head_ci(
+    root: &Path,
+    repo: &Repository,
+    rollup: &Value,
+    pr: &Pr,
+) -> Result<Ci, String> {
+    let slug = repo.github_slug().ok_or("GitHub repository is unknown")?;
+    let (_, project) = slug.split_once('/').ok_or("GitHub project is unknown")?;
+    let (ci, _) = summarize_github_rollup(rollup, &pr.head, |run| {
+        Ok(serde_json::from_slice(&landing_ci_api(
+            root,
+            repo,
+            &format!("repos/{project}/actions/runs/{run}"),
+        )?)?)
+    });
+    Ok(ci)
+}
+
 fn check_link(check: &Value, slug: &str) -> Option<(u64, u64)> {
     let (repo, suffix) = check["detailsUrl"].as_str()?.split_once("/actions/runs/")?;
     if !repo.strip_prefix("https://")?.eq_ignore_ascii_case(slug) {
@@ -336,5 +357,96 @@ mod tests {
             verify(Ci::None, &[], SLUG, BASE, |_| unreachable!()).unwrap(),
             Ci::None
         );
+    }
+
+    // A failed aggregate on an older or unreadable base: the reconciler's
+    // answer is stale or unknown, the failed check at the head still stands.
+    // trace:STORY-2906 | ai:claude
+    #[test]
+    fn story_2906_a_red_head_on_a_stale_or_unknown_base_is_still_stuck_merge_red() {
+        use super::super::stalls::{standing, Standing};
+        use super::super::{derive, Approval, Evidence, Hold, Rounds};
+        struct Approved {
+            ci: std::result::Result<Ci, String>,
+            head: Ci,
+        }
+        impl Evidence for Approved {
+            fn conflict(&self, _: &Pr) -> std::result::Result<bool, String> {
+                Ok(false)
+            }
+            fn reviewing(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+                Ok(None)
+            }
+            fn ci(&self, _: &Pr) -> std::result::Result<Ci, String> {
+                self.ci.clone()
+            }
+            fn head_red(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+                Ok(match &self.head {
+                    Ci::Red(names) => Some(names.clone()),
+                    _ => None,
+                })
+            }
+            fn approval(&self, _: &Pr) -> std::result::Result<Approval, String> {
+                Ok(Approval::Approved("approved at aaaaaaaa".into()))
+            }
+            fn hold(&self, _: &Pr) -> std::result::Result<Option<Hold>, String> {
+                Ok(None)
+            }
+            fn rounds(&self, _: &Pr) -> std::result::Result<Rounds, String> {
+                Ok(Rounds::default())
+            }
+            fn lane(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+                Ok(None)
+            }
+        }
+        let rollup = json!([
+            check(
+                CI_AGGREGATOR_CHECK,
+                "FAILURE",
+                20,
+                201,
+                "2026-11-18T19:00:00Z"
+            ),
+            check("CI (gates)", "FAILURE", 20, 202, "2026-11-18T18:00:00Z"),
+        ]);
+        let (head, checks) =
+            summarize_github_rollup(&rollup, HEAD, |_| anyhow::bail!("no run metadata"));
+        let Ci::Red(names) = head.clone() else {
+            panic!("the head's checks failed: {head:?}");
+        };
+        let pr = Pr {
+            id: 4344,
+            head: HEAD.into(),
+            base: "main".into(),
+            branch: Some("feature".into()),
+            title: "change (TASK-1)".into(),
+            updated_at: None,
+            hold_label: None,
+            ci: None,
+        };
+        let stale = verify(head.clone(), &checks, SLUG, BASE, |_| Ok(OLD.into()));
+        assert!(matches!(stale, Ok(Ci::StaleBase(_))));
+        let unknown = verify(head.clone(), &checks, SLUG, BASE, |_| {
+            anyhow::bail!("logs expired")
+        });
+        assert!(unknown.is_err());
+        for ci in [stale, unknown] {
+            let evidence = Approved {
+                ci: ci.map_err(|error| format!("{error:#}")),
+                head: head.clone(),
+            };
+            let row = derive(&pr, &evidence);
+            match standing(&pr, &row, &evidence) {
+                Standing::Approved {
+                    red: Some(red),
+                    lane: None,
+                    ..
+                } => {
+                    assert!(red.starts_with(&names), "{red}");
+                    assert!(red.contains("base not fresh: "), "{red}");
+                }
+                other => panic!("expected an approved red head, got {other:?}"),
+            }
+        }
     }
 }

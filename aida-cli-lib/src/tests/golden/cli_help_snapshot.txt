@@ -32320,6 +32320,8 @@ Commands:
            child processes, release holds whose condition is met, and send every ready change to one
            train. Run it in a terminal that holds a seat grant, with autoland and the review watcher
            stopped
+  stalls   Print which open changes are stuck, why, and which seat can move them. Also lists recent
+           landings and lanes per host. Nothing is routed
   mode     Show or change the landing mode, keeping the forge's required checks in step with it
   help     Print this message or the help of the given subcommand(s)
 
@@ -32418,6 +32420,32 @@ Options:
       --vendor <VENDOR>
           The vendor reviewers run on; by default the usual selection applies. Rework lanes always
           keep the vendor their change already has
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida land stalls
+Print which open changes are stuck, why, and which seat can move them. Also lists recent landings
+and lanes per host. Nothing is routed
+
+Usage: aida land stalls [OPTIONS]
+
+Options:
+      --json
+          Machine-readable JSON report
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -65912,6 +65940,37 @@ Working on aida itself
         "name": "vendor",
         "takes_value": true,
         "help": "The vendor reviewers run on; by default the usual selection applies. Rework lanes always keep the vendor their change already has"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "land",
+      "stalls"
+    ],
+    "about": "Print which open changes are stuck, why, and which seat can move them. Also lists recent landings and lanes per host. Nothing is routed",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "json",
+        "takes_value": false,
+        "help": "Machine-readable JSON report"
       }
     ],
     "hidden": false
