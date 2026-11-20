@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T15:59:23.061715069Z
+modified_at: 2026-11-20T17:35:23.721240482Z
 req_type: Bug
 tags:
 - dell1
@@ -807,6 +807,13 @@ comments:
   created_at: 2026-11-20T15:59:23.061711525Z
   modified_at: 2026-11-20T15:59:23.061711525Z
   session_id: 01a1f98ba669
+- id: 01a1fa07-2aec-7733-9dbd-e4daad5dec89
+  author: joe
+  content: 'advisor-121 2026-11-20 10:38: review-watch refuses PR-4366 on every pass with ''base evidence refused: change head moved during discovery; retry the next pass'' although the head has been stable at a2e5e16 since 10:04 (an update-branch merge). Launched the review by hand. Possibly the relabel (ci:full toggle) events are read as head moves.'
+  created_at: 2026-11-20T17:35:23.721240482Z
+  modified_at: 2026-11-20T17:35:23.721240482Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
