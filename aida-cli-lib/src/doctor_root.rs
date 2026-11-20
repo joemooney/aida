@@ -1097,7 +1097,8 @@ pub(crate) fn collect_doctor_findings_at(
                     category: "stale-leases".into(),
                     id: format!("shared-{id}"),
                     summary: format!(
-                        "expired shared claim for {} (lease {}, exited worker, dead creator)",
+                        // trace:BUG-2697 | ai:claude — also an admission that never spawned
+                        "expired shared claim for {} (lease {}, no running worker, dead creator)",
                         claim.scope,
                         claim.lease_id.as_deref().unwrap_or("unknown")
                     ),

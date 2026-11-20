@@ -1387,7 +1387,7 @@ ops = ["ship"]   # any of: ship, sketch-signoff, dispatch, hold-clear, relay-res
 
   ```toml
   [mandate.human_gates]
-  protected_paths = ["aida-cli-lib/src/pr_cmd.rs", "scripts/release/"]
+  protected_paths = ["aida-cli-lib/src/pr_cmd/", "scripts/release/"]
   ```
 
   The same two layers apply. Each layer can only add paths: neither can remove

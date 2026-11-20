@@ -1,0 +1,5236 @@
+//! `aida pr` command cluster — the pr dispatcher (`handle_pr_command`) and
+//! its hold/rebase/ship/auto-queue-review handler layer, extracted from
+//! `lib.rs` (SPIKE-78 / STORY-771; pure movement, no behavior change).
+//! Shared PR-detection/git helpers stay in `lib.rs`, reached via `crate::`.
+// trace:STORY-771 | ai:claude
+
+use crate::gate::approval::*;
+use crate::gate::ci_freshness::*;
+use crate::gate::mandate_ship::*;
+use crate::process_retry::RetryEtxtbsy;
+#[cfg(test)]
+use crate::{
+    auto_complete, extract_pr_number_from_commit_subject, help, spec_status, AutonomyMode,
+    Phase3StaleOverlapAction, RealPhaseDriver,
+};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, aida_bin, apply_effort_tag, change_lookup_for_branch, cli,
+    commit_subjects, complexity_calibration, current_git_branch, current_user_id,
+    detect_default_branch_ref, detect_merged_pr_for_branch_via_forge, doctor_cmd,
+    effort_calibration, events, extract_spec_ids_from_commit, find_main_worktree_root,
+    find_project_root, forge, format_review_label, gate, list_leases, main_worktree_root_from,
+    merge_lock, network_retry, orchestrator, parse_review_scope, permissions,
+    pr_is_merged_with_sink, pr_list_handler, pr_rebase, pr_ship, punt, remote_head_sha, role, run,
+    run_client_trailer_guard, run_pr_open_spec_guard, session, ship, spec_matches, stacks,
+    truncate, watch, worktree_gc, AutoQueueStatus, PrLookup, ReviewForge, Storage,
+};
+use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::{Context, Result};
+use colored::Colorize;
+
+// trace:STORY-1728 | ai:claude
+#[path = "../pr_cmd_args.rs"]
+pub(crate) mod pr_cmd_args;
+pub(crate) use pr_cmd_args::*;
+
+pub(crate) use crate::pr_service::*;
+
+// trace:TASK-3822 | ai:codex
+mod cleanup;
+mod finish;
+mod gc;
+mod hold;
+mod rebase;
+mod shipping;
+mod slice;
+
+use cleanup::{
+    post_ship_cleanup_worker, run_post_ship_sweep, run_ship_cleanup_attended,
+    run_ship_cleanup_command, verify_post_ship_sweep_handoff, ShipCleanupError,
+};
+#[cfg(test)]
+use cleanup::{
+    reap_sweep_bounded, run_post_ship_sweep_bounded, verify_sweep_lock, CLEANUP_LOGS_KEPT,
+};
+pub(crate) use cleanup::{run_post_merge_worktree_gc, PostShipCleanupArgs};
+pub(crate) use finish::{
+    finish_base_lookup_failed, run_human_finish_ceremony, ship_branch, HumanFinishOptions,
+};
+pub(crate) use gc::{classify_pr_gc_branch, pr_gc_handler, PrGcAction};
+pub(crate) use hold::{pr_hold_handler, push_and_verify_held_branch};
+pub(crate) use rebase::{
+    classify_intermediate_only_with_gitignore, files_in_range, git_path_is_ignored_by_tree_rules,
+    pr_fetch_failure_message, pr_rebase_check_report, pr_rebase_handler,
+    preflight_intermediate_only_check, preflight_intermediate_only_check_with_forge,
+    preflight_intermediate_only_check_with_gh, preflight_intermediate_only_check_with_info,
+    preflight_stale_base_check, preflight_stale_base_check_with_forge,
+    preflight_stale_base_check_with_gh, preflight_stale_base_check_with_info,
+    preflight_stale_base_file_sets, rebase_worktree_for_run, remove_rebase_worktree,
+    status_output_says_rebasing, PrRebaseMode, REBASE_LEFTOVER_RECOVERY,
+};
+pub(crate) use shipping::{
+    branch_in_sibling_worktree, classify_ship_default_branch, dispatch_ledger_cover,
+    dispatch_ship_checkpoint, dispatch_ship_checkpoint_ledgered, find_open_approved_prs,
+    latest_merged_pr_for_branch, ledger_mandate_ship_failure, open_change_by_number,
+    open_child_prs, pr_ship_ci_wait_skip_reason, pr_ship_create_pr, pr_ship_dry_run_output,
+    pr_ship_dry_run_output_for_method, prepare_main_worktree_for_pr_ship_pull,
+    repo_has_ci_workflows, run_optional_slice_stack_verifier,
+    seat_clone_post_merge_pull_skip_reason, ship_squash_body, ShipCheckpoint,
+    ShipDefaultBranchDisposition, NO_HOLD_RELEASED_NOTE,
+};
+#[cfg(test)]
+pub(crate) use shipping::{
+    ship_is_default_branch, wait_for_pr_checks_to_register_with_gh, TEST_SHIP_CHECKPOINT_OBSERVER,
+};
+use slice::fetch_merged_pr_refs;
+#[cfg(test)]
+use slice::{authored_slice_start, confirm_rebase_merged, landed_commits_for_subjects, landed_run};
+pub(crate) use slice::{
+    complete_rebase_final_slice_specs, merged_pr_refs_from_metadata, post_merge_pull_skip_reason,
+    rebase_slice_bookkeeping, rebase_slice_bookkeeping_due, rebase_slice_inputs,
+    record_non_completing_rebase_slice, RebaseSliceInputs, RebaseSliceRun, SliceBookkeeping,
+};
+
+/// Acquire the branch merge-lease for this ship, or REFUSE (Err) if a live merger
+/// outlasts the bounded wait. The returned guard releases on drop.
+// trace:STORY-1171 | ai:claude
+fn acquire_merge_lease(
+    main_worktree: &std::path::Path,
+    pr: u64,
+) -> Result<crate::merge_lock::MergeLease> {
+    let target = pr_ship_target_branch(pr);
+    crate::merge_lock::acquire(
+        main_worktree,
+        &target,
+        Some(pr),
+        "aida pr ship",
+        crate::merge_lock::DEFAULT_WAIT,
+    )
+    .map_err(|e| {
+        anyhow::anyhow!(
+            "another merger holds the '{target}' merge-lease: {e} \
+             (a concurrent merge is in progress — retry once it releases, or run `aida merge-lock`)"
+        )
+    })
+}
+
+/// TASK-1448: the PR's CURRENT head sha for the approval-covers-head gate,
+/// read from the forge (gh `headRefOid`; pure-git resolves `branch`).
+/// `None` when it cannot be read — which the gate treats as "cannot show
+/// the approval covers the head", i.e. refuse (PRIN-5).
+// trace:TASK-1448 | ai:claude
+fn pr_head_sha_for_merge_gate(
+    project_root: &std::path::Path,
+    pr_number: u64,
+    branch: &str,
+) -> Option<String> {
+    let change = crate::forge::ChangeRef {
+        id: pr_number,
+        url: String::new(),
+        branch: branch.to_string(),
+        base: String::new(),
+        title: None,
+    };
+    crate::forge::forge_for(project_root)
+        .change_status(&change)
+        .ok()
+        .map(|status| status.head_sha.trim().to_string())
+        .filter(|sha| !sha.is_empty())
+}
+
+/// How many times the ship preflight reads the status, and the pause between reads.
+const SHIP_STATUS_READS: u32 = 3;
+const SHIP_STATUS_BACKOFF: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The change status for the ship preflight. It re-reads, up to a bound,
+/// while the read itself or its mergeability has not settled. It returns the
+/// last status the forge gave, settled or not. A definitive refusal fails
+/// immediately; unavailable reads fail when no usable status was obtained.
+// trace:STORY-2401 | ai:codex
+fn ship_status_settled(
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    backoff: std::time::Duration,
+) -> Result<crate::forge::ChangeStatus> {
+    use crate::forge_observed::Observed;
+    let mut last_status = None;
+    let observed = crate::forge_observed::settle(SHIP_STATUS_READS, backoff, || {
+        forge.observe_change_status(change).and_then(|reply| {
+            let status = match reply {
+                Ok(status) => status,
+                Err(why) => return Observed::Known(Err(why)),
+            };
+            let unsettled = status.mergeable.unsettled_reason().map(str::to_string);
+            last_status = Some(status);
+            match unsettled {
+                None => Observed::Known(Ok(())),
+                Some(why) => Observed::Pending(why),
+            }
+        })
+    });
+    // A settled refusal supersedes any earlier pending status.
+    // trace:STORY-2401 | ai:codex
+    if let Observed::Known(Err(why)) = observed {
+        anyhow::bail!("could not read PR-{}'s status: {why}", change.id);
+    }
+    match last_status {
+        Some(status) => Ok(status),
+        None => anyhow::bail!(
+            "could not read PR-{}'s status: {}",
+            change.id,
+            observed.unsettled_reason().unwrap_or("no reply")
+        ),
+    }
+}
+
+/// The status/mergeability decision shared by ship's preflight and its tests.
+/// Backoff is supplied explicitly so tests exercise the production retry loop.
+// trace:STORY-2401 trace:TASK-2794 | ai:codex
+pub(crate) fn ship_mergeability_preflight(
+    forge: &dyn crate::forge::Forge,
+    change: &crate::forge::ChangeRef,
+    backoff: std::time::Duration,
+) -> Result<crate::forge::ChangeStatus> {
+    use crate::gate::ship::ShipRefusal;
+    let status = ship_status_settled(forge, change, backoff)?;
+    // STORY-2401 / TASK-2794: only a settled "no" refuses. GitHub reports
+    // UNKNOWN until it has computed mergeability. If the value is still not
+    // settled after the bounded re-read, ship proceeds, and the forge's own
+    // merge call refuses a PR that turns out to conflict.
+    // trace:STORY-2401 trace:TASK-2794 | ai:claude
+    if status.mergeable.is_known_false() {
+        return Err(ShipRefusal::NotMergeable.error(format!(
+            "PR-{} is not mergeable — rebase the branch and try again.",
+            change.id
+        )));
+    }
+    if let Some(why) = status.mergeable.unsettled_reason() {
+        eprintln!(
+            "note: PR-{} mergeability is not settled yet ({why}); the merge itself will refuse a conflict.",
+            change.id
+        );
+    }
+    Ok(status)
+}
+
+// trace:TASK-1606 | ai:codex
+#[allow(clippy::too_many_arguments)]
+fn ship_preflight_gates(
+    project_root: &std::path::Path,
+    main_worktree: &std::path::Path,
+    hold_root: &std::path::Path,
+    change: &crate::forge::ChangeRef,
+    override_stale_check: bool,
+    override_stale_approval: bool,
+    delete_branch: bool,
+    hold_authority: bool,
+) -> Result<()> {
+    use crate::gate::ship::ShipRefusal;
+    let forge = crate::forge::forge_for(project_root);
+    let status = ship_mergeability_preflight(forge.as_ref(), change, SHIP_STATUS_BACKOFF)?;
+    let ids = ship_gate_known_ids(
+        project_root,
+        &change.branch,
+        change.title.as_deref(),
+        Some(change.id),
+    );
+    // BUG-1918: authors resolved from what the forge says the PR ships, not
+    // only the local range (empty when shipping from main).
+    let (candidates, policy) = merge_approval_inputs(
+        &[project_root, main_worktree],
+        main_worktree,
+        change.id,
+        &ids,
+        Some(&change.branch),
+        Some(&status.head_sha),
+    );
+    pr_ship_approval_gate(
+        main_worktree,
+        change.id,
+        &candidates,
+        Some(&status.head_sha),
+        &policy,
+        override_stale_approval,
+        delete_branch,
+        // TASK-1960: prove only. The gate that pins the merge records,
+        // prints and logs the carry-over, once per ship.
+        // trace:TASK-1960 | ai:claude
+        Some(&crate::gate::review_carryover::CarryOverSite::quiet(
+            main_worktree,
+            Some(change.base.as_str()),
+        )),
+    )?;
+    // TASK-1968: the corpus gate honours the same clean-merge carry-over.
+    // trace:TASK-1968 | ai:claude
+    crate::gate::merge_hold_core::enforce_corpus_gate_before_merge(
+        project_root,
+        change.id,
+        &ids,
+        Some(change.base.as_str()),
+        || Some(status.head_sha.clone()),
+    )
+    .map_err(|e| ShipRefusal::Review.error(e))?;
+    let gate = crate::gate::review_marker::merge_gate(main_worktree, change.id, || {
+        Some(status.head_sha.clone())
+    });
+    if let crate::gate::review_marker::MergeGate::UnderReview(marker) = gate {
+        return Err(ShipRefusal::Review.error(crate::gate::review_marker::refusal_message(&marker)));
+    }
+    let marker = crate::gate::merge_hold_core::read_hold(hold_root, change.id);
+    let label_only =
+        marker.is_none() && crate::merge_hold::label_present(hold_root, change.id).unwrap_or(false);
+    // STORY-1698: a human at a terminal, or an advisor covered by an active
+    // fire-fighting mandate. trace:STORY-1698 | ai:claude
+    if let Some(refusal) = crate::gate::ship::ship_hold_release_refusal_for(
+        marker.is_some(),
+        label_only,
+        hold_authority,
+        change.id,
+    ) {
+        return Err(ShipRefusal::MergeHold.error(refusal));
+    }
+    // trace:STORY-2903 | ai:claude
+    crate::gate::landing_merge::behind_base_gate(
+        project_root,
+        &change.branch,
+        change.id,
+        override_stale_check,
+    )
+    .map_err(|(kind, refusal)| kind.error(refusal))
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pr_ship_handler(
+    n: Option<u64>,
+    no_pull: bool,
+    no_cleanup: bool,
+    dry_run: bool,
+    force_delete_branch: bool,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    effort: Option<effort_calibration::EffortBucket>,
+    no_trailer_check: bool,
+    override_stale_check: bool,
+    override_stale_approval: bool,
+    wait: Option<u64>,
+    no_complete: bool,
+) -> Result<()> {
+    pr_ship_with_method(
+        n,
+        no_pull,
+        no_cleanup,
+        dry_run,
+        force_delete_branch,
+        complexity,
+        effort,
+        no_trailer_check,
+        override_stale_check,
+        override_stale_approval,
+        wait,
+        no_complete,
+        crate::forge::MergeMethod::Squash,
+        false,
+    )
+}
+
+/// The refusal a post-release exit returns: when this ship's mandate
+/// released a hold (a mandate cover and a hold marker), the hold is re-armed
+/// and what `rearm` reports is appended; any other exit returns `refusal`
+/// unchanged and re-arms nothing.
+// trace:TASK-1955 | ai:claude (TASK-2088)
+pub(crate) fn refusal_with_mandate_rearm(
+    refusal: String,
+    mandate_released: bool,
+    held: bool,
+    rearm: impl FnOnce() -> String,
+) -> String {
+    if mandate_released && held {
+        format!("{refusal}{}", rearm())
+    } else {
+        refusal
+    }
+}
+
+// trace:STORY-1663 | ai:antigravity
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pr_ship_with_method(
+    n: Option<u64>,
+    no_pull: bool,
+    no_cleanup: bool,
+    dry_run: bool,
+    force_delete_branch: bool,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    effort: Option<effort_calibration::EffortBucket>,
+    no_trailer_check: bool,
+    override_stale_check: bool,
+    override_stale_approval: bool,
+    wait: Option<u64>,
+    no_complete: bool,
+    merge_method: crate::forge::MergeMethod,
+    final_slice: bool,
+) -> Result<()> {
+    pr_ship_with_method_and_dispatch_ctx(
+        n,
+        no_pull,
+        no_cleanup,
+        dry_run,
+        force_delete_branch,
+        complexity,
+        effort,
+        no_trailer_check,
+        override_stale_check,
+        override_stale_approval,
+        wait,
+        no_complete,
+        merge_method,
+        final_slice,
+        false,
+        None,
+    )
+}
+
+// trace:STORY-1917 | ai:agy
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
+    n: Option<u64>,
+    no_pull: bool,
+    no_cleanup: bool,
+    dry_run: bool,
+    force_delete_branch: bool,
+    complexity: Option<complexity_calibration::ComplexityLevel>,
+    effort: Option<effort_calibration::EffortBucket>,
+    no_trailer_check: bool,
+    override_stale_check: bool,
+    override_stale_approval: bool,
+    wait: Option<u64>,
+    no_complete: bool,
+    merge_method: crate::forge::MergeMethod,
+    final_slice: bool,
+    allow_stacked_base: bool,
+    dispatch_ctx: Option<&crate::gate::dispatch_auth::DispatchExecutionContext>,
+) -> Result<()> {
+    use pr_ship::{
+        branch_pr_resolution_from_lookup, format_activity_event, format_dry_run_plan_with_method,
+        recovery_hint, BranchPrResolution, PrShipOptions, ShipStep, StepOutcome,
+    };
+    dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::Entry)?;
+    // Flow tests stand in for the rest of the ship here, after the real
+    // entry check, so a context dropped on the way in still fails them.
+    #[cfg(test)]
+    if let (Some(ctx), Some(pr)) = (dispatch_ctx, n) {
+        let maybe_res = crate::dispatch::dispatch_flow::TEST_FLOW_SHIP_HOOK
+            .with(|cell| cell.borrow_mut().as_mut().map(|hook| hook(pr, ctx)));
+        if let Some(res) = maybe_res {
+            return res;
+        }
+    }
+    // The one merge path behind `aida pr ship` and `aida ship`: a standalone
+    // implementer stops at an open PR. trace:STORY-1662 | ai:claude
+    crate::standalone_implementer::refuse_under_marker("pr ship")?;
+
+    if final_slice && merge_method != crate::forge::MergeMethod::Rebase {
+        anyhow::bail!(
+            "`--final-slice` (`--complete-spec`) requires `--rebase` or `--merge-method rebase`"
+        );
+    }
+
+    let opts = PrShipOptions {
+        pr_number: n,
+        no_pull,
+        no_cleanup,
+        dry_run,
+        complexity,
+        effort,
+    };
+
+    // Project root for gh/git invocations is wherever the user is —
+    // typical pattern: invoked from inside the spec worktree. The
+    // main worktree (where `.aida-store` lives and `aida pull` must
+    // run) may be a different path; we resolve it explicitly.
+    let project_root = find_project_root()?;
+    let forge_kind = crate::forge::resolve_forge_kind(&project_root);
+    let main_worktree = main_worktree_root_from(&project_root);
+    // Waits a bounded time while loop controllers yield (BUG-2703).
+    // trace:STORY-2857 | ai:codex
+    // trace:BUG-2703 | ai:claude
+    let _admission = if dry_run {
+        None
+    } else {
+        crate::admission_owner::ship_admission(&main_worktree)?
+    };
+    let hold_root = pr_ship_hold_root(&project_root);
+
+    let branch = ship_branch(&project_root, &main_worktree, !opts.dry_run)?;
+    if branch.is_empty() {
+        anyhow::bail!("could not detect current branch (detached HEAD?)");
+    }
+
+    // BUG-2164 / TASK-1795 / TASK-1803: On the default branch (or when the
+    // default branch cannot be determined) with no explicit PR number, refuse
+    // before any push, trailer guard, or PR creation attempt.
+    // trace:BUG-2164 trace:TASK-1795 trace:TASK-1803 | ai:antigravity
+    if opts.pr_number.is_none() {
+        match classify_ship_default_branch(&project_root, &branch) {
+            ShipDefaultBranchDisposition::FeatureBranch => {}
+            ShipDefaultBranchDisposition::OnDefaultBranch => {
+                let approved = find_open_approved_prs(&project_root);
+                anyhow::bail!(
+                    "{}",
+                    crate::gate::ship::format_default_branch_ship_refusal(&approved)
+                );
+            }
+            ShipDefaultBranchDisposition::UnknownDefaultBranch => {
+                let approved = find_open_approved_prs(&project_root);
+                anyhow::bail!(
+                    "{}",
+                    crate::gate::ship::format_unknown_default_branch_ship_refusal(&approved)
+                );
+            }
+        }
+    }
+
+    // ---- STORY-469 Guard 1: validate trailer spec-IDs before shipping. ----
+    // Catch a hallucinated / typo'd / since-rejected `(SPEC-ID)` trailer BEFORE
+    // the commit reaches the PR + shared history. Reuses the STORY-498 gate's
+    // pure validator + store resolver, client-side. Refuses (exit 1) on a dead
+    // reference; `--no-trailer-check` and a store-less checkout both bypass.
+    // trace:STORY-469 | ai:claude
+    if !dry_run {
+        run_client_trailer_guard(&project_root, "pr ship", no_trailer_check);
+    }
+
+    // ---- Step 1: resolve or create the PR. ----
+    eprintln!(
+        "{} aida pr ship — target branch: {}",
+        "→".cyan().bold(),
+        branch
+    );
+
+    // BUG-574: track whether the PR we resolve has ALREADY been merged. Re-running
+    // `aida pr ship` on a spec that already shipped (the agent/loop retries, or a
+    // sibling already merged it) is a benign no-op, not a failure: there is
+    // nothing left to merge, so the merge step would otherwise error non-zero
+    // (`gh pr merge` on a merged PR) and poison `pr ship`'s usage telemetry. When
+    // already-merged, we skip CI-watch + merge and fall through to the idempotent
+    // pull + cleanup steps, exiting 0. trace:BUG-574 | ai:claude
+    let mut already_merged = false;
+    let mut target_change: Option<crate::forge::ChangeRef> = None;
+
+    let pr_number = match opts.pr_number {
+        Some(explicit) => {
+            eprintln!("  step 1: using explicit PR-{}", explicit);
+            target_change = open_change_by_number(&project_root, explicit);
+            // BUG-574: an explicit PR-N that is already merged is "already
+            // shipped" — not a failure. Detect now so the merge step is skipped.
+            if !dry_run {
+                let mut probe_sink = crate::network_retry::NoopSink;
+                if pr_is_merged_with_sink(&project_root, explicit as u32, &mut probe_sink)
+                    == Some(true)
+                {
+                    already_merged = true;
+                }
+            }
+            log_ship_activity(
+                &main_worktree,
+                Some(explicit),
+                &ShipStep::ResolvePr {
+                    create_if_needed: false,
+                },
+                &StepOutcome::Ok,
+            );
+            explicit
+        }
+        None => {
+            // Look up an open change for the current branch through the forge
+            // (GitHub: `gh pr list --head`; GitLab: `glab mr list --source-branch`).
+            // TASK-141: only a definitive "no change" may fall through to
+            // create. CLI/auth/network/parse failures are inconclusive; creating
+            // after those failures masks the resume problem behind gh's "PR
+            // already exists for this branch" error.
+            // trace:TASK-961 trace:STORY-621 trace:TASK-141 | ai:codex
+            let lookup = change_lookup_for_branch(&project_root, &branch);
+            match branch_pr_resolution_from_lookup(&lookup) {
+                BranchPrResolution::Found(existing) => {
+                    // BUG-733: keep the found ChangeRef so the stacked-guard
+                    // below resolves the PR's real head branch.
+                    if let crate::forge::ChangeLookup::Found(c) = lookup {
+                        target_change = Some(c);
+                    }
+                    eprintln!("  step 1: found open PR-{} for branch {}", existing, branch);
+                    log_ship_activity(
+                        &main_worktree,
+                        Some(existing),
+                        &ShipStep::ResolvePr {
+                            create_if_needed: false,
+                        },
+                        &StepOutcome::Ok,
+                    );
+                    existing
+                }
+                BranchPrResolution::LookupFailed(reason) => {
+                    log_ship_activity(
+                        &main_worktree,
+                        None,
+                        &ShipStep::ResolvePr {
+                            create_if_needed: false,
+                        },
+                        &StepOutcome::Failed(reason.clone()),
+                    );
+                    anyhow::bail!(reason);
+                }
+                BranchPrResolution::Create => {
+                    if dry_run {
+                        eprintln!(
+                            "  step 1: would create new PR for branch {} (dry-run)",
+                            branch
+                        );
+                        // Use a placeholder so the rest of the dry-run plan
+                        // still has a coherent N to print.
+                        0
+                    } else if let Some(merged_n) =
+                        latest_merged_pr_for_branch(&project_root, &branch)
+                    {
+                        // BUG-574: no OPEN PR for the branch, but a merged one exists —
+                        // the branch already shipped. `pr_ship_create_pr` would fail with
+                        // "no commits between" (a benign already-shipped state reported as
+                        // a hard error). Treat it as already-merged and exit 0 after the
+                        // idempotent pull/cleanup steps. trace:BUG-574 | ai:claude
+                        eprintln!(
+                            "  step 1: no open PR for branch {} — PR-{} already merged",
+                            branch, merged_n
+                        );
+                        already_merged = true;
+                        log_ship_activity(
+                            &main_worktree,
+                            Some(merged_n),
+                            &ShipStep::ResolvePr {
+                                create_if_needed: false,
+                            },
+                            &StepOutcome::Skipped("PR already merged for this branch".into()),
+                        );
+                        merged_n
+                    } else {
+                        // TASK-1442 (containment for BUG-1510): a leased branch
+                        // must carry a commit trailered for the spec it's leased
+                        // for before a PR opens under that spec's identity.
+                        if let Some(expected) = list_leases(&main_worktree)
+                            .into_iter()
+                            .find(|l| l.branch == branch)
+                            .map(|l| l.scope)
+                        {
+                            run_pr_open_spec_guard(&project_root, &branch, &expected);
+                        }
+                        let new_n = pr_ship_create_pr(&project_root, &branch)?;
+                        eprintln!(
+                            "  {} created PR-{}",
+                            crate::glyph(crate::glyphs::Glyph::Check).green(),
+                            new_n
+                        );
+                        // Dual-write: the seat hands its work to the PR. // trace:STORY-2325 | ai:claude
+                        let shipped_spec = list_leases(&main_worktree)
+                            .into_iter()
+                            .find(|l| l.branch == branch)
+                            .map(|l| l.scope)
+                            .unwrap_or_default();
+                        crate::ownership::dual::handed_off(
+                            &project_root,
+                            &project_root,
+                            &branch,
+                            &shipped_spec,
+                            new_n,
+                        )?;
+                        log_ship_activity(
+                            &main_worktree,
+                            Some(new_n),
+                            &ShipStep::ResolvePr {
+                                create_if_needed: true,
+                            },
+                            &StepOutcome::Ok,
+                        );
+                        new_n
+                    }
+                }
+            }
+        }
+    };
+
+    // BUG-733: an explicit `aida pr ship <N>` may be run from the PR base
+    // branch. Resolve the target PR's head branch before deciding whether to
+    // delete it or whether open PRs are stacked on it.
+    // trace:BUG-733 | ai:codex
+    let branch_for_child_lookup = target_change
+        .as_ref()
+        .and_then(|c| (!c.branch.is_empty()).then_some(c.branch.as_str()))
+        .unwrap_or(&branch);
+    let raw_open_child_prs = open_child_prs(&project_root, branch_for_child_lookup);
+    let (ship_branch, retarget_base, open_child_prs) =
+        pr_ship::ship_branch_context(&branch, target_change.as_ref(), &raw_open_child_prs);
+
+    if ship_branch != branch {
+        eprintln!(
+            "  step 1: PR-{} head branch is {} (current checkout: {})",
+            pr_number, ship_branch, branch
+        );
+    }
+
+    // ---- Detect: is the branch checked out in a sibling worktree? ----
+    // If so, `gh pr merge --delete-branch` will fail the local-cleanup
+    // step with "branch X is already used by worktree at Y". We skip
+    // `--delete-branch` in that case and let `aida session end` handle
+    // the local cleanup (which knows how to remove the worktree first).
+    let branch_in_sibling = branch_in_sibling_worktree(&main_worktree, &ship_branch, &project_root);
+
+    // ---- BUG-434: detect branches/PRs stacked ON this branch. ----
+    // Deleting the merged branch orphans local children and GitHub
+    // auto-CLOSES any PR based on it (the #439 slip). Two substrate
+    // sources: (a) `.aida/stacks.json` parent_branch links (STORY-248),
+    // (b) `gh pr list --base <branch> --state open`. Either populated ⇒
+    // keep the branch unless `--force-delete-branch`. trace:BUG-434
+    let stack_graph = stacks::load(&project_root);
+    let stacked_children: Vec<String> = stacks::children_of(&stack_graph, &ship_branch)
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect();
+    let delete_branch = pr_ship::should_delete_branch(
+        branch_in_sibling,
+        stacked_children.len(),
+        open_child_prs.len(),
+        force_delete_branch,
+    );
+    if !delete_branch
+        && !branch_in_sibling
+        && (!stacked_children.is_empty() || !open_child_prs.is_empty())
+    {
+        // The merge still proceeds; we just keep the base branch alive so
+        // the stacked PRs survive. Tell the operator how to clean up.
+        let child_prs: Vec<String> = open_child_prs.iter().map(|n| format!("#{n}")).collect();
+        eprintln!(
+            "  {} keeping branch `{}` after merge — {} stacked on it",
+            crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+            ship_branch,
+            if child_prs.is_empty() {
+                format!(
+                    "{} child branch(es): {}",
+                    stacked_children.len(),
+                    stacked_children.join(", ")
+                )
+            } else {
+                format!("open child PR(s): {}", child_prs.join(", "))
+            }
+        );
+        if !child_prs.is_empty() {
+            // BUG-HOME-042: the merge is followed by an automatic retarget.
+            // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+            eprintln!(
+                "    after the merge they are retargeted to `{}` and their CI re-run; `{}` is deleted once none targets it.",
+                retarget_base, ship_branch
+            );
+        } else {
+            eprintln!(
+                "    re-target those branches off `{}` before deleting it — or re-run with --force-delete-branch to orphan them.",
+                ship_branch
+            );
+        }
+    }
+
+    // ---- BUG-HOME-042: refuse a PR whose base is not the default branch. ----
+    // A stacked PR whose parent merged still targets the parent's branch
+    // until retargeted; merging it would land the work on a dead branch.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    if !already_merged {
+        if let Some(change) = target_change.as_ref() {
+            let default_branch = crate::forge::local_origin_head_branch(&project_root)
+                .or_else(|| crate::forge::probe_default_branch(&project_root));
+            if let Some(refusal) = pr_ship::stacked_base_refusal(
+                pr_number,
+                &change.base,
+                default_branch.as_deref(),
+                allow_stacked_base,
+            ) {
+                anyhow::bail!(refusal);
+            }
+        }
+    }
+
+    let steps = vec![
+        ShipStep::ResolvePr {
+            create_if_needed: opts.pr_number.is_none(),
+        },
+        ShipStep::WatchCi,
+        ShipStep::Merge { delete_branch },
+        ShipStep::Pull,
+        ShipStep::EndLease,
+    ];
+
+    // ---- Dry-run: print the resolved plan and exit. ----
+    if dry_run {
+        let plan = format_dry_run_plan_with_method(&opts, &steps, forge_kind, merge_method);
+        // trace:BUG-1957 trace:STORY-1663 | ai:antigravity
+        print!(
+            "{}",
+            pr_ship_dry_run_output_for_method(
+                plan,
+                &project_root,
+                pr_number,
+                &ship_branch,
+                no_complete,
+                merge_method,
+                final_slice,
+            )
+        );
+        eprintln!(
+            "  → PR target: {}",
+            if pr_number == 0 {
+                "<would-create>".to_string()
+            } else {
+                format!("PR-{}", pr_number)
+            }
+        );
+        return Ok(());
+    }
+
+    // Reprobe the PR binding and caller on every poll; --wait never grants
+    // authority to a drive seat or bypasses a merge hold.
+    // trace:TASK-1602 | ai:codex
+    let drive_seat = ship_caller_is_drive_seat();
+    let direct_human = crate::gate::seat_authority::require_direct_human().is_ok() && !drive_seat;
+    // trace:TASK-1606 | ai:codex
+    // One flag and deadline cover ownership plus CI registration/settlement.
+    let wait_started = std::time::Instant::now();
+    let result = crate::gate::ship::wait_for_drive_release(
+        wait.map(std::time::Duration::from_secs),
+        std::time::Duration::from_secs(2),
+        || probe_ship_drive_block(&main_worktree, pr_number),
+        |block, remaining| {
+            eprintln!(
+                "  PR-{pr_number} waiting for drive release ({remaining:.0}s remaining): {}",
+                block.detail
+            );
+        },
+    );
+    if let Err(block) = result {
+        let reason_text = match block.reason {
+            crate::gate::ship::ShipMergeBlockReason::DriveSeat => {
+                "caller is a drive implementer/reviewer seat"
+            }
+            crate::gate::ship::ShipMergeBlockReason::DriveOwnedPr => {
+                "target PR is owned by the live drive"
+            }
+        };
+        if direct_human {
+            eprintln!("  {}", block.detail);
+            eprintln!("  The drive's independent reviewer gates the merge; on completion it merges if authorized or escalates the merge decision to you. No completion-time estimate is available.");
+            eprintln!(
+                "  Retry with `aida pr ship {pr_number} --wait 300` (bounded wait; no prompt)."
+            );
+        }
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &pr_ship::ShipStep::Merge { delete_branch },
+            &pr_ship::StepOutcome::Skipped(block.detail.clone()),
+        );
+        let refusal = if block.timed_out {
+            crate::gate::ship::ShipRefusal::CiTimeout
+        } else {
+            crate::gate::ship::ShipRefusal::Review
+        };
+        return Err(refusal.error(format!(
+            "PR-{pr_number} left OPEN — `aida pr ship` refused: {reason_text}. {} \
+             Deliberate in-drive direct-publish: AIDA_PR_SHIP_ALLOW_IN_DRIVE=1 (never bypasses a merge-hold).",
+            if block.timed_out { "Drive ownership wait timed out." } else { "The independent reviewer gates the merge." },
+        )));
+    }
+
+    // Ownership may have been released because the drive merged the PR.
+    // Refresh forge metadata before selecting the CI/merge or sync-only path.
+    // trace:TASK-1602 | ai:codex
+    if wait.is_some() && !already_merged {
+        let mut probe_sink = crate::network_retry::NoopSink;
+        already_merged =
+            pr_is_merged_with_sink(&project_root, pr_number as u32, &mut probe_sink) == Some(true);
+    }
+    dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PreMandateCover)?;
+
+    // ---- STORY-1698: the fire-fighting mandate. A human at a terminal
+    // needs none; any other caller may release a hold only when an active
+    // mandate covers THIS session (advisor seat of the minting human),
+    // these specs, and an attested independent approval at the head. Read
+    // fresh here, again under the merge lease, and once more immediately
+    // before the merge call. trace:STORY-1698 | ai:claude
+    let floor_authority = crate::gate::role_authority::has_integrity_floor_authority();
+    // `[landing] merger`: who may perform the merge. trace:STORY-2897 | ai:claude
+    // The landing policy this ship is decided under; re-read and compared
+    // at the merge. trace:STORY-2897 | ai:claude
+    let landing_entry = crate::landing_policy::load_reporting(&project_root);
+    if let Some(refusal) = crate::gate::ship::advisor_merge_refusal(
+        landing_entry.advisor_merges(),
+        crate::gate::seat_authority::current_seat(&project_root).as_deref(),
+        floor_authority,
+        &format!("PR-{pr_number}"),
+    ) {
+        return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+    }
+    // BUG-HOME-048: the same coverage-filtered set as the preflight gate.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+    let mandate_ids = || {
+        ship_gate_known_ids(
+            &project_root,
+            &ship_branch,
+            target_change.as_ref().and_then(|c| c.title.as_deref()),
+            Some(pr_number),
+        )
+    };
+    let mandate_cover_now = || {
+        if pr_number == 0 || already_merged || floor_authority {
+            return Err(crate::gate::mandate::MandateRefusal::NoMandate);
+        }
+        mandate_ship_cover_for_ship(
+            &project_root,
+            &main_worktree,
+            &hold_root,
+            pr_number,
+            &mandate_ids(),
+            Some(&ship_branch),
+            || pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch),
+            override_stale_approval,
+        )
+    };
+    // BUG-2184: the mandate scan has its own cost and must not eat the --wait
+    // budget meant for CI: its time is taken back out of the CI deadline.
+    // trace:BUG-2184 | ai:claude
+    let scan_started = std::time::Instant::now();
+    let mut mandate_cover = mandate_cover_now();
+    let scan_spent = scan_started.elapsed();
+    let mandate_refusal_note = |cover: &std::result::Result<
+        MandateCover,
+        crate::gate::mandate::MandateRefusal,
+    >| match cover {
+        Err(r) if *r != crate::gate::mandate::MandateRefusal::NoMandate => {
+            let message = r.message(pr_number);
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_MANDATE_SHIP,
+                None,
+                Some(pr_number),
+                &message,
+            );
+            // trace:STORY-1700 | ai:claude
+            crate::mandate_drive::ship_refused(&main_worktree, pr_number, &message);
+            format!(" {message}.")
+        }
+        _ => String::new(),
+    };
+
+    // ---- BUG-1532: ANY merge-hold marker binds `aida pr ship`, with or
+    // without a live drive and whatever its reason text names. Checked HERE —
+    // before the CI watch (which would otherwise discount the hold's own red
+    // gate) and before the release step. A supervision/decision hold still
+    // releases for a human at a terminal (BUG-1167); a refusal-shaped hold
+    // (rework/recusal/malformed/untyped) never releases through a merge, and
+    // no hold releases without a human (BUG-1566). A label-only hold is
+    // caught at the release step below, where the forge label is read.
+    // AIDA_PR_SHIP_ALLOW_IN_DRIVE deliberately does not reach this gate.
+    // trace:BUG-1532 | ai:claude
+    if pr_number != 0 {
+        if let Some(refusal) = crate::gate::ship::ship_hold_gate(
+            crate::gate::merge_hold_core::read_hold_record(&main_worktree, pr_number).as_ref(),
+            floor_authority || mandate_cover.is_ok(),
+            pr_number,
+            |record| {
+                // BUG-1532 criterion 4: only for a refusal hold with a human
+                // present — read the PR's live head, then the verdict at it.
+                let head = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
+                ship_refusal_release(
+                    &[main_worktree.as_path(), project_root.as_path()],
+                    record,
+                    head.as_deref(),
+                    true,
+                )
+            },
+        ) {
+            let refusal = format!("{refusal}{}", mandate_refusal_note(&mandate_cover));
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Skipped(refusal.clone()),
+            );
+            // STORY-1436: the ship hold-release floor HELD. trace:STORY-1436 | ai:claude
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_SHIP_HOLD_RELEASE,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
+            return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
+        }
+    }
+
+    // ---- STORY-529: draft-for-review gate. A spec tagged `review:draft-only`
+    // must NOT be auto-merged by `aida pr ship` — leave the PR a draft and STOP
+    // (before CI-watch + merge) so a human reviews + merges. Opt-in via the tag,
+    // so untagged specs are unaffected. Enforces the draft-for-review handoff
+    // that briefs alone couldn't (handed-off agents self-merged). trace:STORY-529
+    let draft_only = draft_only_specs_for_ship(&project_root);
+    if !draft_only.is_empty() {
+        // Convert the PR back to a draft (no-op/harmless if already one or if
+        // the forge doesn't support drafts — the load-bearing effect is the
+        // bail before merge below).
+        let _ = std::process::Command::new("gh")
+            .current_dir(&project_root)
+            .args(["pr", "ready", &pr_number.to_string(), "--undo"])
+            .status();
+        eprintln!(
+            "{} PR-{} left as a DRAFT — {} tagged `{}`. A human must review + merge; \
+             `aida pr ship` will not auto-merge it.",
+            "⏸".yellow().bold(),
+            pr_number,
+            draft_only.join(", "),
+            crate::gate::ship::DRAFT_ONLY_TAG
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &pr_ship::ShipStep::Merge { delete_branch },
+            &pr_ship::StepOutcome::Skipped(format!(
+                "{} tagged review:draft-only — held for human review",
+                draft_only.join(", ")
+            )),
+        );
+        return Err(crate::gate::ship::ShipRefusal::Review
+            .error("PR left open — awaiting independent review"));
+    }
+
+    // ---- BUG-727: supervised-merge gate (substrate-as-bouncer). The keystone
+    // "Gate + PR, do NOT merge — advisor reviews first" directive used to live
+    // only in spec PROSE, which this ship path never read — it auto-merged
+    // keystone work straight past it. The machine-readable marker is the
+    // spec's `execution_mode`: only `drain` licenses an unattended merge; any
+    // other mode — or none at all (fail safe) — parks the PR OPEN and
+    // mergeable, awaiting an explicit human/advisor merge. A human at an
+    // interactive TTY IS that explicit merge, so the gate fires only for
+    // non-interactive (automation) callers. Skipped when the PR is already
+    // merged — there is nothing left to refuse, only the idempotent post-merge
+    // sync below. trace:BUG-727 | ai:claude
+    let interactive_tty = ship_interactive_tty();
+    // trace:STORY-2884 | ai:claude
+    let unset_default_heads = crate::gate::unset_mode::CheckedHeads::default();
+    let supervised = if already_merged {
+        Vec::new()
+    } else {
+        // STORY-1698: an advisor covered by an active mandate is the explicit
+        // advisor merge this gate waits for (operator-only specs never are:
+        // the mandate refuses them). trace:STORY-1698 | ai:claude
+        let allowed = interactive_tty || mandate_cover.is_ok();
+        // STORY-2884: the files this PR changes, against its base — read only
+        // when a spec takes the project's unset-mode default. The head they
+        // were read at is pinned: preflight refuses a different head.
+        let change_paths = || {
+            let head = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch)?;
+            unset_default_heads.record(&head);
+            crate::gate::unset_mode::changed_paths(
+                &project_root,
+                &format!("origin/{retarget_base}"),
+                &head,
+            )
+        };
+        let mut holds = supervised_specs_for_ship(&project_root, allowed, change_paths);
+        if pr_number > 0 && !allowed {
+            let mut records = ship_gate_spec_records_for_ids(&project_root, mandate_ids());
+            withdraw_unset_defaults(&mut records, change_paths);
+            holds.extend(supervised_specs_in(records, false));
+            holds.sort();
+            holds.dedup();
+        }
+        holds
+    };
+    if !supervised.is_empty() {
+        for (id, label) in &supervised {
+            // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
+            eprintln!(
+                "{} {} is marked {label} — auto-merge refused; merge requires \
+                 human/advisor review",
+                "⏸".yellow().bold(),
+                aida_core::node_alias::display_spec_id(id),
+            );
+        }
+        eprintln!(
+            "{} PR-{} left OPEN — mergeable, awaiting human/advisor review. Once \
+             reviewed, merge it explicitly: `gh pr merge {} --squash; aida pull`.",
+            "⏸".yellow().bold(),
+            pr_number,
+            pr_number,
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &pr_ship::ShipStep::Merge { delete_branch },
+            &pr_ship::StepOutcome::Skipped(format!(
+                "{} — execution mode holds the merge for human/advisor review",
+                supervised
+                    .iter()
+                    .map(|(id, label)| format!("{id} marked {label}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        );
+        return Err(crate::gate::ship::ShipRefusal::Review
+            .error("PR left open — awaiting independent review"));
+    }
+
+    let gate_change = crate::forge::ChangeRef {
+        id: pr_number,
+        url: String::new(),
+        branch: ship_branch.clone(),
+        base: retarget_base.clone(),
+        title: target_change.as_ref().and_then(|c| c.title.clone()),
+    };
+    let preflight_head_sha = if !already_merged {
+        ship_preflight_gates(
+            &project_root,
+            &main_worktree,
+            &hold_root,
+            &gate_change,
+            override_stale_check,
+            override_stale_approval,
+            delete_branch,
+            floor_authority || mandate_cover.is_ok(),
+        )?;
+        let head = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
+        // STORY-2884: a project default was admitted for the head its files
+        // were read at; preflight (and so the merge, pinned to preflight by
+        // STORY-1663) must be that head. trace:STORY-2884 | ai:claude
+        if let Some(refusal) = unset_default_heads.moved_refusal(pr_number, head.as_deref()) {
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Failed(refusal.clone()),
+            );
+            return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+        }
+        head
+    } else {
+        None
+    };
+
+    // BUG-574: if the PR is already merged (re-run on an already-shipped spec,
+    // or a sibling beat us to the merge) there is nothing to watch or merge.
+    // Skip straight to the idempotent pull + cleanup so the re-run exits 0
+    // instead of erroring out of a no-op `gh pr merge`. trace:BUG-574 | ai:claude
+    let mut label_only_hold = false;
+    if already_merged {
+        eprintln!(
+            "  {} PR-{} is already merged — nothing to ship; running post-merge sync + cleanup",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            pr_number
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::WatchCi,
+            &StepOutcome::Skipped("PR already merged".into()),
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::Merge { delete_branch },
+            &StepOutcome::Skipped("PR already merged".into()),
+        );
+    } else if let Some(reason) = pr_ship_ci_wait_skip_reason(&project_root) {
+        eprintln!(
+            "  step 2: {} — skipping CI wait for PR-{}",
+            reason, pr_number
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::WatchCi,
+            &StepOutcome::Skipped(reason),
+        );
+    } else {
+        eprintln!("  step 2: watching CI for PR-{}", pr_number);
+        // Route registration and check reads through the Forge trait.
+        // trace:STORY-516 trace:TASK-1331 | ai:codex
+        let watch_change = crate::forge::ChangeRef {
+            id: pr_number,
+            url: String::new(),
+            branch: ship_branch.clone(),
+            base: String::new(),
+            title: None,
+        };
+        let forge = crate::forge::forge_for(&project_root);
+        // trace:TASK-1606 | ai:codex
+        let mut red_detail: Option<String> = None;
+        let hold_present = crate::gate::merge_hold_core::read_hold(&hold_root, pr_number).is_some();
+        label_only_hold = !hold_present
+            && crate::merge_hold::label_present(&hold_root, pr_number).unwrap_or(false);
+        // trace:TASK-2348 | ai:claude
+        let ci_result = ship_ci_handoff(wait, wait_started.elapsed(), scan_spent, |budget| {
+            crate::ci_gate::wait_for_ship_ci(
+                &project_root,
+                forge.as_ref(),
+                &watch_change,
+                hold_present,
+                label_only_hold,
+                budget,
+                std::time::Duration::from_secs(15),
+            )
+        });
+        if let Err(error) = &ci_result {
+            red_detail = Some(format!("{error:#}"));
+        }
+        let ci_failed = matches!(
+            ci_result,
+            Ok(crate::gate::dispatch_types::CiState::Failed) | Err(_)
+        );
+        // STORY-1480: the ship's CI wait reached a terminal verdict — emit
+        // the same CiTerminal the drain's CI phase emits (empty run_uuid;
+        // specs credited from the branch name), covering interactive ships.
+        // Emitted after the BUG-1180 refinement so a hold/matrix pseudo-red
+        // records as the green it really was. trace:STORY-1480 | ai:claude
+        crate::events::emit_interactive_lifecycle(
+            &main_worktree,
+            &pr_ship::extract_spec_ids_from_text(&ship_branch),
+            &crate::events::EventKind::CiTerminal { green: !ci_failed },
+        );
+        if ci_failed {
+            let detail = match &ci_result {
+                Err(e) => format!("{e:#}"),
+                _ => red_detail
+                    .clone()
+                    .unwrap_or_else(|| format!("CI did not pass for PR-{pr_number}")),
+            };
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &ShipStep::WatchCi,
+                &StepOutcome::Failed(detail),
+            );
+            let hint = recovery_hint(&ShipStep::WatchCi, Some(pr_number), forge_kind);
+            eprintln!(
+                "{} CI failed for PR-{}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                pr_number
+            );
+            eprintln!("  {}", hint);
+            return Err(match ci_result {
+                Err(e) => e,
+                _ => crate::gate::ship::ShipRefusal::CiRed.error(
+                    red_detail.unwrap_or_else(|| format!("CI did not pass for PR-{pr_number}")),
+                ),
+            });
+        }
+        eprintln!(
+            "  {} CI green for PR-{}",
+            crate::glyph(crate::glyphs::Glyph::Check).green(),
+            pr_number
+        );
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::WatchCi,
+            &StepOutcome::Ok,
+        );
+    }
+    dispatch_ship_checkpoint_ledgered(
+        &main_worktree,
+        dispatch_ctx,
+        pr_number,
+        ShipCheckpoint::PostCiWait,
+    )?;
+
+    // ---- Step 3: merge. Use retry-wrapper so a transient gh
+    // network blip doesn't abort. ----
+    // BUG-574: skipped entirely when the PR is already merged — the activity
+    // log for the merge step was already recorded as Skipped above, and the
+    // idempotent pull + cleanup below still run. trace:BUG-574 | ai:claude
+    let mut merged_this_run = false;
+    // trace:STORY-2735 | ai:codex
+    // A review-gated project has no pre-merge CI to require. trace:STORY-2897 | ai:claude
+    let landing_waits_for_ci = crate::landing_policy::load(&project_root).waits_for_ci();
+    if !already_merged && landing_waits_for_ci {
+        crate::ci_gate::require_full_ship_ci(
+            crate::forge::forge_for(&project_root).as_ref(),
+            &gate_change,
+        )?;
+    }
+    // STORY-1171 / TASK-1243: hold the branch merge-lease across check→merge→pull
+    // (ADR-38) so no two same-machine mergers race to this branch. Keyed on the
+    // PR's base branch, held on the MAIN clone (all mergers resolve here), and
+    // released after pull, before cleanup. Bounded-wait-then-refuse on contention.
+    // trace:STORY-1171 | ai:claude
+    let merge_lease = acquire_merge_lease(&main_worktree, pr_number)?;
+    dispatch_ship_checkpoint_ledgered(
+        &main_worktree,
+        dispatch_ctx,
+        pr_number,
+        ShipCheckpoint::UnderMergeLease,
+    )?;
+    // STORY-1698: re-read the mandate under the merge lease. A mandate that
+    // covered the early gate but lapsed (or whose approval moved) since
+    // refuses here, before any hold is touched. trace:STORY-1698 | ai:claude
+    if mandate_cover.is_ok() {
+        mandate_cover = mandate_cover_now();
+        if mandate_cover.is_err() {
+            let refusal = format!(
+                "PR-{pr_number} left OPEN — the merge-hold stays.{}",
+                mandate_refusal_note(&mandate_cover)
+            );
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Skipped(refusal.clone()),
+            );
+            return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
+        }
+    }
+    if !already_merged {
+        // Re-read under the merge lease; no hold release or merge on FAST CI.
+        // trace:STORY-2735 | ai:codex
+        if landing_waits_for_ci {
+            crate::ci_gate::require_full_ship_ci(
+                crate::forge::forge_for(&project_root).as_ref(),
+                &gate_change,
+            )?;
+        }
+        ship_preflight_gates(
+            &project_root,
+            &main_worktree,
+            &hold_root,
+            &gate_change,
+            override_stale_check,
+            override_stale_approval,
+            delete_branch,
+            floor_authority || mandate_cover.is_ok(),
+        )?;
+    }
+    // STORY-1405: refuse while a reviewer is mid-way through THIS head. Asked
+    // under the merge-lease, immediately before the merge, so a review that
+    // started after CI settled is still seen. One local stat when no marker
+    // exists; a forge head lookup only when a live one does.
+    // trace:STORY-1405 | ai:claude
+    if !already_merged {
+        let gate = crate::gate::review_marker::merge_gate(&main_worktree, pr_number, || {
+            fetch_change_info_via_resolved_forge(
+                &project_root,
+                pr_number,
+                crate::forge::resolve_open_change_forge_kind(&project_root),
+            )
+            .ok()
+            .map(|info| info.head_oid)
+        });
+        if let crate::gate::review_marker::MergeGate::UnderReview(m) = &gate {
+            let refusal = crate::gate::review_marker::refusal_message(m);
+            // STORY-1436: the review-in-progress gate HELD.
+            // trace:STORY-1436 | ai:claude
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_REVIEW_IN_PROGRESS,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
+            return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+        }
+        if let Some(note) = crate::gate::review_marker::proceed_note(&gate) {
+            eprintln!(
+                "  {} {note}",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan()
+            );
+        }
+    }
+    let mut merged_head_sha: Option<String> = None;
+    if !already_merged {
+        // ---- TASK-1448: approval-covers-head gate. Checked under the merge
+        // lease, immediately before the merge (and before any merge-hold is
+        // released), so the head it compares is the one about to land. ----
+        // trace:TASK-1448 | ai:claude
+        // BUG-HOME-048: title ids pass the PR's trailer coverage.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+        let gate_spec_ids = ship_gate_known_ids(
+            &project_root,
+            &ship_branch,
+            target_change.as_ref().and_then(|c| c.title.as_deref()),
+            Some(pr_number),
+        );
+        let head_sha = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch);
+        merged_head_sha = head_sha.clone();
+        // STORY-1663: if the PR head moved after preflight/CI, refuse the stale head
+        // before touching holds or merging.
+        // trace:STORY-1663 | ai:antigravity
+        if let Some(refusal) = crate::gate::ship::stale_head_after_ci_refusal(
+            pr_number,
+            preflight_head_sha.as_deref(),
+            head_sha.as_deref(),
+        ) {
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Failed(refusal.clone()),
+            );
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_STALE_APPROVAL,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
+            return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+        }
+        // BUG-1918: what the PR ships comes from the forge too (head ref and
+        // commit trailers), so shipping from main still finds its authors.
+        let (candidates, policy) = merge_approval_inputs(
+            &[project_root.as_path(), main_worktree.as_path()],
+            &main_worktree,
+            pr_number,
+            &gate_spec_ids,
+            Some(&ship_branch),
+            head_sha.as_deref(),
+        );
+        // TASK-1960: the site remembers an applied carry-over, so the PR's
+        // base is re-checked against the proven base right before the merge.
+        // trace:TASK-1960 | ai:claude
+        let carry_site = crate::gate::review_carryover::CarryOverSite::new(
+            &main_worktree,
+            Some(retarget_base.as_str()),
+        );
+        // TASK-1458: gate + merge pin + durable override audit, in one
+        // function so the wiring test drives exactly what ship runs.
+        // trace:TASK-1458 | ai:claude
+        let match_head = pr_ship_approval_gate(
+            &main_worktree,
+            pr_number,
+            &candidates,
+            head_sha.as_deref(),
+            &policy,
+            override_stale_approval,
+            delete_branch,
+            Some(&carry_site),
+        )?;
+        // STORY-1663: optional slice-stack verifier hook before rebase merge.
+        // trace:STORY-1663 | ai:antigravity
+        if merge_method == crate::forge::MergeMethod::Rebase {
+            run_optional_slice_stack_verifier(
+                &project_root,
+                &main_worktree,
+                pr_number,
+                &format!("origin/{retarget_base}"),
+                head_sha.as_deref().unwrap_or(&ship_branch),
+            )?;
+        }
+        if branch_in_sibling {
+            eprintln!(
+                "  step 3: branch {} is checked out in a sibling worktree — \
+                 skipping `--delete-branch`; `aida session end` will clean it up",
+                ship_branch
+            );
+        }
+        let method_label = match merge_method {
+            crate::forge::MergeMethod::Squash => "squash",
+            crate::forge::MergeMethod::Rebase => "rebase",
+            crate::forge::MergeMethod::Merge => "merge",
+        };
+        eprintln!(
+            "  step 3: merging PR-{} ({}{})",
+            pr_number,
+            method_label,
+            if delete_branch { ", delete-branch" } else { "" }
+        );
+        // BUG-1919 / STORY-1663: say which ids the merge will complete and where
+        // they came from (title / branch / none) BEFORE the merge, so a
+        // branch-name fallback or non-final rebase slice never completes a spec
+        // silently. Rebase merges produce no squash subject.
+        // trace:BUG-1919 trace:STORY-1663 | ai:antigravity
+        let ship_meta = fetch_pr_ship_metadata_via_forge(&project_root, pr_number)?;
+        let (explicit_squash_subject, completion_trailer) = derive_pr_ship_subject_for_method_from(
+            &project_root,
+            &ship_meta,
+            &ship_branch,
+            no_complete,
+            merge_method,
+            final_slice,
+        )?;
+        // TASK-1765: the forge's squash body is built from the commits, not
+        // the PR body, so a non-completing declaration would not reach main
+        // and the pull's review-story covers path would complete the covered
+        // specs. trace:TASK-1951 trace:TASK-1765 | ai:claude
+        let declares_non_completing =
+            no_complete || pr_ship::pr_body_declares_non_completing(&ship_meta.body);
+        eprintln!(
+            "  step 3: {}",
+            pr_ship::format_trailer_provenance(&completion_trailer)
+        );
+        if let Some(subject) = &explicit_squash_subject {
+            eprintln!(
+                "  step 3: preserving spec ID in squash subject: {}",
+                subject
+            );
+        }
+
+        // STORY-516: route the merge through the Forge trait instead of an inline
+        // `gh pr merge`. GitHubForge::merge_change reuses the SPEC-410-pinned
+        // `merge_args` (byte-identical argv) and the same network_retry wrapper, so
+        // this is behaviour-preserving on GitHub; a GitLab / pure-git repo now gets
+        // its own provider's merge. The unified contract returns Err (with stderr)
+        // on a failed merge, which we map to the existing activity-log + recovery
+        // hint + bail. trace:STORY-516 | ai:claude
+        // TASK-1330: identity hygiene — when the project allowlists emails
+        // and the default squash body would carry a non-allowlisted one
+        // (an explicit Co-authored-by trailer, or a commit author/committer
+        // the forge would auto-derive a trailer from), replace the body with
+        // the sanitized commit messages. Fail-closed: an unreadable config or
+        // uninspectable branch refuses the merge rather than publishing an
+        // unchecked body. trace:TASK-1330 | ai:claude
+        let identity_allowlist = crate::identity_gate::read_allowed_emails(&project_root)?;
+        let sanitized_squash_body = if merge_method == crate::forge::MergeMethod::Squash {
+            let override_body = crate::identity_gate::squash_coauthor_body_override(
+                &project_root,
+                &retarget_base,
+                head_sha.as_deref().unwrap_or(&ship_branch),
+                &identity_allowlist,
+            )?;
+            override_body.map(|(body, violations)| {
+                eprintln!(
+                    "  step 3: identity gate — stripping {} non-allowlisted email reference(s) \
+                     from the squash body:",
+                    violations.len()
+                );
+                for v in &violations {
+                    eprintln!(
+                        "    {} {} {}",
+                        &v.sha[..v.sha.len().min(10)],
+                        v.role,
+                        v.email
+                    );
+                }
+                body
+            })
+        } else {
+            None
+        };
+        // BUG-HOME-048: the trailer check, for every merge method and fail
+        // closed. A rebase or merge lands the branch commits verbatim and the
+        // pull-side auto-bump completes every trailer on them, so one whose
+        // trailer the PR does not cover is refused here. A squash gets an
+        // explicit body — never the forge's own copy of the branch commit
+        // messages — with every uncovered trailer kept only as a reference.
+        // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
+        let ship_head = head_sha.as_deref().unwrap_or(&ship_branch).to_string();
+        let checked_squash_body = crate::gate::trailer_coverage::ship_trailer_check(
+            Storage::new(main_worktree.join(".aida-store")).load(),
+            |store| {
+                crate::gate::trailer_coverage::pr_trailer_coverage(
+                    &main_worktree,
+                    store,
+                    &ship_branch,
+                    Some(pr_number),
+                )
+            },
+            merge_method,
+            pr_number,
+            || {
+                crate::trailer_coverage::branch_commit_messages(
+                    &project_root,
+                    &format!("origin/{retarget_base}"),
+                    &ship_head,
+                )
+                .or_else(|_| {
+                    crate::trailer_coverage::branch_commit_messages(
+                        &project_root,
+                        &retarget_base,
+                        &ship_head,
+                    )
+                })
+            },
+            || match sanitized_squash_body {
+                Some(body) => Ok(body),
+                None => crate::identity_gate::squash_commit_messages_body(
+                    &project_root,
+                    &retarget_base,
+                    &ship_head,
+                ),
+            },
+        )?;
+        // trace:BUG-2635 | ai:codex
+        let checked_squash_body = checked_squash_body.map(|body| {
+            if declares_non_completing {
+                body
+            } else {
+                crate::trailer_coverage::restrict_body_to_claims(&body, &completion_trailer.ids)
+            }
+        });
+        let sanitized_squash_body =
+            ship_squash_body(merge_method, declares_non_completing, checked_squash_body);
+        // trace:STORY-2733 | ai:codex
+        let sanitized_squash_body =
+            if let Some(audit) = mandate_cover.as_ref().ok().and_then(|c| c.gate_audit()) {
+                Some(format!(
+                    "{}\n\n{audit}",
+                    sanitized_squash_body.unwrap_or_default()
+                ))
+            } else {
+                sanitized_squash_body
+            };
+        let mut merge_opts = crate::forge::MergeOptions {
+            method: merge_method,
+            squash_subject: explicit_squash_subject.clone(),
+            squash_body: sanitized_squash_body, // trace:TASK-1330 | ai:claude
+            delete_branch,
+            match_head, // trace:TASK-1458 | ai:claude
+        };
+        let change_ref = crate::forge::ChangeRef {
+            id: pr_number,
+            url: String::new(),
+            branch: ship_branch.clone(),
+            base: retarget_base.clone(),
+            title: None,
+        };
+        // BUG-1167: `aida pr merge` / `pr ship` is an EXPLICIT human/advisor
+        // merge — the deliberate act that "merge requires human/advisor review"
+        // asks for. So it RELEASES any supervised merge-hold marker before
+        // merging (the chokepoint would otherwise refuse it). The automatic and
+        // concurrent paths — drain auto-merge, an integrate sweep, another
+        // session's merge_change — never clear, so they stay refused. This is
+        // the client-side release; the server-side required-check (ADR-37 layer
+        // 2) still governs a raw `gh pr merge`.
+        //
+        // BUG-1566: releasing the hold here is the SAME human-only integrity
+        // floor as `merge-hold clear` (has_integrity_floor_authority(),
+        // STORY-1353). A human shipping at a terminal still gets BUG-1167's
+        // one-step release; any other seat (headless drain, advisor/reviewer
+        // env, dispatch) is refused BEFORE the hold is touched and pointed at
+        // `aida merge-hold clear <PR>` run by a human. A reviewer's "clear on
+        // my re-review" hold therefore moves to a human once approved.
+        // trace:BUG-1167 trace:BUG-1566 | ai:claude
+        dispatch_ship_checkpoint_ledgered(
+            &main_worktree,
+            dispatch_ctx,
+            pr_number,
+            ShipCheckpoint::PreHoldRelease,
+        )?;
+        let marker_reason = crate::gate::merge_hold_core::read_hold(&hold_root, pr_number);
+        // BUG-1499: a LABEL-ONLY hold (no marker) is never released here —
+        // not even for a human — because a ship leaves no clearance record.
+        // It goes through `aida merge-hold clear <PR>`, which records it.
+        // trace:BUG-1499 | ai:claude
+        // STORY-1698: the mandate cover was re-read under the merge lease.
+        // trace:STORY-1698 | ai:claude
+        let mandate_release = (!floor_authority)
+            .then(|| mandate_cover.as_ref().ok().cloned())
+            .flatten();
+        if let Some(refusal) = crate::gate::ship::ship_hold_release_refusal_for(
+            marker_reason.is_some(),
+            label_only_hold,
+            floor_authority || mandate_release.is_some(),
+            pr_number,
+        ) {
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Skipped(refusal.clone()),
+            );
+            // STORY-1436: the ship hold-release floor HELD. trace:STORY-1436 | ai:claude
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_SHIP_HOLD_RELEASE,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
+            // trace:TASK-1915 | ai:claude
+            ledger_mandate_ship_failure(
+                &main_worktree,
+                mandate_release.as_ref(),
+                pr_number,
+                &refusal,
+            );
+            return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
+        }
+        // BUG-1532 criterion 4, re-checked HERE under the merge lease against
+        // the head about to land (`head_sha`, the TASK-1448 read): a refusal
+        // hold is released only by a fresh APPROVED verdict at that head. The
+        // early gate saw the same answer unless the head or the verdict moved
+        // since, and then this refuses rather than release on a stale answer.
+        // trace:BUG-1532 | ai:claude
+        let hold_record = crate::gate::merge_hold_core::read_hold_record(&hold_root, pr_number);
+        let released_by_verdict = match hold_record.as_ref().filter(|r| r.is_refusal()) {
+            None => None,
+            Some(record) => match ship_refusal_release(
+                &[hold_root.as_path(), project_root.as_path()],
+                record,
+                head_sha.as_deref(),
+                true,
+            ) {
+                crate::gate::merge_hold_core::RefusalRelease::Released(verdict) => Some(verdict),
+                crate::gate::merge_hold_core::RefusalRelease::Held(why) => {
+                    let refusal = format!(
+                        "PR-{pr_number} is under a reviewer-refusal merge-hold and {why}; the hold stays."
+                    );
+                    log_ship_activity(
+                        &main_worktree,
+                        Some(pr_number),
+                        &pr_ship::ShipStep::Merge { delete_branch },
+                        &pr_ship::StepOutcome::Skipped(refusal.clone()),
+                    );
+                    // STORY-1436. trace:STORY-1436 | ai:claude
+                    crate::events::record_gate_held(
+                        &hold_root,
+                        crate::events::GATE_SHIP_HOLD_RELEASE,
+                        None,
+                        Some(pr_number),
+                        &refusal,
+                    );
+                    // trace:TASK-1915 | ai:claude
+                    ledger_mandate_ship_failure(
+                        &main_worktree,
+                        mandate_release.as_ref(),
+                        pr_number,
+                        &refusal,
+                    );
+                    return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
+                }
+            },
+        };
+        // BUG-1532: a hold released by a verdict must merge PINNED to the head
+        // that verdict covers — the TASK-1448 pin is None when the verdict's
+        // key is not among its candidates, and an unpinned merge after the
+        // hold drops could land a commit nobody approved. Decided BEFORE the
+        // hold is touched. trace:BUG-1532 | ai:claude
+        // BUG-2663: a cover for an unheld, supervised-by-mode PR merges pinned
+        // to the head the mandate checked, through this same ledgered exit.
+        // trace:BUG-2663 BUG-2666 | ai:claude
+        match crate::gate::ship::refusal_release_pin(
+            released_by_verdict.is_some(),
+            merge_opts.match_head.take(),
+            head_sha.as_deref(),
+            pr_number,
+        )
+        .and_then(|pin| {
+            crate::gate::mandate_ship::supervised_by_mode_pin(
+                mandate_release.as_ref(),
+                pin,
+                pr_number,
+            )
+        }) {
+            Ok(pin) => merge_opts.match_head = pin,
+            Err(refusal) => {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &pr_ship::ShipStep::Merge { delete_branch },
+                    &pr_ship::StepOutcome::Skipped(refusal.clone()),
+                );
+                // STORY-1436. trace:STORY-1436 | ai:claude
+                crate::events::record_gate_held(
+                    &hold_root,
+                    crate::events::GATE_SHIP_HOLD_RELEASE,
+                    None,
+                    Some(pr_number),
+                    &refusal,
+                );
+                // trace:TASK-1915 | ai:claude
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &refusal,
+                );
+                return Err(crate::gate::ship::ShipRefusal::MergeHold.error(refusal));
+            }
+        }
+        // STORY-1663: rebase merges must always be pinned to a head SHA.
+        // trace:STORY-1663 | ai:antigravity
+        if let Err(refusal) = crate::gate::ship::require_rebase_head_pin(
+            pr_number,
+            merge_opts.method,
+            merge_opts.match_head.as_deref(),
+        ) {
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Failed(refusal.clone()),
+            );
+            // trace:TASK-1915 | ai:claude
+            ledger_mandate_ship_failure(
+                &main_worktree,
+                mandate_release.as_ref(),
+                pr_number,
+                &refusal,
+            );
+            return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+        }
+        if let Some(reason) = marker_reason.as_deref() {
+            match &released_by_verdict {
+                Some(verdict) => eprintln!(
+                    "  {} releasing reviewer-refusal merge-hold on PR-{} — its condition is met: \
+                     a fresh APPROVED verdict for {} at {} ({})",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    pr_number,
+                    verdict.key,
+                    verdict
+                        .reviewed_sha
+                        .as_deref()
+                        .map(crate::gate::review_verdict::short_sha)
+                        .unwrap_or("?"),
+                    verdict.path(),
+                ),
+                None => eprintln!(
+                    "  {} releasing supervised merge-hold on PR-{} (explicit review-merge) — {}",
+                    crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                    pr_number,
+                    reason,
+                ),
+            }
+            // STORY-1698: a mandate-authorized release is recorded in the
+            // hold ledger and on the PR as "released under mandate <id> by
+            // advisor". BUG-2214: through the one shared release sequence the
+            // train also uses. trace:STORY-1698 trace:BUG-2214 | ai:claude
+            // BUG-2666: a release the ledger refused (the hold changed after
+            // the mandate decision) leaves the hold armed and refuses through
+            // the ledgered hold-gate exit below; it never merges.
+            // trace:BUG-2666 | ai:claude
+            let mut release_failure = None;
+            if let (Some(cover), Some(record)) = (&mandate_release, &hold_record) {
+                release_failure = release_hold_under_mandate(
+                    &hold_root,
+                    &change_ref,
+                    cover,
+                    record,
+                    released_by_verdict.clone(),
+                    head_sha.as_deref(),
+                    reason,
+                    None,
+                )
+                .err();
+            } else {
+                // M1 slice 2: one `hold-release` event on the PR's gate
+                // ledger, naming the verdict that met the release condition
+                // when one did. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+                if let Some(record) = &hold_record {
+                    let actor = crate::gate::merge_hold_core::PrincipalIdentity::human(
+                        crate::current_user_id(None),
+                    );
+                    if let Err(err) = crate::gate::merge_hold_core::release_hold(
+                        &hold_root,
+                        record,
+                        &actor,
+                        released_by_verdict.clone(),
+                    ) {
+                        eprintln!(
+                            "  {} could not record the hold release on PR-{pr_number}: {err}",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                        );
+                    }
+                }
+                // BUG-1423: this IS the coordination-seat action the missing
+                // event taxonomy could not record — an explicit advisor/human
+                // `aida pr ship` releasing a supervised merge-hold. Best-effort,
+                // never affects the ship outcome. trace:BUG-1423 | ai:claude
+                let mut hold_event = crate::events::Event::new(
+                    None,
+                    "",
+                    crate::events::EventKind::MergeHoldChanged {
+                        pr: pr_number as u32,
+                        placed: false,
+                        reason: Some(reason.to_string()),
+                        // BUG-2214: who released, and whether the human
+                        // integrity floor held. trace:BUG-2214 | ai:claude
+                        principal: Some(
+                            crate::gate::merge_hold_core::PrincipalIdentity::human(
+                                crate::current_user_id(None),
+                            )
+                            .key(),
+                        ),
+                        human_attested: crate::gate::role_authority::has_integrity_floor_authority(
+                        ),
+                    },
+                );
+                hold_event.seat = crate::events::active_seat();
+                crate::events::emit(&hold_root, &hold_event);
+                if let Err(err) = crate::merge_hold::sync_label(&hold_root, pr_number, false) {
+                    eprintln!(
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        ship_unlabel_failure(pr_number, &err),
+                    );
+                }
+            }
+            // BUG-1180: removing the label re-runs `merge-hold-gate`; the
+            // squash-merge below would be refused by branch protection until it
+            // reports green, so wait for it (bounded) before merging.
+            // trace:BUG-1180 | ai:claude
+            {
+                let waited = match &release_failure {
+                    Some(_) => Ok(false),
+                    None => crate::ci_gate::wait_hold_gate_green(
+                        crate::forge::forge_for(&hold_root).as_ref(),
+                        &change_ref,
+                        std::time::Duration::from_secs(180),
+                        std::time::Duration::from_secs(10),
+                    ),
+                };
+                match waited {
+                    Ok(true) => {}
+                    // STORY-1698: a mandate release never stays released on
+                    // a failure. One exit for both arms, so the ledger call
+                    // is the mandate arm's real write, not a no-op kept for
+                    // the wiring pin. trace:STORY-1698 | ai:claude
+                    // trace:TASK-1955 | ai:claude (TASK-2086)
+                    Ok(false) => {
+                        let refusal = if let Some(err) = &release_failure {
+                            format!(
+                                "PR-{pr_number} left OPEN — the mandate release could not be recorded, so its merge-hold stays armed: {err}"
+                            )
+                        } else if mandate_release.is_some() {
+                            format!(
+                                "released the merge-hold on PR-{pr_number} under a mandate, but `{}` has not re-run green within 180s.{}",
+                                crate::ci_gate::HOLD_GATE_CHECK,
+                                rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+                            )
+                        } else {
+                            format!(
+                                "released the merge-hold on PR-{pr_number}, but `{}` has not re-run green within \
+                                 180s — retry `aida pr ship {pr_number}` shortly (the hold stays released), or \
+                                 inspect `gh pr checks {pr_number}`",
+                                crate::ci_gate::HOLD_GATE_CHECK
+                            )
+                        };
+                        // trace:TASK-1915 | ai:claude
+                        ledger_mandate_ship_failure(
+                            &main_worktree,
+                            mandate_release.as_ref(),
+                            pr_number,
+                            &refusal,
+                        );
+                        anyhow::bail!(refusal)
+                    }
+                    Err(e) => eprintln!(
+                        "  {} could not confirm `{}` re-ran green ({e:#}) — attempting the merge anyway",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                        crate::ci_gate::HOLD_GATE_CHECK
+                    ),
+                }
+            }
+        }
+        // STORY-1698: re-read the mandate immediately before the merge call.
+        // If it lapsed after the hold was released (the hold-gate wait above
+        // can take minutes), re-arm the hold and refuse.
+        // trace:STORY-1698 trace:STORY-1917 trace:TASK-2344 | ai:claude
+        // STORY-1917 Q2: a dispatch-originated ship re-checks its request's
+        // authority here too. The refusal names the actual cause, and only a
+        // hold this ship released is re-armed: an unheld PR is never told to
+        // re-place a hold it never had. A dispatch refusal keeps its typed
+        // error. trace:STORY-1698 trace:STORY-1917 trace:TASK-2344 | ai:claude
+        let dispatch_err = dispatch_ship_checkpoint(dispatch_ctx, ShipCheckpoint::PreMerge).err();
+        let lapsed = mandate_release
+            .as_ref()
+            .filter(|cover| !mandate_cover_still_active(cover));
+        if dispatch_err.is_some() || lapsed.is_some() {
+            let cause = match (&dispatch_err, lapsed) {
+                (Some(err), _) => {
+                    format!("its dispatch request no longer has authority to merge ({err:#})")
+                }
+                (None, Some(cover)) => format!(
+                    "mandate {} ended or was narrowed by a renewal before the merge",
+                    cover.id
+                ),
+                (None, None) => String::new(),
+            };
+            let rearm = if mandate_release.is_some() {
+                rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number)
+            } else {
+                NO_HOLD_RELEASED_NOTE.to_string()
+            };
+            let refusal = format!("PR-{pr_number} left OPEN — {cause}.{rearm}");
+            crate::events::record_gate_held(
+                &hold_root,
+                crate::events::GATE_MANDATE_SHIP,
+                None,
+                Some(pr_number),
+                &refusal,
+            );
+            // An unheld dispatch ship is ledgered under its request's mandate.
+            // trace:TASK-1915 | ai:claude
+            let ledger_cover = mandate_release
+                .clone()
+                .or_else(|| dispatch_ctx.map(dispatch_ledger_cover));
+            ledger_mandate_ship_failure(&main_worktree, ledger_cover.as_ref(), pr_number, &refusal);
+            return Err(match dispatch_err {
+                Some(err) => err.context(refusal),
+                None => crate::gate::ship::ShipRefusal::MergeHold.error(refusal),
+            });
+        }
+        // TASK-1960: a carried-over approval is bound to the base it was
+        // proven against; re-read the PR's base immediately before merging.
+        // trace:TASK-1960 | ai:claude
+        if let Some(proven_base) = carry_site.proven_base() {
+            let base_now = crate::forge::forge_for(&project_root)
+                .change_metadata(pr_number, &mut crate::network_retry::NoopSink)
+                .ok()
+                .map(|m| m.base_ref);
+            if let Some(refusal) = crate::gate::review_carryover::proven_base_refusal(
+                pr_number,
+                &proven_base,
+                base_now.as_deref(),
+            ) {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &pr_ship::ShipStep::Merge { delete_branch },
+                    &pr_ship::StepOutcome::Failed(refusal.clone()),
+                );
+                crate::events::record_gate_held(
+                    &hold_root,
+                    crate::events::GATE_STALE_APPROVAL,
+                    None,
+                    Some(pr_number),
+                    &refusal,
+                );
+                // The hold a mandate released is re-armed and the refusal ledgered,
+                // like every other post-release exit. trace:TASK-1915 | ai:claude
+                // trace:TASK-1955 | ai:claude (TASK-2088)
+                let refusal = refusal_with_mandate_rearm(
+                    refusal,
+                    mandate_release.is_some(),
+                    marker_reason.is_some(),
+                    || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
+                );
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &refusal,
+                );
+                return Err(crate::gate::ship::ShipRefusal::Review.error(refusal));
+            }
+        }
+        // The landing re-checks, after every wait and immediately before the
+        // merge: merger authority, and the no-train stacked proof against the
+        // target as it is now. trace:STORY-2897 | ai:claude
+        let mut merge_sink = crate::network_retry::StderrSink;
+        let merge_attempt = crate::gate::landing_merge::merge(
+            crate::forge::forge_for(&project_root).as_ref(),
+            &project_root,
+            crate::gate::landing_merge::Caller::Ship,
+            &crate::gate::landing_merge::Entry {
+                policy: landing_entry.clone(),
+                floor: floor_authority,
+            },
+            &change_ref,
+            &mandate_ids(),
+            &merge_opts,
+            &mut merge_sink,
+            &crate::pr_train::pr_head_pin_journals,
+        );
+        if let Err(crate::gate::landing_merge::MergeError::Refused(kind, refusal)) = &merge_attempt
+        {
+            let (kind, refusal) = (*kind, refusal.clone());
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &pr_ship::ShipStep::Merge { delete_branch },
+                &pr_ship::StepOutcome::Failed(refusal.clone()),
+            );
+            let refusal = refusal_with_mandate_rearm(
+                refusal,
+                mandate_release.is_some(),
+                marker_reason.is_some(),
+                || rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number),
+            );
+            ledger_mandate_ship_failure(
+                &main_worktree,
+                mandate_release.as_ref(),
+                pr_number,
+                &refusal,
+            );
+            return Err(kind.error(refusal));
+        }
+        if let Err(crate::gate::landing_merge::MergeError::Forge(e)) = merge_attempt {
+            let stderr_text = format!("{e:#}");
+            let mut probe_sink = crate::network_retry::StderrSink;
+            if pr_ship::merge_error_landed_despite_failure(pr_is_merged_with_sink(
+                &project_root,
+                pr_number as u32,
+                &mut probe_sink,
+            )) {
+                eprintln!(
+                    "  {} merge command reported an error after PR-{} landed; continuing with post-merge sync",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                    pr_number
+                );
+                eprintln!("    {}", stderr_text);
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Merge { delete_branch },
+                    &StepOutcome::Ok,
+                );
+                merged_this_run = true;
+            } else {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Merge { delete_branch },
+                    &StepOutcome::Failed(stderr_text.clone()),
+                );
+                let hint = recovery_hint(
+                    &ShipStep::Merge { delete_branch },
+                    Some(pr_number),
+                    forge_kind,
+                );
+                eprintln!(
+                    "{} merge failed: {}",
+                    crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                    stderr_text
+                );
+                eprintln!("  {}", hint);
+                // STORY-1698: re-arm a mandate-released hold on a failed merge.
+                // trace:STORY-1698 | ai:claude
+                if mandate_release.is_some() && marker_reason.is_some() {
+                    let rearm =
+                        rearm_after_mandate_failure(&hold_root, hold_record.as_ref(), pr_number);
+                    // trace:TASK-1915 | ai:claude
+                    ledger_mandate_ship_failure(
+                        &main_worktree,
+                        mandate_release.as_ref(),
+                        pr_number,
+                        &format!("`gh pr merge` failed: {stderr_text}.{rearm}"),
+                    );
+                    return Err(e.context(format!("`gh pr merge` failed.{rearm}")));
+                }
+                // A mandate ship with no hold to re-arm is still a failed
+                // mandate-driven action. trace:TASK-1915 | ai:claude
+                ledger_mandate_ship_failure(
+                    &main_worktree,
+                    mandate_release.as_ref(),
+                    pr_number,
+                    &format!("`gh pr merge` failed: {stderr_text}"),
+                );
+                return Err(e.context("`gh pr merge` failed"));
+            }
+        } else {
+            eprintln!(
+                "  {} merged PR-{}",
+                crate::glyph(crate::glyphs::Glyph::Check).green(),
+                pr_number
+            );
+            log_ship_activity(
+                &main_worktree,
+                Some(pr_number),
+                &ShipStep::Merge { delete_branch },
+                &StepOutcome::Ok,
+            );
+            merged_this_run = true;
+        }
+        // STORY-1700: a ship under a mandate is a mandate-driven action.
+        // trace:STORY-1700 | ai:claude
+        if let (true, Some(cover)) = (merged_this_run, &mandate_release) {
+            crate::mandate_drive::emit_session_ship(
+                &main_worktree,
+                &cover.id,
+                pr_number,
+                crate::gate::dispatch_types::Outcome::Done,
+                cover.ship_audit(),
+            );
+        }
+    }
+
+    // BUG-HOME-042: PRs stacked on the merged branch move to the branch it
+    // merged into, get a CI run there, and the merged branch is deleted once
+    // nothing targets it. trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+    if merged_this_run && !delete_branch && !open_child_prs.is_empty() {
+        eprintln!(
+            "  step 3b: moving {} stacked PR(s) off `{}`",
+            open_child_prs.len(),
+            ship_branch
+        );
+        let mut ports = ForgeStackRetargetPorts {
+            forge: crate::forge::forge_for(&project_root),
+            project_root: project_root.clone(),
+        };
+        pr_ship::retarget_stacked_children(
+            &mut ports,
+            &ship_branch,
+            &retarget_base,
+            &open_child_prs,
+            !branch_in_sibling && stacked_children.is_empty(),
+        );
+    }
+
+    // STORY-439: ship-side calibration capture. Resolve every spec the PR
+    // credits (explicit title trailer → branch, the same precedence the squash
+    // subject repair already uses) and write a ship slot per spec — the
+    // implementer's self-assessed complexity + the punt count
+    // (`.aida/punts.jsonl` filtered by spec). One PR crediting N specs
+    // populates N records. Best-effort: a `gh` blip here leaves the merge
+    // landed and just skips the capture.
+    // trace:STORY-439 | ai:claude
+    // BUG-1423: the decisive gap — a merge performed by `aida pr ship`
+    // (the advisor/product seat's explicit merge path) never appended a
+    // `PrMerged` event, so the feed recorded only drain merges. Mirror the
+    // drain merge phase's emit here (`DriveContext::merge_pr` in `lib.rs`)
+    // so a feed consumer cannot tell whether a merge came from the
+    // orchestrator or this command — same kind, same terminal semantics.
+    // Best-effort: emit failures never fail the ship. trace:BUG-1423 | ai:claude
+    let mut pr_merged_spec_ids: Vec<String> = Vec::new();
+    let mut pr_title_body: Option<(String, String)> = None;
+    if let Ok(pr_meta) = fetch_pr_ship_metadata_via_forge(&project_root, pr_number) {
+        pr_title_body = Some((pr_meta.title.clone(), pr_meta.body.clone()));
+        // Use the same store-qualified completion intent as the squash subject
+        // — including BUG-1919's non-completing / closure-held suppression, so
+        // a slice PR is not credited as a ship of its parent either.
+        // trace:TASK-1600 | ai:codex
+        // trace:BUG-1919 | ai:claude
+        let spec_ids = Storage::new(main_worktree.join(".aida-store"))
+            .load()
+            .map(|store| {
+                let coverage = crate::gate::trailer_coverage::pr_trailer_coverage(
+                    &main_worktree,
+                    &store,
+                    &branch,
+                    Some(pr_number),
+                );
+                ship_completion_trailer_for_method(
+                    &store,
+                    coverage.as_ref(),
+                    merge_method,
+                    final_slice,
+                    &pr_meta.title,
+                    &branch,
+                    &pr_meta.body,
+                    no_complete,
+                )
+                .ids
+            })
+            .unwrap_or_default();
+        pr_merged_spec_ids = spec_ids.clone();
+        for spec in &spec_ids {
+            let punts = complexity_calibration::punt_count_for_spec(&main_worktree, spec);
+            if let Err(e) =
+                complexity_calibration::upsert_ship(&main_worktree, spec, opts.complexity, punts)
+            {
+                eprintln!(
+                    "  {} could not record ship calibration for {spec}: {e}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
+            if let Err(e) = effort_calibration::upsert_ship(
+                &main_worktree,
+                spec,
+                opts.effort,
+                Some(current_user_id(None)),
+            ) {
+                eprintln!(
+                    "  {} could not record ship effort for {spec}: {e}",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+            }
+            apply_effort_tag(
+                &Storage::new(main_worktree.join(".aida-store")),
+                spec,
+                effort_calibration::EffortTouchpoint::Impl,
+                opts.effort,
+            );
+        }
+    }
+    // BUG-1423: emit only for a merge THIS invocation performed — matches
+    // the drain's own emit-on-success semantics and keeps a re-run against
+    // an already-merged PR (BUG-574) from re-appending a duplicate event.
+    // A PR crediting no resolvable spec still emits once (spec: None) so
+    // the merge is never silently dropped from the feed.
+    // trace:BUG-1423 | ai:claude
+    if merged_this_run {
+        emit_ship_pr_merged(&main_worktree, pr_number as u32, &pr_merged_spec_ids);
+    }
+    // TASK-1621: the slice bookkeeping also runs on a re-run that finds the PR
+    // already merged, so a crash between the merge and this step is repaired
+    // by re-running `aida pr ship N --rebase`. On that path the head branch,
+    // base and head sha come from the merged PR itself, never from the
+    // current checkout. Completion and the marker are both idempotent (the
+    // marker dedups per PR).
+    // trace:TASK-1951 trace:TASK-1621 | ai:claude
+    let mut slice_pull_skip = None;
+    if rebase_slice_bookkeeping_due(merged_this_run, already_merged)
+        && merge_method == crate::forge::MergeMethod::Rebase
+    {
+        let outcome = rebase_slice_bookkeeping(
+            &RebaseSliceRun {
+                main_worktree: &main_worktree,
+                project_root: &project_root,
+                pr_number,
+                final_slice,
+                already_merged,
+                ship_branch: &ship_branch,
+                retarget_base: &retarget_base,
+                merged_head_sha: merged_head_sha.as_deref(),
+            },
+            &pr_merged_spec_ids,
+            |merged_branch: &str| {
+                // TASK-1621 (a): the merged PR's own branch, not the checkout's.
+                let (title, body) = pr_title_body.clone().unwrap_or_default();
+                Storage::new(main_worktree.join(".aida-store"))
+                    .load()
+                    .map(|store| {
+                        let coverage = crate::gate::trailer_coverage::pr_trailer_coverage(
+                            &main_worktree,
+                            &store,
+                            merged_branch,
+                            Some(pr_number),
+                        );
+                        ship_completion_trailer_for_method(
+                            &store,
+                            coverage.as_ref(),
+                            merge_method,
+                            final_slice,
+                            &title,
+                            merged_branch,
+                            &body,
+                            no_complete,
+                        )
+                        .ids
+                    })
+                    .unwrap_or_default()
+            },
+            || fetch_merged_pr_refs(&project_root, pr_number, &ship_branch, &retarget_base),
+        );
+        if let Some(warning) = &outcome.warning {
+            eprintln!(
+                "  {} {warning}",
+                crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+            );
+        }
+        slice_pull_skip = outcome.pull_skip;
+    }
+
+    // ---- Step 4: aida pull (from the main worktree). ----
+    if no_pull {
+        eprintln!("  step 4: skipping `aida pull` (--no-pull)");
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::Pull,
+            &StepOutcome::Skipped("--no-pull".into()),
+        );
+    } else if let Some(reason) = seat_clone_post_merge_pull_skip_reason(&project_root)
+        .or_else(|| slice_pull_skip.map(str::to_string))
+    {
+        // TASK-2053: both skip reasons are pure; the note and the log happen here.
+        // trace:TASK-2053 trace:TASK-1951 | ai:claude
+        eprintln!("  step 4: skipping `aida pull` ({reason})");
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::Pull,
+            &StepOutcome::Skipped(reason),
+        );
+    } else {
+        eprintln!(
+            "  step 4: running `aida pull` from main worktree ({})",
+            main_worktree.display()
+        );
+        let pull_status = match prepare_main_worktree_for_pr_ship_pull(&main_worktree) {
+            Ok(()) => {
+                // Spawn `aida pull` as a subcommand. Use the hardened resolver
+                // instead of a raw OS executable lookup: dev rebuilds can make Linux
+                // report "<path> (deleted)", which Command::new cannot spawn.
+                // trace:SPEC-411 | ai:codex
+                let aida_bin = pr_ship_post_merge_aida_exe();
+                let mut pull_cmd = std::process::Command::new(&aida_bin);
+                pull_cmd.current_dir(&main_worktree).arg("pull");
+                Some(
+                    pull_cmd
+                        .status_retrying_etxtbsy()
+                        .context("could not invoke `aida pull`")?,
+                )
+            }
+            Err(e) => {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Pull,
+                    &StepOutcome::Failed(e.to_string()),
+                );
+                let hint = recovery_hint(&ShipStep::Pull, Some(pr_number), forge_kind);
+                eprintln!(
+                    "{} could not prepare main worktree for `aida pull` — the merge already landed, so this is a sync issue, not a merge issue.",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                );
+                eprintln!("  {}", e);
+                eprintln!("  {}", hint);
+                None
+            }
+        };
+        if let Some(pull_status) = pull_status {
+            if !pull_status.success() {
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Pull,
+                    &StepOutcome::Failed(format!("exit {}", pull_status)),
+                );
+                let hint = recovery_hint(&ShipStep::Pull, Some(pr_number), forge_kind);
+                eprintln!(
+                    "{} `aida pull` failed — the merge already landed, so this \
+                     is a sync issue, not a merge issue.",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold()
+                );
+                eprintln!("  {}", hint);
+                // Don't bail — the merge landed; pull failure is recoverable.
+            } else {
+                eprintln!(
+                    "  {} pulled main",
+                    crate::glyph(crate::glyphs::Glyph::Check).green()
+                );
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::Pull,
+                    &StepOutcome::Ok,
+                );
+            }
+        } else {
+            // Preparation failure was already logged and printed above.
+        }
+    }
+
+    // Cleanup must not serialize unrelated merges, even after --no-pull or
+    // a recoverable pull failure. The worker never acquires this merge lease.
+    // trace:BUG-2384 | ai:codex
+    let merge_lock_path = merge_lease.path().to_path_buf();
+    drop(merge_lease);
+    let mut cleanup_lease = None;
+
+    // ---- Step 5: end the lease (worktree cleanup). ----
+    if no_cleanup {
+        eprintln!("  step 5: skipping `aida session end` (--no-cleanup)");
+        log_ship_activity(
+            &main_worktree,
+            Some(pr_number),
+            &ShipStep::EndLease,
+            &StepOutcome::Skipped("--no-cleanup".into()),
+        );
+    } else {
+        // BUG-1953: match the PR head branch, not the cwd branch — shipping
+        // by number from `main` must still end the shipped branch's lease.
+        // `ship_branch` already falls back to `branch` when no PR branch
+        // resolved. trace:BUG-1953 | ai:claude
+        let lease_for_branch = list_leases(&main_worktree)
+            .into_iter()
+            .find(|l| l.branch == ship_branch);
+        match lease_for_branch {
+            Some(lease) => {
+                // If our cwd is inside the worktree we're about to
+                // remove, `aida session end` will refuse (BUG-61 live-
+                // claude check). Detect and skip with a clear next-step.
+                let cwd = std::env::current_dir().ok();
+                let inside_target = cwd
+                    .as_deref()
+                    .map(|c| c.starts_with(&lease.worktree_path))
+                    .unwrap_or(false);
+                if inside_target {
+                    // TASK-1582: name scope/role/worktree, not just the id.
+                    // trace:TASK-1582 | ai:antigravity
+                    let (line, detail) = pr_ship::step5_inside_worktree_messages(
+                        &lease.id,
+                        &lease.scope,
+                        lease.role.as_deref(),
+                        &lease.worktree_path,
+                        &lease.branch,
+                    );
+                    eprintln!("{line}");
+                    log_ship_activity(
+                        &main_worktree,
+                        Some(pr_number),
+                        &ShipStep::EndLease,
+                        &StepOutcome::Skipped(detail),
+                    );
+                } else {
+                    eprintln!(
+                        "  step 5: ending {}",
+                        pr_ship::describe_lease_for_step5(
+                            &lease.id,
+                            &lease.scope,
+                            lease.role.as_deref(),
+                            &lease.worktree_path,
+                        )
+                    );
+                    cleanup_lease = Some(lease.id);
+                }
+            }
+            None => {
+                let (line, detail) = pr_ship::step5_no_lease_messages(&ship_branch);
+                eprintln!("{line}");
+                log_ship_activity(
+                    &main_worktree,
+                    Some(pr_number),
+                    &ShipStep::EndLease,
+                    &StepOutcome::Skipped(detail),
+                );
+            }
+        }
+    }
+
+    // One sequential worker ends the target lease, then reaps/prunes. Its
+    // output goes to a log so a slow sweep can outlive this invocation without
+    // keeping headless output pipes or the merge lease open.
+    // trace:BUG-2384 | ai:codex
+    // The worker records the final EndLease outcome in the ship activity
+    // ledger itself (it may finish after this process exits); ship records
+    // only a worker that never started.
+    // An operator at a terminal keeps TASK-1145's attended prune: the worker
+    // runs in the foreground with this process's TTY stdin, so the doctor
+    // heal gate sees an attended context exactly as before. Only unattended
+    // (no TTY) ships detach the worker behind a bounded wait.
+    // trace:BUG-2384 trace:TASK-1145 | ai:claude
+    if !no_cleanup && (cleanup_lease.is_some() || merged_this_run) {
+        let mut cmd = std::process::Command::new(pr_ship_post_merge_aida_exe());
+        cmd.current_dir(&main_worktree)
+            .args(["pr", "post-ship-cleanup", "--pr", &pr_number.to_string()])
+            .arg("--merge-lock")
+            .arg(&merge_lock_path);
+        if let Some(lease) = &cleanup_lease {
+            cmd.args(["--lease", lease]);
+        }
+        if merged_this_run {
+            cmd.arg("--sweep");
+        }
+        let attended = std::io::IsTerminal::is_terminal(&std::io::stdin());
+        let run = if attended {
+            run_ship_cleanup_attended(cmd)
+        } else {
+            run_ship_cleanup_command(&main_worktree, cmd, std::time::Duration::from_secs(20))
+        };
+        match run {
+            Ok(_) => {}
+            Err(ShipCleanupError::Exited(error)) => {
+                // The worker ran and already logged its own EndLease outcome.
+                eprintln!("  post-merge cleanup failed: {error:#}");
+            }
+            Err(ShipCleanupError::NotStarted(error)) => {
+                eprintln!("  post-merge cleanup failed: {error:#}");
+                if cleanup_lease.is_some() {
+                    log_ship_activity(
+                        &main_worktree,
+                        Some(pr_number),
+                        &ShipStep::EndLease,
+                        &StepOutcome::Failed(error.to_string()),
+                    );
+                }
+            }
+        }
+    } else if no_cleanup && merged_this_run {
+        eprintln!(
+            "  step 6: skipping the session reap and merged agent worktree pruning (--no-cleanup)"
+        );
+    }
+
+    // trace:BUG-2549 | ai:codex — a reference merge leaves work to resume.
+    // Session-end repeats this after asynchronous lease cleanup if necessary.
+    if let Some((title, _)) = &pr_title_body {
+        for spec in pr_ship::extract_trailing_refs_spec_ids_from_subject(title) {
+            if let Err(error) = crate::lane_recovery::reconcile_reference(
+                &main_worktree,
+                &spec,
+                &format!("PR-{pr_number}"),
+            ) {
+                eprintln!("warning: reference-merge recovery for {spec} needs retry: {error:#}");
+            }
+        }
+    }
+
+    // BUG-1537: `merged_this_run` (set only where THIS invocation performed
+    // the merge, never in the `already_merged` no-op path) is the one signal
+    // that distinguishes an act this run performed from one it merely
+    // observed already done. Report the two cases in first person only when
+    // true — PRIN-5: a coordination surface must not render an absent act
+    // identically to a performed one. trace:BUG-1537 | ai:claude
+    if merged_this_run {
+        eprintln!(
+            "{} aida pr ship — PR-{} shipped",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            pr_number
+        );
+    } else {
+        eprintln!(
+            "{} aida pr ship — PR-{} was already merged (not by this run); \
+             ran post-merge sync + cleanup only",
+            crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
+            pr_number
+        );
+    }
+
+    // BUG-376: substrate-as-bouncer signal. The implementer's job ends
+    // here — CI was gated in step 2, the merge ran in step 3, pull +
+    // auto-bump in step 4, lease release in step 5 (any skipped step
+    // already reported its alternate path above). The banner exists so
+    // a confident LLM that "wants to helpfully watch CI" is told, at
+    // the load-bearing moment, that there is nothing left to watch.
+    // Paired with the `aida-implement.md` Step 7 skill directive. The
+    // banner is the *substrate* half of the pairing — even an agent
+    // that has not read or has misremembered the skill template sees
+    // this on the way out. Printed only for a merge THIS run performed
+    // (BUG-1537) — an already-merged PR gets the shorter honest
+    // "observed merged" line instead, from the same function.
+    // trace:BUG-376 trace:BUG-1537 | ai:claude
+    let mut stderr = std::io::stderr();
+    let _ = write_implementer_complete_banner(&mut stderr, pr_number, merged_this_run);
+
+    // Keep the activity-event formatter referenced so the warning-as-
+    // unused-import doesn't fire if a future refactor narrows usage.
+    let _ = format_activity_event;
+    Ok(())
+}
+
+/// BUG-HOME-042: the real [`pr_ship::StackRetargetPorts`]: the forge for the
+/// retarget and the CI re-trigger, `git push origin --delete` for the branch.
+// trace:BUG-B6B1278890774EF993D2EBC327862470-042 | ai:claude
+struct ForgeStackRetargetPorts {
+    forge: Box<dyn crate::forge::Forge>,
+    project_root: std::path::PathBuf,
+}
+
+impl pr_ship::StackRetargetPorts for ForgeStackRetargetPorts {
+    fn retarget(&mut self, pr: u64, base: &str) -> Result<()> {
+        self.forge.retarget_change(pr, base)
+    }
+
+    fn retrigger_ci(&mut self, pr: u64) -> Result<()> {
+        self.forge.retrigger_change_ci(pr)
+    }
+
+    fn delete_remote_branch(&mut self, branch: &str) -> Result<()> {
+        let out = aida_core::git_ops::host_remote_git_command(&self.project_root, "origin")
+            .args(["push", "--quiet", "origin", "--delete", branch])
+            .output()?;
+        anyhow::ensure!(
+            out.status.success(),
+            "git push origin --delete {branch} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
+    }
+
+    fn say(&mut self, line: &str) {
+        eprintln!("{line}");
+    }
+}
+
+/// `aida pr <subcommand>` dispatcher.
+// trace:STORY-90 | ai:claude
+pub(crate) fn handle_pr_command(cmd: &PrCommand) -> Result<()> {
+    match cmd {
+        // trace:STORY-2732 | ai:codex
+        PrCommand::EmergencyLand(args) => crate::pr_emergency_land::run(args),
+        PrCommand::State(args) => crate::pr_state::run(args),
+        // Internal worker preserves the existing cleanup gates after ship exits.
+        // trace:BUG-2384 | ai:codex
+        // trace:BUG-2535 | ai:codex
+        PrCommand::PostShipSweep => {
+            let inputs = aida_core::exec_context::Environment::capture();
+            let _lock = verify_post_ship_sweep_handoff(&inputs)?;
+            run_post_ship_sweep();
+            Ok(())
+        }
+        PrCommand::PostShipCleanup {
+            pr,
+            lease,
+            merge_lock,
+            sweep,
+        } => post_ship_cleanup_worker(PostShipCleanupArgs {
+            pr: *pr,
+            lease: lease.as_deref(),
+            merge_lock: merge_lock.as_deref(),
+            sweep: *sweep,
+        }),
+        PrCommand::AutoQueueReview { branch } => pr_auto_queue_review(branch.as_deref()),
+        PrCommand::Rebase {
+            n,
+            check,
+            interactive,
+            no_smoke,
+            base,
+            onto_parent,
+        } => pr_rebase_handler(
+            *n,
+            *check,
+            *interactive,
+            *no_smoke,
+            base.as_deref(),
+            onto_parent.as_deref(),
+        ),
+        PrCommand::Ship {
+            n,
+            no_pull,
+            no_cleanup,
+            dry_run,
+            force_delete_branch,
+            complexity,
+            effort,
+            no_trailer_check,
+            override_stale_check,
+            override_stale_approval,
+            wait,
+            no_complete,
+            rebase,
+            merge_method,
+            final_slice,
+            allow_stacked_base,
+        } => {
+            let resolved_method =
+                pr_ship::validate_ship_merge_method(*rebase, *merge_method, *final_slice)
+                    .map_err(anyhow::Error::msg)?;
+            pr_ship_with_method_and_dispatch_ctx(
+                *n,
+                *no_pull,
+                *no_cleanup,
+                *dry_run,
+                *force_delete_branch,
+                *complexity,
+                *effort,
+                *no_trailer_check,
+                *override_stale_check,
+                *override_stale_approval,
+                *wait,
+                *no_complete,
+                resolved_method,
+                *final_slice,
+                *allow_stacked_base,
+                None,
+            )
+        }
+        PrCommand::Train {
+            status,
+            json,
+            abandon,
+            prs,
+            all_ready,
+            dry_run,
+            local_ci,
+            max,
+            no_pull,
+            check,
+            all_open,
+            timeout,
+            skip_full_check,
+        } => {
+            anyhow::ensure!(
+                *status || *check || !*json,
+                "--json applies only with --status or --check"
+            );
+            if *status {
+                return crate::pr_train::train_status(*json);
+            }
+            if let Some(name) = abandon {
+                return crate::pr_train::abandon_journal(name);
+            }
+            // trace:STORY-2824 | ai:claude
+            // trace:STORY-2824 | ai:codex
+            if *check {
+                return crate::pr_train::pr_train_check_handler(&crate::pr_train::CheckOptions {
+                    prs,
+                    all_open: *all_open,
+                    skip_full_check: *skip_full_check,
+                    json: *json,
+                    timeout: std::time::Duration::from_secs(*timeout),
+                });
+            }
+            // trace:STORY-2809 | ai:claude
+            crate::pr_train::with_skip_full_check(*skip_full_check, || {
+                crate::pr_train::pr_train_handler(&crate::pr_train::TrainOptions {
+                    prs,
+                    all_ready: *all_ready,
+                    dry_run: *dry_run,
+                    local_ci: local_ci.as_deref(),
+                    max: *max,
+                    no_pull: *no_pull,
+                })
+            })
+        }
+        // trace:STORY-1887 | ai:claude
+        PrCommand::ShipBatch {
+            prs,
+            review_timeout,
+            dry_run,
+        } => crate::pr_ship_batch::run(prs, *review_timeout, *dry_run),
+        PrCommand::Hold { reason } => pr_hold_handler(reason.as_deref()),
+        PrCommand::Gc { dry_run } => pr_gc_handler(*dry_run),
+        PrCommand::List { json, mapped_only } => pr_list_handler(*json, *mapped_only),
+        // `pr review` needs the store; `run_pr` routes it to the shared
+        // queue-work dispatch instead of here. trace:TASK-1715 | ai:claude
+        PrCommand::Review { .. } => {
+            anyhow::bail!("`aida pr review` runs through the store dispatcher, not here")
+        }
+    }
+}
+
+#[cfg(test)]
+#[path = "../tests/task_1715_pr_review_alias_tests.rs"]
+mod task_1715_pr_review_alias_tests;
+
+#[cfg(test)]
+#[path = "../tests/bug_2164_default_branch_ship_refusal_tests.rs"]
+mod bug_2164_default_branch_ship_refusal_tests;
+
+#[cfg(test)]
+#[path = "../tests/task_2793_pr_hold_push_tests.rs"]
+mod task_2793_pr_hold_push_tests;
+
+#[cfg(test)]
+#[path = "../tests/task_140_squash_subject_tests.rs"]
+mod task_140_squash_subject_tests;
+
+#[cfg(test)]
+#[path = "../tests/bug_2203_refs_subject_tests.rs"]
+mod bug_2203_refs_subject_tests;
+
+#[cfg(test)]
+#[path = "../tests/task_1915_mandate_ship_failure_ledger_tests.rs"]
+mod task_1915_mandate_ship_failure_ledger_tests;
+
+// ---------------------------------------------------------------------------
+// BUG-1610: pre-MR-creation base check + `--target-branch`-overridable
+// recovery state.
+//
+// A GitLab project whose remote `main` is never pushed lets the FIRST pushed
+// branch become the project's default. `aida review <SPEC>` then offers to
+// open a change from that branch with no explicit base — `glab mr create
+// --source-branch <branch>` (no `--target-branch`) silently targets the
+// project default, i.e. the SAME branch, and GitLab later refuses to merge
+// it ("You must be on a different branch other than <branch>"). Diagnosing
+// this BEFORE offering the create command turns a confusing later `glab`
+// failure into an immediate, actionable refusal naming both branches.
+// trace:BUG-1610 | ai:claude
+
+#[cfg(test)]
+#[path = "../tests/bug_1610_mr_base_recovery_tests.rs"]
+mod bug_1610_mr_base_recovery_tests;
+
+#[cfg(test)]
+#[path = "../tests/task_471_stale_base_preflight_tests.rs"]
+mod task_471_stale_base_preflight_tests;
+
+#[cfg(test)]
+#[path = "../tests/story_429_auto_rebase_tests.rs"]
+mod story_429_auto_rebase_tests;
+
+#[cfg(all(test, unix))]
+mod pr_ship_environment_tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use std::time::Duration;
+
+    /// BUG-289: a worktree-conflict fetch failure gets the actionable hint
+    /// (end the lease / remove the worktree), NOT the misleading "is the PR
+    /// number correct?" line; other failures still get the generic hint.
+    #[test]
+    fn pr_fetch_failure_message_branches_on_worktree_conflict() {
+        let worktree_err = "fatal: refusing to fetch into branch 'refs/heads/pr-161' \
+                            checked out at '/home/joe/ai/aida-pr-161'";
+        let m = pr_fetch_failure_message(worktree_err, 161, "pr-161");
+        assert!(
+            m.contains("worktree already holds the `pr-161` branch"),
+            "{m}"
+        );
+        assert!(
+            m.contains("aida session end") || m.contains("git worktree remove"),
+            "{m}"
+        );
+        assert!(
+            !m.contains("is the PR number correct"),
+            "worktree-conflict hint must not show the misleading PR-number line: {m}"
+        );
+
+        let other_err = "fatal: couldn't find remote ref refs/pull/999/head";
+        let g = pr_fetch_failure_message(other_err, 999, "pr-999");
+        assert!(g.contains("is the PR number correct"), "{g}");
+        assert!(!g.contains("worktree already holds"), "{g}");
+    }
+
+    fn git(repo: &std::path::Path, args: &[&str]) -> String {
+        let out = crate::test_git::git_command()
+            .current_dir(repo)
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| panic!("git {:?} failed to spawn: {e}", args));
+        assert!(
+            out.status.success(),
+            "git {:?} failed\nstdout:\n{}\nstderr:\n{}",
+            args,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    }
+
+    fn init_repo(path: &std::path::Path) {
+        git(path, &["init", "-b", "main", "--quiet"]);
+        git(path, &["config", "user.email", "aida@example.test"]);
+        git(path, &["config", "user.name", "AIDA Test"]);
+        git(path, &["commit", "--allow-empty", "-m", "base", "--quiet"]);
+    }
+
+    // BUG-463: each test owns its own `tempfile::tempdir()`, so the fake `gh`
+    // scripts are already path-isolated. The residual CI flake came from
+    // `ETXTBSY` when exec'ing a just-written script while a sibling test's
+    // child transiently held the writable fd; the exec path now retries on
+    // `ETXTBSY` (see `command_output_retrying_etxtbsy`), so writing the
+    // script here stays a plain write + chmod.
+    // trace:BUG-463 | ai:claude
+    fn make_executable(path: &std::path::Path, body: &str) {
+        std::fs::write(path, body).unwrap();
+        let mut perms = std::fs::metadata(path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(path, perms).unwrap();
+    }
+
+    #[test]
+    fn recover_open_change_uses_github_origin_even_with_stale_pure_git_config() {
+        // trace:BUG-1994 | ai:codex
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        // trace:BUG-896 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
+        let repo = tmp.path().join("repo");
+        let bin = tmp.path().join("bin");
+        std::fs::create_dir_all(&repo).unwrap();
+        std::fs::create_dir_all(&bin).unwrap();
+        init_repo(&repo);
+        git(
+            &repo,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "https://github.com/acme/repo.git",
+            ],
+        );
+        std::fs::create_dir_all(repo.join(".aida")).unwrap();
+        std::fs::write(
+            repo.join(".aida").join("config.toml"),
+            "[forge]\nprovider = \"pure-git\"\n",
+        )
+        .unwrap();
+        git(&repo, &["checkout", "-b", "bug-896", "--quiet"]);
+        std::fs::write(repo.join("work.txt"), "work\n").unwrap();
+        git(&repo, &["add", "work.txt"]);
+        git(
+            &repo,
+            &[
+                "commit",
+                "-m",
+                "[AI:codex] fix(test): recover open change (BUG-896)",
+                "--quiet",
+            ],
+        );
+
+        let marker = tmp.path().join("gh-args");
+        let gh = bin.join("gh");
+        make_executable(
+            &gh,
+            &format!(
+                "#!/bin/sh\n\
+                 if [ \"$1\" = repo ] && [ \"$2\" = view ]; then\n\
+                   echo main\n\
+                   exit 0\n\
+                 fi\n\
+                 if [ \"$1\" = pr ] && [ \"$2\" = list ]; then exit 0; fi\n\
+                 printf '%s\\n' \"$*\" > '{}'\n\
+                 test \"$1\" = pr\n\
+                 test \"$2\" = create\n\
+                 echo 'https://github.com/acme/repo/pull/896'\n",
+                marker.display()
+            ),
+        );
+        let old_path = std::env::var_os("PATH").unwrap_or_default();
+        let mut path_entries = vec![bin.clone()];
+        path_entries.extend(std::env::split_paths(&old_path));
+        let path = std::env::join_paths(path_entries).unwrap();
+        let _env = crate::test_env::EnvVarGuard::set("PATH", path);
+
+        assert!(recover_open_change(&repo, "bug-896"));
+        let args = std::fs::read_to_string(marker).unwrap();
+        assert!(args.contains("pr create"), "{args}");
+        assert!(args.contains("--base main"), "{args}");
+        assert!(args.contains("--head bug-896"), "{args}");
+
+        // STORY-1480: the adoption recorded its lifecycle pair — the
+        // implementer entry and the PR-open boundary — credited to the spec
+        // the head commit's trailer names, with no run uuid (no drain).
+        // trace:STORY-1480 | ai:claude
+        let feed = crate::events::read_all(&repo);
+        let adoption: Vec<_> = feed
+            .iter()
+            .filter(|e| e.spec.as_deref() == Some("BUG-896"))
+            .collect();
+        assert_eq!(adoption.len(), 2, "{adoption:?}");
+        assert!(matches!(
+            adoption[0].kind,
+            crate::events::EventKind::PhaseEntered { ref slug, attempt: 1, .. } if slug == "implementer"
+        ));
+        assert!(matches!(
+            adoption[1].kind,
+            crate::events::EventKind::PhaseDonePr { pr: 896 }
+        ));
+        assert!(adoption.iter().all(|e| e.run_uuid.is_empty()));
+    }
+
+    #[test]
+    fn waits_for_ci_checks_to_register_before_watch() {
+        let tmp = tempfile::tempdir().unwrap();
+        let counter = tmp.path().join("count");
+        let gh = tmp.path().join("gh");
+        make_executable(
+            &gh,
+            &format!(
+                "#!/bin/sh\n\
+                 count_file='{}'\n\
+                 count=$(cat \"$count_file\" 2>/dev/null || echo 0)\n\
+                 count=$((count + 1))\n\
+                 printf '%s' \"$count\" > \"$count_file\"\n\
+                 if [ \"$count\" -lt 3 ]; then\n\
+                   echo \"no checks reported on the branch\" >&2\n\
+                   exit 1\n\
+                 fi\n\
+                 echo \"build\tpending\t0\thttps://github.example/run/1\"\n\
+                 exit 0\n",
+                counter.display()
+            ),
+        );
+
+        wait_for_pr_checks_to_register_with_gh(
+            tmp.path(),
+            344,
+            gh.as_os_str(),
+            Duration::from_secs(2),
+            Duration::from_millis(1),
+        )
+        .unwrap();
+        assert_eq!(std::fs::read_to_string(counter).unwrap(), "3");
+    }
+
+    #[test]
+    fn ci_startup_timeout_has_configuration_message() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gh = tmp.path().join("gh");
+        make_executable(
+            &gh,
+            "#!/bin/sh\n\
+             echo \"no checks reported on the branch\" >&2\n\
+             exit 1\n",
+        );
+
+        let err = wait_for_pr_checks_to_register_with_gh(
+            tmp.path(),
+            344,
+            gh.as_os_str(),
+            Duration::from_millis(5),
+            Duration::from_millis(1),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("No CI workflows registered"), "{err}");
+        assert!(err.contains(".github/workflows"), "{err}");
+    }
+
+    #[test]
+    fn post_merge_pull_preparation_switches_clean_main_worktree_to_main() {
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        git(tmp.path(), &["checkout", "-b", "stale-feature", "--quiet"]);
+
+        prepare_main_worktree_for_pr_ship_pull(tmp.path()).unwrap();
+        assert_eq!(current_git_branch(tmp.path()).unwrap(), "main");
+    }
+
+    #[test]
+    fn post_merge_pull_preparation_refuses_dirty_feature_branch() {
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        git(tmp.path(), &["checkout", "-b", "stale-feature", "--quiet"]);
+        std::fs::write(tmp.path().join("dirty.txt"), "uncommitted\n").unwrap();
+
+        let err = prepare_main_worktree_for_pr_ship_pull(tmp.path())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("uncommitted changes"), "{err}");
+        assert_eq!(current_git_branch(tmp.path()).unwrap(), "stale-feature");
+    }
+
+    #[test]
+    fn branch_held_by_sibling_worktree_disables_merge_delete_branch() {
+        // BUG-732: this is the normal `aida session start` shape. Passing
+        // `--delete-branch` to `gh pr merge` makes the remote squash merge land
+        // and then fail local branch cleanup because the branch is checked out
+        // by the sibling worktree.
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        let sibling = tmp.path().join("feature-worktree");
+        git(
+            tmp.path(),
+            &[
+                "worktree",
+                "add",
+                "--quiet",
+                "-b",
+                "feature-branch",
+                sibling.to_str().unwrap(),
+            ],
+        );
+
+        let branch_in_sibling =
+            branch_in_sibling_worktree(tmp.path(), "feature-branch", tmp.path());
+        assert!(branch_in_sibling);
+
+        let delete_branch = pr_ship::should_delete_branch(branch_in_sibling, 0, 0, false);
+        assert!(!delete_branch);
+        let merge_args = pr_ship::merge_args(732, delete_branch, None, None);
+        assert!(!merge_args.iter().any(|arg| arg == "--delete-branch"));
+    }
+
+    #[test]
+    fn pr_ship_reads_merge_hold_from_main_worktree_when_run_from_sibling() {
+        // trace:BUG-1188 | ai:codex
+        let tmp = tempfile::tempdir().unwrap();
+        init_repo(tmp.path());
+        let sibling = tmp.path().join("bug-1188-worktree");
+        git(
+            tmp.path(),
+            &[
+                "worktree",
+                "add",
+                "--quiet",
+                "-b",
+                "bug-1188",
+                sibling.to_str().unwrap(),
+            ],
+        );
+
+        crate::gate::merge_hold_core::write_hold(
+            tmp.path(),
+            1188,
+            "BUG-1188 is marked drive — merge requires review",
+        )
+        .unwrap();
+
+        let hold_root = pr_ship_hold_root(&sibling);
+        // trace:BUG-1192 | ai:codex
+        assert_eq!(
+            hold_root.canonicalize().unwrap(),
+            tmp.path().canonicalize().unwrap()
+        );
+        assert!(
+            crate::gate::merge_hold_core::read_hold(&hold_root, 1188)
+                .unwrap()
+                .contains("BUG-1188"),
+            "pr ship launched from a sibling worktree must see the main clone's hold marker"
+        );
+        // BUG-2176: a read keyed by the sibling resolves to the same primary
+        // marker — there is no per-worktree hold store left to read empty.
+        // trace:BUG-2176 | ai:claude
+        assert!(
+            crate::gate::merge_hold_core::read_hold(&sibling, 1188)
+                .is_some_and(|r| r.contains("BUG-1188")),
+            "a sibling-rooted read must see the main clone's hold marker"
+        );
+    }
+
+    // BUG-1423: `aida pr ship` merging a PR outside a drain phase must append
+    // the same `PrMerged` event the drain's merge phase does — one per
+    // credited spec, carrying the acting seat when known. This is the
+    // decisive gap the bug measured: nine of ten advisor merges recorded
+    // nothing.
+    #[test]
+    fn emit_ship_pr_merged_writes_one_event_per_credited_spec_with_seat() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::AmbientGuard::hermetic_with_seat(tmp.path(), "advisor", &[]);
+
+        emit_ship_pr_merged(
+            tmp.path(),
+            4242,
+            &["BUG-1423".to_string(), "TASK-1".to_string()],
+        );
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 2, "one PrMerged per credited spec");
+        for (ev, expected_spec) in events.iter().zip(["BUG-1423", "TASK-1"]) {
+            assert!(
+                matches!(ev.kind, crate::events::EventKind::PrMerged { pr } if pr == 4242),
+                "expected PrMerged{{pr: 4242}}, got {:?}",
+                ev.kind
+            );
+            assert_eq!(ev.spec.as_deref(), Some(expected_spec));
+            assert_eq!(
+                ev.seat.as_deref(),
+                Some("advisor"),
+                "the acting seat must ride along — this is the field the \
+                 PrMerged undercount hid: an advisor merge and a drain merge \
+                 must be distinguishable in the feed"
+            );
+        }
+    }
+
+    // BUG-1423: a PR crediting no resolvable spec (title/branch/body all
+    // miss) must still emit — the merge itself is never silently dropped
+    // from the feed just because spec attribution failed.
+    #[test]
+    fn emit_ship_pr_merged_emits_once_with_no_spec_when_none_resolved() {
+        let tmp = tempfile::tempdir().unwrap();
+        let _seat = crate::test_env::EnvVarGuard::unset("AIDA_SESSION_ROLE");
+
+        emit_ship_pr_merged(tmp.path(), 99, &[]);
+
+        let events = crate::events::read_all(tmp.path());
+        assert_eq!(events.len(), 1);
+        assert!(events[0].spec.is_none());
+        assert!(events[0].seat.is_none());
+        assert!(matches!(
+            events[0].kind,
+            crate::events::EventKind::PrMerged { pr: 99 }
+        ));
+    }
+}
+
+/// Implementation of `aida pr auto-queue-review` — files (or skips, if
+/// already filed) the reviewer story for the PR open on `branch` (default
+/// to `git branch --show-current`). Designed to be invoked by /aida-pr
+/// right after `gh pr create` returns.
+// trace:STORY-90 | ai:claude
+pub(crate) fn pr_auto_queue_review(branch_override: Option<&str>) -> Result<()> {
+    let project_root = find_project_root()?;
+
+    let branch = match branch_override {
+        Some(b) => b.to_string(),
+        None => current_git_branch(&project_root)?,
+    };
+    if branch.is_empty() {
+        anyhow::bail!("could not resolve current branch — pass `--branch <name>` explicitly");
+    }
+    let outcome = queue_review_for_open_pr(&project_root, &branch);
+
+    // Exit non-zero for the "needs attention" bucket so /aida-pr can
+    // detect the failure mode and tell the user to install gh / re-auth
+    // / etc. Filed, already-filed, and by-design skips all return 0 —
+    // they're all expected outcomes the skill should treat as success.
+    match outcome.status {
+        AutoQueueStatus::SkippedNeedsAttention => {
+            anyhow::bail!("{}", outcome.summary)
+        }
+        _ => Ok(()),
+    }
+}
+
+// BUG-2217: `aida ship --no-merge` opens the PR and must file its reviewer
+// story — PR-2895 stalled with "no queued review story" because the StopAtPr
+// arm never queued one. trace:BUG-2217 | ai:claude
+#[cfg(test)]
+mod bug_2217_ship_no_merge_files_review_story {
+    #[test]
+    fn stop_at_pr_queues_the_review_story() {
+        let src = include_str!("finish.rs");
+        let arm = src
+            .find(concat!("FinishMode::StopAt", "Pr => {"))
+            .expect("the --no-merge arm");
+        let body = &src[arm..];
+        let queue = body
+            .find(concat!("queue_review_for_", "open_pr("))
+            .expect("the StopAtPr arm files the reviewer story");
+        let banner = body
+            .find(concat!("--no-merge; not ", "merged"))
+            .expect("the pause banner");
+        assert!(queue < banner, "the story is filed before the pause banner");
+    }
+
+    #[test]
+    fn both_non_train_skip_arms_print_the_rerun_command() {
+        let src = include_str!("../pr_service.rs");
+        let start = src
+            .find(concat!("pub(crate) fn queue_review_for_", "open_pr("))
+            .expect("the shared step");
+        let end = src[start..].find("\n}\n").map(|e| start + e).unwrap();
+        let body = &src[start..end];
+        assert_eq!(
+            body.matches(concat!("aida pr auto-queue-review --", "branch"))
+                .count(),
+            2,
+            "both skip arms print the re-run command"
+        );
+    }
+}
+
+/// Pull-request side-effects. Today: `auto-queue-review` files the
+/// reviewer story right after a change opens, so the trigger lives
+/// where context is freshest. `aida session end` keeps the same logic
+/// as an idempotent backup for changes opened without it.
+// trace:STORY-90 trace:TASK-2251 | ai:claude
+#[derive(clap::Parser, Debug)]
+#[clap(name = "pr")]
+pub(crate) struct PrArgs {
+    #[clap(subcommand)]
+    pub inner: crate::cli::PrCommand,
+}
+
+// STORY-90: PR side-effects dispatch before storage init — the
+// command's side-effects all live in git / gh / self-invoked `aida
+// add` calls; it doesn't need the global Storage handle.
+// trace:STORY-90 | ai:claude
+//
+// TASK-1715: `pr review` is the one subcommand that needs the store — it runs
+// `queue work <change> --auto-complete` through the queue's own dispatch, so
+// it defers past the early point; every other subcommand still finishes there.
+// trace:TASK-1715 | ai:claude
+fn run_pr(
+    matches: &clap::ArgMatches,
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
+    use crate::cmdkit::{Flow, StoreCtx};
+    let args = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let PrCommand::Review { id } = &args.inner else {
+        // Only the early point reaches here: non-review subcommands return.
+        crate::spec_arg::ensure_alias_map();
+        handle_pr_command(&args.inner)?;
+        return Ok(Flow::Return);
+    };
+    match &ctx.store {
+        // Defer to the dispatcher that serves the project's store.
+        None | Some(StoreCtx::Distributed { .. }) => Ok(Flow::Continue),
+        Some(StoreCtx::Git { .. } | StoreCtx::Legacy { .. }) => {
+            let root = crate::find_project_root()
+                .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+            let change = review_change_id(id, crate::forge::resolve_forge_kind(&root))?;
+            crate::queue_cmd::dispatch_queue_args(&review_queue_args(&change)?, ctx)
+        }
+    }
+}
+
+/// Normalize a `pr review` target to the `PR-N` / `MR-N` change ID that
+/// `queue work` resolves. Explicit `PR-N` / `MR-N` (any case) are kept as
+/// named; a bare `N` (or `#N`) takes the configured forge's prefix.
+// trace:TASK-1715 | ai:claude
+pub(crate) fn review_change_id(id: &str, forge: crate::forge::ForgeKind) -> Result<String> {
+    use crate::forge::ForgeKind;
+    use crate::session_start::{format_review_label, parse_review_scope, ReviewForge};
+    if let Some((review_forge, n)) = parse_review_scope(id) {
+        return Ok(format_review_label(review_forge, n));
+    }
+    let trimmed = id.trim();
+    let digits = trimmed.strip_prefix('#').unwrap_or(trimmed);
+    let n: u64 = match digits.parse() {
+        Ok(n) if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) => n,
+        _ => anyhow::bail!(
+            "`{id}` is not a change to review; pass a number, `PR-N` (GitHub) or `MR-N` (GitLab)"
+        ),
+    };
+    match forge {
+        ForgeKind::GitHub => Ok(format_review_label(ReviewForge::GitHub, n)),
+        ForgeKind::GitLab => Ok(format_review_label(ReviewForge::GitLab, n)),
+        ForgeKind::None => anyhow::bail!(
+            "this project has no GitHub or GitLab forge configured, so `{id}` cannot be \
+             resolved; pass `PR-{n}` or `MR-{n}`"
+        ),
+    }
+}
+
+/// The exact `queue work <change> --auto-complete` arguments `pr review`
+/// runs, parsed by the queue's own clap definition.
+// trace:TASK-1715 | ai:claude
+pub(crate) fn review_queue_args(change: &str) -> Result<crate::queue_cmd::QueueArgs> {
+    <crate::queue_cmd::QueueArgs as clap::Parser>::try_parse_from(review_queue_argv(change))
+        .map_err(|e| anyhow::anyhow!("{e}"))
+}
+
+fn review_queue_argv(change: &str) -> [&str; 4] {
+    ["queue", "work", change, "--auto-complete"]
+}
+
+/// `pr review` answers the cross-cutting gates exactly as `queue work` does;
+/// every other subcommand keeps the `pr` policy.
+// trace:TASK-1715 | ai:claude
+fn pr_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
+    if matches.subcommand_name() == Some("state") {
+        return crate::cmdkit::CmdPolicy {
+            stakeholder: crate::stakeholder_role::StakeholderAction::Read,
+            per_write_auto_push: false,
+            skip_role_restore_prompt: true,
+            team_identity_write: false,
+        };
+    }
+    let review = <PrArgs as clap::FromArgMatches>::from_arg_matches(matches)
+        .ok()
+        .and_then(|args| match args.inner {
+            PrCommand::Review { id } => Some(id),
+            _ => None,
+        });
+    if let Some(id) = review {
+        // Match run_pr's forge-specific normalization. trace:TASK-3112 | ai:codex
+        let root = crate::find_project_root()
+            .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default());
+        let Ok(id) = review_change_id(&id, crate::forge::resolve_forge_kind(&root)) else {
+            return crate::cmdkit::CmdPolicy {
+                stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+                per_write_auto_push: false,
+                skip_role_restore_prompt: false,
+                team_identity_write: false,
+            };
+        };
+        let queue = <crate::queue_cmd::QueueArgs as clap::CommandFactory>::command()
+            .try_get_matches_from(review_queue_argv(&id));
+        if let Ok(queue) = queue {
+            return crate::queue_cmd::queue_cli_policy(&queue);
+        }
+    }
+    crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    }
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static PR: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "pr",
+    help_after: "ship",
+    command: <PrArgs as clap::CommandFactory>::command,
+    policy: pr_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_pr),
+};
+
+/// The one-shot HUMAN-implementer finish. From inside a worktree where
+/// you implemented a spec, run the whole finish ceremony in ONE command:
+/// commit any uncommitted work with the (SPEC-ID) trailer, rebase onto
+/// current origin/main, push, open the PR, wait for CI green, squash-merge,
+/// run `aida pull` (Done → Completed auto-bump), and remove the worktree.
+///
+/// It is the orchestrator's finish phases with phase-1 (implement) done by
+/// you instead of a spawned agent — the human-implementer counterpart to
+/// `aida queue work <id> --auto-complete`. The spec is resolved from the
+/// current branch (or the active session lease); pass `<spec>` to override.
+///
+/// Stop earlier with `--no-merge` (open the PR, don't merge) or `--no-pr`
+/// (just rebase + push). `--keep-worktree` leaves the worktree in place
+/// after a successful merge.
+#[derive(clap::Parser, Debug)]
+#[clap(name = "ship")]
+pub(crate) struct ShipArgs {
+    /// Spec to finish. When omitted, resolved from the current branch
+    /// name (e.g. `<spec>-ship` → `<SPEC-ID>`) or the active session
+    /// lease covering this worktree.
+    // trace:BUG-B6B1278890774EF993D2EBC327862470-015 | ai:claude
+    #[clap(value_name = "SPEC", value_parser = crate::spec_arg::spec_id)]
+    pub spec: Option<String>,
+
+    /// Commit subject to use when committing uncommitted work. The
+    /// `(SPEC-ID)` trailer is appended automatically. When omitted, a
+    /// conventional default is used. Ignored when the worktree is clean.
+    /// In a native seat, records a lease-bound host publication declaration
+    /// instead; supply the complete subject including `(ID)` or `(Refs ID)`.
+    // trace:BUG-1294 | ai:claude
+    #[clap(long, short = 'm', value_name = "MSG", allow_hyphen_values = true)]
+    pub message: Option<String>,
+
+    /// Stop after opening the PR — do not watch CI or merge. The PR is
+    /// left open for a human to review + merge.
+    #[clap(long)]
+    pub no_merge: bool,
+
+    /// Stop after rebase + push — do not open a PR. Useful when you want
+    /// to open the PR yourself, or when CI is configured to gate on push.
+    #[clap(long, conflicts_with = "no_merge")]
+    pub no_pr: bool,
+
+    /// Keep the worktree after a successful merge (skip the
+    /// `aida session end` cleanup step).
+    #[clap(long)]
+    pub keep_worktree: bool,
+
+    /// Print the resolved finish sequence without executing any of it.
+    #[clap(long)]
+    pub dry_run: bool,
+
+    /// Bypass the client-side trailer spec-ID check before shipping.
+    // trace:STORY-469 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(long)]
+    pub no_trailer_check: bool,
+
+    /// Publish a contained seat's committed branch from the main checkout:
+    /// bundle it inside the seat sandbox, verify the bundle, print its diff
+    /// stat and the clone's git config and hooks, check its commit trailers,
+    /// push it and open the PR. The seat's hooks never run. Never merges.
+    /// With --dry-run, nothing is imported or pushed.
+    // trace:BUG-HOME-038 trace:TASK-B6B1278890774EF993D2EBC327862470-140 | ai:claude
+    // — plain `//` keeps the marker out of `--help`. It never merges, so
+    // `--no-merge` is refused rather than silently ignored.
+    #[clap(
+        long,
+        value_name = "CLONE",
+        conflicts_with_all = ["message", "keep_worktree", "no_trailer_check", "no_merge"]
+    )]
+    pub from_seat: Option<std::path::PathBuf>,
+
+    /// With --from-seat: first commit the seat's uncommitted changes with
+    /// this message, inside AIDA's own sandbox with the seat's hooks off, on
+    /// the seat's own branch. For a native Codex seat, which cannot commit
+    /// in its own sandbox. The message must carry the spec trailer.
+    // trace:TASK-2712 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(
+        long,
+        value_name = "MSG",
+        requires = "from_seat",
+        allow_hyphen_values = true
+    )]
+    pub commit_pending: Option<String>,
+
+    /// Read a UTF-8 commit body verbatim from this file. Use with native
+    /// -m declarations or --from-seat --commit-pending.
+    // trace:BUG-2493 | ai:codex
+    #[clap(long, value_name = "FILE")]
+    pub commit_body_file: Option<std::path::PathBuf>,
+
+    /// With a native -m declaration: this publication is one slice of the
+    /// spec, not all of it. The commit trailer becomes `(Refs ID)` and the
+    /// spec is not marked Done. Without it, the publication completes the
+    /// spec unless child slices are still outstanding.
+    // trace:BUG-2696 | ai:claude — plain `//` keeps the marker out of `--help`.
+    #[clap(long)]
+    pub partial_slice: bool,
+}
+
+// trace:BUG-2493 | ai:codex
+pub(crate) fn ship_messages(
+    args: &ShipArgs,
+    native: bool,
+) -> anyhow::Result<(Option<String>, Option<String>)> {
+    // trace:BUG-2493 | ai:codex
+    // Native authors provide bodies only through the explicit body-file surface.
+    if native {
+        anyhow::ensure!(
+            !args
+                .message
+                .as_deref()
+                .is_some_and(|s| s.contains(['\n', '\r'])),
+            "native -m requires a single-line subject; use --commit-body-file for the body"
+        );
+    }
+    if args.commit_body_file.is_some() {
+        anyhow::ensure!(
+            args.commit_pending.is_some() || (args.message.is_some() && native),
+            "--commit-body-file requires native -m or --from-seat --commit-pending"
+        );
+    }
+    let body = args
+        .commit_body_file
+        .as_ref()
+        .map(|path| {
+            std::fs::read_to_string(path)
+                .with_context(|| format!("reading --commit-body-file {}", path.display()))
+        })
+        .transpose()?;
+    if let Some(body) = &body {
+        anyhow::ensure!(!body.contains('\0'), "commit body contains NUL");
+    }
+    let with_body = |subject: &str| -> anyhow::Result<String> {
+        anyhow::ensure!(
+            body.is_none() || !subject.contains(['\n', '\r']),
+            "--commit-body-file requires a single-line subject"
+        );
+        Ok(crate::native_publication::join_message(
+            subject,
+            body.as_deref(),
+        ))
+    };
+    Ok((
+        args.message.as_deref().map(with_body).transpose()?,
+        args.commit_pending.as_deref().map(with_body).transpose()?,
+    ))
+}
+
+// STORY-720: `aida ship` dispatches before storage init for the same
+// reason as `aida pr` — every side-effect is a git / gh / self-invoked
+// `aida` call (the finish tail reuses `pr_ship_handler`). The spec is
+// resolved from the branch / lease, not the requirement store.
+// trace:STORY-720 | ai:claude
+fn run_ship(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
+    let args = <ShipArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
+    let ShipArgs {
+        spec,
+        message,
+        no_merge,
+        no_pr,
+        keep_worktree,
+        dry_run,
+        no_trailer_check,
+        from_seat,
+        commit_pending: _,
+        commit_body_file: _,
+        partial_slice,
+    } = &args;
+    // trace:BUG-2493 | ai:codex
+    let native = std::env::var("AIDA_CONTAINMENT_POSTURE").as_deref() == Ok("native");
+    let (publication_message, pending_message) = ship_messages(&args, native)?;
+    // trace:BUG-HOME-038 | ai:claude
+    if let Some(clone) = from_seat {
+        return crate::ship_from_seat::run(crate::ship_from_seat::FromSeatOptions {
+            clone: clone.clone(),
+            spec: spec.clone(),
+            no_pr: *no_pr,
+            dry_run: *dry_run,
+            // trace:TASK-2712 | ai:claude
+            commit_pending: pending_message,
+        });
+    }
+    // trace:TASK-2902 | ai:codex
+    if native {
+        if let Some(subject) = &publication_message {
+            anyhow::ensure!(
+                !*no_trailer_check,
+                "native declarations require trailer validation"
+            );
+            return crate::native_publication::declare(
+                &crate::find_project_root().unwrap_or(std::env::current_dir()?),
+                spec.as_deref(),
+                subject,
+                *partial_slice,
+                *dry_run,
+            );
+        }
+    }
+    // trace:BUG-2696 | ai:claude
+    anyhow::ensure!(
+        !*partial_slice,
+        "--partial-slice applies to a native -m publication declaration; elsewhere write the \
+         `(Refs ID)` trailer yourself"
+    );
+    // TASK-2712: a native Codex lane's git directory is read-only, a seat
+    // clone's included; say so, with the host-commit recovery, before any
+    // git runs.
+    // trace:TASK-2712 | ai:claude
+    crate::codex_native_sandbox::refuse_native_publication(
+        std::env::var("AIDA_CONTAINMENT_POSTURE").ok().as_deref(),
+        &crate::find_project_root().unwrap_or(std::env::current_dir()?),
+    )?;
+    return run_human_finish_ceremony(HumanFinishOptions {
+        spec: spec.clone(),
+        message: message.clone(),
+        no_merge: *no_merge,
+        no_pr: *no_pr,
+        keep_worktree: *keep_worktree,
+        dry_run: *dry_run,
+        no_trailer_check: *no_trailer_check,
+    });
+}
+
+// trace:STORY-1728 | ai:claude
+pub(crate) static SHIP: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "ship",
+    help_after: "triage",
+    command: <ShipArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::BuildLoop,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_ship),
+};
+
+#[cfg(test)]
+mod story_1663_rebase_ship_tests {
+    use super::*;
+    use clap::Parser;
+
+    // trace:TASK-1951 | ai:claude
+    fn task_1951_repo() -> (tempfile::TempDir, impl Fn(&[&str]) -> String) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        let git = move |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(&root)
+                .args(args)
+                .output()
+                .expect("git runs");
+            assert!(out.status.success(), "git {args:?} failed");
+            String::from_utf8(out.stdout).unwrap().trim().to_string()
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.name", "Test"]);
+        git(&["config", "user.email", "test@example.com"]);
+        std::fs::write(tmp.path().join("README.md"), "init\n").unwrap();
+        git(&["add", "README.md"]);
+        git(&["commit", "-q", "-m", "chore: initial"]);
+        (tmp, git)
+    }
+
+    // trace:TASK-1951 trace:TASK-1619 | ai:claude
+    fn commit_stub_verifier(root: &std::path::Path, git: &dyn Fn(&[&str]) -> String, body: &str) {
+        let dir = root.join("scripts/split-lib");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("verify_stack.py"), body).unwrap();
+        git(&["add", "scripts/split-lib/verify_stack.py"]);
+        git(&["commit", "-q", "-m", "chore: verifier"]);
+    }
+
+    /// TASK-1619: the verifier is read from the base the PR merges into, not
+    /// from origin/main, and a passing verifier lets the ship proceed. A base
+    /// that resolves without the script never falls back to the local copy.
+    // trace:TASK-1951 trace:TASK-1619 | ai:claude
+    #[test]
+    fn task_1951_slice_verifier_reads_the_merge_base_and_passes() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let ran = root.join("release-verifier-ran");
+        commit_stub_verifier(
+            root,
+            &git,
+            "import sys\nprint('FAIL main verifier')\nsys.exit(1)\n",
+        );
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        commit_stub_verifier(
+            root,
+            &git,
+            &format!(
+                "import sys\nopen({:?}, 'w').write(' '.join(sys.argv[1:]))\nprint('PASS')\n",
+                ran.display().to_string()
+            ),
+        );
+        git(&["update-ref", "refs/remotes/origin/release", "HEAD"]);
+        std::fs::write(root.join("x.txt"), "moved\n").unwrap();
+        git(&["add", "x.txt"]);
+        git(&["commit", "-q", "-m", "refactor(cli-lib): extract foo.rs"]);
+
+        run_optional_slice_stack_verifier(root, root, 7, "origin/release", "HEAD")
+            .expect("the release base's passing verifier admits the slice");
+        assert_eq!(
+            std::fs::read_to_string(&ran).unwrap(),
+            "origin/release HEAD"
+        );
+
+        // A resolvable base without the script: no verifier, even though the
+        // local checkout has a failing one.
+        let bare = git(&["rev-parse", "HEAD~3"]);
+        git(&["update-ref", "refs/remotes/origin/bare", &bare]);
+        run_optional_slice_stack_verifier(root, root, 7, "origin/bare", "HEAD")
+            .expect("a base without verify_stack.py has no verifier");
+    }
+
+    /// TASK-1620 round 2: two slice commits sharing a subject both land
+    /// under their own shas and both are marked. TASK-1622: an unreadable
+    /// range is an error even when no spec id was found.
+    // trace:TASK-1951 trace:TASK-1620 trace:TASK-1622 | ai:claude
+    #[test]
+    fn task_1951_duplicate_subject_slices_are_each_marked_and_unreadable_ranges_fail() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let store_dir = root.join(".aida-store");
+        let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
+        use aida_core::db::DatabaseBackend;
+        let mut req = aida_core::Requirement::new("Slice parent".into(), String::new());
+        req.spec_id = Some("STORY-78".to_string());
+        req.status = aida_core::RequirementStatus::InProgress;
+        backend.add_requirement(req).unwrap();
+
+        git(&["switch", "-q", "-c", "claude/story-78-part1"]);
+        for n in ["one", "two"] {
+            std::fs::write(root.join(format!("{n}.txt")), "x\n").unwrap();
+            git(&["add", &format!("{n}.txt")]);
+            git(&["commit", "-q", "-m", "refactor: move code (STORY-78)"]);
+        }
+        let pr_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        git(&["cherry-pick", "main..claude/story-78-part1"]);
+        let landed = [git(&["rev-parse", "HEAD"]), git(&["rev-parse", "HEAD~1"])];
+
+        record_non_completing_rebase_slice(
+            root,
+            root,
+            78,
+            "main",
+            Some(&pr_head),
+            "claude/story-78-part1",
+            &[],
+        )
+        .expect("marker recorded");
+        let stored = backend
+            .get_requirement_unambiguous("STORY-78")
+            .unwrap()
+            .unwrap();
+        for sha in &landed {
+            assert!(
+                crate::db_reconcile::spec_ignores_non_completing_rebase_commit(root, &stored, sha),
+                "landed {sha} is marked"
+            );
+        }
+
+        let err = record_non_completing_rebase_slice(
+            root,
+            root,
+            79,
+            "main",
+            Some("0123456789abcdef0123456789abcdef01234567"),
+            "no-spec-branch",
+            &[],
+        )
+        .expect_err("an unreadable range fails before the empty-candidates return");
+        assert!(err.to_string().contains("commit subjects"), "{err:#}");
+    }
+
+    /// TASK-1620: the marker names the commit as it landed on the base after
+    /// the rebase rewrote it, and a later commit reusing the subject is not
+    /// suppressed. TASK-1622: an unopenable store is an error, not silence.
+    // trace:TASK-1951 trace:TASK-1620 trace:TASK-1622 | ai:claude
+    #[test]
+    fn task_1951_non_completing_marker_matches_landed_shas_only_and_reports_failures() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let store_dir = root.join(".aida-store");
+        let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
+        use aida_core::db::DatabaseBackend;
+        let mut req = aida_core::Requirement::new("Slice parent".into(), String::new());
+        req.spec_id = Some("STORY-77".to_string());
+        req.status = aida_core::RequirementStatus::InProgress;
+        backend.add_requirement(req).unwrap();
+
+        git(&["switch", "-q", "-c", "claude/story-77-part1"]);
+        std::fs::write(root.join("slice.txt"), "one\n").unwrap();
+        git(&["add", "slice.txt"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-77)"]);
+        let pr_head = git(&["rev-parse", "HEAD"]);
+        // The rebase merge: main moved on, then the slice lands rewritten.
+        git(&["switch", "-q", "main"]);
+        std::fs::write(root.join("other.txt"), "other\n").unwrap();
+        git(&["add", "other.txt"]);
+        git(&["commit", "-q", "-m", "chore: unrelated"]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD~1"]);
+        git(&["cherry-pick", &pr_head]);
+        let landed = git(&["rev-parse", "HEAD"]);
+        assert_ne!(landed, pr_head);
+
+        record_non_completing_rebase_slice(
+            root,
+            root,
+            77,
+            "main",
+            Some(&pr_head),
+            "claude/story-77-part1",
+            &[],
+        )
+        .expect("marker recorded");
+        let stored = || {
+            backend
+                .get_requirement_unambiguous("STORY-77")
+                .unwrap()
+                .unwrap()
+        };
+        let ignores = |sha: &str| {
+            crate::db_reconcile::spec_ignores_non_completing_rebase_commit(root, &stored(), sha)
+        };
+        assert!(ignores(&landed), "the landed commit is the slice");
+
+        std::fs::write(root.join("slice.txt"), "re-land\n").unwrap();
+        git(&["add", "slice.txt"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-77)"]);
+        let relanded = git(&["rev-parse", "HEAD"]);
+        assert!(
+            !ignores(&relanded),
+            "a later commit reusing the subject is not the recorded slice"
+        );
+
+        let no_store = tempfile::tempdir().unwrap();
+        let err = record_non_completing_rebase_slice(
+            no_store.path(),
+            root,
+            77,
+            "main",
+            Some(&pr_head),
+            "claude/story-77-part1",
+            &[],
+        )
+        .expect_err("a missing store must be reported");
+        assert!(err.to_string().contains("store"), "{err:#}");
+    }
+
+    fn task_1951_merged_meta(
+        state: crate::forge::ChangeState,
+        branch: &str,
+        sha: &str,
+    ) -> crate::forge::ChangeMetadata {
+        crate::forge::ChangeMetadata {
+            state,
+            title: "feat: slice one".into(),
+            author: None,
+            merged_at: None,
+            base_ref: "main".into(),
+            head_ref: branch.into(),
+            head_sha: sha.into(),
+            is_draft: false,
+            is_cross_repository: false,
+            head_repo: None,
+        }
+    }
+
+    /// TASK-1621: an already-merged re-run, from a `main` checkout whose tip
+    /// names another spec, resolves the merged PR's own branch, base, head
+    /// and commits and marks only the PR's spec, once, however often it
+    /// re-runs. When the merged PR cannot be resolved it refuses and names
+    /// the `--rebase` re-run, and the pull is skipped (TASK-1622, deferral
+    /// (d) of #2816).
+    // trace:TASK-1951 trace:TASK-1621 trace:TASK-1622 | ai:claude
+    #[test]
+    fn task_1951_already_merged_rerun_marks_only_the_merged_prs_spec() {
+        assert!(rebase_slice_bookkeeping_due(false, true));
+        assert!(!rebase_slice_bookkeeping_due(false, false));
+
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let store_dir = root.join(".aida-store");
+        let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
+        use aida_core::db::DatabaseBackend;
+        for (id, status) in [
+            ("STORY-77", aida_core::RequirementStatus::InProgress),
+            ("STORY-88", aida_core::RequirementStatus::Done),
+        ] {
+            let mut req = aida_core::Requirement::new(format!("{id} spec"), String::new());
+            req.spec_id = Some(id.to_string());
+            req.status = status;
+            backend.add_requirement(req).unwrap();
+        }
+        git(&["switch", "-q", "-c", "claude/story-77-part1"]);
+        std::fs::write(root.join("slice.txt"), "one\n").unwrap();
+        git(&["add", "slice.txt"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-77)"]);
+        let pr_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        git(&["cherry-pick", &pr_head]);
+        let landed = git(&["rev-parse", "HEAD"]);
+        std::fs::write(root.join("other.txt"), "other\n").unwrap();
+        git(&["add", "other.txt"]);
+        git(&["commit", "-q", "-m", "fix: other work (STORY-88)"]);
+        // Deferral (b): this clone never fetched the PR head object.
+        git(&["branch", "-D", "claude/story-77-part1"]);
+        git(&["reflog", "expire", "--expire=now", "--all"]);
+        git(&["gc", "-q", "--prune=now"]);
+
+        let meta = task_1951_merged_meta(
+            crate::forge::ChangeState::Merged,
+            "claude/story-77-part1",
+            &pr_head,
+        );
+        let run = RebaseSliceRun {
+            main_worktree: root,
+            project_root: root,
+            pr_number: 77,
+            final_slice: false,
+            already_merged: true,
+            // The checkout is `main`, as when the advisor re-runs ship.
+            ship_branch: "main",
+            retarget_base: "main",
+            merged_head_sha: None,
+        };
+        for _ in 0..2 {
+            let outcome = rebase_slice_bookkeeping(
+                &run,
+                &[],
+                |_| unreachable!("no final slice"),
+                || {
+                    merged_pr_refs_from_metadata(
+                        &meta,
+                        vec!["feat: slice one (STORY-77)".to_string()],
+                    )
+                },
+            );
+            assert_eq!(outcome, SliceBookkeeping::default());
+        }
+        let stored = |id: &str| backend.get_requirement_unambiguous(id).unwrap().unwrap();
+        let markers = |id: &str| {
+            stored(id)
+                .comments
+                .iter()
+                .filter(|c| c.content.contains(pr_ship::NON_COMPLETING_REBASE_MARKER))
+                .count()
+        };
+        assert_eq!(markers("STORY-77"), 1, "one marker for the PR's spec");
+        assert_eq!(markers("STORY-88"), 0, "main's tip spec is untouched");
+        assert!(
+            crate::db_reconcile::spec_ignores_non_completing_rebase_commit(
+                root,
+                &stored("STORY-77"),
+                &landed
+            )
+        );
+
+        let unresolved = rebase_slice_bookkeeping(
+            &RebaseSliceRun {
+                pr_number: 78,
+                ..run
+            },
+            &[],
+            |_| unreachable!(),
+            || anyhow::bail!("forge unavailable"),
+        );
+        let warning = unresolved.warning.unwrap();
+        assert!(
+            warning.contains("PR-78") && warning.contains("forge unavailable"),
+            "{warning}"
+        );
+        assert!(
+            warning.contains("re-run `aida pr ship 78 --rebase`"),
+            "{warning}"
+        );
+        assert_eq!(
+            unresolved.pull_skip,
+            Some("non-completing slice marker not recorded")
+        );
+        assert_eq!(post_merge_pull_skip_reason(false), None);
+
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        for bad in [
+            task_1951_merged_meta(crate::forge::ChangeState::Open, "b", sha),
+            task_1951_merged_meta(crate::forge::ChangeState::Merged, "b", ""),
+            task_1951_merged_meta(crate::forge::ChangeState::Merged, "-x", sha),
+        ] {
+            assert!(
+                merged_pr_refs_from_metadata(&bad, Vec::new()).is_err(),
+                "{bad:?}"
+            );
+        }
+    }
+
+    /// TASK-2130: `--rebase` on a re-run of a PR that was squash-merged
+    /// records nothing and completes nothing, even with `--final-slice`.
+    /// TASK-1621 (a): a final slice that was rebase-merged completes the
+    /// specs of the merged PR's branch, not the checkout's.
+    // trace:TASK-1951 trace:TASK-2130 trace:TASK-1621 | ai:claude
+    #[test]
+    fn task_1951_already_merged_rerun_confirms_the_rebase_merge() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store")).unwrap();
+        use aida_core::db::DatabaseBackend;
+        for id in ["STORY-91", "STORY-92"] {
+            let mut req = aida_core::Requirement::new(format!("{id} spec"), String::new());
+            req.spec_id = Some(id.to_string());
+            req.status = aida_core::RequirementStatus::InProgress;
+            backend.add_requirement(req).unwrap();
+        }
+        // STORY-91's two commits were squash-merged as one.
+        git(&["switch", "-q", "-c", "claude/story-91-part1"]);
+        for n in ["a", "b"] {
+            std::fs::write(root.join(n), "x\n").unwrap();
+            git(&["add", n]);
+            git(&["commit", "-q", "-m", &format!("feat: part {n} (STORY-91)")]);
+        }
+        let squashed_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["merge", "-q", "--squash", "claude/story-91-part1"]);
+        git(&["commit", "-q", "-m", "feat: slice (#91)"]);
+        // STORY-92 was rebase-merged.
+        git(&["switch", "-q", "-c", "claude/story-92-part2"]);
+        std::fs::write(root.join("c"), "x\n").unwrap();
+        git(&["add", "c"]);
+        git(&["commit", "-q", "-m", "feat: last part (STORY-92)"]);
+        let rebased_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["cherry-pick", &rebased_head]);
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+
+        let run = |pr, final_slice| RebaseSliceRun {
+            main_worktree: root,
+            project_root: root,
+            pr_number: pr,
+            final_slice,
+            already_merged: true,
+            ship_branch: "main",
+            retarget_base: "main",
+            merged_head_sha: None,
+        };
+        for final_slice in [false, true] {
+            let outcome = rebase_slice_bookkeeping(
+                &run(91, final_slice),
+                &[],
+                |_| panic!("a squash merge must complete nothing"),
+                || {
+                    merged_pr_refs_from_metadata(
+                        &task_1951_merged_meta(
+                            crate::forge::ChangeState::Merged,
+                            "claude/story-91-part1",
+                            &squashed_head,
+                        ),
+                        vec![
+                            "feat: part a (STORY-91)".to_string(),
+                            "feat: part b (STORY-91)".to_string(),
+                        ],
+                    )
+                },
+            );
+            let warning = outcome.warning.unwrap();
+            assert!(warning.contains("was not rebase-merged"), "{warning}");
+        }
+        let story = |id: &str| backend.get_requirement_unambiguous(id).unwrap().unwrap();
+        assert!(story("STORY-91").comments.is_empty());
+        assert_eq!(
+            story("STORY-91").status,
+            aida_core::RequirementStatus::InProgress
+        );
+
+        let asked = std::cell::RefCell::new(None);
+        let outcome = rebase_slice_bookkeeping(
+            &run(92, true),
+            &["STORY-91".to_string()],
+            |branch| {
+                *asked.borrow_mut() = Some(branch.to_string());
+                vec!["STORY-92".to_string()]
+            },
+            || {
+                merged_pr_refs_from_metadata(
+                    &task_1951_merged_meta(
+                        crate::forge::ChangeState::Merged,
+                        "claude/story-92-part2",
+                        &rebased_head,
+                    ),
+                    vec!["feat: last part (STORY-92)".to_string()],
+                )
+            },
+        );
+        assert_eq!(outcome, SliceBookkeeping::default());
+        assert_eq!(asked.borrow().as_deref(), Some("claude/story-92-part2"));
+        assert_eq!(
+            story("STORY-92").status,
+            aida_core::RequirementStatus::Completed
+        );
+        assert_eq!(
+            story("STORY-91").status,
+            aida_core::RequirementStatus::InProgress
+        );
+    }
+
+    /// TASK-2132 + #2816 deferral (c): the landed commits are matched as one
+    /// consecutive run, so a newer commit reusing a slice subject is not
+    /// bound in place of the real one, and a stale `origin/<base>` that does
+    /// not hold the run yet matches nothing there.
+    // trace:TASK-1951 trace:TASK-2132 | ai:claude
+    #[test]
+    fn task_1951_landed_run_ignores_later_subject_reuse_and_stale_refs() {
+        let log = [
+            ("f", "feat: slice one (STORY-5)"),
+            ("e", "chore: unrelated"),
+            ("d", "feat: slice two (STORY-5)"),
+            ("c", "feat: slice one (STORY-5)"),
+            ("b", "chore: base"),
+        ];
+        let subjects = vec![
+            "feat: slice two (STORY-5)".to_string(),
+            "feat: slice one (STORY-5)".to_string(),
+        ];
+        assert_eq!(
+            landed_run(&log, &subjects, false),
+            Some(vec!["d".to_string(), "c".to_string()])
+        );
+        let oldest_first: Vec<String> = subjects.iter().rev().cloned().collect();
+        assert_eq!(
+            landed_run(&log, &oldest_first, false),
+            Some(vec!["c".to_string(), "d".to_string()])
+        );
+        assert_eq!(
+            landed_run(&log[..2], &subjects, false),
+            None,
+            "a stale ref holds no run"
+        );
+
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+        std::fs::write(root.join("s"), "x\n").unwrap();
+        git(&["add", "s"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-5)"]);
+        let real = git(&["rev-parse", "HEAD"]);
+        std::fs::write(root.join("t"), "x\n").unwrap();
+        git(&["add", "t"]);
+        git(&["commit", "-q", "-m", "chore: unrelated"]);
+        // origin/main is stale (never fetched past the base); the local base
+        // holds the run.
+        assert_eq!(
+            landed_commits_for_subjects(
+                root,
+                "main",
+                None,
+                &["feat: slice one (STORY-5)".to_string()]
+            ),
+            vec![Some(real)]
+        );
+    }
+
+    /// TASK-2132, review round 1: with the PR head known, the walk stops at
+    /// the PR's fork point and takes the oldest run above it, so a later
+    /// commit reusing the subject of a one-commit slice (n = 1), or a whole
+    /// run repeated later, never binds in place of the slice.
+    // trace:TASK-1951 trace:TASK-2132 | ai:claude
+    #[test]
+    fn task_1951_landed_run_is_bounded_at_the_pr_fork_point() {
+        let one = vec!["feat: slice one (STORY-5)".to_string()];
+        let log = [
+            ("r", "feat: slice one (STORY-5)"),
+            ("x", "chore: unrelated"),
+            ("s", "feat: slice one (STORY-5)"),
+        ];
+        assert_eq!(landed_run(&log, &one, true), Some(vec!["s".to_string()]));
+        assert_eq!(landed_run(&log, &one, false), Some(vec!["r".to_string()]));
+        let two = vec![
+            "feat: slice two (STORY-5)".to_string(),
+            "feat: slice one (STORY-5)".to_string(),
+        ];
+        let repeated = [
+            ("d2", "feat: slice two (STORY-5)"),
+            ("c2", "feat: slice one (STORY-5)"),
+            ("x", "chore: unrelated"),
+            ("d", "feat: slice two (STORY-5)"),
+            ("c", "feat: slice one (STORY-5)"),
+        ];
+        assert_eq!(
+            landed_run(&repeated, &two, true),
+            Some(vec!["d".to_string(), "c".to_string()])
+        );
+
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        git(&["switch", "-q", "-c", "claude/story-5-part1"]);
+        std::fs::write(root.join("s"), "x\n").unwrap();
+        git(&["add", "s"]);
+        git(&["commit", "-q", "-m", "feat: slice one (STORY-5)"]);
+        let pr_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        std::fs::write(root.join("m"), "x\n").unwrap();
+        git(&["add", "m"]);
+        git(&["commit", "-q", "-m", "chore: base moved"]);
+        git(&["cherry-pick", &pr_head]);
+        let landed = git(&["rev-parse", "HEAD"]);
+        std::fs::write(root.join("t"), "x\n").unwrap();
+        git(&["add", "t"]);
+        git(&[
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "feat: slice one (STORY-5)",
+        ]);
+        let reuse = git(&["rev-parse", "HEAD"]);
+        assert_eq!(
+            landed_commits_for_subjects(root, "main", Some(&pr_head), &one),
+            vec![Some(landed)]
+        );
+        assert_eq!(
+            landed_commits_for_subjects(root, "main", None, &one),
+            vec![Some(reuse)],
+            "without a head the newest run is taken, as before"
+        );
+    }
+
+    /// TASK-2131, review round 1: a pure-git already-merged `--rebase` re-run
+    /// reads the slice's commits from `<base>..<slice branch>`, confirms the
+    /// rebase merge on the base, and completes the slice branch's specs; an
+    /// empty range is refused, never confirmed.
+    // trace:TASK-1951 trace:TASK-2131 | ai:claude
+    #[test]
+    fn task_1951_pure_git_already_merged_rerun_uses_the_slice_branch() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let backend = crate::test_env::home_fixture_backend(&root.join(".aida-store")).unwrap();
+        use aida_core::db::DatabaseBackend;
+        let mut req = aida_core::Requirement::new("STORY-93 spec".to_string(), String::new());
+        req.spec_id = Some("STORY-93".to_string());
+        req.status = aida_core::RequirementStatus::InProgress;
+        backend.add_requirement(req).unwrap();
+        git(&["switch", "-q", "-c", "claude/story-93-part2"]);
+        std::fs::write(root.join("c"), "x\n").unwrap();
+        git(&["add", "c"]);
+        git(&["commit", "-q", "-m", "feat: last part (STORY-93)"]);
+        let slice_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        std::fs::write(root.join("m"), "x\n").unwrap();
+        git(&["add", "m"]);
+        git(&["commit", "-q", "-m", "chore: base moved"]);
+        git(&["cherry-pick", &slice_head]);
+        assert_eq!(
+            crate::forge::resolve_forge_kind(root),
+            crate::forge::ForgeKind::None
+        );
+
+        let inputs = fetch_merged_pr_refs(root, 93, "claude/story-93-part2", "main").unwrap();
+        assert_eq!(
+            inputs.subjects,
+            vec!["feat: last part (STORY-93)".to_string()]
+        );
+        assert_eq!(inputs.head_sha.as_deref(), Some(slice_head.as_str()));
+
+        let run = RebaseSliceRun {
+            main_worktree: root,
+            project_root: root,
+            pr_number: 93,
+            final_slice: true,
+            already_merged: true,
+            ship_branch: "claude/story-93-part2",
+            retarget_base: "main",
+            merged_head_sha: None,
+        };
+        let outcome = rebase_slice_bookkeeping(
+            &run,
+            &[],
+            |branch| {
+                assert_eq!(branch, "claude/story-93-part2");
+                vec!["STORY-93".to_string()]
+            },
+            || fetch_merged_pr_refs(root, 93, "claude/story-93-part2", "main"),
+        );
+        assert_eq!(outcome, SliceBookkeeping::default());
+        assert_eq!(
+            backend
+                .get_requirement_unambiguous("STORY-93")
+                .unwrap()
+                .unwrap()
+                .status,
+            aida_core::RequirementStatus::Completed
+        );
+
+        // A slice branch already on the base has an empty range: refused.
+        git(&["branch", "-f", "claude/story-93-part2", "main"]);
+        let err = fetch_merged_pr_refs(root, 93, "claude/story-93-part2", "main").unwrap_err();
+        assert!(format!("{err:#}").contains("holds no commits"), "{err:#}");
+    }
+
+    /// TASK-2251 (TASK-2248): a pure-git slice merged by fast-forward (the
+    /// base had not moved) leaves `<base>..<slice>` empty; its commits are read
+    /// from the fork point the reflogs record, and the merge is confirmed. A
+    /// branch that never had commits is still refused.
+    // trace:TASK-2251 | ai:claude
+    #[test]
+    fn task_2251_pure_git_already_merged_rerun_confirms_a_fast_forwarded_slice() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        git(&["switch", "-q", "-c", "claude/story-94-part1"]);
+        for (file, subject) in [("a", "feat: one (STORY-94)"), ("b", "feat: two (STORY-94)")] {
+            std::fs::write(root.join(file), "x\n").unwrap();
+            git(&["add", file]);
+            git(&["commit", "-q", "-m", subject]);
+        }
+        let slice_head = git(&["rev-parse", "HEAD"]);
+        git(&["switch", "-q", "main"]);
+        git(&["merge", "-q", "--ff-only", "claude/story-94-part1"]);
+        assert_eq!(git(&["rev-parse", "main"]), slice_head);
+
+        let inputs = fetch_merged_pr_refs(root, 94, "claude/story-94-part1", "main").unwrap();
+        assert_eq!(
+            inputs.subjects,
+            vec![
+                "feat: two (STORY-94)".to_string(),
+                "feat: one (STORY-94)".to_string()
+            ]
+        );
+        confirm_rebase_merged(root, 94, &inputs).unwrap();
+
+        // Created at the base tip and never committed to: nothing to confirm.
+        git(&["branch", "claude/story-94-part2", "main"]);
+        let err = fetch_merged_pr_refs(root, 94, "claude/story-94-part2", "main").unwrap_err();
+        assert!(format!("{err:#}").contains("holds no commits"), "{err:#}");
+    }
+
+    /// TASK-2251 review round 1: a branch with no commits of its own, synced
+    /// onto a base that others moved (fast-forward merge, pull, reset), is on
+    /// the base like a fast-forwarded slice, but its reflog shows no authoring
+    /// entry: refused, so the others' commits are never confirmed as the
+    /// slice's. A slice rebased before the merge forks where it was replayed.
+    // trace:TASK-2251 | ai:claude
+    #[test]
+    fn task_2251_fast_forward_confirmation_requires_the_branch_to_author_its_tip() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let others_commit = |file: &str, subject: &str| {
+            git(&["switch", "-q", "main"]);
+            std::fs::write(root.join(file), "x\n").unwrap();
+            git(&["add", file]);
+            git(&["commit", "-q", "-m", subject]);
+        };
+        for (n, sync) in [
+            (1, &["merge", "-q", "--ff-only", "main"][..]),
+            (2, &["pull", "-q", "--ff-only", ".", "main"][..]),
+            (3, &["reset", "-q", "--hard", "main"][..]),
+        ] {
+            let branch = format!("claude/story-96-part{n}");
+            git(&["branch", &branch, "main"]);
+            others_commit(&format!("o{n}"), &format!("feat: someone else {n}"));
+            git(&["switch", "-q", &branch]);
+            git(sync);
+            assert_eq!(git(&["rev-parse", "HEAD"]), git(&["rev-parse", "main"]));
+            let err = fetch_merged_pr_refs(root, 96, &branch, "main").unwrap_err();
+            assert!(
+                format!("{err:#}").contains("holds no commits"),
+                "{sync:?}: {err:#}"
+            );
+        }
+
+        // Rebased onto a moved base, then fast-forwarded: only its own commit.
+        git(&["switch", "-q", "-c", "claude/story-97-part1", "main"]);
+        std::fs::write(root.join("r"), "x\n").unwrap();
+        git(&["add", "r"]);
+        git(&["commit", "-q", "-m", "feat: rebased slice (STORY-97)"]);
+        others_commit("o4", "feat: someone else 4");
+        git(&["switch", "-q", "claude/story-97-part1"]);
+        git(&["rebase", "-q", "main"]);
+        git(&["switch", "-q", "main"]);
+        git(&["merge", "-q", "--ff-only", "claude/story-97-part1"]);
+        let inputs = fetch_merged_pr_refs(root, 97, "claude/story-97-part1", "main").unwrap();
+        assert_eq!(
+            inputs.subjects,
+            vec!["feat: rebased slice (STORY-97)".to_string()]
+        );
+        confirm_rebase_merged(root, 97, &inputs).unwrap();
+
+        // A rebase that replayed nothing leaves the tip on `onto`: refused.
+        let log = |entries: &[(&str, &str)]| -> Vec<(String, String)> {
+            entries
+                .iter()
+                .map(|(sha, msg)| (sha.to_string(), msg.to_string()))
+                .collect()
+        };
+        let b = "claude/x";
+        assert_eq!(
+            authored_slice_start(
+                &log(&[
+                    ("bbb", "rebase (finish): refs/heads/claude/x onto bbb"),
+                    ("aaa", "branch: Created from main"),
+                ]),
+                b,
+                "bbb"
+            ),
+            None
+        );
+        assert_eq!(
+            authored_slice_start(
+                &log(&[
+                    ("ddd", "commit: two"),
+                    ("ccc", "rebase (finish): refs/heads/claude/x onto bbb"),
+                    ("aaa", "commit (amend): one"),
+                    ("a00", "cherry-pick: zero"),
+                    ("000", "branch: Created from main"),
+                ]),
+                b,
+                "ddd"
+            ),
+            Some("bbb".to_string())
+        );
+        assert_eq!(
+            authored_slice_start(
+                &log(&[
+                    ("ccc", "commit: two"),
+                    ("bbb", "commit (merge): m"),
+                    ("aaa", "branch: Created from main")
+                ]),
+                b,
+                "ccc"
+            ),
+            None,
+            "a merge commit is not on the allowlist"
+        );
+    }
+
+    /// TASK-2251 (TASK-2249): a stale `origin/<base>` behind the slice's fork
+    /// point would count base commits as slice subjects, and the confirmation
+    /// would refuse. `origin/<base>` is fetched first, so the range holds only
+    /// the slice's own commit.
+    // trace:TASK-2251 | ai:claude
+    #[test]
+    fn task_2251_pure_git_already_merged_rerun_fetches_a_stale_origin_base() {
+        let (tmp, git) = task_1951_repo();
+        let root = tmp.path();
+        let remote = tempfile::tempdir().unwrap();
+        crate::test_git::git_command()
+            .args(["init", "-q", "--bare", "-b", "main"])
+            .arg(remote.path())
+            .output()
+            .unwrap();
+        git(&[
+            "remote",
+            "add",
+            "origin",
+            &remote.path().display().to_string(),
+        ]);
+        let initial = git(&["rev-parse", "HEAD"]);
+        std::fs::write(root.join("m"), "x\n").unwrap();
+        git(&["add", "m"]);
+        git(&["commit", "-q", "-m", "chore: base moved"]);
+        git(&["switch", "-q", "-c", "claude/story-95-part1"]);
+        std::fs::write(root.join("s"), "x\n").unwrap();
+        git(&["add", "s"]);
+        git(&["commit", "-q", "-m", "feat: the slice (STORY-95)"]);
+        let slice_head = git(&["rev-parse", "HEAD"]);
+        // The remote rebase-merges the slice onto its main.
+        git(&["switch", "-q", "-c", "landing", "main"]);
+        git(&["cherry-pick", &slice_head]);
+        git(&["push", "-q", "origin", "landing:main"]);
+        git(&["switch", "-q", "claude/story-95-part1"]);
+        git(&["branch", "-D", "-q", "landing"]);
+        // Both local views of the base predate the fork point.
+        git(&["branch", "-f", "main", &initial]);
+        git(&["update-ref", "refs/remotes/origin/main", &initial]);
+
+        let inputs = fetch_merged_pr_refs(root, 95, "claude/story-95-part1", "main").unwrap();
+        assert_eq!(
+            inputs.subjects,
+            vec!["feat: the slice (STORY-95)".to_string()]
+        );
+        confirm_rebase_merged(root, 95, &inputs).unwrap();
+    }
+
+    /// TASK-1765: a non-completing squash ship writes the declaration into
+    /// the squash body, rebuilt from the commits when the identity gate left
+    /// it to the forge.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    #[test]
+    fn task_1951_non_completing_squash_ship_writes_the_marker_into_the_body() {
+        assert_eq!(non_completing_squash_body(""), "aida: no-complete");
+        assert_eq!(
+            non_completing_squash_body("* a\n\n* b\n"),
+            "* a\n\n* b\n\naida: no-complete"
+        );
+        assert!(crate::db_reconcile::commit_declares_non_completing(
+            &format!("fix: x (#9)\n\n{}", non_completing_squash_body("* a"))
+        ));
+        // TASK-2117: the body a --no-complete squash ship builds reaches the
+        // forge's merge argv, whether the identity gate rewrote the body or
+        // left it to the forge; an ordinary ship leaves it to the forge.
+        // trace:TASK-1951 trace:TASK-2117 | ai:claude
+        use crate::forge::MergeMethod;
+        let squash = |declares, body: &str| {
+            ship_squash_body(MergeMethod::Squash, declares, Some(body.to_string()))
+        };
+        for body in [
+            squash(true, "* fix: one (Refs TASK-9)"),
+            squash(true, "* sanitized"),
+        ] {
+            let opts = crate::forge::MergeOptions {
+                method: MergeMethod::Squash,
+                squash_subject: None,
+                squash_body: body,
+                delete_branch: true,
+                match_head: None,
+            };
+            let argv = crate::forge::github_merge_argv(9, &opts);
+            let at = argv
+                .iter()
+                .position(|a| a == "--body")
+                .expect("--body passed");
+            assert!(argv[at + 1].ends_with("\n\naida: no-complete"), "{argv:?}");
+        }
+        // BUG-HOME-048: an ordinary squash ship passes its explicit body too.
+        assert_eq!(squash(false, "* a"), Some("* a".to_string()));
+        assert_eq!(
+            ship_squash_body(MergeMethod::Rebase, true, Some("* a".into())),
+            None
+        );
+    }
+
+    /// The unreadable recorded-label probe reaches `pr ship` after the marker
+    /// is released, so the retry names the human clear and the ship re-run.
+    // trace:TASK-1951 | ai:claude
+    #[test]
+    fn task_1951_ship_unlabel_failure_names_the_ship_retry() {
+        let line = ship_unlabel_failure(
+            12,
+            &crate::merge_hold::LabelSyncError::Other("could not read PR #12's labels".into()),
+        );
+        assert!(line.contains("could not read PR #12's labels"), "{line}");
+        assert!(line.contains("aida merge-hold clear 12"), "{line}");
+        assert!(line.contains("re-run `aida pr ship 12`"), "{line}");
+    }
+
+    #[test]
+    fn cli_parses_rebase_and_merge_method_and_rejects_final_slice_with_squash() {
+        // trace:STORY-1663.ac5970a5 | ai:antigravity
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "ship", "42", "--rebase"])
+            .expect("parses --rebase");
+        match cli.command.registered::<crate::pr_cmd::PrArgs>() {
+            crate::pr_cmd::PrArgs {
+                inner:
+                    crate::cli::PrCommand::Ship {
+                        n,
+                        rebase,
+                        merge_method,
+                        final_slice,
+                        ..
+                    },
+            } => {
+                assert_eq!(n, Some(42));
+                assert!(rebase);
+                assert!(merge_method.is_none());
+                assert!(!final_slice);
+                assert_eq!(
+                    pr_ship::validate_ship_merge_method(rebase, merge_method, final_slice).unwrap(),
+                    crate::forge::MergeMethod::Rebase
+                );
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let cli2 = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "pr",
+                "ship",
+                "42",
+                "--merge-method",
+                "rebase",
+                "--final-slice",
+            ])
+            .expect("parses --merge-method rebase --final-slice");
+        match cli2.command.registered::<crate::pr_cmd::PrArgs>() {
+            crate::pr_cmd::PrArgs {
+                inner:
+                    crate::cli::PrCommand::Ship {
+                        rebase,
+                        merge_method,
+                        final_slice,
+                        ..
+                    },
+            } => {
+                assert!(!rebase);
+                assert_eq!(merge_method, Some(pr_ship::ShipMergeMethod::Rebase));
+                assert!(final_slice);
+                assert_eq!(
+                    pr_ship::validate_ship_merge_method(rebase, merge_method, final_slice).unwrap(),
+                    crate::forge::MergeMethod::Rebase
+                );
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        let cli3 = crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "ship", "42", "--rebase", "--complete-spec"])
+            .expect("parses --complete-spec alias");
+        match cli3.command.registered::<crate::pr_cmd::PrArgs>() {
+            crate::pr_cmd::PrArgs {
+                inner:
+                    crate::cli::PrCommand::Ship {
+                        rebase,
+                        final_slice,
+                        ..
+                    },
+            } => {
+                assert!(rebase);
+                assert!(final_slice);
+            }
+            other => panic!("unexpected command: {other:?}"),
+        }
+
+        // Conflicting --rebase and --merge-method is rejected by clap.
+        assert!(crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "pr",
+                "ship",
+                "42",
+                "--rebase",
+                "--merge-method",
+                "squash"
+            ])
+            .is_err());
+
+        // --final-slice without --rebase or --merge-method rebase is rejected.
+        let err = pr_ship::validate_ship_merge_method(false, None, true)
+            .expect_err("--final-slice without --rebase must be rejected");
+        assert!(err.contains("requires `--rebase`"), "{err}");
+        let err_squash = pr_ship::validate_ship_merge_method(
+            false,
+            Some(pr_ship::ShipMergeMethod::Squash),
+            true,
+        )
+        .expect_err("--final-slice with --merge-method squash must be rejected");
+        assert!(err_squash.contains("requires `--rebase`"), "{err_squash}");
+    }
+
+    #[test]
+    fn rebase_ship_without_independent_approval_at_head_is_refused() {
+        // trace:STORY-1663.ac28109e | ai:antigravity
+        let tmp = tempfile::tempdir().unwrap();
+        let policy = crate::gate::ship::ShipApprovalPolicy::default();
+        let err = pr_ship_approval_gate(
+            tmp.path(),
+            1490,
+            &[],
+            Some("deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"),
+            &policy,
+            false,
+            true,
+            None,
+        )
+        .expect_err("rebase ship uses the same approval gate and must refuse without verdict");
+        assert_eq!(
+            err.downcast_ref::<crate::gate::ship::ShipFailure>()
+                .map(|f| f.reason),
+            Some(crate::gate::ship::ShipRefusal::Review)
+        );
+    }
+
+    #[test]
+    fn pr_ship_with_method_wires_identical_gates_and_rebase_hooks() {
+        // trace:STORY-1663.ac28109e | ai:antigravity
+        // trace:STORY-1663.ac3b41d5 | ai:antigravity
+        let src = include_str!("mod.rs");
+        let start = src
+            .find(concat!("pub(crate) fn pr_ship_", "with_method("))
+            .expect("pr_ship_with_method exists");
+        let body = &src[start..];
+        let preflight = body
+            .find(concat!("ship_preflight_", "gates("))
+            .expect("runs preflight gates");
+        let stale_head = body
+            .find(concat!("stale_head_after_", "ci_refusal("))
+            .expect("checks stale head after CI");
+        let approval_gate = body
+            .find(concat!("let match_head = pr_ship_", "approval_gate("))
+            .expect("runs approval gate");
+        let verifier = body
+            .find(concat!("run_optional_slice_stack_", "verifier("))
+            .expect("runs optional slice-stack verifier");
+        let head_pin = body
+            .find(concat!("require_rebase_head_", "pin("))
+            .expect("requires rebase head pin");
+        let merge_call = body
+            .find(concat!("landing_merge::", "merge("))
+            .expect("invokes merge_change");
+        assert!(
+            preflight < stale_head
+                && stale_head < approval_gate
+                && approval_gate < verifier
+                && verifier < head_pin
+                && head_pin < merge_call,
+            "expected preflight -> stale_head -> approval_gate -> verifier -> head_pin -> merge_change order"
+        );
+    }
+
+    #[test]
+    fn rebase_ship_refuses_stale_head_and_missing_head_pin() {
+        // trace:STORY-1663.ac3b41d5 | ai:antigravity
+        let stale = crate::gate::ship::stale_head_after_ci_refusal(
+            1490,
+            Some("1111111111111111111111111111111111111111"),
+            Some("2222222222222222222222222222222222222222"),
+        )
+        .expect("head movement after preflight/CI must refuse");
+        assert!(stale.contains("PR-1490"), "{stale}");
+        assert!(stale.contains("moved"), "{stale}");
+        // TASK-1623: a head that could not be read refuses instead of
+        // skipping the check. trace:TASK-1951 trace:TASK-1623 | ai:claude
+        let h = Some("1111111111111111111111111111111111111111");
+        for (pre, post, at) in [
+            (None, h, "preflight"),
+            (Some(""), h, "preflight"),
+            (h, None, "merge"),
+            (h, Some("  "), "merge"),
+        ] {
+            let refusal = crate::gate::ship::stale_head_after_ci_refusal(1490, pre, post)
+                .expect("an unreadable head must refuse");
+            assert!(
+                refusal.contains(&format!("could not be read at {at}")),
+                "{refusal}"
+            );
+        }
+        assert!(crate::gate::ship::stale_head_after_ci_refusal(1490, h, h).is_none());
+
+        let unpinned = crate::gate::ship::require_rebase_head_pin(
+            1490,
+            crate::forge::MergeMethod::Rebase,
+            None,
+        )
+        .expect_err("rebase merge without --match-head-commit pin must refuse");
+        assert!(
+            unpinned.contains("without a pinned head commit"),
+            "{unpinned}"
+        );
+
+        assert!(crate::gate::ship::require_rebase_head_pin(
+            1490,
+            crate::forge::MergeMethod::Rebase,
+            Some("1111111111111111111111111111111111111111"),
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn rebase_ship_slice_leaves_spec_status_unchanged_and_completes_only_on_final_slice() {
+        // trace:STORY-1663.ac5970a5 | ai:antigravity
+        let mut store = aida_core::RequirementsStore::default();
+        let mut req = aida_core::Requirement::new(
+            "Slice stack parent".to_string(),
+            "Parent spec".to_string(),
+        );
+        req.spec_id = Some("STORY-1663".to_string());
+        req.status = aida_core::RequirementStatus::InProgress;
+        store.requirements.push(req.clone());
+
+        // Default rebase ship (intermediate slice): suppresses completion trailer IDs
+        // so the owning spec's status stays unchanged.
+        let default_rebase_trailer = ship_completion_trailer_for_method(
+            &store,
+            None,
+            crate::forge::MergeMethod::Rebase,
+            false,
+            "[1/3] feat(ship): slice one (STORY-1663)",
+            "claude/story-1663-part1",
+            "",
+            false,
+        );
+        assert!(
+            default_rebase_trailer.ids.is_empty(),
+            "intermediate rebase slice must not complete owning spec: {default_rebase_trailer:?}"
+        );
+        assert!(
+            default_rebase_trailer
+                .notes
+                .iter()
+                .any(|n| n.contains("--final-slice")),
+            "expected note explaining --final-slice: {:?}",
+            default_rebase_trailer.notes
+        );
+
+        // Final-slice rebase ship (`--final-slice` / `--complete-spec`): resolves the
+        // owning spec ID so `complete_rebase_final_slice_specs` transitions it to Completed.
+        let final_slice_trailer = ship_completion_trailer_for_method(
+            &store,
+            None,
+            crate::forge::MergeMethod::Rebase,
+            true,
+            "[3/3] feat(ship): slice three (STORY-1663)",
+            "claude/story-1663-part3",
+            "",
+            false,
+        );
+        assert_eq!(final_slice_trailer.ids, vec!["STORY-1663".to_string()]);
+
+        // Slice commit subject classifiers recognize both STORY-1488 moves and `[k/N]` slices.
+        assert!(pr_ship::is_non_completing_slice_commit_subject(
+            "refactor(cli-lib): extract pr_cmd.rs (STORY-1488)"
+        ));
+        assert!(pr_ship::is_non_completing_slice_commit_subject(
+            "[1/3] feat(ship): slice one (STORY-1663)"
+        ));
+        assert!(!pr_ship::is_non_completing_slice_commit_subject(
+            "feat(ship): standalone feature (STORY-1663)"
+        ));
+
+        // Verify in a real git repo + store that a non-final rebase slice with a
+        // trailing `(STORY-1663)` commit subject leaves an `InProgress` spec
+        // unchanged across `auto_bump_done_to_completed` (while an unrelated Done
+        // spec `BUG-999` still auto-bumps to Completed), and `complete_rebase_final_slice_specs`
+        // transitions `STORY-1663` to `Completed` on the final slice.
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let run_git = |args: &[&str]| {
+            let status = crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .status()
+                .expect("git runs");
+            assert!(status.success(), "git {args:?} failed");
+        };
+        run_git(&["init", "-b", "main"]);
+        run_git(&["config", "user.name", "Test"]);
+        run_git(&["config", "user.email", "test@example.com"]);
+        std::fs::write(root.join("README.md"), "init\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "chore: initial"]);
+
+        let store_dir = root.join(".aida-store");
+        let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
+        use aida_core::db::DatabaseBackend;
+        backend.add_requirement(req).unwrap();
+        let mut other_req = aida_core::Requirement::new(
+            "Unrelated done bug".to_string(),
+            "Unrelated spec".to_string(),
+        );
+        other_req.spec_id = Some("BUG-999".to_string());
+        other_req.status = aida_core::RequirementStatus::Done;
+        backend.add_requirement(other_req).unwrap();
+
+        // Simulate a non-final rebase slice commit and an unrelated completing commit on main.
+        std::fs::write(root.join("README.md"), "slice 1\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "feat(ship): slice one (STORY-1663)"]);
+        let slice_sha = String::from_utf8(
+            crate::test_git::git_command()
+                .current_dir(root)
+                .args(["rev-parse", "HEAD"])
+                .output()
+                .unwrap()
+                .stdout,
+        )
+        .unwrap()
+        .trim()
+        .to_string();
+
+        record_non_completing_rebase_slice(
+            root,
+            root,
+            1490,
+            "main",
+            Some(&slice_sha),
+            "claude/story-1663-part1",
+            &[],
+        )
+        .expect("marker recorded");
+
+        std::fs::write(root.join("README.md"), "slice 1 + bug 999\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "fix: unrelated bug (BUG-999) (#1491)"]);
+
+        let storage = crate::Storage::new(&store_dir);
+        let flips =
+            crate::db_reconcile::auto_bump_done_to_completed(root, &store_dir, None, &storage)
+                .expect("auto_bump runs");
+        assert!(
+            flips.iter().any(|f| f.spec_id == "BUG-999"),
+            "unrelated spec must still auto-bump: {flips:?}"
+        );
+        assert!(
+            !flips.iter().any(|f| f.spec_id == "STORY-1663"),
+            "non-completing rebase slice must not auto-bump STORY-1663: {flips:?}"
+        );
+        let after_slice = backend
+            .get_requirement_unambiguous("STORY-1663")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            after_slice.status,
+            aida_core::RequirementStatus::InProgress,
+            "STORY-1663 status must stay unchanged after non-final slice"
+        );
+
+        // Now complete STORY-1663 via `--final-slice`.
+        complete_rebase_final_slice_specs(
+            root,
+            1492,
+            &["STORY-1663".to_string()],
+            Some(&slice_sha),
+        );
+        let after_final = backend
+            .get_requirement_unambiguous("STORY-1663")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            after_final.status,
+            aida_core::RequirementStatus::Completed,
+            "STORY-1663 must transition to Completed on --final-slice"
+        );
+        assert_eq!(
+            after_final
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.completion_sha.as_deref()),
+            Some(slice_sha.as_str())
+        );
+    }
+
+    #[test]
+    fn rebase_dry_run_plan_renders_gh_pr_merge_rebase_with_match_head_commit() {
+        // trace:STORY-1663.ac3b41d5 | ai:antigravity
+        let opts = pr_ship::PrShipOptions {
+            pr_number: Some(1490),
+            no_pull: false,
+            no_cleanup: false,
+            dry_run: true,
+            complexity: None,
+            effort: None,
+        };
+        let steps = vec![
+            pr_ship::ShipStep::ResolvePr {
+                create_if_needed: false,
+            },
+            pr_ship::ShipStep::WatchCi,
+            pr_ship::ShipStep::Merge {
+                delete_branch: true,
+            },
+            pr_ship::ShipStep::Pull,
+            pr_ship::ShipStep::EndLease,
+        ];
+        let plan = pr_ship::format_dry_run_plan_with_method(
+            &opts,
+            &steps,
+            crate::forge::ForgeKind::GitHub,
+            crate::forge::MergeMethod::Rebase,
+        );
+        assert!(
+            plan.contains(
+                "gh pr merge <N> --rebase --delete-branch --match-head-commit <approved-head-sha>"
+            ),
+            "unexpected rebase dry-run plan:\n{plan}"
+        );
+    }
+
+    #[test]
+    fn slice_stack_verifier_runs_real_verify_stack_py_and_fails_closed_on_missing_range() {
+        // trace:STORY-1663.ac28109e | ai:antigravity
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let run_git = |args: &[&str]| {
+            let status = crate::test_git::git_command()
+                .current_dir(root)
+                .args(args)
+                .status()
+                .expect("git runs");
+            assert!(status.success(), "git {args:?} failed");
+        };
+        run_git(&["init", "-b", "main"]);
+        run_git(&["config", "user.name", "Test"]);
+        run_git(&["config", "user.email", "test@example.com"]);
+
+        let script_dir = root.join("scripts/split-lib");
+        std::fs::create_dir_all(&script_dir).unwrap();
+        let real_verifier = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("scripts/split-lib/verify_stack.py");
+        std::fs::copy(&real_verifier, script_dir.join("verify_stack.py")).unwrap();
+        run_git(&["add", "scripts/split-lib/verify_stack.py"]);
+        run_git(&["commit", "-m", "chore: add verify_stack.py"]);
+        run_git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+
+        // 1. Fail-closed when the commit range cannot be inspected (e.g., bad head ref).
+        let range_err = run_optional_slice_stack_verifier(
+            root,
+            root,
+            1490,
+            "origin/main",
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+        )
+        .expect_err("unresolvable range must fail closed when verifier is present");
+        assert_eq!(
+            range_err
+                .downcast_ref::<crate::gate::ship::ShipFailure>()
+                .map(|f| f.reason),
+            Some(crate::gate::ship::ShipRefusal::Review)
+        );
+        assert!(
+            range_err
+                .to_string()
+                .contains("could not inspect commit range"),
+            "{range_err}"
+        );
+
+        // 2. Non-slice commits pass without invoking the slice-stack verifier.
+        std::fs::write(root.join("README.md"), "normal change\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "feat: normal change"]);
+        run_optional_slice_stack_verifier(root, root, 1490, "origin/main", "HEAD")
+            .expect("non-slice commit range should pass");
+
+        // 3. A slice-stack commit (`refactor(cli-lib): extract foo.rs`) invokes the
+        // real `verify_stack.py <base> <head>` from `origin/main` and refuses on FAIL.
+        std::fs::write(root.join("README.md"), "invalid slice move\n").unwrap();
+        run_git(&["add", "README.md"]);
+        run_git(&["commit", "-m", "refactor(cli-lib): extract foo.rs"]);
+        let err = run_optional_slice_stack_verifier(root, root, 1490, "origin/main", "HEAD")
+            .expect_err("invalid slice commit must fail real verify_stack.py");
+        assert_eq!(
+            err.downcast_ref::<crate::gate::ship::ShipFailure>()
+                .map(|f| f.reason),
+            Some(crate::gate::ship::ShipRefusal::Review)
+        );
+        let msg = err.to_string();
+        assert!(
+            msg.contains("scripts/split-lib/verify_stack.py origin/main HEAD"),
+            "{msg}"
+        );
+        assert!(msg.contains("FAIL"), "{msg}");
+    }
+
+    #[test]
+    fn two_seat_docs_retire_slice_stack_exception_and_point_at_rebase_ship() {
+        // trace:STORY-1663.ac82754a | ai:antigravity
+        let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap();
+        for rel in [
+            ".aida/discipline/two-seat-protocol.md",
+            "aida-core/templates/.aida/discipline/two-seat-protocol.md",
+        ] {
+            let raw = std::fs::read_to_string(repo_root.join(rel)).unwrap();
+            let doc = raw.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert!(
+                doc.contains("aida pr ship <n> --rebase"),
+                "{rel} must point at `aida pr ship <n> --rebase`"
+            );
+            assert!(
+                doc.contains("Raw `gh pr merge --rebase` is no longer an exception"),
+                "{rel} must state that raw `gh pr merge --rebase` is no longer an exception"
+            );
+            assert!(
+                doc.contains("leaves the owning spec's status unchanged"),
+                "{rel} must state that rebase ship leaves the owning spec's status unchanged"
+            );
+        }
+    }
+}
+
+// The cleanup worker detaches with setsid; these tests spawn POSIX `sh`.
+#[cfg(test)]
+#[cfg(unix)]
+mod bug_2384_cleanup_tests {
+    use super::*;
+
+    // Merge-lease release before the worker starts is asserted at runtime by
+    // the real `aida pr ship` in aida-cli/tests/bug_1953_pr_ship_step5_head_branch.rs.
+
+    // Retention: opening a new worker log keeps at most CLEANUP_LOGS_KEPT
+    // logs, dropping the oldest, and never touches non-log files.
+    // trace:BUG-2384 | ai:claude
+    #[test]
+    fn bug_2384_cleanup_logs_are_bounded() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let logs = main.join(".aida/cleanup-logs");
+        std::fs::create_dir_all(&logs).unwrap();
+        let base = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+        for i in 0..CLEANUP_LOGS_KEPT + 5 {
+            let path = logs.join(format!("old-{i:02}.log"));
+            std::fs::write(&path, "x").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_modified(base + std::time::Duration::from_secs(i as u64))
+                .unwrap();
+        }
+        std::fs::write(logs.join("keep.txt"), "x").unwrap();
+        let cmd = std::process::Command::new("true");
+        assert!(run_ship_cleanup_command(main, cmd, std::time::Duration::from_secs(5)).unwrap());
+        let names: Vec<String> = std::fs::read_dir(&logs)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        let log_count = names.iter().filter(|n| n.ends_with(".log")).count();
+        assert_eq!(log_count, CLEANUP_LOGS_KEPT, "{names:?}");
+        assert!(names.contains(&"keep.txt".to_string()));
+        assert!(!names.contains(&"old-00.log".to_string()), "{names:?}");
+        assert!(names.contains(&format!("old-{:02}.log", CLEANUP_LOGS_KEPT + 4)));
+    }
+
+    // The attended (TTY) path runs the worker in the foreground and reports
+    // an exit failure as `Exited`, a missing binary as `NotStarted`.
+    // trace:BUG-2384 trace:TASK-1145 | ai:claude
+    #[test]
+    fn bug_2384_attended_cleanup_runs_in_foreground() {
+        let temp = tempfile::tempdir().unwrap();
+        let done = temp.path().join("done");
+        let mut cmd = std::process::Command::new("sh");
+        cmd.args(["-c", "sleep 0.2; touch \"$1\"", "cleanup"])
+            .arg(&done);
+        assert!(run_ship_cleanup_attended(cmd).unwrap());
+        assert!(
+            done.exists(),
+            "attended cleanup must finish before returning"
+        );
+        let failing = std::process::Command::new("false");
+        assert!(matches!(
+            run_ship_cleanup_attended(failing),
+            Err(ShipCleanupError::Exited(_))
+        ));
+        let missing = std::process::Command::new(temp.path().join("no-such-binary"));
+        assert!(matches!(
+            run_ship_cleanup_attended(missing),
+            Err(ShipCleanupError::NotStarted(_))
+        ));
+    }
+
+    // Check the runtime lock and background behavior together: cleanup sees no
+    // main lease, and a stalled worker does not keep its caller waiting.
+    // trace:BUG-2384 | ai:codex
+    #[test]
+    fn bug_2384_background_worker_has_no_merge_lease_and_keeps_log() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let lease =
+            crate::merge_lock::acquire(main, "main", None, "test", std::time::Duration::ZERO)
+                .unwrap();
+        let lock = crate::merge_lock::lock_path(main, "main");
+        assert!(lock.exists());
+        drop(lease);
+        let done = main.join("done");
+        let mut cmd = std::process::Command::new("sh");
+        cmd.args([
+            "-c",
+            "test ! -e \"$1\" || exit 9; echo started; sleep 0.2; echo finished; touch \"$2\"",
+            "cleanup",
+        ])
+        .arg(&lock)
+        .arg(&done);
+        assert!(!run_ship_cleanup_command(main, cmd, std::time::Duration::ZERO).unwrap());
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while !done.exists() && std::time::Instant::now() < until {
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        assert!(
+            done.exists(),
+            "background cleanup must finish after its caller returns"
+        );
+        let log = std::fs::read_dir(main.join(".aida/cleanup-logs"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        assert!(std::fs::read_to_string(log).unwrap().contains("finished"));
+        assert!(!lock.exists());
+    }
+}
+
+#[cfg(test)]
+#[path = "../tests/bug_2515_gitlab_ship_tests.rs"]
+mod bug_2515_gitlab_ship_tests;
+
+// trace:BUG-2535 | ai:codex
+#[cfg(all(test, target_os = "linux"))]
+#[path = "../tests/bug_2535_tests.rs"]
+mod bug_2535_tests;
+
+// trace:STORY-2897 | ai:claude
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_ship_author_tests {
+    /// C2 from the full authorship subject: a contributor whose commit only
+    /// `(Refs ...)` another spec is still an author of the change.
+    #[test]
+    fn ship_author_ids_include_refs_only_contributors() {
+        let dir = tempfile::tempdir().unwrap();
+        let (ids, branch) = crate::with_review_pr_subject(
+            crate::ReviewPrSubject {
+                head_ref: "story-a-work".into(),
+                commit_subjects: vec![
+                    "feat: the change (STORY-1)".into(),
+                    "fix: a contributor's piece (Refs BUG-2)".into(),
+                ],
+            },
+            || {
+                crate::gate::approval::ship_author_ids(
+                    dir.path(),
+                    7,
+                    &["STORY-1".to_string()],
+                    Some("story-a-work"),
+                )
+            },
+        );
+        assert!(ids.iter().any(|i| i == "STORY-1"), "{ids:?}");
+        assert!(
+            ids.iter().any(|i| i == "BUG-2"),
+            "Refs-only contributor: {ids:?}"
+        );
+        assert_eq!(branch.as_deref(), Some("story-a-work"));
+    }
+}
