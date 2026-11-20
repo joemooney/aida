@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T02:42:12.784000666Z
+modified_at: 2026-11-20T02:42:27.884957095Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1112,6 +1112,13 @@ comments:
     cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
   created_at: 2026-11-20T02:42:12.784000666Z
   modified_at: 2026-11-20T02:42:12.784000666Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6d5-b190-7de1-a200-a5148f80befe
+  author: joe
+  content: 'Product 19:42: D3-R2 lane queued on dell1 (claude), branch bug-2696-d3. Scope = the AUTHORITATIVE D3-R2 BRIEF in the previous comment.'
+  created_at: 2026-11-20T02:42:27.884957095Z
+  modified_at: 2026-11-20T02:42:27.884957095Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
