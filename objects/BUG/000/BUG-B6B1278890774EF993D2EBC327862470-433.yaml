@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T21:42:51.204968549Z
+modified_at: 2026-11-20T22:40:50.236719891Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -261,6 +261,13 @@ comments:
   created_at: 2026-11-20T21:42:51.204959431Z
   modified_at: 2026-11-20T21:42:51.204959431Z
   session_id: 01a1fa95a139
+- id: 01a1fb1e-d476-7071-bc72-df0705547a36
+  author: joe
+  content: 'advisor-121 15:48: slice-1 r2 at db59d81 has red fast gates (the flags ratchet: docs/cli/06-roles-sessions.md:1903 cites --all under ''aida own''), so it is unreviewable. CI-fix push, not a round: .aida/tmp/brief-BUG-2669-s1-r2-ci.md'
+  created_at: 2026-11-20T22:40:50.236719891Z
+  modified_at: 2026-11-20T22:40:50.236719891Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
