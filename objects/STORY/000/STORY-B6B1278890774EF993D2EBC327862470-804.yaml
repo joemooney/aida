@@ -342,6 +342,13 @@ comments:
   modified_at: 2026-11-20T18:25:06.803131242Z
   session_id: 01a1fa2cb10a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa44-07e1-77e2-baca-eda7aed4313f
+  author: joe
+  content: 'advisor-121 11:58, reviewer note for #4372 r3 and later: today''s real cases for AC1. STUCK-REVIEW: #4365 3h, #4363 2h20m, #4364 3h unreviewed. STUCK-REWORK: #4373''s verdict unrouted 2h. Naming the cause (''watcher admission is busy'' in the review-watch log; a stale aida-pr-N reviewer tree) is a TASK-3827 enhancement, not required here.'
+  created_at: 2026-11-20T18:41:52.140392321Z
+  modified_at: 2026-11-20T18:41:52.140392321Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa44-71ad-7353-905b-ef714a4be960
   author: aida-publication-done
   content: Implementer push 986985f16f95 declared this spec complete for its scope; Done until it lands.
