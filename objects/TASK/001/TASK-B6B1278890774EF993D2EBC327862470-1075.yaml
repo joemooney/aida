@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-19T23:34:08.361819011Z
+modified_at: 2026-11-19T23:46:32.746545937Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -566,6 +566,20 @@ comments:
   modified_at: 2026-11-19T23:29:40.061071898Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f634-6aaa-7453-9c3e-dd3e2855105c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c3b578e1e3 (merge of origin/main be435bcf38 / STORY-2893 into r5 5d2f0ce).
+    Conflict resolution keeps both sides. pr_train_check.rs: main's collect_checks(observe_actors) is folded into the deadline-scoped collector (collect_report -> collect_checks -> with_forge_lookup_deadline -> collect_before_deadline). LiveChecks now carries actor_probe, and probes are returned alongside rows. next_actors (pr_state, review_commands, session_misc) now collects under the same deadline scope (9s budget, nests with an outer deadline via min). Its old elapsed-time cutoff becomes expired(). story_2824 tests: both sides were additions, so both are kept. The TASK-3792 LiveChecks fixture gains actor_probe: None.
+    Probe: main added no new subprocess spawns in the --check path. preview_ship_cover runs only under actor_probe (next_actors), and that path is now deadline-scoped too.
+    Round-4 findings were already addressed in r5 5d2f0ce: (1) bug2406 task_3792_complete_member_gate_spawns_nothing_outside_the_deadline; (2) the marker moved into the cfg(test) bounded_process::test_hooks module.
+    Tests (lane job, exit 0): 90 passed with filters story_2824_ story_2326_ story_2893_ task_3792. check-store-writers --regenerate: no diff.
+    Residual: make check-ci-fast stopped at 'Containment conformance evidence tests' (7 errors, all PermissionError creating sockets under the lane sandbox; unrelated to this diff). The later fast gates and check-ratchets could not finish under the 60s tool cap, so CI at c3b578e1e3 is the evidence.
+  created_at: 2026-11-19T23:46:32.746545937Z
+  modified_at: 2026-11-19T23:46:32.746545937Z
+  session_id: 01a1f628a02d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
   author: joe
