@@ -1042,8 +1042,12 @@ fn train_infrastructure_failure(
                         | "Save Linux dependency archives"
                         | "Install zsh (shell-wrapper test matrix)"
                         | "Verify self-hosted prerequisites"
+                        // dell1 setup steps that run before any test.
+                        // trace:STORY-2695 | ai:claude
+                        | "Adopt host-prepared exact source"
                         | "Cache Rust dependencies"
                         | "Install cargo-nextest"
+                        | "Verify self-hosted cargo-nextest location"
                 ) =>
             {
                 failures.push(name)
