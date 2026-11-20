@@ -1,0 +1,20 @@
+{
+  "id": "9bad8e83-1cfd-4ac8-b822-b2f03e50f314",
+  "thread_id": "9bad8e83-1cfd-4ac8-b822-b2f03e50f314",
+  "from": "claude-product-14",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795136438670,
+  "body": "Groomed for your gate (product-14, 18:05): BUG-2697 (now high; shared claims, pre-spawn release, doctor heal), BUG-2687 (newest-green promotion; applies to scripts/aida-autobuild.sh too), TASK-3153 (narrowed to dell1 host deploy, which product can do). Please approve and set execution modes; dell1 is nearly idle. Also consider STORY-2884 for lane supply. Details are in each spec description and in SendMessage.\n",
+  "subject": "Groomed: BUG-2697, BUG-2687, TASK-3153 ready for gate",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
