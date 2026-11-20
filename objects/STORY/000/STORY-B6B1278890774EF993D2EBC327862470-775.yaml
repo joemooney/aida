@@ -28,6 +28,10 @@ tags:
 - area:portability
 - process-policy
 - vendor-neutral
+relationships:
+- rel_type: Parent
+  target_id: 01a1f9b6-5637-7c23-9223-6c63e4f889f8
+  created_at: 2026-11-20T16:07:40.141672470Z
 comments:
 - id: 01a1f9b4-7fc8-7072-b421-8aee78ca46c9
   author: joe
@@ -36,6 +40,13 @@ comments:
   modified_at: 2026-11-20T16:05:00.527877549Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+history:
+- id: 01a1f9b7-480e-7ec1-8f31-2716b68362cf
+  author: joe
+  timestamp: 2026-11-20T16:08:20.750600050Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
