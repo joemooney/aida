@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T22:38:32.625176630Z
+modified_at: 2026-11-20T22:39:26.575947847Z
 req_type: Bug
 tags:
 - lanes
@@ -261,6 +261,23 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-468` at head `9a5565b17c8552116a9ba459a9f8a31a7011af43`.'
   created_at: 2026-11-20T22:38:32.625172262Z
   modified_at: 2026-11-20T22:38:32.625172262Z
+- id: 01a1fb1d-576f-7932-8f70-5ed7621e26f0
+  author: dirtlab
+  content: |-
+    ## Shared lane-host reader (TASK-3827 PR-A, #4381 round 2, commit e8eb899c06)
+
+    The reader both changes share is aida-cli-lib/src/lane_hosts.rs on branch task-b6b1278890774ef993d2ebc327862470-1136. Whichever of #4381 and #4382 lands second rebases onto it.
+
+    For review_implementer_gate.rs:
+    - lane_hosts::standing(claim, now, our_host) returns None for this host's own claim, a process lock, no host, an unreadable heartbeat or one more than CLOCK_SKEW_SECS (300) ahead. Otherwise Lane { claim, state, heartbeat, expires }: state is Reporting (heartbeat inside its expiry, by claim_staleness) or Silent (unreleased and past expiry: state unknown). These are #4382's remote_standing rules up to the grace bound.
+    - #4382's Unknown { until } and Lapsed are Silent plus its own grace: until = lane.expires + lane_unknown_defer_mins. The grace setting and the lapse report stay in the gate; the reader holds no policy.
+    - lane_hosts::read(root, our_host, now) lists every such lane from coordination/leases with bounded regular-file reads; a record it cannot read is in view.unreadable, not dropped. View::holder picks the reporting lane first, else the silent one that reported last. View::hosts gives per-host counts with the age of the newest report.
+
+    What the reader needs from #4382: the launcher's heartbeat refresh (SessionClaimHeartbeat). Until it lands, a lane's record goes silent 30 minutes after the lane starts, and the throughput guard reports that lane's state as unknown, not live.
+  created_at: 2026-11-20T22:39:26.575947847Z
+  modified_at: 2026-11-20T22:39:26.575947847Z
+  session_id: 01a1faee627d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
