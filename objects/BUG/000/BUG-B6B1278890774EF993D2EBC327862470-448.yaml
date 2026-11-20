@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T14:15:42.423447451Z
+modified_at: 2026-11-20T15:03:33.588981933Z
 req_type: Bug
 tags:
 - dell1
@@ -708,6 +708,21 @@ comments:
   modified_at: 2026-11-20T14:15:42.423447451Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f97b-f7d5-7330-ab88-12ed36fc9f7d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5e86834353 (scoped remainder per advisor-121 07:15; Refs only, the spec stays open).
+    (1) Reap on recorded verdict [evidence: behavioral-test]: next-head pickup also counts a reviewer lease as ended when a conclusive (non-WAITING) verdict is recorded at the lease's own head, its worker is gone and its owner is not provably alive (work.rs recorded_review_lease_finished / conclusive_review_recorded_at). All tree guards still apply (dirty, live cwd, lock, unpublished commits, merge-hold markers, unrecorded draft). When death can't be journaled, retirement writes the lease-bound completion receipt (reader.rs journal_recorded_review_retirement). Test: bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup covers no verdict, WAITING and another-head verdicts (all retained), then the reviewed-head verdict (retired, record Closed).
+    (2) review-watch current head [evidence: manual-inspection]: all three 'head already has a recorded review' sites (review_watch.rs:1115, 1781, 1893) compare History::conclusive against change.head, which comes from gh headRefOid. I found no historical-head comparison. The 3 h stall matches (1): the stale tree/lease made the new head's pickup refuse. No code change; I could not inspect the incident's watcher state from this lane.
+    (3) Stale reviewer lease [evidence: behavioral-test]: the review pickup releases an earlier reviewer's lease when its tree is gone and the ownership reader judges it ended (no live owner/worker pid), with no prompt (session_start.rs release_dead_gone_tree_conflict, reader.rs stale_review_lease_ended). The prompt is never offered to --no-human (in-process flag), AIDA_HEADLESS, an acknowledged no-human run, agent mode or no-TTY. Tests: bug_2684_stale_review_lease_with_gone_tree_is_released_without_prompt (released; live owner, present tree and implementer lease kept) and bug_2684_no_human_review_pickup_never_prompts.
+    Fixes during self-review: restricted (3) to reviewer leases (implementers keep the guarded session end); added a live-pid veto because the reader's legacy pickup rule only checks agent sessions; moved the liveness read into ownership/ (liveness ratchet); kept the AIDA_HEADLESS read byte-identical (exec-context ledger).
+    Evidence: lane jobs. 24/24 bug_2684|bug_home_024|bug_2457_two_heads|bug_2469 pass, as do the bug_2176 merge-hold tests. 27/27 bug_2149_2150 pass once the CLI binary is built. Gates run: fmt, check-store-writers, check-exec-context --base origin/main, trace headers, ownership-liveness/git-maintenance/executable-fixture ratchets, crate-globs, gate-dependency, ci structural guards. make check-ci-fast was not run as one command (it takes longer than the 60 s tool cap); its relevant gates were run individually.
+    Residual risk: a forged local verdict file at a stale lease's head could retire that clean, pushed, process-free tree. The released gone-tree lease's ownership record is left as the old release path leaves it.
+  created_at: 2026-11-20T15:03:33.588981933Z
+  modified_at: 2026-11-20T15:03:33.588981933Z
+  session_id: 01a1f9528de5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
