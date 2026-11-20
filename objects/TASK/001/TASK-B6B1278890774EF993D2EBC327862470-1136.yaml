@@ -1,0 +1,30 @@
+id: 01a1f9f6-d2c8-7bf0-94a2-5d78947c37de
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1136
+agreed_id: TASK-3827
+title: 'Throughput guard slice 2: MAIN-FLAKE-RECURRENCE, LANE-OUTCOME and STALE-CLAIM classes (AC7b-d deferred from #4372)'
+description: |
+  Follow-up slice of STORY-2906 (throughput guard): the AC7 classes deferred from #4372 by advisor ruling 2026-11-20 10:22, carrying the round-1 review findings:
+  - AC7b MAIN-FLAKE-RECURRENCE: collect failures from ANY PR independent of approval (F4); a failed attempt that is green on rerun still counts as a failure occurrence for recurrence (F5).
+  - AC7c LANE-OUTCOME: treat an explicit post-exit routing event or queued work as follow-up, so no false "nothing routed it" (F6).
+  - AC7d STALE-CLAIM: inventory all admission-blocking shared records (coordination leases plus drain/solo lock claims via list_lock_claims), and do not drop an unresolved blocker just for age (F7).
+  Each comes with regressions. Builds on the STORY-2906 guard once #4372 lands. Vendor-neutral. Claude lane, standard review.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T17:17:45.032744607Z
+modified_at: 2026-11-20T17:17:45.032744607Z
+req_type: Task
+tags:
+- landing
+- linked:STORY-2906
+- throughput
+filed_at:
+  code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 78b437097cb
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
