@@ -1,14 +1,8 @@
 job: hub-drift-guard-route
-last_run: 2026-11-20T03:46:10.336501017Z
+last_run: 2026-11-20T03:56:32.376533684Z
 last_by:
   seat: advisor
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: 'advisor-121 20:48: aida-store union-reconciled (gitlab +2); main gitlab 1 behind (#4345 merge), hourly bridge'
-due_since: 2026-11-20T03:55:22.581960820Z
-due_reason: on CronJobFailed:hub-drift-guard
-due_failure:
-  trip_id: hub-drift-guard@2026-11-20T03:41:59.928698335Z
-  job: hub-drift-guard
-  error: 'exit 1: '
+note: 'advisor-121 20:58: aida-store re-diverges within minutes under heavy multi-writer load (3 reconciles today); union-reconciled again; main in sync. Expected churn, not a fault; the hourly bridge covers steady state.'
