@@ -346,7 +346,8 @@ pub(crate) fn review_gated_behind_base(
 
 /// Whether this session may merge `change` under `policy`: the gate's
 /// [`crate::gate::ship::merge_authority_refusal`] over this session's seat,
-/// the operator's `floor` authority, and the change's authors. `aida land
+/// the operator's `floor` authority, and the change's authors, with the
+/// seat and floor validated LAST, after the authors' slow reads. `aida land
 /// run` asks this before it ships; the merge boundary asks it again at the
 /// merge.
 // trace:STORY-2903 | ai:claude
@@ -355,11 +356,13 @@ pub(crate) fn caller_may_merge(
     change: &ChangeRef,
     spec_ids: &[String],
     policy: &crate::landing_policy::LandingPolicy,
-    floor: bool,
+    floor: &dyn Fn() -> bool,
 ) -> Result<(), String> {
+    // The seat and floor are readers: the decision reads them again after
+    // the slow author lookup, and that last read decides (review r4).
     match crate::gate::ship::merge_authority_refusal(
         policy.advisor_merges(),
-        crate::gate::seat_authority::current_seat(project_root).as_deref(),
+        &|| crate::gate::seat_authority::current_seat(project_root),
         floor,
         || merge_authors(project_root, change, spec_ids),
         &format!("PR-{}", change.id),
@@ -417,25 +420,8 @@ pub(crate) fn train_recheck(
             format!("the train is not merged: its landing policy cannot be established ({why})"),
         )
     })?;
-    let floor = crate::gate::role_authority::has_integrity_floor_authority();
-    // Each car's author rule reads the authorship ledger through the one
-    // checked read every C2 caller shares: a ledger that cannot be trusted
-    // refuses the car (F2).
-    for (pr, specs) in cars {
-        let car = ChangeRef {
-            id: *pr,
-            url: String::new(),
-            branch: String::new(),
-            base: base_ref.to_string(),
-            title: None,
-        };
-        caller_may_merge(root, &car, specs, &entry.policy, floor).map_err(|why| {
-            (
-                ShipRefusal::Review,
-                format!("the train is not merged: car {why}"),
-            )
-        })?;
-    }
+    // The stacked proof's base, a local read, before the cars: the last
+    // car's authority is then the final check before the transport (r4).
     if has_origin(root) {
         let now = crate::trusted_config::rev_parse_commit(
             root,
@@ -453,6 +439,26 @@ pub(crate) fn train_recheck(
                 ),
             ));
         }
+    }
+    // Each car's author rule reads the authorship ledger through the one
+    // checked read every C2 caller shares: a ledger that cannot be trusted
+    // refuses the car (F2). Each car's seat and floor are read last, after
+    // its slow author lookup (r4).
+    let floor = crate::gate::role_authority::has_integrity_floor_authority;
+    for (pr, specs) in cars {
+        let car = ChangeRef {
+            id: *pr,
+            url: String::new(),
+            branch: String::new(),
+            base: base_ref.to_string(),
+            title: None,
+        };
+        caller_may_merge(root, &car, specs, &entry.policy, &floor).map_err(|why| {
+            (
+                ShipRefusal::Review,
+                format!("the train is not merged: car {why}"),
+            )
+        })?;
     }
     Ok(())
 }
@@ -548,7 +554,7 @@ pub(crate) fn recheck(
     entry: &crate::landing_policy::LandingPolicy,
     spec_ids: &[String],
     floor_at_entry: bool,
-    floor_now: impl FnOnce() -> bool,
+    floor_now: impl Fn() -> bool,
 ) -> std::result::Result<(), (crate::gate::ship::ShipRefusal, String)> {
     use crate::gate::ship::ShipRefusal;
     let subject = format!("PR-{}", change.id);
@@ -607,11 +613,17 @@ pub(crate) fn recheck(
         }
         review_gated_behind_base(project_root, branch, change.id, &base)?;
     }
-    let floor = floor_now();
-    if let Some(why) = crate::gate::ship::floor_lapse_refusal(floor_at_entry, floor, &subject) {
+    if let Some(why) = crate::gate::ship::floor_lapse_refusal(floor_at_entry, floor_now(), &subject)
+    {
         return Err((ShipRefusal::Review, why));
     }
-    if let Err(why) = caller_may_merge(project_root, change, spec_ids, &policy, floor) {
+    // The author lookup is slow; the seat and floor are validated after it,
+    // as the last step before the transport attempt (review r4).
+    if let Err(why) = caller_may_merge(project_root, change, spec_ids, &policy, &floor_now) {
+        return Err((ShipRefusal::Review, why));
+    }
+    if let Some(why) = crate::gate::ship::floor_lapse_refusal(floor_at_entry, floor_now(), &subject)
+    {
         return Err((ShipRefusal::Review, why));
     }
     Ok(())

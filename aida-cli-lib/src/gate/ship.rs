@@ -1349,28 +1349,46 @@ mod story2897_advisor_merge_tests {
 /// author rule C2 ([`shipper_author_refusal`]) over `authors` (resolved only
 /// when it is needed). One decision for the merge boundary and for `aida
 /// land run`'s choice to ship.
+///
+/// Order (promotion 23 review r4, a TOCTOU): `authors` is a slow read (the
+/// forge's change metadata and the authorship ledger), so the seat grant
+/// and the floor authority are read AGAIN after it, and that last read
+/// decides: a grant revoked or expired during the lookup refuses. The first
+/// read only fails fast.
 // trace:STORY-2903 | ai:claude
 pub(crate) fn merge_authority_refusal(
     advisor_merges: bool,
-    grant_seat: Option<&str>,
-    floor_authority: bool,
+    grant_seat: &dyn Fn() -> Option<String>,
+    floor_authority: &dyn Fn() -> bool,
     authors: impl FnOnce() -> Result<ShipApprovalPolicy, String>,
     subject: &str,
 ) -> Option<String> {
-    if let Some(why) = advisor_merge_refusal(advisor_merges, grant_seat, floor_authority, subject) {
+    if !advisor_merges {
+        return None;
+    }
+    let floor_first = floor_authority();
+    if let Some(why) = advisor_merge_refusal(true, grant_seat().as_deref(), floor_first, subject) {
         return Some(why);
     }
-    if advisor_merges && !floor_authority {
+    if !floor_first {
         // Authors that cannot be established refuse: never "no authors"
         // (promotion 23 review F2). trace:STORY-2903 | ai:claude
-        return match authors() {
+        let author_refusal = match authors() {
             Ok(policy) => shipper_author_refusal(&policy, subject),
             Err(why) => Some(format!(
                 "{subject} is not merged here: its authors cannot be established ({why})"
             )),
         };
+        if author_refusal.is_some() {
+            return author_refusal;
+        }
     }
-    None
+    // LAST, after every slow read: the authority as it is now.
+    let floor_last = floor_authority();
+    if let Some(why) = floor_lapse_refusal(floor_first, floor_last, subject) {
+        return Some(why);
+    }
+    advisor_merge_refusal(true, grant_seat().as_deref(), floor_last, subject)
 }
 
 /// `Some(refusal)` when the integrity-floor authority (the operator at a
@@ -1553,6 +1571,41 @@ mod story2897_landing_mode_authority_tests {
 mod story2903_merge_authority_tests {
     use super::{merge_authority_refusal, AuthorSession, ShipApprovalPolicy};
 
+    fn seat(name: &'static str) -> impl Fn() -> Option<String> {
+        move || Some(name.to_string())
+    }
+
+    /// Promotion 23 review r4 (TOCTOU): the seat grant is revoked while the
+    /// authors are being read (the slow forge/ledger lookup). The authority
+    /// is read again after it, so the merge is refused; with the grant held
+    /// throughout, it merges.
+    // trace:STORY-2903 | ai:claude
+    #[test]
+    fn a_grant_revoked_during_the_author_lookup_refuses_the_merge() {
+        for revoke in [true, false] {
+            let granted = std::cell::Cell::new(true);
+            let seat = || granted.get().then(|| "advisor".to_string());
+            let why = merge_authority_refusal(
+                true,
+                &seat,
+                &|| false,
+                || {
+                    if revoke {
+                        granted.set(false);
+                    }
+                    Ok(authored_by("session:advisor"))
+                },
+                "PR-7",
+            );
+            if revoke {
+                let why = why.expect("a grant revoked mid-lookup refuses");
+                assert!(why.contains("has the advisor perform"), "{why}");
+            } else {
+                assert_eq!(why, None, "a grant held throughout merges");
+            }
+        }
+    }
+
     fn authored_by(shipper: &str) -> ShipApprovalPolicy {
         ShipApprovalPolicy {
             author_sessions: vec![AuthorSession {
@@ -1569,8 +1622,8 @@ mod story2903_merge_authority_tests {
         // Not the advisor: refused before authorship is even resolved.
         let why = merge_authority_refusal(
             true,
-            Some("implementer"),
-            false,
+            &seat("implementer"),
+            &|| false,
             || panic!("authors are not resolved for a non-advisor"),
             "PR-7",
         )
@@ -1579,8 +1632,8 @@ mod story2903_merge_authority_tests {
         // The advisor, as the change's author: refused (C2).
         let why = merge_authority_refusal(
             true,
-            Some("advisor"),
-            false,
+            &seat("advisor"),
+            &|| false,
             || Ok(authored_by("session:author")),
             "PR-7",
         )
@@ -1590,8 +1643,8 @@ mod story2903_merge_authority_tests {
         assert_eq!(
             merge_authority_refusal(
                 true,
-                Some("advisor"),
-                false,
+                &seat("advisor"),
+                &|| false,
                 || Ok(authored_by("session:advisor")),
                 "PR-7"
             ),
@@ -1600,11 +1653,17 @@ mod story2903_merge_authority_tests {
         // The operator at a terminal, and a project where any non-author
         // merges: no author resolution needed.
         assert_eq!(
-            merge_authority_refusal(true, None, true, || panic!("floor"), "PR-7"),
+            merge_authority_refusal(true, &|| None, &|| true, || panic!("floor"), "PR-7"),
             None
         );
         assert_eq!(
-            merge_authority_refusal(false, Some("implementer"), false, || panic!("off"), "PR-7"),
+            merge_authority_refusal(
+                false,
+                &seat("implementer"),
+                &|| false,
+                || panic!("off"),
+                "PR-7"
+            ),
             None
         );
     }

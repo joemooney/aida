@@ -187,7 +187,7 @@ fn c2_with_ledger(ledger: Option<&str>) -> Result<(), String> {
         &change,
         &["TASK-1".to_string()],
         &crate::landing_policy::load(&repo),
-        false,
+        &|| false,
     )
 }
 

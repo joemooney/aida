@@ -1206,7 +1206,7 @@ impl Acts for Live {
             &change,
             &specs_of(pr),
             &crate::landing_policy::load(&self.root),
-            crate::gate::role_authority::has_integrity_floor_authority(),
+            &crate::gate::role_authority::has_integrity_floor_authority,
         )
     }
 

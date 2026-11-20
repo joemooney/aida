@@ -55,7 +55,18 @@ if sys.argv[1:]==['--version']:
     print('gh fixture version 1'); sys.exit(0)
 r=pathlib.Path.cwd(); a=sys.argv[1:]; s=json.loads((r/'transport.json').read_text())
 def emit(v): print(json.dumps(v)); sys.exit(0)
-def meta(n): return s['prs'][str(n)]
+def meta(n):
+    # trace:STORY-2903 | ai:claude — r4: the grant is revoked during a
+    # chosen metadata read of PR `revoke_on` (after `revoke_on_skip` reads).
+    if s.get('revoke_on')==str(n):
+        s['revoke_on_reads']=s.get('revoke_on_reads',0)+1
+        (r/'transport.json').write_text(json.dumps(s))
+    if s.get('revoke_on')==str(n) and s.get('revoke_dir'):
+        if s.get('revoke_on_skip',0)>0: s['revoke_on_skip']-=1
+        else:
+            for g in pathlib.Path(s.pop('revoke_dir')).glob('*.json'): g.unlink()
+        (r/'transport.json').write_text(json.dumps(s))
+    return s['prs'][str(n)]
 with (r/'transport-calls').open('a') as f: f.write(' '.join(a)+'\n')
 if a[:2]==['pr','create']:
     def opt(n): return a[a.index(n)+1]
@@ -117,7 +128,7 @@ if a[0]=='api':
     endpoint=next((x for x in a[1:] if x.startswith('repos/')),a[1])
     if '/check-runs' in endpoint:
         # trace:STORY-2905 | ai:claude — a grant lapsing during the CI wait.
-        if s.get('revoke_dir'):
+        if s.get('revoke_dir') and not s.get('revoke_on'):
             if s.get('revoke_skip',0)>0: s['revoke_skip']-=1
             else:
                 for g in pathlib.Path(s.pop('revoke_dir')).glob('*.json'): g.unlink()
@@ -2130,6 +2141,15 @@ mod story_2905_enforce {
         if crate::test_env::run_path_isolated_test() {
             return;
         }
+        review_gated_advisor_in_child(title, case)
+    }
+
+    /// [`review_gated_advisor_titled`]'s body, for a test already running in
+    /// its isolated child (one that builds more than one fixture).
+    fn review_gated_advisor_in_child(
+        title: Option<&str>,
+        case: impl FnOnce(&Fixture, &GitHubForge, &Built, &ChangeRef),
+    ) {
         let mut f = Fixture::with_member_metadata(true, None, title);
         fs::write(
             f.root().join(".aida/config.toml"),
@@ -2327,6 +2347,116 @@ mod story_2905_enforce {
                 assert!(calls(f.root()).is_empty(), "{why}");
             },
         );
+    }
+
+    /// Arm the fake forge to revoke every grant during the `skip + 1`-th
+    /// metadata read of PR `pr`; `None` arms the read count only.
+    // trace:STORY-2903 | ai:claude
+    fn arm_revoke_on(f: &Fixture, pr: u64, skip: Option<u64>) {
+        set_state(f, "revoke_on", json!(pr.to_string()));
+        set_state(f, "revoke_on_reads", json!(0));
+        match skip {
+            Some(skip) => {
+                let dir = crate::gate::seat_authority::grant_dir().unwrap();
+                set_state(f, "revoke_on_skip", json!(skip));
+                set_state(f, "revoke_dir", json!(dir.display().to_string()));
+            }
+            None => set_state(f, "revoke_on_skip", json!(u64::MAX / 2)),
+        }
+    }
+
+    fn state_u64(f: &Fixture, key: &str) -> u64 {
+        let state: Value =
+            serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap()).unwrap();
+        state[key].as_u64().unwrap_or(0)
+    }
+
+    /// Promotion 23 review r4 (TOCTOU), the train's last car: the grant is
+    /// revoked during the LAST metadata read of car 12 (its author lookup in
+    /// the final authority check before the transport). The seat is
+    /// validated after that read, so the train is not merged. The read count
+    /// comes from a control run on an identical fixture, where the grant
+    /// holds throughout and the train merges.
+    #[test]
+    fn a_grant_revoked_during_the_last_cars_author_lookup_refuses_the_train() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut reads = 0;
+        review_gated_advisor_in_child(None, |f, forge, train, change| {
+            arm_revoke_on(f, 12, None);
+            merge_verified(f, forge, train, change).expect("control: the grant holds");
+            assert_eq!(calls(f.root()).len(), 1, "control merges once");
+            reads = state_u64(f, "revoke_on_reads");
+        });
+        assert!(reads > 0, "car 12's metadata is read before the merge");
+        review_gated_advisor_in_child(None, |f, forge, train, change| {
+            arm_revoke_on(f, 12, Some(reads - 1));
+            let why = format!("{:#}", merge_verified(f, forge, train, change).unwrap_err());
+            assert!(why.contains("has the advisor perform"), "{why}");
+            assert!(calls(f.root()).is_empty(), "no train merge: {why}");
+        });
+    }
+
+    /// Promotion 23 review r4 (TOCTOU), a ship through the merge boundary:
+    /// the grant is revoked during the LAST metadata read of PR 11 (its
+    /// author lookup inside the per-attempt guard), so no `gh pr merge` is
+    /// sent; the control (grant held) merges once.
+    #[test]
+    fn a_grant_revoked_during_a_ships_author_lookup_refuses_the_merge() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        fn ship(f: &Fixture, forge: &GitHubForge) -> std::result::Result<(), String> {
+            let head: Value =
+                serde_json::from_slice(&fs::read(f.root().join("transport.json")).unwrap())
+                    .unwrap();
+            let head = head["prs"]["11"]["headRefOid"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            let change = ChangeRef {
+                id: 11,
+                url: String::new(),
+                branch: "source/BUG-2400".into(),
+                base: "main".into(),
+                title: None,
+            };
+            let opts = MergeOptions {
+                method: MergeMethod::Squash,
+                squash_subject: None,
+                squash_body: None,
+                delete_branch: false,
+                match_head: Some(head),
+            };
+            crate::gate::landing_merge::merge(
+                forge,
+                f.root(),
+                crate::gate::landing_merge::Caller::Ship,
+                &crate::gate::landing_merge::Entry::capture(f.root()),
+                &change,
+                &["BUG-2400".to_string()],
+                &opts,
+                &mut crate::network_retry::NoopSink,
+                &crate::pr_train::pr_head_pin_journals,
+            )
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+        }
+        let mut reads = 0;
+        review_gated_advisor_in_child(None, |f, forge, _, _| {
+            arm_revoke_on(f, 11, None);
+            ship(f, forge).expect("control: the grant holds");
+            assert_eq!(calls(f.root()).len(), 1, "control merges once");
+            reads = state_u64(f, "revoke_on_reads");
+        });
+        assert!(reads > 0, "PR 11's metadata is read before the merge");
+        review_gated_advisor_in_child(None, |f, forge, _, _| {
+            arm_revoke_on(f, 11, Some(reads - 1));
+            let why = ship(f, forge).unwrap_err();
+            assert!(why.contains("has the advisor perform"), "{why}");
+            assert!(calls(f.root()).is_empty(), "no merge sent: {why}");
+        });
     }
 
     /// Round 2 finding 3: an authorship ledger that cannot be trusted
