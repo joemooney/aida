@@ -167,14 +167,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
-  requirement_id: 01a1ec45-5343-7720-a3ac-34f995c661c4
-  position: 22000
-  added_by: claude-product-12
-  note: Follow-up from the p19 (#4239) review; fails safe.
-  added_at: 2026-11-18T01:30:15.214747139Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1ed07-28ed-7c12-af4b-21333ad8f7ea
   position: 24000
   added_by: claude-product-12
