@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T23:12:54.721524627Z
+modified_at: 2026-11-20T23:13:22.465680507Z
 req_type: Task
 tags:
 - landing
@@ -326,6 +326,28 @@ comments:
     cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
   created_at: 2026-11-20T23:12:29.106307576Z
   modified_at: 2026-11-20T23:12:29.106307576Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb3c-678b-7261-8c48-58a96b71329f
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4381):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e8eb899c0691
+    Recorded: 2026-11-20T22:49:23.540077259+00:00
+    Findings:
+    1. land_stalls.rs observe calls live_pass_with before lane_hosts::read. That pass calls coordination::list_claims and read_claim, which use an unrestricted read_to_string on the same shared TOML files. A FIFO can block both guard entry points indefinitely before the bounded reader can report it. The new reviewer lease inventory also uses unrestricted reads through list_leases_strict_all. Use bounded regular-file reads throughout the production observation and test that entry path.
+    2. AC2 still misses the reported long-running remote lane on the pinned base. Session claims here are written once, so after 30 minutes a running lane falls out of the reporting count and its PR can again be routed for rework. The fixtures supply already-refreshed timestamps. Integrate the heartbeat producer and shared observation from #4382 as directed by the advisor, and cover a lane running beyond its first TTL.
+    3. lane_hosts::read_store silently discards parsed foreign records whose heartbeat is invalid, too far ahead, or whose expiry overflows. Meanwhile live_pass_with can retain the same claim because partition_claims treats missing heartbeat age as no TTL refusal. A host can show zero lanes while its invalid record suppresses a rework stall through Standing.lane. Distinguish invalid from inapplicable records, report the filename, and use one validated observation for ownership and counts.
+    4. attach_evidence uses claim_covers, whose branch comparison is a raw prefix. A live TASK-7 lane suppresses the green unreviewed stall on task-70-work even when its only spec is TASK-70. The fixture tests only the reverse prefix direction. Match the complete branch spec identity or a delimited token.
+    5. Evidence::cause in land_stalls_review_cause.rs checks only a PR-N lease scope. A GitLab reviewer lease on MR-N is missed even though the log reader accepts MR-N. Carry the forge-specific change key into lease matching and cover a GitLab stale lease.
+    6. Evidence::cause calls any existing path named aida-pr-N a reviewer worktree from an earlier review. A regular file, unrelated directory or live worktree suffices, and an inspection error is silently treated as absence. Verify worktree identity and occupancy, or describe only the observed path and leave the cause unknown.
+    7. Evidence::read derives stale leases by subtracting live IDs captured in the earlier pass from a new directory listing. A reviewer starting between reads is reported as a dead session. Classify liveness on the same lease snapshot used to identify the review cause and preserve unknown observations.
+    8. The approved-red arm of classify_pr calls merge_red_item without appending foreign_unknown. A matching silent foreign lease is therefore missing from the routed STUCK-MERGE-RED line despite the documented promise to include its host, lease and observation age. Cover this standing alongside rework, review and conflict.
+    9. snapshot_line renders host and memory fields from previously persisted RunSnapshot values verbatim. Snapshots created before this change can contain unsanitized shared host names, so the last-scheduled-run display can still emit control characters or extra lines. Apply the same display bounds when rendering saved observations.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T23:13:22.315431641Z
+  modified_at: 2026-11-20T23:13:22.315431641Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
