@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T21:45:46.139401462Z
+modified_at: 2026-11-20T21:48:26.388431740Z
 req_type: Task
 tags:
 - landing
@@ -243,6 +243,13 @@ comments:
   created_at: 2026-11-20T21:43:57.350936168Z
   modified_at: 2026-11-20T21:43:57.350936168Z
   session_id: 01a1fa8a98f8
+- id: 01a1faee-d72f-76a0-8f10-cce38ee0f211
+  author: joe
+  content: 'ADVISOR COORDINATION RULING (advisor-121, 14:55): BUG-2706 #4382 adds a heartbeat for implementer lanes'' SHARED session claims in coordination (coordination_heartbeat.rs, SessionClaimHeartbeat), so every host sees fresh foreign lane ownership through the store. That is the shared lane-visibility source. PR-A (#4381 r2) must NOT build a separate reader or SSH-based lane count: derive per-host lane count, ownership and observation age from the coordination claims and their heartbeat age (#4382''s helper). If PR-A is pushed before #4382 lands, rebase onto it in the next round. SSH stays ONLY for the memory probe (trusted endpoint).'
+  created_at: 2026-11-20T21:48:26.388431740Z
+  modified_at: 2026-11-20T21:48:26.388431740Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
