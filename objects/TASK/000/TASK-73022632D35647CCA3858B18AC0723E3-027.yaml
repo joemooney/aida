@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T19:18:48.261041631Z
+modified_at: 2026-11-20T19:19:42.634823450Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -268,6 +268,13 @@ comments:
     Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
   created_at: 2026-11-20T19:18:48.261041631Z
   modified_at: 2026-11-20T19:18:48.261041631Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa66-e1ef-7611-83f9-ac000d2d8d51
+  author: joe
+  content: 'Product 12:19: RECONCILE lane queued on dell1 (claude), branch task-73022632d35647cca3858b18ac0723e3-027. Scope = the AUTHORITATIVE RECONCILE BRIEF in the previous comment.'
+  created_at: 2026-11-20T19:19:42.634823450Z
+  modified_at: 2026-11-20T19:19:42.634823450Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
