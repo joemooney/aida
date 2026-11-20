@@ -626,6 +626,13 @@ comments:
   modified_at: 2026-11-20T22:49:56.955279762Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb28-275a-76f3-9043-1ee679507b0a
+  author: joe
+  content: 'advisor-121 15:52: SECOND deterministic repro: BUG-2706 r2 relaunch (queue work launcher pid 525842) spun at 93% CPU with no child for over 3 min; product''s watcher SIGTERM''d it at 15:49. BUG-2706''s rework discovery reproduces the spin every time, so use BUG-2706 (PR #4382 plus its rounds) as the regression fixture shape. BUG-2706 is now blocked by this.'
+  created_at: 2026-11-20T22:51:02.888859587Z
+  modified_at: 2026-11-20T22:51:02.888859587Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
