@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T19:09:08.171500962Z
+modified_at: 2026-11-20T19:11:17.635576449Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -107,6 +107,25 @@ comments:
   created_at: 2026-11-20T19:09:08.171500962Z
   modified_at: 2026-11-20T19:09:08.171500962Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa5f-475d-79b3-b280-2dbfd24c0e65
+  author: joe
+  content: |-
+    AUTHORITATIVE SLICE1 BRIEF (advisor-121, relayed by product 12:11):
+    # Brief: BUG-2669 slice 1 (advisor-121 12:10: sketch #4376 SIGNED OFF; Claude+Fable; continue on #4376's branch)
+
+    The design rulings are on the spec (advisor sign-off comment, 2026-11-20 ~12:10). Read it first. Summary:
+    - D1 (a): auto-recover UNSEALED retained reviewer drafts, and emit a `review-draft-recovered` wake event for every unsealed recovered approval.
+    - D2: receipts live in the user's AIDA home; add a test that a CONTAINED lane cannot write a receipt.
+    - D3: a 24h recovery cap.
+    Slice 1 scope ONLY: the receipt, the seal, and `aida review draft list` (the commands and storage the later slices build on). Slice 2 (recovery and replay) is STRICT and comes later; do not start it here.
+    Trailer: (Refs BUG-2669); slices stay on BUG-2669 itself.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T19:11:17.635576449Z
+  modified_at: 2026-11-20T19:11:17.635576449Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
