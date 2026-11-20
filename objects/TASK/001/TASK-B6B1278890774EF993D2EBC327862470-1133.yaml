@@ -1,0 +1,26 @@
+id: 01a1f99d-2432-7031-893f-4caaf17179f7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1133
+agreed_id: TASK-3824
+title: Revert the temporary reviewer-model boost (TASK-3823) after the 2026-11-22 token reset
+description: |
+  Revert the temporary reviewer-model boost from TASK-3823 after the weekly token reset (~2026-11-22 07:30 MST): remove the [agents.codex.seats] and [agents.claude.seats] reviewer model entries from .aida/config.toml, unless Joe has extended the boost. Small PR, light review.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T15:39:47.634431493Z
+modified_at: 2026-11-20T15:39:47.634431493Z
+req_type: Task
+tags:
+- config
+- review
+- temporary
+filed_at:
+  code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 78b437097cb
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
