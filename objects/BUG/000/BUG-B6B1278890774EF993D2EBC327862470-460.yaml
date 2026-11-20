@@ -18,12 +18,12 @@ description: |
   5. Landing-time completion is written to the shared store (pushed), not only to a local cache, so other hosts (lane hosts) see it before their next admission check. Test or documented evidence.
 
   Process-policy note: this changes the landing lifecycle, so it needs an advisor architecture sketch on this spec before implementation (repo rule).
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T05:05:45.373205234Z
+modified_at: 2026-11-20T05:06:11.913438049Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1506,6 +1506,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f759-1149-7ca2-ad9a-af4deea04cd8
+  author: joe
+  timestamp: 2026-11-20T05:06:11.913435174Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 execution_mode: drain
 filed_at:
   code_sha: 6da63c980365a3d2035dda4ffd1afa687be6c6ec
@@ -1518,4 +1527,5 @@ filed_at:
   harness_version: 2.1.327 (Claude Code)
 implementation_info:
   implemented: false
+  completed_at: 2026-11-20T05:05:59.778461565Z
   reopened_at_sha: 12f6c394147679755176d4434e637a30ad81e6f5
