@@ -5,6 +5,7 @@ trace:STORY-2606 | ai:codex
 """
 
 import argparse
+import json
 import os
 from pathlib import Path
 import re
@@ -244,7 +245,11 @@ def validate_job(job, current):
     # trace:STORY-2672 | ai:codex
     # GitLab always uses its provisioned image; accept only the reviewed GitHub
     # routing policy, never arbitrary runner expressions.
-    guarded_runner = '${{ vars.AIDA_DELL1_CI == \'true\' && ((github.event_name == \'push\' && github.ref == \'refs/heads/main\') || (github.event_name == \'pull_request\' && github.event.pull_request.head.repo.full_name == github.repository && github.base_ref == \'main\' && startsWith(github.head_ref, \'train/\'))) && contains(fromJSON(\'["lib-0","lib-1","cli-0","cli-1"]\'), matrix.shard) && fromJSON(\'["self-hosted","Linux","X64","aida-dell1"]\') || matrix.os }}'
+    guarded_runner = (
+        "${{ contains(fromJSON('[\"lib-0\",\"lib-1\",\"cli-0\",\"cli-1\"]'), matrix.shard) && "
+        "((needs.tier.outputs.dell1 == 'MAIN' && fromJSON('[\"self-hosted\",\"Linux\",\"X64\",\"aida-dell1\",\"MAIN\"]')) || "
+        "(needs.tier.outputs.dell1 == 'TRAIN' && fromJSON('[\"self-hosted\",\"Linux\",\"X64\",\"aida-dell1\",\"TRAIN\"]'))) "
+        "|| matrix.os }}")
     if job.get("runs-on", "${{ matrix.os }}") not in ("${{ matrix.os }}", guarded_runner):
         raise ValueError("Unsupported upstream runner")
     if set(job.get("defaults", {})) - {"run"}:
@@ -257,6 +262,7 @@ def validate_job(job, current):
     step_environment(job, job_context, {})
     if job.get("defaults", {}).get("run", {}) not in ({}, {"shell": "bash --noprofile --norc -e -o pipefail {0}"}):
         raise ValueError("Unsupported upstream run defaults")
+    validate_selection(job["steps"])
     for step in job["steps"]:
         if set(step) - allowed:
             raise ValueError("Unsupported upstream step settings")
@@ -292,6 +298,41 @@ def validate_job(job, current):
                     raise ValueError(f"Unsupported runner variables: {', '.join(sorted(unknown))}")
         else:
             raise ValueError("Unmapped upstream step")
+
+
+def validate_selection(steps):
+    """Require one reviewed producer per selection output, before its readers.
+
+    The adapter supplies `steps.paths.outputs.full_ci` and
+    `steps.changes.outputs.full_ci` itself, so upstream must really define
+    them: a reader with no producer, a second producer, or a producer after
+    its first reader would make this adapter run steps GitHub would not.
+    trace:STORY-2695 | ai:claude
+    """
+    def producers(name):
+        return [index for index, step in enumerate(steps) if step.get("id") == name]
+
+    def readers(name):
+        # Every expression-bearing field: a condition, env, action input or command.
+        return [index for index, step in enumerate(steps)
+                if f"steps.{name}.outputs." in json.dumps(step, sort_keys=True)]
+
+    for name in ("paths", "changes"):
+        found, used = producers(name), readers(name)
+        if len(found) > 1:
+            raise ValueError(f"Upstream defines more than one {name} output producer")
+        if used and not found:
+            raise ValueError(f"Upstream reads {name} outputs that no step produces")
+        if used and found[0] >= used[0]:
+            raise ValueError(f"Upstream reads {name} outputs before their producer")
+    for index in producers("changes"):
+        if steps[index] != SELECT_STEP:
+            raise ValueError("Unmapped upstream full-CI selection step")
+    for index in producers("paths"):
+        step = steps[index]
+        if (step.get("uses", "").split("@", 1)[0] != "dorny/paths-filter" or
+                step.get("if") != "runner.environment != 'self-hosted'"):
+            raise ValueError("Unmapped upstream path-filter producer")
 
 
 def clean_artifacts():

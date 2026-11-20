@@ -110,30 +110,52 @@ compiles into `CARGO_TARGET_DIR`, and uses the installed pinned Rust toolchain
 
 `tests/test_self_hosted_runner.py` checks each rule against the workflow itself.
 
-- **Routing.** With `AIDA_DELL1_CI` set to `true`, the four heavy shards go to
-  dell1 only for a push to `main` (MAIN) and for a same-repository pull request
-  into `main` whose head branch starts with `train/` (TRAIN). Ordinary and fork
-  pull requests, pull requests into `integration`, merge groups, scheduled and
-  manual runs, and the `rest`, `gates` and `contracts` lanes stay hosted. These
-  are the two classes the controller admits; the expression grants nothing.
-  GitHub compares the `train/` prefix without regard to case and the controller
-  does not, so a head branch named `Train/...` would queue for dell1 and never
-  be admitted. Do not create such branches while routing is on.
+- **Routing.** The `tier` job's "Select dell1 route" step decides the class in
+  the shell, once per run, before the matrix exists. With `AIDA_DELL1_CI` set to
+  exactly `true` (lower case), the class is MAIN for a push to
+  `refs/heads/main` and TRAIN for a same-repository pull request into `main`
+  whose head branch starts with `train/`. Everything else gets no class and
+  stays hosted: ordinary and fork pull requests, pull requests into
+  `integration`, merge groups, scheduled and manual runs. The comparison is
+  case-sensitive, as the controller's is, because workflow expressions fold
+  case: a head branch named `Train/x` stays hosted instead of queueing for a
+  runner that would refuse it.
+- **Class label.** The build job's `runs-on` requests
+  `self-hosted, Linux, X64, aida-dell1` plus the class (`MAIN` or `TRAIN`) for
+  the four heavy shards, and `ubuntu-latest` for `rest`, `gates`, `contracts`
+  and any run without a class. `rearm.py` registers each single-job runner with
+  the class of the job it was admitted for, so GitHub can dispatch a TRAIN job
+  only to a TRAIN runner and a MAIN job only to a MAIN runner. The label is
+  routing, not authority: the job-started gate still admits the actual job.
 - **Exact source.** A dell1 job runs no `actions/checkout`. Its first step,
   "Adopt host-prepared exact source", requires `AIDA_CI_WORKSPACE`,
   `CARGO_TARGET_DIR` and `CARGO_HOME` to be existing absolute directories,
   requires the workspace's Git HEAD to equal the job's head SHA (the pull
-  request head, never its merge ref), requires a clean tree, and then replaces
+  request head, never its merge ref), requires a tree with no modified,
+  untracked or ignored file (`git status --porcelain --ignored`; an ignored
+  `.env` refuses), and then replaces
   the runner's empty workspace with a link to the prepared tree. Every later
   step therefore runs in the tree the host extracted. It links `target` in that
   tree to `CARGO_TARGET_DIR` (ignored through `.git/info/exclude`), so the
   steps' `target/...` paths are the seeded build directory. Any mismatch fails
   the job before a build starts.
+- **No inherited reports.** A seeded build directory can contain the reports of
+  the run that published it. Before linking `target`, the same step deletes
+  `test-run.log`, `test-timings.json`, `changed-files.txt` and the whole
+  `nextest` report directory from `CARGO_TARGET_DIR` and refuses if any
+  remains. A job that fails before its own tests run therefore has nothing to
+  budget or upload; a refused adoption exposes no `target` at all.
 - **Toolchain.** `cargo` and `rustc` must resolve to `/opt/aida-ci-toolchain/bin`.
   The rustup install and pin steps are hosted-only.
 - **Local cache only.** `Swatinem/rust-cache` and the APT archive cache are
-  hosted-only. cargo-nextest is downloaded per job into `CARGO_HOME/bin`, which
-  the publisher never copies.
+  hosted-only. cargo-nextest is downloaded per job by `taiki-e/install-action`.
+  That action installs into `CARGO_HOME/bin` only when `cargo` itself runs
+  from there; dell1's `cargo` is `/opt/aida-ci-toolchain/bin/cargo`, so the
+  action installs into `$HOME/.install-action/bin` and adds that directory to
+  the job's PATH. `HOME` is `current/runner/home`, deleted with the job and
+  never published. "Verify self-hosted cargo-nextest location" fails the job
+  if `cargo-nextest` resolves anywhere else (a copy in the seeded
+  `CARGO_HOME/bin` or on the host).
 - **Always full.** The prepared tree has one commit and no remote, so the
   docs-only path filter is hosted-only and a dell1 heavy shard always runs its
   tests. For the same reason the test-time budget finds no parent commit and
@@ -258,9 +280,17 @@ Routing sends only MAIN and TRAIN heavy jobs to dell1 and keeps ordinary/fork
 PRs and merge groups hosted, with the seven lanes, timeouts and hosted required
 aggregate unchanged. During acceptance, also confirm on the installed runner
 that the adopt step's workspace link is honored by every later step (`pwd -P`
-is the prepared tree), that cargo-nextest installs into `CARGO_HOME/bin`, and
-that the timing artifacts upload from the linked `target`. These three depend
-on runner and action behavior that the repository fixtures cannot execute.
+is the prepared tree), that cargo-nextest installs into
+`$HOME/.install-action/bin` (`command -v cargo-nextest` in the job prints
+`/var/lib/aida-ci-jobs/sN/current/runner/home/.install-action/bin/cargo-nextest`,
+the "Verify self-hosted cargo-nextest location" step passes, and
+`CARGO_HOME/bin` holds no `cargo-nextest`), and
+that the timing artifacts upload from the linked `target` and contain only
+this run's reports (on a warm seed, compare the uploaded `test-run.log` with
+the job log). Also confirm that a TRAIN job stays queued while only a
+MAIN-labelled runner is online, and the reverse. These depend
+on runner, action and dispatch behavior that the repository fixtures cannot
+execute.
 Then activate for a bounded window and compare at
 least ten comparable green trains with matched hosted runs. Record run start
 through aggregate finish, shard created/started/finished, queue median/p95,

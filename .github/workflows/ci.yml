@@ -54,12 +54,42 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       full: ${{ steps.select.outputs.full }}
+      dell1: ${{ steps.route.outputs.dell1 }}
     steps:
       - name: Select CI tier
         id: select
         env:
           FULL: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'train/') || (contains(github.event.pull_request.labels.*.name, 'ci:full') && github.event.action != 'synchronize') || vars.AIDA_PR_CI_TIER == 'full' }}
         run: echo "full=$FULL" >> "$GITHUB_OUTPUT"
+      # The dell1 route is decided here, once, by the shell: workflow
+      # expressions compare strings without regard to case, and the dell1
+      # controller does not, so `Train/x` or `refs/heads/Main` must stay
+      # hosted instead of queueing for a runner that will refuse them. The
+      # output is the class label the build job requests: MAIN for a main
+      # push, TRAIN for a same-repository train/ pull request into main,
+      # empty (hosted) for everything else. It grants nothing: the host
+      # admits each job independently. trace:STORY-2695 | ai:claude
+      - name: Select dell1 route
+        id: route
+        env:
+          ENABLED: ${{ vars.AIDA_DELL1_CI }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          class=
+          if [ "$ENABLED" = true ]; then
+            if [ "$EVENT" = push ] && [ "$REF" = refs/heads/main ]; then
+              class=MAIN
+            elif [ "$EVENT" = pull_request ] && [ -n "$REPOSITORY" ] &&
+                [ "$HEAD_REPOSITORY" = "$REPOSITORY" ] && [ "$BASE_REF" = main ]; then
+              case "$HEAD_REF" in train/*) class=TRAIN ;; esac
+            fi
+          fi
+          echo "dell1=$class" >> "$GITHUB_OUTPUT"
 
   fast-gates:
     name: "${{ ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'ci:full') && 'label event (fast gates not rerun)' || 'CI (fast gates)' }}"
@@ -144,13 +174,15 @@ jobs:
     # Forks and merge groups always use hosted capacity. Disabling the variable
     # restores hosted routing; GitHub cannot fail over an already queued job.
     # trace:STORY-2672 | ai:codex
-    # Only the two classes the dell1 controller admits are routed there: a
-    # main push (MAIN) and a same-repository train/ pull request into main
-    # (TRAIN). The controller refuses anything else, and a refused job would
-    # wait in the queue with no failover, so ordinary PRs stay hosted. This
-    # expression grants nothing: the host admits each job independently.
+    # Only the two classes the dell1 controller admits are routed there, and
+    # each requests its own class label: a TRAIN job can only be dispatched to
+    # a runner registered for TRAIN, never to one registered for MAIN (and the
+    # reverse). The tier job computes the class case-sensitively; ordinary
+    # PRs get none and stay hosted, since a refused job would wait in the
+    # queue with no failover. This expression grants nothing: the host admits
+    # each job independently.
     # trace:STORY-2695 | ai:claude
-    runs-on: ${{ vars.AIDA_DELL1_CI == 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.base_ref == 'main' && startsWith(github.head_ref, 'train/'))) && contains(fromJSON('["lib-0","lib-1","cli-0","cli-1"]'), matrix.shard) && fromJSON('["self-hosted","Linux","X64","aida-dell1"]') || matrix.os }}
+    runs-on: ${{ contains(fromJSON('["lib-0","lib-1","cli-0","cli-1"]'), matrix.shard) && ((needs.tier.outputs.dell1 == 'MAIN' && fromJSON('["self-hosted","Linux","X64","aida-dell1","MAIN"]')) || (needs.tier.outputs.dell1 == 'TRAIN' && fromJSON('["self-hosted","Linux","X64","aida-dell1","TRAIN"]'))) || matrix.os }}
     defaults:
       run:
         # Keep this explicit: implementer_preflight.rs validates this contract
@@ -217,8 +249,22 @@ jobs:
           if [ -e "$AIDA_CI_WORKSPACE/target" ] || [ -L "$AIDA_CI_WORKSPACE/target" ]; then
             refuse "prepared source already has target"
           fi
-          status=$(git -C "$AIDA_CI_WORKSPACE" status --porcelain) || refuse "cannot compare prepared source with the admitted commit"
+          # Ignored files count: an ignored .env or build output is still input
+          # the admitted commit does not contain.
+          status=$(git -C "$AIDA_CI_WORKSPACE" status --porcelain --ignored --untracked-files=all) || refuse "cannot compare prepared source with the admitted commit"
           [ -z "$status" ] || refuse "prepared source differs from the admitted commit"
+          # The seeded build directory may carry the reports of the run that
+          # published it. Remove them before any step can see the directory,
+          # so a job that fails before its own tests run has nothing to
+          # evaluate or upload.
+          rm -rf -- "$CARGO_TARGET_DIR/test-run.log" "$CARGO_TARGET_DIR/test-timings.json" \
+            "$CARGO_TARGET_DIR/changed-files.txt" "$CARGO_TARGET_DIR/nextest" \
+            || refuse "cannot clear previous reports from the seeded target"
+          for report in test-run.log test-timings.json changed-files.txt nextest; do
+            if [ -e "$CARGO_TARGET_DIR/$report" ] || [ -L "$CARGO_TARGET_DIR/$report" ]; then
+              refuse "previous report $report survives in the seeded target"
+            fi
+          done
           cd /
           rmdir "$GITHUB_WORKSPACE" || refuse "runner workspace is not empty"
           ln -s "$AIDA_CI_WORKSPACE" "$GITHUB_WORKSPACE"
@@ -226,9 +272,6 @@ jobs:
           # A link is not matched by the tracked `/target/` ignore rule.
           mkdir -p "$AIDA_CI_WORKSPACE/.git/info"
           echo /target >> "$AIDA_CI_WORKSPACE/.git/info/exclude"
-          # Prebuilt tools (cargo-nextest) install here; it is never cached.
-          mkdir -p "$CARGO_HOME/bin"
-          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
 
       # TASK-1217: keep the required Build job green for doc-only PRs/pushes
       # while short-circuiting the expensive Rust/tooling suite. The filter is
@@ -446,6 +489,21 @@ jobs:
         uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           tool: cargo-nextest@0.9.146
+
+      # install-action uses CARGO_HOME/bin only when cargo itself runs from
+      # there. dell1's cargo is the pinned /opt toolchain, so the action
+      # installs into the job's private HOME (deleted with the job) and adds
+      # that directory to PATH itself. Refuse any other cargo-nextest: a copy
+      # from the seeded cache or the host would not be the pinned download.
+      # trace:STORY-2695 | ai:claude
+      - name: Verify self-hosted cargo-nextest location
+        if: runner.environment == 'self-hosted'
+        run: |
+          found=$(command -v cargo-nextest) || { echo "::error::cargo-nextest is not on PATH" >&2; exit 1; }
+          if [ "$found" != "$HOME/.install-action/bin/cargo-nextest" ]; then
+            echo "::error::cargo-nextest resolves to $found, not $HOME/.install-action/bin/cargo-nextest" >&2
+            exit 1
+          fi
 
       # Marker enumeration makes the external-prose inventory a generated,
       # reviewable contract rather than a best-effort audit. trace:TASK-1300
