@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T21:33:38.017983852Z
+modified_at: 2026-11-20T21:58:09.528299893Z
 req_type: Story
 tags:
 - landing
@@ -811,6 +811,13 @@ comments:
   created_at: 2026-11-20T21:33:38.017983852Z
   modified_at: 2026-11-20T21:33:38.017983852Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1faf7-be33-73b0-b8c5-359bf2f51032
+  author: joe
+  content: 'advisor-121 15:12: S3 #4362 MERGED into integration as 5a4a2dc (full tier green; APPROVED at f037b9d after the scoped post-cap delta). Promotion 24 is next.'
+  created_at: 2026-11-20T21:58:09.528299893Z
+  modified_at: 2026-11-20T21:58:09.528299893Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
