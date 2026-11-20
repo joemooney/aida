@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T22:18:24.049506600Z
+modified_at: 2026-11-20T22:18:44.390661548Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -397,6 +397,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2662 partially passes. The prior sweep_pending regression and ordinary repeated approval are covered. Legacy binding can add verdict events before the approval commits. Receipt settlement can leave an orphan after interruption or remove a receipt referenced by a visible verdict after a sync error. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-20T22:18:24.049499829Z
   modified_at: 2026-11-20T22:18:24.049499829Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb0a-623b-7ca0-b705-69151860a2a6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d21536f1c46b
+    Recorded: 2026-11-20T22:15:36.680070834+00:00
+    Findings:
+    1. At store.rs:1012, bind_unbound appends eligible legacy by-spec verdicts to the change before seal can fail. With one pre-change verdict and a first PR approval, success adds both the copied verdict and the approval. If receipt issuance fails, the command returns an error after changing the standing PR verdict. Preserve legacy selection while making binding and recording satisfy the one-event and refused-write guarantees. Cover both outcomes with an existing unbound verdict.
+    2. At store.rs:972, append_review treats every error as proof the verdict did not land and deletes its receipt after releasing the locks. Both writers call write_all before sync_data. If sync_data returns an I/O error, the complete event can already be visible and reference the receipt just deleted. A retry then issues another receipt and appends another approval. Reconcile ambiguous writes under the lock and cover a fault after write_all. The current fault injection runs before the write.
+    3. At store.rs:947, seal persists a new human receipt in a separate file before appending its event. If the recorder exits between those writes, revoke never runs. The next invocation searches the standing verdict for a receipt and cannot recover the orphan. The implementer self-review confirms this remaining crash window. Add recoverable settlement keyed to the recording attempt and cover restart between receipt persistence and ledger append.
+    4. At review_commands.rs:3711, repeat && placed is used as evidence that this refusal was never announced. An already announced refusal whose hold was subsequently released also satisfies that condition on retry, producing a second ReviewVerdictRecorded event for the same verdict. Conversely, a failed mixed filing with an equivalent pre-existing hold can miss the announcement on successful retry. Track announcement by the recorded act independently of hold placement.
+    5. Line 1457 says a failed standalone filing leaves the ledger empty. The new failed-delivery fixture also covers an existing refusal, which stays on the ledger. Describe the recovery evidence as the retained draft and the absence of a new verdict event, so operators can reconcile a nonempty ledger correctly.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T22:18:44.155708575Z
+  modified_at: 2026-11-20T22:18:44.155708575Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
