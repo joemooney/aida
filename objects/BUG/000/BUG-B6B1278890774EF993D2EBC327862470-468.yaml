@@ -15,12 +15,12 @@ description: |
   - AC2: a head whose only new commit is a merge of the base, while such a lane is live, is never reviewed; once the lane exits, the newest head is reviewed.
   - AC3: when the lane-host state cannot be read, review-watch defers for a bounded time (a setting, default 20 min) and then reviews, logging why.
   - Regressions for AC1-AC3 with a fake foreign lane host.
-status: Approved
+status: Done
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T21:39:43.446462002Z
+modified_at: 2026-11-20T21:47:02.326106144Z
 req_type: Bug
 tags:
 - lanes
@@ -118,6 +118,13 @@ comments:
   modified_at: 2026-11-20T21:46:30.265841688Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1faed-5d36-7bf3-984d-abe1e8c4974a
+  author: aida-publication-done
+  content: Implementer push 9a5565b17c85 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T21:47:02.326105552Z
+  modified_at: 2026-11-20T21:47:02.326105552Z
+  session_id: 01a1fabbb213
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
@@ -141,6 +148,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1faed-5d36-7bf3-984d-abddc68d2ff0
+  author: aida-publication-done
+  timestamp: 2026-11-20T21:47:02.326103592Z
+  session_id: 01a1fabbb213
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
