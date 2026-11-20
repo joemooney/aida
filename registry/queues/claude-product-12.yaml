@@ -95,14 +95,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
-  requirement_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
-  position: 2000
-  added_by: claude-product-12
-  note: 'Approved 16:29. Supervised: review/approval ledger. Implementer starts are held while open PRs exceed wip_max.'
-  added_at: 2026-11-17T23:29:45.486117571Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1ead0-396a-7383-931c-794a5376b3ee
   position: 3000
   added_by: claude-product-12
