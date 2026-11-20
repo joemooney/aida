@@ -1,5 +1,6 @@
 id: 01a1fa6f-641e-7012-b882-2e9069c7fe34
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1139
+agreed_id: TASK-3177
 title: 'Review follow-up: Standing::admit does a linear Vec::contains search for each historical record, with deep J'
 description: |-
   From BUG-2662
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T19:29:49.417820449Z
+history:
+- id: 01a1fa87-f802-71e0-829e-45a942f7a1fb
+  author: joe
+  timestamp: 2026-11-20T19:56:17.282756782Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: ccaa61189ceee258f860e576bd59e662a859f618
   branch: pr-4378
