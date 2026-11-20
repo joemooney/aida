@@ -20,13 +20,28 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623325Z
-modified_at: 2026-11-20T20:46:04.623595155Z
+modified_at: 2026-11-20T20:49:38.682949830Z
 req_type: Bug
 tags:
 - lanes
 - linked:STORY-2705
 - review-watch
 - throughput
+comments:
+- id: 01a1fab9-02e6-7182-8ee3-a12a38436644
+  author: joe
+  content: |-
+    Product 13:48: Claude (Fable) fresh-start lane queued on dell1, brief:
+    # Brief: BUG-2706 (fresh start; advisor-121 13:47: approved, drain, high; Claude+Fable)
+
+    Review-watch reviewed MERGE-ONLY heads while a rework lane on a FOREIGN lane host (dell1) was live and still working on that PR: twice this hour (#4364 at 778dc38, #4363 at cde727e). Each produced a premature CHANGES REQUESTED that isn't a spent round. Cause: STORY-2705's "defer review while a rework lane is live" check only sees lanes on the local host, not foreign lane hosts.
+    Implement the spec's ACs: review-watch defers a review while a live rework lane exists for the PR's spec on ANY registered lane host (use the existing lane/lease visibility for foreign hosts; don't add an ad-hoc ssh probe in review-watch). Regression: a foreign-host live lane defers the review; after the lane exits, the new head is reviewed.
+    Trailer (BUG-2706) if every AC is met; otherwise (Refs BUG-2706).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T20:49:38.682949830Z
+  modified_at: 2026-11-20T20:49:38.682949830Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
