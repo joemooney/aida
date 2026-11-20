@@ -1568,6 +1568,43 @@ impl SessionStartReceipt {
         }
     }
 }
+/// BUG-2697: the shared claim a session start acquired while no lease stands
+/// for it yet. Dropping it with a claim still set (the start failed before
+/// its lease was written) compare-and-deletes exactly that claim, so a
+/// refused start never leaves a `process_backed = false` claim behind to
+/// block the next admission. The launch rollback ([`SessionStartCleanup`])
+/// owns the claim instead when it is armed.
+// trace:BUG-2697 | ai:claude
+pub(crate) struct UnleasedClaimRelease {
+    store: std::path::PathBuf,
+    scope: String,
+    pub(crate) claim: Option<coordination::Claim>,
+}
+impl UnleasedClaimRelease {
+    pub(crate) fn new(root: &std::path::Path, scope: &str) -> Self {
+        Self {
+            store: root.join(".aida-store"),
+            scope: scope.into(),
+            claim: None,
+        }
+    }
+}
+impl Drop for UnleasedClaimRelease {
+    fn drop(&mut self) {
+        let Some(claim) = self.claim.take() else {
+            return;
+        };
+        match coordination::release_claim_receipt(&self.store, &claim) {
+            Ok(_) => {}
+            Err(error) => eprintln!(
+                "session start failed and could not release its shared claim for {}: {error:#}; \
+                 `aida doctor heal stale-leases` releases it once it expires",
+                self.scope
+            ),
+        }
+    }
+}
+
 // trace:BUG-2188 | ai:codex
 pub(crate) struct SessionStartCleanup {
     root: std::path::PathBuf,
@@ -2607,6 +2644,10 @@ pub(crate) fn session_start_with_receipt(
     // trace:BUG-2586 | ai:claude
     let lease_id_long = uuid::Uuid::now_v7().to_string();
     let bound_lease_id = lease_id_long.replace('-', "")[..12].to_string();
+    // BUG-2697: without the launch rollback, a start that fails before its
+    // lease is written still releases the shared claim it acquired here.
+    // trace:BUG-2697 | ai:claude
+    let mut unleased_claim = UnleasedClaimRelease::new(&project_root, owns);
     {
         let store_root = project_root.join(".aida-store");
         let orchestrated = orchestrator::detect(&project_root).is_orchestrated();
@@ -2622,11 +2663,15 @@ pub(crate) fn session_start_with_receipt(
             Ok((coordination::AcquireOutcome::Acquired, claim)) => {
                 if let Some(cleanup) = rollback.as_mut() {
                     cleanup.claim = claim;
+                } else {
+                    unleased_claim.claim = claim;
                 }
             }
             Ok((coordination::AcquireOutcome::Reclaimed(reason), claim)) => {
                 if let Some(cleanup) = rollback.as_mut() {
                     cleanup.claim = claim;
+                } else {
+                    unleased_claim.claim = claim;
                 }
                 eprintln!(
                     "  {} reclaiming a stale cross-clone lease on `{owns}` ({reason})",
@@ -3670,6 +3715,9 @@ pub(crate) fn session_start_with_receipt(
             || aida_core::write_atomic(&lease_file, &body).map_err(Into::into),
         )?;
     }
+    // The lease now stands; the claim protects it from here on.
+    // trace:BUG-2697 | ai:claude
+    unleased_claim.claim = None;
     // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
     crate::ownership::dual::lease_written(&project_root, &lease);
     if let Some(cleanup) = rollback.as_mut() {

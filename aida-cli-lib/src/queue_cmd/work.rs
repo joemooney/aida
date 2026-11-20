@@ -7279,13 +7279,19 @@ pub(crate) fn end_finished_review(
 /// wherever it surfaces.
 /// BUG-2684: so is the lane disk preflight's refusal, which the drain launch
 /// reaches after its launch mark but before it spawns anything.
+/// BUG-2697: and every other drain-launch admission refusal (memory floor,
+/// cold-start cap, gate reservation) marked [`RefusedBeforeSpawn`].
+///
+/// [`RefusedBeforeSpawn`]: crate::lane_admission::RefusedBeforeSpawn
 // trace:BUG-2428 TASK-2807 | ai:claude
 // trace:BUG-2684 | ai:claude
+// trace:BUG-2697 | ai:claude
 pub(crate) fn launch_refused_before_agent(setup_result: &Result<()>, agent_started: bool) -> bool {
     setup_result.as_ref().is_err_and(|err| {
         !agent_started
             || crate::gate::seat_authority::ChildGrantRefused::is_in(err)
             || crate::lane_disk_deferral::refusal(err).is_some()
+            || crate::lane_admission::is_refused_before_spawn(err)
     })
 }
 

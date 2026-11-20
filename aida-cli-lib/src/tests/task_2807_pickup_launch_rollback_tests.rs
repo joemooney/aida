@@ -189,6 +189,41 @@ fn a_failure_after_the_agent_started_keeps_the_worktree_and_lease() {
     assert_kept(&fx.main, &tree, scope, &lease_id);
 }
 
+/// BUG-2697: the drain launch marks its agent before host admission runs. A
+/// memory-floor (or any other admission) refusal marked as before-spawn still
+/// launched nobody, so the setup (lease, tree and claim) is rolled back; an
+/// unmarked error after the mark keeps it.
+// trace:BUG-2697 | ai:claude
+#[test]
+fn bug_2697_an_admission_refusal_after_the_mark_rolls_back() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let scope = "TASK-926970";
+    let receipt = launching_setup(scope);
+    let (_, tree) = lease_tree(&fx.main, scope).expect("setup minted a lease");
+
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |agent: &AgentLaunchMark| {
+        agent.starting();
+        Err(crate::lane_admission::refused_before_spawn(anyhow::anyhow!(
+            "host memory headroom is below the lane floor"
+        ))
+        .context("could not start the headless implementer"))
+    });
+
+    let error = result.unwrap_err();
+    assert!(
+        format!("{error:#}").contains("below the lane floor"),
+        "{error:#}"
+    );
+    assert!(rolled_back, "an admission refusal launched nobody");
+    assert_gone(&fx.main, &tree, scope);
+    assert!(!crate::queue_cmd::launch_refused_before_agent(
+        &Err(anyhow::anyhow!("the implementer exited")),
+        true
+    ));
+}
+
 /// TASK-2807: a panic after the agent ran unwinds through a disarmed setup,
 /// so its uncommitted work and lease survive; the panic still propagates.
 #[test]
