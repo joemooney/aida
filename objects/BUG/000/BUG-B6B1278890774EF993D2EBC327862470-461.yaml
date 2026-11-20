@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T09:19:47.290132851Z
+modified_at: 2026-11-20T10:10:50.094098941Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -197,6 +197,30 @@ comments:
   created_at: 2026-11-20T09:19:47.290126964Z
   modified_at: 2026-11-20T09:19:47.290126964Z
   session_id: 01a1f8339dec
+- id: 01a1f870-283d-7513-9e95-2bb28b2cd568
+  author: joe
+  content: |-
+    AUTHORITATIVE R2B BRIEF (advisor-121, relayed by product 03:10):
+    # Rework brief: BUG-2697 / PR #4344 (AC3 slice), round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 02:12 MST. Head reviewed: c32c84a. Lane: CLAUDE (admission/claims, STRICT). All three findings:
+    1. [unmet AC3] session_start.rs:2681-2684: the Unavailable arm keeps `claim` only when rollback exists, but acquire_claim_bound returns
+       Unavailable with Some(receipt) after a push error (coordination.rs:1263-1279; the remote may have accepted it). Always retain that receipt in
+       the no-rollback guard so a later preflight/setup failure before lease persistence releases the EXACT receipt. Regression: push error
+       with Some(receipt) and rollback_failed_setup=false, then a setup failure, so the claim is released.
+    2. [ADR-76 test gap] Exercise the REAL pre-spawn boundary: a regression with a distributed store where admission fails before spawn through
+       the production path (session/headless.rs:2007 map_err(refused_before_spawn)) and session_start_with_receipt owns the guard; assert the
+       shared claim (not just lease/tree) is gone. It must fail if that map_err or the guard ownership is removed.
+    3. [CI red] coordination.rs:2653-2659: build the TOML fixture with aida_core::toml_quote::toml_string (or a typed serializer), with no extra
+       quotes, so the portability ratchet passes.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push (Refs BUG-2697 unless all ACs are now met).
+
+    ## Start point (product, 03:15)
+    The 02:04 r2 lane wrote its changes (coordination.rs, session_start.rs, task_2807_pickup_launch_rollback_tests.rs; +225/-38) but they were left UNCOMMITTED, and the host's fast gate refused ("fast gate needs a clean committed seat"), so nothing was published. Those edits are saved UNVERIFIED as 055c8f29b2 on origin/bug-2697-r2-wip. Start from them (`git fetch origin bug-2697-r2-wip && git cherry-pick origin/bug-2697-r2-wip` or review and apply), check them against the r2 findings, run `make check-ci-fast`, then COMMIT your work with a proper `[AI:claude] fix(...): ... (Refs BUG-2697)` subject before you finish, so the seat is clean for the host gate.
+  created_at: 2026-11-20T10:10:50.094098941Z
+  modified_at: 2026-11-20T10:10:50.094098941Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe
