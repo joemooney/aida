@@ -1,0 +1,31 @@
+id: 01a1f854-b8e4-7272-983b-1d231d8de5dd
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1129
+title: 'Review follow-up: Replace the new ambient PATH read in UnsetShip::new with the approved test-environment hel'
+description: |-
+  From STORY-2884
+  Reviewed sha: d728fb758720c5dee8f6572e3984286d39b67bdc
+
+  Replace the new ambient PATH read in UnsetShip::new with the approved test-environment helper, without enlarging the ratchet ledger. At the exact reviewed head, aida-cli-lib/src/gate/tests/story_1917_dispatch_flow_schedule_tests.rs:3312 still calls std::env::var("PATH"). Exact-head GitHub fast-gates job 136190660147 fails tests.test_exec_context_ratchet.ExecContextRatchetTests.test_repository_matches_exact_ledger with new forbidden site story_1917_dispatch_flow_schedule_tests.rs:new:var:c2c7e032717fc5d2fa3f; the required Build aggregate consequently fails. The latest implementer comment describes this fix as uncommitted, and it is absent from d728fb758720c5dee8f6572e3984286d39b67bdc and the supplied landed diff. Commit the helper-based fixture fix and obtain fresh exact-head CI. This is a P2 fixture/CI regression, not a missing authority-path assertion or a demonstrated authority bypass.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T09:41:04.356827978Z
+modified_at: 2026-11-20T09:41:04.356827978Z
+req_type: Task
+tags:
+- carried-from:STORY-2884
+- finding-hash:7423045a
+- from-review:STORY-2884
+relationships:
+- rel_type: References
+  target_id: 01a1eaa9-ac38-71b2-9fa2-43c1105fe5c5
+  created_at: 2026-11-20T09:41:16.530453759Z
+filed_at:
+  code_sha: d728fb758720c5dee8f6572e3984286d39b67bdc
+  branch: pr-4347
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 888f8b76a6d
+  vendor: claude
+  session: 01a1f85249c6
