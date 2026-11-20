@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T19:39:27.666608452Z
+modified_at: 2026-11-20T19:42:14.956375215Z
 req_type: Bug
 tags:
 - dell1
@@ -844,6 +844,32 @@ comments:
   created_at: 2026-11-20T19:38:59.509723322Z
   modified_at: 2026-11-20T19:38:59.509723322Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa7b-4d86-7e23-bda7-e95fb4b4a3f8
+  author: joe
+  content: |-
+    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 12:42):
+    # Rework brief: BUG-2684 / PR #4364, round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 12:48 MST. Head reviewed: d0c1679. Lane: CLAUDE+Fable. COMMIT your work.
+    The r2 reviewer's draft (APPROVED with 5 unresolved findings; the handoff refused it) is the brief; the core design was verified sound.
+     P3 reader.rs lease_processes_proven_gone: a pid-less reviewer lease in an unobservable pid namespace must NOT be proven dead on age alone;
+        keep it (unverifiable means alive), with a regression.
+     P3 session_start.rs review_conflict_cannot_prompt: the persistent no-human-acknowledged markers must not suppress the conflict prompt for
+        an ATTENDED interactive pickup; only this invocation's --no-human flag (or a non-tty) may.
+     test-gap reader.rs review_holder_proven_dead: tests for the unreadable-ownership-record branch and OwnerVerdict::Alive on a record naming
+        this session (both refuse).
+     test-gap work.rs/session_start.rs: a test that a --no-human pickup marks no-human setup and that the conflict loop takes the
+        release path without prompting (behavioural, not a truth table).
+     style: replace the process-global NO_HUMAN_SETUP AtomicBool with a parameter passed into session start (it leaks across MCP calls
+        and tests).
+    Also merge origin/main (5 behind). cargo fmt; ratchets (ownership liveness!); targeted cargo run; make check-ci-fast. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T19:42:14.956375215Z
+  modified_at: 2026-11-20T19:42:14.956375215Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
