@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T21:48:26.388431740Z
+modified_at: 2026-11-20T22:39:58.177403112Z
 req_type: Task
 tags:
 - landing
@@ -250,6 +250,47 @@ comments:
   modified_at: 2026-11-20T21:48:26.388431740Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb1d-d2e1-7881-8f17-6bf69426d370
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e8eb899c06 (PR #4381 round 2 = PR-A of the advisor's four-way split; trailer `Refs TASK-3827`; PR title and body changed to match). Diff reviewed: `git diff origin/main...HEAD`, 14 files.
+
+    ### Brief items and evidence
+    Tests are in aida-cli-lib/src/tests/task_3827_throughput_guard_tests.rs (module `land::stalls::foundation_tests`) unless named.
+    - Removal of AC7b/c/d: [evidence: manual-inspection] land_stalls_flakes.rs, land_stalls_lanes.rs, land_stalls_claims.rs and their tests are deleted; lane_result.rs, lane_liveness.rs, ci_failures.rs are back to origin/main; coordination.rs differs from main only by `leases_dir` becoming pub(crate). The three classes, their settings and their docs are gone. Limitation: checked by reading `git diff --stat origin/main`.
+    - 1 AC2 lanes on other hosts: [evidence: behavioral-test] `a_change_whose_spec_a_reporting_lane_on_another_host_holds_is_not_stuck` (real record files read through lane_hosts::read_store; rework, review with and without red CI, conflict and approved-red are not stuck; an approved green head still is), `a_silent_lane_on_another_host_does_not_hide_the_stall_and_is_named_as_unknown`, `another_hosts_lanes_are_counted_from_its_own_records_with_their_age` (7 reporting + 1 silent, age shown, saved snapshot reads back). Reader: aida-cli-lib/src/lane_hosts.rs with 7 tests of its own.
+    - 2 STUCK-REVIEW cause: [evidence: behavioral-test] `a_head_nobody_reviews_names_the_observed_cause_or_says_it_is_unknown`, and 4 tests in land_stalls_review_cause.rs (log parsing, a watcher that stopped logging, leftover tree and lease, bounded tail read).
+    - 3 SSH destination: [evidence: behavioral-test] `the_probed_hosts_come_from_the_default_branch_never_from_the_checkout` (a real git repository: main names dell1, the checked-out branch and the working tree name other hosts, `Policy::load` returns dell1; no default branch gives no host) and `a_destination_that_is_not_a_plain_host_alias_is_dropped_before_any_probe`. scripts/config-trust.toml classifies the table under keys.trusted. The probe adds ForwardAgent=no and ForwardX11=no.
+    - 4 no store file created: [evidence: behavioral-test] lane_hosts `task_3827_reading_creates_nothing_and_a_project_without_a_store_directory_is_refused` (no store, a single-file store left byte-identical, an empty store directory left empty). `other_stalls` and its `Storage::load` call are removed.
+    - 5 bounded regular-file reads: [evidence: behavioral-test] lane_hosts `task_3827_a_record_that_is_not_a_small_regular_lane_file_is_named_as_unreadable` (garbled, over 64 KiB, symlink, FIFO, directory). Receipt reads left this change with the LANE-OUTCOME code; PR-C has to use the same read.
+    - 6 durations: [evidence: behavioral-test] `a_threshold_out_of_range_keeps_its_default_and_no_duration_overflows`.
+    - 7 routed fields: [evidence: behavioral-test] `every_routed_field_is_one_bounded_line_without_control_characters` and lane_hosts `task_3827_a_routed_field_is_one_bounded_line_without_hidden_characters`.
+
+    ### Validation
+    - Lane job j20261120T223909621-8-0 at the pushed commit: `cargo test --profile agent -p aida-cli-lib --lib -- land::stalls:: lane_hosts::`, 44 passed, 0 failed.
+    - Lane job j20261120T221334708-16-0 (before one test-helper change): the same plus `lane_binaries bug_1723 config_trust story2705`, 65 passed, 0 failed.
+    - `make check-ci-fast`: exit 0 (lane job j20261120T222151727-6-0). One earlier run failed on the git auto-maintenance ratchet (a test spawned `git commit` directly); fixed by using crate::test_git::git_command.
+    - `python3 scripts/check-store-writers.py`: passes; two rows added, both reads.
+    - Not run: the guard against the live forge and store; the SSH probe against a real host.
+
+    ### Probe findings
+    - Probe 3, fixed: records naming many made-up hosts would have grown the report and the saved state without limit. The report lists at most 32 other hosts, named ones first, and says when more exist.
+    - Probe 4, fixed: `one_line` kept control characters other than white space (ESC, NUL) and direction overrides. `lane_hosts::routed` drops them, and build_report applies it to every item, "not read" line, host line and title.
+    - Probe 5: the only authority-shaped path is the SSH destination. A seat that edits its checkout's config changes thresholds only; refusal is tested with a real repository. No test was weakened; story_2906 tests changed only where `host_lines_from` was replaced.
+    - Probe 1, not fixed: the watcher's line format (`PR-N: watcher admission is busy`, `<time> review-watch pass:`) is matched as text, with no constant shared with review_watch.rs. If the watcher's wording changes, the cause reads "unknown", not a wrong cause.
+
+    ### Decisions the advisor should know
+    - Depends on #4382: a session claim's heartbeat is still written once. Until #4382's refresh lands, a lane's record is silent 30 minutes after the lane starts, so the 14:14 case (#4376) is still reported, now as "a lane on host X still holds it on record but last reported N min ago: whether it runs is unknown". It stops being reported only with both changes in.
+    - A silent record older than 24 hours is treated as a leftover (the store here holds about 1,500 claim files).
+    - A live lane on another host suppresses STUCK-REVIEW also when CI is green. A live lane on this host does not (unchanged slice-1 behaviour); the two differ.
+    - `[throughput_guard.remote_hosts]` now takes effect only from the default branch, so this project's entry starts working when this change lands.
+    - A project with no shared store directory gets one "Not read: lanes on other hosts" line on every run.
+    - The "stale lease" cause is a PR-N lease that is recorded but not among the live leases this run found; no new liveness check was added.
+  created_at: 2026-11-20T22:39:58.177403112Z
+  modified_at: 2026-11-20T22:39:58.177403112Z
+  session_id: 01a1faee627d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
