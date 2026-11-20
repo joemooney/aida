@@ -843,6 +843,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f985-8bde-7f62-b7b6-8ef8aa4eb2ce
+  author: joe
+  timestamp: 2026-11-20T15:14:01.310142851Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
