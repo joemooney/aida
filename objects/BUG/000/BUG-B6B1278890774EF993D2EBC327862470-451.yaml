@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-20T02:01:44.679787810Z
+modified_at: 2026-11-20T02:19:56.106173329Z
 req_type: Bug
 tags:
 - landing
@@ -158,6 +158,19 @@ comments:
   created_at: 2026-11-20T02:00:21.768584495Z
   modified_at: 2026-11-20T02:00:21.768584495Z
   session_id: 01a1f6802f0e
+- id: 01a1f6c0-d94a-7071-90fb-ea781eb08a99
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 502f8421a7 (round 2).
+    Finding 1 (dev_build.rs:435): fixed. green_head_mismatch() refuses in plan_promotion_at whenever a green commit is selected and HEAD is not exactly it, whatever the behind count; --allow-dirty cannot override it. run_dev_build re-probes HEAD right before steps.build, and the swap compares the staged sha with the selected commit, not with HEAD. Regressions (story_1689 tests): a_clean_head_level_with_origin_main_must_still_be_the_chosen_green_commit (pure, also with allow_dirty), head_fast_forwarded_before_the_build_refuses_without_building, head_fast_forwarded_during_the_build_refuses_a_matching_staged_tip (G chosen, HEAD T == origin/main, staged T: refused, live untouched, message names G and T). cargo test dev_autopromote:: 59/59 ok; dev_build/story_1689 filter 114/114 ok.
+    Finding 2 (aida-autobuild.sh:94): fixed. A gh query that fails or times out records the commit as 'CI unknown (query failed, exit N)' and the walk continues; stdout from a failed query is never taken as green. Regressions: test_unreadable_tip_ci_passes_over_to_the_older_green_commit, test_unreadable_ci_everywhere_promotes_nothing; tests/test_lane_autobuild.py 18/18 ok (TMPDIR injected, because sandbox /tmp is read-only).
+    Ratchet: proc_identity baseline for dev_build.rs went from 2 to 3. The new call is a BuildSteps::probe (a git checkout read) that the broad .probe( regex matches; the reason is in a comment in the test. aida-ci-guards 51/51 ok, check-store-writers ok, cargo fmt ok.
+    Residual: make check-ci-fast cannot complete in this lane (60s tool cap). Its containment conformance gate fails here on sandbox EPERM and read-only /tmp, in files this PR does not touch. CI at the PR head is the evidence.
+  created_at: 2026-11-20T02:19:56.106173329Z
+  modified_at: 2026-11-20T02:19:56.106173329Z
+  session_id: 01a1f6b1ce4a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f677-27f6-73c2-83dc-dc7ef45e7218
   author: joe
