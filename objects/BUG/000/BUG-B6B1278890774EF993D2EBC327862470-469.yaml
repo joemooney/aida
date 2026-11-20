@@ -15,12 +15,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-20T23:13:58.838549242Z
+modified_at: 2026-11-20T23:14:21.779971459Z
 req_type: Bug
 tags:
 - review
 - reviewer-skill
 - throughput
+comments:
+- id: 01a1fb3d-811f-7da2-85b6-22442bafccbd
+  author: joe
+  content: 'ADVISOR RULING (advisor-121, 16:26): contract (b), keeping the gate''s current behaviour (per the project-knob policy: default = old behaviour). Any unresolved finding means REQUEST CHANGES; the aida-review skill template says so plainly, and the draft validator refuses an approved-with-findings draft AT DRAFT WRITE (while the reviewer runs), naming the fix. Option (a), approve-with-follow-ups, may come later only as a per-project knob (default off) with its own spec. Claude lane, standard review.'
+  created_at: 2026-11-20T23:14:21.779971459Z
+  modified_at: 2026-11-20T23:14:21.779971459Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe
