@@ -4344,11 +4344,30 @@ pub(crate) fn record_review_act(
         // No ledger decides here: the hand-off names its own receipt.
         let mut obj = obj.clone();
         if let Some(receipt) = receipt {
-            obj.insert(ATTESTATION_KEY.to_string(), receipt.issue()?);
+            match receipt.issue(None) {
+                Ok(attestation) => obj.insert(ATTESTATION_KEY.to_string(), attestation),
+                Err(e) => {
+                    receipt.settle(crate::gate::ledger::store::Settled::Absent);
+                    return Err(e);
+                }
+            };
         }
         if let Err(e) = hand_off_verdict_file(path, &obj) {
             if let Some(receipt) = receipt {
-                receipt.revoke();
+                // The receipt goes only when the hand-off is proved not to
+                // name it: no file, or a file that reads as another record.
+                use crate::gate::ledger::store::Settled;
+                let written = match read_verdict_body(path) {
+                    Ok(body) => serde_json::from_str::<serde_json::Value>(&body)
+                        .ok()
+                        .map(|on_disk| on_disk.get(ATTESTATION_KEY) == obj.get(ATTESTATION_KEY)),
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Some(false),
+                    Err(_) => None,
+                };
+                receipt.settle(match written {
+                    Some(false) => Settled::Absent,
+                    _ => Settled::Kept,
+                });
             }
             return Err(e);
         }
@@ -4358,7 +4377,7 @@ pub(crate) fn record_review_act(
     let mut obj = obj.clone();
     carry_unarchived_rounds(path, &mut obj);
     let spec = crate::gate::ledger::GateSpec::resolve(&root, spec);
-    // The append issues the receipt and takes it back if it does not land.
+    // The append issues the receipt and settles it with what the write did.
     crate::gate::ledger::record_review_act_at(path, &obj, Some(&spec), receipt)
 }
 

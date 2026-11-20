@@ -1502,3 +1502,110 @@ fn story_2913_custom_list_auto_files_followups() {
     .unwrap();
     assert_eq!(record["verdict"], "request-changes");
 }
+
+/// A receipt is settled with what the ledger write did, under the append's
+/// locks, on the unbound ledger and on a change alike: a write that failed
+/// before it began proves the record absent, a write whose sync failed left
+/// the record on the ledger (appended, receipt kept), and a recorder that
+/// exits after the receipt settles nothing.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_receipt_is_settled_by_what_the_write_did() {
+    use crate::gate::ledger::store::{ReviewFault, Settled};
+    use crate::gate::ledger::{self, store, ChangeKey, Delivered, GateSpec};
+    use bug_2662_store::*;
+    #[derive(Default)]
+    struct Probe {
+        issued: std::cell::Cell<u32>,
+        settled: std::cell::RefCell<Vec<Settled>>,
+    }
+    impl store::Receipt for Probe {
+        fn reuse(&self, _: &crate::gate::review_verdict::JsonObj) -> Option<serde_json::Value> {
+            None
+        }
+        fn issue(
+            &self,
+            attempt: Option<&store::Attempt<'_>>,
+        ) -> std::io::Result<serde_json::Value> {
+            let attempt = attempt.expect("a ledger append names its attempt");
+            assert_eq!(attempt.slot.len(), 64);
+            assert!(!attempt.names("probe"), "no record names the receipt yet");
+            self.issued.set(self.issued.get() + 1);
+            Ok(serde_json::json!({"receipt_id":"probe","n":self.issued.get()}))
+        }
+        fn settle(&self, settled: Settled) {
+            self.settled.borrow_mut().push(settled);
+        }
+        fn issued(&self) -> Option<serde_json::Value> {
+            None
+        }
+    }
+    for bound in [false, true] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _guard =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        let spec = GateSpec::resolve(root, "STORY-9840");
+        let record = body("approved", "operator");
+        let probe = Probe::default();
+        let append = || {
+            let rule = store::ReviewRule {
+                once: true,
+                receipt: Some(&probe),
+                ..Default::default()
+            };
+            if bound {
+                let event = evt(root, &record, Some("STORY-9840"));
+                store::append_review(root, Some(ChangeKey::pr(CHANGE)), event, &rule)
+            } else {
+                let event = ledger::event::verdict_event_unbound(root, &spec, &record);
+                store::append_review(root, None, event, &rule)
+            }
+        };
+        let verdicts = || {
+            let events = if bound {
+                store::read_file(root, ChangeKey::pr(CHANGE))
+            } else {
+                store::read_unbound(root, &spec.label)
+            };
+            events
+                .iter()
+                .filter(|e| e.verdict_record().is_some())
+                .count()
+        };
+        let settled = || std::mem::take(&mut *probe.settled.borrow_mut());
+
+        store::FAIL_NEXT_REVIEW_WRITE.with(|c| c.set(true));
+        assert!(append().is_err());
+        assert_eq!(verdicts(), 0, "bound={bound}");
+        assert_eq!(settled(), [Settled::Absent], "bound={bound}: proved absent");
+
+        store::NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::ExitAfterReceipt)));
+        assert!(append().is_err());
+        assert_eq!(verdicts(), 0, "bound={bound}");
+        assert!(
+            settled().is_empty(),
+            "bound={bound}: an exited recorder settles nothing"
+        );
+
+        store::NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::Unsynced)));
+        assert_eq!(append().unwrap(), Delivered::Appended, "bound={bound}");
+        assert_eq!(store::NEXT_REVIEW_FAULT.with(|c| c.get()), None);
+        assert_eq!(verdicts(), 1, "bound={bound}: the event is on the ledger");
+        assert_eq!(settled(), [Settled::Kept], "bound={bound}: in doubt, kept");
+
+        // The record on the ledger names the receipt it was sealed with.
+        let now = store::observe(
+            root,
+            bound.then(|| ChangeKey::pr(CHANGE)),
+            Some(&spec.label),
+        )
+        .unwrap();
+        let act = now.current_act(Some(&spec.label)).expect("the act stands");
+        assert_eq!(
+            act[crate::gate::review_verdict::ATTESTATION_KEY]["receipt_id"],
+            "probe"
+        );
+        assert_eq!(probe.issued.get(), 3, "bound={bound}");
+    }
+}

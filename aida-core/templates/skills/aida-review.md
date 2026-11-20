@@ -1454,10 +1454,12 @@ verdict:
 
 - **Standalone draft handoff** (the launch prompt names a `draft.json` path):
   the parent validates the draft and records it through this same direct
-  `aida review record` path. A failed filing leaves the gate ledger empty: no
-  `sweep_pending` record, no verdict. The recovery evidence is the retained
-  draft file; the parent retries it within the launch, and the next launch
-  for the same head picks it up.
+  `aida review record` path. A failed filing adds nothing to the gate ledger:
+  no `sweep_pending` record and no new verdict event. The ledger itself may
+  not be empty, since a verdict recorded earlier (a previous round's refusal,
+  for instance) stays on it. The recovery evidence is the retained draft file
+  together with the absence of a new verdict event; the parent retries the
+  draft within the launch, and the next launch for the same head picks it up.
 - **Legacy verdict-file collection** (the reviewer wrote a verdict file the
   launcher collects): the launcher persists the complete record with
   `sweep_pending: true` first, so a failed delivery leaves that blocking

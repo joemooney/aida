@@ -580,7 +580,7 @@ fn write_events(
     }
     let mut file = open_append(&ledger_file(root, change))?;
     file.write_all(lines.as_bytes())?;
-    file.sync_data()?;
+    sync_appended(&file)?;
     for event in pending.iter() {
         if let Some(spec) = event.spec.as_deref() {
             if let Err(e) = super::project::index_spec(root, spec, change) {
@@ -656,15 +656,20 @@ pub(crate) fn append_unbound_expected(
     pending: Option<&crate::gate::review_verdict::JsonObj>,
 ) -> std::io::Result<Delivered> {
     let event = super::event::verdict_event_unbound(root, gate_spec, record);
-    append_unbound_checked(root, event, |now, _| {
-        if let Some(pending) = pending {
-            let current = now.unbound.iter().rev().find_map(|e| e.verdict_record());
-            if current != Some(pending) && current != Some(record) {
-                return Err(std::io::Error::other("review changed during sweep delivery; refusing stale approval; record a fresh review"));
+    append_unbound_checked(
+        root,
+        event,
+        |now, _| {
+            if let Some(pending) = pending {
+                let current = now.unbound.iter().rev().find_map(|e| e.verdict_record());
+                if current != Some(pending) && current != Some(record) {
+                    return Err(std::io::Error::other("review changed during sweep delivery; refusing stale approval; record a fresh review"));
+                }
             }
-        }
-        Ok(None)
-    })
+            Ok(None)
+        },
+        |_, wrote| wrote,
+    )
 }
 
 /// Whether `spec` may name a file under `by-spec/`.
@@ -803,6 +808,18 @@ impl Observed {
             .any(|e| e.spec.as_deref() == spec && e.verdict_record() == Some(record))
     }
 
+    /// Whether a verdict event observed, on either ledger, names human-review
+    /// receipt `id`.
+    fn names_receipt(&self, id: &str) -> bool {
+        self.bound.iter().chain(&self.unbound).any(|e| {
+            e.verdict_record()
+                .and_then(|r| r.get(crate::gate::review_verdict::ATTESTATION_KEY))
+                .and_then(|a| a.get("receipt_id"))
+                .and_then(|v| v.as_str())
+                == Some(id)
+        })
+    }
+
     /// The verdict events observed, as [`Standing`].
     pub(crate) fn standing(&self) -> Standing {
         Standing(
@@ -849,21 +866,63 @@ impl Standing {
     }
 }
 
+/// The recording attempt a receipt is issued for, as the append sees it
+/// under its locks.
+// trace:BUG-2662 | ai:claude
+pub(crate) struct Attempt<'a> {
+    /// Where the record lands: the store, the destination ledger and the
+    /// spec label, as one digest. The locks held serialize every attempt
+    /// that shares it.
+    pub(crate) slot: String,
+    /// What is recorded: a digest of the record without the fields every
+    /// recording of the same act changes (its timestamp, the retained round
+    /// history, the attestation that names the receipt).
+    pub(crate) act: String,
+    named: &'a dyn Fn(&str) -> bool,
+}
+
+impl Attempt<'_> {
+    /// Whether a verdict event of the history read under the locks names
+    /// receipt `id`.
+    pub(crate) fn names(&self, id: &str) -> bool {
+        (self.named)(id)
+    }
+}
+
+/// What became of the record a receipt was issued for, as proved under the
+/// append's locks.
+// trace:BUG-2662 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Settled {
+    /// The record is on the ledger and was synced.
+    Landed,
+    /// The record is on the ledger unsynced, or the ledger could not be read
+    /// back: the receipt and its reservation stay, and a retry reconciles.
+    Kept,
+    /// The ledger was read whole and does not hold the record.
+    Absent,
+}
+
 /// The human-review receipt of an act of review, settled with its append
-/// ([`append_review`]) under the destination's locks: a repeat answers with
-/// the standing act's receipt, and a new receipt is persisted only once the
-/// record that names it is about to be appended, and removed again when that
-/// append does not land. No receipt outlives a refused or failed recording.
+/// ([`append_review`]) under the destination's locks. A repeat answers with
+/// the standing act's receipt. A new receipt is reserved for its attempt
+/// ([`Attempt`]) before it is persisted, so a recording that stopped between
+/// the receipt and the ledger write is found by the next attempt at the same
+/// destination: the same act adopts the receipt, another act removes it once
+/// the history read under the locks proves no record names it. After the
+/// write, a receipt is removed only when the record is proved absent
+/// ([`Settled`]); in doubt it is kept.
 // trace:BUG-2662 | ai:claude
 pub(crate) trait Receipt {
     /// The attestation that answers with the receipt of `standing`, when that
     /// receipt still vouches for this act.
     fn reuse(&self, standing: &crate::gate::review_verdict::JsonObj) -> Option<serde_json::Value>;
-    /// Persist a new receipt and return the attestation that names it.
-    fn issue(&self) -> std::io::Result<serde_json::Value>;
-    /// Remove the receipt [`Receipt::issue`] persisted, if any: the record
-    /// naming it was not appended.
-    fn revoke(&self);
+    /// Persist the receipt of `attempt` (adopting the one a stopped recording
+    /// of the same act left) and return the attestation that names it. With
+    /// no attempt (a hand-off file, no ledger) the receipt is always new.
+    fn issue(&self, attempt: Option<&Attempt<'_>>) -> std::io::Result<serde_json::Value>;
+    /// Settle the receipt [`Receipt::issue`] persisted, if any.
+    fn settle(&self, settled: Settled);
     /// The attestation naming the receipt this act issued and kept.
     fn issued(&self) -> Option<serde_json::Value>;
 }
@@ -879,7 +938,7 @@ pub(crate) struct ReviewRule<'a> {
     /// standing at the destination under the same spec is not appended, and
     /// one the ledger already holds but that no longer stands is refused.
     pub(crate) once: bool,
-    /// Copy this spec's unbound records onto the change before the append.
+    /// Copy this spec's unbound records onto the change, in the same append.
     pub(crate) bind: Option<&'a GateSpec>,
     /// Settle the act's human-review receipt with the append.
     pub(crate) receipt: Option<&'a dyn Receipt>,
@@ -898,6 +957,43 @@ thread_local! {
     /// its decision (and any receipt it issued), before the ledger write.
     pub(crate) static FAIL_NEXT_REVIEW_WRITE: std::cell::Cell<bool> =
         const { std::cell::Cell::new(false) };
+    /// BUG-2662 test seam: the next review append on this thread stops as
+    /// [`ReviewFault`] says.
+    pub(crate) static NEXT_REVIEW_FAULT: std::cell::Cell<Option<ReviewFault>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Where [`NEXT_REVIEW_FAULT`] stops a review append.
+// trace:BUG-2662 | ai:claude
+#[cfg(test)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReviewFault {
+    /// The recorder exits once its receipt is persisted, before the ledger
+    /// write: nothing after that point runs, no settlement either.
+    ExitAfterReceipt,
+    /// The ledger write completes and its sync reports an I/O error.
+    Unsynced,
+}
+
+/// Take [`NEXT_REVIEW_FAULT`] when it is `fault`.
+#[cfg(test)]
+fn review_fault(fault: ReviewFault) -> bool {
+    NEXT_REVIEW_FAULT.with(|f| {
+        let hit = f.get() == Some(fault);
+        if hit {
+            f.set(None);
+        }
+        hit
+    })
+}
+
+/// The sync of a ledger append: `Err` under [`ReviewFault::Unsynced`].
+fn sync_appended(file: &std::fs::File) -> std::io::Result<()> {
+    #[cfg(test)]
+    if review_fault(ReviewFault::Unsynced) {
+        return Err(std::io::Error::other("injected review sync failure"));
+    }
+    file.sync_data()
 }
 
 #[cfg(test)]
@@ -939,44 +1035,157 @@ fn review_check(
     Ok(None)
 }
 
-/// The last step before a review append writes: issue the act's receipt, if
-/// it has one to settle, and name it in `event`.
+/// Lowercase hex of `bytes`.
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// [`Attempt::slot`] for a record landing on `change` (`None`: the unbound
+/// ledger) of the store at `root` under `spec`.
 // trace:BUG-2662 | ai:claude
-fn seal(event: &mut GateEvent, rule: &ReviewRule<'_>) -> std::io::Result<()> {
+fn attempt_slot(root: &Path, change: Option<ChangeKey>, spec: Option<&str>) -> String {
+    use sha2::Digest as _;
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let mut hasher = sha2::Sha256::new();
+    hasher.update(root.as_os_str().as_encoded_bytes());
+    hasher.update([0]);
+    hasher.update(change.map_or_else(|| "unbound".to_string(), |c| c.as_key()));
+    hasher.update([0]);
+    hasher.update(spec.unwrap_or_default());
+    hex(&hasher.finalize())
+}
+
+/// [`Attempt::act`] for `record`.
+// trace:BUG-2662 | ai:claude
+fn attempt_act(record: &crate::gate::review_verdict::JsonObj) -> String {
+    let mut act = record.clone();
+    for key in [
+        "recorded_at",
+        "rounds",
+        "unarchived_rounds",
+        "inherited_findings",
+        crate::gate::review_verdict::ATTESTATION_KEY,
+    ] {
+        act.remove(key);
+    }
+    hex(&record_id(&act))
+}
+
+/// The last step before a review append writes: issue the act's receipt, if
+/// it has one to settle, and name it in `event`. A receipt that could not be
+/// issued whole is taken back here: nothing was written under these locks.
+// trace:BUG-2662 | ai:claude
+fn seal(
+    root: &Path,
+    now: &Observed,
+    spec: Option<&str>,
+    record: &crate::gate::review_verdict::JsonObj,
+    event: &mut GateEvent,
+    rule: &ReviewRule<'_>,
+) -> std::io::Result<()> {
     if let Some(receipt) = rule.receipt {
-        event.attest(receipt.issue()?);
+        let named = |id: &str| now.names_receipt(id);
+        let attempt = Attempt {
+            slot: attempt_slot(root, now.change, spec),
+            act: attempt_act(record),
+            named: &named,
+        };
+        match receipt.issue(Some(&attempt)) {
+            Ok(attestation) => event.attest(attestation),
+            Err(e) => {
+                receipt.settle(Settled::Absent);
+                return Err(e);
+            }
+        }
     }
     #[cfg(test)]
-    if FAIL_NEXT_REVIEW_WRITE.with(|f| f.replace(false)) {
-        return Err(std::io::Error::other("injected review write failure"));
+    {
+        if FAIL_NEXT_REVIEW_WRITE.with(|f| f.replace(false)) {
+            if let Some(receipt) = rule.receipt {
+                receipt.settle(Settled::Absent);
+            }
+            return Err(std::io::Error::other("injected review write failure"));
+        }
+        if review_fault(ReviewFault::ExitAfterReceipt) {
+            return Err(std::io::Error::other("injected recorder exit"));
+        }
     }
     Ok(())
+}
+
+/// Settle the receipt of a sealed review append with what its write did,
+/// still under the append's locks. A write that reported an error is read
+/// back strictly: a record that is on the ledger was appended (its sync is
+/// what failed) and keeps its receipt; one proved absent loses it; and when
+/// the ledger cannot be read back the receipt is kept for the retry.
+// trace:BUG-2662 | ai:claude
+fn settle(
+    root: &Path,
+    change: Option<ChangeKey>,
+    spec: Option<&str>,
+    sealed: Option<&crate::gate::review_verdict::JsonObj>,
+    rule: &ReviewRule<'_>,
+    wrote: std::io::Result<Delivered>,
+) -> std::io::Result<Delivered> {
+    let Some(receipt) = rule.receipt else {
+        return wrote;
+    };
+    let error = match wrote {
+        Ok(Delivered::Appended) => {
+            receipt.settle(Settled::Landed);
+            return Ok(Delivered::Appended);
+        }
+        // The ledger already held the sealed record, which names the receipt.
+        Ok(Delivered::Unchanged) => {
+            receipt.settle(Settled::Kept);
+            return Ok(Delivered::Unchanged);
+        }
+        Err(error) => error,
+    };
+    let holds = sealed
+        .ok_or_else(|| std::io::Error::other("no sealed record"))
+        .and_then(|record| Ok(observe(root, change, spec)?.holds(spec, record)));
+    match holds {
+        Ok(true) => {
+            receipt.settle(Settled::Kept);
+            if let (Some(change), Some(spec)) = (change, spec) {
+                let _ = super::project::index_spec(root, spec, change);
+            }
+            eprintln!(
+                "warning: the review verdict is on the gate ledger, but its write reported an error ({error}); its human-review receipt is kept"
+            );
+            Ok(Delivered::Appended)
+        }
+        Ok(false) => {
+            receipt.settle(Settled::Absent);
+            Err(error)
+        }
+        Err(unread) => {
+            receipt.settle(Settled::Kept);
+            Err(std::io::Error::new(
+                error.kind(),
+                format!(
+                    "{error}; the gate ledger could not be read back to tell whether the review verdict was written ({unread}), so its human-review receipt is kept; retry `aida review record`"
+                ),
+            ))
+        }
+    }
 }
 
 /// Append the verdict `event` to `change`'s ledger, or with no change to the
 /// unbound ledger of the spec it names, as `rule` allows.
 ///
 /// The final read of the history, the decision, the receipt the record names
-/// and the append share the change's lock and the spec's `by-spec` lock,
-/// taken in that order (the order a change append already indexes its spec
-/// in). No verdict can join either ledger in between: every change append
-/// holds the first and every unbound append the second.
+/// (issued, and settled with what the write did) and the append share the
+/// change's lock and the spec's `by-spec` lock, taken in that order (the
+/// order a change append already indexes its spec in). No verdict can join
+/// either ledger in between: every change append holds the first and every
+/// unbound append the second. The spec's unbound records a change key binds
+/// ([`ReviewRule::bind`]) are staged and written with the verdict in one
+/// append, after the receipt is issued: a refused or failed recording leaves
+/// the change's ledger as it was.
 // trace:BUG-2662 | ai:claude
 pub(crate) fn append_review(
-    root: &Path,
-    change: Option<ChangeKey>,
-    event: GateEvent,
-    rule: &ReviewRule<'_>,
-) -> std::io::Result<Delivered> {
-    let delivered = append_review_locked(root, change, event, rule);
-    let landed = matches!(delivered, Ok(Delivered::Appended));
-    if let Some(receipt) = rule.receipt.filter(|_| !landed) {
-        receipt.revoke();
-    }
-    delivered
-}
-
-fn append_review_locked(
     root: &Path,
     change: Option<ChangeKey>,
     mut event: GateEvent,
@@ -993,12 +1202,17 @@ fn append_review_locked(
     #[cfg(test)]
     review_append_hook(root, false);
     let Some(change) = change else {
-        return append_unbound_checked(root, event, |now, event| {
-            if let Some(decided) = review_check(root, now, spec, &record, rule)? {
-                return Ok(Some(decided));
-            }
-            seal(event, rule).map(|()| None)
-        });
+        return append_unbound_checked(
+            root,
+            event,
+            |now, event| {
+                if let Some(decided) = review_check(root, now, spec, &record, rule)? {
+                    return Ok(Some(decided));
+                }
+                seal(root, now, spec, &record, event, rule).map(|()| None)
+            },
+            |event, wrote| settle(root, None, spec, event.verdict_record(), rule, wrote),
+        );
     };
     let spec_lock = spec
         .filter(|s| unbound_spec_name(s))
@@ -1008,17 +1222,22 @@ fn append_review_locked(
         if let Some(decided) = review_check(root, &now, spec, &record, rule)? {
             return Ok(decided);
         }
-        if let Some(bind) = rule.bind {
-            bind_unbound(root, bind, change)?;
-        }
-        seal(&mut event, rule)?;
+        let mut events = match rule.bind {
+            Some(bind) => stage_unbound(root, bind, change),
+            None => Vec::new(),
+        };
+        seal(root, &now, spec, &record, &mut event, rule)?;
+        let sealed = event.verdict_record().cloned();
         let body = event.body.clone();
-        let appended = append_locked(root, change, vec![event], false)?;
-        Ok(if appended.iter().any(|e| e.body == body) {
-            Delivered::Appended
-        } else {
-            Delivered::Unchanged
-        })
+        events.push(event);
+        let wrote = append_locked(root, change, events, false).map(|appended| {
+            if appended.iter().any(|e| e.body == body) {
+                Delivered::Appended
+            } else {
+                Delivered::Unchanged
+            }
+        });
+        settle(root, Some(change), spec, sealed.as_ref(), rule, wrote)
     };
     with_lock(root, &lock_file(root, change), || match &spec_lock {
         Some(spec_lock) => with_lock(root, spec_lock, locked),
@@ -1032,12 +1251,14 @@ fn append_review_locked(
 /// ([`super::checked::read_unbound_for_append`]): that one validated read
 /// answers `check`, the duplicate test and the next sequence number, and a
 /// ledger that cannot be read whole refuses the append. `check` runs first
-/// and may finish `event`; `Some` ends the append.
+/// and may finish `event`; `Some` ends the append. `settle` answers for the
+/// write of the finished event, under the same lock.
 // trace:BUG-2662 | ai:claude
 fn append_unbound_checked(
     root: &Path,
     mut event: GateEvent,
     check: impl FnOnce(&Observed, &mut GateEvent) -> std::io::Result<Option<Delivered>>,
+    settle: impl FnOnce(&GateEvent, std::io::Result<Delivered>) -> std::io::Result<Delivered>,
 ) -> std::io::Result<Delivered> {
     let spec = event.change.clone();
     if !unbound_spec_name(&spec) {
@@ -1064,16 +1285,19 @@ fn append_unbound_checked(
             .iter()
             .any(|e| e.verdict_record() == event.verdict_record())
         {
-            return Ok(Delivered::Unchanged);
+            return settle(&event, Ok(Delivered::Unchanged));
         }
         event.seq = existing.last().map(|e| e.seq).unwrap_or(0) + 1;
         event.at = chrono::Utc::now().to_rfc3339();
-        let mut line = serde_json::to_string(&event).map_err(std::io::Error::other)?;
-        line.push('\n');
-        let mut out = open_append(&file)?;
-        out.write_all(line.as_bytes())?;
-        out.sync_data()?;
-        Ok(Delivered::Appended)
+        let wrote = (|| {
+            let mut line = serde_json::to_string(&event).map_err(std::io::Error::other)?;
+            line.push('\n');
+            let mut out = open_append(&file)?;
+            out.write_all(line.as_bytes())?;
+            sync_appended(&out)?;
+            Ok(Delivered::Appended)
+        })();
+        settle(&event, wrote)
     })
     .map_err(|e| named(&file, e))
 }
@@ -1096,9 +1320,28 @@ pub(crate) fn bind_unbound(
     gate_spec: &GateSpec,
     change: ChangeKey,
 ) -> std::io::Result<usize> {
+    with_lock(root, &lock_file(root, change), || {
+        let events = stage_unbound(root, gate_spec, change);
+        if events.is_empty() {
+            return Ok(0);
+        }
+        let appended = append_locked(root, change, events, false)?;
+        Ok(appended
+            .iter()
+            .filter(|e| e.verdict_record().is_some())
+            .count())
+    })
+    .map_err(|e| named(&ledger_file(root, change), e))
+}
+
+/// The copies [`bind_unbound`] appends to `change`, selected under the
+/// change's lock (the caller holds it) and not yet written. A review append
+/// writes them with its verdict, in one append ([`append_review`]).
+// trace:BUG-2662 | ai:claude
+fn stage_unbound(root: &Path, gate_spec: &GateSpec, change: ChangeKey) -> Vec<GateEvent> {
     let spec = gate_spec.label.clone();
     if spec.is_empty() || ChangeKey::parse(&spec).is_some() {
-        return Ok(0);
+        return Vec::new();
     }
     let bound_elsewhere: Vec<GateEvent> = super::project::changes_for_spec(root, &spec)
         .into_iter()
@@ -1116,33 +1359,25 @@ pub(crate) fn bind_unbound(
         })
         .collect();
     if unbound.is_empty() {
-        return Ok(0);
+        return Vec::new();
     }
-    with_lock(root, &lock_file(root, change), || {
-        let existing = read_file(root, change);
-        let newest_bound = existing
-            .iter()
-            .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
-            .map(|e| e.at.clone())
-            .max();
-        let events: Vec<GateEvent> = unbound
-            .into_iter()
-            .filter(|e| e.verdict_record().is_some())
-            .filter(|e| newest_bound.as_ref().is_none_or(|at| e.at > *at))
-            .map(|mut e| {
-                e.change = change.as_key();
-                e.spec = Some(spec.clone());
-                e.spec_key = gate_spec.key.or(e.spec_key);
-                e
-            })
-            .collect();
-        let appended = append_locked(root, change, events, false)?;
-        Ok(appended
-            .iter()
-            .filter(|e| e.verdict_record().is_some())
-            .count())
-    })
-    .map_err(|e| named(&ledger_file(root, change), e))
+    let existing = read_file(root, change);
+    let newest_bound = existing
+        .iter()
+        .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
+        .map(|e| e.at.clone())
+        .max();
+    unbound
+        .into_iter()
+        .filter(|e| e.verdict_record().is_some())
+        .filter(|e| newest_bound.as_ref().is_none_or(|at| e.at > *at))
+        .map(|mut e| {
+            e.change = change.as_key();
+            e.spec = Some(spec.clone());
+            e.spec_key = gate_spec.key.or(e.spec_key);
+            e
+        })
+        .collect()
 }
 
 // trace:BUG-2530 | ai:codex

@@ -2108,6 +2108,62 @@ pub(crate) fn emit_review_verdict_recorded(
     events::emit(project_root, &ev);
 }
 
+/// BUG-2662: where the announcement of one recorded act of review is marked:
+/// a file beside the gate ledger, named by a digest of the verdict key, the
+/// spec and the `recorded_at` of the record standing in `body`. `None` when
+/// no shared ledger decides here (a contained seat's hand-off) or the record
+/// carries no timestamp: such an act is announced as it is written.
+// trace:BUG-2662 | ai:claude
+fn review_announcement_mark(
+    project_root: &std::path::Path,
+    path: &std::path::Path,
+    spec: &str,
+    body: &str,
+) -> Option<std::path::PathBuf> {
+    use sha2::Digest as _;
+    if crate::gate::ledger::contained() {
+        return None;
+    }
+    let (_, key) = crate::gate::review_verdict::canonical_verdict_key(path)?;
+    let store = crate::gate::ledger::store_root(project_root).ok()?;
+    let record: serde_json::Value = serde_json::from_str(body).ok()?;
+    let recorded_at = record.get("recorded_at")?.as_str()?.trim();
+    if recorded_at.is_empty() {
+        return None;
+    }
+    let mut hasher = sha2::Sha256::new();
+    for part in [
+        key.to_ascii_uppercase(),
+        spec.trim().to_ascii_uppercase(),
+        recorded_at.to_string(),
+    ] {
+        hasher.update(part.as_bytes());
+        hasher.update([0]);
+    }
+    let name: String = hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    Some(
+        store
+            .join(".aida")
+            .join("review-announced")
+            .join(format!("{name}.json")),
+    )
+}
+
+/// Write the mark [`review_announcement_mark`] names.
+// trace:BUG-2662 | ai:claude
+fn mark_review_announced(mark: &std::path::Path) -> anyhow::Result<()> {
+    if let Some(dir) = mark.parent() {
+        std::fs::create_dir_all(dir)?;
+    }
+    let body = serde_json::json!({ "announced_at": chrono::Utc::now().to_rfc3339() });
+    aida_core::write_atomic(mark, body.to_string())?;
+    Ok(())
+}
+
 /// STORY-1436: refusal recording seams that live in this module.
 // trace:STORY-1436 | ai:claude
 #[cfg(test)]
@@ -3376,8 +3432,9 @@ fn handle_review_record_context_with_policy_at(
     // after any follow-up findings are filed: a repeat of the act standing
     // for this spec answers with that act's receipt while it still vouches
     // for it; any other approval gets a new receipt as its record is
-    // appended, and loses it if the append does not land. Nothing is
-    // allocated here, so a refused or failed recording leaves no receipt.
+    // appended, and loses it once the ledger proves the record absent (in
+    // doubt it is kept, reserved for the retry). Nothing is allocated here,
+    // so a refused recording leaves no receipt.
     // trace:BUG-1918 | ai:claude
     let mut attestation = attest(None)?;
     verdict_obj.insert(
@@ -3431,12 +3488,12 @@ fn handle_review_record_context_with_policy_at(
     // just read back. M1 slice 2: read back from where the gates read it —
     // the gate ledger (or a contained seat's hand-off file).
     // trace:BUG-1571 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-    if crate::gate::review_verdict::current_verdict_at(&path).is_none() {
+    let Some(current) = crate::gate::review_verdict::current_verdict_at(&path) else {
         anyhow::bail!(
             "the review verdict for {} is not readable immediately after being recorded — not reporting it as recorded",
             spec.to_ascii_uppercase()
         );
-    }
+    };
     // STORY-1405: the verdict is on disk, so the review is no longer "in
     // progress" — clear the resolved change's marker so merge surfaces now
     // read the verdict instead. A spec-only verdict clears no change marker.
@@ -3449,7 +3506,19 @@ fn handle_review_record_context_with_policy_at(
     // the write above lands, so a failed record never produces a phantom
     // event. Best-effort: `events::emit` never fails the command.
     // trace:TASK-1450 | ai:claude
-    if !repeat {
+    //
+    // BUG-2662: one recorded act is announced once, and what says so is the
+    // act's own durable mark, never a side effect of it. A repeat announces
+    // the act it finds standing when no mark exists for it: its first
+    // recording stopped before this point (a mixed refusal whose follow-up
+    // filing failed after the refusal was on record). Whether a hold stands
+    // or was released since has no part in it.
+    // trace:BUG-2662 | ai:claude
+    let announcement = review_announcement_mark(&project_root, &path, spec, &current.body);
+    let unannounced = announcement.as_deref().is_some_and(|mark| !mark.exists())
+        && crate::gate::review_verdict::parse_recorded_verdict(&current.body)
+            .is_some_and(|standing| standing.kind == kind);
+    if !repeat || unannounced {
         emit_review_verdict_recorded(
             &project_root,
             &spec.to_ascii_uppercase(),
@@ -3457,6 +3526,14 @@ fn handle_review_record_context_with_policy_at(
             kind.label().to_string(),
             resolved_sha.clone(),
         );
+        if let Some(mark) = announcement.as_deref() {
+            if let Err(e) = mark_review_announced(mark) {
+                eprintln!(
+                    "  {} could not mark this review as announced ({e}); repeating the record announces it again",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow(),
+                );
+            }
+        }
     }
     // BUG-2136: state the outcome explicitly — a new round, or an identical
     // re-recording — instead of leaving it to be inferred from the
@@ -3704,18 +3781,6 @@ fn handle_review_record_context_with_policy_at(
                 crate::gate::merge_hold_core::place_hold(&project_root, &hold).map(|()| true)
             }
             .with_context(|| format!("verdict recorded, but could not protect PR-{n} with a merge hold; run `aida review stranded --fix`"))?;
-            // A refusal on record with no hold is one whose first recording
-            // stopped before its side effects (a failed follow-up filing):
-            // this repeat is the first to complete, so it is announced.
-            if repeat && placed {
-                emit_review_verdict_recorded(
-                    &project_root,
-                    &spec.to_ascii_uppercase(),
-                    pr.map(|n| n as u32),
-                    kind.label().to_string(),
-                    resolved_sha.clone(),
-                );
-            }
             // A hold that already stood is checked against the forge as it is
             // now: a hold label removed there since is restored, and labels
             // still in place cost no forge write and no ledger event.
