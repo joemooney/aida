@@ -6130,7 +6130,7 @@ fn lane_seat(
     lane_seat_configured(dirty, "", setup)
 }
 
-// [`lane_seat`] whose trusted default-branch config also carries `config`
+// [`lane_seat`] whose trusted default-branch config also carries `config_extra`
 // (e.g. a `[validation]` table), committed before the seat is cloned.
 // trace:BUG-2705 | ai:claude
 fn lane_seat_configured(
