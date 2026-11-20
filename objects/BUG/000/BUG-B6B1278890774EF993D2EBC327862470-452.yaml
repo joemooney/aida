@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-19T15:22:52.237273138Z
+modified_at: 2026-11-20T15:11:00.219480338Z
 req_type: Bug
 tags:
 - conflicts
@@ -735,6 +735,13 @@ comments:
   modified_at: 2026-11-19T15:22:52.237273138Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f982-f784-7223-9412-0cd38fe78cc5
+  author: joe
+  content: 'Product 2026-11-20 08:12 (advisor-121 asked for this note): same-family evidence. TASK-3786''s spec branch binding still pointed at the MERGED #4309 branch (task-...-1066), so ''aida queue work TASK-3786'' routed the fresh-scope lane as a REWORK of that merged PR (''The previous round''s commit is already on the PR branch...''), and it exited no-change. Work-around: a fresh branch task-3786-pr-cmd-dir off main, passed with --branch. Queue work should not treat a spec whose PR is merged as a rework target.'
+  created_at: 2026-11-20T15:11:00.219480338Z
+  modified_at: 2026-11-20T15:11:00.219480338Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
