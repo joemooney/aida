@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-20T01:51:01.975388758Z
+modified_at: 2026-11-20T01:51:16.974213517Z
 req_type: Bug
 tags:
 - landing
@@ -102,6 +102,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes after reading the complete 12-file landed-tree diff against protected base 76842c1d1d814dad22b3431a94d6d623e3b7e5c4 (landed tree b579bf33185bb3caa5877327b73e4022bdba7e33); attested review target is the original PR head 99b17edc331d8e8d6bc3dd3c8e4b42fcad7e93d1. Two actionable defects remain: chosen-SHA equality is conditional on being behind, and cron aborts its history scan on unreadable CI. Neither finding depends on the subsequently changed help golden or store-writer inventory. The generated worksheet was used; this is a completing-spec review with no declared deferrals.. No triage reason was given.'
   created_at: 2026-11-20T01:51:01.975384834Z
   modified_at: 2026-11-20T01:51:01.975384834Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6a6-9d62-7602-b376-b2505e0d8af8
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2687):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 99b17edc331d
+    Recorded: 2026-11-20T01:49:43.488897669+00:00
+    Findings:
+    1. [P2] severity=p2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/dev_build.rs:435. Enforce the selected green SHA even when HEAD is at origin/main. plan_promotion_at calls green_behind_ok only in the state.behind > 0 branch. With green_commit=G, a clean main at a different origin/main tip T (ahead=behind=0) is accepted. A real path is: the worker checks G initially, then an ordinary external checkout fast-forward advances main to T before RealSteps::build constructs its Cargo command; Cargo stamps/builds T, and the final probe and check_staged_sha both agree on T. Under the supported/default clean-main landing policy, ci_gate performs no CI check, so T can be pending or red yet replace the live binary. The checkout flock coordinates AIDA builders, not ordinary Git operations. This violates ac7fa614's unconditional HEAD-is-chosen-green guard and ac00998c's no-red-promotion guarantee. Validate HEAD == green_commit whenever a selected SHA is supplied, both before building and immediately before the swap, independently of behind count. Add a regression for selected G with clean HEAD T == origin/main and a matching staged T, and verify refusal without changing live. Current child movement coverage keeps behind=(2,2), so it misses this path. This finding is independent of the base-overlap files.
+    2. [P2] severity=p2; blocking_tier=unmet-claimed-ac; file=scripts/aida-autobuild.sh:94-96. Pass over unreadable CI per commit instead of aborting the newest-green walk. The new loop invokes fail immediately when gh run list returns nonzero or its timeout expires. For a history live L -> green G -> tip T, a transient query failure for T prevents even querying G, despite G being newer than live and eligible for ff-only promotion. In contrast, dev_autopromote::ci_skip converts the same error to CiUnknown and newest_green continues. This leaves the cron short of acf5979d's same-newest-green rule and the PR's explicit claim that unreadable CI is passed over. Record T as unknown with its diagnostic, continue within the bounded walk, and require an independently successful green result for any selected commit. Add a shell regression where the tip query exits nonzero but the older G query succeeds, asserting selection of G and the skipped-tip reason. This finding is independent of the base-overlap files.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T01:51:16.834757251Z
+  modified_at: 2026-11-20T01:51:16.834757251Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
