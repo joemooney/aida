@@ -1566,3 +1566,4 @@ mod reviewer_completion; // trace:BUG-2546 | ai:codex
 mod seat_health;
 
 mod review_draft; // trace:BUG-2564 | ai:codex
+mod review_handoff; // trace:BUG-2669 | ai:claude

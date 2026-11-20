@@ -259,5 +259,11 @@ pub(crate) fn handle_review_command(
             BlockingTiersCommand::Show { json } => crate::review_blocking::handle_show(*json),
             BlockingTiersCommand::Set { classes } => crate::review_blocking::handle_set(classes),
         },
+        // trace:BUG-2669 | ai:claude
+        ReviewCommand::Draft { command } => match command {
+            ReviewDraftCommand::List { all, json } => {
+                crate::review_handoff::handle_list(*all, *json)
+            }
+        },
     }
 }

@@ -1,7 +1,13 @@
 # Retained reviewer-draft recovery after the launcher exits
 
-Status: PROPOSED 2026-11-20. Awaiting advisor signoff; nothing here is
-implemented. Decisions D1 to D3 below need a ruling before any code.
+Status: APPROVED 2026-11-20 (advisor signoff recorded on the spec). Rulings:
+D1 (a), with a `review-draft-recovered` wake event for every unsealed
+recovered approval (PR, head, verdict, sealed or unsealed, original launcher,
+recovered_by); sealed recoveries are logged without a wake. D2: the user's
+AIDA home, with a test that a contained lane cannot create or modify a
+receipt. D3: 24 hours. Slice 1 (receipt, seal, `aida review draft list`) is
+implemented in `aida-cli-lib/src/review_handoff.rs`; recovery (slices 2 and 3)
+is not, so a retained draft is still not recorded after a launcher restart.
 
 <!-- trace:BUG-2669 | ai:claude -->
 
@@ -59,8 +65,8 @@ Fields: version, draft launch id, project root, canonical review worktree,
 the draft directory's device and inode, PR number, full head SHA, routed
 reviewer session id, launcher grant id, principal, creation time, state
 (`open`, `consumed`, `superseded`, `discarded`). The reviewer child grant id is
-added when the spawn path can surface it before waiting; it is evidence, not
-a precondition.
+added at seal time, when the spawn has returned it; it is evidence, not a
+precondition.
 
 The receipt holds no secret and is not a capability: reading or copying it
 grants nothing. It is the record that a launcher with reviewer delegation

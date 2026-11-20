@@ -36,6 +36,14 @@ impl ReviewerDraft {
         }
     }
 
+    /// SHA-256 of the validated draft's canonical serialization: the digest
+    /// in the ledger's handoff stamp and in a sealed launch receipt.
+    // trace:BUG-2669 | ai:claude
+    pub(crate) fn digest(&self) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(self)?)))
+    }
+
     pub(crate) fn record_findings(&self) -> Vec<String> {
         if self.findings.is_empty()
             && rv::VerdictKind::parse(&self.verdict) != rv::VerdictKind::Waiting
@@ -171,6 +179,33 @@ impl LaunchDraft {
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
+
+    /// This launch's identity: the exclusive draft directory's name.
+    // trace:BUG-2669 | ai:claude
+    pub(crate) fn launch_id(&self) -> Result<String> {
+        Ok(self
+            .path
+            .parent()
+            .and_then(Path::file_name)
+            .context("missing draft launch identity")?
+            .to_string_lossy()
+            .to_string())
+    }
+
+    /// Device and inode of the draft directory held since before the spawn.
+    // trace:BUG-2669 | ai:claude
+    pub(crate) fn dir_identity(&self) -> Result<(u64, u64)> {
+        let meta = self.dir.metadata()?;
+        Ok((meta.dev(), meta.ino()))
+    }
+
+    pub(crate) fn pr(&self) -> u64 {
+        self.pr
+    }
+
+    pub(crate) fn head(&self) -> &str {
+        &self.head
+    }
 }
 
 /// The unconsumed reviewer handoffs (`draft-*/draft.json`) a review checkout
@@ -270,20 +305,11 @@ impl VerifiedReviewer {
         launch: &LaunchDraft,
         draft: &ReviewerDraft,
     ) -> Result<Self> {
-        use sha2::{Digest, Sha256};
         ensure!(
             draft.pr == launch.pr && draft.reviewed_sha == launch.head,
             "draft launch mismatch"
         );
-        let id = launch
-            .path
-            .parent()
-            .and_then(Path::file_name)
-            .context("missing draft launch identity")?
-            .to_string_lossy()
-            .to_string();
-        let digest = format!("{:x}", Sha256::digest(serde_json::to_vec(draft)?));
-        self.handoff = Some((id, digest));
+        self.handoff = Some((launch.launch_id()?, draft.digest()?));
         Ok(self)
     }
 

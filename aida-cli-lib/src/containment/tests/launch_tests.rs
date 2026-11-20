@@ -30,6 +30,23 @@ fn task_2707_directory_leaf_refuses_session_grants() {
     assert!(!p.native().contains("session-grants"));
 }
 
+// trace:BUG-2669 | ai:claude
+#[test]
+fn bug_2669_directory_leaf_refuses_review_handoff_receipts() {
+    let tmp = tempfile::tempdir().unwrap();
+    for name in ["review-handoffs", "review-handoff-locks"] {
+        let dir = tmp.path().join(".aida").join(name);
+        std::fs::create_dir_all(dir.join("nested")).unwrap();
+        for path in [dir.clone(), dir.join("nested")] {
+            let mut profile = WriteProfile::new();
+            assert!(profile.add(&path, true).is_err(), "{}", path.display());
+            assert!(!profile.native().contains(name));
+        }
+        // Read-only visibility stays available.
+        WriteProfile::new().add(&dir, false).unwrap();
+    }
+}
+
 /// An operator/CI lane that must exercise the live boundary sets this; a
 /// skip is then a failure instead of a silent pass.
 // trace:TASK-2708 | ai:claude
@@ -859,6 +876,93 @@ Path('.aida/grant-notices/11111111-1111-4111-8111-111111111111/notice.json').wri
     );
     assert!(!grants.join("new.json").exists());
     assert!(!locks.join("new.lock").exists());
+    assert_eq!(
+        std::fs::read_to_string(notice.join("notice.json")).unwrap(),
+        "informational"
+    );
+}
+
+/// A contained lane can neither create, replace, rewrite nor remove a launch
+/// receipt (or its lock): the user's AIDA home is read-only inside the lane.
+// trace:BUG-2669 | ai:claude
+#[test]
+fn bug_2669_contained_lane_cannot_create_or_modify_a_review_handoff_receipt() {
+    if !live_available() {
+        return;
+    }
+    let script = r#"
+from pathlib import Path
+import errno, os
+denied = (errno.EROFS, errno.EACCES, errno.EPERM, errno.EXDEV, errno.EBUSY)
+def refused(action):
+    try:
+        action()
+    except OSError as e:
+        assert e.errno in denied, e
+    else:
+        raise AssertionError('review handoff receipt writable from a contained lane')
+existing = '.aida/review-handoffs/11111111-1111-4111-8111-111111111111.json'
+assert Path(existing).read_text() == 'receipt-control'
+for path in [existing, '.aida/review-handoffs/new.json', '.aida/review-handoff-locks/new.lock']:
+    refused(lambda: Path(path).write_text('forged'))
+refused(lambda: open(existing, 'a').write('forged'))
+refused(lambda: os.unlink(existing))
+refused(lambda: os.rename(existing, '.aida/review-handoffs/moved.json'))
+refused(lambda: os.rename('.aida/grant-notices/11111111-1111-4111-8111-111111111111/staged.json', existing))
+refused(lambda: os.link(existing, '.aida/review-handoffs/linked.json'))
+refused(lambda: os.mkdir('.aida/review-handoffs/dir'))
+refused(lambda: os.rename('.aida/review-handoffs', '.aida/review-handoffs-moved'))
+Path('.aida/grant-notices/11111111-1111-4111-8111-111111111111/notice.json').write_text('informational')
+"#;
+    let mut plan = fixture(script, "print('seat_grant_valid=true expected_seat=true')");
+    let authority = plan._state.path().join(".aida");
+    let receipts = authority.join("review-handoffs");
+    let locks = authority.join("review-handoff-locks");
+    let notice = authority.join("grant-notices/11111111-1111-4111-8111-111111111111");
+    for dir in [&receipts, &locks, &notice] {
+        std::fs::create_dir_all(dir).unwrap();
+    }
+    // Host positive control: the same paths are writable beforehand.
+    let existing = receipts.join("11111111-1111-4111-8111-111111111111.json");
+    std::fs::write(&existing, "receipt-control").unwrap();
+    std::fs::write(notice.join("staged.json"), "forged").unwrap();
+    plan.profile.add(&authority, false).unwrap();
+    plan.profile.add(&notice, true).unwrap();
+    assert!(plan.profile.add(&receipts, true).is_err());
+    let args: Vec<_> = plan.command.get_args().map(|a| a.to_os_string()).collect();
+    let mut cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
+    cfg["bwrap"] = serde_json::json!(plan.profile.args(plan._state.path()));
+    let env = plan
+        .command
+        .get_envs()
+        .filter_map(|(k, v)| Some((k.to_str()?.into(), v?.to_str()?.into())))
+        .collect();
+    let root = plan._state.path().to_path_buf();
+    let rebuilt = PreparedLaunch::from_config(
+        plan.profile,
+        plan._state,
+        "synthetic-sha".into(),
+        cfg,
+        env,
+        &root,
+    )
+    .unwrap();
+    let mut run = rebuilt.spawn(Stdio::null()).unwrap();
+    run.release().unwrap();
+    assert!(run.child.wait().unwrap().success());
+    assert_eq!(
+        std::fs::read_to_string(&existing).unwrap(),
+        "receipt-control"
+    );
+    let names = |dir: &Path| -> Vec<_> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect()
+    };
+    assert_eq!(names(&receipts), [existing.file_name().unwrap()]);
+    assert!(names(&locks).is_empty());
+    // Positive control: the lane ran and its one writable leaf took a write.
     assert_eq!(
         std::fs::read_to_string(notice.join("notice.json")).unwrap(),
         "informational"

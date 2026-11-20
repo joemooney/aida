@@ -7619,6 +7619,20 @@ pub(crate) fn run_standalone_reviewer(
     let reviewer_session = match &launch {
         QueueWorkLaunch::Fresh(id) | QueueWorkLaunch::Resume(id) => id.clone(),
     };
+    // Register the draft slot in the user's AIDA home before the reviewer
+    // runs. The receipt is evidence for a later recovery, never authority
+    // for this launch, so a failure to write it only warns.
+    // trace:BUG-2669 | ai:claude
+    let receipt = draft.as_ref().and_then(|d| {
+        crate::review_handoff::register(project_root, worktree, d, &reviewer_session)
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "  {} no launch receipt for this review's draft ({e:#}); if this launcher exits before recording, the draft will need manual recovery",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                );
+                None
+            })
+    });
     let (status, log_path, child_grant): (
         std::process::ExitStatus,
         Option<std::path::PathBuf>,
@@ -7923,6 +7937,16 @@ pub(crate) fn run_standalone_reviewer(
             }
             Err(e) => return Err(e),
         };
+        // Seal the receipt with the validated draft before the first
+        // recording attempt. trace:BUG-2669 | ai:claude
+        if let Some(receipt) = &receipt {
+            let sealed = data.digest().and_then(|digest| {
+                crate::review_handoff::seal(&receipt.launch, &digest, checks.child_grant.as_deref())
+            });
+            if let Err(e) = sealed {
+                eprintln!("warning: could not seal this review's launch receipt: {e:#}");
+            }
+        }
         launch_draft.validate_current_head(checks.head_sha.as_deref())?;
         let reviewer = crate::review_draft::VerifiedReviewer::from_launch(
             project_root,
@@ -8012,8 +8036,19 @@ pub(crate) fn run_standalone_reviewer(
         });
     if collected.is_ok() {
         if let Some(draft) = &draft {
-            if let Err(e) = draft.consumed() {
-                eprintln!("warning: verdict is durable but draft consumption marker failed: {e:#}");
+            // trace:BUG-2669 | ai:claude — close the receipt only once the
+            // draft itself is marked consumed.
+            match draft.consumed() {
+                Err(e) => eprintln!(
+                    "warning: verdict is durable but draft consumption marker failed: {e:#}"
+                ),
+                Ok(()) => {
+                    if let Some(receipt) = &receipt {
+                        if let Err(e) = crate::review_handoff::mark_consumed(&receipt.launch) {
+                            eprintln!("warning: verdict is durable but its launch receipt was not closed: {e:#}");
+                        }
+                    }
+                }
             }
         }
     }

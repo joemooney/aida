@@ -1423,4 +1423,30 @@ PY
     let att = v.attestation.unwrap();
     assert_eq!(att.seat.as_deref(), Some("reviewer"));
     assert!(att.grant_id.is_some());
+    // The launcher registered the draft slot before the spawn, sealed it
+    // with the digest it recorded, and closed it. trace:BUG-2669 | ai:claude
+    let receipts: Vec<serde_json::Value> =
+        std::fs::read_dir(tmp.path().join("home/.aida/review-handoffs"))
+            .unwrap()
+            .map(|e| serde_json::from_slice(&std::fs::read(e.unwrap().path()).unwrap()).unwrap())
+            .collect();
+    assert_eq!(receipts.len(), 1, "{receipts:?}");
+    let receipt = &receipts[0];
+    assert_eq!(receipt["state"], "consumed", "{receipt}");
+    assert_eq!(receipt["pr"], 59);
+    assert_eq!(
+        receipt["head"].as_str(),
+        crate::resolve_commit_sha(&project, "HEAD").as_deref()
+    );
+    assert_eq!(receipt["child_grant"].as_str(), att.grant_id.as_deref());
+    let record = crate::gate::review_verdict::read_current_verdict_object(
+        &crate::gate::review_verdict::verdict_path(&project, "PR-59"),
+    )
+    .unwrap();
+    assert_eq!(receipt["launch"], record["reviewer_draft"]["launch"]);
+    assert_eq!(
+        receipt["seal"]["sha256"],
+        record["reviewer_draft"]["sha256"]
+    );
+    assert!(receipt["seal"]["sha256"].as_str().is_some());
 }

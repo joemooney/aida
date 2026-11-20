@@ -1873,6 +1873,34 @@ carry-over proofs. The gate ledger retains carry-over, delta-admission, conflict
 routing and skipped-round evidence; `aida gate state` names the current policy
 and the applicable carry-over proof event.
 
+### Reviewer draft handoffs
+
+A headless reviewer writes its verdict as a data-only draft inside the review
+checkout, and the launcher that started it records the verdict. Before the
+launcher starts the reviewer it registers the draft in a launch receipt under
+`~/.aida/review-handoffs/`, beside the session grants: the pull request, the
+full head, the review checkout, the draft directory's identity and the
+reviewer session. When the reviewer has exited and the draft has passed
+validation, the launcher seals the receipt with the draft's SHA-256 before it
+first tries to record, and closes the receipt once the verdict is recorded.
+
+A receipt holds no secret and authorizes nothing. It is written only by a
+launcher whose grant delegates the reviewer seat, and a contained lane cannot
+create or change one, because the AIDA home is read-only inside it.
+
+```bash
+aida review draft list [--all] [--json]
+```
+
+`list` shows this project's receipts, or every project's with `--all`. Each
+row gives the state (`open`, `consumed`, `superseded` or `discarded`), whether
+the receipt is sealed, its age, and what the draft directory holds now:
+`unrecorded` (a draft the launcher never recorded), `recorded`, `not-written`,
+`directory-missing` or `directory-replaced`. An open receipt with an
+unrecorded draft is a review whose launcher exited before recording. The
+listing is read-only. A draft written before receipts existed has none and
+does not appear.
+
 ### Project review blocking tiers
 
 <!-- trace:TASK-3814 | ai:codex -->
