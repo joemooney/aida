@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-19T22:20:30.293600431Z
+modified_at: 2026-11-20T00:00:04.981800593Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -192,6 +192,13 @@ comments:
   created_at: 2026-11-19T22:20:30.293597514Z
   modified_at: 2026-11-19T22:20:30.293597514Z
   session_id: 01a1f5bf0d7e
+- id: 01a1f641-04a1-7233-8f17-7c5f3358b0ee
+  author: joe
+  content: 'advisor-121 2026-11-19 17:03: trains #4338 and #4339 were both refused because the merge gate read a STALE legacy spec-keyed verdict file, .aida/review-verdicts/BUG-2211.json (recorded 2026-10-23 for PR #2863 at 0fb55cc, from this spec''s earlier fix before the reopen), as BUG-2211''s verdict for the train PR. Moved aside as BUG-2211.json.stale-2026-10-23.advisor121-bak (not deleted). The current approval at 484438b lives in the gate ledger. Underlying defect: a legacy spec-keyed file outranks or shadows the ledger approval for the current change; noted on BUG-2662.'
+  created_at: 2026-11-20T00:00:04.981800593Z
+  modified_at: 2026-11-20T00:00:04.981800593Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a16a2e-33cc-7b11-8f1d-2ed267d72e78
   author: joe
