@@ -3,24 +3,26 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-451
 agreed_id: BUG-2687
 title: 'Auto-promotion only promotes a green main TIP: with merges every ~25 min the tip''s CI is always in progress, so the live binary and primary checkout fall hours behind; promote the newest green commit'
 description: |
-  Observed 2026-11-18 10:16 MST: the primary checkout ~/ai/aida and the live binary were stuck 3 commits behind main (live e207f1f since 07:06) although every newer main commit later went green. Both promoters require CI green at the main TIP: ~/bin/aida-autobuild.sh (cron */30) and the scheduled `dev-autopromote` (`aida dev build --if-main-green`, every 15 min). Under review-gated landing, merges arrive every ~20-30 min and CI takes ~25 min, so the tip's CI is nearly always in_progress at check time:
+  Observed 2026-11-18 10:16 MST: the primary checkout ~/ai/aida and the live binary were stuck 3 commits behind main (live e207f1f since 07:06) although every newer main commit later went green. Both promoters require CI green at the main TIP: the lane-host/operator cron (now scripts/aida-autobuild.sh, shipped in #4327) and the scheduled `dev-autopromote` (`aida dev build --if-main-green`, every 15 min). Under review-gated landing, merges arrive every ~20-30 min and CI takes ~25 min, so the tip's CI is nearly always in_progress at check time:
     09:00 skip: origin/main cca5773b3a CI is 'in_progress'
     09:30 skip: origin/main c934bda1cc CI is 'in_progress'
     10:00 skip: origin/main 873caef7f3 CI is 'in_progress'
+  Recurred 2026-11-19 14:10-15:13 (advisor-121 comment): main 7d36925 went green with the BUG-2696 completion fix, but trains landed on top before the next tick, so live stayed on 4f2d07f for over an hour and three full-trailer landings needed manual completion calls. #4327's script waits for the tip's CI but still skips when origin/main moves during the wait, so it starves the same way.
   Effect: seats and lanes run an older binary (fixes landed on main aren't live), and the operator's checkout looks stale.
 
   ## Acceptance
-  1. `aida dev build --if-main-green` selects the NEWEST main commit whose required CI is green (walking back from the tip, bounded, e.g. 20 commits), fast-forwards the primary checkout to it (ff-only, clean checkout only), builds, smoke-tests and promotes. It skips only when no newer green commit than the live one exists.
-  2. It reports the chosen SHA, the skipped newer SHAs and why (in-progress or red), and `aida dev status` shows "live is N commits behind main; newest green = X".
-  3. Red commits are never promoted; an in-progress tip doesn't block an older green one.
-  4. The operator's cron stopgap (~/bin/aida-autobuild.sh) gets the same rule, or is retired in favour of the scheduled job (operator decision).
-  5. Tests: tip in-progress with an older green commit → promote the older one; tip red → promote the newest green before it; nothing newer green → skip.
+  1. `aida dev build --if-main-green` selects the NEWEST commit on main's first-parent line whose required CI is green (walking back from the tip, bounded to 20 commits) and that is newer than the live binary. It fast-forwards the primary checkout to THAT commit (ff-only, clean checkout only; the checkout may then sit behind origin/main), builds, smoke-tests and promotes. It skips only when no green commit newer than live exists.
+  2. The "promote only when main == origin/main" guard becomes "HEAD is the chosen green commit and an ancestor of origin/main". A later run fast-forwards further as newer commits go green.
+  3. It reports the chosen SHA, the skipped newer SHAs and why (in-progress or red), and `aida dev status` shows "live is N commits behind main; newest green = X".
+  4. Red commits are never promoted; an in-progress tip never blocks an older green one; a commit whose CI run is missing counts as not green.
+  5. scripts/aida-autobuild.sh (lane hosts and operator cron) uses the same newest-green rule instead of waiting on the tip, and keeps #4327's skip-worktree override handling.
+  6. Tests: tip in-progress with an older green commit → promote the older one; tip red → promote the newest green before it; nothing newer than live is green → skip; origin/main moves mid-check → the chosen green commit is still promoted.
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-19T21:26:52.683853144Z
+modified_at: 2026-11-20T00:59:26.582606402Z
 req_type: Bug
 tags:
 - landing
@@ -35,6 +37,42 @@ comments:
   modified_at: 2026-11-19T21:26:52.683853144Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+history:
+- id: 01a1f677-27f6-73c2-83dc-dc7ef45e7218
+  author: joe
+  timestamp: 2026-11-20T00:59:26.582606094Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: description
+    old_value: |
+      Observed 2026-11-18 10:16 MST: the primary checkout ~/ai/aida and the live binary were stuck 3 commits behind main (live e207f1f since 07:06) although every newer main commit later went green. Both promoters require CI green at the main TIP: ~/bin/aida-autobuild.sh (cron */30) and the scheduled `dev-autopromote` (`aida dev build --if-main-green`, every 15 min). Under review-gated landing, merges arrive every ~20-30 min and CI takes ~25 min, so the tip's CI is nearly always in_progress at check time:
+        09:00 skip: origin/main cca5773b3a CI is 'in_progress'
+        09:30 skip: origin/main c934bda1cc CI is 'in_progress'
+        10:00 skip: origin/main 873caef7f3 CI is 'in_progress'
+      Effect: seats and lanes run an older binary (fixes landed on main aren't live), and the operator's checkout looks stale.
+
+      ## Acceptance
+      1. `aida dev build --if-main-green` selects the NEWEST main commit whose required CI is green (walking back from the tip, bounded, e.g. 20 commits), fast-forwards the primary checkout to it (ff-only, clean checkout only), builds, smoke-tests and promotes. It skips only when no newer green commit than the live one exists.
+      2. It reports the chosen SHA, the skipped newer SHAs and why (in-progress or red), and `aida dev status` shows "live is N commits behind main; newest green = X".
+      3. Red commits are never promoted; an in-progress tip doesn't block an older green one.
+      4. The operator's cron stopgap (~/bin/aida-autobuild.sh) gets the same rule, or is retired in favour of the scheduled job (operator decision).
+      5. Tests: tip in-progress with an older green commit → promote the older one; tip red → promote the newest green before it; nothing newer green → skip.
+    new_value: |
+      Observed 2026-11-18 10:16 MST: the primary checkout ~/ai/aida and the live binary were stuck 3 commits behind main (live e207f1f since 07:06) although every newer main commit later went green. Both promoters require CI green at the main TIP: the lane-host/operator cron (now scripts/aida-autobuild.sh, shipped in #4327) and the scheduled `dev-autopromote` (`aida dev build --if-main-green`, every 15 min). Under review-gated landing, merges arrive every ~20-30 min and CI takes ~25 min, so the tip's CI is nearly always in_progress at check time:
+        09:00 skip: origin/main cca5773b3a CI is 'in_progress'
+        09:30 skip: origin/main c934bda1cc CI is 'in_progress'
+        10:00 skip: origin/main 873caef7f3 CI is 'in_progress'
+      Recurred 2026-11-19 14:10-15:13 (advisor-121 comment): main 7d36925 went green with the BUG-2696 completion fix, but trains landed on top before the next tick, so live stayed on 4f2d07f for over an hour and three full-trailer landings needed manual completion calls. #4327's script waits for the tip's CI but still skips when origin/main moves during the wait, so it starves the same way.
+      Effect: seats and lanes run an older binary (fixes landed on main aren't live), and the operator's checkout looks stale.
+
+      ## Acceptance
+      1. `aida dev build --if-main-green` selects the NEWEST commit on main's first-parent line whose required CI is green (walking back from the tip, bounded to 20 commits) and that is newer than the live binary. It fast-forwards the primary checkout to THAT commit (ff-only, clean checkout only; the checkout may then sit behind origin/main), builds, smoke-tests and promotes. It skips only when no green commit newer than live exists.
+      2. The "promote only when main == origin/main" guard becomes "HEAD is the chosen green commit and an ancestor of origin/main". A later run fast-forwards further as newer commits go green.
+      3. It reports the chosen SHA, the skipped newer SHAs and why (in-progress or red), and `aida dev status` shows "live is N commits behind main; newest green = X".
+      4. Red commits are never promoted; an in-progress tip never blocks an older green one; a commit whose CI run is missing counts as not green.
+      5. scripts/aida-autobuild.sh (lane hosts and operator cron) uses the same newest-green rule instead of waiting on the tip, and keeps #4327's skip-worktree override handling.
+      6. Tests: tip in-progress with an older green commit → promote the older one; tip red → promote the newest green before it; nothing newer than live is green → skip; origin/main moves mid-check → the chosen green commit is still promoted.
 filed_at:
   code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
   branch: main
