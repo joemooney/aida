@@ -1,0 +1,37 @@
+id: 01a1f73c-f2d4-7ad3-85a1-7b10d07388d2
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-465
+agreed_id: BUG-2703
+title: 'Long-lived shared admission claims of the advisor loop workers starve every exclusive land: aida pr ship gets ''admission busy'' indefinitely while review-watch and auto-train run'
+description: |
+  Observed 2026-11-19 (product-14, advisor-121): `aida pr ship 4324` (promotion 23) could never acquire admission. The advisor's own ship attempts were "starved by admission for 40 min", and the operator's retry loop never got through: "admission busy: PID 2247524 ... purpose legacy review-watch; PID 2425465 ... purpose legacy auto-train".
+
+  Cause (aida-cli-lib/src/admission_owner.rs, STORY-2857 cooperative admission): `.aida/admission-owner/mode.lock` is a readers-writer flock. Review controllers and cooperative trains take it SHARED (try_lock_shared); a land takes it EXCLUSIVE (try_lock_exclusive), which fails whenever any shared holder exists, and it never waits. The two `aida advisor loops` workers (review-watch and train-worker) each take their shared claim at worker start and hold it for the worker's lifetime, not per tick: receipts 6e7f1cbf (19:39) and 19bbfec1 (19:58). So while the loops run, an exclusive land is starved indefinitely and every retry fails. The only way through was the advisor sending SIGTERM to both workers (21:35), which also stops all auto-review and auto-train. `aida advisor loops` has no supported stop/pause/drain verb, and `aida review watch pause` only pauses new review launches, not the claim.
+  Related: BUG-2665 (auto-train starving behind review-watch; a different pair).
+
+  Acceptance criteria:
+  1. A land/ship requesting the exclusive mode is not starved by long-lived shared holders: either the loop workers hold the shared claim only for the duration of each tick or attempt (released between ticks), or an exclusive requester registers intent and new shared acquisitions defer to it (writer preference) until it has run.
+  2. `aida pr ship` on a busy admission waits up to a bounded time (configurable, default a few minutes) for the exclusive mode instead of failing on the first try_lock, and reports the holders and how long it waited if it gives up.
+  3. Regression through the production path: with both loop workers running, an `aida pr ship` of an approved PR acquires admission within the bound. A control proves an in-progress review launch or train stack is never interrupted mid-operation.
+  4. `aida advisor loops` gains a supported, audited way to drain or pause both workers' admission claims (so no operator or advisor ever needs to SIGTERM them), and `aida advisor loops status` shows each worker's claim age.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T04:35:29.108587336Z
+modified_at: 2026-11-20T04:35:29.108587336Z
+req_type: Bug
+tags:
+- admission
+- landing
+- linked:BUG-2665
+- linked:STORY-2857
+- product-intake
+filed_at:
+  code_sha: 140977cdd550b1f043ea5a57eb4bb91e52211313
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 2b42e9f896c
+  vendor: claude
+  session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
