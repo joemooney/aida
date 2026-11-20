@@ -33,7 +33,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-10T20:30:55.867848469Z
-modified_at: 2026-11-06T04:24:57.876222526Z
+modified_at: 2026-11-20T02:20:55.021391992Z
 req_type: Story
 tags:
 - docs
@@ -237,6 +237,13 @@ comments:
   created_at: 2026-11-06T03:46:32.417387487Z
   modified_at: 2026-11-06T03:46:32.417387487Z
   session_id: 01a1aef5914c
+- id: 01a1f6c1-f037-72a1-9285-82f09c195f17
+  author: joe
+  content: 'advisor-121 2026-11-19: the doc-path checker''s test-literal false positive is fixed under TASK-3161 (approved, drain).'
+  created_at: 2026-11-20T02:20:55.021391992Z
+  modified_at: 2026-11-20T02:20:55.021391992Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a12786-de64-7f61-81ce-787aedc7543e
   author: joe
