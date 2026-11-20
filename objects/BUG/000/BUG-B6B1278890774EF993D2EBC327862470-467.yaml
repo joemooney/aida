@@ -139,6 +139,13 @@ comments:
   modified_at: 2026-11-20T11:14:24.762008663Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f8aa-d29e-7112-a197-42de5e662d9b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: inspected all 10 files and the complete 1,032-line diff as landed on protected base b41fd684a30a08a22ee1ac9d315ec965f5a3c9d1 (landed tree f761590ac6696af343a63ad61f9b0957afef9202), attesting original head a12563e598a3365aade386ef54b04118db3aa6e8. Request changes for two unmet claimed acceptance criteria. No local test/build commands ran, per reviewer policy. CI pending at review time: fast gates passed, fast compile running; pending CI is not the reason for this verdict.. No triage reason was given.'
+  created_at: 2026-11-20T11:15:07.038253365Z
+  modified_at: 2026-11-20T11:15:07.038253365Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f874-487d-7913-ba35-94353334404c
   author: joe
@@ -185,6 +192,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f8aa-d29e-7112-a197-42c53c62969f
+  author: joe
+  timestamp: 2026-11-20T11:15:07.038234522Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
