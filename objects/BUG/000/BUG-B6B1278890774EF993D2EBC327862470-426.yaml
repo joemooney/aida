@@ -14,12 +14,12 @@ description: |
   Impact: anything that reads the ledger before the last write lands sees request-changes for an approval the operator recorded, and the round counter inflates ("round 6").
 
   Acceptance: (1) one `review record --verdict approved` produces exactly one verdict ledger event for the spec. (2) A no-op "unchanged" record writes no ledger event. (3) Regression test covering a prior sweep_pending barrier.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T18:33:44.931632141Z
+modified_at: 2026-11-20T18:42:03.584677088Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -76,6 +76,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fa44-02c0-7ed2-818b-072f849940d7
+  author: aida-session-start
+  timestamp: 2026-11-20T18:42:03.584676046Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2
