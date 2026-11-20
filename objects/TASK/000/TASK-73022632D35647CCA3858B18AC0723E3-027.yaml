@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T15:33:18.864222788Z
+modified_at: 2026-11-20T19:07:49.547444237Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -212,6 +212,13 @@ comments:
   content: PR-4365 at b8d7faa4712a2968230c58250054099f7b7fda7f conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-20T15:33:42.626352631Z
   modified_at: 2026-11-20T15:33:42.626352631Z
+- id: 01a1fa5b-e134-7620-8197-60368c95b8a0
+  author: joe
+  content: 'advisor-121 12:12: #4365 cannot be reviewed because it conflicts with main (the manual review job exited). A conflict-only merge-main round on codex: .aida/tmp/brief-TASK-3133-conflict.md'
+  created_at: 2026-11-20T19:07:49.547444237Z
+  modified_at: 2026-11-20T19:07:49.547444237Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
