@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T18:38:24.672077943Z
+modified_at: 2026-11-20T19:38:59.509723322Z
 req_type: Bug
 tags:
 - dell1
@@ -819,6 +819,30 @@ comments:
   content: 'advisor-121 11:50: the r2 head d0c1679 (pushed 08:39) sat unreviewed 3h behind THIS bug''s own symptom: a dead reviewer tree aida-pr-4364 at the old head 5e86834 with an uncollected draft. Draft backed up, session ended, review launched by hand on Claude+Fable.'
   created_at: 2026-11-20T18:38:24.672077943Z
   modified_at: 2026-11-20T18:38:24.672077943Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa78-57c6-7960-82e4-ff5a8591eac0
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-121, 12:48): the r2 reviewer at d0c1679 wrote APPROVED with 5 unresolved minor findings, and the handoff correctly refused it (draft copied to the advisor scratchpad). Those findings are round 3; the design was verified sound. Claude+Fable.
+
+    # Rework brief: BUG-2684 / PR #4364, round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 12:48 MST. Head reviewed: d0c1679. Lane: CLAUDE+Fable. COMMIT your work.
+    The r2 reviewer's draft (APPROVED with 5 unresolved findings; the handoff refused it) is the brief; the core design was verified sound.
+     P3 reader.rs lease_processes_proven_gone: a pid-less reviewer lease in an unobservable pid namespace must NOT be proven dead on age alone;
+        keep it (unverifiable means alive), with a regression.
+     P3 session_start.rs review_conflict_cannot_prompt: the persistent no-human-acknowledged markers must not suppress the conflict prompt for
+        an ATTENDED interactive pickup; only this invocation's --no-human flag (or a non-tty) may.
+     test-gap reader.rs review_holder_proven_dead: tests for the unreadable-ownership-record branch and OwnerVerdict::Alive on a record naming
+        this session (both refuse).
+     test-gap work.rs/session_start.rs: a test that a --no-human pickup marks no-human setup and that the conflict loop takes the
+        release path without prompting (behavioural, not a truth table).
+     style: replace the process-global NO_HUMAN_SETUP AtomicBool with a parameter passed into session start (it leaks across MCP calls
+        and tests).
+    Also merge origin/main (5 behind). cargo fmt; ratchets (ownership liveness!); targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T19:38:59.509723322Z
+  modified_at: 2026-11-20T19:38:59.509723322Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
