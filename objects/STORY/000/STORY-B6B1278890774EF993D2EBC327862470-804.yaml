@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T16:03:35.378102154Z
+modified_at: 2026-11-20T16:03:56.147261183Z
 req_type: Story
 tags:
 - landing
@@ -23,6 +23,14 @@ tags:
 - product-intake
 - scheduler
 - throughput
+comments:
+- id: 01a1f9b3-83e0-7ec1-bdc6-581acca8a29a
+  author: joe
+  content: 'Product 2026-11-20 09:02 evidence for AC7 (the product seat ran these as session-local Monitors overnight, which is exactly what this spec replaces): (a) #4344 approved 07:12 with red full tier (task_3792 flake), no landing for ~3h until Joe noticed at 08:41; (b) bug_2684 flake 2x (11-19 10:23, 14:41), task_3792 2x (03:59, 07:12): each recurrence was routed by hand; (c) three lanes exited ''fast gate needs a clean committed seat'' (STORY-2884 19:19, r4 02:03; BUG-2697 r2 02:04) and one sat ~1h unnoticed; TASK-3821 failed at 15:18 and was noticed ~1h later; (d) four stale sandbox-host claims on 11-19, two not doctor-healable (BUG-2697).'
+  created_at: 2026-11-20T16:03:56.147261183Z
+  modified_at: 2026-11-20T16:03:56.147261183Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
   author: joe
