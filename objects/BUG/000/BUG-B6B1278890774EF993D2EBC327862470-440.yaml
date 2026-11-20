@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-20T14:28:25.537407736Z
+modified_at: 2026-11-20T15:20:55.261047265Z
 req_type: Bug
 tags:
 - bwrap
@@ -96,6 +96,24 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-440` at head `unavailable`.'
   created_at: 2026-11-20T14:23:26.834769380Z
   modified_at: 2026-11-20T14:23:26.834769380Z
+- id: 01a1f98b-ddcc-70c0-931c-45b3f22916de
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 40b9bb48d661c9c1bfedca507a6c33aeecc13e3f. Reviewed the origin/main merge-base diff, the native working-tree diff, and untracked additions. The merge-base diff contains the earlier TASK-2712 patch, which git cherry confirms already landed. The current edit covers only BUG-2415.
+
+    AC1: [evidence: behavioral-test] PASS for the Refs slice. The live BUG-2415 test ran without a skip and passed in lane job j20261120T151900239-2-0. In aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs:2221, the test checks origin discovery without tracking refs. At lines 2248–2264 it verifies the unpublished follow-up keeps the clone, lease, and pin, then verifies the explicit-refspec push allows session end to remove all three.
+
+    AC2: [evidence: documentation-inspection] N/A for this slice. The fixture uses the existing bubblewrap prerequisite and required-live gate documented in docs/advanced/lane-host-checklist.md. TASK-2712 live coverage and exact-head hosted CI remain outside the evidence from this lane.
+
+    Deep pass. Both pushes retain the same explicit refspec and clear tracking evidence for the initial probe. Paths use OS strings for PATH handling and separate Git arguments for the remote and refspec. The test checks one unadvertised follow-up before the second push and zero after it through real teardown, with multiple origin tips present. The fixture cwd, mailbox-writer inventory and failing forge stub isolate host state. The forge stub supplies zero publication credit. The real non-force unpublished-commit guard refuses and retains all three resources. No production authority paths or live test prerequisites changed.
+
+    Validation. The first fast gate caught a direct PATH read, which now uses Environment::capture. The scratch helper import did not compile in the lane, so the test sets cwd inside the existing one-test child. The fast-gate rerun passed all 48 source gates and the selected ratchets in j20261120T145924353-2-0. The first executed edited run showed the remote-commit guard fired before the dirty-tree guard. I corrected the expected diagnostic and reran the targeted test, rustfmt and diff checks successfully. The standalone store-writer inventory also passed.
+  created_at: 2026-11-20T15:20:55.261047265Z
+  modified_at: 2026-11-20T15:20:55.261047265Z
+  session_id: 01a1f95b9c6f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ed07-d146-7933-8d9c-342df690cc7a
   author: joe
