@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T18:08:41.915377946Z
+modified_at: 2026-11-20T18:08:56.269605925Z
 req_type: Story
 tags:
 - docs:impacted
@@ -252,6 +252,27 @@ comments:
   created_at: 2026-11-20T18:08:41.643440823Z
   modified_at: 2026-11-20T18:08:41.643440823Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa26-0aa3-7510-8a1a-b91939f43408
+  author: joe
+  content: |-
+    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 11:08):
+    # Rework brief: STORY-2906 / PR #4372, round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 11:12 MST. Head reviewed: b539d5c (13 -> 2 findings). Lane: CLAUDE+Fable. COMMIT your work.
+    F1 [AC7a, must fix] land_stalls.rs:324-327: land_ci_base::observe/verify replaces a RED result with Ci::Stale when base freshness cannot be
+       verified, so standing() never sees red and STUCK-MERGE-RED (the #4344 case) is missed. Keep the red-check evidence (failed check names,
+       run and attempt) independently of base freshness: a PR with red checks at its exact head is STUCK-MERGE-RED even if the base is
+       stale or unknown (mention "base not fresh" in the reason). Regression: approved, red checks, base freshness unknown, so it is classified
+       STUCK-MERGE-RED.
+    F2 [AC2 AMENDED by advisor] per-host memory: report LOCAL host memory; for foreign hosts, use memory from a host heartbeat or
+       observation record if one exists (STORY-2748 activity heartbeat / lane-host records), otherwise show `unknown (no remote memory
+       source)`, an explicit reason, not a silent substitution. A real remote memory probe is deferred to TASK-3827 (advisor note there).
+       Test: local memory present; foreign host with no source shows the reason.
+    Nothing else. cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-20T18:08:56.269605925Z
+  modified_at: 2026-11-20T18:08:56.269605925Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
