@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T23:24:14.275068700Z
+modified_at: 2026-11-20T23:41:20.222240829Z
 req_type: Story
 tags:
 - landing
@@ -894,6 +894,32 @@ comments:
   content: 'ADVISOR S1b SKETCH SIGNOFF (advisor-121, 2026-11-20 16:40): APPROVED with rulings. (a) Readiness follows the landing mode: in review-gated mode only merge-hold-gate is required, and other CI is shown as info. ACCEPTED. Q1 RULING: a failed Build does NOT simply become info. In review-gated mode, a red Build BLOCKS readiness unless the red-main watch (S3) has an open episode whose failing checks cover it, i.e. the PR is red only because main is red; then it is info, with the episode named. A PR-caused red never shows as ready. (Rationale: ship''s info treatment assumed someone checks; readiness wakes are what agents act on.) (b) In review-gated mode, a WAITING verdict needs structured --needs. ACCEPTED. Q2 RULING: a CLOSED set of kinds (test:, artifact:, check:, actor:) each with a required free-text detail; NO deny-list (brittle). ''check:'' must name a specific check, and naming only the generic aggregate (Build, or CI-tier) is refused. Record the kinds in the verdict schema so the throughput guard can show what a WAITING PR waits on. Both are project knobs per the landing-mode config; default = current behaviour. Claude+Fable; STRICT (review-record authority path).'
   created_at: 2026-11-20T23:24:14.275068700Z
   modified_at: 2026-11-20T23:24:14.275068700Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb56-31fd-7673-a1b7-16b6c5b1c1dc
+  author: joe
+  content: |-
+    ADVISOR RULING (advisor-121, 2026-11-20 17:00 MST): PROMOTION 24 (#4384) DOES NOT LAND. S3 IS SPLIT.
+    Evidence: promotion review at 5b9312d, 25 findings, all in S3's watch; the sixth full sweep of S3, each finding a fresh batch. The non-convergence is
+    structural: the watch both OBSERVES CI and performs STORE EFFECTS (files fix specs and human attention items, replays the smoke spool into the
+    store, completes items by tag). Most of the authority and durability findings live in the effect path (WORK admission order, a second store
+    path, checkout-local JSON driving store effects, a 12-char tag selector, link-following writers, unreconciled relationship filing).
+    Ruling:
+     1 Revert S3 (#4362's squash, 5a4a2dc) out of integration; close #4384. Integration returns to main plus nothing, ready for S1b.
+     2 S3a (OBSERVATIONAL, re-land): state, journal, cursor scan, attribution, judging, metrics, `aida land watch` report and a mail notice to the
+       advisor role. NO store writes of any kind: no spec or bug filing, no human items, no completion by tag, no smoke spool to store
+       (smoke evidence is reported, not filed). In-scope findings from the p24 review: cursor gaps (:565), first-red attribution (:620),
+       required vs optional judging (:277), attempt binding (forge_commit_ci :336), the close fallback (:1121), last-green vs tip status
+       (:1218), journal byte-level tail (:382), try_lock error classes (:517), evidence keyed by workflow, run and job (:690), unbuildable
+       recomputed (:659), the bounded log tail (forge :3233), the state dir pinned with no-follow and exclusive temp files (:341/350), one
+       trusted watch root (land.rs), config_edit inline tables (:30), the fix_window origin (:1040), the test guard exemption narrowed, and
+       criterion traces. The scheduled job stays (it is read-only).
+     3 S3b (EFFECTS, later, STRICT, needs its own sketch and signoff): fix-spec and human-item filing through an admission-first store write on the
+       project's resolved backend, operator-owned effect state, watch-created UUID identity bound to the full SHA, reconciled relationships,
+       coordinated smoke spool drain, and mailbox ID lookup. Findings :1659 :1447 :464 :1764/1809 :1733 :1279 :1517 dev_build :898.
+     The landed S3 history stays in the PR for reference; S3a may reuse its code with the effect calls removed.
+  created_at: 2026-11-20T23:41:20.222240829Z
+  modified_at: 2026-11-20T23:41:20.222240829Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
