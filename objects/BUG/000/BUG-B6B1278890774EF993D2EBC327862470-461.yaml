@@ -302,6 +302,13 @@ comments:
   created_at: 2026-11-20T18:40:43.066135920Z
   modified_at: 2026-11-20T18:40:43.066135920Z
   session_id: 01a1fa3f6aa2
+- id: 01a1fa43-f937-79d3-b26a-dd538b808bdf
+  author: joe
+  content: 'Product 11:43, CORRECTION (verified by the 11:3x lane, which punted): disrad-dvp98b3puw is dell1''s REAL kernel hostname (initial UTS namespace, /etc/hostname), not a sandbox UTS name. ''dell1'' is only an ssh alias. AIDA''s bwrap launches use --unshare-all without --hostname, so contained seats report the host name. AC1/AC2/AC5 therefore rest on a false premise that I (product-14) carried into the 11-19 grooming without verifying. Earlier comments here that attribute stale or unhealable claims to a ''sandbox host name'' are wrong on that point: per the lane, the two unhealable claims (01a1f4f93790, 01a1f5182ee1) were unhealable because their admission never spawned a worker (no lease, no lane record). AC3 (pre-spawn release) and AC4 are on main via #4344 (861eb515). Recommended: complete on #4344; record AC1/2/5 as invalid premise.'
+  created_at: 2026-11-20T18:41:48.337679562Z
+  modified_at: 2026-11-20T18:41:48.337679562Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe
