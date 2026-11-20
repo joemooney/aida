@@ -1841,7 +1841,9 @@ struct Live {
 
 impl Live {
     fn aida(&self, args: &[&str]) -> std::process::Command {
-        let mut cmd = std::process::Command::new(&self.aida);
+        // The spec-store `aida`, never a vendor program.
+        let aida = &self.aida;
+        let mut cmd = std::process::Command::new(aida);
         cmd.current_dir(&self.root).args(args);
         cmd
     }
