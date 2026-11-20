@@ -15,12 +15,12 @@ description: |
   2. The ownership semantics under test are unchanged; no production code changes.
   3. The test passes 20/20 in a loop locally (one targeted cargo run) and is green on its PR's full tier.
   Test-only, codex lane, FASTTRACK review. Trailer (Refs BUG-2684) is NOT used; this task completes on its own.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T21:42:23.178585Z
-modified_at: 2026-11-20T00:12:44.497939469Z
+modified_at: 2026-11-20T00:13:36.990479910Z
 req_type: Task
 tags:
 - fix-forward
@@ -273,6 +273,13 @@ comments:
   modified_at: 2026-11-20T00:12:44.497939469Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f64d-335e-7b01-98d1-d275d73774bd
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the entire 6690-byte landed diff against protected base be435bcf3807a9e0c892e2d7def934a25c4b1942, attesting original head 21f4982d70e0191186824e76e39026e06b50cd35. Covered spec TASK-3821 (origin TASK-b6b1278890774ef993d2ebc327862470-1127). Acceptance checklist: acb958e7 (fixture-only removal and exact byte accounting): unverified; exact paths, removal and scan estimates are asserted, but successful reclaim accounting is never asserted. ac80e1e2 (unchanged ownership semantics, no production changes): verified by full diff inspection, test-only cfg boundaries and retained ownership/refusal/salvage assertions. acd5e75b (20/20 local loop and green full-tier PR CI): unverified; PR body and canonical spec comment report 20/20 locally and 30/30 module tests, but exact-head CI run 44642824230 selected fast and skipped the full shards. CI pending at review time; pending status alone is not the reason for this verdict. Two blocking unmet-claimed-ac findings. No local tests or builds run.. No triage reason was given.'
+  created_at: 2026-11-20T00:13:36.990478506Z
+  modified_at: 2026-11-20T00:13:36.990478506Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f5c3-790d-7e72-aad3-67032fd7c265
   author: joe
@@ -312,6 +319,15 @@ history:
   timestamp: 2026-11-20T00:12:20.458020336Z
   session_id: 01a1f6499b43
   changes: []
+- id: 01a1f64d-335e-7b01-98d1-d269082ef408
+  author: joe
+  timestamp: 2026-11-20T00:13:36.990462602Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: fd4018a2b2fada46b4d110d11cd446d7fe65d293
@@ -322,11 +338,3 @@ filed_at:
   vendor: claude
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Reviewed the entire 6690-byte landed diff against protected base be435bcf3807a9e0c892e2d7def934a25c4b1942, attesting original head 21f4982d70e0191186824e76e39026e06b50cd35. Covered spec TASK-3821 (origin TASK-b6b1278890774ef993d2ebc327862470-1127). Acceptance checklist: acb958e7 (fixture-only removal and exact byte accounting): unverified; exact paths, removal and scan estimates are asserted, but successful reclaim accounting is never asserted. ac80e1e2 (unchanged ownership semantics, no production changes): verified by full diff inspection, test-only cfg boundaries and retained ownership/refusal/salvage assertions. acd5e75b (20/20 local loop and green full-tier PR CI): unverified; PR body and canonical spec comment report 20/20 locally and 30/30 module tests, but exact-head CI run 44642824230 selected fast and skipped the full shards. CI pending at review time; pending status alone is not the reason for this verdict. Two blocking unmet-claimed-ac findings. No local tests or builds run.'
-  recovery_hint: address the review findings, move TASK-3821 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-20T00:12:07.720920064Z
