@@ -773,7 +773,11 @@ pub(crate) fn run_queue_resume_to_exit(
                 pr,
                 target.vendor.as_str(),
             )?;
-            eprintln!("fast_gate={}", crate::lane_fast_gate::marker(&main, branch));
+            // trace:BUG-2705 | ai:claude
+            eprintln!(
+                "fast_gate={}",
+                crate::lane_fast_gate::marker_with_reason(&main, branch)
+            );
             anyhow::ensure!(
                 !queued,
                 "fast gate failed; one rework round queued before review"
