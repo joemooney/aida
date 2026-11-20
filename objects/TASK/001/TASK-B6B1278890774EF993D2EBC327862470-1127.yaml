@@ -15,12 +15,12 @@ description: |
   2. The ownership semantics under test are unchanged; no production code changes.
   3. The test passes 20/20 in a loop locally (one targeted cargo run) and is green on its PR's full tier.
   Test-only, codex lane, FASTTRACK review. Trailer (Refs BUG-2684) is NOT used; this task completes on its own.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T21:42:23.178585Z
-modified_at: 2026-11-20T00:27:32.104117250Z
+modified_at: 2026-11-20T00:27:41.814551498Z
 req_type: Task
 tags:
 - fix-forward
@@ -376,6 +376,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f65a-1776-7210-a628-ce7a6bb896be
+  author: aida-pr-open
+  timestamp: 2026-11-20T00:27:41.814549610Z
+  session_id: 01a1f61e0ef3
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: fd4018a2b2fada46b4d110d11cd446d7fe65d293
