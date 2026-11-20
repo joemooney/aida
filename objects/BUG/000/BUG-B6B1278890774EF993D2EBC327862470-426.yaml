@@ -2,24 +2,30 @@ id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-426
 agreed_id: BUG-2662
 title: 'aida review record writes alternating request-changes/approved ledger events: one operator approval of PR-4218 produced 4 verdict events'
-description: |
-  Observed 2026-11-17 on PR #4218 at head 46e967b. The operator ran `aida review record BUG-2647 --pr 4218 --sha 46e967b... --verdict approved --no-carry --summary ...` once, at 17:49:37Z, at a TTY. The CLI reported "recorded APPROVED for BUG-2647 (round 6)".
+description: 'Observed 2026-11-17 on PR #4218 at head 46e967b. The operator ran `aida review record BUG-2647 --pr 4218 --sha 46e967b... --verdict approved --no-carry --summary ...` once, at 17:49:37Z, at a TTY. The CLI reported "recorded APPROVED for BUG-2647 (round 6)".
 
-  The gate ledger .aida/gate-ledger/PR-4218.jsonl gained FOUR verdict events for BUG-2647, at seq 17-20 (17:49:40, :54, :57, 17:50:03). They alternate request-changes, approved, request-changes, approved, all with the operator's shell identity and the same summary text.
+
+  The gate ledger .aida/gate-ledger/PR-4218.jsonl gained FOUR verdict events for BUG-2647, at seq 17-20 (17:49:40, :54, :57, 17:50:03). They alternate request-changes, approved, request-changes, approved, all with the operator''s shell identity and the same summary text.
+
 
   A single BUG-2585 run behaved the same way (seq 21-24, alternating). A later identical BUG-2585 run printed "unchanged: identical APPROVED already recorded", but entries were still written around then.
 
-  Context: the prior ledger state was the codex reviewer's sweep_pending barrier, which `aida review verdict` displays as CHANGES REQUESTED (BUG-2564 family). The interleaved request-changes entries are likely that barrier, or the inherited findings, being re-asserted for each write.
+
+  Context: the prior ledger state was the codex reviewer''s sweep_pending barrier, which `aida review verdict` displays as CHANGES REQUESTED (BUG-2564 family). The interleaved request-changes entries are likely that barrier, or the inherited findings, being re-asserted for each write.
+
 
   Impact: anything that reads the ledger before the last write lands sees request-changes for an approval the operator recorded, and the round counter inflates ("round 6").
 
+
   Acceptance: (1) one `review record --verdict approved` produces exactly one verdict ledger event for the spec. (2) A no-op "unchanged" record writes no ledger event. (3) Regression test covering a prior sweep_pending barrier.
+
+  '
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T22:19:15.677556073Z
+created_at: 2026-11-17 17:55:38.467134+00:00
+modified_at: 2026-11-20 22:19:15.677556+00:00
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -28,430 +34,421 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1fa65-24c3-7100-a455-b9b92403f792
-  created_at: 2026-11-20T19:18:22.672454516Z
+  created_at: 2026-11-20 19:18:22.672454+00:00
   created_by: dirtlab
 comments:
 - id: 01a1ebd8-b3bc-7cd1-aa92-e6eecc444ee9
   author: joe
   content: 'Product: queued for implementer, supervised (approval-ledger authority). Starts held until open PRs < wip_max (10).'
-  created_at: 2026-11-17T23:29:58.184765274Z
-  modified_at: 2026-11-17T23:29:58.184765274Z
+  created_at: 2026-11-17 23:29:58.184765+00:00
+  modified_at: 2026-11-17 23:29:58.184765+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1f3fb-f996-7161-be64-46bc306135ad
   author: joe
   content: 'Advisor 06:30 LIVE REPRO on the cfbc140+ live binary (12264ad): ''aida review record PR-4290 --verdict approved --sha f3008c2 --summary ... --finding {deferred p2 test-gap JSON with blocking_tier and class}'' fails with ''could not write the review verdict'' (review_commands.rs:3350/3384, context masks the cause). YET each failed attempt leaves a NEW request-changes ledger record attributed to claude-advisor-119 (recorded_at 13:24:01, then 13:24:54), and the watcher emits a ''CHANGES REQUESTED'' wake each time. So a refused approval writes a CR event. Expected: a failed approve writes nothing; the error names the real cause. Prior state: a reviewer CR at the same sha with 1 carried finding (likely the carry/redecide path).'
-  created_at: 2026-11-19T13:25:26.908650989Z
-  modified_at: 2026-11-19T13:25:26.908650989Z
+  created_at: 2026-11-19 13:25:26.908650+00:00
+  modified_at: 2026-11-19 13:25:26.908650+00:00
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f641-3bb0-7752-aff9-3a2c867cda90
   author: joe
   content: 'advisor-121 2026-11-19 17:03: related shadowing defect. A stale legacy .aida/review-verdicts/<SPEC>.json from a previous cycle of a reopened spec (BUG-2211, 2026-10-23, PR #2863) was read by the train merge gate as the spec''s verdict and refused two trains deterministically, although the ledger held an APPROVED verdict at the member head. Spec-keyed legacy files should be ignored when their recorded PR/branch is not the change being merged.'
-  created_at: 2026-11-20T00:00:20.460940218Z
-  modified_at: 2026-11-20T00:00:20.460940218Z
+  created_at: 2026-11-20 00:00:20.460940+00:00
+  modified_at: 2026-11-20 00:00:20.460940+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa2e-8c53-7a53-a0d5-5a4594d8aab3
   author: joe
   content: 'advisor-121 11:22: drain, Claude+Fable, STRICT (review-record authority).'
-  created_at: 2026-11-20T18:18:21.590945442Z
-  modified_at: 2026-11-20T18:18:21.590945442Z
+  created_at: 2026-11-20 18:18:21.590945+00:00
+  modified_at: 2026-11-20 18:18:21.590945+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa3c-981b-72d2-82fb-aa819d2e742e
   author: joe
   content: "Product 11:33: claude lane queued on dell1 (advisor 11:19 batch), brief:\n# Brief: BUG-2662 (fresh start; advisor-121 11:19 batch: approved, drain; claude)\n\nScope: 'aida review record' must not write alternating request-changes/approved ledger events for one approval. STRICT review: verdict authority, fail closed.\n\nImplement ONLY the still-unmet acceptance criteria on origin/main; earlier slices on main: \nTrailer (BUG-2662) only if your PR plus main meets every AC; otherwise (Refs BUG-2662). If every AC is already met, make no change: punt with per-AC evidence.\nBefore pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`."
-  created_at: 2026-11-20T18:33:44.931632141Z
-  modified_at: 2026-11-20T18:33:44.931632141Z
+  created_at: 2026-11-20 18:33:44.931632+00:00
+  modified_at: 2026-11-20 18:33:44.931632+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa64-60ce-7880-9e34-f0f2e92b4548
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: ccaa61189c (diff vs origin/main: gate/ledger/{mod,store}.rs, gate/review_verdict.rs, review_commands.rs, review_draft.rs tests, story_1421 tests, aida-review skill master, store-writers.toml).
 
-    Root cause: one approval went through two writers that each wrote twice. (a) The ledger writer persisted a request-changes sweep_pending barrier before filing deferred findings, then the approval. (b) With --pr the handler wrote the spec record and then a second 'handshake' record at the same PR key. 2 x 2 = the four alternating events on PR-4218. A failed filing left the barrier behind (the PR-4290 repro), and agent-mode output showed only the top context line.
+
+    Root cause: one approval went through two writers that each wrote twice. (a) The ledger writer persisted a request-changes sweep_pending barrier before filing deferred findings, then the approval. (b) With --pr the handler wrote the spec record and then a second ''handshake'' record at the same PR key. 2 x 2 = the four alternating events on PR-4218. A failed filing left the barrier behind (the PR-4290 repro), and agent-mode output showed only the top context line.
+
 
     Acceptance evidence:
+
     - AC1 [evidence: behavioral-test] review_draft.rs bug_2662_one_approval_is_one_verdict_event_and_a_repeat_adds_none (plain approval: 1 event, carries phase-3 mode and receipt).
+
     - AC2 [evidence: behavioral-test] same test plus bug_2662_approval_over_pending_barrier_writes_one_approved_event: an identical repeat leaves the ledger events byte-equal.
+
     - AC3 [evidence: behavioral-test] bug_2662_approval_over_pending_barrier_writes_one_approved_event: prior sweep_pending barrier with a deferred finding, one approval appends exactly one approved event and no request-changes event.
+
     - Brief (failed approve writes nothing, error names cause) [evidence: behavioral-test] bug_2662_refused_approval_over_standing_refusal_writes_nothing, bug_2662_failed_approval_delivery_records_nothing, and the updated standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery.
+
     - Stale-approval race kept fail-closed [evidence: behavioral-test] bug_2662_approval_is_refused_when_another_review_lands_during_delivery (change ledger and unbound ledger).
 
+
     Probe findings and fixes:
-    - Dropping the barrier would have dropped its 'review changed during delivery' check; replaced with a standing-records snapshot compared under the ledger lock (records copied by bind_unbound are in the snapshot, so binding cannot trip it).
-    - 'Unchanged' by recording_key alone would have swallowed a re-record that changes summary or authority; the no-op requires every field equal except timestamp, round history, inherited/delivered markers and a human receipt id whose prior receipt still verifies. Otherwise it is recorded as a new round and says so.
+
+    - Dropping the barrier would have dropped its ''review changed during delivery'' check; replaced with a standing-records snapshot compared under the ledger lock (records copied by bind_unbound are in the snapshot, so binding cannot trip it).
+
+    - ''Unchanged'' by recording_key alone would have swallowed a re-record that changes summary or authority; the no-op requires every field equal except timestamp, round history, inherited/delivered markers and a human receipt id whose prior receipt still verifies. Otherwise it is recorded as a new round and says so.
+
     - A refusal with deferred follow-ups always writes through, so a failed follow-up filing is still retried by repeating the command.
+
     - Refusal paths tested, not only happy paths. No existing test weakened: two tests that asserted the barrier on the direct record path now assert that nothing is recorded.
 
-    Validation: cargo test --profile agent -p aida-cli-lib --lib with filters 'gate:: review verdict handshake' (2850 passed, 28 failed) and the queue/findings/awaiting set (1227 passed, 3 failed). All 31 failures are lane-environment failures unrelated to the diff (no built CLI binary for process fixtures, mail-retention writer scan, contained-launch refusal, deleted cwd, inherited seat env). aida-ci-guards 51 passed. check-store-writers passes after regenerating the inventory.
+
+    Validation: cargo test --profile agent -p aida-cli-lib --lib with filters ''gate:: review verdict handshake'' (2850 passed, 28 failed) and the queue/findings/awaiting set (1227 passed, 3 failed). All 31 failures are lane-environment failures unrelated to the diff (no built CLI binary for process fixtures, mail-retention writer scan, contained-launch refusal, deleted cwd, inherited seat env). aida-ci-guards 51 passed. check-store-writers passes after regenerating the inventory.
+
 
     Residual risks:
-    - make check-ci-fast could not run whole inside this lane's 60 s tool cap; ran individually: formatting, gate downward dependency, store-writer inventory, glyph lint, trace stranding, ExecContext, crate glob, test portability, executable fixture, help golden, glyph padding, structural guards, check-templates. Clippy and check-ratchets not run locally.
-    - Launcher collection (record_collected_verdict) still writes barrier then approval; out of scope for 'review record'.
+
+    - make check-ci-fast could not run whole inside this lane''s 60 s tool cap; ran individually: formatting, gate downward dependency, store-writer inventory, glyph lint, trace stranding, ExecContext, crate glob, test portability, executable fixture, help golden, glyph padding, structural guards, check-templates. Clippy and check-ratchets not run locally.
+
+    - Launcher collection (record_collected_verdict) still writes barrier then approval; out of scope for ''review record''.
+
     - The stale legacy .aida/review-verdicts/<SPEC>.json shadowing noted by advisor-121 (2026-11-19) is not addressed here.
-    - A human-at-TTY repeat still writes a fresh receipt file in the AIDA home before the no-op is detected (no ledger event).
-  created_at: 2026-11-20T19:17:24.814765594Z
-  modified_at: 2026-11-20T19:17:24.814765594Z
+
+    - A human-at-TTY repeat still writes a fresh receipt file in the AIDA home before the no-op is detected (no ledger event).'
+  created_at: 2026-11-20 19:17:24.814765+00:00
+  modified_at: 2026-11-20 19:17:24.814765+00:00
   session_id: 01a1fa43d4bc
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1fa64-b001-72d1-ab06-1e12da6c0563
   author: aida-publication-done
   content: Implementer push ccaa61189cee declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20T19:17:45.089087773Z
-  modified_at: 2026-11-20T19:17:45.089087773Z
+  created_at: 2026-11-20 19:17:45.089087+00:00
+  modified_at: 2026-11-20 19:17:45.089087+00:00
   session_id: 01a1fa43d4bc
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1fa71-0262-7503-abb8-77759acf1601
   author: joe
-  content: |-
-    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 12:34): 11 findings at ccaa611 (STRICT, review-record authority). Claude+Fable, gated on the live lane exiting.
-
-    # Rework brief: BUG-2662 / PR #4378 (review record idempotence), round 2 of 4, STRICT
-
-    Advisor: claude-advisor-121, 2026-11-20 12:34 MST. Head reviewed: ccaa611. Lane: CLAUDE+Fable. COMMIT your work.
-    Principle for every item: an idempotent repeat is decided UNDER the ledger lock(s) against the exact current act, spec and destination;
-    any incomplete observation REFUSES; a true repeat writes NOTHING (verdict, hold or receipt).
-     1 Repeat key includes SPEC and destination (multi-spec PR: approving B after A with the same body is NOT a repeat).
-     2 Mixed refusal with a deferred finding: retries reuse the existing refusal body (no new recorded_at); one verdict event in total.
-     3 A repeated refusal does not append another hold event when the matching hold stands; test that the whole change ledger is unchanged.
-     4 Standing compares the effective CHANGE-WIDE verdict history (all applicable verdict labels for the PR), not event.spec == spec only.
-     5 Standing snapshots are fallible and validated: a read failure or malformed line refuses, never an empty "fine" snapshot.
-     6 Lock ordering: hold the change lock and the by-spec (unbound) lock in one consistent order across comparison and append
-       (or compare a shared generation atomically). Test a concurrent unbound append.
-     7 The repeat no-op re-validates the current standing act under the lock before reporting unchanged.
-     8 Standing::admit is linear: index event identities, no quadratic deep compares.
-     9 Human TTY: reuse a valid standing receipt for the same act before allocating; no orphan receipts.
-    10 Tests: two operator approvals with distinct receipt IDs; a repeat with the standing receipt missing or invalid; assert event counts.
-    11 Fix the stale doc comment on record_verdict_at.
-    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
-  created_at: 2026-11-20T19:30:58.440682371Z
-  modified_at: 2026-11-20T19:30:58.440682371Z
+  content: "AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 12:34): 11 findings at ccaa611 (STRICT, review-record authority). Claude+Fable, gated on the live lane exiting.\n\n# Rework brief: BUG-2662 / PR #4378 (review record idempotence), round 2 of 4, STRICT\n\nAdvisor: claude-advisor-121, 2026-11-20 12:34 MST. Head reviewed: ccaa611. Lane: CLAUDE+Fable. COMMIT your work.\nPrinciple for every item: an idempotent repeat is decided UNDER the ledger lock(s) against the exact current act, spec and destination;\nany incomplete observation REFUSES; a true repeat writes NOTHING (verdict, hold or receipt).\n 1 Repeat key includes SPEC and destination (multi-spec PR: approving B after A with the same body is NOT a repeat).\n 2 Mixed refusal with a deferred finding: retries reuse the existing refusal body (no new recorded_at); one verdict event in total.\n 3 A repeated refusal does not append another hold event when the matching hold stands; test that the whole change ledger is unchanged.\n 4 Standing\
+    \ compares the effective CHANGE-WIDE verdict history (all applicable verdict labels for the PR), not event.spec == spec only.\n 5 Standing snapshots are fallible and validated: a read failure or malformed line refuses, never an empty \"fine\" snapshot.\n 6 Lock ordering: hold the change lock and the by-spec (unbound) lock in one consistent order across comparison and append\n   (or compare a shared generation atomically). Test a concurrent unbound append.\n 7 The repeat no-op re-validates the current standing act under the lock before reporting unchanged.\n 8 Standing::admit is linear: index event identities, no quadratic deep compares.\n 9 Human TTY: reuse a valid standing receipt for the same act before allocating; no orphan receipts.\n10 Tests: two operator approvals with distinct receipt IDs; a repeat with the standing receipt missing or invalid; assert event counts.\n11 Fix the stale doc comment on record_verdict_at.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run;\
+    \ make check-ci-fast. Push."
+  created_at: 2026-11-20 19:30:58.440682+00:00
+  modified_at: 2026-11-20 19:30:58.440682+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa71-9dd3-7220-97b6-40cb892bacde
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes on BUG-2662. I reviewed all eight files in the landed diff against 012b95ef8904. The generated worksheet has no headed acceptance section, but the requirement description enumerates three criteria.. No triage reason was given.'
-  created_at: 2026-11-20T19:31:52.403740543Z
-  modified_at: 2026-11-20T19:31:52.403740543Z
+  created_at: 2026-11-20 19:31:52.403740+00:00
+  modified_at: 2026-11-20 19:31:52.403740+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa71-da5d-7df1-bd38-52912b0c49fa
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2662):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2662):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: ccaa61189cee
+
     Recorded: 2026-11-20T19:29:10.870671984+00:00
+
     Findings:
+
     1. At the repeat check around line 3395, record_before is the current PR-wide body. The spec is stored on the event envelope and is never compared. On a PR covering A and B, after approving A, submitting the same summary, head and findings for B from the same reviewer can print unchanged and skip B’s first event, its binding and its follow-up delivery. Check the canonical event for the requested spec and destination, including its provenance. Add a two-spec regression.
+
     2. The has_deferred_finding exception at line 3399 disables idempotence for every mixed refusal, including after successful delivery. A normal identical retry rebuilds recorded_at, so exact-body append deduplication does not help. Retry filing using the existing refusal body and preserve the single verdict event for both successful and failed first deliveries.
+
     3. Even when repeat is true and the CLI prints unchanged, the requires_changes path still calls place_hold, whose placed and preserved branches both append a hold event. Reconcile missing protection on retry while skipping placement when the matching hold already stands. Assert the complete change ledger stays unchanged for a repeated refusal.
+
     4. standing filters the change ledger to event.spec == spec, although PR-keyed verdict selection includes all applicable verdict labels. While A is filing follow-ups, a refusal recorded on the same PR under its change key or a sibling covered spec is invisible to append_one_standing. A can then become the newest PR verdict. Compare the effective change-wide verdict history under lock and test a concurrent differently labelled refusal.
+
     5. Standing uses read_file/read_unbound, which convert read failures to empty vectors and silently discard malformed lines. Standing::admit accepts an empty or reduced final snapshot. A failed final read, including an unreadable by-spec file, can therefore authorize the stale append. Use fallible, validated snapshots and refuse if either observation is incomplete.
+
     6. append_one_standing holds only the change lock while checking the unbound ledger. append_unbound_checked uses a separate by-spec lock. An unbound verdict can commit after the final read and before the approval append, defeating the new cross-ledger freshness check. Coordinate both locks in a consistent order through comparison and append, or compare a shared generation atomically.
+
     7. The repeat path skips the write and subsequently tests only that some verdict is readable before clearing review markers and reporting success. A concurrent refusal after record_before was read can satisfy both presence checks, so the command reports an unchanged approval even though the standing verdict is now a refusal. Revalidate the exact current act and spec under the ledger lock before accepting a no-op.
+
     8. Standing::admit does a linear Vec::contains search for each historical record, with deep JSON comparisons under the per-change writer lock. An unchanged history takes quadratic comparisons, and records themselves retain round history. Use a linear check or indexed event identities with a bounded snapshot.
+
     9. At a human terminal a new persistent receipt is allocated before detecting an identical repeat. The repeat discards its ID and leaves an unreferenced receipt per invocation. Validate and reuse the standing receipt for the same act before allocating a replacement.
+
     10. The human-at-TTY receipt exception in repeats_recorded_act is specific to the original operator scenario, but the new acceptance tests pass a VerifiedReviewer grant. Exercise two operator approvals with distinct generated receipt IDs, and a repeat after the standing receipt is missing or invalid. Assert event counts and which receipt remains authoritative.
+
     11. The opening comment on record_verdict_at still says a pending barrier is persisted before touching the sweep and retained after failure. Update it to distinguish direct approvals from mixed refusals and launcher collection.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-20T19:32:07.901801218Z
-  modified_at: 2026-11-20T19:32:07.901801218Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-20 19:32:07.901801+00:00
+  modified_at: 2026-11-20 19:32:07.901801+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa72-b211-7581-b265-b049a21c19d1
   author: joe
-  content: |-
-    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 12:32):
-    # Rework brief: BUG-2662 / PR #4378 (review record idempotence), round 2 of 4, STRICT
-
-    Advisor: claude-advisor-121, 2026-11-20 12:34 MST. Head reviewed: ccaa611. Lane: CLAUDE+Fable. COMMIT your work.
-    Principle for every item: an idempotent repeat is decided UNDER the ledger lock(s) against the exact current act, spec and destination;
-    any incomplete observation REFUSES; a true repeat writes NOTHING (verdict, hold or receipt).
-     1 Repeat key includes SPEC and destination (multi-spec PR: approving B after A with the same body is NOT a repeat).
-     2 Mixed refusal with a deferred finding: retries reuse the existing refusal body (no new recorded_at); one verdict event in total.
-     3 A repeated refusal does not append another hold event when the matching hold stands; test that the whole change ledger is unchanged.
-     4 Standing compares the effective CHANGE-WIDE verdict history (all applicable verdict labels for the PR), not event.spec == spec only.
-     5 Standing snapshots are fallible and validated: a read failure or malformed line refuses, never an empty "fine" snapshot.
-     6 Lock ordering: hold the change lock and the by-spec (unbound) lock in one consistent order across comparison and append
-       (or compare a shared generation atomically). Test a concurrent unbound append.
-     7 The repeat no-op re-validates the current standing act under the lock before reporting unchanged.
-     8 Standing::admit is linear: index event identities, no quadratic deep compares.
-     9 Human TTY: reuse a valid standing receipt for the same act before allocating; no orphan receipts.
-    10 Tests: two operator approvals with distinct receipt IDs; a repeat with the standing receipt missing or invalid; assert event counts.
-    11 Fix the stale doc comment on record_verdict_at.
-    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
-  created_at: 2026-11-20T19:32:49.968476292Z
-  modified_at: 2026-11-20T19:32:49.968476292Z
+  content: "AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 12:32):\n# Rework brief: BUG-2662 / PR #4378 (review record idempotence), round 2 of 4, STRICT\n\nAdvisor: claude-advisor-121, 2026-11-20 12:34 MST. Head reviewed: ccaa611. Lane: CLAUDE+Fable. COMMIT your work.\nPrinciple for every item: an idempotent repeat is decided UNDER the ledger lock(s) against the exact current act, spec and destination;\nany incomplete observation REFUSES; a true repeat writes NOTHING (verdict, hold or receipt).\n 1 Repeat key includes SPEC and destination (multi-spec PR: approving B after A with the same body is NOT a repeat).\n 2 Mixed refusal with a deferred finding: retries reuse the existing refusal body (no new recorded_at); one verdict event in total.\n 3 A repeated refusal does not append another hold event when the matching hold stands; test that the whole change ledger is unchanged.\n 4 Standing compares the effective CHANGE-WIDE verdict history (all applicable verdict labels for the PR),\
+    \ not event.spec == spec only.\n 5 Standing snapshots are fallible and validated: a read failure or malformed line refuses, never an empty \"fine\" snapshot.\n 6 Lock ordering: hold the change lock and the by-spec (unbound) lock in one consistent order across comparison and append\n   (or compare a shared generation atomically). Test a concurrent unbound append.\n 7 The repeat no-op re-validates the current standing act under the lock before reporting unchanged.\n 8 Standing::admit is linear: index event identities, no quadratic deep compares.\n 9 Human TTY: reuse a valid standing receipt for the same act before allocating; no orphan receipts.\n10 Tests: two operator approvals with distinct receipt IDs; a repeat with the standing receipt missing or invalid; assert event counts.\n11 Fix the stale doc comment on record_verdict_at.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push."
+  created_at: 2026-11-20 19:32:49.968476+00:00
+  modified_at: 2026-11-20 19:32:49.968476+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa72-ea28-7392-933d-d0f57d9772a9
   author: joe
   content: 'Product 12:33: R2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-426. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
-  created_at: 2026-11-20T19:33:05.083206092Z
-  modified_at: 2026-11-20T19:33:05.083206092Z
+  created_at: 2026-11-20 19:33:05.083206+00:00
+  modified_at: 2026-11-20 19:33:05.083206+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa7f-fe0c-7190-a5ac-ddbfdadf7bb6
   author: aida-publication-done
   content: Implementer push ccaa61189cee declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20T19:47:34.540271013Z
-  modified_at: 2026-11-20T19:47:34.540271013Z
+  created_at: 2026-11-20 19:47:34.540271+00:00
+  modified_at: 2026-11-20 19:47:34.540271+00:00
   session_id: 01a1fa43d4bc
 - id: 01a1fa80-bc71-78e2-920a-390427169ef3
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-426` at head `ccaa61189ceee258f860e576bd59e662a859f618`.'
-  created_at: 2026-11-20T19:48:23.281175752Z
-  modified_at: 2026-11-20T19:48:23.281175752Z
+  created_at: 2026-11-20 19:48:23.281175+00:00
+  modified_at: 2026-11-20 19:48:23.281175+00:00
   session_id: 01a1fa43d4bc
 - id: 01a1fa80-d6b8-74e3-a481-1db1d75d08fc
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-426` at head `unavailable`.'
-  created_at: 2026-11-20T19:48:30.008018910Z
-  modified_at: 2026-11-20T19:48:30.008018910Z
+  created_at: 2026-11-20 19:48:30.008018+00:00
+  modified_at: 2026-11-20 19:48:30.008018+00:00
   session_id: 01a1fa43d4bc
 - id: 01a1fab4-edd3-7821-870f-7d88f2fed116
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 74968c72e1 (round 2 of PR #4378; addresses all 11 findings of the review at ccaa611, none disputed).
 
+
     Acceptance evidence [behavioral-test], aida-cli-lib --lib, agent profile, run through the lane job runner:
+
     - 1 two-spec repeat: bug_2662_same_review_for_a_sibling_spec_is_not_a_repeat
+
     - 2 mixed refusal, one event after failed and successful filing: bug_2662_mixed_refusal_retry_keeps_one_verdict_event
+
     - 3 repeated refusal leaves the change ledger byte-identical; lost hold is restored: bug_2662_repeated_refusal_leaves_the_change_ledger_unchanged
+
     - 4 change-wide history (change key, sibling spec, unbound): bug_2662_differently_labelled_refusal_during_delivery_refuses_the_approval
+
     - 5 malformed line, torn line, unreadable by-spec file refuse: bug_2662_incomplete_history_refuses_the_approval
+
     - 6 both locks held through compare and append; a concurrent unbound writer waits: bug_2662_unbound_append_cannot_slip_between_the_final_read_and_the_append
+
     - 7 repeat decided under the lock: bug_2662_repeat_is_revalidated_under_the_ledger_lock
+
     - 8 digest-indexed admit: bug_2662_unchanged_long_history_is_admitted (functional only; no timing assertion)
+
     - 9/10 operator receipts: bug_2662_operator_repeat_reuses_a_valid_standing_receipt
+
     - 11 comment on the verdict writer rewritten (documentation-inspection).
+
     Result: 155 passed, 1 failed in the final targeted run (bug_2662, standalone_review_verdict_parent, story_2698, story_2913, bug_2564, merge_hold). The one failure, story_1917 reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant, fails in this sandbox on the mail writer-admission scan and does not reach the changed code.
 
+
     Probe findings fixed before commit:
+
     - with_lock would self-deadlock: the spec index lock and the unbound ledger lock are the same file (by-spec/<SPEC>.lock). with_lock is now re-entrant per thread.
+
     - A mixed refusal whose first filing failed was never announced, because its retry is a repeat. The retry that places the missing hold now emits the coordination event.
 
+
     Residual risks:
+
     - make check-ci-fast could not run whole here: tool calls are capped at 60s and the containment conformance gate needs AF_UNIX sockets the sandbox denies. Run individually and passing: cargo fmt --all --check, store-writer inventory, help-golden co-change, test portability, executable fixture, ExecContext, crate glob import, gate downward dependency, glyph lint, glyph padding, trace stranding, git auto-maintenance, structural guards (python and aida-ci-guards, 51 tests), and the aida-cli-lib ratchet groups (87 tests). Clippy was not run.
+
     - A wider run (filters ledger review hold findings_gate verdict) left 5 failures after the CLI binary was built, all sandbox-bound (mail writer scan, foreign namespace, contained-launch refusal); CI is the full-suite evidence.
-    - A change ledger with a torn or malformed line now refuses every review record for that change until it is quarantined (the gates' checked reader already refuses it).
-    - After A then B are approved on one PR, re-approving A is a new round, not unchanged: the act standing for the change is B's.
+
+    - A change ledger with a torn or malformed line now refuses every review record for that change until it is quarantined (the gates'' checked reader already refuses it).
+
+    - After A then B are approved on one PR, re-approving A is a new round, not unchanged: the act standing for the change is B''s.
+
     - If a human repeat reuses a receipt and a concurrent review lands before the lock, the new round carries the reused receipt id.
-    - A repeated refusal still calls the spec-shelving step; only the ledger and the follow-up count are asserted unchanged.
-  created_at: 2026-11-20T20:45:23.795296642Z
-  modified_at: 2026-11-20T20:45:23.795296642Z
+
+    - A repeated refusal still calls the spec-shelving step; only the ledger and the follow-up count are asserted unchanged.'
+  created_at: 2026-11-20 20:45:23.795296+00:00
+  modified_at: 2026-11-20 20:45:23.795296+00:00
   session_id: 01a1fa82d1b0
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1fabf-ef6b-7253-8d29-e67278e06b84
   author: joe
-  content: |-
-    AUTHORITATIVE ROUND-3 BRIEF (advisor-121, 14:08): 5 findings at 74968c7 (down from 11). Claude+Fable.
-
-    # Rework brief: BUG-2662 / PR #4378, round 3 of 4, STRICT
-
-    Advisor: claude-advisor-121, 2026-11-20 14:08 MST. Head reviewed: 74968c7 (11 -> 5). Lane: CLAUDE+Fable. COMMIT your work.
-     1 store.rs:795 Standing::admit keys on (spec, destination, label, body hash), not the body hash alone: the same refusal body appended under a
-       second spec is a NEW event.
-     2 review_commands.rs:3405 a TTY receipt is selected and persisted UNDER the lock, after deferred-finding filing succeeds; on failure,
-       remove or never create it (no orphans).
-     3 store.rs:944 the unbound append decides from the bounded, validated reader (the same budget), never an unbounded read_to_string.
-     4 review_commands.rs:3730 a repeated refusal verifies the CURRENT forge labels before skipping reconciliation (a removed hold label is restored).
-     5 the aida-review skill template: describe the standalone draft parent's real path (direct review-record) accurately; make sync-templates.
-    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push.
-  created_at: 2026-11-20T20:57:12.347167272Z
-  modified_at: 2026-11-20T20:57:12.347167272Z
+  content: "AUTHORITATIVE ROUND-3 BRIEF (advisor-121, 14:08): 5 findings at 74968c7 (down from 11). Claude+Fable.\n\n# Rework brief: BUG-2662 / PR #4378, round 3 of 4, STRICT\n\nAdvisor: claude-advisor-121, 2026-11-20 14:08 MST. Head reviewed: 74968c7 (11 -> 5). Lane: CLAUDE+Fable. COMMIT your work.\n 1 store.rs:795 Standing::admit keys on (spec, destination, label, body hash), not the body hash alone: the same refusal body appended under a\n   second spec is a NEW event.\n 2 review_commands.rs:3405 a TTY receipt is selected and persisted UNDER the lock, after deferred-finding filing succeeds; on failure,\n   remove or never create it (no orphans).\n 3 store.rs:944 the unbound append decides from the bounded, validated reader (the same budget), never an unbounded read_to_string.\n 4 review_commands.rs:3730 a repeated refusal verifies the CURRENT forge labels before skipping reconciliation (a removed hold label is restored).\n 5 the aida-review skill template: describe the standalone draft\
+    \ parent's real path (direct review-record) accurately; make sync-templates.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push."
+  created_at: 2026-11-20 20:57:12.347167+00:00
+  modified_at: 2026-11-20 20:57:12.347167+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fac0-68a8-7a22-bc9c-52996cad0a7f
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2662 partially passes. The direct approval now shares one event with its handshake, and regression fixtures cover the prior sweep_pending barrier and ordinary sequential repeats. Change-wide concurrent refusal detection and human receipt handling still fail the claimed round-two criteria. These findings apply to the pinned landing tree independently of the base change to the writer inventory. CI fast compile and fast gates were pending at review time.. No triage reason was given.'
-  created_at: 2026-11-20T20:57:56.136037867Z
-  modified_at: 2026-11-20T20:57:56.136037867Z
+  created_at: 2026-11-20 20:57:56.136037+00:00
+  modified_at: 2026-11-20 20:57:56.136037+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fac0-a4ae-78d0-b95f-2f6bf02870c1
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2662):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2662):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: 74968c72e156
+
     Recorded: 2026-11-20T20:52:42.743540777+00:00
+
     Findings:
+
     1. aida-cli-lib/src/gate/ledger/store.rs:795 — Standing::admit hashes only the verdict body across both ledgers and all labels. A collector or binding writer can append an existing refusal body under a second spec while follow-ups are being filed. append_locked accepts that distinct event, but admit recognizes the old hash and lets the approval supersede the intervening refusal. Compare physical event identities including destination, sequence and spec. Cover the identical-body sibling case.
+
     2. aida-cli-lib/src/review_commands.rs:3405 — A fresh TTY approval persists its receipt before record_review_act files deferred findings or completes the locked append. If filing fails, the invocation returns an error and the new receipt remains on disk with no verdict referencing it. Receipt selection also happens before locking, so simultaneous identical TTY approvals can allocate distinct IDs and each append. Settle receipt reuse and allocation with the final append, with recovery for a failed write. Check the receipt directory after a failed TTY filing and after concurrent repeats.
+
     3. aida-cli-lib/src/gate/ledger/store.rs:944 — The unbound append calls read_unbound before its review_check callback. This reads the whole file with read_to_string and parses it without a byte or event budget before the checked reader can reject an oversized ledger. Reuse the bounded validated events for the decision, deduplication and next sequence number.
+
     4. aida-cli-lib/src/review_commands.rs:3730 — A repeated refusal skips forge label reconciliation whenever the last local label_state was Synced. Removing a hold label on the forge leaves that cached state intact. The repeat used to restore the missing label and now silently skips it. Verify current forge labels before skipping reconciliation while keeping an already synchronized repeat free of ledger writes.
-    5. aida-core/templates/skills/aida-review.md:1451 — The skill says a contained reviewer's collecting launcher persists a sweep_pending barrier before filing. The standalone draft parent actually uses the direct review-record path, and standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery now asserts an empty ledger after failure. Distinguish that draft retry from legacy record_collected_verdict collection so operators know which recovery evidence exists.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-20T20:58:11.502185197Z
-  modified_at: 2026-11-20T20:58:11.502185197Z
+
+    5. aida-core/templates/skills/aida-review.md:1451 — The skill says a contained reviewer''s collecting launcher persists a sweep_pending barrier before filing. The standalone draft parent actually uses the direct review-record path, and standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery now asserts an empty ledger after failure. Distinguish that draft retry from legacy record_collected_verdict collection so operators know which recovery evidence exists.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-20 20:58:11.502185+00:00
+  modified_at: 2026-11-20 20:58:11.502185+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fac2-9b4c-7763-8104-c0a2c54d6ba1
   author: joe
-  content: |-
-    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 14:00):
-    # Rework brief: BUG-2662 / PR #4378, round 3 of 4, STRICT
-
-    Advisor: claude-advisor-121, 2026-11-20 14:08 MST. Head reviewed: 74968c7 (11 -> 5). Lane: CLAUDE+Fable. COMMIT your work.
-     1 store.rs:795 Standing::admit keys on (spec, destination, label, body hash), not the body hash alone: the same refusal body appended under a
-       second spec is a NEW event.
-     2 review_commands.rs:3405 a TTY receipt is selected and persisted UNDER the lock, after deferred-finding filing succeeds; on failure,
-       remove or never create it (no orphans).
-     3 store.rs:944 the unbound append decides from the bounded, validated reader (the same budget), never an unbounded read_to_string.
-     4 review_commands.rs:3730 a repeated refusal verifies the CURRENT forge labels before skipping reconciliation (a removed hold label is restored).
-     5 the aida-review skill template: describe the standalone draft parent's real path (direct review-record) accurately; make sync-templates.
-    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push.
-  created_at: 2026-11-20T21:00:07.312938417Z
-  modified_at: 2026-11-20T21:00:07.312938417Z
+  content: "AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 14:00):\n# Rework brief: BUG-2662 / PR #4378, round 3 of 4, STRICT\n\nAdvisor: claude-advisor-121, 2026-11-20 14:08 MST. Head reviewed: 74968c7 (11 -> 5). Lane: CLAUDE+Fable. COMMIT your work.\n 1 store.rs:795 Standing::admit keys on (spec, destination, label, body hash), not the body hash alone: the same refusal body appended under a\n   second spec is a NEW event.\n 2 review_commands.rs:3405 a TTY receipt is selected and persisted UNDER the lock, after deferred-finding filing succeeds; on failure,\n   remove or never create it (no orphans).\n 3 store.rs:944 the unbound append decides from the bounded, validated reader (the same budget), never an unbounded read_to_string.\n 4 review_commands.rs:3730 a repeated refusal verifies the CURRENT forge labels before skipping reconciliation (a removed hold label is restored).\n 5 the aida-review skill template: describe the standalone draft parent's real path (direct review-record)\
+    \ accurately; make sync-templates.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push."
+  created_at: 2026-11-20 21:00:07.312938+00:00
+  modified_at: 2026-11-20 21:00:07.312938+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fac2-d48f-73e1-8021-b0abc9d4c917
   author: joe
   content: 'Product 14:00: R3 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-426. Scope = the AUTHORITATIVE R3 BRIEF in the previous comment.'
-  created_at: 2026-11-20T21:00:22.139260479Z
-  modified_at: 2026-11-20T21:00:22.139260479Z
+  created_at: 2026-11-20 21:00:22.139260+00:00
+  modified_at: 2026-11-20 21:00:22.139260+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fad6-7280-7723-8ba6-da68a1cafdc5
   author: aida-publication-done
   content: Implementer push 74968c72e156 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20T21:22:00.448094901Z
-  modified_at: 2026-11-20T21:22:00.448094901Z
+  created_at: 2026-11-20 21:22:00.448094+00:00
+  modified_at: 2026-11-20 21:22:00.448094+00:00
   session_id: 01a1fa82d1b0
 - id: 01a1fad7-8217-7102-922d-df9578118a3a
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-426` at head `74968c72e1561fe74733bbfa090db8a6c7b99433`.'
-  created_at: 2026-11-20T21:23:09.975921035Z
-  modified_at: 2026-11-20T21:23:09.975921035Z
+  created_at: 2026-11-20 21:23:09.975921+00:00
+  modified_at: 2026-11-20 21:23:09.975921+00:00
   session_id: 01a1fa82d1b0
 - id: 01a1fafb-cafb-71d1-86da-7c2cc6217a39
   author: joe
   content: 'advisor-121 15:15: the verdict at b3225b3 is a PREMATURE review of the r3 lane''s merge-main commit (the lane is live); its 5 findings repeat r2''s. Not a spent round.'
-  created_at: 2026-11-20T22:02:34.767946199Z
-  modified_at: 2026-11-20T22:02:34.767946199Z
+  created_at: 2026-11-20 22:02:34.767946+00:00
+  modified_at: 2026-11-20 22:02:34.767946+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fafc-f111-7bb3-abe8-0c83950b8c39
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: d21536f1c4 (round 3 of PR #4378; five findings, all addressed, none disputed).
 
+
     Acceptance evidence [evidence: behavioral-test], lane job runs of aida-cli-lib --lib:
+
     - F1 store.rs Standing keyed on physical events (ledger, seq, spec, body): bug_2662_identical_body_joining_during_delivery_refuses_the_approval (sibling spec, change key, unbound, bound copy).
+
     - F2 receipt settled under the append locks: bug_2662_unrecorded_operator_approval_leaves_no_receipt (failed filing, failed ledger write, then one receipt on the retry) and bug_2662_simultaneous_operator_approvals_share_one_receipt.
+
     - F3 unbound append reads once through the checked reader: bug_2662_unbound_append_reads_within_the_checked_budget (oversized, malformed, torn; review and plain append).
+
     - F4 repeated refusal verifies forge labels: bug_2662_standing_hold_label_is_verified_against_the_forge (in place: no write, ledger bytes unchanged; removed, cleared or unreadable: synced again).
+
     - F5 [evidence: documentation-inspection] aida-review skill template now separates the standalone draft parent (record_reviewer_draft, empty ledger plus retained draft on failure) from legacy collection (record_collected_verdict, sweep_pending barrier). .claude/skills mirror is a symlink.
+
     Runs: bug_2662 filter 19/19; gate::ledger + merge_hold + story_1421 + story_2324 + bug2406 + parent tests 345 passed, 1 failed; wider gate::/review filter 2853 passed, 29 failed. Ratchet groups 90/90, aida-ci-guards 51/51, store-writer inventory and fmt clean.
+
 
     Probe findings and fixes: making every unbound append strict changed the newer-format refusal wording (bug_2531_unbound_writer_refuses_a_ledger_of_a_newer_format failed); fixed with read_unbound_for_append, which returns newer-format events so the writer still refuses them by name. Publication after a receipt-bearing append now uses the record as appended.
 
-    Not verified here: the 28 other failures in the wide run and the 1 in the narrow run are process-fixture tests that fail in this lane sandbox (no built CLI for fixtures, mail-retention writer scan, seat-clone launch refusal); none touch the changed code, CI decides. make check-ci-fast and check-templates do not finish inside this lane's 60s call cap; I ran fmt, store-writers, glob-import, gate-dependency, glyph, trace-header, portability and help-golden gates individually. Clippy was not run locally.
 
-    Residual risks: a crash between issuing a receipt and the ledger append can still leave one unreferenced receipt (no journal); a plain unbound append now refuses a damaged by-spec ledger instead of appending after it; a repeated refusal now costs one forge read.
-  created_at: 2026-11-20T22:04:03.217693787Z
-  modified_at: 2026-11-20T22:04:03.217693787Z
+    Not verified here: the 28 other failures in the wide run and the 1 in the narrow run are process-fixture tests that fail in this lane sandbox (no built CLI for fixtures, mail-retention writer scan, seat-clone launch refusal); none touch the changed code, CI decides. make check-ci-fast and check-templates do not finish inside this lane''s 60s call cap; I ran fmt, store-writers, glob-import, gate-dependency, glyph, trace-header, portability and help-golden gates individually. Clippy was not run locally.
+
+
+    Residual risks: a crash between issuing a receipt and the ledger append can still leave one unreferenced receipt (no journal); a plain unbound append now refuses a damaged by-spec ledger instead of appending after it; a repeated refusal now costs one forge read.'
+  created_at: 2026-11-20 22:04:03.217693+00:00
+  modified_at: 2026-11-20 22:04:03.217693+00:00
   session_id: 01a1fadb42f3
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1faff-0426-7211-9311-928543dd0632
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-426` at head `d21536f1c46bd0168f00444bbedc68c90d93cbd7`.'
-  created_at: 2026-11-20T22:06:19.174086285Z
-  modified_at: 2026-11-20T22:06:19.174086285Z
+  created_at: 2026-11-20 22:06:19.174086+00:00
+  modified_at: 2026-11-20 22:06:19.174086+00:00
   session_id: 01a1fadb42f3
 - id: 01a1fb09-6f21-7031-90a8-eafa44fd0151
   author: joe
-  content: |-
-    AUTHORITATIVE ROUND-4 (FINAL) BRIEF (advisor-121, 15:28): 5 crash-window findings at d21536f. If not clean, land the core and file the remaining windows. Claude+Fable, STRICT.
-
-    # Rework brief: BUG-2662 / PR #4378, ROUND 4 of 4 (FINAL), STRICT
-
-    Advisor: claude-advisor-121, 2026-11-20 15:28 MST. Head reviewed: d21536f. Lane: CLAUDE+Fable. COMMIT your work.
-    FINAL ROUND: if this is not clean, the advisor lands the verified core and files the remaining crash windows as a follow-up.
-    Principle: a receipt and its verdict event commit together or not at all; on ANY uncertain failure, keep the receipt and make retries
-    idempotent by reconciling (never delete on doubt).
-     1 store.rs:1012 bind_unbound's legacy copies and the new approval are one unit: if seal or receipt issuance fails, no change-ledger events
-       remain (stage, then commit after the seal succeeds).
-     2 store.rs:972 never delete a receipt after an append error unless the event is PROVEN absent (re-read under lock); a sync_data error
-       means "uncertain": keep the receipt, and the retry recovers it.
-     3 store.rs:947 the crash window between receipt persist and event append: on the next invocation, adopt an orphan receipt for the same
-       act (matching spec, destination and body) instead of issuing a new one; test with a simulated exit between the writes.
-     4 review_commands.rs:3711 announce exactly once: use a durable "announced" marker per verdict event, not repeat && placed; a released hold
-       on retry does not re-announce; a failed mixed filing still announces once.
-     5 skill doc line 1457: the recovery evidence is the retained draft plus the ABSENCE of a new verdict event (the ledger may be non-empty).
-    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push.
-  created_at: 2026-11-20T22:17:24.116621497Z
-  modified_at: 2026-11-20T22:17:24.116621497Z
+  content: "AUTHORITATIVE ROUND-4 (FINAL) BRIEF (advisor-121, 15:28): 5 crash-window findings at d21536f. If not clean, land the core and file the remaining windows. Claude+Fable, STRICT.\n\n# Rework brief: BUG-2662 / PR #4378, ROUND 4 of 4 (FINAL), STRICT\n\nAdvisor: claude-advisor-121, 2026-11-20 15:28 MST. Head reviewed: d21536f. Lane: CLAUDE+Fable. COMMIT your work.\nFINAL ROUND: if this is not clean, the advisor lands the verified core and files the remaining crash windows as a follow-up.\nPrinciple: a receipt and its verdict event commit together or not at all; on ANY uncertain failure, keep the receipt and make retries\nidempotent by reconciling (never delete on doubt).\n 1 store.rs:1012 bind_unbound's legacy copies and the new approval are one unit: if seal or receipt issuance fails, no change-ledger events\n   remain (stage, then commit after the seal succeeds).\n 2 store.rs:972 never delete a receipt after an append error unless the event is PROVEN absent (re-read under lock);\
+    \ a sync_data error\n   means \"uncertain\": keep the receipt, and the retry recovers it.\n 3 store.rs:947 the crash window between receipt persist and event append: on the next invocation, adopt an orphan receipt for the same\n   act (matching spec, destination and body) instead of issuing a new one; test with a simulated exit between the writes.\n 4 review_commands.rs:3711 announce exactly once: use a durable \"announced\" marker per verdict event, not repeat && placed; a released hold\n   on retry does not re-announce; a failed mixed filing still announces once.\n 5 skill doc line 1457: the recovery evidence is the retained draft plus the ABSENCE of a new verdict event (the ledger may be non-empty).\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push."
+  created_at: 2026-11-20 22:17:24.116621+00:00
+  modified_at: 2026-11-20 22:17:24.116621+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb0a-13b1-7cd3-8c7e-192f2d12fb11
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2662 partially passes. The prior sweep_pending regression and ordinary repeated approval are covered. Legacy binding can add verdict events before the approval commits. Receipt settlement can leave an orphan after interruption or remove a receipt referenced by a visible verdict after a sync error. CI pending at review time.. No triage reason was given.'
-  created_at: 2026-11-20T22:18:24.049499829Z
-  modified_at: 2026-11-20T22:18:24.049499829Z
+  created_at: 2026-11-20 22:18:24.049499+00:00
+  modified_at: 2026-11-20 22:18:24.049499+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb0a-623b-7ca0-b705-69151860a2a6
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2662):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2662):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: d21536f1c46b
+
     Recorded: 2026-11-20T22:15:36.680070834+00:00
+
     Findings:
+
     1. At store.rs:1012, bind_unbound appends eligible legacy by-spec verdicts to the change before seal can fail. With one pre-change verdict and a first PR approval, success adds both the copied verdict and the approval. If receipt issuance fails, the command returns an error after changing the standing PR verdict. Preserve legacy selection while making binding and recording satisfy the one-event and refused-write guarantees. Cover both outcomes with an existing unbound verdict.
+
     2. At store.rs:972, append_review treats every error as proof the verdict did not land and deletes its receipt after releasing the locks. Both writers call write_all before sync_data. If sync_data returns an I/O error, the complete event can already be visible and reference the receipt just deleted. A retry then issues another receipt and appends another approval. Reconcile ambiguous writes under the lock and cover a fault after write_all. The current fault injection runs before the write.
+
     3. At store.rs:947, seal persists a new human receipt in a separate file before appending its event. If the recorder exits between those writes, revoke never runs. The next invocation searches the standing verdict for a receipt and cannot recover the orphan. The implementer self-review confirms this remaining crash window. Add recoverable settlement keyed to the recording attempt and cover restart between receipt persistence and ledger append.
+
     4. At review_commands.rs:3711, repeat && placed is used as evidence that this refusal was never announced. An already announced refusal whose hold was subsequently released also satisfies that condition on retry, producing a second ReviewVerdictRecorded event for the same verdict. Conversely, a failed mixed filing with an equivalent pre-existing hold can miss the announcement on successful retry. Track announcement by the recorded act independently of hold placement.
+
     5. Line 1457 says a failed standalone filing leaves the ledger empty. The new failed-delivery fixture also covers an existing refusal, which stays on the ledger. Describe the recovery evidence as the retained draft and the absence of a new verdict event, so operators can reconcile a nonempty ledger correctly.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-20T22:18:44.155708575Z
-  modified_at: 2026-11-20T22:18:44.155708575Z
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-20 22:18:44.155708+00:00
+  modified_at: 2026-11-20 22:18:44.155708+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb0a-d2f4-7311-bab6-6aac1b1cea3b
   author: joe
-  content: |-
-    AUTHORITATIVE R4-FINAL BRIEF (advisor-121, relayed by product 15:18):
-    # Rework brief: BUG-2662 / PR #4378, ROUND 4 of 4 (FINAL), STRICT
-
-    Advisor: claude-advisor-121, 2026-11-20 15:28 MST. Head reviewed: d21536f. Lane: CLAUDE+Fable. COMMIT your work.
-    FINAL ROUND: if this is not clean, the advisor lands the verified core and files the remaining crash windows as a follow-up.
-    Principle: a receipt and its verdict event commit together or not at all; on ANY uncertain failure, keep the receipt and make retries
-    idempotent by reconciling (never delete on doubt).
-     1 store.rs:1012 bind_unbound's legacy copies and the new approval are one unit: if seal or receipt issuance fails, no change-ledger events
-       remain (stage, then commit after the seal succeeds).
-     2 store.rs:972 never delete a receipt after an append error unless the event is PROVEN absent (re-read under lock); a sync_data error
-       means "uncertain": keep the receipt, and the retry recovers it.
-     3 store.rs:947 the crash window between receipt persist and event append: on the next invocation, adopt an orphan receipt for the same
-       act (matching spec, destination and body) instead of issuing a new one; test with a simulated exit between the writes.
-     4 review_commands.rs:3711 announce exactly once: use a durable "announced" marker per verdict event, not repeat && placed; a released hold
-       on retry does not re-announce; a failed mixed filing still announces once.
-     5 skill doc line 1457: the recovery evidence is the retained draft plus the ABSENCE of a new verdict event (the ledger may be non-empty).
-    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push.
-  created_at: 2026-11-20T22:18:59.069026984Z
-  modified_at: 2026-11-20T22:18:59.069026984Z
+  content: "AUTHORITATIVE R4-FINAL BRIEF (advisor-121, relayed by product 15:18):\n# Rework brief: BUG-2662 / PR #4378, ROUND 4 of 4 (FINAL), STRICT\n\nAdvisor: claude-advisor-121, 2026-11-20 15:28 MST. Head reviewed: d21536f. Lane: CLAUDE+Fable. COMMIT your work.\nFINAL ROUND: if this is not clean, the advisor lands the verified core and files the remaining crash windows as a follow-up.\nPrinciple: a receipt and its verdict event commit together or not at all; on ANY uncertain failure, keep the receipt and make retries\nidempotent by reconciling (never delete on doubt).\n 1 store.rs:1012 bind_unbound's legacy copies and the new approval are one unit: if seal or receipt issuance fails, no change-ledger events\n   remain (stage, then commit after the seal succeeds).\n 2 store.rs:972 never delete a receipt after an append error unless the event is PROVEN absent (re-read under lock); a sync_data error\n   means \"uncertain\": keep the receipt, and the retry recovers it.\n 3 store.rs:947 the\
+    \ crash window between receipt persist and event append: on the next invocation, adopt an orphan receipt for the same\n   act (matching spec, destination and body) instead of issuing a new one; test with a simulated exit between the writes.\n 4 review_commands.rs:3711 announce exactly once: use a durable \"announced\" marker per verdict event, not repeat && placed; a released hold\n   on retry does not re-announce; a failed mixed filing still announces once.\n 5 skill doc line 1457: the recovery evidence is the retained draft plus the ABSENCE of a new verdict event (the ledger may be non-empty).\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push."
+  created_at: 2026-11-20 22:18:59.069026+00:00
+  modified_at: 2026-11-20 22:18:59.069026+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb0b-158d-76b1-83df-b959b4137354
   author: joe
   content: 'Product 15:19: R4-FINAL lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-426. Scope = the AUTHORITATIVE R4-FINAL BRIEF in the previous comment.'
-  created_at: 2026-11-20T22:19:15.677556073Z
-  modified_at: 2026-11-20T22:19:15.677556073Z
+  created_at: 2026-11-20 22:19:15.677556+00:00
+  modified_at: 2026-11-20 22:19:15.677556+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
-  timestamp: 2026-11-17T23:29:22.165900753Z
+  timestamp: 2026-11-17 23:29:22.165900+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes:
@@ -460,20 +457,20 @@ history:
     new_value: Approved
 - id: 01a1fa2d-70f2-73f2-bc2c-6b5433a4ea87
   author: joe
-  timestamp: 2026-11-20T18:17:24.466089756Z
+  timestamp: 2026-11-20 18:17:24.466089+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
 - id: 01a1fa44-02c0-7ed2-818b-072f849940d7
   author: aida-session-start
-  timestamp: 2026-11-20T18:42:03.584676046Z
+  timestamp: 2026-11-20 18:42:03.584676+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1fa64-b001-72d1-ab06-1e06194664ff
   author: aida-publication-done
-  timestamp: 2026-11-20T19:17:45.089084465Z
+  timestamp: 2026-11-20 19:17:45.089084+00:00
   session_id: 01a1fa43d4bc
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -482,13 +479,13 @@ history:
     new_value: Done
 - id: 01a1fa65-5143-7d33-9205-e842b8534ab8
   author: dirtlab
-  timestamp: 2026-11-20T19:18:26.371801411Z
+  timestamp: 2026-11-20 19:18:26.371801+00:00
   session_id: 01a1fa43d4bc
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1fa70-798b-7693-a0a5-4297e9a249ab
   author: aida-orchestrator
-  timestamp: 2026-11-20T19:30:37.579945424Z
+  timestamp: 2026-11-20 19:30:37.579945+00:00
   session_id: 01a1fa6bfc78
   changes:
   - field_name: status
@@ -496,7 +493,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1fa71-9dd3-7220-97b6-40bbbf81f82d
   author: joe
-  timestamp: 2026-11-20T19:31:52.403725953Z
+  timestamp: 2026-11-20 19:31:52.403725+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
@@ -505,7 +502,7 @@ history:
     new_value: Approved
 - id: 01a1fa7f-fe0c-7190-a5ac-ddaee485dded
   author: aida-publication-done
-  timestamp: 2026-11-20T19:47:34.540268914Z
+  timestamp: 2026-11-20 19:47:34.540268+00:00
   session_id: 01a1fa43d4bc
   changes:
   - field_name: status
@@ -513,7 +510,7 @@ history:
     new_value: Done
 - id: 01a1fabc-80d0-7822-ab06-e8169fc3309c
   author: aida-orchestrator
-  timestamp: 2026-11-20T20:53:40.176774304Z
+  timestamp: 2026-11-20 20:53:40.176774+00:00
   session_id: 01a1fab9b814
   changes:
   - field_name: status
@@ -521,7 +518,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1fac0-68a8-7a22-bc9c-5280c441dcab
   author: joe
-  timestamp: 2026-11-20T20:57:56.136025552Z
+  timestamp: 2026-11-20 20:57:56.136025+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
@@ -530,7 +527,7 @@ history:
     new_value: Approved
 - id: 01a1fad6-7280-7723-8ba6-da5d4a673591
   author: aida-publication-done
-  timestamp: 2026-11-20T21:22:00.448091705Z
+  timestamp: 2026-11-20 21:22:00.448091+00:00
   session_id: 01a1fa82d1b0
   changes:
   - field_name: status
@@ -538,7 +535,7 @@ history:
     new_value: Done
 - id: 01a1fafb-2d99-72f0-b2f0-08edabbeeeb9
   author: aida-orchestrator
-  timestamp: 2026-11-20T22:02:07.641050422Z
+  timestamp: 2026-11-20 22:02:07.641050+00:00
   session_id: 01a1faf973dc
   changes:
   - field_name: status
@@ -546,7 +543,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1fb08-c3b8-7ea1-b818-715fc843db95
   author: aida-orchestrator
-  timestamp: 2026-11-20T22:16:58.040203904Z
+  timestamp: 2026-11-20 22:16:58.040203+00:00
   session_id: 01a1fb058674
   changes:
   - field_name: status
@@ -554,7 +551,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1fb0a-13b1-7cd3-8c7e-1910eb3f9284
   author: joe
-  timestamp: 2026-11-20T22:18:24.049478404Z
+  timestamp: 2026-11-20 22:18:24.049478+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
