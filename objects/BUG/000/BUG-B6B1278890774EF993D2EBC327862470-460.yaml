@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T02:42:03.327622312Z
+modified_at: 2026-11-20T02:42:12.784000666Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1091,6 +1091,28 @@ comments:
   created_at: 2026-11-20T02:42:03.167878282Z
   modified_at: 2026-11-20T02:42:03.167878282Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6d5-71ad-75b0-bdb5-67202cd1e24a
+  author: joe
+  content: |-
+    AUTHORITATIVE D3-R2 BRIEF (advisor-121, relayed by product 19:42):
+    # Rework brief: BUG-2696 D3 / PR #4348, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 19:45 MST. Head reviewed: 9b545c9. Lane: CLAUDE, STRICT.
+    1. [unmet AC] ship_from_seat.rs ~2360-2393 mark_done_after_self_published_round: bound the completion declaration to THIS round.
+       Look up the publication subject only among commits in launch_head..new_tip (excluding HOST_RECONCILE_SUBJECT merges). If this
+       round contains no completing publication commit (e.g. it pushed only a reconciliation merge), do NOT set Done. Regression: an earlier
+       completing (BUG-1) commit on the branch, the spec reopened to Approved, a round pushing only a reconcile merge, so the status stays put.
+    2. [test gap] Add runner-level tests for the two other new exits: run_queue_resume_to_exit (queue_cmd/work.rs) and
+       run_vendor_headless_to_exit (session/headless.rs): a completing push sets Done, a non-completing exit does not, and launch_head is
+       captured BEFORE the child runs.
+    3. [advisor fix scope, must be explicit] Prove the REWORK case that failed in production: queue rework sets InProgress, the lane pushes a
+       completing commit, the spec becomes Done (from InProgress, not only from Approved). Never from a terminal state. fast-gate's
+       reset-on-fail is kept.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T02:42:12.784000666Z
+  modified_at: 2026-11-20T02:42:12.784000666Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
