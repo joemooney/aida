@@ -204,10 +204,74 @@ spends at most 75 seconds on CI detail. A log read once is kept, so the next
 runs read the changes that are still missing; anything not read yet is
 reported as undetermined, with the reason.
 
+Three more stalls are not about one open change. They appear in the same
+report and are routed the same way.
+
+<!-- trace:TASK-3827 | ai:claude -->
+
+| Class | Meaning | Routed to |
+|---|---|---|
+| `MAIN-FLAKE-RECURRENCE` | a test that failed on the default branch and passed on a rerun failed again, there or on any open change, within `flake_window_hours` | advisor |
+| `LANE-OUTCOME` | a lane exited failed, punted, with no change or refused before it started, and nothing took its spec on within `lane_outcome_mins` | the seat that launched the lane, else product |
+| `STALE-CLAIM` | a claim or lease that still blocks admission has read as dead for more than `stale_claim_mins`, and `aida doctor heal stale-leases` does not heal it | advisor |
+
+**Flaky tests.** Each run reads the default branch's workflow runs inside the
+window. Every failed attempt is kept as a failure with its own time; an attempt
+whose run later went green is a flake as well. The failing tests of every open
+change with a red head are read too, whether or not the change is approved or
+reviewed, but only while the default branch has a failure in the window. A
+failure of a test after a flake of the same test in another attempt is a
+recurrence: the line links both, and the action is a fix-forward for the test,
+since another rerun only hides it. Two flakes of one test are a flake and its
+recurrence even when both were rerun green before the guard looked. Each
+attempt and each red head is read once, at most 8 attempts and `max_red_logs`
+heads per run, inside the same 75 seconds; what is left is listed under
+`Not read` and read on a later run. This is read on GitHub only.
+
+**Lane exits.** The guard reads the lane receipts under `.aida/lane-results/`
+of the checkout it runs in, so each host reports the lanes launched from it.
+An exit is followed up by anything dated after it that takes the spec on: a
+later lane attempt, a queue entry for any role, a requeue, a re-drive by the
+supervisor or an escalation to a human. A live lane or claim on the spec counts
+too, and so does a spec that is completed, rejected or superseded. A queue
+entry older than the exit is not a follow-up. The line carries the lane's exit
+(`punted reason=explicit-punt`) and the reason it gave. Exits older than 24
+hours are left alone. A receipt records the launching seat from the day this
+is installed; an older one goes to product.
+
+**Dead claims.** The inventory is every record admission consults: the claims
+under `coordination/leases/` in the store, the drain and solo locks under
+`coordination/`, and the leases of the clone the guard runs in. Each is asked
+what its own admission asks:
+
+- An implementer claim is never freed by age, so one that expired a month ago
+  still blocks and is still reported. It blocks only while its spec can be
+  worked: a claim left on a completed, rejected or superseded spec blocks
+  nothing and is not listed. A reviewer's expired claim is reclaimed by the
+  next reviewer, so it is not listed either.
+- A drain or solo lock is listed while another clone asking for it would be
+  refused although its holder cannot be shown to run. A lock past its expiry is
+  taken over by the next drain and is not listed.
+- A local lease is listed when neither the ownership record nor the lease
+  table can say whether its holder runs, no lane worker is recorded as running
+  for it, and its creator is not provably gone.
+
+A claim whose worker or owner is seen running is not dead. A claim recorded on
+another host cannot be looked at from here, so it waits
+`stale_claim_remote_mins` (default 12 hours) instead. A record the doctor
+heals is not listed: run `aida doctor heal stale-leases`. Each line names the
+record's path, why it reads as dead, what it blocks and why the doctor leaves
+it.
+
 The report also counts landings on the default branch in the last
 `landings_window_mins` and lists live lanes per host, with available memory for
-the host the command runs on. Another host's memory is not measured from here;
-that host's own scheduled run records it.
+the host the command runs on. Another lane host's memory is measured when the
+project names the host under `[throughput_guard.remote_hosts]`: one read-only
+SSH call (`cat /proc/meminfo`, non-interactive, at most 8 seconds) to the alias
+given for it, on every run, also when no live lane of that host is known here.
+A probe that fails is reported as unknown with the reason. A host the project
+did not name is never contacted, and its memory reads
+`unknown (no remote memory source)`.
 
 The scheduled `throughput-guard` job runs `aida doctor check throughput-guard`,
 which computes the same report. On the scheduler's tick each stall not routed

@@ -659,8 +659,14 @@ enabled = true
 # entry here. Every scheduled run saves the landings and each host's lanes and
 # memory in `.aida/throughput-guard/state.json`. `aida land stalls` prints the
 # same classification on demand.
+# Three more stalls are not about one open change: a flaky test that failed
+# again (MAIN-FLAKE-RECURRENCE, to the advisor), a lane that exited failed,
+# punted, with no change or refused and that nobody relaunched or routed
+# (LANE-OUTCOME, to the seat that launched it, else product), and a dead claim
+# that still blocks admission and that `aida doctor heal stale-leases` does not
+# heal (STALE-CLAIM, to the advisor).
 # The guard ships off: both `enabled` lines below turn it on for this project.
-# trace:STORY-2906 | ai:claude
+# trace:STORY-2906 TASK-3827 | ai:claude
 [throughput_guard]
 enabled = true
 # Minutes a change may wait before it counts as stuck: from the approval
@@ -677,6 +683,23 @@ escalate_after_mins = 120
 # Red approved changes whose job logs one run reads; a log read once is kept,
 # so the rest are read on the following runs.
 max_red_logs = 6
+# Minutes a failed, punted, no-change or refused lane exit may go without a
+# relaunch, a queue entry or a routing.
+lane_outcome_mins = 20
+# Minutes a blocking claim may read as dead before it is reported: on this
+# host, and on another host, whose holder cannot be looked at from here.
+stale_claim_mins = 60
+stale_claim_remote_mins = 720
+# A test that failed on main and passed on a rerun, then fails again on main
+# or on any open change inside this many hours, is a recurrence.
+flake_window_hours = 24
+
+# Lane hosts whose memory each run measures with one bounded, read-only SSH
+# call (`cat /proc/meminfo`): the host name its lane claims record = the SSH
+# alias that reaches it. A host not named here is never contacted, and its
+# memory is reported as unknown.
+[throughput_guard.remote_hosts]
+disrad-dvp98b3puw = "dell1"
 
 [[schedule.jobs]]
 name = "throughput-guard"

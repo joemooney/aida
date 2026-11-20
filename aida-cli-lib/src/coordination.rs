@@ -833,6 +833,14 @@ fn bound_holder_is_dead(holder: &Claim, clone_path: &Path) -> bool {
     crate::worktree_gc::lease_is_dead(&lease, facts)
 }
 
+/// Whether implementer admission from `clone_path` still refuses `holder`:
+/// the answer the admission itself gives without `--force-claim`. Age alone
+/// never frees an implementer claim, so an expired one still refuses.
+// trace:TASK-3827 | ai:claude
+pub(crate) fn implementer_admission_refuses(holder: &Claim, clone_path: &Path) -> bool {
+    !holder.review_verb && !holder.process_backed && !bound_holder_is_dead(holder, clone_path)
+}
+
 // A holder without exact death evidence retains Unknown. Legacy claims carry
 // no lease binding at all; bound claims name the lease they were minted for.
 // trace:BUG-2586 | ai:codex
@@ -1583,6 +1591,58 @@ pub(crate) fn list_lock_claims(store_root: &Path) -> Vec<Claim> {
         }
     }
     out
+}
+
+/// One drain or solo lock claim on the store: where it is recorded, and what
+/// the lock's own admission answers another clone at `now`.
+// trace:TASK-3827 | ai:claude
+pub(crate) struct LockClaimView {
+    pub path: PathBuf,
+    pub claim: Claim,
+    /// Another clone asking for the lock is refused.
+    pub refuses: bool,
+}
+
+/// Every drain and solo lock claim recorded on the store, each with its
+/// record path and the decision [`acquire_lock_claim`] makes for a clone that
+/// does not hold it. The holder counts as running unless its process is
+/// provably gone, as in the admission.
+// trace:TASK-3827 | ai:claude
+pub(crate) fn lock_claim_views(store_root: &Path, now: DateTime<Utc>) -> Vec<LockClaimView> {
+    let our_host = hostname();
+    [LockKind::Drain, LockKind::Solo]
+        .into_iter()
+        .filter_map(|kind| {
+            let path = lock_claim_path(store_root, kind);
+            let claim = read_claim(&path)?;
+            let asker = Claim {
+                clone_path: format!("{}#another-clone", claim.clone_path),
+                node_id: format!("{}#another-clone", claim.node_id),
+                ..claim.clone()
+            };
+            let namespace = claim.pid_namespace;
+            let refuses = matches!(
+                decide_claim(
+                    Some(&claim),
+                    &asker,
+                    now,
+                    &our_host,
+                    |pid, start| {
+                        !crate::ownership::reader::local_claim_process_is_dead(
+                            pid, start, namespace,
+                        )
+                    },
+                    |_: &Claim| false,
+                ),
+                ClaimDecision::Refuse { .. }
+            );
+            Some(LockClaimView {
+                path,
+                claim,
+                refuses,
+            })
+        })
+        .collect()
 }
 
 // =========================================================================

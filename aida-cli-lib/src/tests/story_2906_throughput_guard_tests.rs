@@ -780,6 +780,7 @@ fn check_run(id: u64, name: &str, conclusion: &str) -> crate::ci_failures::Check
         status: "completed".into(),
         conclusion: conclusion.into(),
         html_url: String::new(),
+        completed_at: String::new(),
     }
 }
 
@@ -1593,8 +1594,10 @@ fn host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown() {
     assert_eq!(memory("other"), NO_REMOTE_MEMORY);
     assert_eq!(memory("dell1"), "20.0 GiB available of 64.0 GiB");
 
-    // The production source has no record of any other host yet.
-    assert_eq!(recorded_remote_memory("disrad-x"), None);
+    // A host the project did not name is never probed (TASK-3827 added the
+    // probe for the ones it names).
+    let never = |_: &str| -> std::result::Result<String, String> { panic!("probed") };
+    assert_eq!(remote_memory(&Policy::default(), "disrad-x", &never), None);
     let report = Report {
         hosts: lines,
         ..build_report(

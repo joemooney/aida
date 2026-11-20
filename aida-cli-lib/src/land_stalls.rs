@@ -18,6 +18,10 @@
 //! short mail to that seat. No model runs and nothing is launched, merged or
 //! released here: the guard classifies and routes.
 //!
+//! Three more stalls are not about one open change and have a module each:
+//! a flaky test that failed again ([`flakes`]), a lane exit nobody followed
+//! up ([`lanes`]) and a dead claim the doctor cannot heal ([`claims`]).
+//!
 //! The scheduled check does nothing unless `[throughput_guard] enabled =
 //! true` is set in `.aida/config.toml`.
 // trace:STORY-2906 | ai:claude
@@ -33,6 +37,14 @@ use super::{Action, Approval, Ci, Hold, HoldRelease, State};
 use crate::events::{self, Event, EventKind};
 use crate::schedule_ledger;
 use crate::DoctorFinding;
+
+// trace:TASK-3827 | ai:claude
+#[path = "land_stalls_claims.rs"]
+pub(crate) mod claims;
+#[path = "land_stalls_flakes.rs"]
+pub(crate) mod flakes;
+#[path = "land_stalls_lanes.rs"]
+pub(crate) mod lanes;
 
 pub(crate) const CATEGORY: &str = "throughput-guard";
 /// Prefix of the due jobs the guard raises, one per routed seat.
@@ -55,6 +67,8 @@ const MAX_TEST_NAME_CHARS: usize = 200;
 const MAX_LISTED_TESTS: usize = 8;
 /// Scheduled runs whose observation is kept (a day at the default cadence).
 const MAX_RUNS: usize = 72;
+/// Bound on one memory probe of another lane host.
+const REMOTE_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 
 /// `[throughput_guard]` in `.aida/config.toml`. Every threshold is a project
 /// setting; the scheduled check is off unless `enabled = true`.
@@ -65,10 +79,26 @@ pub(crate) struct Policy {
     pub review_mins: i64,
     pub rework_mins: i64,
     pub conflict_mins: i64,
+    /// Minutes a failed, punted, no-change or refused lane exit may go
+    /// without a relaunch or a routing.
+    // trace:TASK-3827 | ai:claude
+    pub lane_outcome_mins: i64,
+    /// Minutes a blocking claim may read as dead before it is reported.
+    pub stale_claim_mins: i64,
+    /// The same for a claim recorded on another host, whose holder cannot
+    /// be looked at from here: long enough that no lane is still running.
+    pub stale_claim_remote_mins: i64,
+    /// A flaky test that fails again inside this many hours is a recurrence.
+    pub flake_window_hours: i64,
     pub landings_window_mins: i64,
     pub escalate_after_mins: i64,
     /// Red changes whose job logs one run reads.
     pub max_red_logs: i64,
+    /// Lane hosts whose memory is probed over SSH: the host name a lane
+    /// claim records, and the SSH alias that reaches it. Empty by default,
+    /// so no host is contacted unless the project names it.
+    // trace:TASK-3827 | ai:claude
+    pub remote_hosts: BTreeMap<String, String>,
 }
 
 impl Default for Policy {
@@ -79,9 +109,14 @@ impl Default for Policy {
             review_mins: 30,
             rework_mins: 30,
             conflict_mins: 30,
+            lane_outcome_mins: 20,
+            stale_claim_mins: 60,
+            stale_claim_remote_mins: 720,
+            flake_window_hours: 24,
             landings_window_mins: 60,
             escalate_after_mins: 120,
             max_red_logs: 6,
+            remote_hosts: BTreeMap::new(),
         }
     }
 }
@@ -102,6 +137,13 @@ impl Policy {
             ("review_mins", &mut policy.review_mins),
             ("rework_mins", &mut policy.rework_mins),
             ("conflict_mins", &mut policy.conflict_mins),
+            ("lane_outcome_mins", &mut policy.lane_outcome_mins),
+            ("stale_claim_mins", &mut policy.stale_claim_mins),
+            (
+                "stale_claim_remote_mins",
+                &mut policy.stale_claim_remote_mins,
+            ),
+            ("flake_window_hours", &mut policy.flake_window_hours),
             ("landings_window_mins", &mut policy.landings_window_mins),
             ("escalate_after_mins", &mut policy.escalate_after_mins),
             ("max_red_logs", &mut policy.max_red_logs),
@@ -113,6 +155,18 @@ impl Policy {
             {
                 *slot = n;
             }
+        }
+        // `[throughput_guard.remote_hosts]`: recorded host name = SSH alias.
+        // trace:TASK-3827 | ai:claude
+        if let Some(hosts) = table.get("remote_hosts").and_then(|v| v.as_table()) {
+            policy.remote_hosts = hosts
+                .iter()
+                .filter_map(|(host, alias)| {
+                    let alias = alias.as_str()?.trim();
+                    (!host.trim().is_empty() && !alias.is_empty())
+                        .then(|| (host.trim().to_string(), alias.to_string()))
+                })
+                .collect();
         }
         policy
     }
@@ -130,6 +184,13 @@ pub(crate) enum Class {
     StuckRework,
     #[serde(rename = "STUCK-CONFLICT")]
     StuckConflict,
+    // trace:TASK-3827 | ai:claude
+    #[serde(rename = "MAIN-FLAKE-RECURRENCE")]
+    MainFlakeRecurrence,
+    #[serde(rename = "LANE-OUTCOME")]
+    LaneOutcome,
+    #[serde(rename = "STALE-CLAIM")]
+    StaleClaim,
     #[serde(rename = "moving")]
     Moving,
 }
@@ -142,6 +203,9 @@ impl Class {
             Class::StuckReview => "STUCK-REVIEW",
             Class::StuckRework => "STUCK-REWORK",
             Class::StuckConflict => "STUCK-CONFLICT",
+            Class::MainFlakeRecurrence => "MAIN-FLAKE-RECURRENCE",
+            Class::LaneOutcome => "LANE-OUTCOME",
+            Class::StaleClaim => "STALE-CLAIM",
             Class::Moving => "moving",
         }
     }
@@ -273,6 +337,10 @@ pub(crate) struct PrFact {
     /// commit that first conflicted for a conflict. `None` when unreadable.
     pub since: Option<DateTime<Utc>>,
     pub red: Option<RedFact>,
+    /// Checks failed at the head, whoever approved or reviews it: a flaky
+    /// test recurs on any change.
+    // trace:TASK-3827 | ai:claude
+    pub head_red: bool,
 }
 
 impl PrFact {
@@ -398,6 +466,7 @@ pub(crate) fn pr_fact(pr: &super::Pr, row: &super::Row, evidence: &dyn super::Ev
         state: row.state.clone(),
         action: row.action.clone(),
         reason: row.reason.clone(),
+        head_red: matches!(evidence.head_red(pr), Ok(Some(_))),
         standing,
         since,
         red: None,
@@ -939,6 +1008,17 @@ pub(crate) struct Memory {
     pub red_detail: BTreeMap<String, RedDetail>,
     #[serde(default)]
     pub escalated_at: Option<DateTime<Utc>>,
+    /// Every failed attempt read inside twice the flake window: the base
+    /// branch's and the open changes'.
+    // trace:TASK-3827 | ai:claude
+    #[serde(default)]
+    pub failures: Vec<flakes::TestFailure>,
+    /// Base-run attempts already read, as `run <id>#<attempt>`.
+    #[serde(default)]
+    pub seen_runs: BTreeMap<String, DateTime<Utc>>,
+    /// `PR-<n>@<head>` -> when the red head's failures were read.
+    #[serde(default)]
+    pub pr_failures_read: BTreeMap<String, DateTime<Utc>>,
     /// The scheduled runs' observations, oldest first.
     #[serde(default)]
     pub runs: Vec<RunSnapshot>,
@@ -952,6 +1032,9 @@ fn rerun_key(pr: u64, head: &str) -> String {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Facts {
     pub prs: Vec<PrFact>,
+    // trace:TASK-3827 | ai:claude
+    pub lane_outcomes: Vec<lanes::LaneOutcomeFact>,
+    pub claims: Vec<claims::ClaimFact>,
     /// When each landing in the escalation window happened; `Err` when the
     /// branch history could not be read.
     pub landings: Option<std::result::Result<Vec<DateTime<Utc>>, String>>,
@@ -968,6 +1051,8 @@ pub(crate) fn build_report(
     memory: &mut Memory,
     now: DateTime<Utc>,
 ) -> Report {
+    // trace:TASK-3827 | ai:claude
+    flakes::prune(memory, policy, now);
     let mut unknown = facts.unknown.clone();
     let mut stuck = Vec::new();
     let mut changes = Vec::new();
@@ -1002,6 +1087,14 @@ pub(crate) fn build_report(
         });
         stuck.extend(item);
     }
+    // trace:TASK-3827 | ai:claude
+    stuck.extend(flakes::flake_recurrences(&memory.failures, policy, now));
+    stuck.extend(lanes::classify_lane_outcomes(
+        &facts.lane_outcomes,
+        policy,
+        now,
+    ));
+    stuck.extend(claims::classify_claims(&facts.claims, policy));
     stuck.sort_by(|a, b| a.class.cmp(&b.class).then(a.key.cmp(&b.key)));
     let window = Duration::minutes(policy.landings_window_mins);
     let dry_window = Duration::minutes(policy.escalate_after_mins);
@@ -1165,6 +1258,26 @@ pub(crate) trait CiReads {
         job: u64,
         timeout: std::time::Duration,
     ) -> std::result::Result<Vec<String>, String>;
+    /// The recent workflow runs on the base branch, each at its latest
+    /// attempt.
+    // trace:TASK-3827 | ai:claude
+    fn base_runs(
+        &self,
+        _branch: &str,
+        _timeout: std::time::Duration,
+    ) -> std::result::Result<Vec<flakes::BaseRun>, String> {
+        Err("this forge reader lists no base-branch runs".into())
+    }
+    /// The jobs of one attempt of a run.
+    // trace:TASK-3827 | ai:claude
+    fn attempt_jobs(
+        &self,
+        _run: u64,
+        _attempt: u64,
+        _timeout: std::time::Duration,
+    ) -> std::result::Result<Vec<flakes::AttemptJob>, String> {
+        Err("this forge reader lists no run attempts".into())
+    }
 }
 
 struct Gh<'a>(&'a Path);
@@ -1202,6 +1315,42 @@ impl CiReads for Gh<'_> {
         let path = format!("repos/{{owner}}/{{repo}}/actions/jobs/{job}/logs");
         self.text(&["api", &path], timeout)
             .map(|log| test_names(&crate::ci_failures::extract_failure_lines(&log)))
+    }
+
+    // trace:TASK-3827 | ai:claude
+    fn base_runs(
+        &self,
+        branch: &str,
+        timeout: std::time::Duration,
+    ) -> std::result::Result<Vec<flakes::BaseRun>, String> {
+        self.text(
+            &[
+                "run",
+                "list",
+                "--branch",
+                branch,
+                "--limit",
+                "100",
+                "--json",
+                "databaseId,attempt,conclusion,status,updatedAt,url",
+            ],
+            timeout,
+        )
+        .and_then(|json| flakes::parse_base_runs(&json))
+    }
+
+    // trace:TASK-3827 | ai:claude
+    fn attempt_jobs(
+        &self,
+        run: u64,
+        attempt: u64,
+        timeout: std::time::Duration,
+    ) -> std::result::Result<Vec<flakes::AttemptJob>, String> {
+        let path = format!(
+            "repos/{{owner}}/{{repo}}/actions/runs/{run}/attempts/{attempt}/jobs?per_page=100"
+        );
+        self.text(&["api", &path], timeout)
+            .and_then(|json| flakes::parse_attempt_jobs(&json))
     }
 }
 
@@ -1366,42 +1515,68 @@ fn landing_times(
     (window, last)
 }
 
-fn memory_line() -> String {
-    let read = |key: &str, text: &str| -> Option<u64> {
-        text.lines()
+/// Available and total memory, from the text of a `/proc/meminfo`.
+pub(crate) fn memory_of(meminfo: &str) -> Option<String> {
+    let read = |key: &str| -> Option<u64> {
+        meminfo
+            .lines()
             .find_map(|line| line.strip_prefix(key))?
             .split_whitespace()
             .next()?
             .parse()
             .ok()
     };
+    let (available, total) = (read("MemAvailable:")?, read("MemTotal:")?);
+    Some(format!(
+        "{:.1} GiB available of {:.1} GiB",
+        available as f64 / 1_048_576.0,
+        total as f64 / 1_048_576.0
+    ))
+}
+
+fn memory_line() -> String {
     match std::fs::read_to_string("/proc/meminfo") {
-        Ok(text) => match (read("MemAvailable:", &text), read("MemTotal:", &text)) {
-            (Some(available), Some(total)) => format!(
-                "{:.1} GiB available of {:.1} GiB",
-                available as f64 / 1_048_576.0,
-                total as f64 / 1_048_576.0
-            ),
-            _ => "unknown (unreadable /proc/meminfo)".into(),
-        },
+        Ok(text) => memory_of(&text).unwrap_or_else(|| "unknown (unreadable /proc/meminfo)".into()),
         Err(_) => "unknown (no /proc/meminfo on this host)".into(),
     }
 }
 
-/// Memory another host recorded about itself, when some record carries it.
-///
-/// Nothing does yet: lane claims and activity heartbeats name a host and its
-/// liveness, not its memory. Until a host publishes it, a foreign host's
-/// memory is reported as unknown with that reason.
-// trace:STORY-2906 | ai:claude
-fn recorded_remote_memory(_host: &str) -> Option<String> {
-    None
+/// Reads `/proc/meminfo` of the lane host behind an SSH alias.
+pub(crate) type MemoryProbe<'a> = &'a dyn Fn(&str) -> std::result::Result<String, String>;
+
+/// The memory of another lane host, measured now: one bounded read of its
+/// `/proc/meminfo` over the SSH alias the project configured for it under
+/// `[throughput_guard.remote_hosts]`. `None` for a host the project did not
+/// name: no host is contacted on a guess. A probe that fails is reported as
+/// unknown with the reason, never as a number.
+// trace:TASK-3827 | ai:claude
+pub(crate) fn remote_memory(policy: &Policy, host: &str, probe: MemoryProbe) -> Option<String> {
+    let alias = policy.remote_hosts.get(host)?;
+    Some(match probe(alias) {
+        Ok(meminfo) => memory_of(&meminfo).unwrap_or_else(|| {
+            format!("unknown (the probe of `{alias}` returned no memory figures)")
+        }),
+        Err(why) => format!(
+            "unknown (the probe of `{alias}` failed: {})",
+            super::one_line(&why, 160)
+        ),
+    })
+}
+
+/// The production probe: SSH, non-interactive, bounded. Never run by a unit
+/// test.
+fn ssh_meminfo(alias: &str) -> std::result::Result<String, String> {
+    if cfg!(test) {
+        return Err("no host is probed in unit tests".into());
+    }
+    crate::doctor_cmd::lane_binaries::meminfo(alias, REMOTE_PROBE_TIMEOUT)
+        .map_err(|err| format!("{err:#}"))
 }
 
 pub(crate) const NO_REMOTE_MEMORY: &str = "unknown (no remote memory source)";
 
 /// One line per host with lanes: this host's memory measured here, another
-/// host's from `remote` when a record of it exists, else unknown with the
+/// host's from `remote` when it has a source, else unknown with the
 /// reason. `foreign` holds the host of each lane claimed elsewhere.
 // trace:STORY-2906 | ai:claude
 pub(crate) fn host_lines_from(
@@ -1431,18 +1606,49 @@ pub(crate) fn host_lines_from(
         .collect()
 }
 
-fn host_lines(pass: &super::Pass) -> Vec<HostLine> {
+/// The host lines of one pass. A configured lane host is listed, and
+/// probed, also when no live lane of it is known here: its claims stop
+/// reading as live once they pass their expiry, and its memory is what a
+/// launch needs to know.
+// trace:TASK-3827 | ai:claude
+pub(crate) fn host_lines_with(
+    here: &str,
+    local_lanes: usize,
+    foreign: &[&str],
+    policy: &Policy,
+    local_memory: &dyn Fn() -> String,
+    probe: MemoryProbe,
+) -> Vec<HostLine> {
+    let mut lines = host_lines_from(here, local_lanes, foreign, local_memory, &|host| {
+        remote_memory(policy, host, probe)
+    });
+    for host in policy.remote_hosts.keys() {
+        if host != here && !lines.iter().any(|line| &line.host == host) {
+            lines.push(HostLine {
+                host: host.clone(),
+                lanes: 0,
+                memory: remote_memory(policy, host, probe)
+                    .unwrap_or_else(|| NO_REMOTE_MEMORY.to_string()),
+            });
+        }
+    }
+    lines.sort_by(|a, b| a.host.cmp(&b.host));
+    lines
+}
+
+fn host_lines(pass: &super::Pass, policy: &Policy) -> Vec<HostLine> {
     let foreign: Vec<&str> = pass
         .foreign_lanes
         .iter()
         .map(|claim| claim.host.as_str())
         .collect();
-    host_lines_from(
+    host_lines_with(
         &crate::coordination::hostname(),
         pass.local_lanes.len(),
         &foreign,
+        policy,
         &memory_line,
-        &recorded_remote_memory,
+        &ssh_meminfo,
     )
 }
 
@@ -1470,6 +1676,49 @@ fn save_memory(root: &Path, memory: &Memory) {
         }
         Err(err) => eprintln!("warning: throughput guard state was not saved: {err:#}"),
     }
+}
+
+/// The lane exits nobody followed up and the dead claims of one pass. Both
+/// are judged against the spec store; when it cannot be read neither is
+/// classified, and the report says so.
+// trace:TASK-3827 | ai:claude
+fn other_stalls(
+    pass: &super::Pass,
+    now: DateTime<Utc>,
+    unknown: &mut Vec<String>,
+) -> (Vec<lanes::LaneOutcomeFact>, Vec<claims::ClaimFact>) {
+    let root = pass.root.as_path();
+    let store_root =
+        crate::detect_distributed_store_from(root).unwrap_or_else(|| root.join(".aida-store"));
+    let store = match aida_core::Storage::new(store_root.clone()).load() {
+        Ok(store) => store,
+        Err(why) => {
+            unknown.push(format!(
+                "lane exits and stale claims: the spec store could not be read ({})",
+                super::one_line(&format!("{why:#}"), 200)
+            ));
+            return (Vec::new(), Vec::new());
+        }
+    };
+    let local: Vec<(String, String)> = pass
+        .local_lanes
+        .iter()
+        .map(|lease| (lease.scope.clone(), format!("lease {} holds it", lease.id)))
+        .collect();
+    let foreign: Vec<(String, String)> = pass
+        .foreign_lanes
+        .iter()
+        .map(|claim| {
+            (
+                claim.scope.clone(),
+                format!("a claim on host `{}` holds it", claim.host),
+            )
+        })
+        .collect();
+    (
+        lanes::lane_outcome_facts(root, &store_root, &store, &local, &foreign, now, unknown),
+        claims::claim_facts(root, &store_root, &store, now, unknown),
+    )
 }
 
 /// One live observation: the reconciler's pass, the same evidence read fact
@@ -1500,6 +1749,13 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
         .filter(|fact| fact.wants_red_detail())
         .map(|fact| (rerun_key(fact.number, &fact.head), fact.head.clone()))
         .collect();
+    // Every red head, approved or not: a flaky test recurs on any change.
+    // trace:TASK-3827 | ai:claude
+    let all_red_heads: Vec<(String, String)> = prs
+        .iter()
+        .filter(|fact| fact.head_red)
+        .map(|fact| (rerun_key(fact.number, &fact.head), fact.head.clone()))
+        .collect();
     let mut details = if pass.gitlab {
         if !red_heads.is_empty() {
             unknown.push("failing test names: CI detail is read on GitHub only".into());
@@ -1522,6 +1778,31 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
             now,
         )
     };
+    // The base branch's failed attempts, then the failures of every red
+    // head, inside what is left of the same budget.
+    // trace:TASK-3827 | ai:claude
+    if pass.gitlab {
+        unknown.push("flaky tests failing again: CI detail is read on GitHub only".into());
+    } else {
+        flakes::read_base_failures(
+            &Gh(&root),
+            &budget,
+            &branch,
+            &mut memory,
+            policy,
+            now,
+            &mut unknown,
+        );
+        flakes::read_pr_failures(
+            &Gh(&root),
+            &budget,
+            &all_red_heads,
+            &mut memory,
+            policy,
+            now,
+            &mut unknown,
+        );
+    }
     for fact in prs.iter_mut() {
         let key = rerun_key(fact.number, &fact.head);
         let Some((checks, unread)) = details.remove(&key) else {
@@ -1541,11 +1822,14 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
     let dry_since =
         now - Duration::minutes(policy.escalate_after_mins.max(policy.landings_window_mins));
     let (landings, last_landing) = landing_times(&root, &branch, dry_since);
+    let (lane_outcomes, claims) = other_stalls(&pass, now, &mut unknown);
     let facts = Facts {
         prs,
+        lane_outcomes,
+        claims,
         landings: Some(landings),
         last_landing,
-        hosts: host_lines(&pass),
+        hosts: host_lines(&pass, policy),
         unknown,
     };
     let report = build_report(&facts, policy, &mut memory, now);
@@ -1598,7 +1882,7 @@ pub(crate) fn route_prompt(seat: &str) -> String {
         )
     } else {
         format!(
-            "The throughput guard found stalled work the {seat} seat can move. Read the evidence in `aida schedule due --seat {seat}` (or run `aida land stalls`). Each line names the stall and the action it calls for: land an approved change, launch a reviewer, route rework or a conflict to a lane, rerun a probable flake once, route a fix-forward for a flake that failed its rerun, or repair a red base branch. Then run `aida schedule done {job}`."
+            "The throughput guard found stalled work the {seat} seat can move. Read the evidence in `aida schedule due --seat {seat}` (or run `aida land stalls`). Each line names the stall and the action it calls for: land an approved change, launch a reviewer, route rework or a conflict to a lane, rerun a probable flake once, route a fix-forward for a flake that failed its rerun or for a flaky test that failed again, repair a red base branch, relaunch or route a lane that exited without a result, or release a dead claim the doctor cannot heal. Then run `aida schedule done {job}`."
         )
     }
 }
@@ -1901,3 +2185,8 @@ pub(crate) fn scan_and_route(
 #[cfg(test)]
 #[path = "tests/story_2906_throughput_guard_tests.rs"]
 mod tests;
+
+// trace:TASK-3827 | ai:claude
+#[cfg(test)]
+#[path = "tests/task_3827_throughput_guard_tests.rs"]
+mod slice_two_tests;
