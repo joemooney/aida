@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:39:12.885207714Z
-modified_at: 2026-11-20T15:46:29.335196298Z
+modified_at: 2026-11-20T15:47:11.309500299Z
 req_type: Task
 tags:
 - config
@@ -46,6 +46,25 @@ comments:
   modified_at: 2026-11-20T15:43:33.927443430Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9a3-e94d-7bb3-b46e-b7ed375c7404
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 [configuration-validation]:** `aida config show` plus a reviewer launch dry-run/resolution line naming the model per vendor; quoted in the PR body.
+    - **AC2 [manual-inspection]:** TEMPORARY comment above the block naming revert task TASK-3824 (deferred to 2026-11-22).
+    - **AC3 [configuration-validation]:** diff touches `.aida/config.toml` only; `make check-ci-fast` and `python3 scripts/check-store-writers.py` green. `scripts/config-trust.toml` already classifies `[agents.<vendor>]` `"*" = "policy"`, so no registry entry is expected.
+
+    ### Expected files
+    - `.aida/config.toml`
+
+    ### Ambiguities / conflicts as questions
+    - None
+  created_at: 2026-11-20T15:47:11.309500299Z
+  modified_at: 2026-11-20T15:47:11.309500299Z
+  session_id: 01a1f9a316e9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f99d-7db5-7bd3-997d-6bde09930651
   author: joe

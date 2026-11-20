@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:16:46.260567298Z
-modified_at: 2026-11-20T15:31:35.004329923Z
+modified_at: 2026-11-20T15:55:03.454318935Z
 req_type: Task
 tags:
 - crate-split
@@ -35,6 +35,26 @@ comments:
   modified_at: 2026-11-20T15:20:56.753852744Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9ab-1eb2-7043-8de7-0b9916cea976
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 78b437097cbccc7025e7529f2f06ff0f092c8495. The origin/main merge-base diff was empty. The review included the native working-tree diff and all eight new Rust files.
+
+    AC1: [evidence: behavioral-test] PASS. aida-cli-lib/src/pr_cmd/mod.rs:39 preserves the crate-visible paths through re-exports. The PR command tests and help golden passed. The main dispatch-aware ship entry stays in mod.rs to retain the writer audit's existing qualified caller edge.
+
+    AC2: [evidence: behavioral-test] PASS. Compared the old and new function bodies and trace lines. Every production body and original trace matched. Existing hold, rebase, GC, cleanup, and ship tests exercised the relocated code. The GC tests moved next to their private fixtures. aida-cli-lib/src/tests/bug_home_033_post_ship_gc_tests.rs:292 now checks the actual worker launch in both branches of ship. The previous source assertion hit a helper definition after the ship function.
+
+    AC3: [evidence: behavioral-test] PASS. scripts/store-writers.toml retained 3,817 writer sites and 297 operation routes with identical policy fields after path normalization. ExecContext passed with 1,199 exact sites, crate-glob with zero imports, and gate dependencies with 150 edges, all with zero additions. The 52 mandate gate inventory tests and 51 shared structural guards passed. The final filtered run passed all 479 Rust tests after building the matching CLI. The Python ratchet and fixture runs passed 285 tests.
+
+    Deep pass. Checked dispatch/export names against callers and test source selectors, exact path syntax in the writer ledger and protected-path docs, empty/single/multiple cases in the unchanged flows, and the hold, stale-head, dirty-tree, and direct worker entry refusals. The split grants no authority. The unchanged ship body rechecks dispatch context, floor or mandate authority, review/head pinning, and the merge hold ahead of the existing landing boundary. Checked the refusal coverage in rebase_ship_without_independent_approval_at_head_is_refused, rebase_ship_refuses_stale_head_and_missing_head_pin, hold_preserves_a_seat_clone_refusal_for_an_existing_branch, and bug_2535_direct_entry_refuses_even_while_cleanup_lock_is_held. The raw Git, raw forge-read and launch-site budgets retain their counts.
+
+    Residual validation. The launcher ran make check-ci-fast and stopped at ExecContext because the seat's read-only Git index omitted the untracked module files. The exact ledger and base-growth checks passed against a temporary index containing the final files. The host FAST gate still needs to run on the committed tree. Hosted CI is pending publication. Custom protected_paths entries using the retired exact filename need the pr_cmd/ prefix shown in docs/cli/04-git-lifecycle.md:1390.
+  created_at: 2026-11-20T15:55:03.454318935Z
+  modified_at: 2026-11-20T15:55:03.454318935Z
+  session_id: 01a1f98f2065
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f988-cecb-7802-bfe2-064cda85d46d
   author: joe
