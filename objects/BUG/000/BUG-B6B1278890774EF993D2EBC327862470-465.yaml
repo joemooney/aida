@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T20:56:53.852832199Z
+modified_at: 2026-11-20T20:57:09.418552729Z
 req_type: Bug
 tags:
 - admission
@@ -503,6 +503,25 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2703 adds writer preference, a production ship-handler regression, and both claim ages. Operator identification, retries at the shortest supported bound, and settlement at long discovery intervals require changes. Fast gates passed and fast compilation was pending at review time. Review used source and existing CI evidence.. No triage reason was given.'
   created_at: 2026-11-20T20:56:53.852830540Z
   modified_at: 2026-11-20T20:56:53.852830540Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fabf-b1a1-7830-9a29-4859f1da85e4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2703):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1fb82107b586
+    Recorded: 2026-11-20T20:53:33.714971627+00:00
+    Findings:
+    1. review_watch_pause.rs:250 and admission_drain.rs:249: The new drain and resume commands identify an unseated operator solely from absent grant and role environment values. A managed process identified by AIDA_AGENT_NAME or AIDA_AGENT_TYPE with neither value reaches the operator arm, can change both workers' state, and is journaled as the operator. Require independent operator evidence at the locked mutation boundary and cover a managed grantless caller alongside the legitimate operator control.
+    2. admission_owner.rs:878, BUG-2703 ac336622: With the supported wait_secs = 1, the first busy result registers intent, sleeps the entire remaining budget and returns the original refusal. Even if the only holder releases immediately after registration, ship never tries again and reports the departed holder. Schedule a retry within even the shortest positive bound and cover release during that window while retaining the hard deadline.
+    3. review_watch.rs:2905 and idle_yielding, BUG-2703 ac6ca3ea: A watcher configured with --interval 3600 yields its claim during idle but continues sleeping for the full discovery interval. A superseding review whose processes exit during that sleep remains active until settlement runs. Ship can exhaust the default 180-second bound with both workers idle and the review already gone. Run yielded settlement independently of discovery cadence and cover an interval longer than the ship bound.
+    4. review_watch.rs:2900: An intentional drain or writer-preference yield is passed to record_pass as a discovery error. next_pass_report counts one refused change on a pass that examined zero changes, and pass_degradation marks the healthy supervised worker degraded for the duration of the drain. Represent an intentional yield separately, preserving real evidence errors.
+    5. admission_drain.rs:226: A drain issued just before a backward host-clock adjustment remains active for the entire rollback plus its requested duration. The journal validates the issue-to-expiry interval only. An otherwise valid 24-hour drain can suppress both workers and supervisor respawn for longer than the documented maximum. Bound remaining lifetime against the observer clock as for admission intents and cover rollback.
+    6. admission_owner.rs:740, intents: A regular intent file with invalid UTF-8 fails in read_regular_file_result_with_limit before parse_intent or stale-file aging. Every mode, including exclusive ship, propagates that error indefinitely. Handle malformed bytes in a bounded regular intent using the same stale-record policy as malformed JSON while retaining refusals for unsafe file types and I/O errors.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T20:57:09.281605260Z
+  modified_at: 2026-11-20T20:57:09.281605260Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
