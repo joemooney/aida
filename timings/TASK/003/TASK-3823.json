@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3823",
+  "publishes": [
+    {
+      "at": "2026-11-20T18:52:57.281891791Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-20T18:52:57.190168416Z",
+      "spec": "TASK-3823",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "012b95ef8904fe2788239f6545622c0b58ba7bd9",
+        "pr": 4369,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
