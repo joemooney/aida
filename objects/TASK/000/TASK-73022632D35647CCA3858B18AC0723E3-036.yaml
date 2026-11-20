@@ -19,7 +19,7 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-19T08:10:22.337973035Z
-modified_at: 2026-11-20T01:36:53.849499639Z
+modified_at: 2026-11-20T05:42:58.431192152Z
 req_type: Task
 tags:
 - from-advisor:TASK-3812
@@ -54,6 +54,13 @@ comments:
   created_at: 2026-11-20T01:36:27.984987004Z
   modified_at: 2026-11-20T01:36:27.984987004Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f77a-ec1e-75b1-886b-25c6200024a4
+  author: joe
+  content: 'Product 22:45: AC2 MET and the task is COMPLETE. Since 6ff4b5c4f9, .aida/config.toml changed on main (git diff --stat: 1 file, 3 insertions), and dell1''s skip-worktree override survived the fast-forwards: git ls-files -v shows ''S .aida/config.toml'', standalone_implementer_cap still present. The repo autobuild has promoted dell1 on its own 5 times since the 18:10 deploy: 18:32 6ff4b5c, 19:38 2b42e9f, 21:08 ccd9832, 21:40 140977c, 22:31 972c2f0 (all ''promoted and verified''). AC1 (deploy) 18:10, AC3 (promoted line) 18:32, AC4 (this record). Completing per advisor-121''s 18:02 ruling.'
+  created_at: 2026-11-20T05:42:58.431192152Z
+  modified_at: 2026-11-20T05:42:58.431192152Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f2f1-adf7-7901-8f89-288863688baa
