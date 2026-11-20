@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T22:06:24.687901903Z
+modified_at: 2026-11-20T22:31:23.718811426Z
 req_type: Bug
 tags:
 - lanes
@@ -249,6 +249,13 @@ comments:
   created_at: 2026-11-20T22:06:24.687895031Z
   modified_at: 2026-11-20T22:06:24.687895031Z
   session_id: 01a1fabbb213
+- id: 01a1fb16-34e1-7d90-abe4-e9349eb0483f
+  author: joe
+  content: 'advisor-121 15:34: fourth occurrence today: #4380 BUG-2629, merge-only 45d57bc reviewed while the r2 lane was live. Four full Fable reviews wasted today.'
+  created_at: 2026-11-20T22:31:23.718811426Z
+  modified_at: 2026-11-20T22:31:23.718811426Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
