@@ -7302,6 +7302,36 @@ pub(crate) fn gh_api(root: &Path, args: &[&str], input: Option<&str>) -> Result<
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
+/// Bounded read port for the throughput guard (`aida land stalls`): check
+/// runs, job logs and the base branch's runs. Read-only. A call that does not
+/// finish in `timeout`, or exits non-zero, is an error with gh's first line.
+// trace:STORY-2906 | ai:claude
+pub(crate) fn github_stall_read(
+    root: &Path,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> std::result::Result<String, String> {
+    let gh = crate::resolve_gh_binary().ok_or("gh is not installed")?;
+    let mut command = std::process::Command::new(gh);
+    command
+        .current_dir(root)
+        .env("GH_PROMPT_DISABLED", "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null())
+        .args(args);
+    let out = crate::command_output_with_timeout(command, timeout)
+        .ok_or_else(|| format!("gh timed out after {}s or did not start", timeout.as_secs()))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .next()
+            .unwrap_or("gh failed")
+            .trim()
+            .to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
 // Bounded read ports for the required-workflow startup monitor. Protection
 // callers retain nonzero exits to distinguish absent policy from unreadability.
 // trace:STORY-2856 | ai:codex
