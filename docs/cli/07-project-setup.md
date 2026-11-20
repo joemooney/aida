@@ -464,6 +464,44 @@ GitLab reports shared failures at job-script granularity; individual script
 step timing remains unknown.
 <!-- trace:STORY-2849 | ai:codex -->
 
+### Throughput guard
+
+`aida doctor check throughput-guard` reports stuck work: changes approved but
+not landed, approved with red CI, pushed but not reviewed, with changes
+requested and no lane, or conflicting with no owner; lane exits nobody followed
+up; shared claims the doctor cannot heal; and flaky tests that failed again.
+`aida land stalls` prints the same classification with every open change, the
+recent landings and the lanes per host. The classes and the red-CI reasoning
+are described in [Landing](../advanced/landing.md#stuck-changes-the-throughput-guard).
+
+The check does nothing unless `[throughput_guard] enabled = true`. Settings,
+all in minutes unless named otherwise: `merge_mins` (default 20), `review_mins`
+(30), `rework_mins` (30), `conflict_mins` (30), `lane_outcome_mins` (20),
+`stale_claim_mins` (30), `flake_window_hours` (24), `landings_window_mins` (60),
+`escalate_after_mins` (120) and `max_red_logs` (6, the red changes whose job
+logs one run reads).
+
+To run it on a schedule, add a job:
+
+```toml
+[throughput_guard]
+enabled = true
+
+[[schedule.jobs]]
+name = "throughput-guard"
+command = "doctor check throughput-guard"
+every = "20m"
+enabled = true
+```
+
+The scheduled run routes each new stall once, as a
+`throughput-guard-route-<seat>` due job and a mail to that seat, and escalates
+to the operator when nothing has landed for `escalate_after_mins` while
+something is stuck. The route jobs are built in. Routing uses only due jobs and
+mail, so a seat receives the same work under every vendor. This repository
+enables the job every 20 minutes.
+<!-- trace:STORY-2906 | ai:claude -->
+
 
 ### `aida defer`
 

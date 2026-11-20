@@ -25,6 +25,10 @@ mod ci_base;
 #[path = "land_metrics.rs"]
 pub(crate) mod metrics;
 
+// trace:STORY-2906 | ai:claude
+#[path = "land_stalls.rs"]
+pub(crate) mod stalls;
+
 use crate::cmdkit::{CmdPolicy, CommandReg, Handler};
 use crate::gate::review_verdict::VerdictKind;
 use crate::stakeholder_role::StakeholderAction;
@@ -1417,6 +1421,10 @@ pub(crate) struct Pass {
     pub notes: Vec<String>,
     /// What the pass could not read and so does not show.
     pub warnings: Vec<String>,
+    /// The approval standing at each head whose CI is red, where there is
+    /// one: the derivation stops at the red CI and never reads it.
+    // trace:STORY-2906 | ai:claude
+    pub red_approvals: BTreeMap<u64, String>,
 }
 
 /// The warning for a lease store that could not be read.
@@ -1497,6 +1505,16 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         review_after_merge: crate::integration_cmd::review::Reader::new(&root),
     };
     let rows = pass(&changes, &live);
+    // trace:STORY-2906 | ai:claude
+    let red_approvals = rows
+        .iter()
+        .filter(|row| row.state == State::CiFailed)
+        .filter_map(|row| changes.iter().find(|pr| pr.id == row.pr))
+        .filter_map(|pr| match live.approval(pr) {
+            Ok(Approval::Approved(approval)) => Some((pr.id, approval)),
+            _ => None,
+        })
+        .collect();
     // trace:TASK-3813 | ai:codex
     metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
     // Lanes that could not be read are said to be missing, never shown as
@@ -1516,6 +1534,7 @@ pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
         book: live.book,
         notes,
         warnings,
+        red_approvals,
     })
 }
 
@@ -1557,6 +1576,11 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
             json || ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json),
         ),
         land_args::LandCommand::Run(args) => run::run(&crate::find_project_root()?, &args),
+        // trace:STORY-2906 | ai:claude
+        land_args::LandCommand::Stalls { json } => stalls::run(
+            &crate::find_project_root()?,
+            json || ctx.globals.and_then(|g| g.format) == Some(crate::cmdkit::OutputFormat::Json),
+        ),
         // trace:STORY-2897 | ai:claude
         land_args::LandCommand::Mode { action } => {
             let root = crate::find_project_root()?;
@@ -1585,6 +1609,7 @@ fn land_policy(matches: &clap::ArgMatches) -> CmdPolicy {
             land_args::LandCommand::Status
                 | land_args::LandCommand::Metrics { .. }
                 | land_args::LandCommand::Run(_)
+                | land_args::LandCommand::Stalls { .. }
                 | land_args::LandCommand::Mode {
                     action: land_args::ModeCommand::Status
                 }

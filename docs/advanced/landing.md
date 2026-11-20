@@ -147,6 +147,65 @@ no `ci-tier: full` run is left out, whatever other checks it carries. A
 repository whose CI has a single tier is admitted as before.
 
 
+## Stuck changes: the throughput guard
+
+<!-- trace:STORY-2906 | ai:claude -->
+
+`aida land stalls` prints which open changes are stuck and who can move them.
+It runs the same pass as `aida land status` and adds how long each change has
+been in its state at its head (from `.aida/land/readiness.jsonl`, so the wait
+counts from the first pass that saw it). Use `--json` for the same report as
+JSON. The command only reads and prints; it routes nothing.
+
+| Class | Meaning | Routed to |
+|---|---|---|
+| `STUCK-MERGE` | approved at the head, not landed for more than `merge_mins` | advisor |
+| `STUCK-MERGE-RED` | approved at the head, CI red there for more than `merge_mins` | advisor |
+| `STUCK-REVIEW` | no verdict at the head and no reviewer for more than `review_mins` | advisor |
+| `STUCK-REWORK` | changes requested at the head, no lane or session on it for more than `rework_mins` | advisor |
+| `STUCK-CONFLICT` | conflicts with its base, nobody on it for more than `conflict_mins` | advisor |
+| `MAIN-FLAKE-RECURRENCE` | a test that flaked failed again within `flake_window_hours` | advisor |
+| `LANE-OUTCOME` | a lane exited failed, punted, no-change or refused, and nothing relaunched or routed its spec within `lane_outcome_mins` | the seat that launched it, else product |
+| `STALE-CLAIM` | a shared claim more than `stale_claim_mins` past its expiry, or a local lease whose holder cannot be established for that long, that `aida doctor heal stale-leases` does not heal | advisor |
+| `moving` | none of the above | - |
+
+A `STUCK-MERGE-RED` line names the failing tests and says why CI is red, with
+the reason it used:
+
+- **probable flake**: no failing test is in a file the change touches, and the
+  same checks pass at the base branch's tip. The action is one rerun. If the
+  rerun fails again, or the test already flaked inside the window, the action
+  becomes a fix-forward for the test, not rework of the change.
+- **the change plausibly caused it**: the change touches a file a failing test
+  covers. The action is rework.
+- **the base branch is red**: the same check is red on the base too.
+- **undetermined**: the logs, the changed files or the base's CI could not be
+  read. The line says which.
+
+Tests are matched to files by module path (`queue::tests::drains` matches
+`src/queue.rs`), so this is a heuristic and the line always shows what it
+compared. A flake is a base-branch run that went green on a rerun, or a red the
+guard itself judged a probable flake. Failing test names and flake history are
+read on GitHub only; on another forge those lines say so.
+
+The report also counts landings on the default branch in the last
+`landings_window_mins` and lists live lanes per host, with available memory for
+the host the command runs on.
+
+The scheduled `throughput-guard` job runs `aida doctor check throughput-guard`,
+which computes the same report. On the scheduler's tick each stall not routed
+before goes out once: one `throughput-guard-route-<seat>` due job per seat,
+carrying all of that seat's current stalls, and a short mail to the seat. A
+change with a new head, or a red whose remedy changed, is a new stall. When
+nothing has landed for `escalate_after_mins` while something is stuck, the
+operator gets `throughput-guard-route-operator` in `aida awaiting` (at most once
+per window) and a push if `[notify]` is configured. No model runs, and the
+guard never launches, merges or releases anything.
+
+The guard is off unless the project sets `[throughput_guard] enabled = true`
+and enables the `throughput-guard` job; see `[throughput_guard]` in
+[Project setup](../cli/07-project-setup.md#throughput-guard).
+
 ## Landing metrics
 
 <!-- trace:TASK-3813 | ai:codex -->
