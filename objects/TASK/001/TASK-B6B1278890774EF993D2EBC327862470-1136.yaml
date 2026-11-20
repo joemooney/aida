@@ -41,6 +41,23 @@ comments:
   modified_at: 2026-11-20T18:41:36.240235472Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa89-2227-7211-a95e-908c2ea1d0ec
+  author: joe
+  content: |-
+    Product 12:56: Claude (Fable) fresh-start lane queued on dell1, brief:
+    # Brief: TASK-3827, throughput guard slice 2 (fresh start; advisor-121 12:55: approved, drain; Claude+Fable; builds on main, where STORY-2906 #4372 landed as 719aa49)
+
+    Implement the spec's ACs: STORY-2906's AC7b-d, deferred from #4372, plus findings F4-F7 from the #4372 review (on STORY-2906 and this spec). Extend the landed throughput-guard (doctor check throughput-guard plus the scheduled job) with:
+    - MAIN-FLAKE-RECURRENCE: a test that went red on main then green on rerun fails again (on main or any PR) within 24h; route a fix-forward to the advisor with the earlier occurrence linked.
+    - LANE-OUTCOME: a lane exit of failed-after-start, punted, no-change or refused-before-start with no relaunch or routing within N min; route it to the launching seat with the exit line and reason. This includes the real remote lane-host probe that #4372 deferred (F2 / AC2 amendment).
+    - STALE-CLAIM: a claim or lease that blocks admission and that `aida doctor heal stale-leases` cannot heal; route it to the advisor with the record path and liveness evidence. (Today's evidence: the unhealable ones were admissions that never spawned a worker; BUG-2697 is corrected on that point.)
+    Vendor-neutral, same pattern as slice 1: due jobs and mail only. Code defaults stay OFF; this project's config enables them.
+    Trailer (TASK-3827) if every AC is met; otherwise (Refs TASK-3827).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T19:57:20.126617905Z
+  modified_at: 2026-11-20T19:57:20.126617905Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
