@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
+  position: -934000
+  added_by: role:implementer
+  added_at: 2026-11-20T21:50:55.795227087Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1f9f6-d2c8-7bf0-94a2-5d78947c37de
   position: -933000
   added_by: role:implementer
@@ -238,13 +244,6 @@
   added_by: role:implementer
   note: 'PR #4272 conflict-only rework'
   added_at: 2026-11-19T00:49:52.766006587Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
-  position: -809000
-  added_by: role:implementer
-  note: 'fresh re-implementation on current main per advisor ruling 04:35; #4158 closed'
-  added_at: 2026-11-18T11:28:12.517621398Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e468-9ec1-7bf2-95cf-266f585c1c6d
