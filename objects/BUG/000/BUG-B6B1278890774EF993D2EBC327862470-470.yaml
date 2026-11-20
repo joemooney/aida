@@ -10,12 +10,12 @@ description: |
   2. The skip notice goes to stderr, is prominent (clearly marked SKIPPED, naming the reason and the override), and repeats in the final line so it shows in tails.
   3. Callers that intentionally rely on the skip (fixer/relay templates, check-ci-fast) are updated to accept the new code. Regression tests cover both paths.
   4. Evidence-style docs and briefs that ask for "N passing runs" mention AIDA_CARGO_FORCE_BUILD=1 / --force-build.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T23:33:38.175003298Z
-modified_at: 2026-11-20T23:33:38.175003298Z
+modified_at: 2026-11-20T23:35:26.642094056Z
 req_type: Bug
 tags:
 - cargo-wrapper
@@ -23,6 +23,16 @@ tags:
 - linked:TASK-1780
 - linked:TASK-3133
 - testing
+history:
+- id: 01a1fb50-9cb2-7cb1-a49c-94ac147e2401
+  author: joe
+  timestamp: 2026-11-20T23:35:26.642081085Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
   branch: main
