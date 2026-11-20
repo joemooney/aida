@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-410
 agreed_id: BUG-2646
 title: 'Rework admission recovery: unverified approvals and closed terminal waits mis-handled when ownership discovery fails'
 description: 'Follow-up from PR-4158 round-4 review (BUG-2629). When binding discovery fails, the raw recovery in queue_cmd/work.rs (~3030-3039) (1) lets an ownership-unverified miskeyed approval suppress a real WAITING refusal, and (2) revives a terminally closed ledger-only wait because newest_review_of strips terminal_wait_source annotations. Both fall back to the pre-BUG-2629 behaviour (Unavailable, ignored), so neither is a regression vs main. Fix: ignore ownership-unverified non-waiting rounds as clearance; apply terminal_wait_overlay_body before is_closed. Regressions for both shapes are given in the PR-4158 review comment of 2026-11-16 21:26 on BUG-2629.'
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:31:20.159152225Z
-modified_at: 2026-11-20T18:34:00.059414730Z
+modified_at: 2026-11-20T18:44:50.232133997Z
 req_type: Bug
 comments:
 - id: 01a1fa2e-d289-7250-af88-722dec7fe8c5
@@ -41,6 +41,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fa46-8db8-7de2-a406-6e67242cfc32
+  author: aida-session-start
+  timestamp: 2026-11-20T18:44:50.232132214Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
