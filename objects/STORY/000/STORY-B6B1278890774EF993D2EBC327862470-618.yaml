@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T18:49:25.075400491Z
+modified_at: 2026-11-20T19:11:42.093257064Z
 req_type: Story
 tags:
 - area:ci
@@ -350,6 +350,33 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-618` at head `b39d82ae3c102d38531c4a760f550ff80b24e9ba`.'
   created_at: 2026-11-20T18:47:59.296094021Z
   modified_at: 2026-11-20T18:47:59.296094021Z
+- id: 01a1fa5f-260d-7fd0-9200-c5c748328b44
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: bc0dcbffdb (Refs slice: workflow contract for the two-slot controller; routing stays off).
+
+    What this slice adds on top of main: ci.yml now matches the contract controller.py and policy.json expect. (1) Routing: heavy shards go to dell1 only for a main push or a same-repo train/ PR into main; ordinary PRs were previously routed and would have queued unadmitted. (2) dell1 runs no checkout: the first step verifies AIDA_CI_WORKSPACE HEAD == job head SHA and a clean tree, then links the runner workspace to it and target to CARGO_TARGET_DIR; fails closed. (3) rustup steps, Swatinem/rust-cache and the docs-only path filter are hosted-only. GitLab adapter (ci/gdma/run-upstream.py) updated for the new expression and selection step. Runbook has a new 'Workflow contract' section and the digest re-pin procedure.
+
+    Acceptance evidence:
+    - AC1 (all heavy shards pass on dell1 with AIDA_REQUIRE_BWRAP_LIVE=1): [evidence: manual-inspection] NOT MET. Needs the operator root install and a live run; nothing in a lane can show it.
+    - AC2 (two concurrent jobs, no shared dir/cache slot, cap holds): [evidence: behavioral-test] on main since #3791 (tests/test_dell1_controller.py LaunchIntegration/Selection); unchanged here.
+    - AC3 (PR job cannot write main/train cache): [evidence: behavioral-test] controller side on main (test_successful_train_never_publishes, ordinary-PR admission refusals). This slice adds the workflow side: tests/test_self_hosted_runner.py routing matrix (ordinary/fork/integration PRs never reach dell1) and test_self_hosted_runs_no_checkout_toolchain_or_remote_cache_action.
+    - AC4 (runbook; post-activation comparison): [evidence: documentation-inspection] runbook updated (docs/internal/testing/dell1-runner.md). The comparison is an operator step after activation: NOT MET.
+
+    Validation: python3 -m unittest tests.test_self_hosted_runner.Routing tests.test_ci_tiers tests.test_ci_test_shards tests.test_gdma_ci tests.test_ci_structural_guards: 81 passed. Fast gate run gate-by-gate: 42 passed; 3 not run (they invoke cargo: cargo-timeout hook test, Check formatting, Rust structural ratchets; no Rust changed); 3 failed only on this seat's AF_UNIX denial (Containment conformance evidence, Store mutation channel, and the tests.test_dell1_controller half of Self-hosted routing security fixtures: 15 PermissionError on socket(AF_UNIX)). check-store-writers.py passed. Simulated the controller's archive + fetch + reset --mixed preparation on this repo: git status is clean, so the new clean-tree check does not refuse a correct tree.
+
+    Probe findings / residual risks:
+    - Actions startsWith is case-insensitive, the controller is not: a same-repo head named Train/... would queue for dell1 and never be admitted. Documented in the runbook; not fixed.
+    - Three behaviours depend on the real runner and are listed in the runbook for acceptance: later steps honouring the workspace link, cargo-nextest installing into CARGO_HOME/bin, upload-artifact following the target link.
+    - dell1 heavy shards always run in full and the test-time budget is strict there (no parent commit to diff).
+    - Any ci.yml merge changes the pinned digest; with routing on, routed jobs wait until the operator re-pins.
+
+    Shard balancing (11-20 05:45 note): no change made. On main run 44793210988 lib-0 and lib-1 both took about 15 min (18:29:24 to 18:44:34 and 18:44:25), so the halves are already balanced in wall time; the flakes look like host load, not skew. Splitting finer needs the per-test JUnit artifacts, which this seat's network policy blocked (artifact blob host denied).
+  created_at: 2026-11-20T19:11:42.093257064Z
+  modified_at: 2026-11-20T19:11:42.093257064Z
+  session_id: 01a1fa4a92e2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
