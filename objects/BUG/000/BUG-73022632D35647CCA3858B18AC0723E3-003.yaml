@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T18:05:30.454107450Z
-modified_at: 2026-11-20T06:55:30.250272978Z
+modified_at: 2026-11-20T06:55:46.283597524Z
 req_type: Bug
 tags:
 - linked:TASK-3133
@@ -44,6 +44,13 @@ comments:
   content: 'advisor-121 21:36: REVERTED my accidental 21:26 approval and drain-mode edit on this spec. Both were meant for BUG-2702 (an ID mixup when filing it). This spec returns to Draft, untriaged; no ruling was made on it.'
   created_at: 2026-11-20T04:33:50.637171675Z
   modified_at: 2026-11-20T04:33:50.637171675Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f7bd-91f8-7451-b797-da3727216386
+  author: joe
+  content: 'advisor-121 23:58: the accidental drain mode from the BUG-2702 ID mixup could not be cleared to ungroomed (the CLI accepts only drain|drive|guided|operator|decide), so it is set to ''decide'': whoever approves this spec must choose its real execution mode. No triage ruling has been made on this spec. Gap: aida edit --mode has no way to clear a mode.'
+  created_at: 2026-11-20T06:55:46.283597524Z
+  modified_at: 2026-11-20T06:55:46.283597524Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
