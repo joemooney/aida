@@ -160,6 +160,13 @@ pub(crate) fn commit_store_writes_since(
         // the worktree text. Preserve that evidence and refuse first.
         // trace:BUG-2490 | ai:codex
         aida_core::git_ops::validate_store_index(store)?;
+        // BUG-2704: a child's spec object holding conflict markers (a stash
+        // re-applied in the store worktree, as in store commit 7124c0f) or
+        // not parsing refuses before staging, so its bytes never reach the
+        // index where they would block every later store commit.
+        // trace:BUG-2704 | ai:claude
+        let pending: Vec<&str> = paths.iter().map(String::as_str).collect();
+        aida_core::git_ops::validate_store_worktree_paths(store, &pending)?;
         for path in &paths {
             if store.join(path).symlink_metadata().is_ok() {
                 aida_core::git_ops::add_all(store, path)?;
@@ -513,6 +520,59 @@ mod tests {
             assert_eq!(read(&["ls-files", "--unmerged"]), before);
             assert_eq!(read(&["rev-parse", "HEAD"]), head);
         }
+    }
+
+    /// BUG-2704: the store commit 7124c0f shape. A contained reviewer session
+    /// re-applied a stash in the store worktree and left conflict markers in
+    /// a spec object with a clean index; the launcher's commit of the child's
+    /// writes must refuse it, naming the path, and leave HEAD, the index and
+    /// the worktree text exactly as they were (nothing staged).
+    // trace:BUG-2704 | ai:claude
+    #[test]
+    fn bug_2704_child_commit_refuses_conflict_markers_before_staging() {
+        let (_tmp, store) = store_fixture();
+        let baseline = StoreBaseline::capture(&store);
+        let conflicted: String = object("a: 1")
+            .lines()
+            .map(|line| match line.strip_prefix("modified_at:") {
+                Some(_) => format!(
+                    "<<<<<<< Updated upstream\nmodified_at: 2026-11-07T23:59:00Z\n\
+                     =======\n{line}\n>>>>>>> Stashed changes\n"
+                ),
+                None => format!("{line}\n"),
+            })
+            .collect();
+        assert!(
+            conflicted.contains("<<<<<<< Updated upstream"),
+            "{conflicted}"
+        );
+        std::fs::write(store.join("objects/old.yaml"), &conflicted).unwrap();
+        std::fs::write(store.join("objects/new.yaml"), object("n: 1")).unwrap();
+        let read = |args: &[&str]| {
+            aida_core::git_ops::host_git_command(&store)
+                .args(args)
+                .output()
+                .unwrap()
+                .stdout
+        };
+        let head = read(&["rev-parse", "HEAD"]);
+        let index = read(&["ls-files", "--stage"]);
+        let error = commit_store_writes_since(&store, &baseline, "reviewer").unwrap_err();
+        let error = format!("{error:#}");
+        assert!(
+            error.contains("objects/old.yaml") && error.contains("conflict markers"),
+            "{error}"
+        );
+        assert_eq!(read(&["rev-parse", "HEAD"]), head);
+        assert_eq!(read(&["ls-files", "--stage"]), index, "nothing staged");
+        assert_eq!(
+            std::fs::read_to_string(store.join("objects/old.yaml")).unwrap(),
+            conflicted
+        );
+        // Once repaired, the same writer commits the child's changes.
+        std::fs::write(store.join("objects/old.yaml"), object("a: 2")).unwrap();
+        let committed = commit_store_writes_since(&store, &baseline, "reviewer").unwrap();
+        assert_eq!(committed, ["objects/new.yaml", "objects/old.yaml"]);
     }
 
     /// Only paths changed after the baseline are committed: a new file, a
