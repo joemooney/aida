@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T14:05:18.756084276Z
+modified_at: 2026-11-20T14:26:38.102856555Z
 req_type: Story
 tags:
 - landing
@@ -638,6 +638,13 @@ comments:
   content: Commit d8417cfcc61 references this requirement
   created_at: 2026-11-20T14:05:18.756084276Z
   modified_at: 2026-11-20T14:05:18.756084276Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f95a-58ce-7e50-991f-e7f441307bb1
+  author: joe
+  content: Commit 734a8839ae6 references this requirement
+  created_at: 2026-11-20T14:26:38.102856555Z
+  modified_at: 2026-11-20T14:26:38.102856555Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
