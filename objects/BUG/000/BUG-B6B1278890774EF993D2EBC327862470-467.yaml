@@ -19,12 +19,12 @@ description: |
   3. Regression through the real lane exit path (scripts/lane-run.sh-driven or its Rust entry): a seat-clone lane exits with uncommitted
      edits, the host commits them, the fast gate runs on the committed tree, and the head publishes.
   Lane-publication path: Claude lane, STRICT review. High priority (costs a lane round per occurrence).
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T10:14:27.369204Z
-modified_at: 2026-11-20T13:23:49.585374954Z
+modified_at: 2026-11-20T13:24:17.274954556Z
 req_type: Bug
 tags:
 - fast-gate
@@ -289,6 +289,15 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f921-14fa-7371-a1dc-58989a10726d
+  author: joe
+  timestamp: 2026-11-20T13:24:17.274951199Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 execution_mode: drain
 filed_at:
   code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
@@ -299,3 +308,6 @@ filed_at:
   vendor: claude
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-20T13:24:04.881425911Z
