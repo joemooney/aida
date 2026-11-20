@@ -2879,6 +2879,11 @@ pub(crate) fn run_with_program(
         }
         // trace:BUG-2703 | ai:claude
         if let Some(reason) = hold_admission(&root, &mut admission, args.once)? {
+            // Yielding stops discovery and launches only. Settlement keeps
+            // running, so prior attempts (a claimed superseding review whose
+            // processes have exited, a lost dispatcher) become quiescent and
+            // the waiting land/ship can get in. trace:BUG-2703 | ai:claude
+            settle_while_yielded(&store)?;
             service::record_pass(
                 &root,
                 &service::PassCounts::default(),
@@ -3003,6 +3008,55 @@ pub(crate) fn run_with_program(
 }
 
 const ADMISSION_PURPOSE: &str = "legacy review-watch";
+
+/// Projects whose worker loops a test has asked to stop (test builds only):
+/// the loops' controller check fails there, as for a withdrawn controller.
+// trace:BUG-2703 | ai:claude
+#[cfg(test)]
+static TEST_STOPPED_LOOPS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(test)]
+pub(crate) fn test_loop_stopped(root: &Path) -> bool {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    TEST_STOPPED_LOOPS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .contains(&root)
+}
+
+#[cfg(test)]
+pub(crate) fn stop_test_loops(root: &Path) {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    TEST_STOPPED_LOOPS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push(root);
+}
+
+/// Settlement-only reconciliation for a watcher that has yielded admission:
+/// no discovery, no forge read, no reservation and no launch. Every recorded
+/// change counts as open, so nothing is dropped; lost dispatchers are
+/// reconciled and every superseding attempt is advanced (confirmed gone and
+/// cleared, or signalled on its schedule), exactly as a normal pass would.
+// trace:BUG-2703 | ai:claude
+fn settle_while_yielded(store: &Store) -> Result<()> {
+    let recorded: BTreeSet<String> = store.load()?.entries.keys().cloned().collect();
+    match store.prune(&recorded) {
+        Ok(_) => {}
+        Err(error) if is_busy(&error) => eprintln!("review-watch settlement deferred: busy"),
+        Err(error) => return Err(error),
+    }
+    for (key, token) in store.load()?.superseding() {
+        match advance(store, &key, &token) {
+            Ok(Some(cause)) => eprintln!("{key}: {cause}"),
+            Ok(None) => {}
+            Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
+            Err(error) if stops_watcher(&error) => return Err(error),
+            Err(error) => eprintln!("{key}: refused: {error:#}"),
+        }
+    }
+    Ok(())
+}
 
 /// At a pass boundary: give up the shared claim when a land/ship is waiting
 /// or the loops are drained, and otherwise retake it. `Ok(Some(reason))`

@@ -156,6 +156,21 @@ fn lock(root: &Path) -> Result<Locked> {
     Ok(Locked(file))
 }
 
+// trace:BUG-2703 | ai:claude
+fn try_lock(root: &Path) -> Result<Locked> {
+    let dir = directory(root);
+    std::fs::create_dir_all(&dir)?;
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(dir.join(LOCK))?;
+    file.try_lock_exclusive()
+        .context("the drain lock is busy; expiry audit deferred")?;
+    Ok(Locked(file))
+}
+
 // Callers hold the drain lock. Expiry is recorded once, at its deadline.
 fn observe_locked(root: &Path, now: DateTime<Utc>) -> Result<Journal> {
     let mut journal = load(root)?;
@@ -188,7 +203,10 @@ fn active_at(root: &Path, now: DateTime<Utc>) -> Result<Option<Drained>> {
             expires_at: receipt.expires_at,
         }));
     }
-    if let Err(error) = lock(root).and_then(|_lock| observe_locked(root, now)) {
+    // Best effort and never a wait: admission callers carry a bound, so a
+    // busy drain lock defers the audit to a later reader (BUG-2703 round 2).
+    // trace:BUG-2703 | ai:claude
+    if let Err(error) = try_lock(root).and_then(|_lock| observe_locked(root, now)) {
         eprintln!("advisor loops drain expiry not yet recorded: {error:#}");
     }
     Ok(None)

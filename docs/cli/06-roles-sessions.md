@@ -1152,11 +1152,17 @@ waiting request. A ship or land waits for review-watch and the auto-train.
 A manual train waits only for the auto-train, because review-watch can run
 alongside a manual train. Running reviews and train passes are never cut
 short. A ship still waits until in-flight reviews settle, and a train pass
-keeps its claim until it ends. The wait is bounded by `[admission] wait_secs`
+keeps its claim until it ends. A yielded review-watch keeps settling earlier
+reviews, so a superseded review whose processes have exited is cleared and
+does not hold the waiting ship. It does not discover or launch reviews while
+it is yielded. The wait is bounded by `[admission] wait_secs`
 in `.aida/config.toml`: 180 seconds by default, at most 3600, and 0 to refuse
 at once. If the requester gives up, its typed **admission busy** refusal
 names the holders (PID, boot/start identity, namespace and purpose when known)
-and how long it waited. A waiting request is removed when its requester gets
+and how long it waited. Every wait for the admission receipt lock counts
+against the same bound, so a stalled process holding that lock cannot keep
+the requester waiting past it. The refusal then names the lock's holder.
+A waiting request is removed when its requester gets
 admission, gives up or dies. Each request also expires 30 seconds after its
 bound. <!-- trace:BUG-2703 | ai:claude -->
 
@@ -1171,8 +1177,10 @@ resume` ends the drain early; otherwise it expires on its own. The journal
 `.aida/admission-owner/loops-drain.journal` keeps the latest 256 drain,
 resume and expiry events, with actor, reason, issue time and expiry. An
 unreadable journal counts as drained. `aida advisor loops status` and
-`train-status` show the controller's claim and its age, the active drain,
-and any waiting land, ship or train. <!-- trace:BUG-2703 | ai:claude -->
+`train-status` show both workers' claims (review-watch and auto-train) with
+their ages, the active drain, and any waiting land, ship or train. A claim
+taken by an older build shows an unknown age. In `--json` output this is the
+`admission_claims` object. <!-- trace:BUG-2703 | ai:claude -->
 
 Land hands only its direct train child its admission
 scope; ordinary grant and merge gates still apply. Eligibility scans and idle

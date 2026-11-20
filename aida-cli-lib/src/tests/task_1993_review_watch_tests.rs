@@ -4543,11 +4543,11 @@ fn bug2703_wait_for(what: &str, mut ready: impl FnMut() -> bool) {
     }
 }
 
-/// AC3 regression through the production path: both loop workers run their
-/// own claim loops (review-watch's pass boundary and idle, the auto-train's
-/// pass boundary and idle), and `aida pr ship`'s admission call acquires the
-/// exclusive mode within the configured bound. While the ship holds it the
-/// loops take no claim; afterwards they take theirs again.
+/// Claim-step unit for AC3 (the production-path regression is
+/// `bug2703_real_worker_loops_yield_to_the_real_ship_handler`): the loops'
+/// boundary and idle helpers give the claim up to a waiting ship's admission
+/// within the configured bound, take none while it holds the exclusive mode,
+/// and take theirs again afterwards.
 // trace:BUG-2703 | ai:claude
 #[test]
 fn bug2703_ship_gets_admission_while_both_loop_workers_run() {
@@ -4688,4 +4688,344 @@ fn bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress() {
     // With nobody waiting any more, its next boundary keeps the claim.
     super::train::hold_admission(root, &Ok(None), &mut train).unwrap();
     assert!(train.is_some());
+}
+
+/// A review process the fixture controls: alive until the test closes its
+/// stdin, then it exits on its own (status 0). Reaped by its own thread.
+// trace:BUG-2703 | ai:claude
+#[cfg(target_os = "linux")]
+fn bug2703_review_process() -> (
+    Identity,
+    std::process::ChildStdin,
+    std::thread::JoinHandle<std::process::ExitStatus>,
+) {
+    let mut child = Command::new("sh")
+        .args(["-c", "read _ignored; exit 0"])
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let identity = Identity::child(&child).unwrap();
+    let stdin = child.stdin.take().unwrap();
+    (
+        identity,
+        stdin,
+        std::thread::spawn(move || child.wait().unwrap()),
+    )
+}
+
+/// Review findings 2 and 3 (round 2), through the production entry points:
+/// the real review-watch worker loop (`run_with_program`, as the service
+/// worker runs it), the real auto-train worker loop (`train::run_passes`,
+/// the loop `train::run` is, around a controlled train pass) and the real
+/// `aida pr ship` handler (`pr_ship_handler`).
+///
+/// In flight when the ship arrives: a claimed review that is running, a
+/// claimed superseding review whose processes have not exited yet, and a
+/// train pass that has not returned. The ship waits; nothing in flight is
+/// signalled or cut short; the review-watch worker, though yielded, keeps
+/// settling, so once the processes exit on their own both attempts settle
+/// (the superseding one confirmed and cleared, finding 2) and the ship
+/// crosses admission within its bound. The handler then stops at its next
+/// step (this fixture's detached HEAD has no ship lease), which no admission
+/// refusal can produce. Afterwards both workers take their claims again.
+// trace:BUG-2703 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug2703_real_worker_loops_yield_to_the_real_ship_handler() {
+    // The fixture's forge and Git wrappers go on PATH: run in its own process.
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("repo");
+    let hub = temp.path().join("hub.git");
+    let bin = temp.path().join("bin");
+    let home = temp.path().join("home");
+    for dir in [&root, &bin, &home] {
+        std::fs::create_dir(dir).unwrap();
+    }
+    let git = |cwd: &Path, args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(
+        temp.path(),
+        &["init", "-q", "--bare", hub.to_str().unwrap()],
+    );
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "user.name", "fixture"]);
+    git(&root, &["config", "user.email", "fixture@test"]);
+    std::fs::write(root.join("own.rs"), "initial").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-q", "-m", "initial"]);
+    git(&root, &["remote", "add", "origin", hub.to_str().unwrap()]);
+    git(&root, &["push", "-q", "origin", "main"]);
+    git(&root, &["fetch", "-q", "origin"]);
+    git(
+        &root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    // The handler's step after admission refuses a detached HEAD with no ship
+    // lease: proof it crossed admission, without a forge merge.
+    git(&root, &["checkout", "-q", "--detach"]);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 30\n",
+    )
+    .unwrap();
+    // The forge is GitHub by origin URL; Git transport stays in the bare hub.
+    // Discovery lists no open change, so nothing new is ever launched.
+    let real_git = crate::find_executable_on_path("git").expect("git on PATH");
+    let q = |p: &Path| crate::sh_single_quote(&p.to_string_lossy());
+    crate::test_exec::write_executable(
+        &bin.join("git"),
+        &format!(
+            "#!/bin/sh\nif [ \"$1 $2 $3\" = 'remote get-url origin' ]; then echo https://github.com/owner/repo.git; exit 0; fi\nfor a in \"$@\"; do shift; if [ \"$a\" = https://github.com/owner/repo.git ]; then set -- \"$@\" {hub}; else set -- \"$@\" \"$a\"; fi; done\nexec {git} \"$@\"\n",
+            hub = q(&hub),
+            git = q(&real_git)
+        ),
+    );
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
+        "#!/bin/sh\nif [ \"$1 $2\" = 'pr list' ]; then echo '[]'; exit 0; fi\nexit 1\n",
+    );
+    let inputs = aida_core::exec_context::Environment::capture();
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        inputs.get("PATH").unwrap().to_string_lossy()
+    );
+    let gh = bin.join("gh");
+    let mut env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "advisor",
+        &["reviewer"],
+        &[
+            ("PATH", Some(path.as_str())),
+            ("HOME", Some(home.to_str().unwrap())),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+            ("GH_REPO", None),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_HEADLESS", None),
+            ("AIDA_SESSION_ID", None),
+            (crate::standalone_implementer::MARKER_ENV, None),
+        ],
+    );
+    // Reissue the advisor parent in the pinned home (as the watcher test does).
+    let parent = crate::gate::seat_authority::test_support::mint_grant_for(
+        &root,
+        crate::test_env::HERMETIC_TEST_USER,
+        "advisor",
+        &["reviewer"],
+    );
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+
+    // Work in flight: a claimed running review (PR-1) and a claimed review
+    // being superseded whose signals were already sent (PR-2).
+    let repo = forge::Repository::load(&root).unwrap();
+    let store = Store::open(&root, &repo.identity).unwrap();
+    let (running_id, running_stdin, running_exit) = bug2703_review_process();
+    let (superseding_id, superseding_stdin, superseding_exit) = bug2703_review_process();
+    for (c, process, supersede) in [
+        (change(1, 1, false), running_id, false),
+        (change(2, 2, false), superseding_id, true),
+    ] {
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = Phase::Running;
+                a.identity = Some(process.clone());
+                if supersede {
+                    let now = chrono::Utc::now();
+                    a.phase = Phase::Superseding;
+                    a.supersede = Some(Supersede {
+                        by: format!("{:040x}", 3),
+                        requested_at: now,
+                        term_at: Some(now),
+                        kill_at: Some(now),
+                        diagnostic: None,
+                    });
+                }
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    // The two production worker loops.
+    let review = {
+        let root = root.clone();
+        let args = ReviewWatchArgs {
+            control: None,
+            once: false,
+            interval: 1,
+            max_concurrent: None,
+            vendor: None,
+            release: None,
+            launch_reservation: None,
+        };
+        std::thread::spawn(move || run_with_program(&args, &root, None).map(|_| ()))
+    };
+    let train_started = Arc::new(AtomicBool::new(false));
+    let train_release = Arc::new(AtomicBool::new(false));
+    let train_finished: Arc<Mutex<Option<Instant>>> = Arc::new(Mutex::new(None));
+    let train_passes = Arc::new(AtomicUsize::new(0));
+    let train = {
+        let root = root.clone();
+        let (started, release, finished, passes) = (
+            train_started.clone(),
+            train_release.clone(),
+            train_finished.clone(),
+            train_passes.clone(),
+        );
+        std::thread::spawn(move || {
+            super::train::run_passes(&root, 1, move || {
+                // The first pass is a train stack in progress until released.
+                if passes.fetch_add(1, Ordering::SeqCst) == 0 {
+                    started.store(true, Ordering::SeqCst);
+                    while !release.load(Ordering::SeqCst) {
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
+                    *finished.lock().unwrap() = Some(Instant::now());
+                }
+                Ok(())
+            })
+        })
+    };
+    let both_hold = || {
+        let claims = bug2703_loop_claims(&root);
+        claims.iter().any(|p| p == "legacy review-watch")
+            && claims.iter().any(|p| p == "legacy auto-train")
+    };
+    bug2703_wait_for("both workers hold claims, a train in progress", || {
+        both_hold() && train_started.load(Ordering::SeqCst)
+    });
+
+    // While the ship waits: nothing in flight is interrupted. Then the work
+    // finishes on its own.
+    let ship_done = Arc::new(AtomicBool::new(false));
+    let observer = {
+        let (root, done, finished, release) = (
+            root.clone(),
+            ship_done.clone(),
+            train_finished.clone(),
+            train_release.clone(),
+        );
+        let (running, superseding) = (running_stdin, superseding_stdin);
+        let store = Store::open(&root, &repo.identity).unwrap();
+        std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while crate::admission_owner::yield_reason(&root, "legacy review-watch").is_none() {
+                assert!(Instant::now() < deadline, "the ship registered no intent");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            std::thread::sleep(Duration::from_secs(3));
+            let claims = bug2703_loop_claims(&root);
+            let attempts: Vec<Attempt> = store
+                .load()
+                .unwrap()
+                .entries
+                .values()
+                .flat_map(|e| e.attempts.clone())
+                .collect();
+            let seen = (
+                done.load(Ordering::SeqCst),
+                claims,
+                finished.lock().unwrap().is_some(),
+                attempts
+                    .iter()
+                    .all(|a| a.recorded().iter().all(|p| p.alive())),
+                attempts.iter().all(active),
+            );
+            drop(running);
+            drop(superseding);
+            release.store(true, Ordering::SeqCst);
+            seen
+        })
+    };
+    let started = Instant::now();
+    let shipped = crate::pr_cmd::pr_ship_handler(
+        Some(4324),
+        true,
+        true,
+        false,
+        false,
+        None,
+        None,
+        true,
+        false,
+        false,
+        None,
+        true,
+    );
+    let waited = started.elapsed();
+    ship_done.store(true, Ordering::SeqCst);
+    let (done_early, claims_during, train_done_during, processes_alive, attempts_active) =
+        observer.join().unwrap();
+    assert!(!done_early, "the ship waited for the work in flight");
+    assert_eq!(
+        claims_during,
+        vec!["legacy auto-train".to_string()],
+        "review-watch yielded; the running train pass kept its claim"
+    );
+    assert!(!train_done_during, "the train pass was not cut short");
+    assert!(processes_alive, "no review process was signalled");
+    assert!(attempts_active, "both reviews were still in flight");
+    // The ship crossed admission within its bound and stopped at its next
+    // step, never at admission.
+    let error = format!("{:#}", shipped.unwrap_err());
+    assert!(!error.contains("admission busy"), "{error}");
+    assert!(
+        error.contains("detached HEAD has no owning session lease"),
+        "{error}"
+    );
+    assert!(waited < Duration::from_secs(30), "{waited:?}");
+    assert!(waited >= Duration::from_secs(3), "{waited:?}");
+    // The work ran to its own end: exit 0, never a signal.
+    assert!(running_exit.join().unwrap().success());
+    assert!(superseding_exit.join().unwrap().success());
+    assert!(train_finished.lock().unwrap().is_some());
+    // Only the yielded watcher's settlement can have cleared the superseding
+    // attempt (finding 2): the ship got in, so it did. A later ordinary pass
+    // may already have pruned both closed entries.
+    let state = store.load().unwrap();
+    if let Some(entry) = state.entries.get("PR-2") {
+        assert_eq!(entry.attempts[0].phase, Phase::Superseded);
+    }
+    assert!(state
+        .entries
+        .values()
+        .flat_map(|e| &e.attempts)
+        .all(|a| !active(a)));
+    // With nobody waiting, both workers take their claims again.
+    bug2703_wait_for("both workers resume their claims", both_hold);
+    crate::review_watch::stop_test_loops(&root);
+    for (name, worker) in [("review-watch", review), ("auto-train", train)] {
+        let error = worker.join().unwrap().expect_err("stopped by the fixture");
+        assert!(
+            format!("{error:#}").contains("test fixture stopped the loop"),
+            "{name}: {error:#}"
+        );
+    }
+    assert!(
+        train_passes.load(Ordering::SeqCst) >= 2,
+        "the auto-train passed again"
+    );
 }

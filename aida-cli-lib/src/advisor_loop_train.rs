@@ -112,6 +112,17 @@ pub(super) fn hold_admission(
 const ADMISSION_PURPOSE: &str = "legacy auto-train";
 
 pub(super) fn run(root: &Path) -> Result<()> {
+    run_passes(root, 180, crate::pr_train::advisor_train_handler)
+}
+
+/// The worker loop, with its pass (the train) and idle length as parameters
+/// so a regression can run this exact loop around a controlled train.
+// trace:BUG-2703 | ai:claude
+pub(super) fn run_passes(
+    root: &Path,
+    idle_seconds: u64,
+    mut pass: impl FnMut() -> Result<()>,
+) -> Result<()> {
     let mut admission: Option<crate::admission_owner::Claim> = None;
     loop {
         train_service::check_controller(root)?;
@@ -126,10 +137,7 @@ pub(super) fn run(root: &Path) -> Result<()> {
         // In review-gated mode the land loop is the one merge hand, and a
         // policy that cannot be read runs nothing: the pass decision is
         // landing_merge::auto_train_pass. trace:STORY-2905 | ai:claude
-        match crate::gate::landing_merge::auto_train_pass(
-            stand_down,
-            crate::pr_train::advisor_train_handler,
-        ) {
+        match crate::gate::landing_merge::auto_train_pass(stand_down, &mut pass) {
             Err(line) => {
                 eprintln!("auto-train: {line}");
                 train_service::record_failure(root, None)?;
@@ -153,7 +161,7 @@ pub(super) fn run(root: &Path) -> Result<()> {
                 train_service::record_failure(root, Some(&reason))?;
             }
         }
-        idle(root, 180, &mut admission)?;
+        idle(root, idle_seconds, &mut admission)?;
     }
 }
 

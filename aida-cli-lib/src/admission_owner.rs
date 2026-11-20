@@ -42,12 +42,13 @@ impl Drop for Claim {
         // Match acquire's receipts -> mode ordering: while waiting for receipts,
         // retain our mode lock. Readers only try (never wait for) the mode lock.
         // trace:STORY-2857 | ai:codex
+        // The serializer wait is bounded (BUG-2703): a stalled holder cannot
+        // keep this claim alive. The receipt is removed either way; readers
+        // skip a receipt that vanishes mid-scan, and the flock is the authority.
+        // trace:BUG-2703 | ai:claude
         if let Some(dir) = self.receipt.parent() {
-            if let Ok(serial) = open(&dir.join("receipts.lock")) {
-                if serial.lock_exclusive().is_ok() {
-                    let _ = std::fs::remove_file(&self.receipt);
-                }
-            }
+            let _serial = lock_serial(dir, std::time::Instant::now() + CLEANUP_GRACE);
+            let _ = std::fs::remove_file(&self.receipt);
         }
         let _ = FileExt::unlock(&self.lock);
     }
@@ -60,6 +61,104 @@ fn open(path: &Path) -> Result<File> {
         .write(true)
         .open(path)?)
 }
+
+/// The least time any admission step waits for the receipt serializer, even
+/// under a zero bound: other holders keep it for milliseconds, so a refusal
+/// must not come from ordinary contention. Never an extension of a bound of
+/// a second or more.
+// trace:BUG-2703 | ai:claude
+const SERIAL_GRACE: Duration = Duration::from_secs(1);
+/// How long cleanup (a dropped claim or intent) waits for the serializer
+/// before removing its own file without it.
+const CLEANUP_GRACE: Duration = Duration::from_millis(500);
+
+/// Take `receipts.lock` by bounded try-lock retries, never a blocking wait:
+/// a holder that stalls while holding it (paused, wedged, stopped under a
+/// debugger) cannot make an admission step outlive `until`. At `until` the
+/// refusal is a typed [`AdmissionBusy`] naming the serializer's holder.
+// trace:BUG-2703 | ai:claude
+fn lock_serial(dir: &Path, until: std::time::Instant) -> Result<File> {
+    let path = dir.join("receipts.lock");
+    let serial = open(&path)?;
+    loop {
+        match serial.try_lock_exclusive() {
+            Ok(()) => return Ok(serial),
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                let now = std::time::Instant::now();
+                if now >= until {
+                    return Err(AdmissionBusy(format!(
+                        "the admission receipt serializer is held by {}",
+                        serial_holder(&path)
+                    ))
+                    .into());
+                }
+                std::thread::sleep((until - now).min(Duration::from_millis(10)));
+            }
+            Err(error) => return Err(error).context("lock the admission receipt serializer"),
+        }
+    }
+}
+
+/// Who holds the flock on `path`, from `/proc/locks` (best effort: a lock
+/// inherited across fork names the process that took it). Never trusted for
+/// any decision; only reported.
+// trace:BUG-2703 | ai:claude
+fn serial_holder(path: &Path) -> String {
+    use std::os::unix::fs::MetadataExt;
+    let unknown = || "a process whose PID is unknown".to_string();
+    let Ok(meta) = std::fs::metadata(path) else {
+        return unknown();
+    };
+    let Ok(locks) = std::fs::read_to_string("/proc/locks") else {
+        return unknown();
+    };
+    let pids = flock_holders(&locks, meta.dev(), meta.ino());
+    if pids.is_empty() {
+        return unknown();
+    }
+    pids.iter()
+        .map(
+            |pid| match std::fs::read_to_string(format!("/proc/{pid}/comm")) {
+                Ok(comm) => format!("PID {pid} ({})", comm.trim()),
+                Err(_) => format!("PID {pid}"),
+            },
+        )
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// PIDs holding (not waiting for) a flock on device `dev`, inode `ino`, as
+/// `/proc/locks` lists them: `N: FLOCK ADVISORY WRITE <pid> <maj>:<min>:<ino> ...`
+/// with major/minor in hex. Blocked waiters (`N: -> FLOCK ...`) are skipped.
+// trace:BUG-2703 | ai:claude
+fn flock_holders(locks: &str, dev: u64, ino: u64) -> Vec<u32> {
+    let major = ((dev >> 8) & 0xfff) | ((dev >> 32) & !0xfff);
+    let minor = (dev & 0xff) | ((dev >> 12) & !0xff);
+    let mut pids = Vec::new();
+    for line in locks.lines() {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        if fields.len() < 6 || fields[1] != "FLOCK" {
+            continue;
+        }
+        let mut id = fields[5].split(':');
+        let (Some(maj), Some(min), Some(inode), None) =
+            (id.next(), id.next(), id.next(), id.next())
+        else {
+            continue;
+        };
+        if u64::from_str_radix(maj, 16) == Ok(major)
+            && u64::from_str_radix(min, 16) == Ok(minor)
+            && inode.parse::<u64>() == Ok(ino)
+        {
+            if let Ok(pid) = fields[4].parse::<u32>() {
+                if !pids.contains(&pid) {
+                    pids.push(pid);
+                }
+            }
+        }
+    }
+    pids
+}
 fn directory(root: &Path) -> PathBuf {
     root.join(".aida/admission-owner")
 }
@@ -68,9 +167,14 @@ fn receipts(dir: &Path) -> Result<Vec<Receipt>> {
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();
         if path.extension().is_some_and(|e| e == "json") {
-            let body =
-                aida_core::seat_clone_detect::read_regular_file_result_with_limit(&path, 16384)
-                    .context("admission holder receipt is unreadable")?;
+            // A claim whose bounded cleanup removed its receipt without the
+            // serializer is simply gone. trace:BUG-2703 | ai:claude
+            let body = match aida_core::seat_clone_detect::read_regular_file_result_with_limit(
+                &path, 16384,
+            ) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                body => body.context("admission holder receipt is unreadable")?,
+            };
             anyhow::ensure!(body.len() <= 16384, "admission holder receipt is too large");
             let row: Receipt = serde_json::from_str(&body)?;
             anyhow::ensure!(row.version == 1, "unsupported admission holder receipt");
@@ -237,7 +341,35 @@ pub(crate) fn acquire(root: &Path, purpose: &str, legacy: bool) -> Result<Claim>
         } else {
             Mode::Exclusive
         },
+        Deadline::start(Duration::ZERO),
     )
+}
+
+/// The one deadline an admission attempt carries through its preflight, its
+/// acquisition retries, its intent registration and cleanup: nothing in it
+/// waits past [`Deadline::serial_until`] for the receipt serializer.
+// trace:BUG-2703 | ai:claude
+#[derive(Clone, Copy)]
+struct Deadline {
+    started: std::time::Instant,
+    bound: Duration,
+}
+impl Deadline {
+    fn start(bound: Duration) -> Self {
+        Self {
+            started: std::time::Instant::now(),
+            bound,
+        }
+    }
+    /// When the wait for holders to yield ends.
+    fn until(&self) -> std::time::Instant {
+        self.started + self.bound
+    }
+    /// When a serializer wait ends: the bound, floored at [`SERIAL_GRACE`]
+    /// from the start so a zero bound still rides out ordinary contention.
+    fn serial_until(&self) -> std::time::Instant {
+        self.started + self.bound.max(SERIAL_GRACE)
+    }
 }
 
 // Explicitly separate manual cooperation from the legacy controller option.
@@ -248,11 +380,11 @@ enum Mode {
     Legacy,
     CooperativeTrain,
 }
-fn acquire_mode(root: &Path, purpose: &str, mode: Mode) -> Result<Claim> {
+fn acquire_mode(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -> Result<Claim> {
     let dir = directory(root);
     std::fs::create_dir_all(&dir)?;
-    let serial = open(&dir.join("receipts.lock"))?;
-    serial.lock_exclusive()?;
+    // trace:BUG-2703 | ai:claude
+    let _serial = lock_serial(&dir, deadline.serial_until())?;
     let rows = receipts(&dir)?;
     // Serialize trains from discovery onward, even before run.lock exists.
     // Review controllers alone may coexist with a manual train.
@@ -380,14 +512,23 @@ pub(crate) fn manual_train_admission(root: &Path, automatic: bool) -> Result<Opt
 /// `aida land run`'s exclusive admission, waiting up to the configured bound.
 // trace:BUG-2703 | ai:claude
 pub(crate) fn land_admission(root: &Path) -> Result<Claim> {
-    acquire_waiting(root, "land run", Mode::Exclusive, wait_bound(root)?)
+    acquire_waiting(
+        root,
+        "land run",
+        Mode::Exclusive,
+        Deadline::start(wait_bound(root)?),
+    )
 }
 
 fn train_mode(root: &Path, automatic: bool, mode: Mode, bound: Duration) -> Result<Option<Claim>> {
+    // One deadline from here on: the handoff preflight below shares it with
+    // the acquisition, so a stalled serializer holder cannot stretch either.
+    // trace:BUG-2703 | ai:claude
+    let deadline = Deadline::start(bound);
     let dir = directory(root);
     if dir.exists() {
-        let serial = open(&dir.join("receipts.lock"))?;
-        serial.lock_exclusive()?;
+        let _serial =
+            lock_serial(&dir, deadline.serial_until()).map_err(|error| gave_up(error, deadline))?;
         let rows = receipts(&dir)?;
         let parent = unsafe { libc::getppid() } as u32;
         if rows.iter().any(|r| {
@@ -407,7 +548,7 @@ fn train_mode(root: &Path, automatic: bool, mode: Mode, bound: Duration) -> Resu
     } else {
         "manual train/ship"
     };
-    acquire_waiting(root, purpose, mode, bound).map(Some)
+    acquire_waiting(root, purpose, mode, deadline).map(Some)
 }
 
 /// Default and ceiling for `[admission] wait_secs`.
@@ -513,8 +654,14 @@ fn intents(dir: &Path, now: DateTime<Utc>) -> Result<Vec<Intent>> {
         if path.extension().is_none_or(|e| e != INTENT_EXTENSION) {
             continue;
         }
-        let body = aida_core::seat_clone_detect::read_regular_file_result_with_limit(&path, 16384)
-            .with_context(|| format!("admission intent {} is unreadable", path.display()))?;
+        // An intent its requester's bounded cleanup removed mid-scan is gone.
+        let body =
+            match aida_core::seat_clone_detect::read_regular_file_result_with_limit(&path, 16384) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                body => body.with_context(|| {
+                    format!("admission intent {} is unreadable", path.display())
+                })?,
+            };
         let row: Intent = serde_json::from_str(&body)
             .with_context(|| format!("admission intent {} is malformed", path.display()))?;
         anyhow::ensure!(
@@ -539,16 +686,16 @@ fn intents(dir: &Path, now: DateTime<Utc>) -> Result<Vec<Intent>> {
     Ok(rows)
 }
 
-/// Removes its intent once the requester holds admission or gives up.
+/// Removes its intent once the requester holds admission or gives up. The
+/// serializer wait is bounded; past it the intent file is removed anyway
+/// (readers skip a vanished intent), so a stalled serializer holder cannot
+/// hold the requester in its own cleanup. trace:BUG-2703 | ai:claude
 struct IntentGuard(PathBuf);
 impl Drop for IntentGuard {
     fn drop(&mut self) {
         if let Some(dir) = self.0.parent() {
-            if let Ok(serial) = open(&dir.join("receipts.lock")) {
-                if serial.lock_exclusive().is_ok() {
-                    let _ = std::fs::remove_file(&self.0);
-                }
-            }
+            let _serial = lock_serial(dir, std::time::Instant::now() + CLEANUP_GRACE);
+            let _ = std::fs::remove_file(&self.0);
         }
     }
 }
@@ -557,12 +704,15 @@ fn register_intent(
     root: &Path,
     purpose: &str,
     kind: IntentKind,
-    remaining: Duration,
+    deadline: Deadline,
 ) -> Result<IntentGuard> {
     let dir = directory(root);
     std::fs::create_dir_all(&dir)?;
-    let serial = open(&dir.join("receipts.lock"))?;
-    serial.lock_exclusive()?;
+    // trace:BUG-2703 | ai:claude
+    let _serial = lock_serial(&dir, deadline.serial_until())?;
+    let remaining = deadline
+        .until()
+        .saturating_duration_since(std::time::Instant::now());
     let now = Utc::now();
     let row = Intent {
         version: 1,
@@ -585,45 +735,62 @@ fn register_intent(
 /// the quiescence and train checks still refuse until they finish. Giving up
 /// names the holders and the time waited. Any other error refuses at once.
 // trace:BUG-2703 | ai:claude
-fn acquire_waiting(root: &Path, purpose: &str, mode: Mode, bound: Duration) -> Result<Claim> {
+// Every serializer wait inside (preflight, acquisition, intent registration
+// and cleanup) ends by `deadline`, so a process stalled while holding
+// receipts.lock cannot hold the requester past its bound either.
+// trace:BUG-2703 | ai:claude
+fn acquire_waiting(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -> Result<Claim> {
     let kind = if mode == Mode::Exclusive {
         IntentKind::Exclusive
     } else {
         IntentKind::Train
     };
-    let started = std::time::Instant::now();
     let mut intent: Option<IntentGuard> = None;
     loop {
-        let error = match acquire_mode(root, purpose, mode) {
+        let error = match acquire_mode(root, purpose, mode, deadline) {
             Ok(claim) => return Ok(claim),
             Err(error) => error,
         };
         let Some(busy) = error.downcast_ref::<AdmissionBusy>() else {
             return Err(error);
         };
-        let waited = started.elapsed();
-        if waited >= bound {
-            if bound.is_zero() {
-                return Err(error);
-            }
-            return Err(AdmissionBusy(format!(
-                "{}; gave up after waiting {}s (bound {}s, `[admission] wait_secs`)",
-                busy.0,
-                waited.as_secs(),
-                bound.as_secs()
-            ))
-            .into());
+        let now = std::time::Instant::now();
+        if now >= deadline.until() {
+            return Err(gave_up(error, deadline));
         }
         if intent.is_none() {
             eprintln!(
                 "admission busy for {purpose} ({}); waiting up to {}s for holders to yield",
                 busy.0,
-                bound.as_secs()
+                deadline.bound.as_secs()
             );
-            intent = Some(register_intent(root, purpose, kind, bound - waited)?);
+            intent = Some(
+                register_intent(root, purpose, kind, deadline)
+                    .map_err(|error| gave_up(error, deadline))?,
+            );
         }
-        std::thread::sleep((bound - waited).min(Duration::from_secs(1)));
+        std::thread::sleep((deadline.until() - now).min(Duration::from_secs(1)));
     }
+}
+
+/// A busy refusal at the end of a bounded wait names the holders and how
+/// long it waited; a zero bound keeps the original holder evidence. Other
+/// errors pass through unchanged.
+// trace:BUG-2703 | ai:claude
+fn gave_up(error: anyhow::Error, deadline: Deadline) -> anyhow::Error {
+    let Some(busy) = error.downcast_ref::<AdmissionBusy>() else {
+        return error;
+    };
+    if deadline.bound.is_zero() {
+        return error;
+    }
+    AdmissionBusy(format!(
+        "{}; gave up after waiting {}s (bound {}s, `[admission] wait_secs`)",
+        busy.0,
+        deadline.started.elapsed().as_secs(),
+        deadline.bound.as_secs()
+    ))
+    .into()
 }
 
 /// Why a loop controller holding (or about to take) a shared claim for
@@ -639,8 +806,9 @@ pub(crate) fn yield_reason(root: &Path, purpose: &str) -> Option<String> {
         if !dir.is_dir() {
             return Ok(None);
         }
-        let serial = open(&dir.join("receipts.lock"))?;
-        serial.lock_exclusive()?;
+        // Bounded: a stalled serializer holder makes the controller yield
+        // (fail closed), never hang between passes. trace:BUG-2703 | ai:claude
+        let _serial = lock_serial(&dir, std::time::Instant::now() + SERIAL_GRACE)?;
         Ok(intents(&dir, Utc::now())?
             .iter()
             .find(|intent| yields_to(Mode::Legacy, purpose, intent.kind))
@@ -749,7 +917,12 @@ mod tests {
         let waiter = {
             let root = root.clone();
             std::thread::spawn(move || {
-                acquire_waiting(&root, "land run", Mode::Exclusive, Duration::from_secs(20))
+                acquire_waiting(
+                    &root,
+                    "land run",
+                    Mode::Exclusive,
+                    Deadline::start(Duration::from_secs(20)),
+                )
             })
         };
         let deadline = std::time::Instant::now() + Duration::from_secs(10);
@@ -793,7 +966,7 @@ mod tests {
             temp.path(),
             "manual train/ship",
             Mode::Exclusive,
-            Duration::from_secs(2),
+            Deadline::start(Duration::from_secs(2)),
         )
         .err()
         .unwrap();
@@ -811,7 +984,7 @@ mod tests {
             temp.path(),
             "manual train/ship",
             Mode::Exclusive,
-            Duration::ZERO,
+            Deadline::start(Duration::ZERO),
         )
         .err()
         .unwrap();
@@ -835,7 +1008,7 @@ mod tests {
                     &root,
                     "cooperative manual train",
                     Mode::CooperativeTrain,
-                    Duration::from_secs(20),
+                    Deadline::start(Duration::from_secs(20)),
                 )
             })
         };
@@ -882,8 +1055,13 @@ mod tests {
     fn bug2703_stale_intents_expire_and_malformed_intents_fail_closed() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path();
-        let guard =
-            register_intent(root, "land run", IntentKind::Exclusive, Duration::ZERO).unwrap();
+        let guard = register_intent(
+            root,
+            "land run",
+            IntentKind::Exclusive,
+            Deadline::start(Duration::ZERO),
+        )
+        .unwrap();
         let mut row: Intent = serde_json::from_slice(&std::fs::read(&guard.0).unwrap()).unwrap();
         row.registered_at = Utc::now() - chrono::Duration::seconds(120);
         row.expires_at = Utc::now() - chrono::Duration::seconds(1);
@@ -929,6 +1107,169 @@ mod tests {
         }
         let temp = tempfile::tempdir().unwrap();
         assert_eq!(wait_bound(temp.path()).unwrap(), Duration::from_secs(180));
+    }
+
+    /// Child fixture: a separate process that takes the receipt serializer,
+    /// says so, and then stalls holding it. A no-op unless the parent test
+    /// below launches it.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_serializer_holder_child() {
+        let inputs = aida_core::exec_context::Environment::capture();
+        let Some(dir) = inputs.get("AIDA_TEST_SERIALIZER_HOLD_DIR") else {
+            return;
+        };
+        let dir = PathBuf::from(dir);
+        let serial = open(&dir.join("receipts.lock")).unwrap();
+        serial.lock_exclusive().unwrap();
+        std::fs::write(dir.join("serializer-held"), std::process::id().to_string()).unwrap();
+        std::thread::sleep(Duration::from_secs(30));
+    }
+
+    /// Kills the stalled serializer holder when a test ends, pass or fail.
+    struct StalledHolder(std::process::Child);
+    impl Drop for StalledHolder {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+
+    fn stall_serializer(dir: &Path) -> StalledHolder {
+        let marker = dir.join("serializer-held");
+        let _ = std::fs::remove_file(&marker);
+        let child = std::process::Command::new(crate::aida_bin::current_executable_path().unwrap())
+            .args([
+                "--exact",
+                "admission_owner::tests::bug2703_serializer_holder_child",
+                "--nocapture",
+            ])
+            .env("AIDA_TEST_SERIALIZER_HOLD_DIR", dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let holder = StalledHolder(child);
+        let deadline = std::time::Instant::now() + Duration::from_secs(20);
+        while !marker.exists() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the holder never took the serializer"
+            );
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        holder
+    }
+
+    /// Review finding 1 (round 2): a separate process stalled while holding
+    /// receipts.lock cannot hold `pr ship`'s admission past its bound, in
+    /// the preflight, the acquisition or the intent cleanup. The refusal is
+    /// typed busy, names the serializer's holder and the wait; a zero bound
+    /// still returns within the serializer grace; loop controllers neither
+    /// hang nor take a claim (they fail closed and yield).
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_stalled_serializer_holder_cannot_outlast_the_bound() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let dir = directory(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[admission]\nwait_secs = 1\n",
+        )
+        .unwrap();
+
+        // Preflight + acquisition: the serializer is stalled from the start.
+        let holder = stall_serializer(&dir);
+        let pid = holder.0.id();
+        let started = std::time::Instant::now();
+        let error = ship_admission(root)
+            .err()
+            .expect("ship refuses at its bound");
+        let waited = started.elapsed();
+        assert!(waited >= Duration::from_secs(1), "{waited:?}");
+        assert!(waited < Duration::from_secs(3), "{waited:?}");
+        assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error:#}");
+        let text = error.to_string();
+        assert!(text.contains("receipt serializer is held by"), "{text}");
+        assert!(text.contains(&format!("PID {pid}")), "{text}");
+        assert!(
+            text.contains("gave up after waiting 1s (bound 1s"),
+            "{text}"
+        );
+        // A zero bound refuses within the serializer grace, naming the holder.
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[admission]\nwait_secs = 0\n",
+        )
+        .unwrap();
+        let started = std::time::Instant::now();
+        let error = ship_admission(root).err().unwrap();
+        assert!(started.elapsed() < SERIAL_GRACE + Duration::from_secs(1));
+        assert!(error.to_string().contains(&format!("PID {pid}")), "{error}");
+        // Loop controllers neither hang nor claim: they fail closed.
+        let started = std::time::Instant::now();
+        assert!(acquire(root, "legacy review-watch", true).is_err());
+        let reason = yield_reason(root, "legacy review-watch").expect("yields");
+        assert!(reason.contains("serializer is held"), "{reason}");
+        assert!(started.elapsed() < 2 * SERIAL_GRACE + Duration::from_secs(1));
+        drop(holder);
+
+        // Intent registration and cleanup: the ship is already waiting (its
+        // intent registered) when the serializer stalls.
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[admission]\nwait_secs = 3\n",
+        )
+        .unwrap();
+        let watcher = acquire(root, "legacy review-watch", true).unwrap();
+        let ship = {
+            let root = root.to_path_buf();
+            std::thread::spawn(move || {
+                let started = std::time::Instant::now();
+                (
+                    ship_admission(&root).map(|c| c.is_some()),
+                    started.elapsed(),
+                )
+            })
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while intent_files(root) == 0 {
+            assert!(std::time::Instant::now() < deadline, "no intent registered");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let holder = stall_serializer(&dir);
+        let (result, waited) = ship.join().unwrap();
+        let error = result.err().expect("ship gives up at its bound");
+        assert!(
+            waited < Duration::from_secs(3) + CLEANUP_GRACE + Duration::from_secs(1),
+            "{waited:?}"
+        );
+        assert!(
+            error.to_string().contains("gave up after waiting"),
+            "{error}"
+        );
+        assert_eq!(
+            intent_files(root),
+            0,
+            "the intent is removed despite the stall"
+        );
+        drop(holder);
+        drop(watcher);
+        assert!(acquire(root, "legacy review-watch", true).is_ok());
+    }
+
+    #[test]
+    fn bug2703_flock_holders_parses_proc_locks() {
+        let dev: u64 = (0x103 << 8) | 0x05;
+        let locks = "1: FLOCK  ADVISORY  WRITE 4242 103:05:77 0 EOF\n\
+                     1: -> FLOCK  ADVISORY  WRITE 5151 103:05:77 0 EOF\n\
+                     2: POSIX  ADVISORY  WRITE 6161 103:05:77 0 EOF\n\
+                     3: FLOCK  ADVISORY  READ 7171 103:05:78 0 EOF\n";
+        assert_eq!(flock_holders(locks, dev, 77), vec![4242]);
+        assert!(flock_holders(locks, dev, 79).is_empty());
     }
     // trace:BUG-2650 | ai:codex
     #[test]

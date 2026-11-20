@@ -283,42 +283,107 @@ fn admission_status(root: &Path, state: Option<&Service>, now: DateTime<Utc>) ->
         .and_then(|s| s.worker.as_ref())
         .filter(|w| w.alive())
         .map(|w| w.pid);
-    let (claim, waiting) = match crate::admission_owner::holders(root) {
+    // The other loop's controller, from its own service receipt (read-only).
+    // trace:BUG-2703 | ai:claude
+    let other = if TRAIN {
+        crate::review_watch::service::live_worker_pid(root)
+    } else {
+        crate::review_watch::train_service::live_worker_pid(root)
+    };
+    let (claim, claims, waiting) = match crate::admission_owner::holders(root) {
         Ok(rows) => {
-            let claim = rows
-                .iter()
-                .find(|r| r.state == "claim" && r.purpose == HOLDER_PURPOSE && Some(r.pid) == worker)
-                .map(|r| {
-                    serde_json::json!({
-                        "pid": r.pid,
-                        "acquired_at": r.since,
-                        "age_seconds": r.since.map(|at| (now - at).num_seconds().max(0)),
-                    })
-                });
+            let own = claim_view(&rows, HOLDER_PURPOSE, worker, now);
+            let other_purpose = if TRAIN {
+                "legacy review-watch"
+            } else {
+                "legacy auto-train"
+            };
+            let other = match &other {
+                Ok(pid) => claim_view(&rows, other_purpose, *pid, now),
+                Err(error) => serde_json::json!({ "error": format!("{error:#}") }),
+            };
+            let (review_watch, auto_train) = if TRAIN {
+                (other, own.clone())
+            } else {
+                (own.clone(), other)
+            };
             let waiting: Vec<_> = rows
                 .iter()
                 .filter(|r| r.state == "waiting")
                 .map(|r| format!("PID {} ({}) since {}", r.pid, r.purpose, r.since.map(|at| at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)).unwrap_or_default()))
                 .collect();
-            (claim.unwrap_or(serde_json::Value::Null), serde_json::json!(waiting))
+            (
+                own,
+                serde_json::json!({ "review-watch": review_watch, "auto-train": auto_train }),
+                serde_json::json!(waiting),
+            )
         }
-        Err(error) => (
-            serde_json::json!({ "error": format!("{error:#}") }),
-            serde_json::Value::Null,
-        ),
+        Err(error) => {
+            let error = serde_json::json!({ "error": format!("{error:#}") });
+            (
+                error.clone(),
+                serde_json::json!({ "review-watch": error.clone(), "auto-train": error }),
+                serde_json::Value::Null,
+            )
+        }
     };
     let drain = match crate::admission_drain::active(root) {
         Ok(Some(drained)) => serde_json::json!(drained),
         Ok(None) => serde_json::Value::Null,
         Err(error) => serde_json::json!({ "error": format!("{error:#}") }),
     };
-    serde_json::json!({ "admission_claim": claim, "drain": drain, "admission_waiting": waiting })
+    serde_json::json!({
+        "admission_claim": claim,
+        "admission_claims": claims,
+        "drain": drain,
+        "admission_waiting": waiting,
+    })
+}
+
+/// One loop's live claim for status: the claim its recorded controller
+/// holds, else any live claim for its purpose (a controller the service
+/// receipt no longer names still holds admission). A receipt written before
+/// claims carried a time (legacy) shows an unknown age, never zero.
+// trace:BUG-2703 | ai:claude
+fn claim_view(
+    rows: &[crate::admission_owner::HolderView],
+    purpose: &str,
+    worker: Option<u32>,
+    now: DateTime<Utc>,
+) -> serde_json::Value {
+    let mine = |r: &&crate::admission_owner::HolderView| r.state == "claim" && r.purpose == purpose;
+    rows.iter()
+        .filter(mine)
+        .find(|r| Some(r.pid) == worker)
+        .or_else(|| rows.iter().find(mine))
+        .map(|r| {
+            serde_json::json!({
+                "pid": r.pid,
+                "controller": worker,
+                "acquired_at": r.since,
+                "age_seconds": r.since.map(|at| (now - at).num_seconds().max(0)),
+            })
+        })
+        .unwrap_or(serde_json::Value::Null)
+}
+
+/// This service's live controller PID, from its receipt; read-only and
+/// lock-free (the receipt is replaced atomically), so another service's
+/// status can show it without taking this service's lock.
+// trace:BUG-2703 | ai:claude
+pub(crate) fn live_worker_pid(root: &Path) -> Result<Option<u32>> {
+    let Some(dir) = directory(root, false)? else {
+        return Ok(None);
+    };
+    Ok(read(&dir)?
+        .and_then(|s| s.worker)
+        .filter(Identity::alive)
+        .map(|w| w.pid))
 }
 
 // trace:BUG-2703 | ai:claude
-fn admission_line(value: &serde_json::Value) -> String {
-    let claim = &value["admission_claim"];
-    let claim = if claim.is_null() {
+fn claim_phrase(claim: &serde_json::Value) -> String {
+    if claim.is_null() {
         "not held".to_string()
     } else if let Some(error) = claim["error"].as_str() {
         format!("unreadable ({error})")
@@ -327,7 +392,18 @@ fn admission_line(value: &serde_json::Value) -> String {
             Some(age) => format!("held by pid {} for {}m{:02}s", claim["pid"], age / 60, age % 60),
             None => format!("held by pid {} (age unknown)", claim["pid"]),
         }
-    };
+    }
+}
+
+// trace:BUG-2703 | ai:claude
+fn admission_line(value: &serde_json::Value) -> String {
+    // Both workers' claims, whichever service's status this is.
+    let claims = &value["admission_claims"];
+    let claim = format!(
+        "review-watch {}; auto-train {}",
+        claim_phrase(&claims["review-watch"]),
+        claim_phrase(&claims["auto-train"])
+    );
     let drain = &value["drain"];
     let drain = if drain.is_null() {
         "none".to_string()
@@ -375,7 +451,45 @@ fn print_status_with_pass(
     json: bool,
 ) -> Result<()> {
     let root = forge::main_root(&std::env::current_dir()?)?;
-    let failure = failure_state(&root)?;
+    let value = status_value(&root, status, state, blockers, pass, degraded)?;
+    if json || crate::output_format_is_json() {
+        println!("{}", crate::cache_output::json_pretty(&value)?);
+    } else if matches!(
+        crate::output_format_override(),
+        Some(crate::OutputFormat::Toon)
+    ) {
+        for (key, value) in value.as_object().unwrap() {
+            println!(
+                "{}",
+                crate::toon::scalar(
+                    key,
+                    &value
+                        .as_str()
+                        .map(str::to_owned)
+                        .unwrap_or_else(|| value.to_string())
+                )
+            );
+        }
+    } else {
+        for line in status_lines(status, &value, pass, degraded) {
+            println!("{line}");
+        }
+    }
+    Ok(())
+}
+
+/// The status projection both `loops status` and `train-status` print, as
+/// JSON. Separate from printing so the command's projection is testable.
+// trace:BUG-2703 | ai:claude
+fn status_value(
+    root: &Path,
+    status: &str,
+    state: Option<&Service>,
+    blockers: &[String],
+    pass: Option<&PassReport>,
+    degraded: &[String],
+) -> Result<serde_json::Value> {
+    let failure = failure_state(root)?;
     let binary = binary_status(
         state,
         &crate::dev_build::default_live_dir()?.join("aida"),
@@ -400,62 +514,50 @@ fn print_status_with_pass(
     // The train service says when its passes do nothing: review-gated mode,
     // or a landing policy it cannot read (STORY-2905, advisor call (c)).
     // The review-watch service's display is unchanged. trace:STORY-2905 | ai:claude
-    let standing_down = if TRAIN {
-        crate::gate::landing_merge::train_stand_down_line(&root)
-    } else {
-        None
-    };
-    if let Some(line) = &standing_down {
-        value["standing_down"] = serde_json::json!(line);
+    if TRAIN {
+        if let Some(line) = crate::gate::landing_merge::train_stand_down_line(root) {
+            value["standing_down"] = serde_json::json!(line);
+        }
     }
     // trace:BUG-2703 | ai:claude
-    let admission = admission_status(&root, state, Utc::now());
-    for key in ["admission_claim", "drain", "admission_waiting"] {
+    let admission = admission_status(root, state, Utc::now());
+    for key in ["admission_claim", "admission_claims", "drain", "admission_waiting"] {
         value[key] = admission[key].clone();
     }
-    if json || crate::output_format_is_json() {
-        println!("{}", crate::cache_output::json_pretty(&value)?);
-    } else if matches!(
-        crate::output_format_override(),
-        Some(crate::OutputFormat::Toon)
-    ) {
-        for (key, value) in value.as_object().unwrap() {
-            println!(
-                "{}",
-                crate::toon::scalar(
-                    key,
-                    &value
-                        .as_str()
-                        .map(str::to_owned)
-                        .unwrap_or_else(|| value.to_string())
-                )
-            );
-        }
-    } else {
-        println!("{}", binary_line(&value));
-        println!("{NAME}: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}; consecutive failures {}; alert {}",
-            value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]);
-        if let Some(line) = standing_down {
-            println!("{NAME}: {line}");
-        }
-        println!("{NAME}: {}", admission_line(&value)); // trace:BUG-2703 | ai:claude
-        // trace:BUG-2674 | ai:claude
-        if let Some(pass) = pass {
-            println!(
-                "last pass: {}; {} open change(s); {} dispatched; {} not admitted; {} busy; {} refused",
-                pass.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
-                pass.changes,
-                pass.dispatched,
-                pass.unadmitted,
-                pass.busy,
-                pass.refused
-            );
-        }
-        for reason in degraded {
-            println!("degraded: {reason}");
-        }
+    Ok(value)
+}
+
+/// The human status lines for a [`status_value`] projection.
+// trace:BUG-2703 | ai:claude
+fn status_lines(
+    status: &str,
+    value: &serde_json::Value,
+    pass: Option<&PassReport>,
+    degraded: &[String],
+) -> Vec<String> {
+    let mut lines = vec![binary_line(value)];
+    lines.push(format!("{NAME}: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}; consecutive failures {}; alert {}",
+        value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]));
+    if let Some(line) = value["standing_down"].as_str() {
+        lines.push(format!("{NAME}: {line}"));
     }
-    Ok(())
+    lines.push(format!("{NAME}: {}", admission_line(value))); // trace:BUG-2703 | ai:claude
+    // trace:BUG-2674 | ai:claude
+    if let Some(pass) = pass {
+        lines.push(format!(
+            "last pass: {}; {} open change(s); {} dispatched; {} not admitted; {} busy; {} refused",
+            pass.at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true),
+            pass.changes,
+            pass.dispatched,
+            pass.unadmitted,
+            pass.busy,
+            pass.refused
+        ));
+    }
+    for reason in degraded {
+        lines.push(format!("degraded: {reason}"));
+    }
+    lines
 }
 
 // Read the kernel-held worker image, not the path that may have been
@@ -507,6 +609,12 @@ thread_local! { static CONTROLLER: std::cell::RefCell<Option<String>> = const { 
 /// Ordinary review-watch invocations keep their existing behavior. The fixed
 /// service worker checks binding and authority at every pass and PR admission.
 pub(super) fn check_controller(root: &Path) -> Result<()> {
+    // A regression running the real worker loops in threads ends them here,
+    // where a withdrawn controller would end. trace:BUG-2703 | ai:claude
+    #[cfg(test)]
+    if crate::review_watch::test_loop_stopped(root) {
+        anyhow::bail!("test fixture stopped the loop");
+    }
     if !CONTROLLER.with(|id| id.borrow().is_some()) {
         return Ok(());
     }
@@ -3203,7 +3311,13 @@ mod loop_tests {
         state.worker = Some(Identity::current().unwrap());
         let value = admission_status(root, Some(&state), Utc::now());
         assert_eq!(value["admission_claim"], serde_json::Value::Null);
-        assert!(admission_line(&value).contains("claim not held; drain none; waiting none"));
+        assert!(
+            admission_line(&value).contains(
+                "claim review-watch not held; auto-train not held; drain none; waiting none"
+            ),
+            "{}",
+            admission_line(&value)
+        );
         let claim = crate::admission_owner::acquire(root, HOLDER_PURPOSE, true).unwrap();
         let later = Utc::now() + chrono::Duration::seconds(125);
         let value = admission_status(root, Some(&state), later);
@@ -3220,6 +3334,71 @@ mod loop_tests {
         assert!(line.contains("drain by joe (uid 1) until"), "{line}");
         assert!(line.contains("land #4324"), "{line}");
         drop(claim);
+    }
+
+    /// Review finding 4 (round 2): `advisor loops status` (the review-watch
+    /// service's command projection, human and JSON) shows BOTH workers'
+    /// claims and ages: its own controller's and the auto-train's, whose
+    /// legacy receipt (no acquisition time) shows an unknown age, not zero.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_loops_status_projects_both_workers_claims() {
+        if TRAIN {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        let own = Identity::current().unwrap();
+        state.worker = Some(own.clone());
+        let pid = own.pid;
+        // Both workers hold admission: review-watch with a timed claim, the
+        // auto-train with a receipt written before claims carried a time.
+        let review = crate::admission_owner::acquire(root, HOLDER_PURPOSE, true).unwrap();
+        let legacy = crate::admission_owner::write_test_receipt(
+            root,
+            aida_core::proc_identity::ProcIdentity::capture(pid).unwrap(),
+            "legacy auto-train",
+        );
+        let value = status_value(root, "running", Some(&state), &[], None, &[]).unwrap();
+        let claims = &value["admission_claims"];
+        assert_eq!(claims["review-watch"]["pid"], pid);
+        assert_eq!(claims["review-watch"]["controller"], pid);
+        assert!(claims["review-watch"]["age_seconds"].as_i64().unwrap() >= 0);
+        assert_eq!(claims["auto-train"]["pid"], pid);
+        assert!(claims["auto-train"]["age_seconds"].is_null(), "{claims}");
+        assert!(claims["auto-train"]["acquired_at"].is_null(), "{claims}");
+        assert_eq!(value["admission_claim"]["pid"], pid);
+        let lines = status_lines("running", &value, None, &[]);
+        let line = lines
+            .iter()
+            .find(|l| l.starts_with("review-watch: admission:"))
+            .unwrap_or_else(|| panic!("{lines:?}"));
+        assert!(
+            line.contains(&format!("claim review-watch held by pid {pid} for 0m0")),
+            "{line}"
+        );
+        assert!(
+            line.contains(&format!("auto-train held by pid {pid} (age unknown)")),
+            "{line}"
+        );
+        // Neither worker holding: both show as not held.
+        drop(review);
+        std::fs::remove_file(legacy).unwrap();
+        let value = status_value(root, "running", Some(&state), &[], None, &[]).unwrap();
+        assert!(value["admission_claims"]["review-watch"].is_null());
+        assert!(value["admission_claims"]["auto-train"].is_null());
+        assert!(status_lines("running", &value, None, &[])
+            .iter()
+            .any(|l| l.contains("claim review-watch not held; auto-train not held")));
     }
 }
 
