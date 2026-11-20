@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T08:15:41.246362956Z
-modified_at: 2026-11-20T08:21:57.641158626Z
+modified_at: 2026-11-20T08:26:13.494770841Z
 req_type: Bug
 tags:
 - mandate
@@ -49,6 +49,29 @@ comments:
   modified_at: 2026-11-20T08:18:45.310341126Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f810-3276-7012-acdf-133cf9eeb2ce
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Acceptance criteria and evidence
+    - **AC1 (behavioral, unit + fixture):** `aida-cli-lib/src/mandate.rs` history reader detects git conflict markers (same line predicate as the store writer guard, now shared from `aida_core::git_ops::is_conflict_marker_line`) and expands a conflicted version into every resolution: each hunk taken as ours / theirs / diff3 base, cartesian across hunks (so a combination-dependent class such as keystone type+tag is still seen). Every resolution is judged; any excluded side excludes. Malformed / nested / unterminated markers, too many hunks, or a side that does not parse stay an `Err` (fail closed). Unit tests in `mandate.rs` cover sides, diff3 base, multi-hunk combinations, malformed markers.
+    - **AC2 (behavioral, fixture through `mandate_ship_cover_for_ship`):** new `gate/tests/bug_2704_conflicted_history_tests.rs` built on the BUG-2702 promotion fixture: a real store commit with the 7124c0f shape (markers around `modified_at`) is covered; a conflicted version whose stashed side carries `operator-only` refuses (`AlwaysHuman`); a version unparseable for another reason still refuses `HistoryUnreadable`.
+    - **AC3 (root cause + writer guard):** root cause already fixed by BUG-2490 (#3652, merged 2026-11-08, the day after 7124c0f): a contained reviewer session's autostash/stash re-apply left markers that `commit_store_writes_since` (child_store_commit.rs) committed; `validate_object_text` now refuses conflict markers in every store commit path (core test `bug_2490_autostash_conflict_refuses_store_commit`). Gap I will close: that writer stages the marked file before refusing, leaving corrupt bytes in the index that then block every later store writer. Add a pre-stage check of the child's changed spec objects in `commit_store_writes_since` + regression test (worktree-only markers, clean index -> refused, HEAD and index unchanged).
+
+    ### Expected files
+    - `aida-core/src/git_ops.rs` (export marker predicate + pre-stage validator)
+    - `aida-cli-lib/src/mandate.rs`
+    - `aida-cli-lib/src/child_store_commit.rs`
+    - `aida-cli-lib/src/gate/tests/bug_2704_conflicted_history_tests.rs` + test mod registration
+    - `scripts/store-writers.toml` only if the store-writer ratchet requires
+
+    ### Ambiguities / conflicts as questions
+    - None; AC3 guard pre-exists (BUG-2490) so this PR hardens and re-proves it rather than adding a second guard. No store history rewrite.
+  created_at: 2026-11-20T08:26:13.494770841Z
+  modified_at: 2026-11-20T08:26:13.494770841Z
+  session_id: 01a1f80c0105
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f806-f52a-7b93-85f0-93a09733af5c
   author: joe
