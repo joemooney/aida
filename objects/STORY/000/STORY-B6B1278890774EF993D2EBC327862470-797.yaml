@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T20:53:18.461189515Z
+modified_at: 2026-11-20T21:33:38.017983852Z
 req_type: Story
 tags:
 - landing
@@ -803,6 +803,14 @@ comments:
   created_at: 2026-11-20T20:53:18.461189515Z
   modified_at: 2026-11-20T20:53:18.461189515Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fae1-48e0-73e2-9159-49130558b552
+  author: joe
+  content: |
+    S3 #4362 five post-cap P2s pushed at f037b9d2878, one commit, these five only: (1) unterminated final journal line = uncommitted even if it parses; flush re-appends, append cuts only that tail (regression: short final write). (2) reruns_done per run: recorded only on an accepted request; failed/deadline-skipped retried, accepted never repeated (regression). (3) busy watch lock during note_smoke_failure -> spool file .aida/land/main-watch-smoke.spool, replayed next pass; dev build error reports it (SmokeNote). (4) github_run_jobs paginates with completeness checks, used by run_job_report and github_run_job_failed_steps (regression: failed job on page 2; incomplete listing refused). (5) close "fixed" only when the fix spec completed or a closing commit names it; else "unattributed" (regressions). main_watch 49/49, commit_ci 25/25, dev_build 105/105, completion seam 14/14, check-ci-fast exit 0; ci:full relabelled.
+  created_at: 2026-11-20T21:33:38.017983852Z
+  modified_at: 2026-11-20T21:33:38.017983852Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
