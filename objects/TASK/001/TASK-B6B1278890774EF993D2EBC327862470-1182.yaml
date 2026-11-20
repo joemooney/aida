@@ -1,0 +1,31 @@
+id: 01a1fb55-2eda-7750-90d5-54b0d2bd60d7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1182
+title: 'Review follow-up: aida-cli-lib/src/queue_cmd/rework_bindings.rs:256 — The fallback enforces a byte ceiling b'
+description: |-
+  From BUG-2629
+  Reviewed sha: fb1e88018a70046786f06bb53ac4528bd3926c8d
+
+  aida-cli-lib/src/queue_cmd/rework_bindings.rs:256 — The fallback enforces a byte ceiling but omits the existing 200,000-attempt ceiling. parse_ledger tries every nonblank line and retains every failed line. Many short malformed lines can force millions of parses and a large vector even within the byte limit. Share an attempt counter across the fallback pass and refuse when it runs out.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T23:40:26.202385263Z
+modified_at: 2026-11-20T23:40:26.202385263Z
+req_type: Task
+tags:
+- carried-from:BUG-2629
+- finding-hash:058e9a2f
+- from-review:BUG-2629
+relationships:
+- rel_type: References
+  target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
+  created_at: 2026-11-20T23:40:38.875125513Z
+filed_at:
+  code_sha: fb1e88018a70046786f06bb53ac4528bd3926c8d
+  branch: pr-4380
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1fb527b11

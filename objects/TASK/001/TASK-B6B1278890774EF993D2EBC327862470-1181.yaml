@@ -1,0 +1,31 @@
+id: 01a1fb54-fdaa-72e2-8784-a68bfd5d04d3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1181
+title: 'Review follow-up: aida-cli-lib/src/queue_cmd/rework_bindings.rs:543 — The legacy byte budget is debited only'
+description: |-
+  From BUG-2629
+  Reviewed sha: fb1e88018a70046786f06bb53ac4528bd3926c8d
+
+  aida-cli-lib/src/queue_cmd/rework_bindings.rs:543 — The legacy byte budget is debited only when checked_legacy_record returns a parsed verdict. Malformed or invalid-UTF-8 legacy files can each consume the full remaining allowance and recovery continues to other keys with that allowance intact. Charge bytes as consumed, including failed parses, or stop the pass on a read whose consumption cannot be accounted for.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T23:40:13.610649382Z
+modified_at: 2026-11-20T23:40:13.610649382Z
+req_type: Task
+tags:
+- carried-from:BUG-2629
+- finding-hash:c6d52550
+- from-review:BUG-2629
+relationships:
+- rel_type: References
+  target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
+  created_at: 2026-11-20T23:40:26.007841760Z
+filed_at:
+  code_sha: fb1e88018a70046786f06bb53ac4528bd3926c8d
+  branch: pr-4380
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1fb527b11
