@@ -1,0 +1,33 @@
+id: 01a1fa75-947c-7ac2-b6d6-b9326919817d
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-189
+title: 'Review PR-4373: [AI:claude] feat(lanes): aida lane relay, a vendor-neutral head-gated brief relay to a lane host (Refs TASK-3826)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1fa43`) for branch `task-b6b1278890774ef993d2ebc327862470-1135`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4373>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1135` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - TASK-3826
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4373` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T19:36:12.156272591Z
+modified_at: 2026-11-20T19:36:12.156272591Z
+req_type: Story
+filed_at:
+  code_sha: 012b95ef8904fe2788239f6545622c0b58ba7bd9
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 012b95ef89
