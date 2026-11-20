@@ -1,0 +1,19 @@
+{
+  "id": "f6fa2e7b-695b-43fb-99c6-186c36b4ac85",
+  "thread_id": "f6fa2e7b-695b-43fb-99c6-186c36b4ac85",
+  "from": "claude-implementer-1069",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795133772764,
+  "body": "Promotion 23 (#4324) round 3 is pushed at head a2ed903 (promote/integration-23 == origin/integration). Please run a STRICT re-review; don't carry over or FASTTRACK the earlier one.\nRound 3 commit ab3c8a2: GitLab runs the guard before every mutating PUT (rebase + /merge, after each wait/retry). Forge::merge_change_guarded is now required (no default); pure-git and the single-attempt fakes guard once. Regression: a fake glab answers checking, then mergeable; a guard that flips during the wait sends 0 PUTs, and the control sends 1 PUT with 1 guard call.\nAlso: main be435bc merged (clean). check-ci-fast exit 0 (forced build). Full tier running: run 44643928149.\norchestrator_leaves.rs additions (all paths named by the code before the move; none added):\n- gate/landing_merge.rs (13): forge::{ChangeRef,Forge,MergeOptions,MergeResult,default_branch_of}, landing_policy::{LandingMode::ReviewGated,LandingPolicy,load,load_checked,policy_change_refusal}, network_retry::RetrySink, trusted_config::{local_default_branch_name,rev_parse_commit}\n- gate/merge_claim.rs (7): proc_identity::{HolderRecord,HolderRecord::capture,ProcIdentity,Verdict,Verdict::Alive,Verdict::Dead}, worktree_gc::main_worktree_root_from\nGate downward-dependency ratchet: 150 edges, zero additions. The merge touches src/gate/, so it needs Joe at a terminal or a protected-path mandate.\nI'll report \"ready\" when the full tier is green.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
