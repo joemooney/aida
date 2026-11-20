@@ -14,12 +14,12 @@ description: |
   2. The skip-worktree override `standalone_implementer_cap = 8` survives at least one fast-forward that changes .aida/config.toml (verify with `git ls-files -v .aida/config.toml` showing the S flag and the value intact).
   3. ~/.aida/autobuild.log on dell1 shows at least one "promoted" line, and `aida doctor` per-host binary reporting (#4327) shows dell1 live within 10 changes of origin/main.
   4. Record the deploy and the first promotion as comments here, then complete.
-status: Draft
+status: Approved
 priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-19T08:10:22.337973035Z
-modified_at: 2026-11-20T00:59:40.178029258Z
+modified_at: 2026-11-20T01:02:34.477400293Z
 req_type: Task
 tags:
 - from-advisor:TASK-3812
@@ -64,6 +64,15 @@ history:
       2. The skip-worktree override `standalone_implementer_cap = 8` survives at least one fast-forward that changes .aida/config.toml (verify with `git ls-files -v .aida/config.toml` showing the S flag and the value intact).
       3. ~/.aida/autobuild.log on dell1 shows at least one "promoted" line, and `aida doctor` per-host binary reporting (#4327) shows dell1 live within 10 changes of origin/main.
       4. Record the deploy and the first promotion as comments here, then complete.
+- id: 01a1f67a-05ed-7221-ab2d-edf1b159af89
+  author: joe
+  timestamp: 2026-11-20T01:02:34.477390339Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 4d6994869def49bf5179328a9d1a7f6c9752315a
   branch: task-b6b1278890774ef993d2ebc327862470-1095
