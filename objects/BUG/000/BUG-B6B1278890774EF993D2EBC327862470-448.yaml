@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T19:45:22.093645308Z
+modified_at: 2026-11-20T20:25:56.334739126Z
 req_type: Bug
 tags:
 - dell1
@@ -877,6 +877,13 @@ comments:
   created_at: 2026-11-20T19:42:29.113910796Z
   modified_at: 2026-11-20T19:42:29.113910796Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1faa3-5eda-73f3-bd2c-11661fcf8754
+  author: joe
+  content: 'advisor-121 13:30: the verdict at 778dc38 is a PREMATURE review of the r3 lane''s merge-main commit (the lane is still live); not a spent round. Its findings: #2 (pid-less lease proven dead on age alone) is already r3 brief item 1. NEW for the next brief if the r3 push doesn''t cover them: (a) session_start.rs:3071 the eager release_gone_worktree_leases_among pass releases a missing-tree lease with a dead active_pid even when the creator is alive or the ownership record names a replacement, so route it through the new holder-proven-dead guard; (b) work.rs:3848 same_reviewed_sha accepts 7-hex prefixes, so compare full OIDs or resolve unambiguously; (c) session_reap.rs:1695 the gone-tree release must re-check the lease generation under the lease write lock before releasing (no revoking a refreshed grant).'
+  created_at: 2026-11-20T20:25:56.334739126Z
+  modified_at: 2026-11-20T20:25:56.334739126Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
