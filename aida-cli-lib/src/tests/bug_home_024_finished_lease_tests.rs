@@ -502,8 +502,10 @@ fn missing_session_id_is_reported_as_an_id_not_a_branch() {
 }
 
 /// BUG-2684: a finished reviewer's stale lease whose tree is gone is
-/// released by the review pickup with no prompt, although it records no pid
-/// for the process-table heuristic. A live owner or a present tree is kept.
+/// released by the review pickup with no prompt only when its holder is
+/// positively dead. Unknown liveness (no recorded process, a record naming a
+/// replacement holder, a live legacy creator), a live owner, or a present
+/// tree keeps it.
 // trace:BUG-2684 | ai:claude
 #[test]
 fn bug_2684_stale_review_lease_with_gone_tree_is_released_without_prompt() {
@@ -518,6 +520,7 @@ fn bug_2684_stale_review_lease_with_gone_tree_is_released_without_prompt() {
     let path = deleted_worktree(repo.path(), holder.path(), "pr-4354");
     let mut lease = lease_at("01a1f76fcee1", "PR-4354", &path, "pr-4354", None);
     lease.review_verb = true;
+    lease.active_pid = Some(reaped_pid());
     lease.pr_head_sha = Some(head.clone());
     write_lease(repo.path(), &lease);
     let key = WorkKey::Review {
@@ -535,19 +538,57 @@ fn bug_2684_stale_review_lease_with_gone_tree_is_released_without_prompt() {
                     key: key.clone(),
                     generation: 0,
                     phase: Phase::Reviewing { head: head.clone() },
-                    holder: Some(owner),
+                    holder: Some(owner.clone()),
                 },
                 None,
             ))
         })
         .unwrap();
 
-    // The observed stale reviewer lease: witness-less and pid-less. The
-    // process-table heuristic keeps it (no pid to prove dead), so the old
-    // pickup prompted at a terminal; the ownership reader judges it ended,
-    // so the pickup now releases it without asking.
-    assert!(!release_gone(repo.path(), &lease));
+    // Fail closed first. Witness-less and pid-less: no positive proof.
+    let mut pidless = lease.clone();
+    pidless.active_pid = None;
+    write_lease(repo.path(), &pidless);
+    assert!(!crate::session_start::release_dead_gone_tree_conflict(
+        repo.path(),
+        &pidless
+    ));
     assert!(lease_path(repo.path(), &lease.id).exists());
+    // Every recorded process dead, but a replacement holder owns the key.
+    write_lease(repo.path(), &lease);
+    let mut replacement = owner.clone();
+    replacement.session = "01a1f76fcee9".into();
+    let set_holder = |holder: crate::ownership::Holder| {
+        crate::ownership::store::OwnershipStore::for_project(repo.path())
+            .unwrap()
+            .unwrap()
+            .update(&key, "fixture", Expect::Any, |_| {
+                Some((
+                    Ownership {
+                        key: key.clone(),
+                        generation: 0,
+                        phase: Phase::Reviewing { head: head.clone() },
+                        holder: Some(holder),
+                    },
+                    None,
+                ))
+            })
+            .unwrap();
+    };
+    set_holder(replacement);
+    let why = crate::ownership::reader::review_holder_proven_dead(repo.path(), &lease).unwrap_err();
+    assert!(why.contains("different session"), "{why}");
+    assert!(!crate::session_start::release_dead_gone_tree_conflict(
+        repo.path(),
+        &lease
+    ));
+    assert!(lease_path(repo.path(), &lease.id).exists());
+    set_holder(owner);
+
+    // The observed stale reviewer lease: witness-less, its recorded worker
+    // positively gone. Its holder is proven dead, so the review pickup
+    // releases it without asking.
+    assert!(crate::ownership::reader::review_holder_proven_dead(repo.path(), &lease).is_ok());
     assert!(!crate::ownership::reader::lease_retained(
         repo.path(),
         &lease
@@ -580,6 +621,33 @@ fn bug_2684_stale_review_lease_with_gone_tree_is_released_without_prompt() {
         &live
     ));
     assert!(lease_path(repo.path(), &live.id).exists());
+
+    // A legacy lease (no ownership record) whose worker is dead but whose
+    // creator is alive outside the tree is not finished.
+    let gone_creator = deleted_worktree(repo.path(), holder.path(), "pr-9");
+    let mut creator = lease_at(
+        "01a1f76fcee5",
+        "PR-9",
+        &gone_creator,
+        "pr-9",
+        Some(std::process::id()),
+    );
+    creator.review_verb = true;
+    creator.active_pid = Some(reaped_pid());
+    write_lease(repo.path(), &creator);
+    assert!(
+        crate::ownership::reader::lease_record(repo.path(), &creator)
+            .unwrap()
+            .is_none()
+    );
+    let why =
+        crate::ownership::reader::review_holder_proven_dead(repo.path(), &creator).unwrap_err();
+    assert!(why.contains("creator process"), "{why}");
+    assert!(!crate::session_start::release_dead_gone_tree_conflict(
+        repo.path(),
+        &creator
+    ));
+    assert!(lease_path(repo.path(), &creator.id).exists());
 
     // A provably dead lease whose tree still exists is not released here.
     let present = holder.path().join("wt-present");

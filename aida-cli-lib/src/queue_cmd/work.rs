@@ -3876,10 +3876,28 @@ pub(crate) fn conclusive_review_recorded_at(
     })
 }
 
-/// A reviewer lease whose review is over: its verdict is recorded at the
-/// head it reviewed, its recorded worker is gone, and its owner is not
-/// provably alive. Tree safety (dirty, live cwd, unpublished commits, an
-/// unrecorded draft, merge-hold markers) remains the caller's job.
+/// Whether a reviewer lease's review is over, or why it is kept: its verdict
+/// is recorded at exactly the head it reviewed AND its holder is positively
+/// dead. Unknown liveness — an unreadable record, a record naming another
+/// holder, a live legacy creator — keeps it. `None` means the lease is not a
+/// recorded review of this change at all. Tree safety (dirty, live cwd,
+/// unpublished commits, an unrecorded draft, merge-hold markers) remains the
+/// caller's job.
+// trace:BUG-2684 | ai:claude
+fn recorded_review_lease_state(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+    lease: &SessionLease,
+) -> Option<std::result::Result<(), String>> {
+    (crate::pr_lease_takeover::reviewer_target(lease) == Some((forge, n))
+        && lease
+            .pr_head_sha
+            .as_deref()
+            .is_some_and(|head| conclusive_review_recorded_at(root, forge, n, head)))
+    .then(|| crate::ownership::reader::review_holder_proven_dead(root, lease))
+}
+
 // trace:BUG-2684 | ai:claude
 fn recorded_review_lease_finished(
     root: &std::path::Path,
@@ -3887,16 +3905,10 @@ fn recorded_review_lease_finished(
     n: u64,
     lease: &SessionLease,
 ) -> bool {
-    crate::pr_lease_takeover::reviewer_target(lease) == Some((forge, n))
-        && lease
-            .pr_head_sha
-            .as_deref()
-            .is_some_and(|head| conclusive_review_recorded_at(root, forge, n, head))
-        && crate::ownership::reader::finished_review_worker_is_gone(lease)
-        && !matches!(
-            crate::ownership::reader::lease_owner(root, lease),
-            crate::ownership::OwnerVerdict::Alive { .. }
-        )
+    matches!(
+        recorded_review_lease_state(root, forge, n, lease),
+        Some(Ok(()))
+    )
 }
 
 /// A finished or crashed review may leave its disposable checkout. An ended
@@ -3970,6 +3982,24 @@ fn review_worktree_retirement(
                 && ended(lease) =>
         {
             Some(lease)
+        }
+        // A recorded review whose holder is not positively dead is kept;
+        // name why, so the refusal is not a bare "branch held".
+        // trace:BUG-2684 | ai:claude
+        [lease] => {
+            let kept = match recorded_review_lease_state(root, forge, n, lease) {
+                Some(Err(why)) => Some(why),
+                _ => None,
+            };
+            return preflight_queue_work_branch(root, Some(&branch))
+                .map(|_| None)
+                .map_err(|error| match kept {
+                    Some(why) => anyhow::anyhow!(
+                        "{error:#}\nReviewer lease {} has a recorded verdict but was kept: {why}.",
+                        lease.id
+                    ),
+                    None => error,
+                });
         }
         _ => return preflight_queue_work_branch(root, Some(&branch)).map(|_| None),
     };

@@ -532,43 +532,100 @@ pub(crate) fn journal_review_reclaim(root: &Path, lease: &crate::SessionLease) -
 }
 
 /// Whether an earlier reviewer's lease has ended for a review pickup: the
-/// pickup ownership rule does not retain it, and no recorded owner or worker
-/// process is still alive (the pickup's legacy rule consults only agent
-/// sessions, so a live non-agent pid must veto here).
+/// pickup ownership rule does not retain it and its holder is positively
+/// dead ([`review_holder_proven_dead`]). Unknown liveness keeps the lease.
 // trace:BUG-2684 | ai:claude
 pub(crate) fn stale_review_lease_ended(root: &Path, lease: &crate::SessionLease) -> bool {
     crate::pr_lease_takeover::reviewer_target(lease).is_some()
         && !lease_retained(root, lease)
-        && crate::leases::lease_owner_gone(lease) != Some(false)
-        && finished_review_worker_is_gone(lease)
+        && review_holder_proven_dead(root, lease).is_ok()
+}
+
+/// Positive proof that a reviewer lease's holder ended, or why it is kept.
+/// Reaping fails closed: an unreadable ownership record, a record naming a
+/// different (or no) holder, or a provably live holder keeps the lease. When
+/// the record names this session but cannot judge it, or no record exists
+/// (a legacy lease), every recorded process must be positively gone
+/// ([`lease_processes_proven_gone`]).
+// trace:BUG-2684 | ai:claude
+pub(crate) fn review_holder_proven_dead(
+    root: &Path,
+    lease: &crate::SessionLease,
+) -> std::result::Result<(), String> {
+    match lease_record(root, lease) {
+        Err(error) => Err(format!("ownership evidence unreadable: {error:#}")),
+        Ok(Some(record)) => match record.holder.as_ref() {
+            Some(holder) if holder.session == lease.id => match owner(&record) {
+                OwnerVerdict::Dead { .. } => Ok(()),
+                OwnerVerdict::Alive { witness } => {
+                    Err(format!("review holder is still alive ({witness})"))
+                }
+                OwnerVerdict::Unknown { why } => lease_processes_proven_gone(lease)
+                    .map_err(|process| format!("holder liveness unknown ({why}); {process}")),
+            },
+            Some(holder) => Err(format!(
+                "ownership record names a different session ({})",
+                holder.session
+            )),
+            None => Err("ownership record names no holder for this session".into()),
+        },
+        Ok(None) => lease_processes_proven_gone(lease),
+    }
+}
+
+/// Every process a lease records is positively gone: the worker
+/// ([`finished_review_worker_is_gone`]), the owner by its liveness probe,
+/// and the creator by pid plus recorded start identity. A legacy lease
+/// whose live creator sits outside the tree is therefore never finished,
+/// and a lease recording no process at all has no proof.
+// trace:BUG-2684 | ai:claude
+fn lease_processes_proven_gone(lease: &crate::SessionLease) -> std::result::Result<(), String> {
+    if !finished_review_worker_is_gone(lease) {
+        return Err("its recorded worker is alive or unverifiable".into());
+    }
+    if crate::leases::lease_owner_gone(lease) != Some(true) {
+        return Err("its owner process is not provably gone".into());
+    }
+    // The creator by pid plus start identity; only a Dead verdict proves it.
+    match lease.creator_pid {
+        Some(pid)
+            if !matches!(
+                aida_core::proc_identity::observe_legacy_registry(
+                    pid,
+                    lease.creator_pid_start_time.as_deref(),
+                    lease.pid_namespace,
+                ),
+                aida_core::proc_identity::Verdict::Dead(_)
+            ) =>
+        {
+            Err(format!(
+                "its creator process {pid} is still alive or unverifiable"
+            ))
+        }
+        _ => Ok(()),
+    }
 }
 
 /// Journal retirement of a review whose verdict the caller found recorded at
-/// the lease's head, when the holder's death has no positive proof. A record
-/// that no longer names this lease has nothing to release; a provably live
-/// holder refuses; otherwise the recorded verdict is the completion evidence,
-/// written as the same lease-bound completion receipt the supervisor writes.
+/// the lease's head. Only a positively dead holder is retired: an ownership
+/// death proof is journaled as a reclaim; a dead legacy lease (no record)
+/// needs no journal; a recording holder whose death rests on the lease's own
+/// process proof gets the lease-bound completion receipt. Anything else —
+/// including a record that names another holder — refuses.
 // trace:BUG-2684 | ai:claude
 pub(crate) fn journal_recorded_review_retirement(
     root: &Path,
     lease: &crate::SessionLease,
 ) -> Result<()> {
-    let Some(record) = lease_record(root, lease)? else {
-        return Ok(());
-    };
-    if record
-        .holder
-        .as_ref()
-        .is_none_or(|holder| holder.session != lease.id)
-    {
-        return Ok(());
-    }
-    match lease_owner(root, lease) {
-        OwnerVerdict::Alive { witness } => {
-            anyhow::bail!("review holder is still alive ({witness}); retirement refused")
+    review_holder_proven_dead(root, lease).map_err(|why| {
+        anyhow::anyhow!("review holder not proven dead: {why}; retirement refused")
+    })?;
+    match lease_record(root, lease)? {
+        None => Ok(()),
+        Some(_) if matches!(lease_owner(root, lease), OwnerVerdict::Dead { .. }) => {
+            journal_reclaim(root, lease)
         }
-        OwnerVerdict::Dead { .. } => journal_reclaim(root, lease),
-        OwnerVerdict::Unknown { .. } => review_finished(root, lease),
+        Some(_) => review_finished(root, lease),
     }
 }
 

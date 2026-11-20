@@ -384,10 +384,12 @@ fn bug_2684_unrecorded_reviewer_draft_survives_exit_teardown_and_next_pickup() {
 }
 
 /// A finished reviewer whose verdict is recorded at its head, but whose
-/// lifecycle close was never written and whose owner cannot be proven dead
-/// (the 2026-11-20 stall that held the next head's review for hours), is
-/// retired by the next head's pickup. No verdict, a WAITING verdict, or a
-/// verdict at another head leaves it in place.
+/// lifecycle close was never written (the 2026-11-20 stall that held the
+/// next head's review for hours), is retired by the next head's pickup only
+/// when its holder is POSITIVELY dead. Reaping fails closed: no verdict, a
+/// WAITING verdict, a verdict at another head, a lease recording no process,
+/// a live creator outside the tree, or an ownership record naming a
+/// replacement holder each keep the tree and lease, and the refusal says why.
 // trace:BUG-2684 | ai:claude
 #[test]
 fn bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup() {
@@ -414,28 +416,25 @@ fn bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup() {
     let mut lease = crate::list_leases(&fx.main).remove(0);
     let tree = lease.worktree_path.clone();
     let first_head = git_ok(&tree, &["rev-parse", "HEAD"]);
-    // The observed stale lease: exact session, Reviewing, no witnesses and no
-    // pids, so ownership is Unknown rather than provably dead.
+    // The observed stale lease: exact session, Reviewing, no witnesses, so
+    // the ownership record alone cannot judge its holder.
     lease.pr_head_sha = Some(first_head.clone());
-    lease.active_pid = None;
-    lease.creator_pid = None;
     lease.holder_record = None;
-    lease.active_pid_start_time = None;
-    lease.creator_pid_start_time = None;
     lease.pid_namespace = crate::agent_registry::current_pid_namespace();
     let lease_file = crate::lease_path(&fx.main, &lease.id);
-    {
-        use crate::ownership::{Ownership, Phase, WorkKey};
-        let key = WorkKey::Review {
-            change: crate::ownership::dual::change(2457),
-            head: first_head.clone(),
-        };
+    let key = crate::ownership::WorkKey::Review {
+        change: crate::ownership::dual::change(2457),
+        head: first_head.clone(),
+    };
+    let set_holder = |lease: &crate::SessionLease, session: &str| {
+        use crate::ownership::{Ownership, Phase};
         let mut holder = crate::ownership::dual::holder_for_lease(
-            &lease,
+            lease,
             &crate::ownership::dual::WriterFacts::here(),
             chrono::Utc::now(),
         );
         holder.witnesses.clear();
+        holder.session = session.to_string();
         crate::ownership::store::OwnershipStore::for_project(&fx.main)
             .unwrap()
             .unwrap()
@@ -458,8 +457,22 @@ fn bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup() {
                 },
             )
             .unwrap();
-    }
-    std::fs::write(&lease_file, toml::to_string(&lease).unwrap()).unwrap();
+    };
+    let reaped = || {
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        pid
+    };
+    let set_pids = |lease: &mut crate::SessionLease, active: Option<u32>, creator: Option<u32>| {
+        lease.active_pid = active;
+        lease.creator_pid = creator;
+        lease.active_pid_start_time = None;
+        lease.creator_pid_start_time = None;
+        std::fs::write(&lease_file, toml::to_string(&*lease).unwrap()).unwrap();
+    };
+    set_holder(&lease, &lease.id);
+    set_pids(&mut lease, None, None);
     assert!(matches!(
         crate::ownership::reader::lease_owner(&fx.main, &lease),
         crate::ownership::OwnerVerdict::Unknown { .. }
@@ -494,12 +507,14 @@ fn bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup() {
         )
         .unwrap();
     };
-    let retained = |why: &str| {
+    let retained = |why: &str| -> String {
         let before = std::fs::read(&lease_file).unwrap();
-        let err = queue_work(&storage).unwrap_err().to_string();
+        let err = format!("{:#}", queue_work(&storage).unwrap_err());
         assert!(err.contains("held by worktree"), "{why}: {err}");
         assert_eq!(std::fs::read(&lease_file).unwrap(), before, "{why}");
         assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), first_head, "{why}");
+        assert!(tree.exists(), "{why}");
+        err
     };
     let recorded = |sha: &str| {
         crate::queue_cmd::conclusive_review_recorded_at(
@@ -521,6 +536,32 @@ fn bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup() {
     record("request-changes", &first_head);
     assert!(recorded(&first_head));
     assert!(!recorded(&next_head), "only the reviewed head is covered");
+
+    // Unknown liveness keeps it: no recorded process proves the holder dead.
+    let err = retained("a lease recording no process has no death proof");
+    assert!(err.contains("has a recorded verdict but was kept"), "{err}");
+
+    // A live creator outside the tree keeps it, though the worker is gone.
+    set_pids(&mut lease, Some(reaped()), Some(std::process::id()));
+    let err = retained("a live creator outside the tree");
+    assert!(err.contains("creator process"), "{err}");
+
+    // A replacement holder owns the work key: nothing is retired, even with
+    // every process this old lease recorded positively dead.
+    set_pids(&mut lease, Some(reaped()), Some(reaped()));
+    set_holder(&lease, "01replacement0holder");
+    let err = retained("the record names a replacement holder");
+    assert!(err.contains("different session"), "{err}");
+    let replaced = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    assert_eq!(replaced.holder.unwrap().session, "01replacement0holder");
+    assert!(
+        crate::ownership::reader::journal_recorded_review_retirement(&fx.main, &lease).is_err()
+    );
+
+    // Positively dead holder + verdict at its exact head: retired.
+    set_holder(&lease, &lease.id);
     queue_work(&storage).unwrap();
     assert!(!lease_file.exists());
     let new_lease = crate::list_leases(&fx.main).remove(0);
