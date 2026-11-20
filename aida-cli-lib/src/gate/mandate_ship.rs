@@ -78,19 +78,6 @@ impl MandateCover {
     }
 }
 
-/// BUG-2702: is `id`, which resolved to no current record (`resolved` is
-/// false), an ID only the branch name supplies? Such an ID is not a named
-/// unresolved spec: it is judged like a trace-derived ID (store history and
-/// the exclusion ledger still apply; with neither it is dangling). Every
-/// other named ID is unchanged, so a title or trailer naming an unknown spec
-/// still refuses as unresolved.
-// trace:BUG-2702 | ai:claude
-pub(crate) fn unresolved_branch_only(id: &str, resolved: bool, branch_only: &[String]) -> bool {
-    // Both sides are normalized ids; a spelling that differs (zero padding)
-    // is not matched, so the ID stays named (fail closed).
-    !resolved && branch_only.iter().any(|b| b.eq_ignore_ascii_case(id))
-}
-
 /// Assemble exclusion subjects only; never use this union for authority inputs.
 // trace:TASK-1790 | ai:codex
 // trace:TASK-1800 | ai:antigravity
@@ -112,32 +99,15 @@ pub(crate) fn mandate_exclusion_specs(
 
 /// TASK-2067: resolve every exclusion subject — the named IDs and the
 /// trace-derived ones — to its current record, its recorded aliases and every
-/// stored version, exactly as the mandate cover judges them. The TASK-1800
-/// replay uses it so the replay measures production resolution: it is
-/// [`resolve_exclusion_specs_with_branch_only`], which the cover calls, with
-/// no branch-only IDs.
+/// stored version, exactly as the mandate cover judges them. Shared by the
+/// cover and the TASK-1800 replay so the replay measures production
+/// resolution.
 // trace:TASK-2067 | ai:claude
-// trace:BUG-2702 | ai:claude
-#[cfg(test)]
 pub(crate) fn resolve_exclusion_specs(
     store: Option<&aida_core::RequirementsStore>,
     store_root: &std::path::Path,
     named: &[String],
     traced: std::collections::BTreeSet<String>,
-) -> Vec<crate::gate::mandate::ShipSpec> {
-    resolve_exclusion_specs_with_branch_only(store, store_root, named, traced, &[])
-}
-
-/// [`resolve_exclusion_specs`] where a named ID in `branch_only` that
-/// resolves to no current record is resolved as non-named
-/// ([`unresolved_branch_only`]) before its history is read.
-// trace:BUG-2702 | ai:claude
-pub(crate) fn resolve_exclusion_specs_with_branch_only(
-    store: Option<&aida_core::RequirementsStore>,
-    store_root: &std::path::Path,
-    named: &[String],
-    traced: std::collections::BTreeSet<String>,
-    branch_only: &[String],
 ) -> Vec<crate::gate::mandate::ShipSpec> {
     let mut history_keys_of: Vec<Vec<String>> = Vec::new();
     let mut specs = mandate_exclusion_specs(named, traced, |id, is_named| {
@@ -188,8 +158,7 @@ pub(crate) fn resolve_exclusion_specs_with_branch_only(
         crate::gate::mandate::ShipSpec {
             id: id.to_owned(),
             aliases,
-            // trace:BUG-2702 | ai:claude
-            named: is_named && !unresolved_branch_only(id, req.is_some(), branch_only),
+            named: is_named,
             shipped: false,
             current: req,
             history: Ok(Vec::new()),
@@ -665,13 +634,8 @@ fn collect_mandate_cover(
         )
     });
     let head = head();
-    let subject = pr_gate_subject(main_worktree, pr, known_ids, head_branch);
-    let (ids, branch, forge_resolved, authorship_ids) = (
-        subject.ids.clone(),
-        subject.branch.clone(),
-        subject.forge_resolved,
-        subject.authorship_ids.clone(),
-    );
+    let (ids, branch, forge_resolved, authorship_ids) =
+        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
     let candidates = crate::gate::ship::merge_gate_verdict_candidates(
         &[project_root, main_worktree],
         pr,
@@ -696,9 +660,6 @@ fn collect_mandate_cover(
         crate::forge::resolve_open_change_forge_kind(main_worktree),
     )
     .map_err(&unreadable)?;
-    // BUG-2702: the IDs only the branch name supplies; the title and the
-    // commit trailers stay authoritative. trace:BUG-2702 | ai:claude
-    let branch_only = subject.branch_only_ids(main_worktree, pr);
     // BUG-2214: a forge-side head move (`gh pr update-branch`) leaves the new
     // head unfetched locally, and the evidence diff below fails on the missing
     // commit. Fetch the base and head first; a fetch that still fails falls
@@ -756,12 +717,11 @@ fn collect_mandate_cover(
         stable,
         || {
             let store = load_store_for_lookup(project_root);
-            let specs = resolve_exclusion_specs_with_branch_only(
+            let specs = resolve_exclusion_specs(
                 store.as_ref(),
                 &store_root,
                 &ids,
                 trace_evidence.ids.clone(),
-                &branch_only,
             );
             // STORY-1698: every excluded class seen in any version goes into the
             // append-only ledger first, then the ledger is read back as the first
