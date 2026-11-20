@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-20T01:51:16.974213517Z
+modified_at: 2026-11-20T01:51:32.686416807Z
 req_type: Bug
 tags:
 - landing
@@ -118,6 +118,26 @@ comments:
   created_at: 2026-11-20T01:51:16.834757251Z
   modified_at: 2026-11-20T01:51:16.834757251Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6a7-0a52-7763-beb4-1a9a04f9c463
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 18:51):
+    # Rework brief: BUG-2687 / PR #4345, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-19 18:55 MST. Head reviewed: 99b17ed. Lane: CLAUDE (promotion path). Two findings, both unmet ACs:
+    1. dev_build.rs:435: plan_promotion_at enforces "HEAD == chosen green SHA" (green_behind_ok) only when state.behind > 0. Enforce it
+       UNCONDITIONALLY: whenever a green_commit G is selected, the build must stamp exactly G, so re-verify HEAD == G immediately before
+       building AND before staging/promoting (check_staged_sha must compare against G, not against whatever HEAD became). A checkout that
+       moved to another tip T aborts the promotion with a typed refusal. Regression: select G, fast-forward the checkout to T before the
+       build step, so no promotion happens and the refusal names G and T.
+    2. scripts/aida-autobuild.sh:94-96: a failed or timed-out `gh run list` for one commit aborts the newest-green walk. Mirror
+       dev_autopromote::ci_skip: record that commit as UNKNOWN (with its diagnostic) and continue to the next older first-parent commit,
+       bounded to 20. Never promote an unknown commit. Regression: tip T unreadable, G green, so G is promoted.
+    cargo fmt; check-store-writers.py; targeted cargo run plus the autobuild script's test harness; make check-ci-fast. Push.
+  created_at: 2026-11-20T01:51:32.686416807Z
+  modified_at: 2026-11-20T01:51:32.686416807Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f677-27f6-73c2-83dc-dc7ef45e7218
