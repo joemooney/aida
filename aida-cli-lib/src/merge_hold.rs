@@ -112,6 +112,38 @@ pub(crate) fn adopt_worktree_hold(
     Ok(true)
 }
 
+/// Preserve a recognized legacy hold and refuse removal if any marker remains.
+// trace:BUG-2176 BUG-2684 | ai:codex
+pub(crate) fn preserve_review_worktree_holds(
+    root: &Path,
+    path: &Path,
+    pr: u64,
+    since: std::time::SystemTime,
+) -> anyhow::Result<bool> {
+    let markers = path.join(".aida/merge-holds");
+    for dir in [path.join(".aida"), markers.clone()] {
+        match dir.symlink_metadata() {
+            Ok(metadata) => anyhow::ensure!(
+                metadata.is_dir(),
+                "review state directory is not a directory: {}",
+                dir.display()
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+            Err(e) => return Err(e.into()),
+        }
+    }
+    let marker = crate::gate::ledger::legacy::hold_marker_path(path, pr);
+    match marker.symlink_metadata() {
+        Ok(metadata) if metadata.is_file() => {
+            crate::merge_hold::adopt_worktree_hold(root, path, pr, since)?;
+        }
+        Ok(_) => return Ok(false),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    Ok(std::fs::read_dir(markers)?.next().transpose()?.is_none())
+}
+
 /// BUG-2176: markers sitting in linked worktrees of `main_root`'s repository,
 /// as `(pr, path)` ascending — where no merge gate reads them and removing the
 /// worktree destroys them. `aida merge-hold list` warns on each.
