@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T19:57:39.453116438Z
+modified_at: 2026-11-20T20:08:20.262428199Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -166,6 +166,34 @@ comments:
   created_at: 2026-11-20T19:57:39.453112904Z
   modified_at: 2026-11-20T19:57:39.453112904Z
   session_id: 01a1fa63963c
+- id: 01a1fa93-34ea-78a2-b13d-c4a1f9501804
+  author: joe
+  content: |-
+    AUTHORITATIVE SLICE-1 ROUND-2 BRIEF (advisor-121, 13:14): 12 findings at bd0a12f. Claude+Fable.
+
+    # Rework brief: BUG-2669 slice 1 / PR #4376 (receipt, seal, draft list), round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 13:14 MST. Head reviewed: bd0a12f. Lane: CLAUDE+Fable. COMMIT your work.
+    Fix all 12; CI first:
+     1 CI red: classify the two new containment tests in the structural inventory (like the neighbouring launch fixtures); select and count the live
+       receipt test in ci.yml's required-live bwrap step.
+     2 the `review draft` command registers from its OWN module via command_registry (signoff requirement), not a ReviewCommand variant.
+     3 bug_1502 JSON audit: add the `review draft` and `review draft list` rows (and the probe).
+     4 draft_status (~389): only NotFound means absent; other lookup errors keep the receipt (never swept).
+     5 draft list (~412) resolves the project like the launcher (find_main_worktree_root); test from a linked checkout.
+     6 (~8037) legacy collection with no draft.json must not mark the receipt consumed; distinguish legacy from verified draft recording.
+     7 registration publishes atomically with exactly one name (no-replace rename or checked reconciliation); a failed unlink never reports success.
+     8 parse validates the full 40-hex head; a malformed row is shown as unreadable in human and JSON output (no slicing panic).
+     9 docs: describe the file state (open receipt plus draft.json) without inferring launcher death or ledger state.
+    10 receipt maintenance OFF the launch path, or within an aggregate time and work budget with incremental scanning; no per-receipt 2 s waits.
+    11 version-1 (slice-1) receipts are marked INELIGIBLE for automatic slice-2 recovery (no supersession protection existed); state this in
+       the receipt version and the plan doc.
+    12 the review-handoffs path exclusion is scoped to the resolved host receipt and lock roots only; test an unrelated directory of the same name.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T20:08:20.262428199Z
+  modified_at: 2026-11-20T20:08:20.262428199Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
