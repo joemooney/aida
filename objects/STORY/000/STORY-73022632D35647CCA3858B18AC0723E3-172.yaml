@@ -1,5 +1,6 @@
 id: 01a1f6b4-779d-7683-8249-8da669d47097
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-172
+agreed_id: STORY-2977
 title: 'Review PR-4347: [AI:claude] feat(gate): project default for an unset execution mode (STORY-2884)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f686`) for branch `story-b6b1278890774ef993d2ebc327862470-791`.
@@ -48,6 +49,12 @@ history:
   timestamp: 2026-11-20T02:06:49.846891891Z
   session_id: 01a1f68604db
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f6ba-432b-77e0-bf20-abe1b21849c9
+  author: joe
+  timestamp: 2026-11-20T02:12:44.459771431Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 5993f598551f94fd8ebbebedd0a8214b1fe9c4fb

@@ -1,5 +1,6 @@
 id: 01a1f6af-ff44-7610-a354-fe864a464530
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-171
+agreed_id: STORY-2978
 title: 'Review PR-4345: [AI:claude] fix(dev): promote the newest green main commit, not only a green tip (BUG-2687)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1f680`) for branch `bug-b6b1278890774ef993d2ebc327862470-451`.
@@ -33,6 +34,12 @@ history:
 - id: 01a1f6b0-1cfc-7221-b7b3-f8b164d4de15
   author: dirtlab
   timestamp: 2026-11-20T02:01:39.324716070Z
+  changes: []
+- id: 01a1f6ba-72ec-7c22-9230-2f6e07ff2653
+  author: joe
+  timestamp: 2026-11-20T02:12:56.684658394Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6ff4b5c4f9c49608f0d14330e087b80a529d67d6
