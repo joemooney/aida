@@ -194,6 +194,42 @@ pub fn extract_spec_ids_from_text(text: &str) -> Vec<String> {
     out
 }
 
+/// BUG-2702: the spec IDs a branch name carries under AIDA's branch
+/// conventions: `<type>-<n>-<slug>` and the node-local
+/// `<type>-<node>-<n>`, where `<type>` is a built-in spec-type prefix
+/// ([`aida_core::RequirementType::ALL`]). Any other `word-<n>` token
+/// (`promote/integration-23`, `train/<uuid>-1`, `release-2`) names no spec, so
+/// a branch can never contribute an ID no spec type could have issued.
+// trace:BUG-2702 | ai:claude
+pub fn extract_branch_spec_ids(branch: &str) -> Vec<String> {
+    extract_spec_ids_from_text(branch)
+        .into_iter()
+        .filter(|id| {
+            let head = id.split('-').next().unwrap_or("");
+            aida_core::RequirementType::ALL
+                .iter()
+                .any(|t| t.default_prefix() == head)
+        })
+        .collect()
+}
+
+/// BUG-2702: a PR's spec IDs from its head `branch` (branch conventions
+/// only, [`extract_branch_spec_ids`]) and its `title` (any ID-shaped token),
+/// branch first, deduplicated by numeric identity.
+// trace:BUG-2702 | ai:claude
+pub fn extract_pr_spec_ids(branch: &str, title: &str) -> Vec<String> {
+    let mut out = extract_branch_spec_ids(branch);
+    for id in extract_spec_ids_from_text(title) {
+        if !out
+            .iter()
+            .any(|seen| aida_core::id_identity::same_id(seen, &id))
+        {
+            out.push(id);
+        }
+    }
+    out
+}
+
 /// Derive completion intent from an explicit title trailer, then the branch.
 /// PR body prose and mid-title references are never completion directives;
 /// a body non-completing marker withholds completion from every source (BUG-1919).
@@ -1712,6 +1748,10 @@ pub fn cluster_pr_body(batch_name: &str, branch: &str, members: &[String]) -> St
 #[cfg(test)]
 #[path = "tests/pr_ship_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2702_branch_spec_ids_tests.rs"]
+mod bug_2702_branch_spec_ids_tests;
 
 #[cfg(test)]
 #[path = "tests/bug_home_042_stacked_ship_tests.rs"]
