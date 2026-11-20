@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T02:48:35.962048493Z
+modified_at: 2026-11-20T03:07:57.487189876Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1133,6 +1133,20 @@ comments:
   modified_at: 2026-11-20T02:46:51.258149329Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6ec-d0af-75e2-90be-038a549a5b26
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d882ff9e29 (round 9 rework, PR #4348).
+    Finding 1 (round bound): mark_done_after_self_published_round now takes its subject from publication_subject_since(tip, launch_head): git log --first-parent tip ^base ^launch_head, skipping host reconciliation merges. A reconcile-only round over an earlier completing commit has no subject, so nothing is written. A launch head that is not hex or can't be resolved also writes nothing (fail closed). Evidence: bug_2696_self_published_done_is_bounded_to_the_round. The reconcile-only case stays Approved, and an assert shows the unbounded walk would still have found the old completing subject. The control (new completing commit under the merge) reaches Done.
+    Finding 2 (resume/drain): bug_2696_resume_and_drain_self_published_exits_set_done drives run_queue_resume_to_exit and run_vendor_headless_to_exit end to end with a mock Claude child that pushes. A completing push goes InProgress to Done. The Refs push and the held completing push stay InProgress. A launch head captured after the child would equal the pushed tip, so the positive case also proves capture happens before the child.
+    Advisor item 3: the standalone runner test adds a 'rework from in-progress' case (earlier Refs PR head, then a completing round: Done) and a 'terminal spec' case (Completed never moves). fast-gate reset-on-fail is unchanged.
+    Validation: cargo test -p aida-cli-lib --lib bug_2696_ (40 passed); aida-ci-guards --lib (51 passed); cargo fmt --check; check-store-writers.py OK. Not run locally: make check-ci-fast and check-ratchets.py, because both run past this lane's 60s tool cap. CI covers them.
+    Residual risk: a branch history rewrite between rounds makes the launch head unresolvable or unrelated, so Done is not set and the landing path completes the spec instead.
+  created_at: 2026-11-20T03:07:57.487189876Z
+  modified_at: 2026-11-20T03:07:57.487189876Z
+  session_id: 01a1f6dae3dd
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
