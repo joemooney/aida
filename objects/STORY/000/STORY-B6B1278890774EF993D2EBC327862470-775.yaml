@@ -22,12 +22,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-16T03:59:44.396486907Z
-modified_at: 2026-11-16T03:59:44.396486907Z
+modified_at: 2026-11-20T16:05:00.527877549Z
 req_type: Story
 tags:
 - area:portability
 - process-policy
 - vendor-neutral
+comments:
+- id: 01a1f9b4-7fc8-7072-b421-8aee78ca46c9
+  author: joe
+  content: 'Product 2026-11-20 09:05, PROPOSED SLICE 1 (Joe 08:59: codify, don''t rely on Claude memory; Codex is an equal agent): turn the product seat''s untracked .aida/tmp/relay-rework.sh into a tracked AIDA verb, e.g. `aida lane relay SPEC --pr N --brief FILE [--vendor claude|codex] [--model M] [--host H]`. Behaviour it must keep, all learned 2026-11-19/20: (1) gate on the PR head at queue time, and fire only if the PR is still OPEN with the head unchanged after the prior lane on that spec exits, otherwise log SKIPPED and notify the advisor; (2) post the brief on the spec as the authoritative round brief, with a pointer comment; (3) deliver the brief to the vendor''s channel (claude agent-briefs or codex --brief path); (4) respect the host lane cap and RAM gate; (5) per-vendor model knobs (today --model claude-fable-5-2 / gpt-6.2-astra) as project settings, not hard-coded; (6) check admission after launch and report a refusal. Product duties that currently run as session-local Claude Monitors belong in STORY-2906 (throughput-guard), now groomed. Slices 2+ (lane-host commands, fleet policy config) can follow.'
+  created_at: 2026-11-20T16:05:00.527877549Z
+  modified_at: 2026-11-20T16:05:00.527877549Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 filed_at:
   code_sha: 086a68f26f104969b2401f8fc06b124225f51ae1
   branch: main
