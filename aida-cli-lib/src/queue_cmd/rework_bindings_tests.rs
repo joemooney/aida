@@ -419,14 +419,16 @@ fn bug_2629_rework_scan_is_bounded_on_a_ledger_of_over_1000_changes() {
         "batch read {new} of a {corpus} byte corpus"
     );
 
-    // The spec in hand lost its binding too: its own full reads refuse, a
-    // bounded number of times, and the wait still refuses.
+    // The spec in hand lost its binding too: its own full read refuses and
+    // one label pass stands in for it, a bounded number of times, and the
+    // wait still refuses.
     std::fs::remove_file(bindings.join(SPEC).join("PR-77")).unwrap();
     let (new, took) = batch(&root);
     eprintln!("bug_2629 own discovery refused: batch={new} in {took:?}");
-    // One refused full read per resolution; `batch` resolves twice.
+    // One refused full read and one label pass per resolution; `batch`
+    // resolves twice.
     assert!(
-        new <= 3 * corpus,
+        new <= 5 * corpus,
         "a refused discovery read {new} of a {corpus} byte corpus"
     );
 }
@@ -434,8 +436,9 @@ fn bug_2629_rework_scan_is_bounded_on_a_ledger_of_over_1000_changes() {
 /// Finding 1 of the round-4 review: many fingerprinted reviews of the spec
 /// in hand, one lost binding, a malformed ledger and no open wait, so the
 /// recovery visits every one of its changes. The refused full read happens
-/// once for the resolution, not once per change: each change's projection
-/// read (what the recovery used to ask per key) repeats it.
+/// once for the resolution, not once per change (each change's projection
+/// read, what the recovery used to ask per key, repeats it), followed by the
+/// one label pass that finds the change whose binding was lost.
 // trace:BUG-b6b1278890774ef993d2ebc327862470-393.ac915e51 | ai:claude
 #[test]
 fn bug_2629_failed_discovery_reads_the_corpus_once_for_many_target_changes() {
@@ -468,13 +471,14 @@ fn bug_2629_failed_discovery_reads_the_corpus_once_for_many_target_changes() {
     let (new, took) = (ledger_reads(), started.elapsed());
     eprintln!("bug_2629 many targets: corpus={corpus} per-key={per_key} batch={new} in {took:?}");
     assert!(why.contains("ownership discovery failed"), "{why}");
+    // The refused full read, then the one label pass that stands in for it.
     assert!(
-        new < 2 * corpus,
+        new < 3 * corpus,
         "the resolution read {new} of a {corpus} byte corpus"
     );
     reset_ledger_reads();
     refuse_waiting_review(&root, SPEC, SPEC, None).unwrap();
-    assert!(ledger_reads() < 2 * corpus);
+    assert!(ledger_reads() < 3 * corpus);
 }
 
 /// A review no ownership witness could disqualify: the `--pr` handshake.
@@ -870,4 +874,354 @@ fn bug_2629_a_slow_rework_phase_names_itself() {
         || (),
     );
     assert!(said.lock().unwrap().is_empty());
+}
+
+// Round 5: a source that could not be listed, read, parsed or verified is
+// unknown, never absent, and an unknown source refuses rework by name.
+
+/// Finding 1: a legacy file that is malformed or refused (a link) is not an
+/// absent record. The phase-3 refusal behind it is not known to be current,
+/// so its findings are not imported beside the wait on another change, and
+/// with no wait in hand admission is still refused, naming the file.
+#[test]
+fn bug_2629_a_refused_legacy_file_is_unknown_not_absent() {
+    fn malformed(root: &Path) {
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("PR-4000.json"), b"{ not a verdict").unwrap();
+    }
+    fn linked(root: &Path) {
+        let target = root.join("elsewhere.json");
+        std::fs::write(
+            &target,
+            serde_json::json!({"verdict": "approved", "reviewed_sha": HEAD}).to_string(),
+        )
+        .unwrap();
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::os::unix::fs::symlink(target, dir.join("PR-4000.json")).unwrap();
+    }
+    let refusals: [(&str, fn(&Path)); 2] = [("malformed", malformed), ("linked", linked)];
+    for (name, refuse) in refusals {
+        {
+            let (_tmp, root, _env) = fixture();
+            append(&root, 3698, SPEC, &record("waiting", -30));
+            append(&root, 4000, SPEC, &phase3(record("request-changes", -10)));
+            lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+            assert!(
+                matches!(
+                    resolve_rework_review(&root, SPEC, SPEC, None),
+                    Ok(crate::rework_direction::ReviewResult::Available(_))
+                ),
+                "{name}: readable findings beside the wait are imported"
+            );
+            refuse(&root);
+            assert!(refused_waiting(&root), "{name}: the wait refuses");
+        }
+
+        // No wait in hand: the unknown file alone refuses.
+        let (_tmp, root, _env) = fixture();
+        append(&root, 4000, SPEC, &phase3(record("request-changes", -10)));
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 4000);
+        unavailable(&root);
+        refuse(&root);
+        let why = refused_uncovered(&root);
+        assert!(why.contains("PR-4000.json"), "{name}: {why}");
+    }
+}
+
+/// Finding 2: the hint and the binding of the spec's only waiting change
+/// are gone and its bindings directory remains, so a strict full read is
+/// called for, and a malformed unrelated ledger refuses it. That read
+/// enumerated nothing: the change is found by label instead, and when the
+/// label pass cannot cover the ledger admission is refused.
+#[test]
+fn bug_2629_a_refused_lost_binding_read_still_finds_the_waiting_change() {
+    let (_tmp, root, _env) = fixture();
+    append(&root, 3698, SPEC, &record("waiting", -30));
+    assert!(refused_waiting(&root));
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+    std::fs::remove_file(ledger::ledger_dir(&root).join(format!("by-spec/{SPEC}.json"))).unwrap();
+    assert!(ledger::bindings::bindings_dir(&root).join(SPEC).is_dir());
+    let found = super::discover(&root, &[SPEC.to_string()], None, false);
+    assert!(found.failure().is_some() && found.refusal().is_none());
+    assert!(refused_waiting(&root));
+
+    let _budget = ReadBudgetGuard::set(1);
+    let why = refused_uncovered(&root);
+    assert!(why.contains("could not be enumerated"), "{why}");
+}
+
+/// Finding 3: the label pass tells a ledger directory that does not exist
+/// (empty) from one it could not inspect (refused, by name).
+#[test]
+fn bug_2629_the_label_pass_refuses_what_it_cannot_inspect() {
+    let labels = vec![SPEC.to_string()];
+    let (_tmp, root, _env) = fixture();
+    assert_eq!(super::labelled_changes(&root, &labels), Ok(Vec::new()));
+    append(&root, 3698, SPEC, &phase3(record("waiting", -30)));
+    assert_eq!(
+        super::labelled_changes(&root, &labels),
+        Ok(vec![ChangeKey::pr(3698)])
+    );
+    let dir = ledger::ledger_dir(&root);
+
+    // A line that is not an event: passed over, unless it carries the label.
+    let torn = dir.join("PR-7.jsonl");
+    std::fs::write(&torn, b"{\"kind\":\"verdict\",\"spec\":\"BUG-9000\",\n").unwrap();
+    assert_eq!(
+        super::labelled_changes(&root, &labels),
+        Ok(vec![ChangeKey::pr(3698)])
+    );
+    std::fs::write(&torn, b"{\"kind\":\"verdict\",\"spec\":\"bug-2629\",\n").unwrap();
+    let why = super::labelled_changes(&root, &labels).unwrap_err();
+    assert!(
+        why.contains("PR-7.jsonl") && why.contains("cannot be parsed"),
+        "{why}"
+    );
+
+    // A ledger that is not a readable regular text file.
+    std::fs::write(&torn, [0xff, 0xfe, b'\n']).unwrap();
+    let why = super::labelled_changes(&root, &labels).unwrap_err();
+    assert!(why.contains("PR-7.jsonl"), "{why}");
+    std::fs::remove_file(&torn).unwrap();
+    std::fs::create_dir(&torn).unwrap();
+    let why = super::labelled_changes(&root, &labels).unwrap_err();
+    assert!(
+        why.contains("PR-7.jsonl") && why.contains("not a regular file"),
+        "{why}"
+    );
+
+    // The command refuses on it once the bindings certify nothing.
+    std::fs::remove_file(ledger::bindings::marker_file(&root)).unwrap();
+    std::fs::remove_dir_all(ledger::bindings::bindings_dir(&root)).unwrap();
+    std::fs::remove_dir_all(dir.join("by-spec")).unwrap();
+    let why = refused_uncovered(&root);
+    assert!(why.contains("could not be enumerated"), "{why}");
+    assert!(why.contains("PR-7.jsonl"), "{why}");
+    std::fs::remove_dir(&torn).unwrap();
+    assert!(refused_waiting(&root));
+
+    // A ledger directory that cannot be listed.
+    std::fs::remove_dir_all(&dir).unwrap();
+    std::fs::write(&dir, b"").unwrap();
+    let why = super::labelled_changes(&root, &labels).unwrap_err();
+    assert!(why.contains("cannot be listed"), "{why}");
+}
+
+/// Finding 3, recovery side: an inventoried ledger that exists and cannot
+/// be read, or holds a line that is not an event, is unknown.
+#[test]
+fn bug_2629_an_unreadable_ledger_of_the_spec_refuses() {
+    for torn in [&b"{\"kind\":\"verdict\",\n"[..], &[0xff, 0xfe, b'\n'][..]] {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 4000, SPEC, &phase3(record("request-changes", -10)));
+        append(&root, 4001, SPEC, &phase3(record("request-changes", -5)));
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 4000);
+        unavailable(&root);
+        std::fs::write(store::ledger_file(&root, ChangeKey::pr(4001)), torn).unwrap();
+        let why = refused_uncovered(&root);
+        assert!(why.contains("PR-4001.jsonl"), "{why}");
+    }
+}
+
+/// Finding 4: the legacy files are read within the same aggregate budget as
+/// the ledgers, and the findings kept across keys are charged to it. Small
+/// ledgers beside large legacy findings exhaust it at a legacy file.
+#[test]
+fn bug_2629_legacy_records_and_kept_findings_spend_the_recovery_budget() {
+    use crate::rework_direction::ReviewResult;
+    let (_tmp, root, _env) = fixture();
+    append(&root, 3698, SPEC, &record("waiting", -30));
+    for pr in 4001..=4003u64 {
+        legacy_file(
+            &root,
+            &format!("PR-{pr}"),
+            serde_json::json!({
+                "verdict": "request-changes", "reviewed_sha": HEAD,
+                "findings": [format!("defect {pr} {}", "x".repeat(1000))],
+            }),
+        );
+        project::index_spec(&root, SPEC, ChangeKey::pr(pr)).unwrap();
+    }
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+    let size = |path: PathBuf| std::fs::metadata(path).unwrap().len();
+    let ledger_bytes = size(store::ledger_file(&root, ChangeKey::pr(3698)));
+    let legacy_bytes = size(root.join(".aida/review-verdicts/PR-4001.json"));
+    {
+        // The ledger, one legacy record read and kept (body and parsed
+        // findings), and half of the next.
+        let _budget = ReadBudgetGuard::set(ledger_bytes + 3 * legacy_bytes + legacy_bytes / 2);
+        let why = refused_uncovered(&root);
+        assert!(why.contains("PR-4002.json"), "{why}");
+        assert!(why.contains("read budget"), "{why}");
+    }
+    {
+        // Every byte read fits; the findings it would keep do not.
+        let _budget = ReadBudgetGuard::set(ledger_bytes + legacy_bytes + 16);
+        let why = refused_uncovered(&root);
+        assert!(why.contains("the findings recorded for PR-4001"), "{why}");
+        assert!(why.contains("read budget"), "{why}");
+    }
+    match resolve_rework_review(&root, SPEC, SPEC, None) {
+        Ok(ReviewResult::Available(block)) => {
+            for pr in 4001..=4003 {
+                assert!(block.contains(&format!("defect {pr}")), "{block}");
+            }
+        }
+        other => panic!("the full budget imports the findings, got {other:?}"),
+    }
+}
+
+/// Finding 4: the bound holds on the open handle. A ledger that grows after
+/// it was listed is refused at the budget, not read past it.
+#[test]
+fn bug_2629_a_read_is_capped_at_the_remaining_budget() {
+    let (_tmp, root, _env) = fixture();
+    let file = root.join("ledger.jsonl");
+    std::fs::write(&file, vec![b'x'; 64]).unwrap();
+    let _budget = ReadBudgetGuard::set(100);
+    let mut budget = super::ReadBudget::new(u64::MAX);
+    assert_eq!(budget.read(&file).ok().flatten().map(|b| b.len()), Some(64));
+    assert_eq!(budget.left, 36);
+    assert!(matches!(
+        budget.read(&file),
+        Err(super::Unread::Exhausted(why)) if why.contains("ledger.jsonl")
+    ));
+    assert_eq!(budget.left, 36, "a refused read spends nothing");
+    assert!(matches!(budget.read(&root.join("absent")), Ok(None)));
+    assert!(budget.charge(&"kept", 37).is_err());
+    budget.charge(&"kept", 36).unwrap();
+    // The legacy reader stops at its allowance as well.
+    legacy_file(
+        &root,
+        "PR-1",
+        serde_json::json!({"verdict": "approved", "reviewed_sha": HEAD}),
+    );
+    let over = rv::checked_legacy_record(&root, "PR-1", 8).unwrap_err();
+    assert!(over.get_ref().is_some_and(|e| e.is::<rv::OverReadLimit>()));
+    assert!(rv::checked_legacy_record(&root, "PR-1", 4096)
+        .unwrap()
+        .is_some());
+    assert!(rv::checked_legacy_record(&root, "PR-2", 4096)
+        .unwrap()
+        .is_none());
+}
+
+/// Answers for the signed publication of every key; restored on drop.
+struct PublishedGuard;
+
+impl PublishedGuard {
+    fn set(answer: impl Fn(&str) -> anyhow::Result<Option<rv::CurrentVerdict>> + 'static) -> Self {
+        super::PUBLISHED.with(|stub| *stub.borrow_mut() = Some(Box::new(answer)));
+        Self
+    }
+}
+
+impl Drop for PublishedGuard {
+    fn drop(&mut self) {
+        super::PUBLISHED.with(|stub| *stub.borrow_mut() = None);
+    }
+}
+
+fn signed(root: &Path, verdict: &str) -> rv::CurrentVerdict {
+    rv::CurrentVerdict {
+        body: serde_json::json!({
+            "verdict": verdict, "reviewed_sha": HEAD,
+            "summary": "review publication refused: bad signature",
+        })
+        .to_string(),
+        source: rv::VerdictSource::File(root.join(".aida-store/reviews/v1/changes")),
+        written_at: None,
+    }
+}
+
+/// Findings 5 and 7. A verified signed approval answers for its keys, so
+/// the raw wait it superseded no longer refuses, and the evidence is still
+/// named unavailable rather than empty (the signing fixture's half of this
+/// lives with the publication tests). A publication that cannot be verified
+/// is no signed record: it supersedes nothing and supplies no findings.
+#[test]
+fn bug_2629_only_a_verified_publication_takes_signed_precedence() {
+    {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 3698, SPEC, &record("waiting", -30));
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+        assert!(refused_waiting(&root));
+        {
+            let at = root.clone();
+            let _signed = PublishedGuard::set(move |_| Ok(Some(signed(&at, "approved"))));
+            assert!(!refused_waiting(&root));
+            let why = unavailable(&root);
+            assert!(why.contains("ownership discovery failed"), "{why}");
+        }
+        let _signed = PublishedGuard::set(|_| Err(anyhow::anyhow!("bad signature")));
+        assert!(refused_waiting(&root), "the raw wait still refuses");
+    }
+    {
+        // Beside a wait on another change, the diagnostic is not findings,
+        // and the findings it may supersede are not imported.
+        let (_tmp, root, _env) = fixture();
+        append(&root, 3698, SPEC, &record("waiting", -30));
+        append(&root, 4000, SPEC, &phase3(record("request-changes", -10)));
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+        assert!(matches!(
+            resolve_rework_review(&root, SPEC, SPEC, None),
+            Ok(crate::rework_direction::ReviewResult::Available(_))
+        ));
+        let _signed = PublishedGuard::set(|key| match key {
+            "PR-4000" => Err(anyhow::anyhow!("bad signature")),
+            _ => Ok(None),
+        });
+        assert!(refused_waiting(&root));
+    }
+
+    // No wait in hand: the unverifiable publication alone refuses, by name.
+    let (_tmp, root, _env) = fixture();
+    append(&root, 4000, SPEC, &phase3(record("request-changes", -10)));
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 4000);
+    unavailable(&root);
+    let _signed = PublishedGuard::set(|_| Err(anyhow::anyhow!("bad signature")));
+    let why = refused_uncovered(&root);
+    assert!(
+        why.contains("cannot be verified") && why.contains("bad signature"),
+        "{why}"
+    );
+}
+
+/// Finding 6: an unbound review is read from its bound copy only when that
+/// copy can answer. A copy whose ownership is unverified answers nothing,
+/// and the unbound record, which no foreign change can own, still does: an
+/// approval keeps clearing the older wait, and a refusal keeps its findings.
+#[test]
+fn bug_2629_an_unbound_review_outlives_its_withheld_bound_copy() {
+    use crate::rework_direction::ReviewResult;
+    let spec = ledger::GateSpec::with_key(SPEC, None);
+    {
+        let (_tmp, root, _env) = fixture();
+        store::append_unbound(&root, &spec, &record("waiting", -30)).unwrap();
+        assert!(refused_waiting(&root));
+        let approval = record("approved", -10);
+        store::append_unbound(&root, &spec, &approval).unwrap();
+        append(&root, 3698, SPEC, &approval);
+        assert!(!refused_waiting(&root), "healthy ledger");
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+        assert!(rv::current_verdict(&root, "PR-3698").is_none());
+        assert!(!refused_waiting(&root), "the unbound approval answers");
+        unavailable(&root);
+    }
+
+    let (_tmp, root, _env) = fixture();
+    append(&root, 3698, SPEC, &record("waiting", -30));
+    let refusal = record("request-changes", -10);
+    store::append_unbound(&root, &spec, &refusal).unwrap();
+    append(&root, 4000, SPEC, &refusal);
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+    assert!(rv::current_verdict(&root, "PR-4000").is_none());
+    match resolve_rework_review(&root, SPEC, SPEC, None) {
+        Ok(ReviewResult::Available(block)) => {
+            assert_eq!(block.matches("repair the defect").count(), 1, "{block}");
+        }
+        other => panic!("expected the unbound findings, got {other:?}"),
+    }
 }

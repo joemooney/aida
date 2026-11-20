@@ -138,6 +138,8 @@ pub(crate) use rework::{
     record_rework_ruling, rework_is_review_shelf, rework_smart_target, rework_triage_loop,
     run_aida_interactive, run_rework, DrainRunning, ReworkArgs, ReworkFlags, REWORK,
 };
+#[cfg(test)]
+pub(crate) use rework_bindings::ON_LEDGER_STEP;
 mod time_args;
 pub use rework::{requeue_project_root, rework_target_for_mode};
 pub use time_args::parse_lookback;

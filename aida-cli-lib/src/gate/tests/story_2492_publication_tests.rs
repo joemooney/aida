@@ -1254,10 +1254,23 @@ fn bug_2629_signed_approval_supersedes_a_withheld_raw_wait() {
         Some(rv::VerdictKind::Approved)
     );
     admission().unwrap();
-    // Not an empty answer either: the evidence is named unavailable.
-    let why =
-        crate::queue_cmd::resolve_rework_findings(&f.a, "STORY-1", &native, None).unwrap_err();
-    assert!(why.contains("ownership discovery failed"), "{why}");
+    // A publication that no longer verifies is not a signed decision: the
+    // request-changes diagnostic the projection renders for it supersedes
+    // nothing.
+    let store = f.a.join(".aida-store");
+    let (_, _, rel) = f.receipts(&f.a, "PR-7").pop().unwrap();
+    std::fs::remove_file(store.join(&rel)).unwrap();
+    std::os::unix::fs::symlink("/dev/null", store.join(&rel)).unwrap();
+    git_ok(&store, &["add", "-A"]);
+    git_ok(&store, &["commit", "-qm", "unsafe publication fixture"]);
+    let refused = current(&f.a, &["PR-7"]).unwrap();
+    assert!(rv::parse_recorded_verdict(&refused.body)
+        .unwrap()
+        .kind
+        .blocks_done());
+    // The raw wait it no longer supersedes refuses again.
+    let why = admission().unwrap_err();
+    assert!(why.contains("WAITING") && why.contains("Host:"), "{why}");
 }
 
 // trace:BUG-2530 | ai:codex

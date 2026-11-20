@@ -1243,13 +1243,16 @@ pub(crate) fn current(root: &Path, ids: &[&str]) -> Option<rv::CurrentVerdict> {
     resolve_current(root, ids, None)
 }
 
-/// [`current`] without the local-disagreement report. The report reads the
-/// local ledger projection of each id, which opens an ownership discovery; a
-/// caller already recovering from a failed discovery must not repeat it per
-/// key. The selection and its refusal are the same.
+/// The verified publication [`current`] selects, without its two
+/// projections: no local-disagreement report (it reads the local ledger
+/// projection of each id, which opens an ownership discovery; a caller
+/// already recovering from a failed discovery must not repeat it per key),
+/// and no synthesized refusal. A publication that cannot be verified is an
+/// error here, never a request-changes record: a caller that gives signed
+/// records precedence over raw ones must not give it to a diagnostic.
 // trace:BUG-2629 | ai:claude
-pub(crate) fn current_unreported(root: &Path, ids: &[&str]) -> Option<rv::CurrentVerdict> {
-    current_for(root, ids, None).unwrap_or_else(|e| Some(refused(root, &e)))
+pub(crate) fn current_verified(root: &Path, ids: &[&str]) -> Result<Option<rv::CurrentVerdict>> {
+    current_for(root, ids, None)
 }
 
 /// Error-preserving [`current_at_head`] for callers that must refuse, not

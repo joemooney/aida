@@ -3276,7 +3276,7 @@ fn resolve_rework_review_inner(
     };
     if let Some(why) = bindings.refusal() {
         return Err(uncovered(
-            "the changes that review it could not be enumerated within the read bound",
+            "the changes that review it could not be enumerated",
             why,
         ));
     }
@@ -3290,11 +3290,14 @@ fn resolve_rework_review_inner(
         if let Some(wait) = &recovered.wait {
             // Substantive findings remain actionable even beside a wait, as
             // below: the request-changes reviews that are readable as
-            // current without an ownership index are still imported.
+            // current without an ownership index are still imported. Not
+            // beside a source that could not be read or verified: what it
+            // holds may supersede them, so nothing then admits rework.
             // trace:BUG-2500 | ai:codex
             let findings = recovered
                 .findings
                 .iter()
+                .filter(|_| recovered.unknown.is_none())
                 .filter_map(|(key, v)| {
                     crate::review_verdict_display::rework_findings_comment(&shown, key, v)
                 })
@@ -3303,6 +3306,14 @@ fn resolve_rework_review_inner(
                 return Ok(ReviewResult::Available(findings.join("\n\n")));
             }
             waiting_rework_error(&shown, wait)?;
+        }
+        // An unreadable, unparseable or unverifiable review source is
+        // unknown, never absent: a wait may be behind it.
+        if let Some(unknown) = &recovered.unknown {
+            return Err(uncovered(
+                "gate-ledger ownership discovery failed and a review source could not be read or verified",
+                unknown,
+            ));
         }
         return Err(ReworkReviewError::Unavailable(format!(
             "the reviews of {shown} cannot be read completely: gate-ledger ownership discovery failed ({why})"
