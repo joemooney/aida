@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T14:26:37.710107466Z
+modified_at: 2026-11-20T16:44:42.552114283Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -258,6 +258,13 @@ comments:
   created_at: 2026-11-20T14:26:37.710107466Z
   modified_at: 2026-11-20T14:26:37.710107466Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9d8-c17b-79e1-84d8-3a509ba0667b
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-20 09:48): STAYS OPEN. #4344 (Refs) landed AC3: a pre-spawn admission failure releases its own shared claim, including the Unavailable-receipt path (r2b approved at 6863c05). Remaining for the next lane: AC4 (doctor heal recognises an expired claim whose host is a local lane-sandbox UTS name, with a regression of the 01a1f4f93790 shape) and the underlying fix that leases/claims record the HOST node identity, not the sandbox hostname. The 13:40 manual-release ruling (AC6) stays the stopgap until AC4 lands.'
+  created_at: 2026-11-20T16:44:42.552114283Z
+  modified_at: 2026-11-20T16:44:42.552114283Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
