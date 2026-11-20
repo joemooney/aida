@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T22:45:59.371731969Z
+modified_at: 2026-11-20T22:46:44.229403810Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -560,6 +560,27 @@ comments:
     cargo fmt; check-store-writers.py; ratchets (gate downward!); targeted cargo run; check-ci-fast. Push.
   created_at: 2026-11-20T22:45:59.371731969Z
   modified_at: 2026-11-20T22:45:59.371731969Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb23-ece5-72b0-b633-8c21527b7693
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2629):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8777c40af496
+    Recorded: 2026-11-20T22:45:17.481081313+00:00
+    Findings:
+    1. [security-authority-bypass, P1] rework_bindings.rs:331 discards checked_legacy_record errors and treats a refused or malformed legacy file as absent. With a withheld wait on PR A and a phase-3 request-changes round behind a refused legacy file on PR B, judge imports B's findings and work.rs admits implementer rework. choose_local_current explicitly withholds B's ledger in this situation. Preserve the file error when deciding whether findings are authoritative, and cover this mixed case.
+    2. [P1] rework_bindings.rs:491 handles a failed lost-binding full scan as an ownership failure even though the inventory itself may be incomplete. For example, remove the hint and binding for a spec's sole waiting PR but leave its binding directory. A malformed unrelated ledger makes recorded_changes fail. Recovery then visits no PR, returns Unavailable, and refuse_waiting_review permits rework. Complete a bounded fallback that finds the missing PR, or refuse admission when inventory coverage cannot be established.
+    3. [P1] rework_bindings.rs:401 and :422 discard directory iteration and ledger read errors in the uncertified inventory fallback. An unreadable directory or ledger therefore yields a successful empty or partial inventory and can hide a WAITING review. Distinguish a genuinely absent store from inspection failure and return a named refusal when the search cannot establish coverage.
+    4. [unmet-claimed-ac, P1] rework_bindings.rs:115 charges a pathname's size before a separate unbounded read_to_string, so an append between stat and read can exceed the budget. Recovery also retains whole legacy or published bodies plus parsed findings across keys in Recovered::take without charging them at all. Many small indexed ledgers with large distinct legacy findings can exhaust memory while the ledger byte budget remains available. Enforce the aggregate bound during reads and before retaining payloads from every source. Exercise exhaustion on legacy records as well as immutable ledger files.
+    5. [P1] rework_bindings.rs:324 treats current_unreported's synthesized request-changes on publication verification error as a signed decision. Its diagnostic summary renders as findings, so a corrupt publication can supersede a raw wait or supply the findings that admit rework beside another wait. Return a distinct verification error and reserve signed-source precedence for verified records.
+    6. [P1] rework_bindings.rs:224 removes an unbound review if an identical raw bound record exists, before checking whether that bound copy has verified ownership. The ordinary spec projection deduplicates after ownership filtering. A valid unbound approval copied to a change can disappear during recovery when the copy is withheld, reviving an older wait, and an analogous request-changes record can lose its actionable findings. Retain the independent unbound evidence when its bound copy cannot answer.
+    7. [P2] gate/tests/story_2492_publication_tests.rs adds crate::queue_cmd::resolve_rework_findings to a gate-layer fixture whose dependency ledger allows only refuse_waiting_review. CI job 136611392815 failed the Gate downward dependency ratchet on this head. Move the cross-layer assertion to queue-side coverage.
+    8. [test-gap, P2] The BUG-2629 operator report adds a concrete writer-lock regression on the headless queue work path. The new regression fixtures count ledger reads and exercise queue rework, but none establishes that another store writer can acquire the lock during pickup discovery. Add contention coverage through queue work with multiple bound reviews. The reported live incident was on main, and lock ownership on this PR head remains unverified.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T22:46:38.053471524Z
+  modified_at: 2026-11-20T22:46:38.053471524Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
