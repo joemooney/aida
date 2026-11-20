@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T19:32:26.637563154Z
+modified_at: 2026-11-20T20:05:04.291668173Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -386,6 +386,33 @@ comments:
   modified_at: 2026-11-20T19:32:26.637563154Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa90-02a3-7732-8dad-1aaa522889c9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ccb4768ffb (fresh on main 012b95ef89; nothing taken from #4158).
+
+    Repro (scope 1): the live gate ledger is not readable from this contained seat, so the spin was reproduced on a synthetic ledger of 1100 change ledgers (3.27 MB) by counting ledger bytes read. main's per-key check (change_verdict_bound_to over every stored key) read 6.69 MB healthy and 163.6 MB (50x the corpus) with 48 lost bindings beside one malformed ledger: every such key repeats a refused, uncached full read. That quadratic is the spin. The batch discovery reads 60 KB in both cases (24 ms), and 19.6 MB (6 bounded full reads, 103 ms) when the spec's own discovery refuses.
+
+    Acceptance evidence (aida-cli-lib/src/queue_cmd/rework_bindings_tests.rs):
+    AC1 [behavioral-test]: bug_2629_a_slow_rework_phase_names_itself (a lookup past 5s names its phase on stderr); the under-10s figure on the live ledger is NOT measured (ledger unreachable here).
+    AC2 [behavioral-test]: bug_2629_track_refusal_precedes_any_gate_ledger_read (zero ledger bytes and directory entries read before reason=other-track).
+    AC3 [behavioral-test]: bug_2629_rework_scan_is_bounded_on_a_ledger_of_over_1000_changes.
+    Scope 2 (round-3 P1): bug_2629_ledger_wait_survives_failed_ownership_discovery (two breakages, projection asserted withheld), bug_2629_indexed_legacy_wait_survives_failed_ownership_discovery, bug_2629_queue_rework_refuses_a_withheld_wait_without_mutation (Approved spec; store, queues, merge-holds unchanged), bug_2629_failed_discovery_without_a_wait_is_unavailable_not_empty.
+    BUG-2646 shapes, covered in the same recovery: bug_2629_unverified_later_round_does_not_clear_a_withheld_wait, bug_2629_closed_terminal_wait_stays_closed_when_discovery_fails.
+    Equivalence with the old per-key answer: bug_2629_batch_binding_matches_the_per_key_check.
+
+    Validation: lane job cargo test -p aida-cli-lib --lib -- bug_2629 bug_2500 bug_2525 bug_2430 bug_2403 bug_2540 bug_2656 bug_2507 story_2690 queue_rework: 157 passed, 0 failed (10 bug_2629). An earlier run that also covered rework_direction, story_2492, bug_2517, bug_2531, bug_2543 passed 228/0 before the slow-phase notice was added. cargo check -p aida-cli-lib -p aida-mcp clean. rustfmt, check-store-writers, gate-dependency, exec-context, crate-glob, portability, trace-header, glyph and structural ratchets pass. make check-ci-fast did NOT complete: it needs more than the 60s tool cap and cannot resume; CI must run it.
+
+    Probe findings / behaviour changes to weigh:
+    1. A failed ownership discovery with no known wait now returns Unavailable instead of an empty answer. queue rework warns and proceeds (as for other unavailable evidence); queue work refuses the implementer launch and names the ledger fault and its fix.
+    2. In the recovery a later ordinary approval does not clear a wait (its ownership is unverified), so a spec whose wait was genuinely superseded stays refused until the ledger is repaired. This is BUG-2646 finding 1 applied as written.
+    3. Waits are not reconciled against merged changes while discovery fails.
+    Residual risks: a ledger that is both unbound and unindexed for the spec is not found (the bindings' documented blind spot; the old scan saw only its unfingerprintable events); a spec ledger that the lossy reader cannot read at all (FIFO, oversized) still reads as empty; no tests were weakened, change_verdict_bound_to is kept test-only as the oracle.
+  created_at: 2026-11-20T20:05:04.291668173Z
+  modified_at: 2026-11-20T20:05:04.291668173Z
+  session_id: 01a1fa738e48
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
