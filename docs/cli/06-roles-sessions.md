@@ -1159,12 +1159,15 @@ it is yielded. The wait is bounded by `[admission] wait_secs`
 in `.aida/config.toml`: 180 seconds by default, at most 3600, and 0 to refuse
 at once. If the requester gives up, its typed **admission busy** refusal
 names the holders (PID, boot/start identity, namespace and purpose when known)
-and how long it waited. Every wait for the admission receipt lock counts
+and how long it waited. When a review still in flight is what blocks it, the
+refusal names that review's change and the PIDs of its live processes. Every wait for the admission receipt lock counts
 against the same bound, so a stalled process holding that lock cannot keep
 the requester waiting past it. The refusal then names the lock's holder.
 A waiting request is removed when its requester gets
 admission, gives up or dies. Each request also expires 30 seconds after its
-bound. Requests and holder receipts are written by rename, so a reader never
+bound. A request dated ahead of the reader's clock (after a backwards clock
+correction) is ignored until what is left of it is within that maximum, so no
+request holds claims back for longer. Requests and holder receipts are written by rename, so a reader never
 sees one half written. A request file that cannot be parsed (left by an
 interrupted write) blocks nothing: it is ignored and removed once it is 30
 seconds old. A review-watch that gave up its claim during a manual train
@@ -1180,7 +1183,10 @@ and take no new one. The deputy's supervisor does not restart an exited
 loop worker. Running reviews and trains finish first. `aida advisor loops
 resume` ends the drain early; otherwise it expires on its own. The journal
 `.aida/admission-owner/loops-drain.journal` keeps the latest 256 drain,
-resume and expiry events, with actor, reason, issue time and expiry. An
+resume and expiry events, with actor, reason, issue time and expiry. It is
+also kept under 256 KiB: with long reasons the oldest events are dropped
+sooner. A drain or resume checks its caller's authority once it holds the
+journal lock, so a grant revoked while the command waited is refused. An
 unreadable journal counts as drained. `aida advisor loops status` and
 `train-status` show both workers' claims (review-watch and auto-train) with
 their ages, the active drain, and any waiting land, ship or train. A claim

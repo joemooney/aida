@@ -755,6 +755,24 @@ impl Store {
     /// its deterministic mailbox ID and is not duplicated.
     // trace:TASK-1993 | ai:claude
     fn prune(&self, open: &BTreeSet<String>) -> Result<usize> {
+        self.settle(Some(open))
+    }
+    /// Reconcile lost dispatchers under the admission lock, against the
+    /// state as it is under that lock, and drop nothing: for a watcher that
+    /// has yielded admission and so has no fresh list of open changes.
+    /// It never judges an entry closed. A set of keys read before the lock
+    /// was taken would not do instead: another watcher still finishing a pass
+    /// can reserve a new change in between, and that reservation, not yet
+    /// claimed by its dispatcher, would be discarded as closed (review round
+    /// 4, finding 5).
+    // trace:BUG-2703 | ai:claude
+    fn reconcile(&self) -> Result<()> {
+        self.settle(None).map(|_| ())
+    }
+    /// `open`: the changes discovery lists as open; entries of any other
+    /// change are dropped once nothing of theirs can still be running.
+    /// `None` drops no entry.
+    fn settle(&self, open: Option<&BTreeSet<String>>) -> Result<usize> {
         // Every writer takes the global lock first, so it alone excludes them.
         let _global = self.dir.lock("admission.lock")?;
         let mut state = self.load()?;
@@ -762,7 +780,7 @@ impl Store {
         self.reconcile_lost_dispatchers(&mut state);
         let before = state.entries.len();
         state.entries.retain(|key, entry| {
-            open.contains(key)
+            open.is_none_or(|open| open.contains(key))
                 || entry.attempts.iter().any(|attempt| {
                     // Closed changes cannot retain local orphan reservations.
                     // Keep live/unknown descendants and distributed claims: a
@@ -3030,15 +3048,15 @@ pub(crate) fn stop_test_loops(root: &Path) {
 }
 
 /// Settlement-only reconciliation for a watcher that has yielded admission:
-/// no discovery, no forge read, no reservation and no launch. Every recorded
-/// change counts as open, so nothing is dropped; lost dispatchers are
-/// reconciled and every superseding attempt is advanced (confirmed gone and
-/// cleared, or signalled on its schedule), exactly as a normal pass would.
+/// no discovery, no forge read, no reservation and no launch. No entry is
+/// dropped (this watcher has no list of open changes to judge by); lost
+/// dispatchers are reconciled and every superseding attempt is advanced
+/// (confirmed gone and cleared, or signalled on its schedule), exactly as a
+/// normal pass would.
 // trace:BUG-2703 | ai:claude
 fn settle_while_yielded(store: &Store) -> Result<()> {
-    let recorded: BTreeSet<String> = store.load()?.entries.keys().cloned().collect();
-    match store.prune(&recorded) {
-        Ok(_) => {}
+    match store.reconcile() {
+        Ok(()) => {}
         Err(error) if is_busy(&error) => eprintln!("review-watch settlement deferred: busy"),
         Err(error) => return Err(error),
     }
@@ -4409,9 +4427,35 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
         Some(body) => {
             let state: State = serde_json::from_slice(&body)?;
             validate_state(&state, &state.repository)?;
-            for attempt in state.entries.values().flat_map(|e| &e.attempts) {
+            // Each refusal names its change and any process still alive: once
+            // the loop workers have yielded, a running review is the only
+            // thing a land or ship is waiting for (review round 4, finding 2).
+            // trace:BUG-2703 | ai:claude
+            for (key, attempt) in state
+                .entries
+                .iter()
+                .flat_map(|(key, e)| e.attempts.iter().map(move |a| (key, a)))
+            {
                 if active(attempt) {
-                    return Err(busy("prior review attempts are not quiescent; inspect review watch and release settled attempts".into()));
+                    let alive: Vec<String> = attempt
+                        .recorded()
+                        .into_iter()
+                        .filter(|process| process.alive())
+                        .map(|process| format!("PID {}", process.pid))
+                        .collect();
+                    return Err(busy(format!(
+                        "prior review attempts are not quiescent: the review of {key} is {} ({}); inspect review watch and release settled attempts",
+                        match attempt.phase {
+                            Phase::Reserved => "reserved and not yet running",
+                            Phase::Superseding => "being superseded",
+                            _ => "running",
+                        },
+                        if alive.is_empty() {
+                            "no live process recorded".to_string()
+                        } else {
+                            alive.join(", ")
+                        }
+                    )));
                 }
                 // Terminal phase alone does not attest descendant exit. A failed
                 // pre-spawn attempt needs no process proof; all other attempts
@@ -4422,7 +4466,9 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
                     || attempt.pgid.is_some()
                 {
                     confirm(attempt).map_err(|why| {
-                        busy(format!("prior review attempt is not quiescent: {why}"))
+                        busy(format!(
+                            "prior review attempt for {key} is not quiescent: {why}"
+                        ))
                     })?;
                 }
             }

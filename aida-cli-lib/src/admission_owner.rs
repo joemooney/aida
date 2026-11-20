@@ -689,17 +689,44 @@ fn yields_to(mode: Mode, purpose: &str, kind: IntentKind) -> bool {
 /// A well-formed intent, or `None` for an empty, truncated, malformed or
 /// invalid one (an unsupported version, or an expiry past any bound).
 // trace:BUG-2703 | ai:claude
+// Only differences between timestamps are taken, never a sum: a recorded
+// time at the edge of the representable range cannot overflow (review round
+// 4, finding 6).
 fn parse_intent(body: &str) -> Option<Intent> {
     let row: Intent = serde_json::from_str(body).ok()?;
     (row.version == 1
-        && row.expires_at
-            <= row.registered_at
-                + chrono::Duration::seconds(MAX_WAIT_SECS as i64 + INTENT_SLACK_SECS))
+        && row.expires_at.signed_duration_since(row.registered_at) <= max_intent_lifetime())
     .then_some(row)
 }
 
-/// Live, unexpired intents. Callers hold receipts.lock. Dead or expired
-/// intents are removed; an unknown liveness keeps the intent (it expires).
+/// The longest any intent may withhold a claim: the largest wait bound plus
+/// the slack.
+// trace:BUG-2703 | ai:claude
+fn max_intent_lifetime() -> chrono::Duration {
+    chrono::Duration::seconds(MAX_WAIT_SECS as i64 + INTENT_SLACK_SECS)
+}
+
+impl Intent {
+    /// Whether this intent may withhold a claim when observed at `now`: it
+    /// has not expired, and what is left of it is no more than
+    /// [`max_intent_lifetime`]. The second half is measured from the
+    /// observer's clock, not from the intent's own `registered_at`: after a
+    /// backwards clock correction an intent can be dated in the future, and
+    /// one whose owner cannot be proved dead would otherwise withhold claims
+    /// from now until that future expiry. Such an intent is ignored until
+    /// its remaining lifetime is within the maximum, so from any observation
+    /// it withholds claims for at most the maximum.
+    // trace:BUG-2703 | ai:claude
+    fn in_effect(&self, now: DateTime<Utc>) -> bool {
+        let remaining = self.expires_at.signed_duration_since(now);
+        remaining > chrono::Duration::zero() && remaining <= max_intent_lifetime()
+    }
+}
+
+/// Live intents in effect at `now`. Callers hold receipts.lock. Dead or
+/// expired intents are removed; an unknown liveness keeps the intent (it
+/// expires). One dated ahead of `now` by more than any intent may last is
+/// kept but ignored ([`Intent::in_effect`]).
 /// An intent that does not parse is stale, never a wedge: it has no expiry
 /// and no requester to outlive, so it is ignored at once and removed after
 /// [`UNPARSABLE_INTENT_GRACE`]. Intents are written atomically, so a live
@@ -737,9 +764,11 @@ fn intents(dir: &Path, now: DateTime<Utc>) -> Result<Vec<Intent>> {
             )
         {
             remove_stale(&path)?;
-        } else {
+        } else if row.in_effect(now) {
             rows.push(row);
         }
+        // Otherwise dated too far ahead of this observer's clock: ignored
+        // (it grants nothing and withholds nothing) until it is in effect.
     }
     Ok(rows)
 }
@@ -748,11 +777,20 @@ fn intents(dir: &Path, now: DateTime<Utc>) -> Result<Vec<Intent>> {
 /// serializer wait is bounded; past it the intent file is removed anyway
 /// (readers skip a vanished intent), so a stalled serializer holder cannot
 /// hold the requester in its own cleanup. trace:BUG-2703 | ai:claude
-struct IntentGuard(PathBuf);
+// The guard carries its attempt's deadline: cleanup waits for the serializer
+// until that deadline at most (and never longer than CLEANUP_GRACE), not for
+// a fresh grace counted from the drop (review round 4, finding 1).
+struct IntentGuard(PathBuf, std::time::Instant);
+impl IntentGuard {
+    /// When this guard's cleanup stops waiting for the serializer.
+    fn cleanup_until(&self, now: std::time::Instant) -> std::time::Instant {
+        (now + CLEANUP_GRACE).min(self.1)
+    }
+}
 impl Drop for IntentGuard {
     fn drop(&mut self) {
         if let Some(dir) = self.0.parent() {
-            let _serial = lock_serial(dir, std::time::Instant::now() + CLEANUP_GRACE);
+            let _serial = lock_serial(dir, self.cleanup_until(std::time::Instant::now()));
             let _ = std::fs::remove_file(&self.0);
         }
     }
@@ -785,11 +823,11 @@ fn register_intent(
     // Atomic, and nothing is left behind when the write fails: the guard
     // exists only for an intent that is fully written.
     write_atomic(&path, &serde_json::to_vec(&row)?).context("write the admission intent")?;
-    Ok(IntentGuard(path))
+    Ok(IntentGuard(path, deadline.until()))
 }
 
 /// Acquire `mode`, retrying an [`AdmissionBusy`] refusal once a second for up
-/// to `bound`. While it waits it registers an intent, so loop controllers
+/// to `bound`; no attempt starts after the bound has passed. While it waits it registers an intent, so loop controllers
 /// yield their shared claims at their next tick boundary and no new shared
 /// claim starts ahead of it. Running reviews and trains are never cut short:
 /// the quiescence and train checks still refuse until they finish. Giving up
@@ -814,8 +852,7 @@ fn acquire_waiting(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -
         let Some(busy) = error.downcast_ref::<AdmissionBusy>() else {
             return Err(error);
         };
-        let now = std::time::Instant::now();
-        if now >= deadline.until() {
+        if std::time::Instant::now() >= deadline.until() {
             return Err(gave_up(error, deadline));
         }
         if intent.is_none() {
@@ -824,12 +861,24 @@ fn acquire_waiting(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -
                 busy.0,
                 deadline.bound.as_secs()
             );
+            #[cfg(test)]
+            tests::before_intent_registration();
             intent = Some(
                 register_intent(root, purpose, kind, deadline)
                     .map_err(|error| gave_up(error, deadline))?,
             );
         }
-        std::thread::sleep((deadline.until() - now).min(Duration::from_secs(1)));
+        // Measured after registration, which may itself have waited for the
+        // serializer up to the deadline: the pause before the next attempt
+        // is what is left of the bound now, and no attempt starts once the
+        // bound has passed (review round 4, finding 1).
+        let remaining = deadline
+            .until()
+            .saturating_duration_since(std::time::Instant::now());
+        std::thread::sleep(remaining.min(Duration::from_secs(1)));
+        if std::time::Instant::now() >= deadline.until() {
+            return Err(gave_up(error, deadline));
+        }
     }
 }
 
@@ -933,7 +982,7 @@ pub(crate) fn holders(root: &Path) -> Result<Vec<HolderView>> {
             let Some(row) = parse_intent(&body) else {
                 continue;
             };
-            if row.expires_at > Utc::now()
+            if row.in_effect(Utc::now())
                 && !matches!(
                     aida_core::proc_identity::observe(&row.identity, true),
                     Verdict::Dead(_)
@@ -955,6 +1004,19 @@ pub(crate) fn holders(root: &Path) -> Result<Vec<HolderView>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    thread_local! {
+        /// Runs once on this thread between a waiter's first busy refusal
+        /// and its intent registration: where a test stalls the serializer.
+        static BEFORE_INTENT: std::cell::RefCell<Option<Box<dyn FnOnce()>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn before_intent_registration() {
+        if let Some(hook) = BEFORE_INTENT.with(|cell| cell.borrow_mut().take()) {
+            hook();
+        }
+    }
 
     fn intent_files(root: &Path) -> usize {
         std::fs::read_dir(directory(root))
@@ -1462,6 +1524,183 @@ mod tests {
         drop(holder);
         drop(watcher);
         assert!(acquire(root, "legacy review-watch", true).is_ok());
+    }
+
+    /// Review round 4, finding 1: the intent registration waits for the
+    /// serializer until shortly before the deadline. The pause that follows
+    /// is what is left of the bound, not a second counted from before the
+    /// registration, so a holder that goes away just after the deadline is
+    /// not acquired late: the waiter has already given up.
+    // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
+    #[test]
+    fn bug2703_registration_wait_does_not_extend_the_bound() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().to_path_buf();
+        let dir = directory(&root);
+        let watcher = acquire(&root, "legacy review-watch", true).unwrap();
+        let bound = Duration::from_secs(3);
+        let started = std::time::Instant::now();
+        let (go, wait_go) = std::sync::mpsc::channel::<()>();
+        let (held, wait_held) = std::sync::mpsc::channel();
+        let stall = std::thread::spawn(move || {
+            // From the waiter's first busy refusal the serializer is held
+            // until 300 ms before the deadline; the only claim holder leaves
+            // 500 ms after the deadline.
+            wait_go.recv().unwrap();
+            let serial = open(&dir.join("receipts.lock")).unwrap();
+            serial.lock_exclusive().unwrap();
+            held.send(()).unwrap();
+            let at = |offset: Duration| {
+                std::thread::sleep(offset.saturating_sub(started.elapsed()));
+            };
+            at(bound - Duration::from_millis(300));
+            FileExt::unlock(&serial).unwrap();
+            at(bound + Duration::from_millis(500));
+            drop(watcher);
+        });
+        BEFORE_INTENT.with(|cell| {
+            *cell.borrow_mut() = Some(Box::new(move || {
+                go.send(()).unwrap();
+                wait_held.recv().unwrap();
+            }));
+        });
+        let result = acquire_waiting(
+            &root,
+            "land run",
+            Mode::Exclusive,
+            Deadline { started, bound },
+        );
+        assert!(
+            BEFORE_INTENT.with(|cell| cell.borrow_mut().take().is_none()),
+            "the waiter registered no intent"
+        );
+        let error = result
+            .err()
+            .expect("no acquisition after the bound has passed");
+        assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error:#}");
+        let text = error.to_string();
+        assert!(text.contains("gave up after waiting "), "{text}");
+        assert!(text.contains("s (bound 3s, "), "{text}");
+        stall.join().unwrap();
+        assert_eq!(intent_files(&root), 0);
+        assert!(acquire(&root, "land run", false).is_ok());
+    }
+
+    /// Review round 4, finding 1: an intent's cleanup waits for the
+    /// serializer until its attempt's own deadline at most, never for a
+    /// fresh grace counted from the drop; the intent is removed regardless.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_intent_cleanup_keeps_the_original_deadline() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let now = std::time::Instant::now();
+        // An attempt whose bound ran out two seconds ago.
+        let spent = Deadline {
+            started: now - Duration::from_secs(3),
+            bound: Duration::from_secs(1),
+        };
+        let guard = register_intent(root, "land run", IntentKind::Exclusive, spent).unwrap();
+        assert_eq!(guard.cleanup_until(now), spent.until());
+        assert!(guard.cleanup_until(now) < now);
+        // The serializer is held by someone else: the drop tries it once,
+        // does not wait, and removes the intent.
+        let serial = open(&directory(root).join("receipts.lock")).unwrap();
+        serial.lock_exclusive().unwrap();
+        let path = guard.0.clone();
+        drop(guard);
+        assert!(!path.exists());
+        FileExt::unlock(&serial).unwrap();
+        // With time left, cleanup is still capped by the cleanup grace.
+        let fresh = Deadline::start(Duration::from_secs(600));
+        let guard = register_intent(root, "land run", IntentKind::Exclusive, fresh).unwrap();
+        let now = std::time::Instant::now();
+        assert_eq!(guard.cleanup_until(now), now + CLEANUP_GRACE);
+        // And by the deadline when that is nearer.
+        let near = Deadline {
+            started: now,
+            bound: Duration::from_millis(100),
+        };
+        let guard_near = register_intent(root, "land run", IntentKind::Exclusive, near).unwrap();
+        assert_eq!(guard_near.cleanup_until(now), near.until());
+    }
+
+    /// Review round 4, finding 6: an intent dated ahead of the observer's
+    /// clock (a backwards clock correction) whose owner is alive withholds
+    /// no claim until what is left of it fits the maximum, and timestamps at
+    /// the edge of the representable range are handled without overflow.
+    // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+    #[test]
+    fn bug2703_future_dated_intent_is_bounded_from_the_observation() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let dir = directory(root);
+        let guard = register_intent(
+            root,
+            "land run",
+            IntentKind::Exclusive,
+            Deadline::start(Duration::from_secs(5)),
+        )
+        .unwrap();
+        // This process owns it, so it is never removed as dead.
+        let live: Intent = serde_json::from_slice(&std::fs::read(&guard.0).unwrap()).unwrap();
+        let write = |registered_at: DateTime<Utc>, expires_at: DateTime<Utc>| {
+            let mut row = live.clone();
+            row.registered_at = registered_at;
+            row.expires_at = expires_at;
+            std::fs::write(&guard.0, serde_json::to_vec(&row).unwrap()).unwrap();
+        };
+        let ignored = |what: &str| {
+            assert_eq!(yield_reason(root, "legacy review-watch"), None, "{what}");
+            assert_eq!(yield_reason(root, "legacy auto-train"), None, "{what}");
+            assert!(holders(root).unwrap().is_empty(), "{what}");
+            for purpose in ["legacy review-watch", "legacy auto-train"] {
+                assert!(acquire(root, purpose, true).is_ok(), "{what}: {purpose}");
+            }
+        };
+        let now = Utc::now();
+        let max = max_intent_lifetime();
+        let hour = chrono::Duration::hours(1);
+        // Registered "two hours from now", with the longest valid lifetime:
+        // well-formed by its own dates, yet it would withhold claims for
+        // three hours from here.
+        let ahead = now + hour * 2;
+        write(ahead, ahead + max);
+        assert!(parse_intent(&std::fs::read_to_string(&guard.0).unwrap()).is_some());
+        ignored("dated two hours ahead");
+        assert!(guard.0.exists(), "kept: its owner is alive");
+        // Observed later, it is in effect only once what is left of it fits
+        // the maximum, and it is removed when it expires.
+        let seen = |at: DateTime<Utc>| intents(&dir, at).unwrap().len();
+        assert_eq!(seen(now), 0);
+        assert_eq!(seen(ahead - chrono::Duration::seconds(1)), 0);
+        assert_eq!(seen(ahead), 1);
+        assert_eq!(seen(ahead + max - chrono::Duration::seconds(1)), 1);
+        assert!(guard.0.exists());
+        assert_eq!(seen(ahead + max), 0);
+        assert!(!guard.0.exists(), "removed at its expiry");
+        // The edge of the representable range: no overflow, no claim withheld.
+        let (first, last) = (DateTime::<Utc>::MIN_UTC, DateTime::<Utc>::MAX_UTC);
+        for (registered_at, expires_at) in [
+            (last - chrono::Duration::seconds(10), last),
+            (last, last),
+            (now, last),
+            (first, last),
+            (first, now + chrono::Duration::seconds(60)),
+        ] {
+            write(registered_at, expires_at);
+            ignored(&format!("{registered_at} to {expires_at}"));
+            assert!(ship_admission(root).unwrap().is_some());
+            let _ = intents(&dir, last).unwrap();
+            let _ = intents(&dir, first).unwrap();
+            let _ = std::fs::remove_file(&guard.0);
+        }
+        // An ordinary intent is still honoured.
+        write(now, now + chrono::Duration::seconds(60));
+        assert!(yield_reason(root, "legacy review-watch").is_some());
+        assert_eq!(holders(root).unwrap().len(), 1);
     }
 
     #[test]

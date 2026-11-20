@@ -4663,6 +4663,10 @@ fn bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress() {
         .expect("ship waits, then gives up");
     let text = format!("{error:#}");
     assert!(text.contains("not quiescent"), "{text}");
+    assert!(
+        text.contains(&format!("the review of {} is ", c.key())),
+        "{text}"
+    );
     assert!(text.contains("gave up after waiting"), "{text}");
     assert!(in_flight(&store), "the review attempt is untouched");
     // A one-shot watcher retakes its claim once nobody waits.
@@ -4692,6 +4696,136 @@ fn bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress() {
     // With nobody waiting any more, its next boundary keeps the claim.
     super::train::hold_admission(root, &Ok(None), &mut train).unwrap();
     assert!(train.is_some());
+}
+
+/// Review round 4, finding 2: with the loop workers yielded, a running
+/// review is the only thing a ship waits for. The refusal it ends with names
+/// that review's change and its live process, not only "not quiescent"; a
+/// review whose process has exited but is not yet proved gone names its
+/// change too.
+// trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug2703_busy_refusal_names_the_running_review_and_its_process() {
+    let (temp, store) = fixture();
+    let root = temp.path();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 1\n",
+    )
+    .unwrap();
+    let (process, stdin, exit) = bug2703_review_process();
+    let pid = process.pid;
+    let c = change(4324, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    store
+        .transaction(&c.key(), |state| {
+            let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+            a.phase = Phase::Running;
+            a.identity = Some(process.clone());
+            Ok(())
+        })
+        .unwrap();
+    // No loop worker holds a claim: the review alone blocks the ship.
+    assert!(bug2703_loop_claims(root).is_empty());
+    let refusal = || {
+        let error = crate::admission_owner::ship_admission(root)
+            .err()
+            .expect("the ship is refused");
+        assert!(
+            error
+                .downcast_ref::<crate::admission_owner::AdmissionBusy>()
+                .is_some(),
+            "{error:#}"
+        );
+        error.to_string()
+    };
+    let text = refusal();
+    assert!(text.contains("the review of PR-4324 is running"), "{text}");
+    assert!(text.contains(&format!("(PID {pid})")), "{text}");
+    assert!(text.contains("gave up after waiting"), "{text}");
+    assert!(text.contains("(bound 1s, "), "{text}");
+    // `land run` ends with the same evidence.
+    let land = crate::admission_owner::land_admission(root)
+        .err()
+        .expect("the land is refused");
+    let land = land.to_string();
+    assert!(land.contains("the review of PR-4324 is running"), "{land}");
+    assert!(land.contains(&format!("(PID {pid})")), "{land}");
+    // A reservation with no process yet says so, and still names the change.
+    store
+        .transaction(&c.key(), |state| {
+            let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+            a.phase = Phase::Reserved;
+            a.identity = None;
+            Ok(())
+        })
+        .unwrap();
+    let text = refusal();
+    assert!(
+        text.contains("the review of PR-4324 is reserved and not yet running"),
+        "{text}"
+    );
+    assert!(text.contains("(no live process recorded)"), "{text}");
+    drop(stdin);
+    assert!(exit.join().unwrap().success());
+}
+
+/// Review round 4, finding 5: a yielded watcher's settlement drops no entry.
+/// A change another watcher reserved after this one last read the state (its
+/// dispatcher has not claimed it yet) is still there afterwards; judged
+/// against an older set of keys, as the settlement used to, it is discarded.
+// trace:BUG-2703 | ai:claude
+#[test]
+fn bug2703_yielded_settlement_never_discards_an_unclaimed_reservation() {
+    let (_temp, store) = fixture();
+    // What the yielded watcher saw before it settled.
+    let seen = change(1, 1, false);
+    dispatch(select(&store, &seen, None, 2).unwrap());
+    let snapshot: BTreeSet<String> = store.load().unwrap().entries.keys().cloned().collect();
+    // Another watcher, already in a pass, reserves a new change.
+    let new = change(2, 2, false);
+    let reserved = dispatch(select(&store, &new, None, 2).unwrap());
+    assert!(reserved.unclaimed_before_spawn());
+    settle_while_yielded(&store).unwrap();
+    store.reconcile().unwrap();
+    let state = store.load().unwrap();
+    assert_eq!(state.entries.keys().collect::<Vec<_>>(), ["PR-1", "PR-2"]);
+    let kept = &state.entries["PR-2"].attempts[0];
+    assert_eq!(
+        (&kept.token, &kept.phase),
+        (&reserved.token, &Phase::Reserved)
+    );
+    // The same state judged against the older key set loses the reservation:
+    // why the settlement takes no key set at all.
+    assert_eq!(store.prune(&snapshot).unwrap(), 1);
+    assert_eq!(
+        store.load().unwrap().entries.keys().collect::<Vec<_>>(),
+        ["PR-1"]
+    );
+    // Reconciliation itself still runs: a claimed review whose dispatcher is
+    // gone without a terminal receipt is settled, and its entry kept.
+    #[cfg(target_os = "linux")]
+    {
+        let (process, stdin, exit) = bug2703_review_process();
+        drop(stdin);
+        assert!(exit.join().unwrap().success());
+        let lost = change(3, 3, false);
+        let attempt = dispatch(select(&store, &lost, None, 2).unwrap());
+        store
+            .transaction(&lost.key(), |state| {
+                let a = attempt_mut(state, &lost.key(), &attempt.token).unwrap();
+                a.phase = Phase::Running;
+                a.identity = Some(process.clone());
+                Ok(())
+            })
+            .unwrap();
+        settle_while_yielded(&store).unwrap();
+        let state = store.load().unwrap();
+        assert!(!active(&state.entries["PR-3"].attempts[0]));
+        assert!(state.entries.contains_key("PR-1"));
+    }
 }
 
 /// A review process the fixture controls: alive until the test closes its
@@ -4729,9 +4863,12 @@ fn bug2703_review_process() -> (
 /// signalled or cut short; the review-watch worker, though yielded, keeps
 /// settling, so once the processes exit on their own both attempts settle
 /// (the superseding one confirmed and cleared, finding 2) and the ship
-/// crosses admission within its bound. The handler then stops at its next
-/// step (this fixture's detached HEAD has no ship lease), which no admission
-/// refusal can produce. Afterwards both workers take their claims again.
+/// crosses admission within its bound. Its target is an open PR whose pushed
+/// head carries a recorded approval and green CI (review round 4, finding 7):
+/// after admission the handler reads that head, passes its approval and CI
+/// checks and asks the forge to merge exactly that head. The fixture's forge
+/// refuses the merge call itself, so nothing merges. Afterwards both workers
+/// take their claims again.
 // trace:BUG-2703 | ai:claude
 // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
 // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
@@ -4787,17 +4924,33 @@ fn bug2703_real_worker_loops_yield_to_the_real_ship_handler() {
             "refs/remotes/origin/main",
         ],
     );
-    // The handler's step after admission refuses a detached HEAD with no ship
-    // lease: proof it crossed admission, without a forge merge.
-    git(&root, &["checkout", "-q", "--detach"]);
+    // The ship's target (review round 4, finding 7): PR-4324, open, its head
+    // pushed and approved. The ship runs from the default branch, as the
+    // advisor's did.
+    git(&root, &["checkout", "-q", "-b", "claude/bug-4324"]);
+    std::fs::write(root.join("own.rs"), "changed").unwrap();
+    git(&root, &["commit", "-q", "-am", "fix(x): change"]);
+    git(&root, &["push", "-q", "origin", "claude/bug-4324"]);
+    let approved_head = {
+        let out = crate::test_git::git_command()
+            .current_dir(&root)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap();
+        String::from_utf8(out.stdout).unwrap().trim().to_string()
+    };
+    git(&root, &["checkout", "-q", "main"]);
     std::fs::create_dir_all(root.join(".aida")).unwrap();
     std::fs::write(
         root.join(".aida/config.toml"),
-        "[admission]\nwait_secs = 30\n",
+        "[forge]\nprovider = \"github\"\n\n[admission]\nwait_secs = 30\n",
     )
     .unwrap();
     // The forge is GitHub by origin URL; Git transport stays in the bare hub.
-    // Discovery lists no open change, so nothing new is ever launched.
+    // Review-watch's own discovery read lists no open change, so the watcher
+    // launches nothing new; the ship's reads answer with PR-4324, approved
+    // at its pushed head, with green CI. A merge call fails: no merge is
+    // needed to show the ship got that far. Every call is logged.
     let real_git = crate::find_executable_on_path("git").expect("git on PATH");
     let q = |p: &Path| crate::sh_single_quote(&p.to_string_lossy());
     crate::test_exec::write_executable(
@@ -4808,10 +4961,98 @@ fn bug2703_real_worker_loops_yield_to_the_real_ship_handler() {
             git = q(&real_git)
         ),
     );
+    let gh_calls = temp.path().join("gh-calls");
+    let pr_view = temp.path().join("pr-view.json");
+    std::fs::write(
+        &pr_view,
+        serde_json::json!({
+            "number": 4324,
+            "url": "https://github.com/owner/repo/pull/4324",
+            "state": "OPEN", "isDraft": false, "mergedAt": null,
+            "headRefOid": approved_head, "headRefName": "claude/bug-4324",
+            "baseRefName": "main", "title": "fix(x): change", "body": "",
+            "labels": [], "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN",
+            "reviewDecision": "APPROVED", "author": {"login": "implementer"},
+        })
+        .to_string(),
+    )
+    .unwrap();
     crate::test_exec::write_executable(
         &bin.join("gh"),
-        "#!/bin/sh\nif [ \"$1 $2\" = 'pr list' ]; then echo '[]'; exit 0; fi\nexit 1\n",
+        &format!(
+            r#"#!/usr/bin/env python3
+import json, subprocess, sys
+a = sys.argv[1:]
+open({gh_calls:?}, "a").write(" ".join(a) + "\n")
+def opt(name):
+    for i, x in enumerate(a):
+        if x == name and i + 1 < len(a):
+            return a[i + 1]
+    return None
+def emit(doc):
+    q = opt("-q") or opt("--jq")
+    text = json.dumps(doc)
+    if q:
+        r = subprocess.run(["jq", "-r", q], input=text, capture_output=True, text=True)
+        sys.stdout.write(r.stdout)
+        sys.exit(r.returncode)
+    print(text)
+    sys.exit(0)
+verb = " ".join(a[:2])
+doc = json.load(open({pr_view:?}))
+if verb == "pr view" and a[2] == "4324":
+    emit(doc)
+if verb == "pr list":
+    if opt("--json") == {DISCOVERY_FIELDS:?} or opt("--base") is not None:
+        emit([])
+    emit([doc])
+if verb == "pr checks":
+    emit([{{"name": "ci", "state": "SUCCESS", "bucket": "pass", "link": "", "workflow": "ci"}}])
+if verb in ("pr edit", "label create"):
+    sys.exit(0)
+sys.exit(1)
+"#,
+            DISCOVERY_FIELDS = "number,headRefOid,headRefName,baseRefName,isDraft,state,author",
+        ),
     );
+    // The approval of that head, as `aida review record` stamps it from an
+    // independent reviewer seat.
+    let record_approval = |root: &Path| {
+        let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
+            root,
+            crate::test_env::HERMETIC_TEST_USER,
+            "reviewer",
+            &[],
+        );
+        let grant = crate::gate::seat_authority::read_grant(&grant_id).unwrap();
+        let attestation = crate::gate::review_verdict::RecorderAttestation {
+            sha: approved_head.clone(),
+            seat: Some("reviewer".into()),
+            grant_id: Some(grant_id),
+            identity: vec!["session:independent-reviewer".into()],
+            grant_binding: grant.binding.clone(),
+            ..Default::default()
+        };
+        let record = serde_json::json!({
+            "schema_version": 1,
+            "pr": 4324,
+            "verdict": "APPROVED",
+            "head_sha": approved_head,
+            "recorded_by": "reviewer",
+            "recorded_at": (chrono::Utc::now() + chrono::Duration::seconds(1)).to_rfc3339(),
+            "summary": format!("approved at {approved_head}"),
+            "spec_ids": ["BUG-2703"],
+            "findings": [],
+            crate::gate::review_verdict::ATTESTATION_KEY: attestation,
+        });
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("PR-4324.json"),
+            serde_json::to_vec_pretty(&record).unwrap(),
+        )
+        .unwrap();
+    };
     let inputs = aida_core::exec_context::Environment::capture();
     let path = format!(
         "{}:{}",
@@ -4843,6 +5084,7 @@ fn bug2703_real_worker_loops_yield_to_the_real_ship_handler() {
         &["reviewer"],
     );
     env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+    record_approval(&root);
 
     // Work in flight: a claimed running review (PR-1) and a claimed review
     // being superseded whose signals were already sent (PR-2).
@@ -4968,19 +5210,27 @@ fn bug2703_real_worker_loops_yield_to_the_real_ship_handler() {
         })
     };
     let started = Instant::now();
-    let shipped = crate::pr_cmd::pr_ship_handler(
-        Some(4324),
-        true,
-        true,
-        false,
-        false,
-        None,
-        None,
-        true,
-        false,
-        false,
-        None,
-        true,
+    let shipped = crate::with_review_pr_subject(
+        crate::ReviewPrSubject {
+            head_ref: "claude/bug-4324".into(),
+            commit_subjects: vec!["fix(x): change".into()],
+        },
+        || {
+            crate::pr_cmd::pr_ship_handler(
+                Some(4324),
+                true,
+                true,
+                false,
+                false,
+                None,
+                None,
+                true,
+                false,
+                false,
+                None,
+                true,
+            )
+        },
     );
     let waited = started.elapsed();
     ship_done.store(true, Ordering::SeqCst);
@@ -4995,13 +5245,41 @@ fn bug2703_real_worker_loops_yield_to_the_real_ship_handler() {
     assert!(!train_done_during, "the train pass was not cut short");
     assert!(processes_alive, "no review process was signalled");
     assert!(attempts_active, "both reviews were still in flight");
-    // The ship crossed admission within its bound and stopped at its next
-    // step, never at admission.
+    // The ship crossed admission within its bound and went on to check its
+    // own PR at the forge: never an admission refusal.
     let error = format!("{:#}", shipped.unwrap_err());
-    assert!(!error.contains("admission busy"), "{error}");
+    let calls = std::fs::read_to_string(&gh_calls).unwrap_or_default();
     assert!(
-        error.contains("detached HEAD has no owning session lease"),
-        "{error}"
+        !error.contains("admission busy"),
+        "{error}\ngh calls:\n{calls}"
+    );
+    // It checked that PR after admission: read its head and approval state,
+    // found the recorded approval at that head, read its CI, and asked the
+    // forge to merge exactly the approved head. Only the fixture's merge
+    // refusal stopped it.
+    assert!(
+        error.contains("`gh pr merge` failed") && error.contains("#4324"),
+        "{error}\ngh calls:\n{calls}"
+    );
+    let ship_calls: Vec<&str> = calls.lines().filter(|l| l.contains(" 4324 ")).collect();
+    let position = |start: &str| {
+        ship_calls
+            .iter()
+            .position(|l| l.starts_with(start))
+            .unwrap_or_else(|| panic!("no `{start}` call:\n{calls}"))
+    };
+    let head_read = position("pr view 4324 --json state,mergeable,reviewDecision,headRefOid");
+    let ci_read = position("pr checks 4324 ");
+    let merge = position("pr merge 4324 ");
+    assert!(head_read < ci_read && ci_read < merge, "{calls}");
+    assert!(
+        calls.contains(&format!("--match-head-commit {approved_head}")),
+        "the merge is pinned to the approved head:\n{calls}"
+    );
+    assert_eq!(
+        calls.lines().filter(|l| l.starts_with("pr merge ")).count(),
+        1,
+        "{calls}"
     );
     assert!(waited < Duration::from_secs(30), "{waited:?}");
     assert!(waited >= Duration::from_secs(3), "{waited:?}");
