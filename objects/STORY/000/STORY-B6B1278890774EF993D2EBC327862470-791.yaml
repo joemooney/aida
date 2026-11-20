@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T03:20:38.580825358Z
+modified_at: 2026-11-20T03:40:46.729163643Z
 req_type: Story
 tags:
 - landing
@@ -228,6 +228,22 @@ comments:
   modified_at: 2026-11-20T03:18:13.952505312Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f70a-dd09-7f42-ae91-a8ce5014b182
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1de9926e14 (round 2, PR #4347).
+    Findings addressed:
+    1. [P1] Protected paths for the unset-mode default are read from the same trusted default-branch commit as the setting (body's [mandate.human_gates]), plus ~/.aida/config.toml. If either fails to parse, resolve() withholds the default ('protected gate paths could not be read'). Each ProjectDefault mode carries its protected set, so withdrawal no longer reloads via load_human_gates/origin/main. Tests: committed_custom_protection_withdraws_the_default, unreadable_protection_withdraws_every_default, a_master_default_branch_reads_its_protection_and_fails_closed. mandate_ship checks both its gate set and the policy's own set.
+    2. [P1] pr ship records each head whose files admitted a default (CheckedHeads) and refuses if the preflight head differs or is unknown; the final head is already pinned to preflight (STORY-1663). Test: a_head_moved_after_the_default_check_is_refused (pure helper; the pr_ship wiring is not covered end to end).
+    3. [P2] show_label resolves through ship::gating_execution_source (new; gating_execution_mode now delegates to it) and labels '<mode> (from its carrier X)'. The store is loaded only for a superseded spec. Test: show_label_follows_the_superseding_carrier (guided/operator/drain carriers, unreadable store, modeless carrier).
+    4. [P2] changed_paths runs through forge_lookup::deadline_output. Test: story_2884_defaulted_spec_diff_read_shares_the_deadline (LiveChecks under a 1s deadline with a stalled git diff: child killed, default withdrawn, nothing spawned unbounded; unstalled control keeps the default).
+    Validation: targeted lane cargo tests (gate::unset_mode, story_2884, story_1888, project_default, story_2824, bug_2413, supervised: 156 + 53 passed), lib ratchet groups (38 passed), aida-ci-guards (51 passed), check-store-writers OK, showcase build --check OK. make check-ci-fast stopped at 'Containment conformance evidence tests': the sandbox denies socket creation (PermissionError), which is environmental.
+    Residual risks: mandate_gates::load_human_gates still anchors on origin/main for the mandate itself (out of scope; it fails closed there). PathSource::Committed's label still reads 'origin/main:.aida/config.toml' even on a master repo. Knob default stays supervised.
+  created_at: 2026-11-20T03:40:46.729163643Z
+  modified_at: 2026-11-20T03:40:46.729163643Z
+  session_id: 01a1f6f83c80
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
   author: joe
