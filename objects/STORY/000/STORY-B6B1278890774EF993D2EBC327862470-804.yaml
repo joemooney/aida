@@ -218,6 +218,34 @@ comments:
   modified_at: 2026-11-20T17:56:51.820834518Z
   session_id: 01a1f9fcbea8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa1b-0bcb-74b0-8585-5b765cab200a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: b539d5c860 (rework round 2 of PR #4372; scope per advisor-121: AC1-AC6, AC7a, AC8; AC7b-d and their code removed, moved to TASK-3827).
+
+    Acceptance evidence (all behavioral-test, aida-cli-lib land::stalls::tests, 22 passed; land:: + help golden 170 passed):
+    - AC1/F1: classification reads each fact through the reconciler's Evidence seam (land_stalls.rs standing/pr_fact/classify_pr). Tests derive the reconciler row and the guard fact from one fake: each_stall_class_is_found_past_its_threshold_from_the_evidence, a_stall_the_reconcilers_precedence_hides_is_still_found (unreviewed+red, changes-requested+red, approved+unmet hold, 3 rounds).
+    - AC1/F2: waits count from approval / head commit / verdict / first conflicting base commit (land.rs head_at, approved_at, conflict_since): each_wait_counts_from_the_push_or_verdict_that_started_it.
+    - AC2/F3: record_run saves landings, per-host lanes and memory every scheduled run: a_scheduled_run_saves_landings_and_each_hosts_lanes_and_memory_even_with_no_stall.
+    - AC3/F11: a_mail_wake_that_failed_is_sent_again_on_the_next_run; dedup and escalation tests kept.
+    - AC7a/F8/F9: an_unread_failed_job_keeps_the_cause_undetermined_never_a_flake, a_base_red_check_does_not_exonerate_another_failing_check.
+    - F10: the_red_log_allowance_reaches_every_red_change_across_runs. F12: slow_job_logs_stop_at_the_detail_budget_and_the_rest_is_reported_unread (every forge call bounded by the remaining budget).
+    - F13: no legacy liveness call sites remain; tests.test_ownership_liveness_ratchet passes.
+
+    Probe findings and fixes: approval time first read recorded_at, which a record may lack, so STUCK-MERGE could never fire; now uses the ledger's own event time. The conflict onset search ran for owned conflicts too; now only for unowned ones.
+
+    Checks: cargo fmt clean; check-store-writers.py clean; fast gates run one by one in the seat, all ok except three that need AF_UNIX sockets or a writable /tmp, which this seat's sandbox denies (containment conformance, store mutation channel, self-hosted routing fixtures; none touch this diff).
+
+    Residual risks:
+    - The live path (observe: real forge, git bisect for conflict onset) has no automated test and was not run against GitHub from this seat.
+    - Another host's memory is not measured: the report says so, and each host's own scheduled run records its own. Remote collection is not built.
+    - The head's time is its commit date, which can precede the push.
+    - STUCK-CONFLICT onset assumes a conflict, once introduced on the base, stays.
+  created_at: 2026-11-20T17:57:18.923671895Z
+  modified_at: 2026-11-20T17:57:18.923671895Z
+  session_id: 01a1f9fcbea8
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a1fa24-70bf-7801-8fd7-62b8a0b6b65a
   author: joe
   content: 'AUTHORITATIVE ROUND-3 BRIEF (advisor-121, 11:12): two left at b539d5c. F1 (red evidence must survive unknown base freshness, the core STUCK-MERGE-RED case) is a fix. F2 AC2 is AMENDED: local memory plus heartbeat-sourced foreign memory, else an explicit unknown reason; a real remote probe is deferred to TASK-3827. Claude+Fable, gated on the live lane exiting.'
