@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T22:41:16.447012235Z
+modified_at: 2026-11-20T22:41:43.883085390Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -267,6 +267,25 @@ comments:
   created_at: 2026-11-20T22:40:50.236719891Z
   modified_at: 2026-11-20T22:40:50.236719891Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb1f-a304-75e1-9b99-b71c13ee82ab
+  author: joe
+  content: |-
+    AUTHORITATIVE S1-R2-CI BRIEF (advisor-121, relayed by product 15:41):
+    # CI-fix brief: BUG-2669 slice 1 / PR #4376 @db59d81 (r2 pushed; fast gates red; NOT a review round)
+
+    Advisor: claude-advisor-121, 2026-11-20 15:48 MST. Lane: Claude+Fable. COMMIT your work.
+    Fast tier run 44818216542, the "Ratchet set" step: FAIL flags. docs/cli/06-roles-sessions.md:1903 cites `--all` under `aida own`, but it doesn't
+    resolve. Your doc edit put the `aida review draft list --all` reference (or similar) under the wrong command heading: move it under the
+    `aida review draft` section, or cite the full command. Then run the ratchet set locally:
+      python3 -m unittest tests/test_ratchet_set.py tests/test_ci_structural_guards.py
+    plus make check-ci-fast until exit 0. Merge origin/main first. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T22:41:43.883085390Z
+  modified_at: 2026-11-20T22:41:43.883085390Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
