@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:56:38.591487997Z
-modified_at: 2026-11-20T16:56:27.943608481Z
+modified_at: 2026-11-20T16:57:29.371637677Z
 req_type: Task
 tags:
 - fix-forward
@@ -68,6 +68,12 @@ comments:
   content: Implementer push d7afb5a2aeb9 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-20T16:55:39.325469825Z
   modified_at: 2026-11-20T16:55:39.325469825Z
+  session_id: 01a1f9b31fae
+- id: 01a1f9e4-461b-75a2-a880-962192297c6d
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1134` at head `unavailable`.'
+  created_at: 2026-11-20T16:57:29.371629759Z
+  modified_at: 2026-11-20T16:57:29.371629759Z
   session_id: 01a1f9b31fae
 history:
 - id: 01a1f9ad-17c2-75a3-ad6a-024eaa66592b
