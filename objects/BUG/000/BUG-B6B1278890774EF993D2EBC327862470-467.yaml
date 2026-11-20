@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T10:14:27.369204Z
-modified_at: 2026-11-20T12:00:06.435498644Z
+modified_at: 2026-11-20T13:23:49.585374954Z
 req_type: Bug
 tags:
 - fast-gate
@@ -227,6 +227,13 @@ comments:
   created_at: 2026-11-20T12:00:06.435495536Z
   modified_at: 2026-11-20T12:00:06.435495536Z
   session_id: 01a1f8adb9a8
+- id: 01a1f920-da49-78c1-b75e-c1d3f96a5e4b
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-20 06:25): COMPLETE. #4358 landed via train #4361 (~05:49): the host commits a self-publishing seat lane''s leftover edits before the clean-seat check and names any skip or failure reason on every terminal publication path, with a regression through the real exit driver and fast gate (r2 approved at 1992d90). Manual call: D4 did not complete this Done spec (see BUG-2696).'
+  created_at: 2026-11-20T13:23:49.585374954Z
+  modified_at: 2026-11-20T13:23:49.585374954Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f874-487d-7913-ba35-94353334404c
   author: joe
