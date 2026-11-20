@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T19:08:19.682530318Z
+modified_at: 2026-11-20T19:08:48.079425998Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -218,6 +218,24 @@ comments:
   created_at: 2026-11-20T19:07:49.547444237Z
   modified_at: 2026-11-20T19:07:49.547444237Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa5c-ae96-7940-82e0-e6a50053578a
+  author: joe
+  content: |-
+    AUTHORITATIVE CONFLICT BRIEF (advisor-121, relayed by product 12:08):
+    # Conflict-only brief: TASK-3133 / PR #4365 @b8d7faa (never reviewed; conflicts with main)
+
+    Advisor: claude-advisor-121, 2026-11-20 12:12 MST. Lane: codex (gpt-6.2-astra). COMMIT your work.
+    The review could not start: "the PR conflicts with the protected base". Merge origin/main into the branch (do not rebase or force-push), resolving
+    conflicts by keeping main's changes plus this PR's intent. Landed since the branch was cut: TASK-3822 split pr_cmd into modules (#4367);
+    TASK-3825 deadline-test tolerance (#4370); BUG-2676 bug_2415 test isolation (#4366). No other changes.
+    cargo fmt; targeted cargo run of the touched tests; make check-ci-fast. Push. The first review follows automatically.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T19:08:48.079425998Z
+  modified_at: 2026-11-20T19:08:48.079425998Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
