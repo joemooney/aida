@@ -1683,16 +1683,30 @@ fn human_resolve_locked(storage: &aida_core::Storage, red_sha: &str) -> Result<(
     let mut store = storage.load()?;
     let Some(item) = store
         .requirements
-        .iter_mut()
+        .iter()
         .find(|r| r.tags.contains(&tag))
+        .cloned()
     else {
         return Ok(());
     };
     let id = item.id;
     if item.status != aida_core::RequirementStatus::Completed {
-        item.status = aida_core::RequirementStatus::Completed;
-        item.modified_at = Utc::now();
-        storage.save(&store)?;
+        // Completion goes through the one completion seam (STORY-1418).
+        let mut item = item;
+        let spec_id = display(&item);
+        crate::completion::transition_to_completed(
+            &mut item,
+            None,
+            &spec_id,
+            red_sha,
+            "red-main-watch",
+            |done, _prior| {
+                if let Some(slot) = store.requirements.iter_mut().find(|r| r.id == done.id) {
+                    *slot = done.clone();
+                }
+                storage.save(&store)
+            },
+        )?;
     }
     let user = crate::current_user_id(None);
     if storage
