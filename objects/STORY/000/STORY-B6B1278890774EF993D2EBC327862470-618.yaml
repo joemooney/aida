@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T23:11:28.447217023Z
+modified_at: 2026-11-20T23:15:16.992557637Z
 req_type: Story
 tags:
 - area:ci
@@ -491,6 +491,29 @@ comments:
   created_at: 2026-11-20T23:11:03.222326754Z
   modified_at: 2026-11-20T23:11:03.222326754Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb3e-5707-7482-8e1b-6b0154646242
+  author: joe
+  content: |-
+    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 16:15):
+    # Rework brief: STORY-2695 / PR #4377, round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 16:20 MST. Head reviewed: 03e78ae (the reviewer meant APPROVED with 5 minor follow-ups; the handoff refused it). Lane: CLAUDE+Fable.
+    Fix these five, then it lands:
+     1 [p2] pr_train.rs:1033-1047 train_infrastructure_failure: add the two new dell1 setup steps ('Adopt host-prepared exact source',
+       'Verify self-hosted cargo-nextest location') to the infrastructure-failure list.
+     2 [p3] ci.yml:499-506: verify where `cargo nextest` resolves ($CARGO_HOME/bin first), not `command -v cargo-nextest`.
+     3 [test-gap] test_adopt_refuses_every_broken_source_contract: add the four missing refusal cases (rustc not pinned, and the others named in
+       the review).
+     4 [style] drop GITHUB_PATH from SELF_HOSTED_ONLY_VARIABLES (run-upstream.py:231).
+     5 [style] update the PR body (the Train/ residual is fixed; mention per-class runner labels).
+    make check-ci-fast plus the self-hosted runner tests. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T23:15:16.992557637Z
+  modified_at: 2026-11-20T23:15:16.992557637Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
