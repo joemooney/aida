@@ -9,10 +9,11 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T15:39:47.634431493Z
-modified_at: 2026-11-20T15:40:42.717937006Z
+modified_at: 2026-11-20T15:40:58.170174220Z
 req_type: Task
 tags:
 - config
+- operator-held
 - review
 - temporary
 history:
@@ -31,6 +32,16 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f99e-6ab9-7fe1-893f-01612f116424
+  author: joe
+  timestamp: 2026-11-20T15:41:11.225179943Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
+deferred: true
+deferred_at: 2026-11-20T15:40:58.170174220Z
+deferred_until: date:2026-11-22
+deferred_reason: revert after the weekly token reset unless Joe extends the boost
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
