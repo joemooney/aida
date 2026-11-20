@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T16:26:44.973890478Z
-modified_at: 2026-11-20T02:34:34.557373184Z
+modified_at: 2026-11-20T02:39:10.522966445Z
 req_type: Task
 tags:
 - carried-from:BUG-2696
@@ -45,6 +45,20 @@ comments:
   modified_at: 2026-11-20T02:23:41.457390800Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6d2-77c1-7052-bf48-4876fdd5ec64
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 2b42e9f896c63a9152a2508fd50211741e6ee72d. The origin/main merge-base diff was empty. Reviewed the uncommitted diff against HEAD and checked for untracked additions.
+    AC1: [evidence: behavioral-test] PASS for Rust test directories and inline cfg(test) modules. test_doc_path_guard_ignores_only_rust_test_directories and test_doc_path_guard_ignores_inline_test_modules_and_keeps_surrounding_code are in tests/test_doc_audiences.py:97 and :114.
+    AC2: [evidence: behavioral-test] PASS. The same missing reference is reported in production Rust and Markdown, including Markdown inside a tests directory. Two production occurrences around test modules still count as two. Existing counted-exception tests pass.
+    AC3: [evidence: behavioral-test] PASS. The exact docs/x.md literal is generated in the fixture and passes. Replayed the historical STORY-2884 test-file input at 5993f59855 and BUG-2696 inline test-module input at c778a0e587.
+    Deep pass: Case-sensitive Rust token and directory matching and existing path counting are consistent. Exercised comments, raw strings, nested attributes, raw identifiers, and zero/one/multiple module cases. Fixed a production macro token-tree lookalike uncovered by the review and added a regression in test_doc_path_guard_keeps_cfg_lookalikes_visible. Separate Rust files outside the named test directories are still checked because this lexical filter does not resolve Rust's module graph. No authority changes.
+    Validation: 14 audience tests passed, working-tree docs path scan found zero invalid references, and the store writer check passed. Aggregate native pre-push validation was still running when this comment was recorded.
+  created_at: 2026-11-20T02:39:10.522966445Z
+  modified_at: 2026-11-20T02:39:10.522966445Z
+  session_id: 01a1f6ce133e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f594-1a3f-7ca0-9d49-1718e585e981
   author: joe
