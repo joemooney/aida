@@ -8,12 +8,12 @@ description: |
   - AC7c LANE-OUTCOME: treat an explicit post-exit routing event or queued work as follow-up, so no false "nothing routed it" (F6).
   - AC7d STALE-CLAIM: inventory all admission-blocking shared records (coordination leases plus drain/solo lock claims via list_lock_claims), and do not drop an unresolved blocker just for age (F7).
   Each comes with regressions. Builds on the STORY-2906 guard once #4372 lands. Vendor-neutral. Claude lane, standard review.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T21:08:48.129085607Z
+modified_at: 2026-11-20T21:23:20.940596108Z
 req_type: Task
 tags:
 - landing
@@ -65,6 +65,60 @@ comments:
   modified_at: 2026-11-20T21:08:48.129085607Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fad7-3721-7e72-8aa6-caecad925c83
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: dc2c2ee634dd971732f0d1e8c765ff630bdbea30 (branch task-b6b1278890774ef993d2ebc327862470-1136), diff origin/main...HEAD.
+
+    ### Acceptance evidence
+    Tests are in aida-cli-lib/src/tests/task_3827_throughput_guard_tests.rs unless named otherwise.
+    - AC7b MAIN-FLAKE-RECURRENCE: [evidence: behavioral-test] `a_flaky_test_that_fails_again_inside_the_window_is_a_recurrence_with_the_earlier_run_linked` (window, link to the earlier run, advisor seat). Code: land_stalls_flakes.rs `flake_recurrences`.
+    - F4 (any PR, whatever its approval): [evidence: behavioral-test] `a_known_flake_failing_on_an_unapproved_change_is_a_recurrence`. It goes through `pr_fact` (new `PrFact.head_red`, set for unreviewed, under-review and conflicting heads) and the loader `read_pr_failures`.
+    - F5 (a failed attempt stays a failure after a green rerun): [evidence: behavioral-test] `two_flakes_of_one_test_read_in_one_pass_are_a_flake_and_its_recurrence` (both runs arrive in one pass through `read_base_failures`) and `a_red_base_run_becomes_a_flake_when_its_rerun_goes_green`. Forge JSON: `base_runs_and_attempt_jobs_are_read_from_the_forges_json`.
+    - AC7c LANE-OUTCOME: [evidence: behavioral-test] `a_lane_exit_nobody_followed_up_routes_to_the_seat_that_launched_it` (wait, launching seat, exit line and reason). Receipt reader: lane_result.rs `task_3827_recorded_reads_finished_and_unfinished_receipts_and_counts_bad_files`.
+    - F6 (routing or queued work after the exit is follow-up): [evidence: behavioral-test] `the_lane_loader_counts_queue_entries_and_routing_events_after_the_exit_as_follow_up` (real receipts, queue file and events file through `lane_outcome_facts`; a punt queued for the advisor and a requeued failure are not reported, an exit with only an older queue entry is) and `only_what_is_dated_after_the_exit_or_holds_the_spec_now_is_a_follow_up`.
+    - AC7d STALE-CLAIM: [evidence: behavioral-test] `only_a_blocking_dead_claim_the_doctor_cannot_heal_is_routed_with_its_record_and_evidence`.
+    - F7 (whole inventory, no age cut-off): [evidence: behavioral-test] `the_claim_loader_keeps_old_blockers_and_reads_locks_and_unknown_leases` runs `claim_facts` on real files: an implementer claim expired 30 days ago on an open spec is reported, the drain lock is read at coordination/drain.lock.toml, and a local lease with an unknown holder is reported. The lease read uses ownership::reader::lease_owner (F13 of #4372: no new legacy liveness call site; tests.test_ownership_liveness_ratchet passes).
+    - Remote lane-host memory (STORY-2906 AC2 as amended): [evidence: behavioral-test] `a_configured_lane_host_is_probed_for_its_memory_and_a_failed_probe_says_why` covers `host_lines_with` and `remote_memory` with an injected probe. The SSH call itself (doctor/lane_binaries.rs `meminfo`) was not run against a host.
+    - Routing and settings: [evidence: behavioral-test] `the_three_classes_are_reported_and_each_goes_to_its_seat_once` (due job per seat, product for a lane exit, no second wake), `the_new_waits_and_the_probed_hosts_are_project_settings`.
+    - Off by default, on for this project: [evidence: configuration-validation] `Policy::default()` has `enabled = false` and no remote host (tested); .aida/config.toml sets the new waits and `[throughput_guard.remote_hosts] disrad-dvp98b3puw = "dell1"`.
+    - Vendor-neutral: [evidence: manual-inspection] the new classes reach seats only through the existing `route_with` (schedule ledger, CronJobFired event, mail). No model call was added. Limitation: by reading the diff, not by a test.
+
+    Validation: `cargo test --profile agent -p aida-cli-lib --lib -- land::stalls:: task_3827 lane_binaries lane_result coordination::` through the lane job runner: 130 passed, 0 failed. `make check-ci-fast` through the lane job runner: exit 0 at this HEAD (two earlier runs failed and were fixed: a `/tmp` literal in a test, and a test name containing "inventory" that the structural-ratchet cover picks up). `python3 scripts/check-store-writers.py`: passes after one inventory row was added.
+
+    ### Probe findings and fixes made before the commit
+    - Probe 4: fields of a shared claim (scope, agent, host, clone path) are written by any clone or lane and were quoted into the advisor's due job and mail as they were. Fixed: each is flattened to one line and cut to 120 characters. The lane receipt's spec and reason code get the same treatment.
+    - Probe 3: a red head that lists no failed check run (a rerun in progress) was marked read, so its later failure would have been missed. Fixed: it is asked again.
+    - Probe 1: a landing train with red CI was left out of the recurrence reader. Fixed: every red head is read.
+    - Probe 2: an unquoted TOML host name with a dot becomes nested tables and is skipped without a word. Not fixed in code; the setup doc says to quote it.
+    - Probe 5: the only new outward action is the SSH memory probe. It runs only for hosts named in `[throughput_guard.remote_hosts]`, refuses anything that is not a host alias before SSH starts (tested), is non-interactive with strict host keys, and reads two numbers from the answer. No authority is granted or checked by this change, and no existing test was weakened: one assertion in story_2906_throughput_guard_tests.rs changed because the function it named was replaced.
+
+    ### Decisions the advisor should know
+    - "Blocks admission" for a claim means its spec is still open. This host's copy of the store holds 1,522 claim files, 445 of them not reviewer claims and most on completed specs; without this rule each of those would be a stall. A claim on a completed, rejected or superseded spec is not listed. No blocker is dropped for its age.
+    - A lock past its expiry is reclaimed by the next drain, so it is not listed. The lock that is listed is one the lock's own admission still refuses although its holder cannot be shown to run.
+    - A claim recorded on another host waits `stale_claim_remote_mins` (default 12 h), because a session claim's heartbeat is never refreshed and a lane running on another host would otherwise be reported as dead after 30 minutes.
+    - Lane exits older than 24 hours are not reported.
+    - `stale_claim_mins` defaults to 60, not round 1's 30.
+
+    ### Residual risks
+    - `observe` and the `Gh` forge reads (`gh run list`, the attempt jobs endpoint) were never run against the live forge. A wrong field name shows as a "Not read" line and no recurrence, not as a crash.
+    - LANE-OUTCOME reads the receipts of the host it runs on. A lane launched on dell1 is reported only by a guard run on dell1 (filed as TASK-73022632d35647cca3858b18ac0723e3-041).
+    - The advisor's 11:58 note kept "cause naming" for STUCK-REVIEW in this spec; the 12:55 brief did not list it and it is not implemented (filed as TASK-73022632d35647cca3858b18ac0723e3-040). The watcher's "admission is busy" message goes to its stderr only.
+    - A local lease is reported only when both the ownership reader and the lease table say unknown; whether the doctor could still heal it through a merged branch is not checked, because that needs a forge call per lease.
+    - Run time is unmeasured. The new forge reads share the existing 75 s budget; loading the spec store and one 8 s SSH probe per named host are outside it.
+    - The lane-receipt detail and the claim fields are bounded but not otherwise filtered.
+  created_at: 2026-11-20T21:22:50.785149880Z
+  modified_at: 2026-11-20T21:22:50.785149880Z
+  session_id: 01a1fa8a98f8
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1fad7-acec-7f52-84a3-cdeedaa3a704
+  author: aida-publication-done
+  content: Implementer push dc2c2ee634dd declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T21:23:20.940595270Z
+  modified_at: 2026-11-20T21:23:20.940595270Z
+  session_id: 01a1fa8a98f8
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
@@ -94,6 +148,15 @@ history:
   session_id: 01a1fa8a98f8
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1fad7-acec-7f52-84a3-cdd79d581c0a
+  author: aida-publication-done
+  timestamp: 2026-11-20T21:23:20.940591738Z
+  session_id: 01a1fa8a98f8
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
