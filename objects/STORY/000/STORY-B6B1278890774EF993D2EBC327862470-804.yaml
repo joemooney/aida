@@ -316,6 +316,12 @@ comments:
   modified_at: 2026-11-20T18:09:24.367268245Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa2a-e584-7a80-b3b0-9c32d82c93a5
+  author: aida-publication-done
+  content: Implementer push b539d5c86058 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T18:14:37.700360321Z
+  modified_at: 2026-11-20T18:14:37.700360321Z
+  session_id: 01a1f9fcbea8
 history:
 - id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
   author: joe
@@ -443,6 +449,14 @@ history:
   timestamp: 2026-11-20T18:06:45.445878789Z
   session_id: 01a1fa20aac0
   changes: []
+- id: 01a1fa2a-e584-7a80-b3b0-9c2430ab341a
+  author: aida-publication-done
+  timestamp: 2026-11-20T18:14:37.700358727Z
+  session_id: 01a1f9fcbea8
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
