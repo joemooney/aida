@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T18:05:30.454107450Z
-modified_at: 2026-11-20T04:33:48.659652746Z
+modified_at: 2026-11-20T04:33:50.637171675Z
 req_type: Bug
 tags:
 - linked:TASK-3133
@@ -38,6 +38,13 @@ comments:
   created_at: 2026-11-20T04:31:07.206939464Z
   modified_at: 2026-11-20T04:31:07.206939464Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f73b-a543-7a41-8433-8e30207589de
+  author: joe
+  content: 'advisor-121 21:36: REVERTED my accidental 21:26 approval and drain-mode edit on this spec. Both were meant for BUG-2702 (an ID mixup when filing it). This spec returns to Draft, untriaged; no ruling was made on it.'
+  created_at: 2026-11-20T04:33:50.637171675Z
+  modified_at: 2026-11-20T04:33:50.637171675Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f595-1465-79d1-99b1-24a99fc7a0e5
