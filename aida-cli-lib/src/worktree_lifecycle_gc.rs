@@ -2430,7 +2430,55 @@ mod tests {
         let reclaimable = ["ended", "another-ended", "stale.unknown"];
         let reclaimable_paths = reclaimable.map(|id| overlays.join(id));
         let deadline = || Instant::now() + Duration::from_secs(20);
-        reclaim_lane_overlays(&main, deadline());
+        // The fixture's `main` is a private tempdir, so every overlay the
+        // reclaimer can see is one this test created. Prove that before each
+        // pass, then require the credited bytes to equal exactly the 16-byte
+        // fixture caches of the paths that pass removed: zeroing or inflating
+        // the accumulator fails, and a repeated pass must credit nothing.
+        // trace:TASK-3821 | ai:claude
+        let fixture_ids = [
+            "ended",
+            "another-ended",
+            "live",
+            "occupied",
+            "open-fd",
+            ".unexpected",
+            "stale.unknown",
+        ];
+        let present = || -> Vec<&str> {
+            let on_disk: std::collections::BTreeSet<String> = std::fs::read_dir(&overlays)
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+                .collect();
+            assert!(
+                on_disk
+                    .iter()
+                    .all(|name| fixture_ids.contains(&name.as_str())),
+                "overlay root holds entries this fixture did not create: {on_disk:?}"
+            );
+            fixture_ids
+                .into_iter()
+                .filter(|id| on_disk.contains(*id))
+                .collect()
+        };
+        let reclaim_credits = |expected_removed: &[&str]| {
+            let before = present();
+            let freed = reclaim_lane_overlays(&main, deadline());
+            let after = present();
+            let removed: Vec<&str> = before
+                .into_iter()
+                .filter(|id| !after.contains(id))
+                .collect();
+            assert_eq!(removed, expected_removed, "overlays removed by this pass");
+            assert_eq!(
+                freed,
+                16 * removed.len() as u64,
+                "bytes credited for removed fixture overlays {removed:?}"
+            );
+        };
+        reclaim_credits(&["ended", "another-ended", "stale.unknown"]);
+        // Idempotence: nothing reclaimable remains while holders are live.
+        reclaim_credits(&[]);
         holder.kill().unwrap();
         holder.wait().unwrap();
         drop(open);
@@ -2483,8 +2531,13 @@ mod tests {
             assert!(row.eligible, "{id}: {}", row.reason);
             assert_eq!(row.bytes, 16, "estimated bytes for {id}");
         }
-        for _ in 0..2 {
-            reclaim_lane_overlays(&main, deadline());
+        for pass in 0..2 {
+            let expected: &[&str] = if pass == 0 {
+                &["occupied", "open-fd"]
+            } else {
+                &[]
+            };
+            reclaim_credits(expected);
             for id in ["occupied", "open-fd"] {
                 assert!(
                     super::absent(&overlays.join(id)).unwrap(),
