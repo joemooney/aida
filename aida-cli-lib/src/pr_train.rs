@@ -1421,7 +1421,7 @@ pub(crate) trait MemberChecks {
         self.covered_ids(
             pr,
             head_ref,
-            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+            crate::pr_ship::extract_pr_spec_ids(head_ref, title),
         )
     }
     /// The local merge-hold marker's reason, if any.
@@ -1473,6 +1473,15 @@ pub(crate) trait MemberChecks {
     fn drive_block(&mut self, pr: u64) -> Option<String>;
     /// The specs the member ships, as ship's STORY-529/BUG-727 gates read them.
     fn spec_records(&mut self, ids: &[String]) -> Vec<crate::pr_cmd::ShipGateSpecRecord>;
+    /// STORY-2884: withdraw the project's unset-mode drain default from
+    /// `records` when the member's diff at `head` touches a protected gate
+    /// path or cannot be read, as ship does.
+    // trace:STORY-2884 | ai:claude
+    fn withdraw_unset_defaults(
+        &mut self,
+        records: &mut [crate::pr_cmd::ShipGateSpecRecord],
+        head: &str,
+    );
     /// BUG-727: a human at an interactive terminal.
     fn interactive_tty(&self) -> bool;
     /// STORY-1698: whether an active mandate covers merging this member;
@@ -1655,7 +1664,7 @@ pub(crate) fn member_spec_ids(
     subject: &str,
     body: &str,
 ) -> Vec<String> {
-    let mut ids = crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}"));
+    let mut ids = crate::pr_ship::extract_pr_spec_ids(head_ref, title);
     for line in std::iter::once(subject).chain(body.lines()) {
         // Policy reads every constituent claim and reference; only the landed
         // completion body is narrowed to the PR's completing claims.
@@ -1865,8 +1874,12 @@ fn typed_gate_member_with(
         &head_ref,
         member_spec_ids(&head_ref, &meta.title, &subject, &body),
     );
-    let records = checks.spec_records(&ids);
+    let mut records = checks.spec_records(&ids);
     let tty = checks.interactive_tty();
+    if !tty {
+        // trace:STORY-2884 | ai:claude
+        checks.withdraw_unset_defaults(&mut records, &head);
+    }
     // BUG-2214: the cover is read at most once per gate run — the supervised
     // gate and the hold release share it. trace:BUG-2214 | ai:claude
     let mut cover_slot: Option<
@@ -2005,7 +2018,7 @@ impl MemberChecks for LiveChecks<'_> {
         let mut ids = self.covered_ids(
             pr,
             head_ref,
-            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+            crate::pr_ship::extract_pr_spec_ids(head_ref, title),
         );
         if let Ok(merge_step) =
             verified::merge_step_spec_ids(self.project_root, pr, head_ref, title, subject, body)
@@ -2207,6 +2220,17 @@ impl MemberChecks for LiveChecks<'_> {
     }
     fn spec_records(&mut self, ids: &[String]) -> Vec<crate::pr_cmd::ShipGateSpecRecord> {
         crate::pr_cmd::ship_gate_spec_records_for_ids(self.project_root, ids.to_vec())
+    }
+    // trace:STORY-2884 | ai:claude
+    fn withdraw_unset_defaults(
+        &mut self,
+        records: &mut [crate::pr_cmd::ShipGateSpecRecord],
+        head: &str,
+    ) {
+        let (root, base) = (self.main_worktree, self.base);
+        crate::pr_cmd::withdraw_unset_defaults(records, || {
+            crate::gate::unset_mode::changed_paths(root, &format!("origin/{base}"), head)
+        });
     }
     fn interactive_tty(&self) -> bool {
         self.actor_probe.is_none()

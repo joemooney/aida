@@ -108,12 +108,15 @@ pub enum DevCommand {
         #[clap(long)]
         after_wave: bool,
 
-        /// For a schedule: promote only when origin/main has moved past the
-        /// live binary and every CI check on that commit passed. Fetches,
-        /// fast-forwards a clean primary `main`, and launches the build in
-        /// the background; skips quietly otherwise. Acts only from the
-        /// checkout the live binary was built from.
+        /// For a schedule: promote the newest commit on origin/main's
+        /// first-parent line (up to 20 back) that is newer than the live
+        /// binary and whose CI checks all passed, so a tip whose CI is still
+        /// running never blocks an older green commit. Fetches,
+        /// fast-forwards a clean primary `main` to that commit, and launches
+        /// the build in the background; skips quietly otherwise. Acts only
+        /// from the checkout the live binary was built from.
         // trace:STORY-1689 | ai:claude
+        // trace:BUG-2687 | ai:claude
         #[clap(
             long,
             conflicts_with_all = ["clean", "no_promote", "allow_dirty", "install_links", "after_wave"]

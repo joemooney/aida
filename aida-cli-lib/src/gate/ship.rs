@@ -490,11 +490,21 @@ pub(crate) fn gating_execution_mode(
     requirements: &[aida_core::Requirement],
     req: &aida_core::Requirement,
 ) -> Option<aida_core::ExecutionMode> {
+    gating_execution_source(requirements, req).map(|(mode, _)| mode)
+}
+
+/// [`gating_execution_mode`] with the spec that sets it: `req` itself, or the
+/// carrier on its superseded-by chain (STORY-2884: `aida show` names it).
+// trace:BUG-2413 trace:STORY-2884 | ai:claude
+pub(crate) fn gating_execution_source<'a>(
+    requirements: &'a [aida_core::Requirement],
+    req: &'a aida_core::Requirement,
+) -> Option<(aida_core::ExecutionMode, &'a aida_core::Requirement)> {
     let mut current = req;
     // Bounded: a superseded-by cycle must not loop the gate.
     for _ in 0..8 {
         if let Some(mode) = current.execution_mode {
-            return Some(mode);
+            return Some((mode, current));
         }
         let carrier = current
             .relationships
@@ -550,6 +560,25 @@ pub fn supervised_merge_holds(
         .iter()
         .filter(|(_, mode)| merge_requires_supervision(*mode))
         .map(|(id, mode)| (id.clone(), supervision_mode_label(*mode)))
+        .collect()
+}
+
+/// STORY-2884: [`supervised_merge_holds`] over effective modes — the
+/// `(spec-id, mode-label)` pairs whose effective mode holds the merge. The
+/// label names the effective mode and its source, e.g.
+/// `unset (supervised: not defaulted, the change touches ...)`.
+// trace:STORY-2884 | ai:claude
+pub(crate) fn effective_supervised_merge_holds(
+    specs: &[(String, Vec<String>, crate::gate::unset_mode::EffectiveMode)],
+    interactive_tty: bool,
+) -> Vec<(String, String)> {
+    if interactive_tty {
+        return Vec::new();
+    }
+    specs
+        .iter()
+        .filter(|(_, _, mode)| mode.requires_supervision())
+        .map(|(id, _, mode)| (id.clone(), mode.label()))
         .collect()
 }
 

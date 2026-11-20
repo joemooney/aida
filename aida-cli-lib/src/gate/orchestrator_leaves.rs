@@ -363,4 +363,21 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::trailer_coverage::uncovered_phrase",
         ],
     ),
+    // trace:STORY-2884 | ai:claude
+    (
+        "unset_mode.rs",
+        "unset execution mode default: reads the trusted default-branch config and the change's files through git; the effective mode it resolves is pure",
+        &[
+            "aida_core::ExecutionMode",
+            "aida_core::ExecutionMode::Drain",
+            "aida_core::RelationshipType::SupersededBy",
+            "aida_core::Requirement",
+            "aida_core::RequirementType",
+            "aida_core::RequirementType::ALL",
+            "aida_core::git_ops::host_git_command",
+            "aida_core::node_alias::display_spec_id",
+            "crate::forge_lookup::deadline_output",
+            "crate::trusted_config::read_trusted_config_toml_local",
+        ],
+    ),
 ];

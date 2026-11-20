@@ -1866,7 +1866,7 @@ fn task3112_rework_hint_retains_owning_spec_beside_refs_metadata() {
     assert!(
         policies
             .iter()
-            .any(|(_, _, mode)| *mode == Some(aida_core::ExecutionMode::Operator)),
+            .any(|(_, _, mode)| mode.mode == Some(aida_core::ExecutionMode::Operator)),
         "{policies:?}"
     );
 }

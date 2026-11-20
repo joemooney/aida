@@ -12653,10 +12653,11 @@ Options:
           Wait for a live drain wave pinned to the current binary to finish instead of refusing
 
       --if-main-green
-          For a schedule: promote only when origin/main has moved past the live binary and every CI
-          check on that commit passed. Fetches, fast-forwards a clean primary `main`, and launches
-          the build in the background; skips quietly otherwise. Acts only from the checkout the live
-          binary was built from
+          For a schedule: promote the newest commit on origin/main's first-parent line (up to 20
+          back) that is newer than the live binary and whose CI checks all passed, so a tip whose CI
+          is still running never blocks an older green commit. Fetches, fast-forwards a clean
+          primary `main` to that commit, and launches the build in the background; skips quietly
+          otherwise. Acts only from the checkout the live binary was built from
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -45559,7 +45560,7 @@ Working on aida itself
       {
         "name": "if-main-green",
         "takes_value": false,
-        "help": "For a schedule: promote only when origin/main has moved past the live binary and every CI check on that commit passed. Fetches, fast-forwards a clean primary `main`, and launches the build in the background; skips quietly otherwise. Acts only from the checkout the live binary was built from"
+        "help": "For a schedule: promote the newest commit on origin/main's first-parent line (up to 20 back) that is newer than the live binary and whose CI checks all passed, so a tip whose CI is still running never blocks an older green commit. Fetches, fast-forwards a clean primary `main` to that commit, and launches the build in the background; skips quietly otherwise. Acts only from the checkout the live binary was built from"
       },
       {
         "name": "install-links",

@@ -1995,14 +1995,8 @@ pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
 // trace:BUG-1774 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
 pub(crate) fn corpus_gate_spec_hints(project_root: &Path, c: &ChangeRef) -> Vec<String> {
-    let mut ids = crate::pr_ship::extract_spec_ids_from_text(&c.branch);
-    if let Some(title) = c.title.as_deref() {
-        for id in crate::pr_ship::extract_spec_ids_from_text(title) {
-            if !ids.contains(&id) {
-                ids.push(id);
-            }
-        }
-    }
+    // BUG-2702: the branch by convention only. trace:BUG-2702 | ai:claude
+    let ids = crate::pr_ship::extract_pr_spec_ids(&c.branch, c.title.as_deref().unwrap_or(""));
     crate::gate::trailer_coverage::covered_gate_ids(project_root, &c.branch, Some(c.id), ids)
 }
 
