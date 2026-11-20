@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T21:56:59.320044940Z
+modified_at: 2026-11-20T21:57:14.370513270Z
 req_type: Bug
 tags:
 - lanes
@@ -170,6 +170,28 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes on BUG-2706. Reviewed the entire landed diff against pinned main 719aa4947d06. CI pending at review time (fast gates passed, fast compile pending). BUG-2706 bug protocol, the PR touches at least one test file: met by changed inline Rust test modules in coordination_heartbeat.rs and review_implementer_gate.rs.. No triage reason was given.'
   created_at: 2026-11-20T21:56:59.320040189Z
   modified_at: 2026-11-20T21:56:59.320040189Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1faf6-b35f-7ff2-8e75-623709757822
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2706):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9a5565b17c85
+    Recorded: 2026-11-20T21:55:03.451033420+00:00
+    Findings:
+    1. BUG-2706 AC1/AC2: Only standalone_implementer::run starts the heartbeat. Drain-driven implementer lanes bypass that launcher. With the default settings their shared claim stops deferring after 50 minutes even if the lane is still working on a merge-only head. Bind refresh to the live lease across supported implementer launch paths and cover a long-running drain lane.
+    2. BUG-2706 AC1/AC2: decide reads only the watcher's local store checkout. Publishing a claim or heartbeat to origin does not update that checkout. A watcher behind the first claim sees no holder, and one behind subsequent heartbeats sees a falsely expired holder. Establish snapshot freshness or use bounded unknown handling when it cannot be established. Verify with separate publisher and observer checkouts.
+    3. BUG-2706 AC3: list_claims silently drops directory, entry and parse errors, and remote_standing drops invalid heartbeat timestamps. A temporarily unreadable claim can therefore produce an empty holder list and immediate review. Distinguish unreadable evidence from confirmed absence and track a bounded unknown interval that survives repeated passes.
+    4. BUG-2706 AC3: remote_standing discards the lapse 30 minutes after the grace deadline. If the watcher was stopped or delayed past that window, it reviews a previously deferred head without the required reason. REPORTED also suppresses a second lapse after recovery of the same lane and retains branch/lane keys indefinitely. Track the outstanding deferral episode and log its release once.
+    5. BUG-2706.ace1c795: The fake foreign-host test replaces the observer with a fresh empty directory on release and never supplies a changing head. The existing watch test injects a skip string and later selects the same SHA. Exercise a merge-only head followed by a distinct fix SHA with the foreign lane still live, release the lane, and assert only the fix SHA is dispatched once. Include actual unreadable claim evidence.
+    6. bound_claim reads arbitrary .toml paths in the shared store, follows links and accepts special files. heartbeat_session_claim later reopens the matched path with fs::write under host permissions. A linked or replaced entry can redirect that write outside the claim directory, and a FIFO can stall the host store lock. Pin the directory, read bounded regular files without following links, and replace only the verified claim inside it.
+    7. fs::write truncates the live claim before completing the replacement. A short write, disk error or launcher termination can destroy the previous parseable ownership record. Concurrent unlocked gate readers can also see the empty or partial file and admit the head. Write a complete temporary sibling and atomically replace the validated claim.
+    8. SessionClaimHeartbeat::drop joins a thread that may be inside a fetch or push using an unbounded Git subprocess. A stalled remote during a refresh can keep an otherwise finished launcher from returning, and a stalled pull holds the shared writer lock. Bound or cancel the refresh I/O and join on shutdown within a defined deadline.
+    9. The spec's advisor selected the claim heartbeat as the shared visibility source for TASK-3827 and requested a documented claim-to-holder/host/age API. The new remote_standing and Standing are private to the review gate and the live result omits age. Expose the shared observation from coordination so the throughput reader can reuse the interpretation without duplicating review policy.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T21:57:14.207146472Z
+  modified_at: 2026-11-20T21:57:14.207146472Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
