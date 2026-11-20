@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T10:10:50.094098941Z
+modified_at: 2026-11-20T10:11:05.527837127Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -219,6 +219,13 @@ comments:
     The 02:04 r2 lane wrote its changes (coordination.rs, session_start.rs, task_2807_pickup_launch_rollback_tests.rs; +225/-38) but they were left UNCOMMITTED, and the host's fast gate refused ("fast gate needs a clean committed seat"), so nothing was published. Those edits are saved UNVERIFIED as 055c8f29b2 on origin/bug-2697-r2-wip. Start from them (`git fetch origin bug-2697-r2-wip && git cherry-pick origin/bug-2697-r2-wip` or review and apply), check them against the r2 findings, run `make check-ci-fast`, then COMMIT your work with a proper `[AI:claude] fix(...): ... (Refs BUG-2697)` subject before you finish, so the seat is clean for the host gate.
   created_at: 2026-11-20T10:10:50.094098941Z
   modified_at: 2026-11-20T10:10:50.094098941Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f870-6388-7cf1-8b3b-572755e858bb
+  author: joe
+  content: 'Product 03:11: R2B lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-461. Scope = the AUTHORITATIVE R2B BRIEF in the previous comment.'
+  created_at: 2026-11-20T10:11:05.527837127Z
+  modified_at: 2026-11-20T10:11:05.527837127Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
