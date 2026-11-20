@@ -235,6 +235,16 @@ pub(crate) trait Evidence {
     fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String>;
     /// CI on the head.
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String>;
+    /// The failed checks at the exact head, named, whatever base the run
+    /// tested: `ci` answers stale or unknown when the base moved, and that
+    /// answer hides a red head. `None` when no check failed there.
+    // trace:STORY-2906 | ai:claude
+    fn head_red(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        Ok(match self.ci(pr)? {
+            Ci::Red(names) => Some(names),
+            _ => None,
+        })
+    }
     /// Whether red CI on the head blocks landing: true in `ci-gated` mode;
     /// in `review-gated` mode pre-merge CI is informational and red CI
     /// never turns an approved head into rework on its own.
@@ -336,6 +346,9 @@ impl Evidence for Memo<'_> {
     }
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
         memo(&self.ci, pr.id, || self.inner.ci(pr))
+    }
+    fn head_red(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        self.inner.head_red(pr)
     }
     fn ci_gates_landing(&self) -> bool {
         self.inner.ci_gates_landing()
@@ -1152,6 +1165,21 @@ impl Evidence for Live {
         pr.ci
             .clone()
             .ok_or_else(|| "discovery did not report checks".to_string())
+    }
+
+    // trace:STORY-2906 | ai:claude
+    fn head_red(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        let ci = match self.github_checks.get(&pr.id) {
+            Some(rollup) => ci_base::head_ci(&self.root, &self.repo, rollup, pr)?,
+            None => pr
+                .ci
+                .clone()
+                .ok_or_else(|| "discovery did not report checks".to_string())?,
+        };
+        Ok(match ci {
+            Ci::Red(names) => Some(names),
+            _ => None,
+        })
     }
 
     fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String> {

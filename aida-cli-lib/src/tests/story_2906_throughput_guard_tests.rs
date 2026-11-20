@@ -23,6 +23,8 @@ struct Fake {
     conflict: std::result::Result<bool, String>,
     reviewing: std::result::Result<Option<String>, String>,
     ci: std::result::Result<Ci, String>,
+    /// The failed checks at the head, when read apart from `ci`.
+    head_red: Option<std::result::Result<Option<String>, String>>,
     approval: std::result::Result<Approval, String>,
     hold: std::result::Result<Option<Hold>, String>,
     rounds: std::result::Result<Rounds, String>,
@@ -39,6 +41,7 @@ impl Default for Fake {
             conflict: Ok(false),
             reviewing: Ok(None),
             ci: Ok(Ci::Green),
+            head_red: None,
             approval: Ok(Approval::Refused("no approval covers the head".into())),
             hold: Ok(None),
             rounds: Ok(Rounds::default()),
@@ -63,6 +66,15 @@ impl Evidence for Fake {
     }
     fn ci(&self, _: &Pr) -> std::result::Result<Ci, String> {
         self.ci.clone()
+    }
+    fn head_red(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+        match &self.head_red {
+            Some(read) => read.clone(),
+            None => Ok(match self.ci.clone()? {
+                Ci::Red(names) => Some(names),
+                _ => None,
+            }),
+        }
     }
     fn approval(&self, _: &Pr) -> std::result::Result<Approval, String> {
         self.approval.clone()
@@ -1048,7 +1060,7 @@ fn a_scheduled_run_saves_landings_and_each_hosts_lanes_and_memory_even_with_no_s
             HostLine {
                 host: "disrad-x".into(),
                 lanes: 1,
-                memory: "unknown from this host (that host's own scheduled run records it)".into(),
+                memory: NO_REMOTE_MEMORY.into(),
             },
         ],
         ..Facts::default()
@@ -1467,4 +1479,132 @@ fn the_guards_memory_round_trips_and_an_older_file_still_loads() {
     assert_eq!(seat_for_job("throughput-guard-route-"), None);
     assert!(route_prompt("advisor").contains("aida schedule done throughput-guard-route-advisor"));
     assert!(route_prompt("operator").contains("Nothing has landed"));
+}
+
+// Red checks at the exact head are red whatever is known of the base: the
+// reconciler's CI answer turns stale or unreadable once the base moves.
+#[test]
+fn approved_red_head_is_stuck_merge_red_when_the_base_is_stale_or_unknown() {
+    let stale = "CI run 20 tested base bbbbbbbb, current base is cccccccc";
+    let unread = "CI run 20's tested base is unknown: logs expired";
+    for (ci, why) in [
+        (Ok(Ci::StaleBase(stale.into())), stale),
+        (Err(unread.to_string()), unread),
+    ] {
+        let fake = Fake {
+            ci,
+            head_red: Some(Ok(Some("Test (full)".into()))),
+            ..approved(45)
+        };
+        let mut fact = fact(4344, &fake);
+        assert!(fact.wants_red_detail(), "{:?}", fact.standing);
+        let unexamined = item_of(&fact);
+        assert_eq!(unexamined.class, Class::StuckMergeRed);
+        fact.red = Some(red(
+            vec![check(
+                "Test (full)",
+                11,
+                &["tests::task_3792_tests::retries"],
+                BaseCheck::Pass,
+            )],
+            &["aida-cli-lib/src/leases.rs"],
+        ));
+        let item = item_of(&fact);
+        assert_eq!(item.class, Class::StuckMergeRed);
+        assert!(item.summary.contains("Test (full)"), "{}", item.summary);
+        assert!(
+            item.summary.contains(&format!("base not fresh: {why}")),
+            "{}",
+            item.summary
+        );
+        assert!(item
+            .summary
+            .contains("failing tests: tests::task_3792_tests::retries"));
+        // The same stall whatever the base says: routed once.
+        assert_eq!(
+            item.key,
+            item_of(&red_pr(4344, fact.red.clone().unwrap())).key
+        );
+    }
+}
+
+// A stale or unreadable base with no failed check at the head is not red.
+#[test]
+fn a_stale_or_unknown_base_without_failed_checks_is_not_called_red() {
+    let stale = Fake {
+        ci: Ok(Ci::StaleBase("CI run 20 tested an older base".into())),
+        head_red: Some(Ok(None)),
+        ..approved(45)
+    };
+    let fact_stale = fact(7, &stale);
+    assert!(!fact_stale.wants_red_detail());
+    assert_eq!(
+        class_of(&fact_stale, &Policy::default()),
+        Some(Class::StuckMerge)
+    );
+    for head_red in [Ok(None), Err("the rollup was not read".to_string())] {
+        let unread = Fake {
+            ci: Err("logs expired".into()),
+            head_red: Some(head_red),
+            ..approved(45)
+        };
+        assert!(matches!(
+            fact(8, &unread).standing,
+            Standing::Unknown(what) if what.contains("CI unknown (logs expired)")
+        ));
+    }
+    let unreadable_head = Fake {
+        ci: Ok(Ci::StaleBase("CI run 20 tested an older base".into())),
+        head_red: Some(Err("the rollup was not read".into())),
+        ..approved(45)
+    };
+    assert!(matches!(
+        fact(9, &unreadable_head).standing,
+        Standing::Unknown(_)
+    ));
+}
+
+// This host's memory is measured; another host's comes from a record of it
+// when there is one, and is otherwise unknown with the reason.
+#[test]
+fn host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown() {
+    let local = || "20.0 GiB available of 64.0 GiB".to_string();
+    let lines = host_lines_from("dell1", 4, &["disrad-x", "", "disrad-x"], &local, &|_| None);
+    let line = |host: &str| lines.iter().find(|line| line.host == host).unwrap();
+    assert_eq!(lines.len(), 3);
+    assert_eq!((line("dell1").lanes, line("disrad-x").lanes), (4, 2));
+    assert_eq!(line("dell1").memory, "20.0 GiB available of 64.0 GiB");
+    assert_eq!(line("disrad-x").memory, "unknown (no remote memory source)");
+    assert_eq!(line("unknown").memory, NO_REMOTE_MEMORY);
+
+    // A record of the foreign host is used, for that host only.
+    let recorded =
+        |host: &str| (host == "disrad-x").then(|| "3.0 GiB available of 16.0 GiB".to_string());
+    let lines = host_lines_from("dell1", 0, &["disrad-x", "other"], &local, &recorded);
+    let memory = |host: &str| {
+        lines
+            .iter()
+            .find(|line| line.host == host)
+            .unwrap()
+            .memory
+            .clone()
+    };
+    assert_eq!(memory("disrad-x"), "3.0 GiB available of 16.0 GiB");
+    assert_eq!(memory("other"), NO_REMOTE_MEMORY);
+    assert_eq!(memory("dell1"), "20.0 GiB available of 64.0 GiB");
+
+    // The production source has no record of any other host yet.
+    assert_eq!(recorded_remote_memory("disrad-x"), None);
+    let report = Report {
+        hosts: lines,
+        ..build_report(
+            &facts(Vec::new()),
+            &Policy::default(),
+            &mut Memory::default(),
+            now(),
+        )
+    };
+    assert!(
+        render(&report).contains("Host other: 1 lane(s); memory unknown (no remote memory source)")
+    );
 }

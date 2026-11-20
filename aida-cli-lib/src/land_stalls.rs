@@ -321,10 +321,21 @@ pub(crate) fn standing(
         Ok(Some(review)) => return Standing::Reviewing(review),
         Ok(None) => {}
     }
+    // Red checks at the exact head stand whatever is known of the base: a
+    // run on an older base, or one whose base cannot be read, still failed.
+    // trace:STORY-2906 | ai:claude
+    let not_fresh = |names: String, why: &str| Some(format!("{names}; base not fresh: {why}"));
     let red = match evidence.ci(pr) {
-        Err(why) => return unknown("CI", why),
         Ok(Ci::Red(names)) => Some(names),
+        Ok(Ci::StaleBase(why)) => match evidence.head_red(pr) {
+            Err(why) => return unknown("CI", why),
+            Ok(names) => names.and_then(|names| not_fresh(names, &why)),
+        },
         Ok(_) => None,
+        Err(why) => match evidence.head_red(pr) {
+            Ok(Some(names)) => not_fresh(names, &why),
+            _ => return unknown("CI", why),
+        },
     };
     let lane = match evidence.lane(pr) {
         Ok(lane) => lane,
@@ -857,7 +868,8 @@ pub(crate) struct Landings {
 pub(crate) struct HostLine {
     pub host: String,
     pub lanes: usize,
-    /// Available memory, measured on the host the run is on.
+    /// Available memory: measured here for the host the run is on, from a
+    /// record of the host for another, else unknown with the reason.
     pub memory: String,
 }
 
@@ -1376,30 +1388,62 @@ fn memory_line() -> String {
     }
 }
 
-fn host_lines(pass: &super::Pass) -> Vec<HostLine> {
-    let here = crate::coordination::hostname();
+/// Memory another host recorded about itself, when some record carries it.
+///
+/// Nothing does yet: lane claims and activity heartbeats name a host and its
+/// liveness, not its memory. Until a host publishes it, a foreign host's
+/// memory is reported as unknown with that reason.
+// trace:STORY-2906 | ai:claude
+fn recorded_remote_memory(_host: &str) -> Option<String> {
+    None
+}
+
+pub(crate) const NO_REMOTE_MEMORY: &str = "unknown (no remote memory source)";
+
+/// One line per host with lanes: this host's memory measured here, another
+/// host's from `remote` when a record of it exists, else unknown with the
+/// reason. `foreign` holds the host of each lane claimed elsewhere.
+// trace:STORY-2906 | ai:claude
+pub(crate) fn host_lines_from(
+    here: &str,
+    local_lanes: usize,
+    foreign: &[&str],
+    local_memory: &dyn Fn() -> String,
+    remote: &dyn Fn(&str) -> Option<String>,
+) -> Vec<HostLine> {
     let mut lanes: BTreeMap<String, usize> = BTreeMap::new();
-    *lanes.entry(here.clone()).or_default() += pass.local_lanes.len();
-    for claim in &pass.foreign_lanes {
-        let host = if claim.host.is_empty() {
-            "unknown".to_string()
-        } else {
-            claim.host.clone()
-        };
-        *lanes.entry(host).or_default() += 1;
+    *lanes.entry(here.to_string()).or_default() += local_lanes;
+    for host in foreign {
+        let host = if host.is_empty() { "unknown" } else { host };
+        *lanes.entry(host.to_string()).or_default() += 1;
     }
     lanes
         .into_iter()
         .map(|(host, lanes)| HostLine {
             memory: if host == here {
-                memory_line()
+                local_memory()
             } else {
-                "unknown from this host (that host's own scheduled run records it)".into()
+                remote(&host).unwrap_or_else(|| NO_REMOTE_MEMORY.to_string())
             },
             host,
             lanes,
         })
         .collect()
+}
+
+fn host_lines(pass: &super::Pass) -> Vec<HostLine> {
+    let foreign: Vec<&str> = pass
+        .foreign_lanes
+        .iter()
+        .map(|claim| claim.host.as_str())
+        .collect();
+    host_lines_from(
+        &crate::coordination::hostname(),
+        pass.local_lanes.len(),
+        &foreign,
+        &memory_line,
+        &recorded_remote_memory,
+    )
 }
 
 fn memory_path(root: &Path) -> PathBuf {
