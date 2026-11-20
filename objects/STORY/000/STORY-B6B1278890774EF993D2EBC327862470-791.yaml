@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T04:11:47.312101010Z
+modified_at: 2026-11-20T04:11:59.829350316Z
 req_type: Story
 tags:
 - landing
@@ -288,6 +288,26 @@ comments:
   created_at: 2026-11-20T04:11:47.171119334Z
   modified_at: 2026-11-20T04:11:47.171119334Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f727-a1fa-7001-b8b5-ce0b3ad9856a
+  author: joe
+  content: |-
+    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 21:11):
+    # Rework brief: STORY-2884 / PR #4347, round 3 of 4 (test-only)
+
+    Advisor: claude-advisor-121, 2026-11-19 21:16 MST. Head reviewed: 1de9926. All four r1 defects FIXED in source. Lane: CLAUDE. ONE gap
+    [authority-path test]: a_head_moved_after_the_default_check_is_refused (gate/tests/story_2884_unset_mode_tests.rs:480-509) only builds
+    CheckedHeads and calls record/moved_refusal directly. Add a regression THROUGH the production ship orchestration
+    (pr_ship_with_method_and_dispatch_ctx): an unset ordinary bug spec with the drain default enabled, H1 ordinary at the default check,
+    then the PR head moves to H2 touching a protected path before preflight, so no merge call reaches the forge and the refusal names both heads.
+    It must fail if the record call at pr_cmd.rs:2778 or the refusal at pr_cmd.rs:2851-2858 is removed (state that mutation in a
+    comment). Plus a control: an unchanged head merges once. No production changes. cargo fmt; targeted cargo run; make check-ci-fast. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T04:11:59.829350316Z
+  modified_at: 2026-11-20T04:11:59.829350316Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
