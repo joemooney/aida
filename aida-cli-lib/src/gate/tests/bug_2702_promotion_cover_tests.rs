@@ -10,7 +10,7 @@ use super::*;
 use crate::gate::mandate::{Mandate, MandateRefusal};
 use std::path::Path;
 
-fn git(dir: &Path, args: &[&str]) -> String {
+pub(super) fn git(dir: &Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()
         .arg("-C")
         .arg(dir)
@@ -35,22 +35,22 @@ fn git(dir: &Path, args: &[&str]) -> String {
     String::from_utf8(out.stdout).unwrap().trim().to_owned()
 }
 
-const MANDATE_ID: &str = "6f1c1d6e-0000-4000-8000-000000002702";
+pub(super) const MANDATE_ID: &str = "6f1c1d6e-0000-4000-8000-000000002702";
 
-const PROMOTION_TITLE: &str =
+pub(super) const PROMOTION_TITLE: &str =
     "[AI:claude] chore(integration): two stories [promotion 23] (Refs STORY-1 STORY-2)";
 
 /// A project whose PR head carries two real commits, one per stored story,
 /// and a store holding exactly those two stories.
-struct Fixture {
+pub(super) struct Fixture {
     _tmp: tempfile::TempDir,
-    root: std::path::PathBuf,
-    head: String,
+    pub(super) root: std::path::PathBuf,
+    pub(super) head: String,
     gh: std::path::PathBuf,
 }
 
 impl Fixture {
-    fn new() -> Self {
+    pub(super) fn new() -> Self {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path().to_path_buf();
         git(&root, &["init", "-q"]);
@@ -129,7 +129,7 @@ impl Fixture {
     /// Record an approval of the head by an independent reviewer seat: a
     /// live `reviewer` grant for the same principal, re-validated at ship
     /// time, its recorder identity distinct from the shipping session.
-    fn approve(&self) {
+    pub(super) fn approve(&self) {
         let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
             &self.root,
             crate::test_env::HERMETIC_TEST_USER,
@@ -159,7 +159,7 @@ impl Fixture {
     /// `aida pr ship`'s mandate cover for PR 42 on `head_ref` titled `title`:
     /// the ids assembled by the production `ship_gate_known_ids`, then the
     /// production entry and decision.
-    fn ship_cover(
+    pub(super) fn ship_cover(
         &self,
         head_ref: &str,
         title: &str,
@@ -180,7 +180,7 @@ impl Fixture {
     }
 }
 
-fn active_mandate() -> Mandate {
+pub(super) fn active_mandate() -> Mandate {
     let now = chrono::Utc::now();
     Mandate {
         id: MANDATE_ID.into(),
@@ -202,7 +202,7 @@ fn active_mandate() -> Mandate {
     }
 }
 
-fn plant(m: &Mandate) {
+pub(super) fn plant(m: &Mandate) {
     use std::os::unix::fs::PermissionsExt;
     let dir = crate::gate::mandate::mandate_dir().unwrap();
     std::fs::create_dir_all(&dir).unwrap();

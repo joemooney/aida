@@ -1147,3 +1147,7 @@ mod task_2067_trace_resolution_tests;
 #[cfg(test)]
 #[path = "tests/bug_2702_promotion_cover_tests.rs"]
 mod bug_2702_promotion_cover_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2704_conflicted_history_tests.rs"]
+mod bug_2704_conflicted_history_tests;
