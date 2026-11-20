@@ -15,7 +15,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-20T23:14:52.265667348Z
+modified_at: 2026-11-20T23:23:34.146951082Z
 req_type: Bug
 tags:
 - review
@@ -28,6 +28,20 @@ comments:
   created_at: 2026-11-20T23:14:21.779971459Z
   modified_at: 2026-11-20T23:14:21.779971459Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb45-edcf-78f3-8573-2c6a2d4a0c60
+  author: joe
+  content: |-
+    Product 16:22: Claude (Fable) fresh-start lane queued on dell1, brief:
+    # Brief: BUG-2707 (fresh start; advisor-121 16:15: approved, drain, high; Claude+Fable)
+
+    The reviewer and the gate disagree on "approve with findings": reviewers wrote APPROVED drafts carrying unresolved minor findings, and the verdict handoff refused them, so no verdict was recorded and the round was wasted (twice today: STORY-2695 #4377 at 03e78ae and BUG-2684 #4364). Advisor ruling: contract (b). The reviewer-draft VALIDATOR refuses an inconsistent draft at WRITE time, telling the reviewer at once to either record the findings as deferred follow-ups (with the blocking_tier/class/disposition fields the recorder requires) or change the verdict to request-changes, instead of the handoff refusing it later.
+    Implement the spec's ACs. Regression: an APPROVED draft with unresolved findings is refused at draft write with an actionable message; a correctly deferred approval is accepted and recorded.
+    Trailer (BUG-2707) if every AC is met; otherwise (Refs BUG-2707).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T23:23:34.146951082Z
+  modified_at: 2026-11-20T23:23:34.146951082Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
