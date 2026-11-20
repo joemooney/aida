@@ -124,6 +124,15 @@ history:
   timestamp: 2026-11-20T03:10:20.678559809Z
   session_id: 01a1f6ce133e
   changes: []
+- id: 01a1f737-189c-7612-92bd-0f9eb8ee3b57
+  author: aida-auto-bump
+  timestamp: 2026-11-20T04:29:05.564316060Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
 - id: 01a1f738-13ba-7b81-8683-a849685756ec
   author: aida-auto-bump
   timestamp: 2026-11-20T04:30:09.850392897Z
@@ -132,6 +141,12 @@ history:
     old_value: Done
     new_value: Completed
 processing_record:
+- id: 01a1f737-194a-7612-a048-2aa4ec9c6c2f
+  timestamp: 2026-11-20T04:29:05.738834389Z
+  agent: aida
+  commit_sha: 140977cdd550b1f043ea5a57eb4bb91e52211313
+  summary: 'APPROVED: reviewed the complete 8,110-byte landed diff against protected main 2b42e9f896c63a9152a2508fd50211741e6ee72d, landed tree cd06f79ce96fb9445d2d3a95a82e094e3328b105, attesting original PR head c079d526713465adf48a41c1b1ebcf322a533a17. The landed tree and original head have no file differences. Used the generated review worksheet and TASK-3161''s advisor scope clarification, which supersedes the original fixture-only description. No actionable defects found; trace comments present. TASK-3161 AC1 (ignore Rust test directories and #[cfg(test)] modules): verified by source inspection of production_rust and CI-backed test_doc_path_guard_ignores_only_rust_test_directories plus test_doc_path_guard_ignores_inline_test_modules_and_keeps_surrounding_code, including nested modules, comments, raw strings and intervening attributes. TASK-3161 AC2 (production Rust and docs remain checked): verified by CI-backed test_tracked_path_guard_rejects_prose_code_and_template_references, production and Markdown cases in test_doc_path_guard_ignores_only_rust_test_directories, surrounding production reference counts, and test_doc_path_guard_keeps_cfg_lookalikes_visible covering strings, comments, macro token [REDACTED] non-test cfg and external module declarations. TASK-3161 AC3 (test fixture containing docs/x.md passes): verified by the generated exact literal in the test-directory and inline-module regressions. Evidence: existing exact-head CI fast-gates job 136054832953, Documentation audience coverage: python3 -m unittest tests/test_doc_audiences.py passed all 14 tests; python3 scripts/check-doc-paths.py reported 0 invalid references. No local tests or builds run. CI pending at review time: fast compile remains in progress; approval does not authorize landing before required CI succeeds.'
+  review_verdict: approved
 - id: 01a1f738-13c3-7140-b6e3-71fa6d5fd340
   timestamp: 2026-11-20T04:30:09.859931128Z
   agent: aida
