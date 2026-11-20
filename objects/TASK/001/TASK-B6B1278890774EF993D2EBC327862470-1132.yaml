@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:39:12.885207714Z
-modified_at: 2026-11-20T15:47:11.309500299Z
+modified_at: 2026-11-20T16:04:17.683838993Z
 req_type: Task
 tags:
 - config
@@ -63,6 +63,31 @@ comments:
     - None
   created_at: 2026-11-20T15:47:11.309500299Z
   modified_at: 2026-11-20T15:47:11.309500299Z
+  session_id: 01a1f9a316e9
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f9b3-9293-7e61-8ea6-f44ef0c13657
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 20e66a36e5 (`git diff origin/main...HEAD`: `.aida/config.toml` +10, nothing else).
+
+    **Acceptance evidence**
+    - AC1 [evidence: configuration-validation] PARTIAL. The committed config parses to `agents.codex.seats.reviewer = {model: gpt-6.2-astra}` and `agents.claude.seats.reviewer = {model: claude-fable-5-2, effort: high}` (python tomllib). Routing analysis: `aida_core::agents_config::tuning_from_file` (aida-core/src/agents_config.rs:112) reads `[agents.<vendor>.seats].<seat>.{model,effort}`; review-watch launches `queue work --role reviewer [--vendor V]` with no `--model` (aida-cli-lib/src/review_watch.rs:2339), so the seat table decides. No higher-precedence file shadows it: the primary checkout has no `.aida/agents.toml`, and `~/.aida/agents.toml` sets no model/seats. NOT obtained: `aida config show` does not render agent model tuning, and `queue work --role reviewer --dry-run` prints vendor/exec but no model, so there is no CLI line naming the model.
+    - AC2 [evidence: manual-inspection] TEMPORARY comment at .aida/config.toml:47-50 names revert task TASK-3824 and its 2026-11-22 deferral.
+    - AC3 [evidence: configuration-validation] one file changed; `scripts/config-trust.toml` `[keys.worktree.agents] "*" = "policy"` already covers the keys, no registry edit. `python3 scripts/check-store-writers.py` passes.
+
+    **Probes**
+    - Cross-reference: vendor and seat keys are lowercase, matching `AgentSeat::as_str` and the lowercased vendor lookup.
+    - Format: inline tables on one line, no trailing commas; no pre-existing `[agents.codex]`/`[agents.claude]` tables to collide with; `[agents] vendor` untouched.
+    - Multiplicity: only the reviewer seat is set; other seats and the vendor default are unchanged (no `[agents.<vendor>] model`).
+    - Adversarial: `AIDA_AGENT_MODEL` / `AIDA_AGENT_EFFORT` in the launching environment override the config (session/headless.rs:880). A review-watch process started from a shell carrying those variables would ignore this block.
+    - Authority: grants nothing; model names are opaque passthrough strings.
+
+    **Fixes**: none needed.
+
+    **Residual risks**: model names are not validated by AIDA, so a name the vendor CLI rejects fails only at reviewer launch; codex reviewer effort stays at the vendor default (as specified).
+  created_at: 2026-11-20T16:04:17.683838993Z
+  modified_at: 2026-11-20T16:04:17.683838993Z
   session_id: 01a1f9a316e9
   harness_version: 2.1.319 (Claude Code)
 history:
