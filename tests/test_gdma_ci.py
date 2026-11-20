@@ -77,11 +77,13 @@ class ExpressionTests(unittest.TestCase):
                             adapter.step_environment(step, context, {})
                             if 'uses' in step:
                                 self.assertIn(step['uses'].split('@')[0], adapter.ACTIONS)
+                            elif step.get('name') == adapter.SELECT_STEP['name']:
+                                self.assertEqual(step, adapter.SELECT_STEP)
                             elif 'run' in step and step.get('name') not in adapter.INSTALL_STEPS:
                                 command = adapter.shell(step['run'])
                                 references = set(adapter.RUNNER_REFERENCE.findall(command))
                                 if step.get('if') == "runner.environment == 'self-hosted'":
-                                    references.discard('GITHUB_ENV')
+                                    references -= adapter.SELF_HOSTED_ONLY_VARIABLES
                                 self.assertLessEqual(references, adapter.RUNNER_VARIABLES)
 
     # trace:STORY-2672 | ai:codex

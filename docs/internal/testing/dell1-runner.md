@@ -2,11 +2,12 @@
 
 <!-- trace:STORY-2695 | ai:codex -->
 
-S2 implements the launcher/controller and cache lifecycle. **Routing stays off:**
-keep `AIDA_DELL1_CI` unset. S2 changes no workflow, repository settings, installed
-units, accounts or credentials. S3 owns installation, workflow integration,
-activation and ten-train acceptance. The existing workflow's same-repository PR
-routing is historical and is **not** suitable for activating this controller.
+S2 implements the launcher/controller and cache lifecycle. The workflow contract
+below is in `.github/workflows/ci.yml`. **Routing stays off:** keep
+`AIDA_DELL1_CI` unset until the operator has finished installation and
+acceptance. No change in this repository touches repository settings, installed
+units, accounts or credentials; the operator owns installation, activation and
+the ten-train comparison.
 The binding [plan](../../plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md)
 and the 2026-11-10 14:41 UTC brief supersede the single-slot runbook.
 
@@ -99,11 +100,52 @@ preserve executable bits but remove group/other permissions and special bits.
 The host fetches the exact admitted SHA's public source archive, refuses archive
 links/traversal, and reconstructs Git object/index identity with an independent
 public fetch/reset. It never runs checkout filters/hooks, cached Git config or
-cached programs. The reviewed S3 workflow must use `AIDA_CI_WORKSPACE` and
-the Git HEAD in `AIDA_CI_WORKSPACE`, compile into `CARGO_TARGET_DIR`, and honor the installed pinned
-Rust toolchain. It must not silently checkout a PR merge ref instead of the
-admitted head. Remote rust-cache restore/save must be disabled on local paths;
-no fallback to PR cache keys. Hosted jobs retain their existing behavior.
+cached programs. The workflow uses `AIDA_CI_WORKSPACE` and its Git HEAD,
+compiles into `CARGO_TARGET_DIR`, and uses the installed pinned Rust toolchain
+(see "Workflow contract" below). Hosted jobs retain their existing behavior.
+
+## Workflow contract (what `policy.json` pins)
+
+<!-- trace:STORY-2695 | ai:claude -->
+
+`tests/test_self_hosted_runner.py` checks each rule against the workflow itself.
+
+- **Routing.** With `AIDA_DELL1_CI` set to `true`, the four heavy shards go to
+  dell1 only for a push to `main` (MAIN) and for a same-repository pull request
+  into `main` whose head branch starts with `train/` (TRAIN). Ordinary and fork
+  pull requests, pull requests into `integration`, merge groups, scheduled and
+  manual runs, and the `rest`, `gates` and `contracts` lanes stay hosted. These
+  are the two classes the controller admits; the expression grants nothing.
+  GitHub compares the `train/` prefix without regard to case and the controller
+  does not, so a head branch named `Train/...` would queue for dell1 and never
+  be admitted. Do not create such branches while routing is on.
+- **Exact source.** A dell1 job runs no `actions/checkout`. Its first step,
+  "Adopt host-prepared exact source", requires `AIDA_CI_WORKSPACE`,
+  `CARGO_TARGET_DIR` and `CARGO_HOME` to be existing absolute directories,
+  requires the workspace's Git HEAD to equal the job's head SHA (the pull
+  request head, never its merge ref), requires a clean tree, and then replaces
+  the runner's empty workspace with a link to the prepared tree. Every later
+  step therefore runs in the tree the host extracted. It links `target` in that
+  tree to `CARGO_TARGET_DIR` (ignored through `.git/info/exclude`), so the
+  steps' `target/...` paths are the seeded build directory. Any mismatch fails
+  the job before a build starts.
+- **Toolchain.** `cargo` and `rustc` must resolve to `/opt/aida-ci-toolchain/bin`.
+  The rustup install and pin steps are hosted-only.
+- **Local cache only.** `Swatinem/rust-cache` and the APT archive cache are
+  hosted-only. cargo-nextest is downloaded per job into `CARGO_HOME/bin`, which
+  the publisher never copies.
+- **Always full.** The prepared tree has one commit and no remote, so the
+  docs-only path filter is hosted-only and a dell1 heavy shard always runs its
+  tests. For the same reason the test-time budget finds no parent commit and
+  holds every test to its strict limit on dell1. A budget failure that appears
+  only on dell1 is a rollback trigger, not a reason to relax the budget.
+
+Any edit to `ci.yml` changes the digest. After each such merge, review the new
+default-branch file against these rules and install its SHA-256 as
+`workflow_sha256`; until then the controller refuses every job (`default
+workflow policy drift`) and routed jobs wait. Turn routing off before merging a
+workflow change you cannot re-pin promptly. A train whose head carries a
+different `ci.yml` than `main` is refused the same way.
 
 ## S3 installation prerequisites (operator only)
 
@@ -149,8 +191,8 @@ no fallback to PR cache keys. Hosted jobs retain their existing behavior.
    `profile_features`, and booleans `capacity_accepted`, `local_cache_only`,
    `exact_checkout`, all true. The last three attest **completed operator review**,
    not runtime measurements inferred by the launcher. Pin only a reviewed
-   default-branch workflow that enforces exact source/toolchain and local-cache
-   rules above; the historical workflow in S2 does not satisfy that contract.
+   default-branch workflow that enforces the "Workflow contract" rules above:
+   `sha256sum .github/workflows/ci.yml` on the reviewed `origin/main` commit.
    A changed compiler/build configuration creates a cold key; changed workflow
    bytes require fresh policy review. Install cache root root:root 0700 and jobs
    root root:root 0755. Keep enough disk for concurrent private copies, source,
@@ -212,9 +254,14 @@ positive controls, and `AIDA_REQUIRE_BWRAP_LIVE=1`; no skips count as acceptance
 Run all four heavy shards through the two slots. Confirm no OOM/memory limit
 failures, cgroup survivors, cleanup overlaps or namespace-policy regressions.
 
-Only S3 changes workflow routing: TRAIN/MAIN labels for eligible heavy jobs,
-hosted ordinary/fork PRs and merge groups; keep the seven lanes, timeouts and
-hosted required aggregate. Then activate for a bounded window and compare at
+Routing sends only MAIN and TRAIN heavy jobs to dell1 and keeps ordinary/fork
+PRs and merge groups hosted, with the seven lanes, timeouts and hosted required
+aggregate unchanged. During acceptance, also confirm on the installed runner
+that the adopt step's workspace link is honored by every later step (`pwd -P`
+is the prepared tree), that cargo-nextest installs into `CARGO_HOME/bin`, and
+that the timing artifacts upload from the linked `target`. These three depend
+on runner and action behavior that the repository fixtures cannot execute.
+Then activate for a bounded window and compare at
 least ten comparable green trains with matched hosted runs. Record run start
 through aggregate finish, shard created/started/finished, queue median/p95,
 slot/class, seed SHA/hit/age, cold/warm state, libtest thread count, memory peaks,

@@ -144,7 +144,13 @@ jobs:
     # Forks and merge groups always use hosted capacity. Disabling the variable
     # restores hosted routing; GitHub cannot fail over an already queued job.
     # trace:STORY-2672 | ai:codex
-    runs-on: ${{ vars.AIDA_DELL1_CI == 'true' && (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && contains(fromJSON('["lib-0","lib-1","cli-0","cli-1"]'), matrix.shard) && fromJSON('["self-hosted","Linux","X64","aida-dell1"]') || matrix.os }}
+    # Only the two classes the dell1 controller admits are routed there: a
+    # main push (MAIN) and a same-repository train/ pull request into main
+    # (TRAIN). The controller refuses anything else, and a refused job would
+    # wait in the queue with no failover, so ordinary PRs stay hosted. This
+    # expression grants nothing: the host admits each job independently.
+    # trace:STORY-2695 | ai:claude
+    runs-on: ${{ vars.AIDA_DELL1_CI == 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.base_ref == 'main' && startsWith(github.head_ref, 'train/'))) && contains(fromJSON('["lib-0","lib-1","cli-0","cli-1"]'), matrix.shard) && fromJSON('["self-hosted","Linux","X64","aida-dell1"]') || matrix.os }}
     defaults:
       run:
         # Keep this explicit: implementer_preflight.rs validates this contract
@@ -175,7 +181,54 @@ jobs:
         shard: [lib-0, lib-1, cli-0, cli-1, rest, gates, contracts]
 
     steps:
+      # dell1 never checks out: the host controller prepared the admitted
+      # head's exact source before releasing this job (see the next step).
+      # trace:STORY-2695 | ai:claude
       - uses: actions/checkout@v5
+        if: runner.environment != 'self-hosted'
+
+      # The dell1 controller extracts the admitted SHA into AIDA_CI_WORKSPACE
+      # and seeds CARGO_TARGET_DIR / CARGO_HOME from the trusted cache. Every
+      # later step runs in that tree: the runner's empty workspace becomes a
+      # link to it, so no step can build a pull request's merge ref or any
+      # other source instead. `target` links to the seeded build directory so
+      # the steps' relative target/ paths and Cargo agree. The toolchain is
+      # the operator-installed pinned one; nothing is downloaded by rustup.
+      # Fails closed when any part of the contract is missing.
+      # trace:STORY-2695 | ai:claude
+      - name: Adopt host-prepared exact source
+        if: runner.environment == 'self-hosted'
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          refuse() { echo "::error::dell1 source contract refused: $*" >&2; exit 1; }
+          for name in AIDA_CI_WORKSPACE CARGO_TARGET_DIR CARGO_HOME; do
+            case "${!name:-}" in
+              /*) [ -d "${!name}" ] && [ ! -L "${!name}" ] || refuse "$name is not a host-prepared directory" ;;
+              *) refuse "$name is not an absolute host-prepared path" ;;
+            esac
+          done
+          actual=$(git -C "$AIDA_CI_WORKSPACE" rev-parse --verify HEAD) || refuse "prepared source has no Git HEAD"
+          [ "$actual" = "$EXPECTED_SHA" ] || refuse "prepared source is $actual, this job is for $EXPECTED_SHA"
+          [ "$(git -C "$AIDA_CI_WORKSPACE" rev-parse --show-toplevel)" = "$AIDA_CI_WORKSPACE" ] || refuse "prepared source is not its own Git root"
+          [ "$(command -v cargo)" = /opt/aida-ci-toolchain/bin/cargo ] || refuse "cargo is not the installed pinned toolchain"
+          [ "$(command -v rustc)" = /opt/aida-ci-toolchain/bin/rustc ] || refuse "rustc is not the installed pinned toolchain"
+          cargo --version | grep -q '^cargo ' || refuse "cargo did not report a version"
+          if [ -e "$AIDA_CI_WORKSPACE/target" ] || [ -L "$AIDA_CI_WORKSPACE/target" ]; then
+            refuse "prepared source already has target"
+          fi
+          status=$(git -C "$AIDA_CI_WORKSPACE" status --porcelain) || refuse "cannot compare prepared source with the admitted commit"
+          [ -z "$status" ] || refuse "prepared source differs from the admitted commit"
+          cd /
+          rmdir "$GITHUB_WORKSPACE" || refuse "runner workspace is not empty"
+          ln -s "$AIDA_CI_WORKSPACE" "$GITHUB_WORKSPACE"
+          ln -s "$CARGO_TARGET_DIR" "$AIDA_CI_WORKSPACE/target"
+          # A link is not matched by the tracked `/target/` ignore rule.
+          mkdir -p "$AIDA_CI_WORKSPACE/.git/info"
+          echo /target >> "$AIDA_CI_WORKSPACE/.git/info/exclude"
+          # Prebuilt tools (cargo-nextest) install here; it is never cached.
+          mkdir -p "$CARGO_HOME/bin"
+          echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"
 
       # TASK-1217: keep the required Build job green for doc-only PRs/pushes
       # while short-circuiting the expensive Rust/tooling suite. The filter is
@@ -183,7 +236,8 @@ jobs:
       # files, lockfiles, and Rust sources) opts back into full CI.
       # trace:TASK-1217 | ai:codex
       - name: Detect full-CI changes
-        id: changes
+        id: paths
+        if: runner.environment != 'self-hosted'
         uses: dorny/paths-filter@v4
         with:
           predicate-quantifier: some-with-excludes
@@ -194,6 +248,14 @@ jobs:
               - '!**/*.md'
               - '!LICENSE'
               - '!.gitignore'
+
+      # dell1's prepared source has one commit and no remote to diff against,
+      # so its heavy shards always run in full. trace:STORY-2695 | ai:claude
+      - name: Select full or docs-only CI
+        id: changes
+        env:
+          FULL_CI: ${{ runner.environment == 'self-hosted' && 'true' || steps.paths.outputs.full_ci }}
+        run: echo "full_ci=$FULL_CI" >> "$GITHUB_OUTPUT"
 
       - name: CI docs-only short-circuit
         if: steps.changes.outputs.full_ci != 'true'
@@ -207,6 +269,7 @@ jobs:
       # (seconds, no compilation), so this costs docs-only PRs little.
       # trace:TASK-1447 | ai:claude
       - name: Install Rust toolchain
+        if: runner.environment != 'self-hosted'
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -220,6 +283,7 @@ jobs:
       # elsewhere) via `shell: bash`, which GitHub provides on all
       # runners. trace:BUG-103 | ai:claude
       - name: Pin stable toolchain & verify cargo
+        if: runner.environment != 'self-hosted'
         shell: bash
         run: |
           mkdir -p target
@@ -325,7 +389,11 @@ jobs:
       # gates and contracts keep the shared one. The suffix goes on
       # shared-key: rust-cache ignores `key` when shared-key is set.
       # trace:TASK-1979 | ai:claude
+      # dell1 builds only from its host-published local cache: no remote
+      # restore or save, and no fallback to a pull request's cache key.
+      # trace:STORY-2695 | ai:claude
       - name: Cache Rust dependencies
+        if: runner.environment != 'self-hosted'
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: ci-dev-profile${{ (startsWith(matrix.shard, 'lib-') && '-lib') || (startsWith(matrix.shard, 'cli-') && '-cli') || (matrix.shard == 'rest' && '-rest') || '' }}
