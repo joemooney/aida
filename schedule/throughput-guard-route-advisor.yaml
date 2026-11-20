@@ -1,8 +1,7 @@
 job: throughput-guard-route-advisor
-note: '[STUCK-REVIEW] #4362 at 81cbe3ad has had no verdict, no reviewer and no lane for 40 min, and its CI is red (Build (ubuntu-latest); base not fresh: CI run 44813022275''s tested base is unknown: CI run has no completed checkout job) -> launch a reviewer for #4362 at 81cbe3ad, or route a lane for its red CI; [STUCK-REWORK] #4376 has changes requested at af0a1fb5 (round 1, CI red) and no lane or session on it for 42 min -> route rework of #4376 to a lane; [STUCK-CONFLICT] #4306 at b6315683 conflicts with its base and nobody owns it, for 1116 min -> route a lane to resolve the conflict on #4306; [STUCK-CONFLICT] #4365 at b8d7faa4 conflicts with its base and nobody owns it, for 329 min -> route a lane to resolve the conflict on #4365'
-due_since: 2026-11-20T20:45:17.996792598Z
-due_reason: on CronJobFired:throughput-guard-route-advisor
-due_failure:
-  trip_id: throughput-guard-route-advisor@2026-11-20T20:45:17Z
-  job: throughput-guard
-  error: '[STUCK-REVIEW] #4362 at 81cbe3ad has had no verdict, no reviewer and no lane for 40 min, and its CI is red (Build (ubuntu-latest); base not fresh: CI run 44813022275''s tested base is unknown: CI run has no completed checkout job) -> launch a reviewer for #4362 at 81cbe3ad, or route a lane for its red CI; [STUCK-REWORK] #4376 has changes requested at af0a1fb5 (round 1, CI red) and no lane or session on it for 42 min -> route rework of #4376 to a lane; [STUCK-CONFLICT] #4306 at b6315683 conflicts with its base and nobody owns it, for 1116 min -> route a lane to resolve the conflict on #4306; [STUCK-CONFLICT] #4365 at b8d7faa4 conflicts with its base and nobody owns it, for 329 min -> route a lane to resolve the conflict on #4365'
+last_run: 2026-11-20T20:46:59.442297220Z
+last_by:
+  seat: advisor
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  vendor: claude
+result: done
