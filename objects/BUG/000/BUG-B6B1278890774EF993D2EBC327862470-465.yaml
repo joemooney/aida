@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T20:02:28.538194587Z
+modified_at: 2026-11-20T20:43:08.621341881Z
 req_type: Bug
 tags:
 - admission
@@ -446,6 +446,30 @@ comments:
   modified_at: 2026-11-20T19:59:13.929636344Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fab2-ddcd-76d1-b175-00c1f0bcbc67
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1fb82107b5 (round 4 of PR #4363; diff origin/main...HEAD, strict tier)
+
+    Acceptance evidence (all [evidence: behavioral-test], aida-cli-lib --lib):
+    - F1 AC2: admission_owner bug2703_registration_wait_does_not_extend_the_bound (serializer held until 300 ms before the deadline, holder leaves 500 ms after: gives up, no late acquisition) and bug2703_intent_cleanup_keeps_the_original_deadline. No attempt now starts after the bound.
+    - F2 AC2: review_watch bug2703_busy_refusal_names_the_running_review_and_its_process (ship and land refusals name PR key and live PID; reservation with no process says so).
+    - F3: admission_drain bug2703_grant_revoked_while_waiting_for_the_drain_lock_is_refused (drain and resume, journal byte-identical) and bug2703_drain_is_dated_after_its_wait_for_the_lock.
+    - F4 AC4: bug2703_journal_of_maximum_escaped_reasons_stays_readable (264 renewals of 512-byte backslash/quote reasons and actor; every write loads and is <= 256 KiB; then resume, drain, expiry).
+    - F5: bug2703_yielded_settlement_never_discards_an_unclaimed_reservation (settlement keeps a reservation made after the old snapshot; prune against that snapshot drops it; lost dispatcher still reconciled).
+    - F6: bug2703_future_dated_intent_is_bounded_from_the_observation (future-dated live intent ignored until its remaining lifetime fits the maximum, removed at expiry; MIN_UTC/MAX_UTC timestamps without overflow).
+    - F7 AC3: bug2703_real_worker_loops_yield_to_the_real_ship_handler now ships open PR-4324 with a pushed, approved head and green CI; asserts the head read, CI read and one merge call pinned to the approved head, in that order after admission. The fixture forge refuses the merge call.
+
+    Validation: lane job runs: filters bug2703 admission_ review_watch:: story2857 bug2650 = 348 passed; after the final strictness change bug2703 admission_ story2857 bug2650 = 95 passed; ratchet-set lib filters plus story_1698 task_1458 = 206 passed; aida-ci-guards 51 passed. cargo fmt --check, check-store-writers, exec-context, crate-globs, glyph-lint, trace-headers, doc links/paths, portability, python ratchet unit tests: pass. make check-ci-fast as one command was NOT run to completion (exceeds this lane's 60 s tool cap); its relevant gates were run individually, the rest are left to CI.
+
+    Probe findings: authority paths: drain/resume only (control_actor now under drain.lock; no fail-open: a failed authority closure returns before any journal write). No test weakened or removed; the ship regression's old detached-HEAD stop was replaced by a stricter stop at the merge call.
+
+    Residual risks: (1) behaviour change: a bounded wait no longer makes a final attempt at the deadline itself, so wait_secs = 1 gets a single attempt. (2) A future-dated intent whose owner's liveness is unknown stays on disk, ignored, until its own dates come into range. (3) F1's regression test is timing-based for mutation sensitivity only; the fixed code cannot fail it by load.
+  created_at: 2026-11-20T20:43:08.621341881Z
+  modified_at: 2026-11-20T20:43:08.621341881Z
+  session_id: 01a1fa8d6880
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
