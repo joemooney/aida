@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-20T20:44:29.317756579Z
+modified_at: 2026-11-20T21:35:27.531745383Z
 req_type: Task
 tags:
 - codify
@@ -246,6 +246,26 @@ comments:
   modified_at: 2026-11-20T20:44:36.111036821Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fae2-c32b-7272-8f48-e4a08acc8047
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7ac565fd1c (CI-fix round on PR #4373; scope = the two commits after the merge of main at c2272d72d2, not a re-review of the whole relay diff).
+
+    Root cause of the red fast tier at c3a15b8/c2272d7: not the three items in the CI-fix brief (the classifier doc, shard map and Cargo.toml lines are fixture output from the tooling self-tests; `external-prose-classifiers.py --check` and the shard tooling tests pass on this tree). The real failures were ratchets:
+    - story_2326_ambient_aida_inputs_have_a_disposition: AIDA_LANE_RELAY_GATE had no disposition. Now in DROPPED_AIDA_KEYS (operation-local; launch/spawn.rs already strips it from vendor children).
+    - launch_sites_outside_the_launcher_match_the_ledger: Live::aida built its child as Command::new(&self.aida), a spelling the ledger counts as a possible vendor program. Now bound to `aida` (the spec-store aida binary); no ledger entry added.
+    - bug_1502 checked_in_audit_*: the eight lane relay / relay-host paths were missing from docs/internal/cli-format-json-audit.md. Added by hand as 'JSON not honoured' (none has --json); the generator needs a built binary, which this seat cannot reach.
+
+    Evidence (lane job runner, agent profile): aida-ci-guards --lib 51 passed; ratchet-set aida-cli-lib groups 90 passed; bug_1502 checked_in_audit_ 2 passed; lane_relay:: 27 passed. Source fast gates run one by one: all pass except three that open AF_UNIX sockets, which this sandbox denies (containment conformance, store mutation channel, self-hosted routing fixtures). check-store-writers.py: reconciled, no new site. CI fast gates passed at 26fb90bfd7.
+
+    Probes on the delta: the DROPPED entry cannot widen a vendor allowlist (forwarding an unknown or dropped AIDA_ key is refused); the rename changes no behaviour. No test weakened or ledger grown.
+
+    Residual: docs/cli/verify-manual.py's dynamic pass (last ratchet-set step) was not run locally; CI fast compile at 7ac565fd1c is the evidence for it.
+  created_at: 2026-11-20T21:35:27.531745383Z
+  modified_at: 2026-11-20T21:35:27.531745383Z
+  session_id: 01a1fab3bd8d
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
   author: joe
