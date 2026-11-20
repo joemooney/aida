@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-410
 agreed_id: BUG-2646
 title: 'Rework admission recovery: unverified approvals and closed terminal waits mis-handled when ownership discovery fails'
 description: 'Follow-up from PR-4158 round-4 review (BUG-2629). When binding discovery fails, the raw recovery in queue_cmd/work.rs (~3030-3039) (1) lets an ownership-unverified miskeyed approval suppress a real WAITING refusal, and (2) revives a terminally closed ledger-only wait because newest_review_of strips terminal_wait_source annotations. Both fall back to the pre-BUG-2629 behaviour (Unavailable, ignored), so neither is a regression vs main. Fix: ignore ownership-unverified non-waiting rounds as clearance; apply terminal_wait_overlay_body before is_closed. Regressions for both shapes are given in the PR-4158 review comment of 2026-11-16 21:26 on BUG-2629.'
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T04:31:20.159152225Z
-modified_at: 2026-11-20T18:44:50.232133997Z
+modified_at: 2026-11-20T19:12:48.778957170Z
 req_type: Bug
 comments:
 - id: 01a1fa2e-d289-7250-af88-722dec7fe8c5
@@ -48,6 +48,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fa60-2a8b-7ae2-93d0-63b52f447961
+  author: dirtlab
+  timestamp: 2026-11-20T19:12:48.779012193Z
+  session_id: 01a1fa465ec9
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 3b634489942a0804a1e98de5b791d44d9414dfb3
@@ -58,3 +67,9 @@ filed_at:
   vendor: claude
   session: 01a1e7c2-b004-7c43-ae32-7ceb8122c76d
   harness_version: 2.1.326 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: 'The code BUG-2646 fixes is not on origin/main (012b95ef89). It targets the raw discovery-failure recovery added by PR #4158 (BUG-2629) in queue_cmd/work.rs; #4158 was CLOSED unmerged (advisor ruling 2026-11-18 04:35: close as superseded, re-implement BUG-2629 fresh on main and carry these follow-up findings). On main, resolve_rework_review_inner (work.rs:3221) has no raw recovery: no waiting_recovery_events, no newest_review_of call outside gate/ledger/project.rs:434 and gate/review_alias.rs:542, no bug_2629 tests. Failed ownership discovery just withholds bound copies and admission proceeds, which is BUG-2629''s own open P1. BUG-2629 is In Progress with no open PR. Both BUG-2646 findings (unverified non-waiting round used as clearance; terminal_wait_source stripped before is_closed) have nothing to apply to until that recovery exists. The spec also has no Acceptance section. No code changed, no PR.'
+  lean: Fold both findings into BUG-2629's fresh re-implementation as acceptance criteria (as the 11-18 ruling already says) and close BUG-2646 as merged into it, or re-queue BUG-2646 after the new BUG-2629 PR lands.
+  raised_by: implementer
+  raised_at: 2026-11-20T19:12:48.778957170Z
