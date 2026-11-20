@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T18:16:48.795078010Z
+modified_at: 2026-11-20T18:25:06.803131242Z
 req_type: Story
 tags:
 - docs:impacted
@@ -328,6 +328,20 @@ comments:
   created_at: 2026-11-20T18:15:21.023869510Z
   modified_at: 2026-11-20T18:15:21.023869510Z
   session_id: 01a1f9fcbea8
+- id: 01a1fa34-7ef3-7ca0-8b86-053851e33eb9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 986985f16f (round 3 rework of PR #4372)
+    - F1 / AC7a [evidence: behavioral-test]: standing() now reads the failed checks at the exact head (new Evidence::head_red; Live reads the rollup without the base-freshness verdict) when CI answers stale-base or is unreadable; such a head is STUCK-MERGE-RED and its summary says 'base not fresh: <why>'. Tests: land::stalls::tests::approved_red_head_is_stuck_merge_red_when_the_base_is_stale_or_unknown, a_stale_or_unknown_base_without_failed_checks_is_not_called_red, and land::ci_base::tests::story_2906_a_red_head_on_a_stale_or_unknown_base_is_still_stuck_merge_red (verify() fixture and standing() together).
+    - F2 / AC2 as amended [evidence: behavioral-test]: local memory measured; a foreign host uses a record when one exists, else 'unknown (no remote memory source)'. No heartbeat or lane-host record carries memory today, so the production source returns none; the real probe is TASK-3827. Test: host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown.
+    - Probes: routing key unchanged by the base note (asserted); stale base with no failed check stays STUCK-MERGE; unreadable CI with no red head stays unknown (no fail-open); reconciler derive() untouched.
+    - Validation: cargo test -p aida-cli-lib --lib land:: 149 passed; cargo fmt clean; check-store-writers.py ok. make check-ci-fast not completed: it exceeds this lane's 60s tool cap (source gates run before the cut-off passed; ratchets not run).
+    - Residual: run id/attempt come from the per-head check-run detail (FailedCheck.id), not the summary line; head_red is not memoised (one extra rollup summary per stale red PR per run).
+  created_at: 2026-11-20T18:25:06.803131242Z
+  modified_at: 2026-11-20T18:25:06.803131242Z
+  session_id: 01a1fa2cb10a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
   author: joe
