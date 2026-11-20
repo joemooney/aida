@@ -17,12 +17,12 @@ description: |
   4. Red commits are never promoted; an in-progress tip never blocks an older green one; a commit whose CI run is missing counts as not green.
   5. scripts/aida-autobuild.sh (lane hosts and operator cron) uses the same newest-green rule instead of waiting on the tip, and keeps #4327's skip-worktree override handling.
   6. Tests: tip in-progress with an older green commit → promote the older one; tip red → promote the newest green before it; nothing newer than live is green → skip; origin/main moves mid-check → the chosen green commit is still promoted.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-20T01:50:17.074015465Z
+modified_at: 2026-11-20T01:51:01.975388758Z
 req_type: Bug
 tags:
 - landing
@@ -97,6 +97,13 @@ comments:
   modified_at: 2026-11-20T01:50:17.074015465Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6a6-6357-7db1-ae0e-0ad8b5816994
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes after reading the complete 12-file landed-tree diff against protected base 76842c1d1d814dad22b3431a94d6d623e3b7e5c4 (landed tree b579bf33185bb3caa5877327b73e4022bdba7e33); attested review target is the original PR head 99b17edc331d8e8d6bc3dd3c8e4b42fcad7e93d1. Two actionable defects remain: chosen-SHA equality is conditional on being behind, and cron aborts its history scan on unreadable CI. Neither finding depends on the subsequently changed help golden or store-writer inventory. The generated worksheet was used; this is a completing-spec review with no declared deferrals.. No triage reason was given.'
+  created_at: 2026-11-20T01:51:01.975384834Z
+  modified_at: 2026-11-20T01:51:01.975384834Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f677-27f6-73c2-83dc-dc7ef45e7218
   author: joe
@@ -169,6 +176,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f6a6-6357-7db1-ae0e-0ac92fb596f4
+  author: joe
+  timestamp: 2026-11-20T01:51:01.975363114Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
@@ -179,22 +195,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Request changes after reading the complete 12-file landed-tree diff against protected base 76842c1d1d814dad22b3431a94d6d623e3b7e5c4 (landed tree b579bf33185bb3caa5877327b73e4022bdba7e33); attested review target is the original PR head 99b17edc331d8e8d6bc3dd3c8e4b42fcad7e93d1. Two actionable defects remain: chosen-SHA equality is conditional on being behind, and cron aborts its history scan on unreadable CI. Neither finding depends on the subsequently changed help golden or store-writer inventory. The generated worksheet was used; this is a completing-spec review with no declared deferrals.
-
-    Acceptance worksheet for BUG-b6b1278890774ef993d2ebc327862470-451 (BUG-2687):
-    acc64b1d: unverified — newest_green implements newest-first first-parent selection with a 20-commit bound, clean-checkout checks, ff-only and the existing staged smoke/promotion pipeline; source regressions cover pending/red tips and no green newer than live. However, finding 1 permits promotion of a commit other than the selected green SHA.
-    ac7fa614: unverified — plan_promotion_at/green_behind_ok enforce equality and ancestry while behind, and the moving-origin regression covers that path; equality is omitted when HEAD reaches origin/main (finding 1).
-    ac6f47e9: verified by source evidence in GreenWalk::passed_lines, launch_line, GreenScan persistence and behind_main_line, with report/status assertions in the added Rust tests. Status explicitly labels the scan time and scanned tip.
-    ac00998c: unverified — selector source and red_and_unreadable_commits_are_never_promoted/no_green_commit_newer_than_live_skips cover red, pending, missing and unreadable CI, but finding 1 can promote an unselected red tip under clean-main after checkout movement.
-    acf5979d: unverified — shell fixtures cover newest-green selection and preservation/rebasing of the skip-worktree override, but unreadable newer CI aborts cron instead of passing over it as the Rust scanner does (finding 2).
-    Tests: verified by inspection of added source regressions for all four required cases. Runnable Rust commands include cargo test -p aida-cli-lib an_in_progress_tip_promotes_the_older_green_commit; cargo test -p aida-cli-lib a_red_tip_promotes_the_newest_green_commit_before_it; cargo test -p aida-cli-lib no_green_commit_newer_than_live_skips; cargo test -p aida-cli-lib origin_main_moving_mid_check_still_promotes_the_chosen_green_commit. Shell regression command: python3 tests/test_lane_autobuild.py. These are inspected tests, not reviewer-executed results. Each of the six supplied previously-untraced criteria now has relevant test coverage in the diff; the two uncovered edge paths are identified in findings.
-
-    Type protocol checklist: BUG-2687 (bug protocol): met — PR modifies aida-cli-lib/src/tests/story_1689_dev_autopromote_tests.rs and tests/test_lane_autobuild.py, plus the help golden. Existing traces use the BUG-2687 alias. No Cargo or local test/build commands were run, per reviewer policy. Existing GitHub evidence: CI fast gates succeeded, CI fast compile remained in progress; CI pending at review time is not the reason for request-changes.
-  recovery_hint: address the review findings, move BUG-2687 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-20T01:49:50.515037835Z
