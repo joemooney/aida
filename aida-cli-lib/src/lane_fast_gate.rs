@@ -20,6 +20,12 @@ struct Receipt {
     owner: Option<aida_core::proc_identity::ProcIdentity>,
     #[serde(default)]
     reserved_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Why the gate could not run this round (infrastructure trouble, a
+    /// dirty seat the host could not commit), carried onto the lane's result
+    /// line so a refusal never reads as a bare marker.
+    // trace:BUG-2705 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reason: Option<String>,
 }
 
 fn path(main: &Path, branch: &str) -> PathBuf {
@@ -149,10 +155,12 @@ fn begin_locked(main: &Path, branch: &str) -> Result<()> {
         repair_queue: None,
         owner: None,
         reserved_at: None,
+        reason: None,
     });
     if !receipt.pending {
         receipt.repair_used = false;
     }
+    receipt.reason = None;
     receipt.pending = true;
     receipt.owner = aida_core::proc_identity::ProcIdentity::capture(std::process::id()).ok();
     receipt.reserved_at = Some(chrono::Utc::now());
@@ -310,6 +318,8 @@ pub(crate) fn infrastructure(main: &Path, branch: &str, _lease: &str, error: &an
         eprintln!("fast_gate={marker}: {error:#}");
         if let Some(mut r) = read(main, branch)? {
             r.marker = marker;
+            // trace:BUG-2705 | ai:claude
+            r.reason = Some(format!("{error:#}"));
             write(main, &r)?;
         }
         Ok(())
@@ -326,7 +336,32 @@ pub(crate) fn result_line(main: &Path, branch: &str, line: &str) -> String {
     } else {
         &marker
     };
-    format!("{line} fast_gate={marker}")
+    format!("{line} fast_gate={}", with_reason(main, branch, marker))
+}
+
+/// A marker followed by its receipt's recorded reason, if any: the exact
+/// reason travels with the marker. trace:BUG-2705 | ai:claude
+pub(crate) fn with_reason(main: &Path, branch: &str, marker: &str) -> String {
+    match reason(main, branch) {
+        Some(reason) => format!("{marker} (reason: {reason})"),
+        None => marker.to_owned(),
+    }
+}
+
+/// [`marker`] with its recorded reason. trace:BUG-2705 | ai:claude
+pub(crate) fn marker_with_reason(main: &Path, branch: &str) -> String {
+    with_reason(main, branch, &marker(main, branch))
+}
+
+/// Why this branch's gate could not run, when its receipt recorded one.
+// trace:BUG-2705 | ai:claude
+pub(crate) fn reason(main: &Path, branch: &str) -> Option<String> {
+    read(main, branch)
+        .ok()
+        .flatten()
+        .and_then(|r| r.reason)
+        .map(|r| r.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|r| !r.is_empty())
 }
 
 /// An absent receipt is an ordinary non-lane PR. Corrupt state fails closed.
@@ -499,7 +534,16 @@ impl std::error::Error for NativeCommitError {}
 fn commit(main: &Path, tree: &Path, spec: &str, lease: &str, clean: bool) -> Result<bool> {
     match crate::ship_from_seat::post_exit_commit_reported(main, tree, spec, lease, clean) {
         crate::ship_from_seat::PostExitCommit::Failed(why) => Err(NativeCommitError(why).into()),
-        crate::ship_from_seat::PostExitCommit::NotASeat => Ok(false),
+        crate::ship_from_seat::PostExitCommit::NotASeat => {
+            // Say why publication stops here. trace:BUG-2705 | ai:claude
+            eprintln!(
+                "PUBLISH SKIPPED: host post-exit commit skipped: {} is not a seat clone \
+                 recorded by {}; seat retained",
+                tree.display(),
+                main.display()
+            );
+            Ok(false)
+        }
         _ => Ok(true),
     }
 }
@@ -510,10 +554,7 @@ fn snapshot(main: &Path, tree: &Path, branch: &str) -> Result<String> {
     if crate::seat_clone::host_recorded_clone(main, tree).is_some() {
         match crate::seat_clone::probe(main, tree) {
             crate::seat_clone::Probe::Known(facts) => {
-                anyhow::ensure!(
-                    facts.dirty.is_empty(),
-                    "fast gate needs a clean committed seat"
-                );
+                anyhow::ensure!(facts.dirty.is_empty(), "{}", dirty_seat(&facts.dirty));
                 facts.head.context("fast gate seat has no head")
             }
             _ => anyhow::bail!("cannot bind fast gate to the seat head"),
@@ -522,10 +563,35 @@ fn snapshot(main: &Path, tree: &Path, branch: &str) -> Result<String> {
         let state = crate::headless_background::SeatState::read(tree, branch);
         anyhow::ensure!(
             state.uncommitted == Some(0),
-            "fast gate needs a clean committed seat"
+            "fast gate needs a clean committed seat: {}",
+            match state.uncommitted {
+                Some(n) => format!("{n} uncommitted path(s) remain and nothing committed them"),
+                None => "the seat's uncommitted state could not be read".into(),
+            }
         );
         crate::headless_background::seat_head(tree).context("fast gate seat head unavailable")
     }
+}
+
+/// The refusal for a seat clone that still holds uncommitted work: name the
+/// paths, so the lane log says what was left behind, not a bare refusal.
+// trace:BUG-2705 | ai:claude
+fn dirty_seat(dirty: &[String]) -> String {
+    const SHOWN: usize = 5;
+    let mut shown = dirty
+        .iter()
+        .take(SHOWN)
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .join(", ");
+    if dirty.len() > SHOWN {
+        shown.push_str(&format!(", and {} more", dirty.len() - SHOWN));
+    }
+    format!(
+        "fast gate needs a clean committed seat: {} uncommitted path(s) remain and nothing \
+         committed them ({shown})",
+        dirty.len()
+    )
 }
 
 fn attempt(
@@ -742,7 +808,7 @@ pub(crate) fn native_rounds(
         receipt.repair_used = true;
         receipt.marker = result.clone();
         write(main, &receipt)?;
-        repair(&repair_prompt(&output))?;
+        repair(&repair_prompt(&output, true))?;
         let Some((next_head, next_result, next_output)) = attempt()? else {
             return Ok(());
         };
@@ -769,14 +835,28 @@ fn retry_marker<'a>(previous: &'a str, next: &'a str) -> &'a str {
     }
 }
 
-fn repair_prompt(output: &str) -> String {
+/// `host_published`: whether the host commits and publishes this lane's
+/// edits after it exits. Only those lanes may leave edits uncommitted; a
+/// self-publishing lane told to do so strands its fix in a dirty seat that
+/// nothing commits, and the next gate refuses it.
+// trace:BUG-2705 | ai:claude
+fn repair_prompt(output: &str, host_published: bool) -> String {
     // Bound the entire failure excerpt well below Linux's single-argv limit.
     let mut start = output.len().saturating_sub(16 * 1024);
     while !output.is_char_boundary(start) {
         start += 1;
     }
     let output = &output[start..];
-    format!("The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Native seats must leave edits uncommitted for host publication; retain all punt/hold instructions.\n{output}")
+    let finish = if host_published {
+        "Leave your edits uncommitted: the host commits and publishes them after you exit"
+    } else {
+        // The queued repair may be picked up by any lane; only a native seat
+        // (its Git read-only) defers the commit to the host.
+        "Commit your fix and publish it to the existing branch before you finish; \
+         uncommitted edits are not published (only a seat whose \
+         AIDA_CONTAINMENT_POSTURE is native defers its commit to the host)"
+    };
+    format!("The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. {finish}; retain all punt/hold instructions.\n{output}")
 }
 
 /// A self-published lane queues its one repair before review admission. The
@@ -801,7 +881,7 @@ pub(crate) fn pushed(
 }
 
 // trace:STORY-2640 | ai:codex
-fn pushed_head_attempt(
+pub(crate) fn pushed_head_attempt(
     local: &str,
     published: &str,
     run: impl FnOnce() -> Result<(String, String, String)>,
@@ -872,7 +952,8 @@ fn pushed_inner(
             let req = store
                 .get_requirement_unambiguous(spec)?
                 .context("fast gate spec unavailable")?;
-            let note = repair_prompt(&output);
+            // A pushed gate's lane published itself. trace:BUG-2705 | ai:claude
+            let note = repair_prompt(&output, false);
             let vendor = crate::brief::validate_brief_agent(vendor)?;
             let dir = main.join(".aida/agent-briefs").join(vendor);
             std::fs::create_dir_all(&dir)?;
@@ -1159,10 +1240,21 @@ mod tests {
     #[test]
     fn fast_gate_repair_prompt_bounds_multibyte_output_below_argv_limit() {
         let output = "é".repeat(1024 * 1024) + "trailing failure";
-        let prompt = repair_prompt(&output);
+        let prompt = repair_prompt(&output, true);
         assert!(prompt.len() < 20 * 1024);
         assert!(prompt.ends_with("trailing failure"));
         assert!(prompt.contains("ONE fast-gate fix round"));
+    }
+
+    // trace:BUG-2705 | ai:claude
+    #[test]
+    fn fast_gate_repair_prompt_tells_only_host_published_lanes_to_leave_edits_uncommitted() {
+        let native = repair_prompt("red", true);
+        assert!(native.contains("Leave your edits uncommitted"), "{native}");
+        let pushed = repair_prompt("red", false);
+        assert!(!pushed.contains("Leave your edits uncommitted"), "{pushed}");
+        assert!(pushed.contains("Commit your fix"), "{pushed}");
+        assert!(pushed.contains("retain all punt/hold instructions"));
     }
 
     // trace:STORY-2640 | ai:codex
@@ -1735,6 +1827,53 @@ mod tests {
         assert!(!blocks_review(tmp.path(), "lane").unwrap());
         assert!(result_line(tmp.path(), "lane", "publication failed:")
             .contains("fast_gate=skipped(infrastructure)"));
+    }
+
+    // BUG-2705: a gate refused for a dirty seat names the reason on the
+    // lane's result line, never a bare `fast_gate=fail`, and a new
+    // reservation starts without the previous round's reason.
+    // trace:BUG-2705 | ai:claude
+    #[test]
+    fn fast_gate_refusal_reason_reaches_the_result_line_until_the_next_reservation() {
+        let tmp = tempfile::tempdir().unwrap();
+        begin(tmp.path(), "lane").unwrap();
+        let mut red = read(tmp.path(), "lane").unwrap().unwrap();
+        red.marker = "fail".into();
+        red.repair_used = true;
+        write(tmp.path(), &red).unwrap();
+        let dirty = dirty_seat(&["src/a.rs".into(), "src/b.rs".into()]);
+        infrastructure(
+            tmp.path(),
+            "lane",
+            "lease",
+            &anyhow::anyhow!("{dirty}\nsecond line"),
+        );
+        let line = result_line(tmp.path(), "lane", "implementer:");
+        assert!(
+            line.ends_with(
+                "fast_gate=fail (reason: fast gate needs a clean committed seat: 2 uncommitted \
+                 path(s) remain and nothing committed them (src/a.rs, src/b.rs) second line)"
+            ),
+            "{line}"
+        );
+        assert!(!line.contains('\n'));
+        assert!(marker_with_reason(tmp.path(), "lane").starts_with("fail (reason: "));
+        begin(tmp.path(), "lane").unwrap();
+        assert_eq!(reason(tmp.path(), "lane"), None);
+        assert!(result_line(tmp.path(), "lane", "implementer:")
+            .ends_with("fast_gate=skipped(lane-ended)"));
+    }
+
+    // trace:BUG-2705 | ai:claude
+    #[test]
+    fn fast_gate_dirty_seat_refusal_names_a_bounded_list_of_paths() {
+        let paths: Vec<String> = (1..=7).map(|n| format!("f{n}")).collect();
+        let message = dirty_seat(&paths);
+        assert!(
+            message.ends_with("7 uncommitted path(s) remain and nothing committed them (f1, f2, f3, f4, f5, and 2 more)"),
+            "{message}"
+        );
+        assert!(!message.contains("f6"));
     }
 
     // trace:STORY-2640 | ai:codex
