@@ -15,11 +15,11 @@ description: |
   5. Existing leases and claims with a sandbox hostname are shown with a note in `aida session leases --all` (no data rewrite needed).
   6. Until this lands, the manual release procedure in the advisor-121 ruling (comment of 2026-11-19 13:38) stays the documented stopgap; remove that note from the lane-host checklist when this ships.
 status: Draft
-priority: Low
+priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T00:59:12.249580307Z
+modified_at: 2026-11-20T00:59:55.362130506Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -91,6 +91,15 @@ history:
       4. `aida doctor check leases` reports, and `aida doctor heal stale-leases --id shared-<claim> --yes` heals, an expired shared claim (heartbeat + ttl in the past, process_backed=false, holder pid not running) whose recorded host is a sandbox UTS name of THIS node, as well as one recorded with the node identity. Regression test reproducing the 01a1f4f93790 record shape.
       5. Existing leases and claims with a sandbox hostname are shown with a note in `aida session leases --all` (no data rewrite needed).
       6. Until this lands, the manual release procedure in the advisor-121 ruling (comment of 2026-11-19 13:38) stays the documented stopgap; remove that note from the lane-host checklist when this ships.
+- id: 01a1f677-9862-7f91-a471-dbd651a4977c
+  author: joe
+  timestamp: 2026-11-20T00:59:55.362129842Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: priority
+    old_value: Low
+    new_value: High
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
   branch: main
