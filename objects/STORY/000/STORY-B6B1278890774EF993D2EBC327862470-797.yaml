@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T23:19:02.528311405Z
+modified_at: 2026-11-20T23:23:59.661585363Z
 req_type: Story
 tags:
 - landing
@@ -825,6 +825,68 @@ comments:
     Promotion 24 READY: PR #4384 (promote/integration-24 at 5b9312d -> main), title "... [promotion 24] (Refs STORY-2897)" with parens last. Refs, not completing: S1b (review-watch readiness by mode, plus review record refusing WAITING on generic or pending CI) is still unimplemented; the PR body says so. Contents: #4362 S3 (5a4a2dc) plus the main sync through 719aa49 (conflict: JSON-audit row, kept both stalls and watch) plus one test fix (landing-path scan follows the pr_cmd/ directory split). origin/integration = 5b9312d. check-ci-fast exit 0; review story STORY-2996 queued via auto-queue-review (the first call errored on id dispensing, the retry reused STORY-2996 and repaired its link); ci:full added after the push run started.
   created_at: 2026-11-20T23:19:02.528311405Z
   modified_at: 2026-11-20T23:19:02.528311405Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb46-5287-7490-bda1-be12ba26e497
+  author: joe
+  content: |
+    SKETCH S1b (integration seat, 2026-11-20): STORY-2897 slice S1b, the last open slice. No code until the advisor signs.
+
+    Source: the 2026-11-17 21:16/21:17 acceptance additions (product and advisor). They were split out of S1 by the 2026-11-18 00:35 ruling.
+
+    ## (a) The readiness wake follows the landing mode (review_watch_ready.rs)
+
+    Today `evaluate()` requires every check on the head to be green, plus `[review_watch] required_checks` (judge_commit_checks). It documents that it "reads the same evidence `aida pr ship` checks", but in review-gated mode ship no longer waits for CI. So the wake still waits on Build, which is the 21:17 defect.
+
+    - Read the effective mode via `landing_policy::load(root)` (the trusted default branch).
+    - **ci-gated**: unchanged. `[review_watch] required_checks`, and every check must be green.
+    - **review-gated**: the required set is `policy.review_gated_checks` (merge-hold-gate) only. Pending, failed or absent checks outside that set do not block readiness. They are reported as info on the wake line ("CI at head: Build pending" / "failed: X"), so the advisor sees them. This mirrors what `aida pr ship` does in that mode.
+    - An unreadable policy fails closed. `load` already falls back to ci-gated, so the wake waits on CI as today.
+    - The Evidence port gains `landing_mode()`, so tests are fixture-driven.
+    - The ready-after-update, under-review, hold and base logic is untouched.
+
+    Tests:
+    - both modes with Build pending, failed and green;
+    - merge-hold-gate pending blocks in both modes;
+    - an unreadable policy behaves as ci-gated;
+    - the info line text.
+
+    ## (b) review record refuses a CI-only WAITING in review-gated mode (review_commands.rs)
+
+    Today a WAITING verdict needs only a free-text summary (BUG-2500). Free-text detection of "generic CI" is fragile, so I propose a structured field:
+
+    - `aida review record --verdict waiting --needs <kind>:<name>`, repeatable. The kinds are:
+      - `test:<test path or name>`
+      - `artifact:<name>`
+      - `check:<check name>`
+      - `actor:<seat or person>`, for a decision someone owes.
+    - In review-gated mode, WAITING refuses (exit nonzero, nothing recorded) when:
+      - (1) no `--needs` is given, or
+      - (2) every `--needs` is a `check:` naming a generic CI check: the CI-gated set (`required_checks.ci_gated`, e.g. Build), the tier markers (`ci-tier:*`), or a shard aggregate.
+    - The refusal tells the reviewer to record APPROVED or CHANGES REQUESTED on the code, with CI as info.
+    - A `check:` naming a specific non-aggregate job, and any `test:`/`artifact:`/`actor:`, is accepted.
+    - The `--needs` items are stored in the verdict record (a new optional field; old records read as none) and shown in `aida review verdict`.
+    - In ci-gated mode nothing changes: `--needs` is optional and not validated.
+    - The mode is read from the trusted default branch, like the gates.
+
+    The template master `aida-core/templates/.../aida-review.md` contract text (the :644 and :1363 lines say to approve a defect-free head while CI is pending) gains the `--needs` form and the refusal. Then `make sync-templates`.
+
+    Tests:
+    - review-gated: no `--needs` refused; `check:Build` refused; `check:ci-tier: full` refused; `test:foo::bar` accepted; `actor:advisor` accepted;
+    - ci-gated: summary-only still accepted;
+    - old verdict records deserialize.
+
+    ## Not in S1b
+    - STORY-2914 (gate/authority-path PRs need full CI before merge in review-gated mode) is its own spec. When it lands, readiness must mirror it; the readiness port leaves room for that.
+    - No new user setting (the 10:37 trim): `--needs` is a command flag, not a knob.
+
+    ## Questions for the advisor
+    - Q1: should a completed FAILED Build on the head block readiness in review-gated mode? I propose not: it's info only, mirroring ship. Blocking would make readiness stricter than the merge it predicts.
+    - Q2: are the `--needs` kinds above the right set, or do you want free-text plus a deny-list instead?
+
+    Size: ~250 lines plus tests, one integration PR, trailer (STORY-2897). It completes the story.
+  created_at: 2026-11-20T23:23:59.661585363Z
+  modified_at: 2026-11-20T23:23:59.661585363Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
