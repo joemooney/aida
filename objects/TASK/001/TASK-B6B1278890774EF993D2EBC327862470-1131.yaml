@@ -15,12 +15,26 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T15:16:46.260567298Z
-modified_at: 2026-11-20T15:17:36.904488355Z
+modified_at: 2026-11-20T15:20:56.753852744Z
 req_type: Task
 tags:
 - crate-split
 - linked:TASK-3786
 - refactor
+comments:
+- id: 01a1f98c-1265-7300-838b-1db5f364ab20
+  author: joe
+  content: |-
+    Product 08:20: codex fresh-start lane queued on dell1, brief:
+    # Brief: TASK-3822 (fresh start; advisor-121 08:18: approved, drain, codex)
+
+    Split aida-cli-lib's pr_cmd module into a pr_cmd/ directory (the remainder of crate-split PR10; #4309 already extracted pr_service). A MECHANICAL move: no logic changes, unchanged public paths and re-exports, keep every trace comment with its code, update scripts/store-writers.toml for any moved writer sites, and update the CLI help golden only if it actually changes (it shouldn't).
+    Implement the spec's acceptance criteria. Trailer (TASK-3822) if complete.
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T15:20:56.753852744Z
+  modified_at: 2026-11-20T15:20:56.753852744Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f988-cecb-7802-bfe2-064cda85d46d
   author: joe
