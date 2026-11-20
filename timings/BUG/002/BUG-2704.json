@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2704",
+  "publishes": [
+    {
+      "at": "2026-11-20T10:21:05.703203968Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-20T10:21:05.487353503Z",
+      "spec": "BUG-2704",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b41fd684a30a08a22ee1ac9d315ec965f5a3c9d1",
+        "pr": 4356,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
