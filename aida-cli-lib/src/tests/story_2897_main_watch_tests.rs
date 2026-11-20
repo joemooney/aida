@@ -28,6 +28,7 @@ fn check(name: &str, outcome: CheckOutcome, run: &str, attempt: u64) -> CommitCh
         workflow_id: Some("ci".into()),
         cancelled: false,
         run_attempt: Some(attempt),
+        run_in_progress: false,
     }
 }
 
@@ -51,6 +52,8 @@ struct Fake {
     checks: HashMap<String, Vec<CommitCheck>>,
     evidence: HashMap<String, Evidence>,
     evidence_failures: usize,
+    log_failures: usize,
+    comments: Vec<(String, String)>,
     reruns: Vec<String>,
     mails: Vec<(String, String, String)>,
     notices: Vec<String>,
@@ -124,12 +127,19 @@ impl Ports for Fake {
             self.evidence_failures -= 1;
             anyhow::bail!("gh unavailable");
         }
-        Ok(self.evidence.get(run_id).cloned().unwrap_or(Evidence {
+        let mut found = self.evidence.get(run_id).cloned().unwrap_or(Evidence {
             check: job.into(),
             link: format!("https://ci.example/runs/{run_id}"),
             failed_steps: vec!["Run tests".into()],
             excerpt: "test foo ... FAILED".into(),
-        }))
+            log_complete: true,
+        });
+        if self.log_failures > 0 {
+            self.log_failures -= 1;
+            found.excerpt = "(the job log could not be read yet)".into();
+            found.log_complete = false;
+        }
+        Ok(found)
     }
     fn rerun_failed(&mut self, run_id: &str) -> Result<()> {
         self.reruns.push(run_id.into());
@@ -145,6 +155,10 @@ impl Ports for Fake {
     fn notify_operator(&mut self, key: &str, _title: &str, _body: &str) -> Result<()> {
         anyhow::ensure!(!self.fail_operator, "push channel down");
         self.notices.push(key.into());
+        Ok(())
+    }
+    fn comment_fix_spec(&mut self, id: &str, text: &str) -> Result<()> {
+        self.comments.push((id.into(), text.into()));
         Ok(())
     }
     fn human_open(&mut self, red_sha: &str, _title: &str, body: &str) -> Result<String> {
@@ -462,6 +476,7 @@ fn each_revert_trigger_is_escalated_once_after_confirmation() {
             link: "l".into(),
             failed_steps: vec!["Build all packages".into()],
             excerpt: "error[E0425]".into(),
+            log_complete: true,
         },
     );
     run(dir.path(), &mut fake);
@@ -496,7 +511,7 @@ fn each_revert_trigger_is_escalated_once_after_confirmation() {
 #[test]
 fn a_transient_evidence_read_is_retried_and_still_finds_an_unbuildable_main() {
     let (dir, mut fake) = red_on_green();
-    fake.evidence_failures = 2;
+    fake.evidence_failures = 1;
     fake.evidence.insert(
         "200".into(),
         Evidence {
@@ -504,6 +519,7 @@ fn a_transient_evidence_read_is_retried_and_still_finds_an_unbuildable_main() {
             link: "l".into(),
             failed_steps: vec!["Build aida binary for lib unit tests".into()],
             excerpt: String::new(),
+            log_complete: true,
         },
     );
     run(dir.path(), &mut fake);
@@ -1055,4 +1071,183 @@ fn the_ci_readers_keep_cancellation_and_the_run_attempt() {
     .unwrap();
     assert_eq!(gitlab[0].outcome, CheckOutcome::Failed);
     assert!(gitlab[0].cancelled);
+}
+
+// ---------------------------------------------------------------------------
+// Round 4.
+// ---------------------------------------------------------------------------
+
+/// P1: a held store lock fails a store effect at once; it succeeds once the
+/// lock is free (the watch retries it on its next pass).
+#[test]
+fn a_held_store_lock_fails_store_effects_at_once_and_they_succeed_later() {
+    let _user = crate::test_env::pin_queue_user();
+    let (_dir, _root, store_root, _) =
+        crate::bug_1638_race_seam_tests::project_with(aida_core::RequirementStatus::Approved);
+    let storage = crate::test_env::home_fixture_storage(&store_root);
+    let fix = FixSpec {
+        red_sha: sha(2),
+        title: "main red at x: Build".into(),
+        description: "d".into(),
+        fixes: Vec::new(),
+    };
+    let (held_tx, held_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+    let holder_root = store_root.clone();
+    let holder = std::thread::spawn(move || {
+        aida_core::db::with_store_write_lock(&holder_root, || {
+            held_tx.send(()).unwrap();
+            release_rx.recv().unwrap();
+            Ok(())
+        })
+        .unwrap();
+    });
+    held_rx.recv().unwrap();
+    let started = std::time::Instant::now();
+    assert!(file_fix_spec(&storage, &fix).is_err());
+    assert!(human_open(&storage, &sha(2), "t", "b").is_err());
+    assert!(human_resolve(&storage, &sha(2)).is_err());
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(5),
+        "never waits: {:?}",
+        started.elapsed()
+    );
+    release_tx.send(()).unwrap();
+    holder.join().unwrap();
+    file_fix_spec(&storage, &fix).unwrap();
+    human_open(&storage, &sha(2), "t", "b").unwrap();
+}
+
+/// P2: a re-run that started between the check-run read and the run read
+/// is pending, not a confirmed failure.
+#[test]
+fn a_rerun_in_progress_is_pending_not_a_confirmed_failure() {
+    use serde_json::json;
+    let head = sha(1);
+    let runs = json!({"total_count": 1, "check_runs": [
+        {"name": BUILD, "head_sha": head, "status": "completed", "conclusion": "failure",
+         "details_url": "https://github.com/o/r/actions/runs/7/job/1"}]});
+    let mut api = |endpoint: &str| -> Result<Vec<u8>> {
+        let body = if endpoint.contains("/check-runs") {
+            runs.clone()
+        } else if endpoint.ends_with("/actions/runs/7") {
+            json!({"id": 7, "head_sha": head, "workflow_id": 3, "run_attempt": 2, "status": "in_progress"})
+        } else {
+            json!({"sha": head, "total_count": 0, "statuses": []})
+        };
+        Ok(serde_json::to_vec(&body).unwrap())
+    };
+    let checks = crate::forge::github_commit_checks("o/r", &head, &mut api).unwrap();
+    assert!(checks.checks[0].run_in_progress);
+    assert!(matches!(
+        judge(Ok(checks), &required()),
+        Verdict::Unknown(_)
+    ));
+
+    let (dir, mut fake) = red_on_green();
+    run(dir.path(), &mut fake);
+    let mut rerun = red("200", 2);
+    rerun[0].run_in_progress = true;
+    fake.checks.insert(sha(2), rerun);
+    fake.at(10);
+    run(dir.path(), &mut fake);
+    assert!(state(dir.path()).episode.unwrap().confirmed_at.is_none());
+    assert!(fake.filed.is_empty());
+}
+
+/// P2: evidence is fresh per (run, attempt) of each failed job, not per the
+/// newest attempt overall.
+#[test]
+fn a_rerun_failing_again_has_its_new_attempt_probed() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fake = Fake::default();
+    fake.push(1, "base (#1)", green("1"));
+    run(dir.path(), &mut fake);
+    fake.push(
+        2,
+        "two jobs (#2)",
+        vec![
+            check(BUILD, CheckOutcome::Failed, "10", 3),
+            check("CI (lib-1)", CheckOutcome::Failed, "20", 1),
+        ],
+    );
+    run(dir.path(), &mut fake);
+    fake.evidence.insert(
+        "20".into(),
+        Evidence {
+            check: "CI (lib-1)".into(),
+            link: "l".into(),
+            failed_steps: vec!["Build all packages".into()],
+            excerpt: "error".into(),
+            log_complete: true,
+        },
+    );
+    fake.checks.insert(
+        sha(2),
+        vec![
+            check(BUILD, CheckOutcome::Failed, "10", 3),
+            check("CI (lib-1)", CheckOutcome::Failed, "20", 2),
+        ],
+    );
+    fake.at(5);
+    run(dir.path(), &mut fake);
+    let episode = state(dir.path()).episode.unwrap();
+    assert!(
+        episode.evidence_keys.contains("20:2"),
+        "{:?}",
+        episode.evidence_keys
+    );
+    assert!(
+        episode.unbuildable.is_some(),
+        "B's new failing step was read"
+    );
+}
+
+/// P2: an unread log keeps the link and steps, is retried, and reaches the
+/// alert and the filed fix spec as follow-ups once it is read.
+#[test]
+fn an_unread_log_is_retried_and_followed_up_on_the_alert_and_fix_spec() {
+    let (dir, mut fake) = red_on_green();
+    fake.log_failures = 3;
+    run(dir.path(), &mut fake);
+    let episode = state(dir.path()).episode.unwrap();
+    assert!(episode.evidence_keys.is_empty());
+    assert_eq!(episode.evidence[0].link, "https://ci.example/runs/200");
+    fake.at(31);
+    run(dir.path(), &mut fake);
+    assert_eq!(fake.filed.len(), 1);
+    fake.at(33);
+    run(dir.path(), &mut fake);
+    assert!(fake.comments.is_empty(), "the log is still unread");
+    fake.at(35);
+    run(dir.path(), &mut fake);
+    let key = format!("main-red-{}-evidence-{}", sha(2), "Build--ubuntu-latest-");
+    assert!(
+        fake.mail_keys().contains(&key.as_str()),
+        "{:?}",
+        fake.mail_keys()
+    );
+    assert_eq!(fake.comments.len(), 1);
+    assert_eq!(fake.comments[0].0, "BUG-9000");
+    assert!(fake.comments[0].1.contains("test foo ... FAILED"));
+}
+
+/// P2: a torn last journal line does not stop the replay.
+#[test]
+fn a_torn_last_journal_line_is_skipped_and_the_replay_proceeds() {
+    let (dir, mut fake) = red_on_green();
+    fail_at(Some("journal"));
+    assert!(try_run(dir.path(), &mut fake).is_err());
+    fail_at(None);
+    let journal_path = dir.path().join(JOURNAL);
+    std::fs::write(&journal_path, b"{\"id\":\"torn").unwrap();
+    assert!(read_journal(dir.path()).unwrap().is_empty());
+    run(dir.path(), &mut fake);
+    assert_eq!(count(dir.path(), "red_start"), 1);
+    let raw = std::fs::read_to_string(&journal_path).unwrap();
+    assert!(!raw.contains("torn"), "the torn line was cut: {raw}");
+    assert_eq!(
+        fake.mail_keys(),
+        vec![format!("main-red-{}", sha(2)).as_str()]
+    );
 }

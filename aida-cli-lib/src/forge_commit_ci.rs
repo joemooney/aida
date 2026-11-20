@@ -40,6 +40,10 @@ pub(crate) struct CommitCheck {
     /// after one re-run), verified from that run; `None` elsewhere.
     // trace:STORY-2897 | ai:claude
     pub run_attempt: Option<u64>,
+    /// The owning GitHub Actions run has not completed (a re-run started
+    /// after this row was listed): its failure is not a finished attempt.
+    // trace:STORY-2897 | ai:claude
+    pub run_in_progress: bool,
 }
 
 /// Every check the forge reports on `sha`.
@@ -289,7 +293,7 @@ pub(crate) fn github_commit_checks(
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<CommitChecks> {
     let mut checks = Vec::new();
-    let mut workflows = std::collections::HashMap::<String, (String, Option<u64>)>::new();
+    let mut workflows = std::collections::HashMap::<String, (String, Option<u64>, bool)>::new();
     let mut total = None;
     let mut seen = 0usize;
     for page in 1..=MAX_PAGES {
@@ -328,11 +332,17 @@ pub(crate) fn github_commit_checks(
                         .and_then(|v| v.as_u64())
                         .context("workflow run has no workflow_id")?;
                     let attempt = value.get("run_attempt").and_then(|v| v.as_u64());
-                    workflows.insert(run.to_string(), (workflow.to_string(), attempt));
+                    let in_progress =
+                        value.get("status").and_then(|v| v.as_str()) != Some("completed");
+                    workflows.insert(
+                        run.to_string(),
+                        (workflow.to_string(), attempt, in_progress),
+                    );
                 }
-                if let Some((workflow, attempt)) = workflows.get(run) {
+                if let Some((workflow, attempt, in_progress)) = workflows.get(run) {
                     check.workflow_id = Some(workflow.clone());
                     check.run_attempt = *attempt;
+                    check.run_in_progress = *in_progress;
                 }
             }
             checks.push(check);
@@ -405,6 +415,7 @@ pub(crate) fn parse_gh_check_runs(
             workflow_id: None,
             cancelled: outcome == CheckOutcome::Failed && conclusion == Some("cancelled"),
             run_attempt: None,
+            run_in_progress: false,
             run_id: run
                 .get("details_url")
                 .and_then(|v| v.as_str())
@@ -460,6 +471,7 @@ pub(crate) fn parse_gh_commit_status(
                 workflow_id: None,
                 cancelled: false,
                 run_attempt: None,
+                run_in_progress: false,
             })
         })
         .collect()
@@ -555,6 +567,7 @@ pub(crate) fn parse_glab_commit_statuses(
             workflow_id: None,
             cancelled,
             run_attempt: None,
+            run_in_progress: false,
         })
         .collect())
 }

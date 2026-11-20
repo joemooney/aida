@@ -67,6 +67,10 @@ pub(crate) struct Evidence {
     pub link: String,
     pub failed_steps: Vec<String>,
     pub excerpt: String,
+    /// The job log was read; `false` keeps the link and steps and retries
+    /// the log on a later pass.
+    #[serde(default)]
+    pub log_complete: bool,
 }
 
 /// What the watch reads and does outside its own state files. [`Live`] is
@@ -86,6 +90,8 @@ pub(crate) trait Ports {
     fn mail(&mut self, key: &str, subject: &str, body: &str) -> Result<()>;
     /// The operator's optional push notice.
     fn notify_operator(&mut self, key: &str, title: &str, body: &str) -> Result<()>;
+    /// Add `text` to fix spec `id` as a comment, once.
+    fn comment_fix_spec(&mut self, id: &str, text: &str) -> Result<()>;
     /// Create or update the durable `aida human` item for `red_sha`.
     fn human_open(&mut self, red_sha: &str, title: &str, body: &str) -> Result<String>;
     /// Resolve the `aida human` item for `red_sha`, if there is one.
@@ -150,10 +156,13 @@ pub(crate) struct Episode {
     /// Failure evidence per failing check.
     #[serde(default)]
     pub evidence: Vec<Evidence>,
-    /// The run attempt the evidence was read for; `None` until a read of
-    /// every failing job succeeded, so an unknown read is retried.
+    /// `run:attempt` of each failed job whose evidence, log included, was
+    /// read; any other failed job is read again on the next pass.
     #[serde(default)]
-    pub evidence_attempt: Option<u64>,
+    pub evidence_keys: BTreeSet<String>,
+    /// The opening alert went out; evidence arriving later is sent after it.
+    #[serde(default)]
+    pub alerted: bool,
     /// `Some(why)` when a failing check failed at a compile step.
     pub unbuildable: Option<String>,
     /// The episode commit whose staged build failed the smoke test.
@@ -181,6 +190,7 @@ pub(crate) enum Channel {
     Operator,
     HumanOpen { red_sha: String },
     HumanResolve { red_sha: String },
+    FixComment { spec: String },
 }
 
 /// One journal line.
@@ -229,15 +239,30 @@ pub(crate) fn judge(checks: Result<CommitChecks>, required: &[String]) -> Verdic
         .map(String::as_str)
         .filter(|n| *n != crate::landing_policy::MERGE_HOLD_GATE)
         .collect();
+    let mut rerunning: Vec<String> = Vec::new();
     let failed: Vec<FailedCheck> = latest
         .iter()
         .filter(|c| c.outcome == CheckOutcome::Failed && !c.cancelled)
+        .copied()
+        .collect::<Vec<_>>()
+        .into_iter()
+        .filter(|c| {
+            // A failure counts for an attempt only once that attempt has
+            // completed; a re-run in progress is pending.
+            if c.run_in_progress && required.contains(&c.name.as_str()) {
+                rerunning.push(c.name.clone());
+            }
+            !c.run_in_progress
+        })
         .map(|c| FailedCheck {
             name: c.name.clone(),
             run_id: c.run_id.clone(),
             attempt: c.run_attempt,
         })
         .collect();
+    if !rerunning.is_empty() {
+        return Verdict::Unknown(format!("a re-run is in progress: {}", rerunning.join(", ")));
+    }
     // A required check that failed makes the commit red; other failed checks
     // are carried as evidence beside it, but alone are not red.
     if failed.iter().any(|f| required.contains(&f.name.as_str())) {
@@ -317,11 +342,29 @@ fn write_state(root: &Path, state: &State) -> Result<()> {
 
 fn append(root: &Path, event: &Event) -> Result<()> {
     failpoint("journal")?;
+    use std::io::{Read, Seek, SeekFrom};
     let mut file = std::fs::OpenOptions::new()
         .create(true)
-        .append(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
         .open(root.join(JOURNAL))
         .with_context(|| format!("opening {JOURNAL}"))?;
+    // Cut a torn last line (a crash mid-append) before appending.
+    let len = file.metadata()?.len();
+    if len > 0 {
+        let mut last = [0u8; 1];
+        file.seek(SeekFrom::Start(len - 1))?;
+        file.read_exact(&mut last)?;
+        if last[0] != b'\n' {
+            let mut text = Vec::new();
+            file.seek(SeekFrom::Start(0))?;
+            file.read_to_end(&mut text)?;
+            let keep = text.iter().rposition(|b| *b == b'\n').map_or(0, |p| p + 1);
+            file.set_len(keep as u64)?;
+        }
+    }
+    file.seek(SeekFrom::End(0))?;
     let mut line = serde_json::to_vec(event)?;
     line.push(b'\n');
     file.write_all(&line)?;
@@ -332,11 +375,22 @@ fn append(root: &Path, event: &Event) -> Result<()> {
 /// Every journal event, oldest first, each transition id once.
 pub(crate) fn read_journal(root: &Path) -> Result<Vec<Event>> {
     let events: Vec<Event> = match std::fs::read_to_string(root.join(JOURNAL)) {
-        Ok(text) => text
-            .lines()
-            .filter(|l| !l.trim().is_empty())
-            .map(|l| serde_json::from_str(l).with_context(|| format!("invalid line in {JOURNAL}")))
-            .collect::<Result<_>>()?,
+        Ok(text) => {
+            let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
+            let mut events = Vec::new();
+            for (i, line) in lines.iter().enumerate() {
+                match serde_json::from_str(line) {
+                    Ok(event) => events.push(event),
+                    // A crash mid-append leaves a torn last line: skip it;
+                    // the next append truncates it away.
+                    Err(e) if i + 1 == lines.len() => {
+                        eprintln!("red-main watch: ignoring a torn last line in {JOURNAL}: {e}");
+                    }
+                    Err(e) => return Err(e).with_context(|| format!("invalid line in {JOURNAL}")),
+                }
+            }
+            events
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
         Err(e) => return Err(e.into()),
     };
@@ -426,6 +480,7 @@ fn deliver(
                 .human_open(red_sha, &notice.title, &notice.body)
                 .map(|_| ()),
             Channel::HumanResolve { red_sha } => ports.human_resolve(red_sha),
+            Channel::FixComment { spec } => ports.comment_fix_spec(spec, &notice.body),
         };
         if let Err(e) = result {
             if let Channel::HumanOpen { red_sha } | Channel::HumanResolve { red_sha } =
@@ -577,26 +632,28 @@ pub(crate) fn pass(
     Ok(notes)
 }
 
-/// Read the failure evidence of every failing job of the episode, unless it
-/// was already read for the current run attempt. Returns whether it read
-/// anything; a failed read leaves the evidence to be retried next pass.
-fn probe(episode: &mut Episode, ports: &mut dyn Ports, notes: &mut Vec<String>) -> bool {
-    let attempt = episode
-        .failed
-        .iter()
-        .filter_map(|f| f.attempt)
-        .max()
-        .or(Some(0));
-    if episode.evidence_attempt == attempt {
-        return false;
-    }
-    let mut complete = true;
-    for f in &episode.failed {
+/// Read the failure evidence of each failed job whose `run:attempt` has not
+/// been read in full yet. Returns whether anything was read, and the
+/// evidence that completed only after the opening alert went out (it is sent
+/// as a follow-up). A failed read is retried next pass.
+fn probe(
+    episode: &mut Episode,
+    ports: &mut dyn Ports,
+    notes: &mut Vec<String>,
+) -> (bool, Vec<Evidence>) {
+    let mut changed = false;
+    let mut late = Vec::new();
+    for f in episode.failed.clone() {
         let Some(run) = f.run_id.as_deref() else {
             continue;
         };
+        let key = format!("{run}:{}", f.attempt.unwrap_or(0));
+        if episode.evidence_keys.contains(&key) {
+            continue;
+        }
         match ports.evidence(run, &f.name) {
             Ok(mut found) => {
+                changed = true;
                 found.check = f.name.clone();
                 if let Some(step) = found
                     .failed_steps
@@ -605,22 +662,38 @@ fn probe(episode: &mut Episode, ports: &mut dyn Ports, notes: &mut Vec<String>) 
                 {
                     episode.unbuildable = Some(format!("`{}` failed at step `{step}`", f.name));
                 }
+                let had_log = episode
+                    .evidence
+                    .iter()
+                    .any(|e| e.check == found.check && e.log_complete);
+                if found.log_complete {
+                    episode.evidence_keys.insert(key);
+                    if episode.alerted && !had_log {
+                        late.push(found.clone());
+                    }
+                } else {
+                    notes.push(format!(
+                        "red-main watch: the log of `{}` could not be read; retried next pass",
+                        f.name
+                    ));
+                }
                 episode.evidence.retain(|e| e.check != found.check);
                 episode.evidence.push(found);
             }
-            Err(e) => {
-                complete = false;
-                notes.push(format!(
-                    "red-main watch: the failure evidence of `{}` could not be read; retried next pass: {e:#}",
-                    f.name
-                ));
-            }
+            Err(e) => notes.push(format!(
+                "red-main watch: the failure evidence of `{}` could not be read; retried next pass: {e:#}",
+                f.name
+            )),
         }
     }
-    if complete {
-        episode.evidence_attempt = attempt;
-    }
-    true
+    (changed, late)
+}
+
+/// A check name made safe for a notice key.
+fn slug(name: &str) -> String {
+    name.chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect()
 }
 
 fn evidence_text(episode: &Episode) -> String {
@@ -731,13 +804,15 @@ fn open(
         confirmed_at: None,
         fix_spec: None,
         evidence: Vec::new(),
-        evidence_attempt: None,
+        evidence_keys: BTreeSet::new(),
+        alerted: false,
         unbuildable: None,
         smoke_failed: None,
         red_merges: Vec::new(),
         recommended: Vec::new(),
     };
     probe(&mut episode, ports, notes);
+    episode.alerted = true;
     let body = format!(
         "Main is red at {} ({}).\nPR: {}\nSpecs: {}\nFailing:\n{}{}\n\nThe failed jobs are re-run \
          once. If the red survives that re-run or 30 minutes, a fix spec is filed at the top of \
@@ -803,7 +878,47 @@ fn advance(
     }
     // Evidence (and the unbuildable trigger) is read again until it is
     // complete, and again for each new run attempt.
-    if probe(&mut episode, ports, notes) {
+    // The pass that opened the episode already read the evidence.
+    let (read, late) = if episode.opened_at == now {
+        (false, Vec::new())
+    } else {
+        probe(&mut episode, ports, notes)
+    };
+    for found in &late {
+        let body = format!(
+            "The log of `{}` for main's red at {} is now read:\n{}\n{}",
+            found.check,
+            short(&episode.red_sha),
+            found.link,
+            found.excerpt
+        );
+        let key = format!(
+            "main-red-{}-evidence-{}",
+            episode.red_sha,
+            slug(&found.check)
+        );
+        notify(
+            state,
+            key.clone(),
+            Channel::Mail,
+            format!(
+                "main red at {}: log of {}",
+                short(&episode.red_sha),
+                found.check
+            ),
+            body.clone(),
+        );
+        if let Some(id) = &episode.fix_spec {
+            notify(
+                state,
+                format!("{key}-comment"),
+                Channel::FixComment { spec: id.clone() },
+                String::new(),
+                body,
+            );
+        }
+    }
+    if read {
         state.episode = Some(episode.clone());
         write_state(root, state)?;
     }
@@ -1255,13 +1370,14 @@ impl Ports for Live {
                     report.failed_steps.first().map(String::as_str),
                 )
             }
-            Err(e) => format!("(the job log could not be read: {e})"),
+            Err(e) => format!("(the job log could not be read yet: {e})"),
         };
         Ok(Evidence {
             check: job.to_string(),
             link: report.link,
             failed_steps: report.failed_steps,
             excerpt,
+            log_complete: report.log.is_ok(),
         })
     }
 
@@ -1308,6 +1424,10 @@ impl Ports for Live {
     fn notify_operator(&mut self, key: &str, title: &str, body: &str) -> Result<()> {
         crate::notify::send_direct_bounded(&self.root, key, title, body, Some(self.call_timeout))
             .map(|_| ())
+    }
+
+    fn comment_fix_spec(&mut self, id: &str, text: &str) -> Result<()> {
+        comment_fix_spec(&self.store(), id, text)
     }
 
     fn human_open(&mut self, red_sha: &str, title: &str, body: &str) -> Result<String> {
@@ -1403,6 +1523,31 @@ fn tagged(store: &aida_core::RequirementsStore, tag: &str) -> Option<(uuid::Uuid
         .map(|r| (r.id, display(r)))
 }
 
+/// Run a store effect under the store write lock without ever waiting for
+/// it: another writer holding the lock fails the effect at once, and the
+/// watch retries it on its next pass. The land loop and the auto-train
+/// worker never wait on the store through the watch.
+fn locked<T>(storage: &aida_core::Storage, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    aida_core::db::with_store_write_lock_try(storage.path(), f)
+        .context("the requirement store is busy or not writable; retried next pass")
+}
+
+/// Add `text` to fix spec `id` as a comment, unless it already has it.
+pub(crate) fn comment_fix_spec(storage: &aida_core::Storage, id: &str, text: &str) -> Result<()> {
+    locked(storage, || {
+        let mut store = storage.load()?;
+        let author = aida_core::provenance::default_author_in(Some(storage.path()));
+        let req = store
+            .get_requirement_unambiguous_mut(id)?
+            .with_context(|| format!("{id} is not in the store"))?;
+        if req.comments.iter().any(|c| c.content == text) {
+            return Ok(());
+        }
+        req.add_comment(aida_core::Comment::new(author, text.to_string()));
+        storage.save(&store)
+    })
+}
+
 /// Queue `id` at the top for `role`, unless the user already has it queued.
 fn ensure_queued(
     storage: &aida_core::Storage,
@@ -1435,6 +1580,10 @@ fn ensure_queued(
 /// queue. An existing spec with the same tag is reused, and its queue entry
 /// is restored if a crash or a failed queue write left it out.
 pub(crate) fn file_fix_spec(storage: &aida_core::Storage, fix: &FixSpec) -> Result<String> {
+    locked(storage, || file_fix_spec_locked(storage, fix))
+}
+
+fn file_fix_spec_locked(storage: &aida_core::Storage, fix: &FixSpec) -> Result<String> {
     use aida_core::{Requirement, RequirementStatus, RequirementType};
     let tag = fix_tag(&fix.red_sha);
     let mut store = storage.load()?;
@@ -1480,6 +1629,15 @@ pub(crate) fn human_open(
     title: &str,
     body: &str,
 ) -> Result<String> {
+    locked(storage, || human_open_locked(storage, red_sha, title, body))
+}
+
+fn human_open_locked(
+    storage: &aida_core::Storage,
+    red_sha: &str,
+    title: &str,
+    body: &str,
+) -> Result<String> {
     use aida_core::{Requirement, RequirementStatus, RequirementType};
     let tag = human_tag(red_sha);
     let mut store = storage.load()?;
@@ -1516,6 +1674,10 @@ pub(crate) fn human_open(
 
 /// Complete the attention item for `red_sha` and take it off the queue.
 pub(crate) fn human_resolve(storage: &aida_core::Storage, red_sha: &str) -> Result<()> {
+    locked(storage, || human_resolve_locked(storage, red_sha))
+}
+
+fn human_resolve_locked(storage: &aida_core::Storage, red_sha: &str) -> Result<()> {
     let tag = human_tag(red_sha);
     let mut store = storage.load()?;
     let Some(item) = store
