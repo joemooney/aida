@@ -375,6 +375,21 @@ pub(crate) fn plan_promotion(
     no_promote: bool,
     allow_dirty: bool,
 ) -> PromotionPlan {
+    plan_promotion_at(state, no_promote, allow_dirty, None)
+}
+
+/// [`plan_promotion`], where `green_commit` names a commit the caller has
+/// verified green on `main`'s first-parent line (the scheduled promote and
+/// the operator cron). On `main`, HEAD may then sit behind `origin/main` when
+/// HEAD is exactly that commit and has nothing `origin/main` lacks, i.e. it
+/// is an ancestor of `origin/main`. Every other rule is unchanged.
+// trace:BUG-2687 | ai:claude
+pub(crate) fn plan_promotion_at(
+    state: &CheckoutState,
+    no_promote: bool,
+    allow_dirty: bool,
+    green_commit: Option<&str>,
+) -> PromotionPlan {
     if no_promote {
         return PromotionPlan::BuildOnly(BuildOnlyReason::NoPromote);
     }
@@ -384,6 +399,7 @@ pub(crate) fn plan_promotion(
     }
     let upstream = landing_ref(state.branch.as_deref());
     let mut reasons = Vec::new();
+    let mut warnings = Vec::new();
     match state.branch.as_deref() {
         Some("main") | Some(INTEGRATION_BRANCH) => {}
         Some(other) => reasons.push(format!(
@@ -420,17 +436,24 @@ pub(crate) fn plan_promotion(
             state.ahead, state.behind
         ));
     } else if state.behind > 0 {
-        reasons.push(format!(
-            "HEAD is {} commit(s) behind {upstream}",
-            state.behind
-        ));
+        if let Some(green) = green_behind_ok(state, green_commit) {
+            warnings.push(format!(
+                "HEAD is {} commit(s) behind {upstream}; promoting the newest green commit {}",
+                state.behind,
+                &green[..green.len().min(12)]
+            ));
+        } else {
+            reasons.push(format!(
+                "HEAD is {} commit(s) behind {upstream}",
+                state.behind
+            ));
+        }
     } else if state.ahead > 0 {
         reasons.push(format!(
             "HEAD is {} commit(s) ahead of {upstream} (unpushed work)",
             state.ahead
         ));
     }
-    let mut warnings = Vec::new();
     if state.untracked > 0 {
         warnings.push(format!(
             "{} untracked file(s) in the checkout (not blocking)",
@@ -449,6 +472,23 @@ pub(crate) fn plan_promotion(
         return PromotionPlan::Promote { warnings };
     }
     PromotionPlan::Refuse { reasons }
+}
+
+/// PURE: the green commit HEAD may promote from while behind `origin/main`:
+/// only on `main` (never `integration`), only when HEAD is exactly
+/// `green_commit` (full SHA, case-insensitive) and nothing in HEAD is missing
+/// from `origin/main`.
+// trace:BUG-2687 | ai:claude
+fn green_behind_ok<'a>(state: &CheckoutState, green_commit: Option<&'a str>) -> Option<&'a str> {
+    let green = green_commit.map(str::trim).filter(|g| !g.is_empty())?;
+    let head = state.head.as_deref()?.trim();
+    (state.branch.as_deref() == Some("main")
+        && state.has_upstream
+        && state.ahead == 0
+        && crate::git_arg_guard::is_hex_sha(green)
+        && green.len() == head.len()
+        && head.eq_ignore_ascii_case(green))
+    .then_some(green)
 }
 
 /// The CI gate of a live promotion under `[landing] promote_live_binary_from`:
@@ -675,6 +715,10 @@ pub(crate) struct DevBuildOptions {
     pub yes: bool,
     pub after_wave: bool,
     pub autopromote_target: Option<String>,
+    /// A commit the caller verified green on `main`'s first-parent line:
+    /// HEAD may promote from it while behind `origin/main` (see
+    /// [`plan_promotion_at`]). trace:BUG-2687 | ai:claude
+    pub green_commit: Option<String>,
 }
 
 /// What re-recording the mail-retention activation after a promote did.
@@ -711,7 +755,9 @@ pub(crate) fn run_dev_build(
     out: &mut dyn Write,
 ) -> Result<BuildOutcome> {
     let state = steps.probe(&layout.repo)?;
-    let plan = plan_promotion(&state, opts.no_promote, opts.allow_dirty);
+    // trace:BUG-2687 | ai:claude
+    let green = opts.green_commit.as_deref();
+    let plan = plan_promotion_at(&state, opts.no_promote, opts.allow_dirty, green);
     match &plan {
         // trace:STORY-1689 | ai:claude
         PromotionPlan::Refuse { reasons } => {
@@ -895,7 +941,7 @@ pub(crate) fn run_dev_build(
             // Anything but `Promote` refuses: a linked worktree that left
             // `integration` during the build plans `BuildOnly`, not `Refuse`.
             // trace:STORY-2737 | ai:claude
-            let recheck = match plan_promotion(&state, false, opts.allow_dirty) {
+            let recheck = match plan_promotion_at(&state, false, opts.allow_dirty, green) {
                 PromotionPlan::Promote { .. } => None,
                 PromotionPlan::Refuse { reasons } => Some(reasons),
                 PromotionPlan::BuildOnly(_) => Some(vec![format!(
@@ -969,7 +1015,7 @@ pub(crate) fn run_dev_build(
                 sha: head,
                 allow_dirty: opts.allow_dirty
                     && matches!(
-                        plan_promotion(&state, false, false),
+                        plan_promotion_at(&state, false, false, green),
                         PromotionPlan::Refuse { .. }
                     ),
                 promoted_at: chrono::Utc::now().to_rfc3339(),
@@ -2427,8 +2473,12 @@ pub(crate) fn handle_dev_build(opts: &DevBuildOptions) -> Result<()> {
     let repo = resolve_build_repo()?;
     let layout = DevLayout::for_repo(&repo)?;
     let env = aida_core::exec_context::Environment::capture();
+    let mut opts = opts.clone();
     let _build_lock = if env.get("AIDA_AUTOBUILD_LOCK_FD") == Some(std::ffi::OsStr::new("9")) {
         verify_cron_build_lock(&repo, 9).context("verifying inherited checkout build lock")?;
+        // The operator cron names the newest green commit it fast-forwarded
+        // to; honoured only with its verified lock. trace:BUG-2687 | ai:claude
+        opts.green_commit = cron_green_commit(env.get(AUTOBUILD_TARGET_ENV))?;
         None
     } else if repo.join(".git").is_dir() {
         let lock = try_checkout_build_lock(&repo)?;
@@ -2438,8 +2488,25 @@ pub(crate) fn handle_dev_build(opts: &DevBuildOptions) -> Result<()> {
         None
     };
     let mut stdout = std::io::stdout();
-    run_dev_build(&layout, opts, &mut RealSteps, &mut stdout)?;
+    run_dev_build(&layout, &opts, &mut RealSteps, &mut stdout)?;
     Ok(())
+}
+
+/// The operator cron's (`scripts/aida-autobuild.sh`) newest green commit.
+// trace:BUG-2687 | ai:claude
+pub(crate) const AUTOBUILD_TARGET_ENV: &str = "AIDA_AUTOBUILD_TARGET";
+
+/// PURE: the cron's green commit, when set: a full commit SHA or an error.
+// trace:BUG-2687 | ai:claude
+pub(crate) fn cron_green_commit(raw: Option<&std::ffi::OsStr>) -> Result<Option<String>> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let sha = raw.to_str().unwrap_or_default().trim();
+    if sha.len() != 40 || !crate::git_arg_guard::is_hex_sha(sha) {
+        bail!("{AUTOBUILD_TARGET_ENV} must be a full 40-character commit SHA");
+    }
+    Ok(Some(sha.to_ascii_lowercase()))
 }
 
 /// `aida dev rollback` with the live-wave guard: refuses (or waits, with
@@ -2621,6 +2688,36 @@ pub(crate) fn ci_decision_lines(
 }
 
 /// The live-binary block of `aida dev status`.
+/// PURE: `live is N commits behind main; newest green = X`, from the local
+/// `origin/main` and the last scheduled scan. `None` when the distance is
+/// unknown. trace:BUG-2687 | ai:claude
+pub(crate) fn behind_main_line(
+    behind: Option<usize>,
+    scan: Option<&crate::dev_autopromote::GreenScan>,
+) -> Option<String> {
+    let n = behind?;
+    if n == 0 {
+        return Some("Behind main:  live is at main (origin/main)".to_string());
+    }
+    let short = |s: &str| s[..s.len().min(12)].to_string();
+    let green = match scan {
+        None => "unknown (no scheduled check recorded)".to_string(),
+        Some(scan) => format!(
+            "{} (checked {} at origin/main {})",
+            scan.newest_green
+                .as_deref()
+                .map(short)
+                .unwrap_or_else(|| "none newer than live".to_string()),
+            scan.at,
+            short(&scan.tip)
+        ),
+    };
+    Some(format!(
+        "Behind main:  live is {n} commit{} behind main; newest green = {green}",
+        if n == 1 { "" } else { "s" }
+    ))
+}
+
 pub(crate) fn print_live_status() {
     let Ok(live_dir) = default_live_dir() else {
         return;
@@ -2654,6 +2751,27 @@ pub(crate) fn print_live_status() {
         crate::promotion_failures::read_last(&live_dir).as_ref(),
     ) {
         println!("{line}");
+    }
+    // trace:BUG-2687 | ai:claude
+    if let (Some(l), Some(meta)) = (&layout, &live_meta) {
+        let behind = crate::git_arg_guard::is_hex_sha(&meta.sha)
+            .then(|| {
+                git_out(
+                    &l.repo,
+                    &[
+                        "rev-list",
+                        "--count",
+                        &format!("{}..refs/remotes/origin/main", meta.sha),
+                        "--",
+                    ],
+                )
+            })
+            .flatten()
+            .and_then(|n| n.trim().parse().ok());
+        let scan = crate::dev_autopromote::read_scan(&live_dir);
+        if let Some(line) = behind_main_line(behind, scan.as_ref()) {
+            println!("{line}");
+        }
     }
     println!("Previous:     {}", show(&prev));
     if let Some(l) = &layout {
