@@ -1475,6 +1475,17 @@ an optional `coverage` object with `reviewed_sha`, `head_sha` and the full
 `proof`. Reading the verdict does not record a new approval or proof.
 <!-- trace:STORY-2694 | ai:codex -->
 
+An approval at the current head shows the observed next actor. A pending STRICT
+pre-merge review appears on its own line when the approval or corpus gate still
+requires review under strict freshness. Hold-clear wake lines identify the
+superseded review head when known and report whether current-head approval was
+verified during clearance. `aida session handoff --write` checks explicit
+operator-waiting claims on lines or lists containing `#N` or `PR-N` references.
+It warns with the observed next actor when the operator ask is unsupported and
+saves the handoff as written.
+<!-- trace:STORY-2893 | ai:codex -->
+
+
 New gate-ledger verdict events also record a versioned advisory risk assessment,
 computed from the committed diff against the pinned protected-base tip. The tier
 is `FASTTRACK`, `STANDARD` or `STRICT`, with repository, base/head and reasons.

@@ -134,11 +134,32 @@ subject remains usable, but the generic rework subject refuses publication.
 <!-- trace:TASK-2891 | ai:codex -->
 
 A native Codex seat cannot commit: Codex keeps the clone's `.git` read-only
-inside its sandbox. In that seat, `aida ship -m '[AI:codex] feat(scope): partial work (Refs <spec-id>)'`
+inside its sandbox. In that seat, `aida ship -m '[AI:codex] feat(scope): work (<spec-id>)'`
 records a publication declaration without committing or publishing. Supply the
-complete subject and exactly one live non-epic lease spec; `(ID)` declares
-completion and `(Refs ID)` declares a partial slice. `--dry-run` validates without
-recording. A missing message retains the native publication refusal. The seat
+complete subject and exactly one live non-epic lease spec. The declaration
+records whether the publication completes the spec: it does unless you pass
+`--partial-slice` or the spec still has child slices that are not finished. The
+commit and PR trailer is derived from that answer, `(ID)` when it completes and
+`(Refs ID)` otherwise; a hand-written `(Refs ID)` is still read as a partial
+slice. `--dry-run` validates without recording.
+
+Only child specs count as a slice plan: a spec's outgoing parent links to its
+children (what `aida decompose` and `aida add --parent` record). A plan written
+in a comment or a plan document is not consulted, so sliced work must be split
+into child specs. The host checks the children itself when it publishes and
+again when it writes Done. If it cannot read the store or the branch, or the
+children change while it writes, the push counts as partial and the spec is
+not marked Done.
+
+A push that completes its spec marks the spec Done, on the first round and on
+every rework round; a partial push leaves the status alone, and a punted or held
+lane never publishes. When a commit referencing a Done spec lands on the default
+branch, the spec becomes Completed whatever its trailer. A `(Refs ID)` landing
+on a spec that is not Done leaves it open and adds a note to the spec for
+triage. Landing-time status changes are pushed to the shared store at once;
+if that push is rejected or the remote is unreachable, the change stays local,
+the scan reports it, and the push is retried on the next scan until it succeeds.
+<!-- trace:BUG-2696 | ai:claude --> A missing message retains the native publication refusal. The seat
 leaves its edits uncommitted. When an implementer lane's Codex process exits,
 the launcher commits that pending work in the seat clone. An operator can also
 commit and publish it with
@@ -231,6 +252,10 @@ A failed or unreachable PR lookup cannot confirm no-change.
 - `aida pr gc` — opt-in sweep of local `pr-N`/`mr-N` review-snapshot branches (created when you or a headless review fetches a change's head ref) whose change has reached a terminal state. Never removes a branch tied to a still-open change, checked out anywhere, or diverged from the fetched head; `--dry-run` previews.
 - `aida pr state [--format human|json]` (or `--json`) — read-only PR decisions with state, next action, concrete owner, reason, evidence key and current-head review attempt count. Uses batched GitHub reads and rechecks heads and bases; unsupported forges refuse visibly. Pending or transient evidence remains `EvidencePending`; missing or ambiguous owners become `NeedsRuling` with an explicit refusal if the advisor seat cannot be resolved. WAITING and attempts without verdicts supply no verdict; retry backoff remains pending and exhausted retries require a ruling. Older-head verdicts are diagnostic only. The command performs no dispatch, queue mutation, clearance, train nomination or merge. These decisions grant no action authority; existing action-specific gates still apply.
 <!-- trace:STORY-2688 | ai:codex -->
+
+  The `NEXT ACTOR` column (JSON `next_actor`) names the first observed train gate and its reason. Missing or stale approval points to the reviewer, full-tier CI points to CI, and a train rider or eligible member points to the train. A confirmed human-only refusal points to the operator. A caller who lacks the advisor grant sees the advisor as the next actor when the mandate requires that grant. Unreadable or unchecked evidence is shown as `unverified`. The train probe may refresh remote-tracking refs and uses a bounded batch budget before starting each new PR.
+<!-- trace:STORY-2893 | ai:codex -->
+
 
 - `aida pr list` — one row per open PR/MR: the spec IDs it maps to (from its title, else branch, else body, else a lease on its branch), comma-joined when there are several (`spec_id` in `--json`, `null` with `mapping_source: none` when it maps to nothing; `--mapped-only` hides those), plus review status, CI, and whether a rebase is needed. The CI column reads "Failing" when any red check is *not* matched by the `[ci]` `informational_workflows` / `informational_checks` allow-list in `.aida/config.toml` (default: workflows named `Cross-platform*`). Branch-protection required checks are not consulted, so a red check that does not actually gate the merge still reads "Failing" unless you allow-list it; when every red check is allow-listed the column shows "Passing (N informational red)".
 

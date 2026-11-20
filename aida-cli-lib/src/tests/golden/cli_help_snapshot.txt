@@ -13149,6 +13149,9 @@ Options:
       --lane-host
           Check this machine before running automated lanes
 
+      --lane-binaries <HOST>
+          Compare lane hosts' launcher binaries with local origin/main (repeat for each SSH alias)
+
       --lane-codegraph
           Report the host codegraph snapshot age as seen from this lane
 
@@ -13164,12 +13167,6 @@ Options:
       --json
           Emit machine-readable JSON
 
-      --lane-capacity
-          Read-only typed local lane capacity and reservations (not readiness admission)
-
-      --force
-          Permit riskier destructive fixes such as branch deletion
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -13180,12 +13177,18 @@ Options:
           - toon:  Token-efficient TOON — the compact agent default when piped/captured
           - json:  Machine JSON, for commands that support a JSON projection
 
-      --all
-          Show older completed-without-commit findings individually
+      --lane-capacity
+          Read-only typed local lane capacity and reservations (not readiness admission)
 
       --canonical-ids
           Show node-local spec IDs in their canonical form instead of the node's friendly label (for
           scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --force
+          Permit riskier destructive fixes such as branch deletion
+
+      --all
+          Show older completed-without-commit findings individually
 
       --since <DATE_OR_REF>
           Exempt specs completed before this point from the completed-without-commit integrity
@@ -16580,6 +16583,11 @@ Options:
       --commit-body-file <FILE>
           Read a UTF-8 commit body verbatim from this file. Use with native -m declarations or
           --from-seat --commit-pending
+
+      --partial-slice
+          With a native -m declaration: this publication is one slice of the spec, not all of it.
+          The commit trailer becomes `(Refs ID)` and the spec is not marked Done. Without it, the
+          publication completes the spec unless child slices are still outstanding
 
   -h, --help
           Print help (see a summary with '-h')
@@ -46127,6 +46135,11 @@ Working on aida itself
         "help": "Emit machine-readable JSON"
       },
       {
+        "name": "lane-binaries",
+        "takes_value": true,
+        "help": "Compare lane hosts' launcher binaries with local origin/main (repeat for each SSH alias)"
+      },
+      {
         "name": "lane-capacity",
         "takes_value": false,
         "help": "Read-only typed local lane capacity and reservations (not readiness admission)"
@@ -49586,6 +49599,11 @@ Working on aida itself
         "name": "no-trailer-check",
         "takes_value": false,
         "help": "Bypass the client-side trailer spec-ID check before shipping"
+      },
+      {
+        "name": "partial-slice",
+        "takes_value": false,
+        "help": "With a native -m declaration: this publication is one slice of the spec, not all of it. The commit trailer becomes `(Refs ID)` and the spec is not marked Done. Without it, the publication completes the spec unless child slices are still outstanding"
       }
     ],
     "hidden": false
