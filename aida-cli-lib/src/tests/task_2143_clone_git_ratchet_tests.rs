@@ -30,7 +30,11 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-mcp/src/mcp.rs", 1),
     ("aida-cli-lib/src/orchestrator_leases.rs", 5),
     ("aida-cli-lib/src/phase_driver.rs", 1),
-    ("aida-cli-lib/src/pr_cmd.rs", 44),
+    ("aida-cli-lib/src/pr_cmd/finish.rs", 4),
+    ("aida-cli-lib/src/pr_cmd/gc.rs", 4),
+    ("aida-cli-lib/src/pr_cmd/rebase.rs", 22),
+    ("aida-cli-lib/src/pr_cmd/shipping.rs", 10),
+    ("aida-cli-lib/src/pr_cmd/slice.rs", 4),
     ("aida-cli-lib/src/pr_service.rs", 3),
     ("aida-cli-lib/src/queue_cmd/done.rs", 1),
     ("aida-cli-lib/src/queue_cmd/recover.rs", 2),
@@ -66,12 +70,13 @@ const ALWAYS_SCANNED: &[&str] = &[
     "aida-cli-lib/src/pr_service.rs",
 ];
 
-// Split queue and doctor modules retain their original file scan boundaries.
+// Split queue, doctor, and PR modules retain their original file scan boundaries.
 // trace:TASK-3426 | ai:codex
 fn always_scanned(file: &str) -> bool {
     ALWAYS_SCANNED.contains(&file)
         || (file.starts_with("aida-cli-lib/src/queue_cmd/") && file.ends_with(".rs"))
         || (file.starts_with("aida-cli-lib/src/doctor/") && file.ends_with(".rs"))
+        || (file.starts_with("aida-cli-lib/src/pr_cmd/") && file.ends_with(".rs"))
 }
 
 #[test]

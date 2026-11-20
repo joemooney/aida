@@ -571,7 +571,7 @@ fn statusline_shows_an_active_mandate_only() {
 
 #[test]
 fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     let handler = src
         .split("pub(crate) fn pr_ship_handler(")
         .nth(1)
@@ -1107,7 +1107,7 @@ fn a_mandate_released_hold_is_re_armed_after_a_merge_failure() {
 
 #[test]
 fn every_failure_after_a_mandate_release_re_arms_the_hold() {
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     let handler = src.split("pub(crate) fn pr_ship_handler(").nth(1).unwrap();
     let release = handler
         .find("crate::gate::merge_hold_core::release_hold(")

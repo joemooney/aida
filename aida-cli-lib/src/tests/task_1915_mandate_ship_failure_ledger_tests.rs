@@ -58,7 +58,7 @@ fn a_ship_no_mandate_released_writes_no_row() {
 // trace:TASK-1915 | ai:claude (TASK-2124)
 #[test]
 fn every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal() {
-    let src = include_str!("../pr_cmd.rs");
+    let src = include_str!("../pr_cmd/mod.rs");
     let body = &src[src
         .find(concat!("pub(crate) fn pr_ship_", "with_method("))
         .expect("pr_ship_with_method exists")..];
@@ -88,7 +88,7 @@ fn every_exit_between_the_mandate_release_and_the_merge_ledgers_a_refusal() {
 // trace:TASK-1955 | ai:claude (TASK-2087)
 #[test]
 fn no_question_mark_exit_between_the_mandate_release_and_the_merge() {
-    let src = include_str!("../pr_cmd.rs");
+    let src = include_str!("../pr_cmd/mod.rs");
     let body = &src[src
         .find(concat!("pub(crate) fn pr_ship_", "with_method("))
         .expect("pr_ship_with_method exists")..];

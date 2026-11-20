@@ -37,7 +37,7 @@ fn ship_hold_release_requires_the_integrity_floor() {
 // the marker or drops the label — never after, never not at all.
 #[test]
 fn ship_release_site_gates_on_the_floor_before_clearing() {
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     // STORY-1698: the release step's gate is the last call site (the
     // preflight's takes the authority the handler decided).
     let gate = src
@@ -312,7 +312,7 @@ fn verdict_released_hold_always_merges_pinned_to_the_head() {
         Ok(Some("abc".to_string()))
     );
     // Wiring: the pin is applied to merge_opts BEFORE the hold is cleared.
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     let pin = src
         .find("ship::refusal_release_pin(")
         .expect("ship applies the release pin");
@@ -334,7 +334,7 @@ fn verdict_released_hold_always_merges_pinned_to_the_head() {
 // marker itself, not a drive-liveness or reason-substring predicate.
 #[test]
 fn ship_hold_gate_runs_before_ci_and_ignores_drive_liveness() {
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     let gate = src
         .find("ship::ship_hold_gate(")
         .expect("pr ship must consult the hold gate");
