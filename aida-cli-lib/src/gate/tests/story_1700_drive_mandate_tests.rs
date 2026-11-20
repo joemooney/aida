@@ -760,10 +760,10 @@ fn pr_touching_gate_paths_is_gated() {
             ))
         );
     }
-    // pr_cmd.rs is NOT protected as a whole (condition C1).
+    // pr_cmd/mod.rs is NOT protected as a whole (condition C1).
     assert_eq!(
         crate::gate::mandate_gates::touches_gates(
-            &["aida-cli-lib/src/pr_cmd.rs".into()],
+            &["aida-cli-lib/src/pr_cmd/mod.rs".into()],
             crate::gate::mandate_gates::ProtectedPaths::floor_ref()
         ),
         None

@@ -317,7 +317,7 @@ pub(crate) const NOT_GATE_AUTHORITY: &[(&str, &str, &str)] = &[
         "lease coexistence on reviewer pickup; reviewer independence is decided by identity in review_authority.rs",
     ),
     (
-        "aida-cli-lib/src/pr_cmd.rs",
+        "aida-cli-lib/src/pr_cmd/mod.rs",
         "pr_head_sha_for_merge_gate",
         "reads the PR head sha from the forge; the gate that uses it lives in gate/",
     ),

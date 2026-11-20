@@ -2194,6 +2194,7 @@ fn bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin(
 /// origin lacks still counts.
 // trace:BUG-2415 | ai:claude
 // trace:BUG-2630 | ai:codex
+// trace:BUG-2676 | ai:codex
 #[cfg(target_os = "linux")]
 #[test]
 fn bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec() {
@@ -2207,8 +2208,11 @@ fn bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec() {
     // trace:BUG-2630 | ai:codex
     let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
+    std::env::set_current_dir(&fx.main).unwrap();
     let id = "c0ffee002415";
     let clone = seat(&fx, "bug2415", id);
+    let lease = crate::lease_path(&fx.main, id);
+    let pin = pin_ref(&clone).unwrap();
     seat_commit(&clone, "work.txt");
     let origin = fx.origin.to_str().unwrap();
     seat_git(
@@ -2240,15 +2244,36 @@ fn bug_2415_bwrap_session_end_ends_a_clone_pushed_by_explicit_refspec() {
 
     seat_commit(&clone, "more.txt");
     assert_eq!(counted(&clone), 1, "a commit origin lacks still counts");
+
+    // The local origin is the only publication evidence in this fixture.
+    // Session end also probes merged PR heads via gh on PATH.
+    let bin = fx.root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(&bin.join("gh"), "#!/bin/sh\nexit 1\n");
+    let environment = aida_core::exec_context::Environment::capture();
+    let path = std::env::join_paths(
+        std::iter::once(bin).chain(std::env::split_paths(environment.get("PATH").unwrap())),
+    )
+    .unwrap();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
+    ambient.set_key("PATH", &path);
+    let refusal = end_session(id, false).unwrap_err();
+    assert!(
+        format!("{refusal:#}")
+            .contains("holds 1 commit(s) reachable from HEAD or local branches that no remote has"),
+        "{refusal:#}"
+    );
+    assert!(clone.exists() && lease.exists() && ref_exists(&fx.main, &pin));
+
     seat_git(
         &clone,
         &["push", "-q", origin, "HEAD:refs/heads/published-elsewhere"],
     );
 
-    let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
     end_session(id, false).unwrap();
     assert!(!clone.exists());
-    assert!(!crate::lease_path(&fx.main, id).exists());
+    assert!(!lease.exists());
+    assert!(!ref_exists(&fx.main, &pin));
 }
 
 /// BUG-051: an untracked file refuses session end, and the refusal names it.

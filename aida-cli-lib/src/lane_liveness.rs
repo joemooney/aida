@@ -797,6 +797,28 @@ pub(crate) fn claim_worker_has_exited(
         )
 }
 
+// A bound claim whose admission never spawned a worker: its clone is present
+// here and holds no lane record for the claim's lease. Only a confirmed absence
+// counts; an unreadable record or a missing clone is not evidence.
+// trace:BUG-2697 | ai:claude
+pub(crate) fn claim_worker_never_recorded(claim: &crate::coordination::Claim) -> bool {
+    let Some(id) = claim
+        .lease_id
+        .as_deref()
+        .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+    else {
+        return false;
+    };
+    let root = Path::new(&claim.clone_path);
+    if claim.clone_path.is_empty() || !root.join(".aida").is_dir() {
+        return false;
+    }
+    matches!(
+        std::fs::symlink_metadata(headless_record_path(root, id)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    )
+}
+
 // Retained seat evidence must belong to this exact claim generation.
 // trace:BUG-2655 | ai:codex
 pub(crate) fn exited_claim_seat(claim: &crate::coordination::Claim) -> Option<PathBuf> {
