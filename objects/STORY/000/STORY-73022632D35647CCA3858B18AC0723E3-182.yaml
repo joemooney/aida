@@ -1,5 +1,6 @@
 id: 01a1f9bc-ec72-7843-8190-c6e20ba9dafa
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-182
+agreed_id: STORY-2990
 title: 'Review PR-4367: [AI:codex] refactor(cli-lib): split pr_cmd into modules (TASK-3822)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f98f`) for branch `task-b6b1278890774ef993d2ebc327862470-1131`.
@@ -48,6 +49,12 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a1fa0b-6e26-7653-9299-e5bf89948779
+  author: joe
+  timestamp: 2026-11-20T17:40:15.526133537Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
   branch: main

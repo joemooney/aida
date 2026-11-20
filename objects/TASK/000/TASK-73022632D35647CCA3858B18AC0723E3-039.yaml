@@ -1,5 +1,6 @@
 id: 01a1f9c0-1c04-72f1-8efa-7e549eec0f34
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-039
+agreed_id: TASK-3171
 title: No CLI surface names the resolved per-seat agent model; TASK-3823 AC1 verified by config parse and code path only
 description: |
   TASK-3823 acceptance 1 asks for verification "by `aida config show` and one dry-run or launch log line naming the model". Neither exists today:
@@ -26,6 +27,13 @@ tags:
 - from-implementer:TASK-3823
 - kind:deviation
 - severity:minor
+history:
+- id: 01a1fa0a-7e13-70a3-bf75-3feea2dbb0fa
+  author: joe
+  timestamp: 2026-11-20T17:39:14.067008972Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b4dccb59840c4b1b6aa0d00faacc1919f4e1baa8
   branch: task-b6b1278890774ef993d2ebc327862470-1132

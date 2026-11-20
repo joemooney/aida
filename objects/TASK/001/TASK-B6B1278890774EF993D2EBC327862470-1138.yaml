@@ -1,5 +1,6 @@
 id: 01a1fa01-1371-7300-9a71-273a0f96bde3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1138
+agreed_id: TASK-3172
 title: 'Review follow-up: Coverage of the boost is narrower than TASK-3823 intends: because reviewer seat tuning is '
 description: |-
   From TASK-3823
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1f99c-9c75-7a33-b419-667d975fdc7b
   created_at: 2026-11-20T17:28:56.945371402Z
+history:
+- id: 01a1fa0a-af38-7511-88ef-819f1477c67c
+  author: joe
+  timestamp: 2026-11-20T17:39:26.648619264Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: b4dccb59840c4b1b6aa0d00faacc1919f4e1baa8
   branch: pr-4369
