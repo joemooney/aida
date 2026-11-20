@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-5acdd5203405dbbbefc0d38967f4e627ff81e91a42836df4e4e33c924b427f75",
+  "thread_id": "review-watch-5acdd5203405dbbbefc0d38967f4e627ff81e91a42836df4e4e33c924b427f75",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795183917815,
+  "body": "PR-4344 at 6863c052496957a62b73480e5f35c002013ccbf5 is ready to ship: an authorized approval of 6863c052496957a62b73480e5f35c002013ccbf5 covers the head, every CI check on 6863c052496957a62b73480e5f35c002013ccbf5 passed, it is ready under the base freshness policy for `main`, and no merge hold or review in progress is recorded. Run `aida pr ship 4344` to merge it. The watcher only reports; it did not merge or update the branch.",
+  "subject": "PR-4344: ready to ship",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
