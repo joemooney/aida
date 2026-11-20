@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-20T15:14:30.415312734Z
+modified_at: 2026-11-20T15:14:45.048203758Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -216,6 +216,12 @@ comments:
   content: 'Lane exit evidence: retained branch `task-3786-pr-cmd-dir` at head `78b437097cbccc7025e7529f2f06ff0f092c8495`.'
   created_at: 2026-11-20T15:14:30.415306378Z
   modified_at: 2026-11-20T15:14:30.415306378Z
+  session_id: 01a1f984f41d
+- id: 01a1f986-36b8-76b2-b2a8-cd229d59cd00
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `task-3786-pr-cmd-dir` at head `78b437097cbccc7025e7529f2f06ff0f092c8495`.'
+  created_at: 2026-11-20T15:14:45.048200965Z
+  modified_at: 2026-11-20T15:14:45.048200965Z
   session_id: 01a1f984f41d
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
