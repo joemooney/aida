@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T04:11:32.502681657Z
+modified_at: 2026-11-20T04:11:47.312101010Z
 req_type: Story
 tags:
 - landing
@@ -273,6 +273,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Read the complete 99,644-byte supplied review diff and reviewed the change as landed on pinned main ccd9832894397b0541985d2e6ebfb8d97f0705ba, landed tree fda309cd1865483823b046b041a4f72efb0d09a8, attesting only original PR head 1de9926e14b71b647c0df6458a2101f7e7244423. The four prior implementation defects are addressed in source: protection policy and committed protected paths share one trusted config body and parse failures withhold the default; checked heads are compared to preflight and final heads remain pinned through the existing gate; show follows carrier execution modes; changed_paths uses the scoped deadline runner. STORY-2884 AC1 PASS by source/default-policy and existing test inspection (legacy truth-table execution is implementer-reported); AC2 PARTIAL because the matrix and train integration are present but the ship head-race enforcement has only a detached helper test, leaving one blocking ADR-76 mutation-kill test gap; AC3 PASS by carrier-aware source and label-test inspection; AC4 PASS by config reference, generated showcase and both two-seat protocol copies, with repository opt-in left unchanged. No additional semantic defects found. The one finding is independent of the newer base commit. Existing exact-head GitHub CI evidence: FAST source gates green, FAST compile still running and merge-hold status pending at review time; CI pending is not the reason for request-changes. No local Cargo, test or build commands were run. Standalone draft for parent validation and recording; no canonical verdict record was attempted.. No triage reason was given.'
   created_at: 2026-11-20T04:11:32.502675933Z
   modified_at: 2026-11-20T04:11:32.502675933Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f727-4063-7341-8432-5950470c2015
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2884):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1de9926e14b7
+    Recorded: 2026-11-20T03:59:18.305452509+00:00
+    Findings:
+    1. Add a regression through the production ship orchestration for the protected-path head race. The new test a_head_moved_after_the_default_check_is_refused (gate/tests/story_2884_unset_mode_tests.rs:480-509) only constructs CheckedHeads and calls record/moved_refusal directly. It never exercises pr_ship_with_method_and_dispatch_ctx, so removing the record call at pr_cmd.rs:2778 or the refusal block at pr_cmd.rs:2851-2858 would leave that regression passing while restoring the previously reported unattended-merge bypass. Source inspection found no test covering those production calls; the implementer also explicitly records that the wiring is not covered end to end. Exercise an unset ordinary bug admitted from H1, advance the forge head to H2 with a protected-path change before preflight, supply otherwise valid H2 approval/CI, and assert ship refuses before any hold release or merge. Include an unchanged-head positive control and ensure removing the production recording or refusal makes the regression fail. This is a test-gap in the new supervision/authority gate and blocks under ADR-76, rather than an assertion that the current source still has the old bypass. The finding applies equally to the original head and pinned landed tree; it does not depend on the newer base changes.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T04:11:47.171119334Z
+  modified_at: 2026-11-20T04:11:47.171119334Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
