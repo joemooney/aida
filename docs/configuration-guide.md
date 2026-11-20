@@ -56,9 +56,7 @@ The [setup reference](cli/07-project-setup.md), [roles and sessions](cli/06-role
 
 `[landing] mode` in `.aida/config.toml` sets what a merge into the default branch waits for: `ci-gated` (the default) or `review-gated`.
 
-`[landing] red_main.fix_window` (default `"2h"`, from one minute to one week) is how long a confirmed red main may wait for a fix before AIDA recommends a revert. Set it with `aida config menu`, which checks that the value is a duration in range. See [When main goes red](advanced/landing.md#when-main-goes-red).
-
-AIDA reads both from the default branch only, and `aida config show` lists the effective values with their source. A value AIDA does not recognise falls back to `ci-gated`, with a warning. See [Landing approved work](advanced/landing.md#landing-modes) for what each mode does, and [Who may do what](advanced/authority-and-seats.md) for who may merge.
+AIDA reads it from the default branch only, and `aida config show` lists the effective value with its source. A value AIDA does not recognise falls back to `ci-gated`, with a warning. See [Landing approved work](advanced/landing.md#landing-modes) for what each mode does, and [Who may do what](advanced/authority-and-seats.md) for who may merge.
 
 ## Unset execution mode
 

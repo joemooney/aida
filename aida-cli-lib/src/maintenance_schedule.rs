@@ -3819,19 +3819,6 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
-        // STORY-2897: the red-main watch runs only as this job (and by hand),
-        // never inside a landing path, so nothing that merges can stall on
-        // it; the job's own timeout bounds a pass. It fetches and reads the
-        // forge, so never on the per-turn hook path.
-        // trace:STORY-2897 | ai:claude
-        (
-            &["land watch"],
-            ScheduledCommand {
-                display: "land watch",
-                args: &["land", "watch"],
-                hook_allowed: false,
-            },
-        ),
         // The hub-bridge reconcile. Never `--yes`: identity-bearing content
         // stops the run and the failure routes to the advisor. Only a job
         // from this clone's machine-local layer may run it (`build_task`).

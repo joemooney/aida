@@ -31,19 +31,6 @@ pub(crate) struct CommitCheck {
     pub run_id: Option<String>,
     /// GitHub workflow identity, verified from the owning Actions run.
     pub workflow_id: Option<String>,
-    /// The check was cancelled rather than failing on its own. It still
-    /// judges as [`CheckOutcome::Failed`] for every gate; only the red-main
-    /// watch tells the two apart (a cancelled run is not a red main).
-    // trace:STORY-2897 | ai:claude
-    pub cancelled: bool,
-    /// The attempt of the owning GitHub Actions run (1 for the first run, 2
-    /// after one re-run), verified from that run; `None` elsewhere.
-    // trace:STORY-2897 | ai:claude
-    pub run_attempt: Option<u64>,
-    /// The owning GitHub Actions run has not completed (a re-run started
-    /// after this row was listed): its failure is not a finished attempt.
-    // trace:STORY-2897 | ai:claude
-    pub run_in_progress: bool,
 }
 
 /// Every check the forge reports on `sha`.
@@ -293,7 +280,7 @@ pub(crate) fn github_commit_checks(
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<CommitChecks> {
     let mut checks = Vec::new();
-    let mut workflows = std::collections::HashMap::<String, (String, Option<u64>, bool)>::new();
+    let mut workflows = std::collections::HashMap::<String, String>::new();
     let mut total = None;
     let mut seen = 0usize;
     for page in 1..=MAX_PAGES {
@@ -331,19 +318,9 @@ pub(crate) fn github_commit_checks(
                         .get("workflow_id")
                         .and_then(|v| v.as_u64())
                         .context("workflow run has no workflow_id")?;
-                    let attempt = value.get("run_attempt").and_then(|v| v.as_u64());
-                    let in_progress =
-                        value.get("status").and_then(|v| v.as_str()) != Some("completed");
-                    workflows.insert(
-                        run.to_string(),
-                        (workflow.to_string(), attempt, in_progress),
-                    );
+                    workflows.insert(run.to_string(), workflow.to_string());
                 }
-                if let Some((workflow, attempt, in_progress)) = workflows.get(run) {
-                    check.workflow_id = Some(workflow.clone());
-                    check.run_attempt = *attempt;
-                    check.run_in_progress = *in_progress;
-                }
+                check.workflow_id = workflows.get(run).cloned();
             }
             checks.push(check);
         }
@@ -398,11 +375,10 @@ pub(crate) fn parse_gh_check_runs(
             .get("status")
             .and_then(|v| v.as_str())
             .with_context(|| format!("check run `{name}` has no status"))?;
-        let conclusion = run.get("conclusion").and_then(|v| v.as_str());
         let outcome = if status != "completed" {
             CheckOutcome::Pending
         } else {
-            match conclusion {
+            match run.get("conclusion").and_then(|v| v.as_str()) {
                 Some("success") => CheckOutcome::Passed,
                 Some("neutral" | "skipped") => CheckOutcome::Skipped,
                 Some(_) => CheckOutcome::Failed,
@@ -413,9 +389,6 @@ pub(crate) fn parse_gh_check_runs(
             name: name.to_string(),
             outcome,
             workflow_id: None,
-            cancelled: outcome == CheckOutcome::Failed && conclusion == Some("cancelled"),
-            run_attempt: None,
-            run_in_progress: false,
             run_id: run
                 .get("details_url")
                 .and_then(|v| v.as_str())
@@ -469,9 +442,6 @@ pub(crate) fn parse_gh_commit_status(
                 outcome,
                 run_id: None,
                 workflow_id: None,
-                cancelled: false,
-                run_attempt: None,
-                run_in_progress: false,
             })
         })
         .collect()
@@ -513,7 +483,7 @@ pub(crate) fn parse_glab_commit_statuses(
     rows: &[serde_json::Value],
     sha: &str,
 ) -> Result<Vec<CommitCheck>> {
-    let mut latest: std::collections::BTreeMap<String, (u64, CheckOutcome, bool)> =
+    let mut latest: std::collections::BTreeMap<String, (u64, CheckOutcome)> =
         std::collections::BTreeMap::new();
     for row in rows {
         let name = row
@@ -550,24 +520,18 @@ pub(crate) fn parse_glab_commit_statuses(
             ) => CheckOutcome::Pending,
             other => anyhow::bail!("commit status `{name}` has unknown status {other:?}"),
         };
-        let cancelled = row.get("status").and_then(|v| v.as_str()) == Some("canceled");
-        let entry = latest
-            .entry(name.to_string())
-            .or_insert((id, outcome, cancelled));
+        let entry = latest.entry(name.to_string()).or_insert((id, outcome));
         if id >= entry.0 {
-            *entry = (id, outcome, cancelled);
+            *entry = (id, outcome);
         }
     }
     Ok(latest
         .into_iter()
-        .map(|(name, (_, outcome, cancelled))| CommitCheck {
+        .map(|(name, (_, outcome))| CommitCheck {
             name,
             outcome,
             run_id: None,
             workflow_id: None,
-            cancelled,
-            run_attempt: None,
-            run_in_progress: false,
         })
         .collect())
 }
@@ -583,17 +547,6 @@ pub(crate) fn github_run_job_failed_steps(
     job: &str,
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<Vec<String>> {
-    failed_steps_of(&github_run_jobs(repo, run, api)?, job)
-}
-
-/// GitHub: every job of workflow run `run` (its latest attempt), read page
-/// by page; `Err` when a page cannot be read or the listing is incomplete.
-// trace:STORY-2897 | ai:claude
-pub(crate) fn github_run_jobs(
-    repo: &str,
-    run: &str,
-    api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
-) -> Result<Vec<serde_json::Value>> {
     anyhow::ensure!(
         !run.is_empty() && run.bytes().all(|b| b.is_ascii_digit()),
         "invalid CI run id `{run}`"
@@ -627,7 +580,7 @@ pub(crate) fn github_run_jobs(
                 "workflow run {run} listed {} of {count} jobs; the listing is incomplete",
                 jobs.len()
             );
-            return Ok(jobs);
+            return failed_steps_of(&jobs, job);
         }
     }
     anyhow::bail!("jobs of workflow run {run} exceed {MAX_PAGES} pages")

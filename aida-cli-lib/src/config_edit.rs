@@ -20,28 +20,6 @@ pub(crate) fn set_kv(path: &Path, section: &str, key: &str, value: Value) -> Res
     save_doc(path, &doc)
 }
 
-/// Set `key = value` in the nested table `tables` (`["landing", "red_main"]`
-/// is `[landing.red_main]`), creating the tables as needed and preserving the
-/// rest of the file.
-// trace:STORY-2897 | ai:claude
-pub(crate) fn set_nested(path: &Path, tables: &[&str], key: &str, value: Value) -> Result<()> {
-    let (first, rest) = tables
-        .split_first()
-        .ok_or_else(|| anyhow::anyhow!("no table named for `{key}`"))?;
-    let mut doc = load_doc(path)?;
-    let mut tbl = table_mut(&mut doc, first);
-    for name in rest {
-        if !tbl.contains_key(name) {
-            tbl.insert(name, Item::Table(Table::new()));
-        }
-        tbl = tbl[*name]
-            .as_table_mut()
-            .ok_or_else(|| anyhow::anyhow!("`{name}` in {} is not a table", path.display()))?;
-    }
-    tbl.insert(key, Item::Value(value));
-    save_doc(path, &doc)
-}
-
 /// Set several `[section] key = value` pairs in ONE write, preserving the rest
 /// of the file.
 // trace:STORY-1415 | ai:claude

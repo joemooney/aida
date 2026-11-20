@@ -118,9 +118,6 @@ fn a_cancelled_earlier_run_does_not_outvote_the_latest_run_of_a_check() {
         outcome,
         run_id: run.map(str::to_string),
         workflow_id: Some("ci".to_string()),
-        cancelled: false,
-        run_attempt: None,
-        run_in_progress: false,
     };
     let on = |checks: Vec<CommitCheck>| CommitChecks {
         sha: SHA.to_string(),
@@ -181,9 +178,6 @@ fn a_fast_run_cancelled_by_the_full_run_contributes_nothing() {
         outcome,
         run_id: Some(run.to_string()),
         workflow_id: Some("ci".to_string()),
-        cancelled: false,
-        run_attempt: None,
-        run_in_progress: false,
     };
     let cancelled_fast = || {
         vec![
@@ -299,9 +293,6 @@ fn a_label_event_run_never_supersedes_the_run_that_executed() {
         outcome,
         run_id: Some(run.to_string()),
         workflow_id: Some("ci".to_string()),
-        cancelled: false,
-        run_attempt: None,
-        run_in_progress: false,
     };
     let real = |build| {
         vec![
@@ -737,9 +728,6 @@ fn overlapping_job_names_in_distinct_workflows_never_supersede_failures() {
         outcome,
         run_id: Some(run.into()),
         workflow_id: workflow.map(str::to_string),
-        cancelled: false,
-        run_attempt: None,
-        run_in_progress: false,
     };
     for workflow in [Some("other"), None] {
         let checks = CommitChecks {

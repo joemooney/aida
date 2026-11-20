@@ -44,13 +44,6 @@ pub enum LandCommand {
         #[clap(subcommand)]
         action: ModeCommand,
     },
-    /// Check the default branch's CI once: report a red main, route a fix
-    /// forward, and recommend a revert only when main does not build, fails
-    /// the smoke test, outlasts the fix window or needs a design decision.
-    /// It also runs as its own scheduled job, never inside the land loop or
-    /// a train.
-    // trace:STORY-2897 | ai:claude
-    Watch,
 }
 
 /// `aida land mode` verbs.

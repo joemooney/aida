@@ -17,9 +17,6 @@ fn checks(outcomes: &[(&str, CheckOutcome)]) -> Result<CommitChecks> {
                 outcome: *outcome,
                 run_id: None,
                 workflow_id: Some("ci".to_string()),
-                cancelled: false,
-                run_attempt: None,
-                run_in_progress: false,
             })
             .collect(),
     })

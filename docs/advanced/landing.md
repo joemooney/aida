@@ -3,13 +3,10 @@
 <!-- trace:STORY-2809 | ai:claude -->
 <!-- trace:STORY-b6b1278890774ef993d2ebc327862470-732.Docs | ai:claude -->
 
-How a pull request reaches the default branch depends on the landing mode.
-In `ci-gated` mode (the default) it lands through a merge train
-(`aida pr train`), which tests the combined result before it merges. In
-`review-gated` mode it merges on an independent approval at its exact head,
-and CI runs after the merge. This page describes both modes, the CI a pull
-request must pass before a train admits it in `ci-gated` mode, and what
-happens when main goes red. The train itself is described in the
+A pull request reaches the default branch through a merge train
+(`aida pr train`), which tests the combined result before it merges. This page
+describes the CI a pull request must pass before a train admits it. The train
+itself is described in the
 [git lifecycle reference](../cli/04-git-lifecycle.md).
 
 ## Landing modes
@@ -18,7 +15,7 @@ happens when main goes red. The train itself is described in the
 
 `[landing] mode` in `.aida/config.toml` chooses what a merge into the default branch waits for: `ci-gated` (the default) or `review-gated`. AIDA reads it from the default branch only, so a pull request cannot relax it with its own copy. A value it does not recognise falls back to `ci-gated`, with a warning.
 
-In `ci-gated` mode, `aida pr ship` waits for CI on the head, and the train admits only a green full-tier head. Choose it (the default) when a broken main is expensive: many changes land at once, a revert is slow, or nobody watches main after a merge. The CI sections below describe this mode.
+In `ci-gated` mode, which is the rest of this page, `aida pr ship` waits for CI on the head, and the train admits only a green full-tier head.
 
 In `review-gated` mode, a change merges as soon as it has an independent approval at its exact head and no hold. Nothing waits for CI; CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the advisor seat (or the operator at a terminal) performs the merge, and only for a change it authored none of.
 
@@ -58,40 +55,6 @@ In `review-gated` mode the auto-train stands down: each pass does nothing and sa
 `aida land mode reconcile` re-applies the current mode's list.
 
 Both `set` and `reconcile` change branch protection, so each needs either the operator at a terminal or the advisor seat under a mandate that includes protected paths. Both work on GitHub only.
-
-## When main goes red
-
-<!-- trace:STORY-2897 | ai:claude -->
-
-In both modes, AIDA watches the default branch's CI after each merge. The check runs as its own scheduled job, `land watch` every 5 minutes (enabled in this repository's `.aida/config.toml`), and `aida land watch` runs it once on demand. No landing path runs it, so the land loop and trains never wait on it.
-
-A commit is red when a check the CI-gated mode requires concludes as a failure on that commit. A cancelled check is not a failure, and neither is a check that is still running.
-
-When main goes red:
-
-1. AIDA mails the advisor and product seats at once, as urgent. The mail names the first red commit, its pull request and specs, and the failing checks with their links and the error lines of their logs. It also names the last green commit, where the live binary stays. AIDA re-runs the failed jobs once.
-2. If a green re-run clears the red first, the episode is recorded as a flake. Nobody else is alerted and no spec is filed.
-3. If the red survives the re-run, or 30 minutes pass, the red is confirmed. AIDA files a bug ("main red at <commit>: <checks>") carrying the same evidence. It links the bug to the red commit's specs and queues it at the top of the implementer queue. It also opens an `aida human` item, which it keeps up to date and completes when main is green again, and sends the operator a push notice if one is configured.
-4. Merging continues while main is red. The live binary stays on the newest green commit.
-
-AIDA fixes forward by default. After confirmation it recommends a revert of the red commit, once per reason, only when:
-
-- main does not build (a compile step failed);
-- the build of a red commit fails `aida dev build`'s smoke test;
-- no fix has landed within `[landing] red_main.fix_window` (default `2h`);
-- the fix spec is tagged `needs-design`, or its lane stopped on a design fork.
-
-A revert is an ordinary pull request with a normal review. The first green commit ends the episode, and AIDA mails that main is green again. A notice that cannot be delivered is retried on every pass until it is.
-
-Each watch call to git or the forge has a time limit, and so does the whole pass and the scheduled job. A store write that would wait on another writer is skipped and retried on the next pass.
-
-`aida land metrics` reports, from `.aida/land/main-watch.jsonl`:
-
-- red-main minutes;
-- episodes, with flakes counted separately;
-- merges that landed while red;
-- fix latency, which excludes flakes;
-- how many episodes ended in a revert.
 
 ## Two CI tiers on a pull request
 

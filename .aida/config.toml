@@ -235,15 +235,6 @@ command = "remote mirror-sync"
 every = "1h"
 enabled = true
 
-# STORY-2897: the red-main watch, as its own job only (no landing path runs
-# it). A pass is bounded by the scheduler's job timeout.
-# trace:STORY-2897 | ai:claude
-[[schedule.jobs]]
-name = "red-main-watch"
-command = "land watch"
-every = "5m"
-enabled = true
-
 [[schedule.jobs]]
 name = "hub-drift-guard-route"
 seats = ["advisor"]

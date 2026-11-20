@@ -17,9 +17,6 @@ fn check(name: &str, outcome: CheckOutcome, run: &str) -> CommitCheck {
         outcome,
         run_id: Some(run.into()),
         workflow_id: Some("1".into()),
-        cancelled: false,
-        run_attempt: None,
-        run_in_progress: false,
     }
 }
 

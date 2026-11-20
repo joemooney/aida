@@ -582,13 +582,7 @@ pub(super) fn run(start: &Path, since: &str, until: Option<&str>, json_format: b
             reviews.push(review);
         }
     }
-    let mut report = calculate(&events, &merges, &reviews, since, until);
-    // trace:STORY-2897 | ai:claude
-    report["red_main"] = crate::main_watch::metrics(
-        &crate::main_watch::read_journal(&root)?,
-        since,
-        until.min(Utc::now()),
-    );
+    let report = calculate(&events, &merges, &reviews, since, until);
     if json_format {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
@@ -616,19 +610,6 @@ pub(super) fn run(start: &Path, since: &str, until: Option<&str>, json_format: b
         println!(
             "PRs without an approval record: {}",
             report["review_rounds_unavailable_prs"]
-        );
-        let red = &report["red_main"];
-        println!(
-            "Red main (watch journal): {} episodes ({} flakes), {} min red, {} red merges, \
-             fix latency median {}s max {}s, {} of {} resolved by revert",
-            red["episodes"],
-            red["flakes"],
-            red["red_minutes"],
-            red["red_merges"],
-            red["fix_latency_seconds_median"],
-            red["fix_latency_seconds_max"],
-            red["reverted"],
-            red["resolved"]
         );
     }
     Ok(())
