@@ -16,7 +16,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:37:08.796411381Z
-modified_at: 2026-11-19T22:37:22.725978039Z
+modified_at: 2026-11-20T00:38:28.030056653Z
 req_type: Bug
 tags:
 - product-intake
@@ -190,6 +190,13 @@ comments:
   created_at: 2026-11-19T22:37:22.725975276Z
   modified_at: 2026-11-19T22:37:22.725975276Z
   session_id: 01a1f5ccd057
+- id: 01a1f664-336d-78c0-a5d6-3433a8a3dffc
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 17:42): COMPLETE. #4336 landed with a full (BUG-2683) trailer: review prompts scope Refs-only acceptance checks to the declared slice. r2 (approved at ce13585) added typed advisor scope records read from the spec and keeps the strict contract when PR metadata cannot be read. Manual call: the r2 lane ran the pre-BUG-2696 binary, so it never set Done.'
+  created_at: 2026-11-20T00:38:28.030056653Z
+  modified_at: 2026-11-20T00:38:28.030056653Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef4e-9802-7881-a786-878c927859d8
   author: joe
