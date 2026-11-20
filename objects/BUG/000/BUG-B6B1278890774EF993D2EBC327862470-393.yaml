@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T19:17:43.455877137Z
+modified_at: 2026-11-20T19:24:23.277420683Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -362,6 +362,22 @@ comments:
   created_at: 2026-11-20T19:17:43.455877137Z
   modified_at: 2026-11-20T19:17:43.455877137Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa6b-018b-70b1-9687-6cb2fd04c73d
+  author: joe
+  content: |-
+    Product 12:25: Claude (Fable) FRESH lane queued on dell1 on new branch bug-2629-fresh (off main 012b95ef), brief:
+    # Brief: BUG-2629 FRESH on main (advisor-121 12:18: drain; Claude+Fable; STRICT; branch bug-2629-fresh off current main)
+
+    This spec was orphaned after the 11-18 04:35 ruling that closed PR #4158 as superseded. NEVER resume or cherry-pick #4158's branch. Scope is on the spec; in short:
+    (1) Reproduce the original `aida queue rework` CPU spin (100% CPU for 9+ min on BUG-2593, while gate-ledger/by-spec was open) on current main. Fix it, or record evidence that it no longer reproduces.
+    (2) Implement a FAIL-CLOSED discovery-failure recovery in rework admission (queue_cmd/work.rs, resolve_rework_review_inner ~:3221): when ownership discovery fails, admission must not just withhold bound copies and proceed. Preserve indexed waits AND ledger PR waits.
+    BUG-2646's findings (unverified non-waiting round used as clearance; terminal_wait_source stripped before is_closed) apply to this recovery. BUG-2646 is blocked-by this spec, so design with them in mind.
+    Trailer (BUG-2629) only if every AC is met; otherwise (Refs BUG-2629).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T19:24:23.277420683Z
+  modified_at: 2026-11-20T19:24:23.277420683Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
