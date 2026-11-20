@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587336Z
-modified_at: 2026-11-20T04:41:10.189483164Z
+modified_at: 2026-11-20T04:41:31.007135839Z
 req_type: Bug
 tags:
 - admission
@@ -39,6 +39,13 @@ comments:
   content: 'Product 21:42: stopping the workers is not durable. After the advisor''s SIGTERM at ~21:35, both ''aida advisor loops'' workers respawned within minutes (train-worker pid 2910319, review-watch pid 2921307) with fresh shared receipts, and train #4353 started, so the exclusive ship is blocked again. AC4 (a supported drain/pause) must also hold the supervisor''s respawn, not just the current worker processes.'
   created_at: 2026-11-20T04:41:10.189483164Z
   modified_at: 2026-11-20T04:41:10.189483164Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f742-a73e-78b3-9fd7-15deafa65653
+  author: joe
+  content: 'Product 21:43 (per advisor-121): the respawn is confirmed. The loop workers'' supervisor respawns them within ~2-4 min of SIGTERM, so a stop is not durable and there is no supported pause. Stopping them also closed the in-flight train #4352. WORKING PATH for exclusive-starved ships until this lands: a single-PR cooperative train from a human terminal, `aida pr train <PR>`. Trains share the admission mode with the loops, and a human at the terminal naming the PR satisfies the supervised-spec rule.'
+  created_at: 2026-11-20T04:41:31.007135839Z
+  modified_at: 2026-11-20T04:41:31.007135839Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
