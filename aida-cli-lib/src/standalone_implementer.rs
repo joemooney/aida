@@ -186,6 +186,31 @@ thread_local! {
     /// run's branch returns (`answer` itself may be `None`: no PR).
     pub(crate) static TEST_PR: std::cell::RefCell<Option<Option<(u64, Option<String>)>>> =
         const { std::cell::RefCell::new(None) };
+    /// BUG-2705: a mock forge whose PR `pr` is open while the bare origin at
+    /// the path holds the run's branch, its head the branch's current tip:
+    /// a lookup after the host publishes sees the head it pushed.
+    pub(crate) static TEST_PR_AT_ORIGIN: std::cell::RefCell<Option<(u64, PathBuf)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// [`TEST_PR_AT_ORIGIN`]'s answer for `branch`, when a test seated one.
+// trace:BUG-2705 | ai:claude
+#[cfg(test)]
+fn test_pr_at_origin(branch: &str) -> Option<Option<(u64, Option<String>)>> {
+    let (pr, origin) = TEST_PR_AT_ORIGIN.with(|p| p.borrow().clone())?;
+    let out = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&origin)
+        .args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("refs/heads/{branch}"))
+        .output()
+        .ok()?;
+    Some(out.status.success().then(|| {
+        (
+            pr,
+            Some(String::from_utf8_lossy(&out.stdout).trim().to_owned()),
+        )
+    }))
 }
 
 fn marker_value() -> Option<String> {
@@ -1341,6 +1366,28 @@ pub(crate) fn self_published_seat_exit(
     Ok((outcome, note))
 }
 
+/// Record on a finished lane's result why its seat stayed dirty or why its
+/// fast gate could not run: the host post-exit commit's skip or failure
+/// (`leftover`) and the gate receipt's recorded reason. Every terminal
+/// publication path calls this after it finalizes the attempt, whatever the
+/// result kind: a lane that pushed and then left edits, or one routed as an
+/// empty rework because its old PR head is still blocked, keeps the reason in
+/// its durable record, not only on stderr.
+// trace:BUG-2705 | ai:claude
+fn persist_exit_notes(
+    attempt: &crate::lane_result::Attempt,
+    leftover: Option<&str>,
+    main: &Path,
+    branch: &str,
+) -> Result<()> {
+    let gate = crate::lane_fast_gate::reason(main, branch).map(|why| format!("fast gate: {why}"));
+    // The leftover note already names the host step ("host post-exit commit ...").
+    for note in leftover.iter().copied().chain(gate.as_deref()) {
+        attempt.append_detail(note)?;
+    }
+    Ok(())
+}
+
 /// Apply the no-change classification only to a seat read as clean. A seat
 /// with uncommitted paths, or one git could not read, keeps its outcome.
 // trace:BUG-2580 | ai:claude
@@ -1805,6 +1852,8 @@ fn run(
             launch_seat.head,
             untested,
         )?;
+        // trace:BUG-2705 | ai:claude
+        persist_exit_notes(&attempt, None, &main_root, launch.branch)?;
         let line = crate::lane_fast_gate::result_line(&main_root, launch.branch, &attempt.line()?);
         let os_wrap_off =
             untested && crate::lane_job::lane_ran_without_os_wrap(&main_root, launch.lease_id);
@@ -1953,6 +2002,13 @@ fn run(
             Some(&head),
             untested,
         )?;
+        // trace:BUG-2705 | ai:claude
+        persist_exit_notes(
+            &attempt,
+            leftover_note.as_deref(),
+            &main_root,
+            launch.branch,
+        )?;
         crate::lane_result::emit_line(&attempt.with_retained_seats(attempt.line()?));
         return Err(anyhow::Error::new(StandaloneImplementerExit {
             code: if escalated {
@@ -1968,15 +2024,13 @@ fn run(
     let (_, mut code) = report(&outcome, status.code(), unshipped.as_ref());
     // trace:STORY-2690 | ai:codex
     let kind = attempt.finish_outcome(&outcome, status.success(), unshipped.is_some(), untested)?;
-    // The lane's result record names why its seat stayed unpublished.
     // trace:BUG-2705 | ai:claude
-    if kind == crate::lane_result::Kind::FailedAfterStart {
-        let gate = crate::lane_fast_gate::reason(&main_root, launch.branch)
-            .map(|why| format!("fast gate: {why}"));
-        for note in leftover_note.iter().chain(gate.iter()) {
-            attempt.append_detail(note)?;
-        }
-    }
+    persist_exit_notes(
+        &attempt,
+        leftover_note.as_deref(),
+        &main_root,
+        launch.branch,
+    )?;
     if kind == crate::lane_result::Kind::FailedAfterStart && code == 0 {
         code = NO_PR_EXIT_CODE;
     }
@@ -2158,6 +2212,10 @@ fn lookup_pr_with(
 ) -> Option<(u64, Option<String>)> {
     #[cfg(test)]
     if let Some(pr) = TEST_PR.with(|p| p.borrow().clone()) {
+        return pr;
+    }
+    #[cfg(test)]
+    if let Some(pr) = test_pr_at_origin(branch) {
         return pr;
     }
     for attempt in 0..attempts {

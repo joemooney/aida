@@ -6098,15 +6098,15 @@ pub(crate) fn assert_retention_notice(lines: &[String], kind: &str, clone: &Path
 
 // trace:BUG-2607 | ai:claude
 // Fields drop in order: the guards before the fixture they point into.
-struct RefusedLaunch {
+pub(super) struct RefusedLaunch {
     _cwd: crate::session::contained_cwd_seam::CwdGuard,
     _env: crate::test_env::AmbientGuard,
-    clone: PathBuf,
-    fx: Fixture,
+    pub(super) clone: PathBuf,
+    pub(super) fx: Fixture,
 }
 
-const REFUSED_LEASE: &str = "c0ffee260701";
-const REFUSED_BRANCH: &str = "early-refusal";
+pub(super) const REFUSED_LEASE: &str = "c0ffee260701";
+pub(super) const REFUSED_BRANCH: &str = "early-refusal";
 
 // A leased seat clone whose launch is refused because its vendor is missing.
 // `dirty` keeps the seat's pending file; otherwise the clone is clean.
@@ -6127,12 +6127,24 @@ fn lane_seat(
     dirty: bool,
     setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
 ) -> RefusedLaunch {
+    lane_seat_configured(dirty, "", setup)
+}
+
+// [`lane_seat`] whose trusted default-branch config also carries `config`
+// (e.g. a `[validation]` table), committed before the seat is cloned.
+// trace:BUG-2705 | ai:claude
+fn lane_seat_configured(
+    dirty: bool,
+    config_extra: &str,
+    setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
+) -> RefusedLaunch {
     let fx = fixture();
     // Reach the vendor spawn on a host short of the default disk floor.
     let config = fx.main.join(".aida/config.toml");
     std::fs::create_dir_all(config.parent().unwrap()).unwrap();
     let mut body = std::fs::read_to_string(&config).unwrap_or_default();
     body.push_str("\n[doctor.disk_headroom]\nmin_free_gib = 1\n");
+    body.push_str(config_extra);
     std::fs::write(&config, body).unwrap();
     git_ok(&fx.main, &["add", ".aida/config.toml"]);
     git_ok(&fx.main, &["commit", "-qm", "disk floor"]);
@@ -6265,7 +6277,18 @@ fn started_lane(
     body: impl FnOnce(&Fixture, &Path) -> String,
     setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
 ) -> RefusedLaunch {
-    lane_seat(dirty, |fx, clone| {
+    started_lane_configured(dirty, "", body, setup)
+}
+
+// [`started_lane`] with `config_extra` in the trusted default-branch config.
+// trace:BUG-2705 | ai:claude
+pub(super) fn started_lane_configured(
+    dirty: bool,
+    config_extra: &str,
+    body: impl FnOnce(&Fixture, &Path) -> String,
+    setup: impl FnOnce(&Fixture, &Path) -> Vec<(&'static str, Option<String>)>,
+) -> RefusedLaunch {
+    lane_seat_configured(dirty, config_extra, |fx, clone| {
         let vendor = fx.root.join("mock-claude");
         crate::test_exec::write_executable(
             &vendor,
@@ -6529,7 +6552,7 @@ fn self_push(clone: &Path, branch: &str, subject: &str) {
 // Shell for a mock lane child that commits `subject` in its seat and pushes
 // its own branch to origin, as a self-publishing Claude lane does.
 // trace:BUG-2696 | ai:claude
-fn self_push_body(clone: &Path, subject: &str) -> String {
+pub(super) fn self_push_body(clone: &Path, subject: &str) -> String {
     format!(
         "cd '{clone}' && printf '%s\\n' '{subject}' > self-pushed.txt && \
          git -c maintenance.auto=false -c gc.auto=0 add -A && \
@@ -6558,7 +6581,7 @@ fn lane_bug_1_status(fx: &Fixture) -> aida_core::RequirementStatus {
 // hermetic host reads the distributed store, as the empty-rework lane test
 // does.
 // trace:BUG-2696 | ai:claude
-fn seed_lane_spec(fx: &Fixture, status: aida_core::RequirementStatus) {
+pub(super) fn seed_lane_spec(fx: &Fixture, status: aida_core::RequirementStatus) {
     crate::test_env::enroll_synthetic_home(&fx.main).unwrap();
     let mut req = title_spec("Repair seat publication");
     req.status = status.clone();
