@@ -957,22 +957,7 @@ fn no_merge_or_landing_path_reads_or_calls_the_red_main_watch() {
             "upgrade_release.rs",
         ]
         .iter()
-        .map(|f| {
-            // A module may be a file or (after a split) a directory; a
-            // listed module that is neither fails, so the scan never
-            // silently stops covering it.
-            let file = src.join(f);
-            let dir = src.join(f.trim_end_matches(".rs"));
-            assert!(
-                file.is_file() || dir.is_dir(),
-                "landing module {f} is gone; update this scan"
-            );
-            if file.is_file() {
-                file
-            } else {
-                dir
-            }
-        }),
+        .map(|f| src.join(f)),
     );
     for entry in std::fs::read_dir(&src).unwrap() {
         let path = entry.unwrap().path();
