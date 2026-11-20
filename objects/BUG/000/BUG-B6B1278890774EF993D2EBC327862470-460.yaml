@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T06:20:17.454518017Z
+modified_at: 2026-11-20T06:20:24.786512208Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1186,12 +1186,12 @@ comments:
   modified_at: 2026-11-20T05:05:45.373205234Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
-- id: 01a1f79d-1691-7282-b22e-8893f1a750d8
+- id: 01a1f79d-32bd-7483-96c7-ef3e4ab0aaa8
   author: joe
-  content: 'Product 23:20, POST-LANDING CONFIRMATION (rework D3): BUG-2702 r2 was a queue-rework lane on the existing PR #4354, on dell1 binary 972c2f04 (contains #4348). It pushed 8655779c, and history shows 22:42 Approved -> InProgress (pickup), then 23:15 InProgress -> Done (push). That''s the exact case TASK-3821 r2 failed at 17:28. Combined with D4 (TASK-3161: 21:29 Done -> Completed, no manual call), the completion lifecycle is evidenced end-to-end in production.'
-  created_at: 2026-11-20T06:20:17.454518017Z
-  modified_at: 2026-11-20T06:20:17.454518017Z
-  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  content: 'advisor-121 23:22: REOPEN CONDITION PASSED, verified. BUG-2702 r2 (queue-rework round on the EXISTING PR #4354, dell1 binary 972c2f0) pushed 8655779c, and history shows InProgress -> Done at 23:15 with no manual call. With TASK-3161''s D4 (Done -> Completed at 21:29, no manual call), the D3+D4 lifecycle is evidenced in production for fresh and rework rounds. Manual completion calls are no longer needed for full-trailer completing pushes.'
+  created_at: 2026-11-20T06:20:24.786512208Z
+  modified_at: 2026-11-20T06:20:24.786512208Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
