@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T21:38:11.625036595Z
+modified_at: 2026-11-20T21:38:25.805103691Z
 req_type: Task
 tags:
 - landing
@@ -228,6 +228,13 @@ comments:
     cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
   created_at: 2026-11-20T21:38:11.625036595Z
   modified_at: 2026-11-20T21:38:11.625036595Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fae5-ae11-7931-aab2-44e36fa1a80e
+  author: joe
+  content: 'Product 14:38: R2-PR-A lane queued on dell1 (claude), branch task-b6b1278890774ef993d2ebc327862470-1136. Scope = the AUTHORITATIVE R2-PR-A BRIEF in the previous comment.'
+  created_at: 2026-11-20T21:38:25.805103691Z
+  modified_at: 2026-11-20T21:38:25.805103691Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
