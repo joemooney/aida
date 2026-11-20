@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T15:56:34.159315546Z
+modified_at: 2026-11-20T15:59:57.394803249Z
 req_type: Bug
 tags:
 - admission
@@ -221,6 +221,29 @@ comments:
   modified_at: 2026-11-20T15:56:34.159315546Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9af-99d2-7270-8d6b-d710f8db477f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 634d82e8e4 (round 2 of PR #4363, against origin/main...HEAD).
+
+    Acceptance evidence (round-2 findings):
+    1. Serializer inside the deadline: admission_owner.rs lock_serial/Deadline. Preflight (train_mode), acquire_mode, register_intent, IntentGuard/Claim drop and yield_reason all use bounded try-lock retries. At expiry the typed busy refusal names the holder (from /proc/locks) and the time waited. Test: admission_owner::tests::bug2703_stalled_serializer_holder_cannot_outlast_the_bound, where a separate process holds receipts.lock. With wait_secs=1 the ship refuses in [1s,3s) naming the holder PID; wait_secs=0 refuses within 1s plus slack; a stall after the intent is registered returns by about bound+0.5s and removes the intent.
+    2. Settlement while yielded: review_watch.rs settle_while_yielded (prune over every recorded key, then advance every superseding attempt; no discovery and no launch).
+    3. Production path: review_watch::tests::bug2703_real_worker_loops_yield_to_the_real_ship_handler runs the real run_with_program loop, train::run_passes (the loop behind train::run) around a controlled pass, and the real pr_ship_handler. In flight: a running review, a claimed superseding review and a train pass. Nothing is signalled or cut short (exit 0, pass completes). The ship crosses admission within its bound only because the yielded watcher settles the superseding attempt.
+    4. loops status: advisor_loop_service.rs admission_claims and the status_value/status_lines projection. Test: loop_tests::bug2703_loops_status_projects_both_workers_claims (both workers, legacy receipt shows an unknown age).
+
+    Validation: all 20 bug2703 tests pass. Also passing: 98 admission/story2857/bug2650/story2905 tests, 463 review_watch/land_run/pr_train tests, the ratchet groups (110) and aida-ci-guards (51). check-store-writers was regenerated. Fast gates were run one at a time under the 60s cap, and portability and ExecContext hits were fixed. Gates 4, 5 and 45 (containment, store-mutation channel, self-hosted routing) fail here on sandbox EPERM or a read-only /tmp. Gates 5 and 45 fail the same way on the unmodified tree.
+
+    Probe findings / residual risks:
+    - Finding 3, partly disputed: the ship fixture does not carry an approved PR through to a forge merge. In pr_ship_with_method_and_dispatch_ctx, admission is acquired before any PR evidence is read, so approval cannot affect admission. The fixture stops the real handler at its next step (detached HEAD, no ship lease); no admission refusal can produce that error.
+    - Settlement while yielded may still send the supersede protocol's TERM/KILL to an obsolete-head review, exactly as a normal pass would. It never launches.
+    - Claim/intent cleanup removes its own file without the serializer after 500ms. Readers skip vanished files, and the flock remains the authority.
+    - acquire() for loop controllers now refuses busy after 1s of serializer contention instead of blocking. Callers already treat busy as wait or yield.
+  created_at: 2026-11-20T15:59:57.394803249Z
+  modified_at: 2026-11-20T15:59:57.394803249Z
+  session_id: 01a1f9891835
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
