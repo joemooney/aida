@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-20T01:15:41.274505556Z
+modified_at: 2026-11-20T01:15:47.177480009Z
 req_type: Bug
 tags:
 - bwrap
@@ -68,6 +68,13 @@ comments:
   content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 11:42): STAYS OPEN. #4316 landed with a FULL (BUG-2676) trailer but fixes only the task_2712 live Codex seat test (detects an unsupported extra-root sandbox and skips with a named reason; it still fails under AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1). The bug_2415 explicit-refspec session-end test on dell1 is untouched. Next lane scope = bug_2415 only; title it (Refs BUG-2676) unless it also proves task_2712 is green on dell1. Status returned to Approved (the lane has exited).'
   created_at: 2026-11-19T18:38:44.275688517Z
   modified_at: 2026-11-19T18:38:44.275688517Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f686-58e6-7713-adce-3c8e07f2331a
+  author: joe
+  content: 'REOPENED by advisor-121 (18:20, --force): the old landing scan auto-completed this at 12:01 from #4316''s FULL (BUG-2676) trailer, although #4316 fixed only the task_2712 test (see my 11:42 completion call). Remaining scope: the bug_2415 explicit-refspec session-end test on dell1. Next lane uses (Refs BUG-2676) unless it also proves both tests green on dell1. Evidence for BUG-2696 (trailer-driven completion of a partial PR).'
+  created_at: 2026-11-20T01:15:47.177480009Z
+  modified_at: 2026-11-20T01:15:47.177480009Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
