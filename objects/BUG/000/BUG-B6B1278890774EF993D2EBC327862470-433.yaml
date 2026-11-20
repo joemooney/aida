@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T18:18:02.833476858Z
+modified_at: 2026-11-20T18:33:29.470620935Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -42,6 +42,13 @@ comments:
   created_at: 2026-11-20T18:18:02.833476858Z
   modified_at: 2026-11-20T18:18:02.833476858Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa3c-5ca6-7f13-9572-6101dde98c0e
+  author: joe
+  content: "Product 11:33: claude lane queued on dell1 (advisor 11:19 batch), brief:\n# Brief: BUG-2669 (fresh start; advisor-121 11:19 batch: approved, drain; claude)\n\nScope: a retained reviewer draft must stay replayable/collectable after the reviewer's launcher exits (tonight #4347's uncollected APPROVED draft sat in a stale aida-pr-4347 tree and was saved only by hand). See the spec's ACs.\n\nImplement ONLY the still-unmet acceptance criteria on origin/main; earlier slices on main: 9025b1b0fe4  c55e14a7eaa  8d81acfcb4a  7ef65001d07  \nTrailer (BUG-2669) only if your PR plus main meets every AC; otherwise (Refs BUG-2669). If every AC is already met, make no change: punt with per-AC evidence.\nBefore pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`."
+  created_at: 2026-11-20T18:33:29.470620935Z
+  modified_at: 2026-11-20T18:33:29.470620935Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
