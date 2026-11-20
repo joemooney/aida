@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-20T15:20:55.261047265Z
+modified_at: 2026-11-20T15:39:16.371878086Z
 req_type: Bug
 tags:
 - bwrap
@@ -27,6 +27,11 @@ relationships:
     custom: implemented-by
   target_id: 01a1f4bd-9579-76e0-8459-abefcd1a628a
   created_at: 2026-11-19T16:57:35.630598435Z
+  created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f99c-86ba-7400-9ac2-d6524c8ae9f8
+  created_at: 2026-11-20T15:39:16.371862632Z
   created_by: dirtlab
 comments:
 - id: 01a1ed08-7f40-74e1-96da-a2e067bc9742
@@ -180,6 +185,11 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f99c-b13c-7fd3-8b1e-a63b72705a87
+  author: dirtlab
+  timestamp: 2026-11-20T15:39:18.204559256Z
+  session_id: 01a1f95b9c6f
+  changes: []
 processing_record:
 - id: 01a1f52f-614c-7811-ba25-20efe4bd456a
   timestamp: 2026-11-19T19:01:25.452762937Z
