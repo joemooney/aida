@@ -1,0 +1,31 @@
+id: 01a1fa88-5f9d-78a1-9499-efd07a53cf43
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1143
+title: 'Review follow-up: Yielded settlement snapshots keys before prune acquires admission.lock and reloads state. '
+description: |-
+  From BUG-2703
+  Reviewed sha: d0d953c3461a95653bc8dc20f6cb44f9abf978cf
+
+  Yielded settlement snapshots keys before prune acquires admission.lock and reloads state. Another watcher already in a pass can reserve a new change between those reads. prune treats that new key as closed and can discard the unclaimed local reservation before dispatch. Reconcile lost dispatchers under the lock without filtering on an older key set.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T19:56:43.805248433Z
+modified_at: 2026-11-20T19:56:43.805248433Z
+req_type: Task
+tags:
+- carried-from:BUG-2703
+- finding-hash:24400da9
+- from-review:BUG-2703
+relationships:
+- rel_type: References
+  target_id: 01a1f73c-f2d4-7ad3-85a1-7b10d07388d2
+  created_at: 2026-11-20T19:56:56.670300526Z
+filed_at:
+  code_sha: d0d953c3461a95653bc8dc20f6cb44f9abf978cf
+  branch: pr-4363
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 012b95ef890
+  vendor: claude
+  session: 01a1fa85c395
