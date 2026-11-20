@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T03:17:18.295707441Z
+modified_at: 2026-11-20T03:17:37.050329560Z
 req_type: Story
 tags:
 - landing
@@ -176,6 +176,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full landed-diff review completed against pinned main 2b42e9f896c63a9152a2508fd50211741e6ee72d / landed tree 04486174b3a59478aa6acf7115c61f0a7c1b4bf6, attesting original PR head only. Four actionable defects: protected-policy read failures drop custom protections, ship path supervision is not pinned to the later authorized head, show ignores explicit carrier modes, and the new diff read bypasses the train-check timeout. Completing STORY-2884 criterion statuses: ac14a117 verified by default-policy source/test inspection and implementer-reported legacy truth-table results; ac604e5b unverified because findings 1-2 violate protected-path supervision despite ordinary-case matrix tests; ac90eb51 unverified because finding 3 misreports carrier-aware mode; ac67a09f verified by config-guide and both two-seat protocol updates, with repository opt-in left to the operator. All criteria enumerated in the generated worksheet. GitHub FAST gates/compile and Build aggregate green; full Rust execution skipped. No local builds/tests run under reviewer policy. Parent must validate and record this draft.. No triage reason was given.'
   created_at: 2026-11-20T03:17:18.295705468Z
   modified_at: 2026-11-20T03:17:18.295705468Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6f5-a7ec-7192-9326-fce86ba75269
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2884):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dfe7a9938ffd
+    Recorded: 2026-11-20T03:15:50.107574738+00:00
+    Findings:
+    1. [P1] blocking_tier=unmet-claimed-ac; class=security-authority-bypass; file=aida-cli-lib/src/gate/unset_mode.rs:377-380; STORY-2884 ac604e5b. Do not turn an unreadable protected-path policy into permission to default to drain. protected_paths calls ProtectedPaths::of(load_human_gates(...)), which converts ANY load error to only the built-in floor. If the trusted config enables drain and protects src/payments/, but the operator config is unreadable/malformed (or the committed gate layer cannot be loaded), the custom protected paths disappear and a payments PR passes the unattended supervision gate. This also occurs on a repository with origin/master as the default: UnsetModePolicy reads origin/master, while load_human_gates requires origin/main. Ordinary no-hold ship/train paths do not require a successful mandate, so its fail-closed gate does not rescue this. Preserve load failure and withdraw all project defaults when protection cannot be established; use the same trusted default-branch anchor for the policy and committed protected paths. Add regressions for operator-layer failure with committed custom protection and for a non-main default branch.
+    2. [P1] blocking_tier=unmet-claimed-ac; class=security-authority-bypass; file=aida-cli-lib/src/pr_cmd.rs:2773-2784; STORY-2884 ac604e5b. Bind the protected-path decision to the head that is actually authorized to merge. change_paths reads a forge head here but discards its identity. The later preflight/CI sequence establishes its own head and stale_head_after_ci_refusal compares only that later head with the final head. A push between this check and preflight can replace an ordinary H1 with protected-path-changing H2; with independent H2 approval and H2 CI, every later gate can pass while the unset-mode default was admitted from H1. This is new path-dependent supervision authority and must be pinned too. Return/preserve the checked SHA and reject a different preflight/final head, or rerun effective supervision and protected-path checks under the merge lease against the final pinned head. Add a regression that advances the head to protected changes between supervision and preflight.
+    3. [P2] blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/gate/unset_mode.rs:230-237; STORY-2884 ac90eb51. aida show reports the wrong effective mode for a superseded unset spec. show_label always calls policy.resolve(None, req), while ship_gate_spec_records_for_ids first calls ship::gating_execution_mode over the superseded-by carrier chain. With the bug drain default enabled, an ordinary unset bug superseded into a guided/operator carrier is displayed as drain (project default for unset bug), although the merge gate correctly requires the carrier mode and supervision. Conversely a drain carrier can be displayed as supervised for an unlisted child type. Resolve the carrier-aware gating mode using the store before rendering and identify its source; add CLI/show coverage for unset children with explicit carrier modes.
+    4. [P2] blocking_tier=p2; file=aida-cli-lib/src/gate/unset_mode.rs:392-397. The new changed_paths subprocess bypasses the train --check --timeout deadline. LiveChecks::withdraw_unset_defaults reaches this helper during collect_report, whose scoped deadline only bounds subprocesses executed through forge_lookup::deadline_output (or equivalent). host_git_command returns an ordinary Command and this direct output() can block indefinitely on a stalled Git process or inherited pipes after a drain default is enabled. Route the command through the existing scoped deadline runner, retain unknown-path refusal on timeout, and extend the train-check deadline regression to a defaulted spec reaching this diff read.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T03:17:36.876678531Z
+  modified_at: 2026-11-20T03:17:36.876678531Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
