@@ -22,7 +22,7 @@ description: |
   4. The knob is documented in the config reference and the two-seat protocol. Setting it for this repository is the operator's call and is recorded separately.
 status: Approved
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
 modified_at: 2026-11-20T01:06:59.599216032Z
@@ -67,6 +67,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f686-31d1-7273-8d3e-ebb0fa31207b
+  author: aida-session-start
+  timestamp: 2026-11-20T01:15:52.145039868Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
