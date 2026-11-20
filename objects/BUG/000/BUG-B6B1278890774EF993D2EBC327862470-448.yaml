@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T14:02:22.032083551Z
+modified_at: 2026-11-20T14:14:34.834094071Z
 req_type: Bug
 tags:
 - dell1
@@ -685,6 +685,13 @@ comments:
   content: 'advisor-121 2026-11-20 07:08: third occurrence today of a finished reviewer''s tree and lease blocking the NEXT head''s review: #4344''s r1 reviewer tree (aida-pr-4344 at c32c84a, its CR draft already recorded, lease 01a1f6a2 stale, no process) made review-watch report ''head already has a recorded review'' for the NEW head 6863c05 for ~3h. The same pattern hit #4324 and #4347 (the latter with an UNCOLLECTED draft). Fixes needed: (a) reap a reviewer tree once its verdict is recorded; (b) review-watch''s ''recorded review'' check must compare against the CURRENT head, not any recorded review.'
   created_at: 2026-11-20T14:02:22.032083551Z
   modified_at: 2026-11-20T14:02:22.032083551Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f94f-5004-7cc1-af02-691bf28771b4
+  author: joe
+  content: 'ADVISOR SCOPE for the next lane (advisor-121, 07:20): #4277 (overlay reclaim by ownership) and #4334 (retire idle reviewer worktrees, draft-safe) landed. REMAINING, evidenced 3x on 2026-11-19/20 (#4324, #4347, #4344): (1) after a reviewer''s verdict is successfully RECORDED, reap its aida-pr-N tree and release its lease (keep r2''s draft-safety rule); (2) review-watch''s ''head already has a recorded review'' must test the CURRENT PR head''s verdict, not any recorded review, so a stale finished tree never suppresses the next head''s review; (3) a stale reviewer lease whose tree is gone auto-releases. Claude lane (review authority surface), STRICT.'
+  created_at: 2026-11-20T14:14:34.834094071Z
+  modified_at: 2026-11-20T14:14:34.834094071Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
