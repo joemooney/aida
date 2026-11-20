@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-20T15:14:45.048203758Z
+modified_at: 2026-11-20T15:17:51.411985298Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -230,6 +230,13 @@ comments:
   created_at: 2026-11-20T15:14:45.048200965Z
   modified_at: 2026-11-20T15:14:45.048200965Z
   session_id: 01a1f984f41d
+- id: 01a1f989-3e25-72c1-9907-69f519bdc0af
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 08:22): COMPLETE. #4309 (pr_service extraction) landed and the lane verified its last stored review finding is resolved in b820668. The stored rework state kept routing new lanes into that finished review, so the pr_cmd/ directory split is moved to its own spec: TASK-3822.'
+  created_at: 2026-11-20T15:17:51.411985298Z
+  modified_at: 2026-11-20T15:17:51.411985298Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
   author: joe
