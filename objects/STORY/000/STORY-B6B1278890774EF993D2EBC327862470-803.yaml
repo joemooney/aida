@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-20T04:10:03.895914282Z
+modified_at: 2026-11-20T04:41:25.624112162Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -214,6 +214,13 @@ comments:
   content: 'advisor-121 21:12: promotion 23 #4324 is READY at 95edb31 (STRICT r4 approval at 774878b plus a light approval of the conflict-only re-cut at 95edb31; full tier green, run 44668741777) but NOT merged. (1) aida pr ship was starved by admission contention (45 attempts: auto-train/review-watch). (2) The mandate REFUSES cover: ''what the PR ships could not be resolved to specs in the store''; the promotion inherits many supervised specs. The advisor will not hand-merge around a mandate refusal. NEEDS JOE at a terminal: aida pr ship 4324 (pinned to 95edb31). Follow-up gap: the mandate cannot cover integration promotions.'
   created_at: 2026-11-20T04:10:03.895914282Z
   modified_at: 2026-11-20T04:10:03.895914282Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f742-9279-71f2-96f6-452b8cd66033
+  author: joe
+  content: 'advisor-121 21:44: promotion 23 #4324 landing path: exclusive error: "admission busy: PID 2921307, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:174088457 (pidns 4026531836), purpose legacy review-watch; PID 2910319, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:174074023 (pidns 4026531836), purpose legacy auto-train" is starved by the loop workers'' lifetime shared claims (BUG-2703), and SIGTERM''d workers respawn within minutes. A train runs in the SHARED admission mode, and a human at a terminal naming the PR satisfies the supervised rule, so Joe lands it with error: "admission busy: PID 2921307, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:174088457 (pidns 4026531836), purpose legacy review-watch; PID 2910319, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:174074023 (pidns 4026531836), purpose legacy auto-train". The mandate cannot cover it until BUG-2702 lands.'
+  created_at: 2026-11-20T04:41:25.624112162Z
+  modified_at: 2026-11-20T04:41:25.624112162Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
