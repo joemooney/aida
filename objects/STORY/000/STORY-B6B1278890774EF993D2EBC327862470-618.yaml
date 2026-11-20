@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T20:02:06.954072077Z
+modified_at: 2026-11-20T20:02:25.237304764Z
 req_type: Story
 tags:
 - area:ci
@@ -456,6 +456,13 @@ comments:
     Residual risks: (a) ci.yml bytes changed, so the operator must re-pin workflow_sha256 after merge. (b) AIDA_DELL1_CI must now be exactly lower-case 'true'; 'TRUE' no longer routes. (c) Label dispatch, install-action's real install directory and artifact upload through the linked target are runner behaviour the fixtures model but cannot execute; the runbook acceptance section lists each check. (d) AC1/AC2 live evidence still needs the operator install.
   created_at: 2026-11-20T20:02:06.954072077Z
   modified_at: 2026-11-20T20:02:06.954072077Z
+  session_id: 01a1fa7d073d
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa8d-9555-7071-a872-9edaff3833a7
+  author: dirtlab
+  content: 'Correction to the self-review at 03e78ae805: tests/test_gdma_ci.py runs 34 tests (not 36), all passing.'
+  created_at: 2026-11-20T20:02:25.237304764Z
+  modified_at: 2026-11-20T20:02:25.237304764Z
   session_id: 01a1fa7d073d
   harness_version: 2.1.319 (Claude Code)
 history:
