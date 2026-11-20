@@ -9,12 +9,12 @@ description: |-
   1. aida queue rework finishes in under 10s on this repo's current gate ledger (658 PR ledgers), or prints progress and names the slow phase.
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T21:49:53.526456896Z
+modified_at: 2026-11-20T21:50:39.850213636Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -453,6 +453,13 @@ comments:
   modified_at: 2026-11-20T21:49:53.526456896Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1faf0-aeea-7ad1-8cba-90192f084121
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes. Reviewed the landed diff on base 719aa494. No finding depends on the intervening base commit. FAST CI passed. Evidence below comes from source and the implementer''s reported test results.. No triage reason was given.'
+  created_at: 2026-11-20T21:50:39.850205157Z
+  modified_at: 2026-11-20T21:50:39.850205157Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
@@ -638,6 +645,15 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1faf0-aeea-7ad1-8cba-90019ba21272
+  author: joe
+  timestamp: 2026-11-20T21:50:39.850191293Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
@@ -648,16 +664,3 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Request changes. Reviewed the landed diff on base 719aa494. No finding depends on the intervening base commit. FAST CI passed. Evidence below comes from source and the implementer's reported test results.
-
-    BUG-b6b1278890774ef993d2ebc327862470-393.ac56b111 — verified by the five-second forge and ledger phase notices and bug_2629_a_slow_rework_phase_names_itself. Live-ledger timing was not measured.
-    BUG-b6b1278890774ef993d2ebc327862470-393.aca2b718 — verified by require_rework_pickable preceding both lookups and bug_2629_track_refusal_precedes_any_gate_ledger_read, which checks the other-track refusal and zero ledger reads.
-    BUG-b6b1278890774ef993d2ebc327862470-393.ac915e51 — unverified. bug_2629_rework_scan_is_bounded_on_a_ledger_of_over_1000_changes gives the target spec one change. Recovery still repeats a corpus scan per related change when the target has many.
-  recovery_hint: address the review findings, move BUG-2629 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-20T21:49:26.439018728Z
