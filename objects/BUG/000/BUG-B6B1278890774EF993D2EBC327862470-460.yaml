@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T02:41:47.963133115Z
+modified_at: 2026-11-20T02:42:03.327622312Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1075,6 +1075,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES. Reviewed original head 9b545c9671452358feb24deba963ee850a68bc6e as landed tree c6cf56f482e0b963893ae0be9a6c92640b5d83cb on protected main 2b42e9f896c63a9152a2508fd50211741e6ee72d. Read the entire supplied 16,559-byte diff and generated .aida/review-prompt-pr-4348.md. Inspected all five changed files and downstream completion, signal, seat-state and fast-gate helpers. The PR body declares D3-only scope; landing behavior is unchanged, but all worksheet criteria are accounted for below. Evidence below means source inspection, not a reviewer test execution. No local build or test commands were run.. No triage reason was given.'
   created_at: 2026-11-20T02:41:47.963121495Z
   modified_at: 2026-11-20T02:41:47.963121495Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6d5-191f-7482-8d32-fb027edce5b9
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2696):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9b545c967145
+    Recorded: 2026-11-20T02:36:31.040967160+00:00
+    Findings:
+    1. severity=p2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/ship_from_seat.rs; lines=2360-2393 in landed tree (new mark_done_after_self_published_round). Bound the completion declaration to this round, not merely the changed tip. launch_head is used only to establish HEAD != launch_head, then discarded when calling mark_done_after_confirmed_push. Its publication_subject lookup walks the entire first-parent branch back to the default branch, skipping every HOST_RECONCILE_SUBJECT commit. Consequently, if a previous completing (BUG-1) commit remains on the branch, the spec is reopened to Approved, and this round pushes only a reconciliation merge, the new tip passes pushed_since and remote confirmation, but the lookup skips the new merge and returns the previous round's completing subject. Done is written without a new completion declaration. The unchanged-head negative test does not cover this moved-head case. Carry the launch boundary into subject selection and reject a completing subject at or before that boundary; add a regression with an old completing push, reopen, then a reconciliation-only push, plus a control with a new completing commit beneath reconciliation. This violates the new helper's own-round contract for ac78da20 and is unchanged on the pinned protected base.
+    2. severity=p2; blocking_tier=untested-path; class=test-gap; file=aida-cli-lib/src/ship_from_seat.rs; related_files=aida-cli-lib/src/queue_cmd/work.rs,aida-cli-lib/src/session/headless.rs. Cover the two additional self-publication lifecycle exits. The diff adds Done writes to run_queue_resume_to_exit and run_vendor_headless_to_exit, but its only runner-level test invokes standalone_implementer::run_for_test; the other new test calls the helper directly. Removing either resume/drain hook, moving its launch-head capture after the child, or passing the wrong scope/exit result would leave every new test unchanged. These are separate seat lifecycle paths with different lease, branch and signal handling, so helper and standalone coverage does not establish their behavior. Add focused resume and drain regressions that exercise a completing self-push and assert Done, with a non-completing or vetoed control for each. ADR-76 makes this untested seat path blocking. The protected-base conflict-routing changes do not supply this coverage.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T02:42:03.167878282Z
+  modified_at: 2026-11-20T02:42:03.167878282Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
