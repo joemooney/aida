@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T20:58:11.636298182Z
+modified_at: 2026-11-20T21:00:07.312938417Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -292,6 +292,25 @@ comments:
   created_at: 2026-11-20T20:58:11.502185197Z
   modified_at: 2026-11-20T20:58:11.502185197Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fac2-9b4c-7763-8104-c0a2c54d6ba1
+  author: joe
+  content: |-
+    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 14:00):
+    # Rework brief: BUG-2662 / PR #4378, round 3 of 4, STRICT
+
+    Advisor: claude-advisor-121, 2026-11-20 14:08 MST. Head reviewed: 74968c7 (11 -> 5). Lane: CLAUDE+Fable. COMMIT your work.
+     1 store.rs:795 Standing::admit keys on (spec, destination, label, body hash), not the body hash alone: the same refusal body appended under a
+       second spec is a NEW event.
+     2 review_commands.rs:3405 a TTY receipt is selected and persisted UNDER the lock, after deferred-finding filing succeeds; on failure,
+       remove or never create it (no orphans).
+     3 store.rs:944 the unbound append decides from the bounded, validated reader (the same budget), never an unbounded read_to_string.
+     4 review_commands.rs:3730 a repeated refusal verifies the CURRENT forge labels before skipping reconciliation (a removed hold label is restored).
+     5 the aida-review skill template: describe the standalone draft parent's real path (direct review-record) accurately; make sync-templates.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push.
+  created_at: 2026-11-20T21:00:07.312938417Z
+  modified_at: 2026-11-20T21:00:07.312938417Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
