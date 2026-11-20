@@ -19,7 +19,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-19T13:25:26.908650989Z
+modified_at: 2026-11-20T00:00:20.460940218Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -39,6 +39,13 @@ comments:
   modified_at: 2026-11-19T13:25:26.908650989Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+- id: 01a1f641-3bb0-7752-aff9-3a2c867cda90
+  author: joe
+  content: 'advisor-121 2026-11-19 17:03: related shadowing defect. A stale legacy .aida/review-verdicts/<SPEC>.json from a previous cycle of a reopened spec (BUG-2211, 2026-10-23, PR #2863) was read by the train merge gate as the spec''s verdict and refused two trains deterministically, although the ledger held an APPROVED verdict at the member head. Spec-keyed legacy files should be ignored when their recorded PR/branch is not the change being merged.'
+  created_at: 2026-11-20T00:00:20.460940218Z
+  modified_at: 2026-11-20T00:00:20.460940218Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
