@@ -744,6 +744,26 @@ comments:
   modified_at: 2026-11-20T15:13:24.394770330Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f985-e3df-7ed1-81ad-7474d656f02f
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 08:14):
+    # Rework brief: BUG-2684 / PR #4364, round 2 of 4 (STRICT; reaping must fail closed)
+
+    Advisor: claude-advisor-121, 2026-11-20 08:18 MST. Head reviewed: 5e86834. Lane: CLAUDE. Both P1s:
+    1. ownership/reader.rs:556-564 + queue_cmd/work.rs:3895-3899: recorded_review_lease_finished accepts every lease_owner result except Alive.
+       Treat Unknown (including "ownership record names a different session") as NOT finished: never retire or release when the
+       current ownership record names another holder or cannot be read. Regression: an old on-disk lease plus a conclusive verdict while a
+       replacement holder owns the work key, so nothing is retired.
+    2. queue_cmd/work.rs:3895-3899: before declaring a legacy reviewer lease finished, check creator_pid plus its start identity. If the creator is
+       alive (matching start time), it is NOT finished, even with no active_pid/holder_record and no cwd/fds in the tree. Regression: a live
+       legacy creator outside the tree with a conclusive verdict, so it is kept.
+    Retirement happens only when the holder is POSITIVELY dead (or the tree is gone AND the holder is positively dead) and the verdict at that exact
+    head is recorded. Unknown means keep, and report. cargo fmt; check-store-writers.py; targeted cargo run; make check-ci-fast. COMMIT your work. Push.
+  created_at: 2026-11-20T15:14:11.943671033Z
+  modified_at: 2026-11-20T15:14:11.943671033Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
