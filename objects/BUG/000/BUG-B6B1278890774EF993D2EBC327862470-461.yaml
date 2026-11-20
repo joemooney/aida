@@ -14,12 +14,12 @@ description: |
   4. `aida doctor check leases` reports, and `aida doctor heal stale-leases --id shared-<claim> --yes` heals, an expired shared claim (heartbeat + ttl in the past, process_backed=false, holder pid not running) whose recorded host is a sandbox UTS name of THIS node, as well as one recorded with the node identity. Regression test reproducing the 01a1f4f93790 record shape.
   5. Existing leases and claims with a sandbox hostname are shown with a note in `aida session leases --all` (no data rewrite needed).
   6. Until this lands, the manual release procedure in the advisor-121 ruling (comment of 2026-11-19 13:38) stays the documented stopgap; remove that note from the lane-host checklist when this ships.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T18:36:47.172993456Z
+modified_at: 2026-11-20T18:37:17.815069835Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -370,6 +370,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1fa3f-a677-7f60-a9a1-c9db42d37197
+  author: aida-session-start
+  timestamp: 2026-11-20T18:37:17.815068587Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
