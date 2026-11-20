@@ -20,12 +20,12 @@ description: |
   2. With `default = "drain"` and a type list, an unattended `aida pr ship`/train ships a PR whose specs are all unset-mode, of a listed type, not sensitive, and not touching protected paths. Every other gate (independent APPROVE at head, green pinned CI, no holds) still applies. A test covers the matrix: type in or out of the list × sensitive or not × protected path or not × explicit mode.
   3. The refusal text and `aida show` name the effective mode and where it came from, for example `drain (project default for unset bug)`.
   4. The knob is documented in the config reference and the two-seat protocol. Setting it for this repository is the operator's call and is recorded separately.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T09:54:07.480105510Z
+modified_at: 2026-11-20T10:08:02.985173797Z
 req_type: Story
 tags:
 - landing
@@ -454,6 +454,12 @@ comments:
   modified_at: 2026-11-20T09:54:07.480105510Z
   session_id: 01a1f85a6fa1
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f86d-6ba9-7b32-8884-acc42decf605
+  author: aida-publication-done
+  content: Implementer push 810aabf4121b declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T10:08:02.985173340Z
+  modified_at: 2026-11-20T10:08:02.985173340Z
+  session_id: 01a1f85a6fa1
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
   author: joe
@@ -570,6 +576,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f86d-6ba9-7b32-8884-acbfe75ce992
+  author: aida-publication-done
+  timestamp: 2026-11-20T10:08:02.985171909Z
+  session_id: 01a1f85a6fa1
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
