@@ -25,7 +25,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T01:03:09.805090374Z
+modified_at: 2026-11-20T01:06:59.599216032Z
 req_type: Story
 tags:
 - landing
@@ -37,6 +37,19 @@ comments:
   created_at: 2026-11-20T01:03:09.805090374Z
   modified_at: 2026-11-20T01:03:09.805090374Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f67e-51aa-7c10-9511-9c263e3e2179
+  author: joe
+  content: |-
+    Product 18:05: Claude fresh-start lane queued on dell1 (advisor gate 18:02), brief:
+    # Brief: STORY-2884 (fresh start; advisor-121 gate 2026-11-19 ~18:02: APPROVED, drain, CLAUDE, STRICT review)
+
+    Implement the project knob for the effective execution mode of specs with no mode set. The knob DEFAULT MUST STAY 'supervised' (advisor ruling). Switching this project to drain is a separate config change for Joe and must NOT be in this PR. Follow the process-policy knob convention: a per-project config setting whose default is the old behaviour.
+    Only unmet ACs. Trailer: (STORY-2884) only if your PR plus main meets every AC; otherwise (Refs STORY-2884). STRICT review follows.
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T01:06:59.599216032Z
+  modified_at: 2026-11-20T01:06:59.599216032Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
