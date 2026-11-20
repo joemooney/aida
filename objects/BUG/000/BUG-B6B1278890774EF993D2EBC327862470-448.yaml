@@ -10,12 +10,12 @@ description: |
   2. The disk guard (STORY-2711) runs `worktree gc --apply` for these when the host is below the floor, logs freed bytes, and the lane launch it refused is retried automatically.
   3. bwrap overlay `work/work` dirs (mode 700) are made removable (chmod u+rwx) before removal; no sudo needed.
   4. Tests: an ended young overlay is reclaimed; a mounted or cwd-occupied young overlay is kept; an unknown-owner young overlay is kept by the age guard.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T19:38:59.509723322Z
+modified_at: 2026-11-20T19:39:27.666608452Z
 req_type: Bug
 tags:
 - dell1
@@ -959,6 +959,15 @@ history:
   session_id: 01a1f98ba669
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1fa78-e239-7d02-844a-75c23044d5f5
+  author: joe
+  timestamp: 2026-11-20T19:39:48.665705126Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
