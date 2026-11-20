@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-20T14:21:38.445418450Z
+modified_at: 2026-11-20T14:33:39.863682598Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -195,6 +195,17 @@ comments:
   modified_at: 2026-11-20T14:16:00.217132728Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f960-9c18-75c3-867b-7f4f4e1cee48
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3a6e0206ce9533107cb56763ccf31eb167752a02.
+    AC1: [evidence: documentation-inspection] Verified that the round-two correction places the review-snapshot branch documentation and TASK-1312 trace immediately above pr_gc_candidate_branches in aida-cli-lib/src/pr_cmd.rs and retains STORY-621 and TASK-963 above fetch_change_info_via_forge in aida-cli-lib/src/pr_service.rs.
+    The corrective commit moves only those two comment lines. Cross-reference inspection found the expected attachment in both files. The correction changes no parsing, iteration, input handling, or authority checks. git diff --check passed for the merge-base diff. The correction is already present on the tracked PR branch.
+  created_at: 2026-11-20T14:33:39.863682598Z
+  modified_at: 2026-11-20T14:33:39.863682598Z
+  session_id: 01a1f95568f9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
   author: joe
