@@ -1,0 +1,39 @@
+id: 01a1f9b6-5637-7c23-9223-6c63e4f889f8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1135
+agreed_id: TASK-3826
+title: 'aida lane relay: vendor-neutral head-gated rework/fresh lane relay (replaces the product seat''s untracked relay-rework.sh)'
+description: |
+  STORY-2852 slice 1 (product-14 2026-11-20, advisor-121 ruling 09:06). Operator ask (Joe 08:59): "how do we cement this knowledge and codify it rather than rely on memory... Codex is an equal agent, it is the only agent allowed at my workplace."
+
+  Today the advisor's "launch SPEC rN on VENDOR with brief P, gated on head H" is executed by the product seat's UNTRACKED script .aida/tmp/relay-rework.sh (git-excluded, single point of knowledge). Its behaviour was learned the hard way on 2026-11-19/20 (stale-round launches, briefs lost or never consumed, lanes over the host cap, admission refusals nobody saw). Codify it as a vendor-neutral AIDA command.
+
+  ## Acceptance
+  1. `aida lane relay SPEC [--pr N] --brief FILE [--vendor claude|codex] [--model M] [--host H] [--label L]` exists, registered from its own module (command_registry), with --help and docs.
+  2. Head gate: when --pr is given, records the PR head at invocation. It launches only after any running lane for SPEC on the host has exited AND the PR is still OPEN at that same head. Otherwise it records SKIPPED with a typed reason (head moved X->Y, PR closed or merged) and notifies the advisor seat (mail plus a spec comment). It never launches against a superseded round.
+  3. Brief: posts the brief on the spec as the AUTHORITATIVE round brief (with a pointer comment) and delivers it through the vendor's own channel (claude: agent-briefs; codex: an explicit --brief path on the lane host), so both vendors receive it equally.
+  4. Vendor-neutral: claude and codex lanes are equal paths. Per-vendor lane models come from project config (e.g. [agents.<vendor>.seats] implementer model), with --model as a per-run override; nothing is hard-coded (today's temporary values claude-fable-5-2 / gpt-6.2-astra live only in config).
+  5. Capacity: reuses the existing lane-host cap and memory-headroom checks (lanes.max_concurrent, min_memory_headroom_gib) and does not invent new ones. Over-cap launches wait, bounded, and report.
+  6. Admission check: after launch it watches the lane's admission result and, on a refusal (e.g. holder state Unknown, a dirty retained seat), records the typed reason on the spec and notifies the advisor instead of failing silently.
+  7. Tests through the real command path: head moved -> SKIPPED; PR closed -> SKIPPED; prior lane still live -> waits, then fires; brief delivered for each vendor; admission refusal reported.
+  8. The product seat's .aida/tmp/relay-rework.sh is retired, and the discipline doc for the product role points at `aida lane relay`.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T16:07:18.839053638Z
+modified_at: 2026-11-20T16:07:18.839053638Z
+req_type: Task
+tags:
+- codify
+- lanes
+- linked:STORY-2906
+- product-intake
+filed_at:
+  code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 78b437097cb
+  vendor: claude
+  session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
