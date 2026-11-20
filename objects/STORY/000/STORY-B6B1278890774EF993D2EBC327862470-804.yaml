@@ -23,12 +23,12 @@ description: |
      c. LANE-OUTCOME: a lane exit of failed-after-start, punted, no-change or refused-before-start with no relaunch or routing within N min. Route it to the seat that launched the lane, with the exit line and reason.
      d. STALE-CLAIM: a shared claim or lease that blocks admission and that `aida doctor heal stale-leases` cannot heal. Route it to the advisor with the record path and liveness evidence.
   8. Seed `.aida/config.toml` with the job enabled by default for this project; thresholds are project settings (process-policy knobs, default = current behaviour).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T18:25:06.803131242Z
+modified_at: 2026-11-20T18:42:31.981916705Z
 req_type: Story
 tags:
 - docs:impacted
@@ -342,6 +342,12 @@ comments:
   modified_at: 2026-11-20T18:25:06.803131242Z
   session_id: 01a1fa2cb10a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa44-71ad-7353-905b-ef714a4be960
+  author: aida-publication-done
+  content: Implementer push 986985f16f95 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T18:42:31.981916156Z
+  modified_at: 2026-11-20T18:42:31.981916156Z
+  session_id: 01a1fa2cb10a
 history:
 - id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
   author: joe
@@ -484,6 +490,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fa44-71ad-7353-905b-ef63c205956c
+  author: aida-publication-done
+  timestamp: 2026-11-20T18:42:31.981913700Z
+  session_id: 01a1fa2cb10a
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
