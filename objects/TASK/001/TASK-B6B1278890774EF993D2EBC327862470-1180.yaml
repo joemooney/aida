@@ -1,0 +1,31 @@
+id: 01a1fb41-bf99-7653-9172-77cc719ccf28
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1180
+title: 'Review follow-up: aida-cli-lib/src/gate/review_authority.rs, HumanReceiptSettlement::receipt_id — When remov'
+description: |-
+  From BUG-2662
+  Reviewed sha: 0ab2fa424e20d439ec8a63c589c9084890744898
+
+  aida-cli-lib/src/gate/review_authority.rs, HumanReceiptSettlement::receipt_id — When removing a previous crashed attempt’s unreferenced receipt fails, the function warns and returns a new ID. issue then overwrites the slot reservation, losing the recovery pointer to the old receipt. A transient unlink failure followed by a successful reservation write leaves an orphan permanently. Preserve the reservation and propagate the cleanup error so a retry can finish it.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T23:19:12.537150154Z
+modified_at: 2026-11-20T23:19:12.537150154Z
+req_type: Task
+tags:
+- carried-from:BUG-2662
+- finding-hash:d732364e
+- from-review:BUG-2662
+relationships:
+- rel_type: References
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-20T23:19:25.293041234Z
+filed_at:
+  code_sha: 0ab2fa424e20d439ec8a63c589c9084890744898
+  branch: pr-4378
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1fb3f2daf
