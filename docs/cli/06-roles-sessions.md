@@ -1900,8 +1900,9 @@ review there.
 aida review draft list [--all] [--json]
 ```
 
-`list` shows this project's receipts, or every project's with `--all`; run it
-from the main checkout or any linked checkout. It reports two things per
+`aida review draft list` shows this project's receipts, and
+`aida review draft list --all` shows every project's; run it from the main
+checkout or any linked checkout. It reports two things per
 receipt and nothing else:
 
 - What the receipt says: its state (`open`, `consumed`, `unused`,
