@@ -1,0 +1,33 @@
+id: 01a1f86f-93a6-7220-bab1-fba82a34677b
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-177
+title: 'Review PR-4344: [AI:claude] fix(leases): release and heal claims from pre-spawn admission failures (Refs BUG-2697)'
+description: |
+  Auto-filed by `aida session end` (backup trigger) (session `01a1f833`) for branch `bug-b6b1278890774ef993d2ebc327862470-461`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4344>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-461` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2697
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4344` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T10:10:24.294745580Z
+modified_at: 2026-11-20T10:10:24.294745580Z
+req_type: Story
+filed_at:
+  code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 888f8b76a6
