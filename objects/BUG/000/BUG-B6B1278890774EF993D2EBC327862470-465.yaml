@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587336Z
-modified_at: 2026-11-20T15:03:51.315200795Z
+modified_at: 2026-11-20T15:04:07.204247577Z
 req_type: Bug
 tags:
 - admission
@@ -108,6 +108,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES: three unmet claimed acceptance criteria and one additional settlement-progress defect. Read the entire 16-file pinned review diff against protected main 78b437097cbccc7025e7529f2f06ff0f092c8495 and landed tree aebfdb617fc81a21ea84b0e90baae52ab283d296; this verdict targets original PR head 36e1d02a7af0338feb8ff4c6de2f1ef92ecc5171. Used the generated review worksheet; all four criteria are claimed, with no declared slice or deferrals.. No triage reason was given.'
   created_at: 2026-11-20T15:03:51.315196332Z
   modified_at: 2026-11-20T15:03:51.315196332Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f97c-7aab-7dc1-ae61-a0cd7025660b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2703):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 36e1d02a7af0
+    Recorded: 2026-11-20T15:02:17.925457925+00:00
+    Findings:
+    1. [P2] Include receipt serialization in the admission deadline (BUG-b6b1278890774ef993d2ebc327862470-465.ac336622). aida-cli-lib/src/admission_owner.rs:386-390 takes receipts.lock with blocking lock_exclusive before acquire_waiting even starts its timer. acquire_mode, register_intent and IntentGuard::drop also block on that serializer without consulting the deadline. A live process paused or stalled while holding receipts.lock makes pr ship wait indefinitely even with wait_secs=1 (or 0), with no timeout/holder report. Carry a single deadline through the preflight, acquisition and intent cleanup, use bounded try-lock retries, and cover a separate process retaining the serializer beyond the configured bound.
+    2. [P2] Continue settlement maintenance while review-watch yields admission. aida-cli-lib/src/review_watch.rs:2881-2888 continues before store.prune and advance, so a waiting ship suppresses the maintenance needed to make prior attempts quiescent. In particular, a claimed Superseding attempt remains active even after every descendant exits: transition_classified deliberately leaves it Superseding, reap_dispatchers only terminalizes unclaimed attempts, and only advance confirms and clears it. admission_quiescent rejects active attempts before confirming process exit. Thus the ship's intent keeps the watcher from clearing the very attempt blocking that ship until the ship times out; an active drain can retain the condition for hours. Run settlement-only reconciliation while yielding, without discovery or new launches, and add a regression with a superseding claimed review whose descendants finish during the wait.
+    3. [P2] Supply the claimed production-path regression and real in-progress controls (BUG-b6b1278890774ef993d2ebc327862470-465.acc625bf). aida-cli-lib/src/tests/task_1993_review_watch_tests.rs:4553-4592 constructs replacement thread loops calling hold_admission/idle helpers and invokes ship_admission directly. It never runs either production worker loop, invokes the pr ship handler/CLI, or supplies an approved PR. The control likewise uses a synthetic active attempt and an Option<Claim>, rather than an in-progress review launch or train stack. It would still pass if pr_ship_with_method_and_dispatch_ctx reverted to the old immediate-refusal API or the production loops stopped yielding. Add a fixture-driven invocation through the actual ship and worker entry points, with approved-PR evidence and controlled live review/train operations, proving admission within the bound and preservation of in-progress work.
+    4. [P2] Show both workers' claim ages in loops status (BUG-b6b1278890774ef993d2ebc327862470-465.ac00712a). aida-cli-lib/src/advisor_loop_service.rs:282-303 filters all holder rows down to one HOLDER_PURPOSE and the current service worker PID. advisor_cmd_root routes loops status only to the review-watch service, so its human and JSON outputs omit the auto-train claim and age even when both workers hold admission. Requiring a separate train-status command does not satisfy the claimed loops status view of each worker. Aggregate both service claims in loops status, preserving unknown ages for legacy receipts, and test the command projection with both workers present.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T15:04:07.083399194Z
+  modified_at: 2026-11-20T15:04:07.083399194Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
