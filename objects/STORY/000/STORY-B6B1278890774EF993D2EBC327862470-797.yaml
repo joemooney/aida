@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T12:43:46.366310790Z
+modified_at: 2026-11-20T12:44:34.995426018Z
 req_type: Story
 tags:
 - landing
@@ -604,6 +604,18 @@ comments:
   created_at: 2026-11-20T12:43:46.366310790Z
   modified_at: 2026-11-20T12:43:46.366310790Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f8fc-e9cc-78b2-ab30-513e47522443
+  author: joe
+  content: |-
+    ADVISOR SIGNOFF: S3 sketch (advisor-121, 2026-11-20 05:50): SIGNED with one amendment.
+    Q1: NO keep_merging gate, not even an internal off-by-default one. Joe's 10:37 trim makes 'merging continues while red' fixed; a hidden switch is an unrequested knob. Keep the test that landing_merge has no main_watch dependency.
+    Q2: run in BOTH modes (observational, cheap).
+    AMENDMENT (flake damping, fixed rule, no knob): tonight main went red four times on CI-load flakes that one rerun cleared (bug_2684, task_3219, task_3792, bug_2403). As sketched, each would file a BUG spec and raise an aida human notice. Instead: the episode OPENS immediately (red_start in the journal plus urgent mail to advisor and product), but the fix spec AND the human notice are deferred until the red persists past one completed rerun attempt of the failed jobs OR 30 minutes, whichever comes first. An episode closed by a green re-run before that point is recorded as 'flake' (red_end with outcome=flake), and metrics gain a flake count; flakes are excluded from fix-latency stats. Tests: a flake cleared by a re-run files no spec and no notice; a persistent red files exactly once after the rerun or 30 min (injected clock).
+    Everything else as sketched: the shared main_commit_ci helper, cancelled-is-not-red, oldest red SHA, idempotent filing via state plus title search, revert RECOMMEND only with the three fixed triggers, metrics never a gate, forge mocked in tests. STRICT review on the integration PR.
+  created_at: 2026-11-20T12:44:34.995426018Z
+  modified_at: 2026-11-20T12:44:34.995426018Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
