@@ -353,8 +353,9 @@ fn with_pr_at_origin<T>(lane: &RefusedLaunch, pr: u64, f: impl FnOnce() -> T) ->
 /// BUG-2705 AC1/AC3: a Claude lane on a seat clone exits 0 with its edits
 /// uncommitted. The host commits them, publishes that head, and the
 /// configured fast check runs on the committed tree (it finds the child's
-/// edit, the gate snapshot refuses a dirty seat) and is bound to the
-/// published head; the lane's receipt records the new head as pushed.
+/// edit; the gate snapshot refuses a dirty seat, so a pass means the host
+/// commit ran first) and is bound to the published head; the lane's receipt
+/// records the new head as pushed.
 #[cfg(unix)]
 #[test]
 fn bug_2705_real_lane_exit_commits_leftovers_gates_the_committed_tree_and_publishes() {
@@ -396,13 +397,12 @@ fn bug_2705_real_lane_exit_commits_leftovers_gates_the_committed_tree_and_publis
         "pass",
         "{lines:?}"
     );
-    assert_eq!(
-        crate::lane_fast_gate::receipt_head(&lane.fx.main, REFUSED_BRANCH).as_deref(),
-        Some(tip.as_str()),
-        "the gate judged a head other than the committed, published one"
-    );
+    // The lane's one result line binds the gate's pass to the committed,
+    // published head.
     assert!(
-        lines.iter().any(|l| l.contains("fast_gate=pass")),
+        lines.iter().any(|l| l.starts_with("implementer: pushed ")
+            && l.contains(&format!(" head={tip} "))
+            && l.contains(" fast_gate=pass")),
         "{lines:?}"
     );
     assert_eq!(finished(&lane.fx.main).0, "pushed", "{result:?} {lines:?}");

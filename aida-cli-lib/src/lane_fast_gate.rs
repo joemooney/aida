@@ -364,13 +364,6 @@ pub(crate) fn reason(main: &Path, branch: &str) -> Option<String> {
         .filter(|r| !r.is_empty())
 }
 
-/// The head this branch's gate receipt is bound to, for tests that check the
-/// gate judged the committed, published head. trace:BUG-2705 | ai:claude
-#[cfg(test)]
-pub(crate) fn receipt_head(main: &Path, branch: &str) -> Option<String> {
-    read(main, branch).ok().flatten().and_then(|r| r.head)
-}
-
 /// An absent receipt is an ordinary non-lane PR. Corrupt state fails closed.
 pub(crate) fn blocks_review(main: &Path, branch: &str) -> Result<bool> {
     if read(main, branch)?.is_none() {
