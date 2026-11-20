@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T19:11:42.093257064Z
+modified_at: 2026-11-20T19:37:55.437212652Z
 req_type: Story
 tags:
 - area:ci
@@ -377,6 +377,28 @@ comments:
   modified_at: 2026-11-20T19:11:42.093257064Z
   session_id: 01a1fa4a92e2
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa77-5871-7e21-a319-ab39e8b9f15f
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 12:42): 7 findings at bc0dcbf. Claude+Fable, gated on the live lane exiting.
+
+    # Rework brief: STORY-2695 / PR #4377 (dell1 CI runner routing), round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 12:42 MST. Head reviewed: bc0dcbf. Lane: CLAUDE+Fable. COMMIT your work.
+    CI infrastructure change: every item needs a fixture or test. Fix all 7:
+     1 ci.yml:153 request the per-route CLASS label (MAIN vs TRAIN), per the binding plan; a train must never dispatch to a MAIN-registering runner.
+     2 ci.yml:153 routing is CASE-SENSITIVE (no startsWith case folding): compute the route before the matrix; add a Train/x hosted fixture.
+     3 ci.yml:225 never expose stale reports: clear or exclude test-run.log, test-timings.json and nextest junit XML before exposing the target;
+       a failed warm job cannot publish the previous run's reports.
+     4 ci.yml:220 the exact-source check refuses ignored AND untracked files (git status --ignored), with an ignored-.env refusal fixture.
+     5 nextest install location: align the workflow, fixture and operator acceptance check with where install-action actually puts it.
+     6 test_self_hosted_runner.py:97 evaluate the FULL condition for the four self-hosted shards; cover the OR-branch mutation.
+     7 run-upstream.py:276 require exactly one validated producer for the paths and changes outputs in dependency order; test a removed selector.
+    Run the CI gates locally (make check-ci-fast plus the self-hosted runner tests). Push.
+  created_at: 2026-11-20T19:37:55.437212652Z
+  modified_at: 2026-11-20T19:37:55.437212652Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
