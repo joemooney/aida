@@ -156,6 +156,14 @@ history:
   session_id: 01a1f87af1a2
   harness_version: 2.1.319 (Claude Code)
   changes: []
+- id: 01a1f8a9-d7ef-7571-9e4d-46b3aac934a2
+  author: aida-orchestrator
+  timestamp: 2026-11-20T11:14:02.863603857Z
+  session_id: 01a1f8a68013
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
