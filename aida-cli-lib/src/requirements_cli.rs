@@ -7101,6 +7101,14 @@ fn run_show(
                                         "execution_mode",
                                         &m.to_string(),
                                     ));
+                                } else if let Some(label) = store_path.parent().and_then(|root| {
+                                    crate::gate::unset_mode::show_label(root, &req, || {
+                                        backend.load().ok().map(|s| s.requirements)
+                                    })
+                                }) {
+                                    // STORY-2884: the project default an unset
+                                    // mode takes. trace:STORY-2884 | ai:claude
+                                    lines.push(crate::toon::scalar("effective_mode", &label));
                                 }
                                 // STORY-634: the multi-repo origin dimension, emitted
                                 // only when set. trace:STORY-634 | ai:claude
@@ -7767,6 +7775,14 @@ fn run_show(
                                     m.to_string().cyan(),
                                     crate::do_dispatch::human_contract(m).dimmed()
                                 );
+                            } else if let Some(label) = store_path.parent().and_then(|root| {
+                                crate::gate::unset_mode::show_label(root, &req, || {
+                                    backend.load().ok().map(|s| s.requirements)
+                                })
+                            }) {
+                                // STORY-2884: the project default an unset mode
+                                // takes at merge. trace:STORY-2884 | ai:claude
+                                println!("\n{} {}", "Effective mode:".bold(), label.cyan());
                             }
                             // Human output at an interactive terminal renders the
                             // markdown in the description (the knowledge body for

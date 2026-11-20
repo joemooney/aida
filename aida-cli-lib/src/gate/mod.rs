@@ -55,6 +55,8 @@ pub(crate) mod ship;
 pub(crate) mod solo_review;
 // BUG-HOME-048: completion trailers complete only the specs a PR covers.
 pub(crate) mod trailer_coverage;
+// STORY-2884: the project default for an unset execution mode.
+pub(crate) mod unset_mode;
 
 // TASK-2707: the shared cache is never consulted for authority.
 // trace:TASK-2707 | ai:claude
