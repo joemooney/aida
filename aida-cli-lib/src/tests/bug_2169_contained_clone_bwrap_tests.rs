@@ -69,14 +69,12 @@ mod linux {
         ok
     }
 
-    /// A directory for fixtures OUTSIDE `/tmp`: the os_wrap layer mounts a fresh
-    /// tmpfs on `/tmp`, which would hide a fixture living there. Uses the
-    /// workspace's (gitignored) `target/`.
+    /// Use the workspace's ignored target when it is outside a seat.
+    /// Lane jobs use a temporary fixture and restore its visibility in bwrap.
     fn fixture_tempdir() -> tempfile::TempDir {
         let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
         // A repository nested inside a seat remains part of that seat for
         // clone detection. Use TMPDIR there, never the operator's host main.
-        // Live bwrap runs need TMPDIR outside /tmp (which they mask).
         // trace:TASK-2032 | ai:codex
         let base = Some(workspace.join("target"))
             .filter(|p| {
@@ -348,7 +346,7 @@ mod linux {
 
     /// A bubblewrap argv modelling Claude Code's Linux sandbox for `settings`
     /// with the session's cwd at `cwd`.
-    fn claude_sandbox_argv(settings: &serde_json::Value, cwd: &Path) -> Vec<String> {
+    fn claude_sandbox_argv(settings: &serde_json::Value, cwd: &Path, root: &Path) -> Vec<String> {
         let s = |p: &Path| p.display().to_string();
         // Claude Code's sandbox gives the session a private writable temp dir.
         let mut argv: Vec<String> = [
@@ -364,6 +362,7 @@ mod linux {
         ]
         .map(String::from)
         .to_vec();
+        expose_fixture_after_tmpfs(&mut argv, root);
         argv.extend(["--bind".into(), s(cwd), s(cwd)]);
         for path in entries(settings, "allowWrite") {
             if path.exists() {
@@ -388,12 +387,30 @@ mod linux {
         argv
     }
 
+    // The lane runner puts TMPDIR under /tmp. Restore only the private fixture
+    // after the new tmpfs, before either sandbox applies its writable binds.
+    // trace:TASK-3133 BUG-2701 | ai:codex
+    fn expose_fixture_after_tmpfs(argv: &mut Vec<String>, root: &Path) {
+        if root.starts_with("/tmp") {
+            let after_tmpfs = argv
+                .windows(2)
+                .position(|args| args == ["--tmpfs", "/tmp"])
+                .expect("sandbox mounts a fresh /tmp")
+                + 2;
+            let root = root.to_str().unwrap();
+            argv.splice(
+                after_tmpfs..after_tmpfs,
+                ["--ro-bind", root, root].map(String::from),
+            );
+        }
+    }
+
     /// The `[contained] os_wrap` argv for a seat running in `tree`.
     /// Built by the production wrapper itself, `os_wrapped_program_and_args`,
     /// with os_wrap on; the trailing program is dropped so a test supplies its own.
-    fn os_wrap_argv(main: &Path, tree: &Path) -> Vec<String> {
+    fn os_wrap_argv(fx: &Fixture, tree: &Path) -> Vec<String> {
         let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
-            main,
+            &fx.main,
             "implementer",
             &[],
             &[("AIDA_OS_WRAP", Some("1"))],
@@ -407,6 +424,7 @@ mod linux {
         .unwrap();
         assert_eq!(program, "bwrap");
         assert_eq!(argv.pop().as_deref(), Some("true"));
+        expose_fixture_after_tmpfs(&mut argv, &fx.root);
         argv
     }
 
@@ -493,9 +511,9 @@ mod linux {
         vec![
             (
                 "claude sandbox",
-                claude_sandbox_argv(&settings_for(&fx.main, clone), clone),
+                claude_sandbox_argv(&settings_for(&fx.main, clone), clone, &fx.root),
             ),
-            ("os_wrap", os_wrap_argv(&fx.main, clone)),
+            ("os_wrap", os_wrap_argv(fx, clone)),
         ]
     }
 
@@ -1038,7 +1056,7 @@ mod linux {
         );
         if bwrap_live() {
             let ran = run_in(
-                &os_wrap_argv(&fx.main, &clone),
+                &os_wrap_argv(&fx, &clone),
                 r#"touch "$MAIN/.git/FORGED" && echo WROTE
 echo '[core]' >> "$MAIN/.git/config" && echo CONFIG
 true"#,
@@ -1363,13 +1381,9 @@ echo "$EVIL" > heads/main && echo WROTE"#;
         let legacy = fixture();
         let settings = legacy_2694_settings(&legacy, &legacy.other_wt);
         let ran = run_in(
-            &claude_sandbox_argv(&settings, &legacy.other_wt),
-            &format!(
-                "MAIN={} EVIL={}; {script}",
-                legacy.main.display(),
-                legacy.evil
-            ),
-            &[],
+            &claude_sandbox_argv(&settings, &legacy.other_wt, &legacy.root),
+            &format!("EVIL={}; {script}", legacy.evil),
+            &[("MAIN", &legacy.main)],
         );
         assert_eq!(
             legacy.rev("refs/heads/main"),
@@ -1384,8 +1398,8 @@ echo "$EVIL" > heads/main && echo WROTE"#;
         for (layer, argv) in clone_layers(&fx, &clone) {
             let ran = run_in(
                 &argv,
-                &format!("MAIN={} EVIL={}; {script}", fx.main.display(), fx.evil),
-                &[],
+                &format!("EVIL={}; {script}", fx.evil),
+                &[("MAIN", &fx.main)],
             );
             assert!(!ran.out.contains("WROTE"), "{layer}: {}", ran.out);
             assert!(
@@ -1419,7 +1433,7 @@ echo "$EVIL" > "$MAIN/.git/refs/heads/main" && echo WROTE"#;
         for (variant, host_cmd) in host_moves {
             let legacy = fixture();
             let settings = legacy_2694_settings(&legacy, &legacy.other_wt);
-            let argv = claude_sandbox_argv(&settings, &legacy.other_wt);
+            let argv = claude_sandbox_argv(&settings, &legacy.other_wt, &legacy.root);
             let out = detach_attack(&legacy, &argv, &legacy.other_wt, host_cmd, script);
             assert_eq!(
                 legacy.rev("refs/heads/main"),
@@ -1502,7 +1516,7 @@ true"#;
         let legacy = fixture();
         let settings = legacy_2694_settings(&legacy, &legacy.other_wt);
         let ran = run_in(
-            &claude_sandbox_argv(&settings, &legacy.other_wt),
+            &claude_sandbox_argv(&settings, &legacy.other_wt, &legacy.root),
             script,
             &[("MAIN", &legacy.main)],
         );
@@ -1554,13 +1568,9 @@ true"#;
         let legacy = fixture();
         let settings = legacy_2694_settings(&legacy, &legacy.other_wt);
         let ran = run_in(
-            &claude_sandbox_argv(&settings, &legacy.other_wt),
-            &format!(
-                "MAIN={} EVIL={}; {script}",
-                legacy.main.display(),
-                legacy.evil
-            ),
-            &[],
+            &claude_sandbox_argv(&settings, &legacy.other_wt, &legacy.root),
+            &format!("EVIL={}; {script}", legacy.evil),
+            &[("MAIN", &legacy.main)],
         );
         assert!(
             ran.out.contains("HEAD_MOVED") && ran.out.contains("TAG_MOVED"),
@@ -1575,8 +1585,8 @@ true"#;
         for (layer, mut argv) in clone_layers(&fx, &clone) {
             let ran = run_in(
                 &argv,
-                &format!("MAIN={} EVIL={}; {script}", fx.main.display(), fx.evil),
-                &[],
+                &format!("EVIL={}; {script}", fx.evil),
+                &[("MAIN", &fx.main)],
             );
             assert!(!ran.out.contains("HEAD_MOVED"), "{layer}: {}", ran.out);
             assert!(!ran.out.contains("TAG_MOVED"), "{layer}: {}", ran.out);
@@ -1614,7 +1624,7 @@ true"#;
         let legacy = fixture();
         let settings = legacy_2694_settings(&legacy, &legacy.other_wt);
         let ran = run_in(
-            &claude_sandbox_argv(&settings, &legacy.other_wt),
+            &claude_sandbox_argv(&settings, &legacy.other_wt, &legacy.root),
             script,
             &[("MAIN", &legacy.main)],
         );
@@ -1673,9 +1683,14 @@ true"#;
     }
 
     /// B3 (round 1): the interactive contained RESUME goes through os_wrap too.
+    // trace:TASK-3133 BUG-2700 | ai:codex
     #[test]
     fn a_contained_interactive_resume_goes_through_os_wrap() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
         let fx = fixture();
+        std::env::set_current_dir(&fx.other_wt).unwrap();
         std::fs::create_dir_all(fx.other_wt.join(".aida")).unwrap();
         std::fs::write(
             fx.other_wt.join(".aida/config.toml"),
