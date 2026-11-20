@@ -1,5 +1,6 @@
 id: 01a1f89f-348c-7483-8c7c-03aa64662f41
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-037
+agreed_id: TASK-3169
 title: 'Drain self-publishing seat lanes: run the host leftover commit before the pushed fast gate'
 description: |
   BUG-2705 gave standalone self-publishing seat-clone lanes a host post-exit commit (standalone_implementer::self_published_seat_exit) before publication and the pushed fast gate. The drain paths that call lane_fast_gate::pushed (aida-cli-lib/src/queue_cmd/work.rs ~767 and aida-cli-lib/src/session/headless.rs ~2116) now print the refusal reason (marker_with_reason), but they still refuse a seat clone with uncommitted edits without committing it. If drains run self-publishing lanes in seat clones, reuse self_published_seat_exit there.
@@ -19,6 +20,13 @@ tags:
 - kind:followup-suggestion
 - lanes
 - severity:minor
+history:
+- id: 01a1f8c4-79c7-76a2-9223-31800610efea
+  author: joe
+  timestamp: 2026-11-20T11:43:08.231527094Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f2b9e1b344592e301fa1910b8f0a5f865430f8ae
   branch: bug-b6b1278890774ef993d2ebc327862470-467

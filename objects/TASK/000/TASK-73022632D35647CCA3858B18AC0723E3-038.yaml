@@ -1,5 +1,6 @@
 id: 01a1f89f-3f8c-7963-9ef5-b12c4fa230ad
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-038
+agreed_id: TASK-3168
 title: task_2712 codex bg post-exit tests fail inside the lane job runner (exit scan never clears)
 description: |
   In the lane job runner (cargo test inside bubblewrap), story_2254_codex_bg_supervisor_tests::task_2712_bg_lane_commits_pending_work_after_clean_exit and task_2712_bg_lane_failed_exit_commits_salvage_with_refs fail with "the post-exit step ran once: left 0". agent_codex_background::post_exit_seat_commit returns before the step because exit_clear is false: the process-group exit scan cannot prove the lane over. That is likely PID-namespace visibility under bwrap. BUG-2705 did not touch that path (the hook still runs first in post_exit_commit_reported_as), but the implementer did not confirm the tests also fail on main. If they do, mark them environment-gated or fix the scan for lane runners so they can't hide regressions.
@@ -18,6 +19,13 @@ tags:
 - kind:bug-spotted
 - severity:minor
 - tests
+history:
+- id: 01a1f8c4-48e3-7b20-a449-9b4442aebbae
+  author: joe
+  timestamp: 2026-11-20T11:42:55.715700560Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f2b9e1b344592e301fa1910b8f0a5f865430f8ae
   branch: bug-b6b1278890774ef993d2ebc327862470-467

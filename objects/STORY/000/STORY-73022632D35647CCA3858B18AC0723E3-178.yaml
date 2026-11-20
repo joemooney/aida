@@ -1,5 +1,6 @@
 id: 01a1f89f-d9bf-7bf2-8102-caf320823aa7
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-178
+agreed_id: STORY-2984
 title: 'Review PR-4358: [AI:claude] fix(lanes): host-commit a self-publishing seat lane''s leftover edits and name every fast-gate refusal (BUG-2705)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f87a`) for branch `bug-b6b1278890774ef993d2ebc327862470-467`.
@@ -35,6 +36,12 @@ history:
   timestamp: 2026-11-20T11:03:12.520613746Z
   session_id: 01a1f87af1a2
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f8c4-ad48-75a3-909e-253347b88461
+  author: joe
+  timestamp: 2026-11-20T11:43:21.416620138Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: a12563e598a3365aade386ef54b04118db3aa6e8
