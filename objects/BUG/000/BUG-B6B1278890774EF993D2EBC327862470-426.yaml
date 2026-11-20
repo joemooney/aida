@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T20:57:56.136039395Z
+modified_at: 2026-11-20T20:58:11.636298182Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -273,6 +273,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2662 partially passes. The direct approval now shares one event with its handshake, and regression fixtures cover the prior sweep_pending barrier and ordinary sequential repeats. Change-wide concurrent refusal detection and human receipt handling still fail the claimed round-two criteria. These findings apply to the pinned landing tree independently of the base change to the writer inventory. CI fast compile and fast gates were pending at review time.. No triage reason was given.'
   created_at: 2026-11-20T20:57:56.136037867Z
   modified_at: 2026-11-20T20:57:56.136037867Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fac0-a4ae-78d0-b95f-2f6bf02870c1
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 74968c72e156
+    Recorded: 2026-11-20T20:52:42.743540777+00:00
+    Findings:
+    1. aida-cli-lib/src/gate/ledger/store.rs:795 — Standing::admit hashes only the verdict body across both ledgers and all labels. A collector or binding writer can append an existing refusal body under a second spec while follow-ups are being filed. append_locked accepts that distinct event, but admit recognizes the old hash and lets the approval supersede the intervening refusal. Compare physical event identities including destination, sequence and spec. Cover the identical-body sibling case.
+    2. aida-cli-lib/src/review_commands.rs:3405 — A fresh TTY approval persists its receipt before record_review_act files deferred findings or completes the locked append. If filing fails, the invocation returns an error and the new receipt remains on disk with no verdict referencing it. Receipt selection also happens before locking, so simultaneous identical TTY approvals can allocate distinct IDs and each append. Settle receipt reuse and allocation with the final append, with recovery for a failed write. Check the receipt directory after a failed TTY filing and after concurrent repeats.
+    3. aida-cli-lib/src/gate/ledger/store.rs:944 — The unbound append calls read_unbound before its review_check callback. This reads the whole file with read_to_string and parses it without a byte or event budget before the checked reader can reject an oversized ledger. Reuse the bounded validated events for the decision, deduplication and next sequence number.
+    4. aida-cli-lib/src/review_commands.rs:3730 — A repeated refusal skips forge label reconciliation whenever the last local label_state was Synced. Removing a hold label on the forge leaves that cached state intact. The repeat used to restore the missing label and now silently skips it. Verify current forge labels before skipping reconciliation while keeping an already synchronized repeat free of ledger writes.
+    5. aida-core/templates/skills/aida-review.md:1451 — The skill says a contained reviewer's collecting launcher persists a sweep_pending barrier before filing. The standalone draft parent actually uses the direct review-record path, and standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery now asserts an empty ledger after failure. Distinguish that draft retry from legacy record_collected_verdict collection so operators know which recovery evidence exists.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T20:58:11.502185197Z
+  modified_at: 2026-11-20T20:58:11.502185197Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
