@@ -151,14 +151,6 @@
   for_role: implementer
   added_by_machine: imac
 - user_id: claude-product-12
-  requirement_id: 01a1e1a3-1172-71b3-8580-880a91c7e553
-  position: 14000
-  added_by: claude-product-12
-  note: Advisor-approved 16:34. Implementer starts are held while open PRs exceed wip_max.
-  added_at: 2026-11-17T23:34:29.539124864Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: claude-product-12
   requirement_id: 01a1e216-661a-77f3-9b7e-0213a75ec1ab
   position: 15000
   added_by: claude-product-12
