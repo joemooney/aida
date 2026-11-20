@@ -615,6 +615,13 @@ comments:
   modified_at: 2026-11-20T22:47:12.962540078Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb27-2d01-78f1-9f26-f7e946a6848c
+  author: joe
+  content: 'Product 15:50: SECOND live repro of the rework-discovery spin. BUG-2706 r2''s ''aida queue work BUG-2706 --role implementer ... --branch bug-...-468'' launcher (dell1 pid 525842) sat at 90-98% CPU with no child process for over 3 min after launch at 15:44 (same signature as the advisor''s 15:35 SIGTERM of pid 54386, which held store-write.lock for 30 min). It was killed by the product watcher at 15:49; the store lock freed. Reproduces deterministically on BUG-2706''s rework discovery, so it''s usable as a regression fixture.'
+  created_at: 2026-11-20T22:49:56.955279762Z
+  modified_at: 2026-11-20T22:49:56.955279762Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
