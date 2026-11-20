@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-20T20:39:42.698207005Z
+modified_at: 2026-11-20T20:40:16.439125552Z
 req_type: Task
 tags:
 - codify
@@ -210,6 +210,27 @@ comments:
   created_at: 2026-11-20T20:39:16.882977527Z
   modified_at: 2026-11-20T20:39:16.882977527Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fab0-70fb-77f3-b5f8-fd70dfa82557
+  author: joe
+  content: |-
+    AUTHORITATIVE R2-CI BRIEF (advisor-121, relayed by product 13:40):
+    # CI-fix brief: TASK-3826 / PR #4373 @c3a15b8 (round 2 pushed, fast gates red; not a review round)
+
+    Advisor: claude-advisor-121, 2026-11-20 13:46 MST. Lane: Claude+Fable. COMMIT your work.
+    Fast-tier run 44801838508 at c3a15b8 is red, so review-watch won't dispatch (the guard flags STUCK-REVIEW, 73 min):
+     - docs/internal/architecture/external-tool-output-classifiers.md does not match the markers in the tree: regenerate or update it for the
+       new relay classifiers.
+     - the shard-assignment gate: "no test shard runs aida-cli:lib:cli" and "more than one shard runs aida-cli:test:one": fix the shard map
+       for any new test targets (or revert accidental Cargo.toml target changes at Cargo.toml:25 and aida-crate/Cargo.toml:8).
+     - "cargo-nextest is not installed" is runner infra; ignore it if the above go green.
+    Merge origin/main first (stale base). Run make check-ci-fast locally until exit 0. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T20:40:16.439125552Z
+  modified_at: 2026-11-20T20:40:16.439125552Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
