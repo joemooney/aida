@@ -19,17 +19,23 @@ description: |
   3. Root cause: find what committed conflict markers into the store from a contained reviewer session (stash pop in the store worktree) and
      make store writers refuse to commit a file containing conflict markers. Regression for the writer guard.
   Authority path (mandate cover): Claude lane, STRICT review. Unblocks promotion 23 (#4324 @95edb31).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T08:15:41.246362956Z
-modified_at: 2026-11-20T08:41:49.505325032Z
+modified_at: 2026-11-20T09:00:50.509155493Z
 req_type: Bug
 tags:
 - mandate
 - promotion
 - store
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f82f-cd0a-73a2-ba10-815595cf8998
+  created_at: 2026-11-20T09:00:50.509125844Z
+  created_by: dirtlab
 comments:
 - id: 01a1f809-8ae9-7af1-9a74-e47447b422fe
   author: joe
@@ -90,6 +96,13 @@ comments:
   modified_at: 2026-11-20T08:41:49.505325032Z
   session_id: 01a1f80c0105
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f82f-8693-71d3-a87a-fcf25597c836
+  author: aida-publication-done
+  content: Implementer push cae079889afe declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T09:00:26.643481648Z
+  modified_at: 2026-11-20T09:00:26.643481648Z
+  session_id: 01a1f80c0105
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f806-f52a-7b93-85f0-93a09733af5c
   author: joe
@@ -113,6 +126,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f82f-8693-71d3-a87a-fce254e2fd06
+  author: aida-publication-done
+  timestamp: 2026-11-20T09:00:26.643480144Z
+  session_id: 01a1f80c0105
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a1f82f-eab7-7443-9f81-8767d16c0d4b
+  author: dirtlab
+  timestamp: 2026-11-20T09:00:52.279715307Z
+  session_id: 01a1f80c0105
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a
