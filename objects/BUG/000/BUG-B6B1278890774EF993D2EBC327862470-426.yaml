@@ -14,12 +14,12 @@ description: |
   Impact: anything that reads the ledger before the last write lands sees request-changes for an approval the operator recorded, and the round counter inflates ("round 6").
 
   Acceptance: (1) one `review record --verdict approved` produces exactly one verdict ledger event for the spec. (2) A no-op "unchanged" record writes no ledger event. (3) Regression test covering a prior sweep_pending barrier.
-status: Approved
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T19:33:05.083206092Z
+modified_at: 2026-11-20T19:47:34.540271513Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -196,6 +196,12 @@ comments:
   modified_at: 2026-11-20T19:33:05.083206092Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa7f-fe0c-7190-a5ac-ddbfdadf7bb6
+  author: aida-publication-done
+  content: Implementer push ccaa61189cee declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T19:47:34.540271013Z
+  modified_at: 2026-11-20T19:47:34.540271013Z
+  session_id: 01a1fa43d4bc
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
@@ -251,6 +257,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1fa7f-fe0c-7190-a5ac-ddaee485dded
+  author: aida-publication-done
+  timestamp: 2026-11-20T19:47:34.540268914Z
+  session_id: 01a1fa43d4bc
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2
