@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T23:43:12.001242012Z
+modified_at: 2026-11-20T23:43:25.206279453Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -716,6 +716,29 @@ comments:
   created_at: 2026-11-20T23:43:11.850305782Z
   modified_at: 2026-11-20T23:43:11.850305782Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb58-1a98-79d3-bbce-02aec4016477
+  author: joe
+  content: |-
+    AUTHORITATIVE R4-FINAL BRIEF (advisor-121, relayed by product 16:43):
+    # Rework brief: BUG-2629 FRESH / PR #4380, ROUND 4 of 4 (FINAL), STRICT
+
+    Advisor: claude-advisor-121, 2026-11-20 17:08 MST. Head reviewed: fb1e880. Lane: CLAUDE+Fable. COMMIT your work.
+    FINAL. AC3 is THE bug (the live 30-min spins at 15:37 and 15:49 on BUG-2706's branch). If AC3 is not met, nothing else matters.
+     1 [AC3, FIRST] rework_bindings.rs:783: discovery runs ONCE per invocation. Build the inventory once and pass it to every ownership_checked call (no
+       checked::discover or Inventory::current per change). Regression with BUG-2706's real shape (2 PRs, about 6 fingerprinted review rounds, many
+       bindings) asserting a bounded count of ledger reads (for example under 3x the ledger count) and completion under 5 s.
+     2 :406 recovery validates the physical change key, the supported version and an advancing sequence like the strict reader (or reuse it).
+     3 :227 ReadBudget opens with O_NOFOLLOW plus fstat (regular files only), single open, no check-then-open window.
+     4 :518 a verdict event missing its verdict field is UNKNOWN (refuse), never Standing::Nothing.
+     5 :543 debit the legacy byte budget for every read, including malformed or invalid UTF-8.
+     6 :256 the fallback also enforces the 200,000-attempt ceiling, and failed lines are counted, not retained.
+     7 queue_work_tests.rs:5114 the contention regression drives the real `queue work` headless pickup path (not refuse_waiting_pickup directly) and
+       proves another process takes store-write.lock during discovery.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-20T23:43:25.206279453Z
+  modified_at: 2026-11-20T23:43:25.206279453Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
