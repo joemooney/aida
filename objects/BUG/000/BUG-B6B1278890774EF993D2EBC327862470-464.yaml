@@ -30,6 +30,12 @@ tags:
 - linked:STORY-1698
 - mandate
 - promotion
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f76b-23a7-7cb1-8487-529067137cda
+  created_at: 2026-11-20T05:26:01.930348296Z
+  created_by: dirtlab
 comments:
 - id: 01a1f739-5cb5-75e3-af7e-39d0902b436c
   author: joe
@@ -66,6 +72,33 @@ comments:
     - Store-defined custom type prefixes are not consulted (built-in types only); acceptable?
   created_at: 2026-11-20T04:38:30.611358910Z
   modified_at: 2026-11-20T04:38:30.611358910Z
+  session_id: 01a1f73a92b0
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f76a-a555-7273-98b6-b009792d6be5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a3516fff69
+
+    **Acceptance evidence**
+    - AC1 [behavioral-test]: `pr_ship::extract_branch_spec_ids` (aida-cli-lib/src/pr_ship.rs) keeps only ids whose leading segment is a built-in spec-type prefix (RequirementType::ALL). Tests: `non_spec_type_branches_yield_no_spec_id` (promote/integration-23, train/<uuid>-1, release-2 → nothing), `spec_type_branches_keep_their_spec_id` (incl. node-local BUG-<hex>-464). Used by pr_gate_subject (local + forge head ref), ship_gate_known_ids, train member ids, forge merge chokepoint hints, release --after-pr.
+    - AC2 [behavioral-test]: in the mandate cover, a named id with no current record that only the branch supplies (not in forge title, not in a commit trailer/Refs) is resolved as non-named before its history is read (`resolve_exclusion_specs_with_branch_only`, gate/mandate_ship.rs), so history + exclusion ledger still judge it. Forge unanswered or title unreadable → no demotion. Tests: `bug_2702_only_an_unresolved_branch_only_id_loses_its_named_weight`, `bug_2702_branch_only_ids_exclude_title_and_trailer_ids_and_need_the_forge`.
+    - AC3 [behavioral-test, production path]: `bug_2702_promotion_pr_cover_resolves_its_title_specs_and_unknown_title_ids_refuse` drives ship_gate_known_ids + collect_mandate_cover with a gh stub, active mandate and typed hold: head promote/integration-23 + title (Refs STORY-1 STORY-2) → named specs exactly STORY-1/STORY-2, cover passes; controls: unknown title id → SpecsUnresolved; unknown commit trailer → SpecsUnresolved; branch story-998 unresolved and unnamed elsewhere → non-named, covered; same id in title → refuses. The decision closure is hold_cover's spec half (approval half not fabricated).
+
+    **Validation**: lane-runner cargo test (mandate, pr_ship, pr_train, trailer_coverage, approval, bug_1918, task_1800, task_2067, story_1888, gate_state, review_launch): 1086 passed, 0 failed (pre-test-path tweak); bug_2702 at HEAD: 6/6. make check-ci-fast (lane runner) exit 0 at HEAD. check-store-writers.py ok.
+
+    **Probe findings / fixes**: (1) first cut demoted after history read → HistoryUnreadable; moved demotion into resolution. (2) story_1888 orchestrator-inventory ratchet flagged new outside paths in mandate_ship.rs; reworked so mandate_ship names no new paths (pr_gate_subject now returns a PrGateSubject struct; provenance via methods). (3) gate dependency ratchet: gate test named pr_cmd items → now names pr_service. No existing test weakened (bug_1918 test only adapted to .into_tuple()).
+
+    **Residual risks**: store-defined custom type prefixes are not consulted for branch ids (built-in types only; titles/trailers still carry them). Branch-only demotion uses one extra forge metadata read for the title. A branch-only unresolved id for a spec that exists on another node but is not synced locally now passes as dangling when other named specs resolve (AC2 behaviour by design). Zero-padding mismatches between branch and spec ids are not demoted (fail closed). The three pr_train call-site edits carry no per-line trace comment (the extractor carries it).
+  created_at: 2026-11-20T05:25:23.925211014Z
+  modified_at: 2026-11-20T05:25:23.925211014Z
+  session_id: 01a1f73a92b0
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f76a-e0ef-7c52-94f6-ca2e8896c7da
+  author: aida-publication-done
+  content: Implementer push e5faadc10c51 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T05:25:39.183931998Z
+  modified_at: 2026-11-20T05:25:39.183931998Z
   session_id: 01a1f73a92b0
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f773-6b4d-72b1-b47b-88187365c235
@@ -142,6 +175,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f76a-e0ef-7c52-94f6-ca177e02dc30
+  author: aida-publication-done
+  timestamp: 2026-11-20T05:25:39.183928463Z
+  session_id: 01a1f73a92b0
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
+- id: 01a1f76b-40b0-7140-a3b0-821944f5ca46
+  author: dirtlab
+  timestamp: 2026-11-20T05:26:03.696116202Z
+  session_id: 01a1f73a92b0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 - id: 01a1f772-d1ae-7e41-8eab-4c8e336c5623
   author: joe
   timestamp: 2026-11-20T05:34:19.566434604Z

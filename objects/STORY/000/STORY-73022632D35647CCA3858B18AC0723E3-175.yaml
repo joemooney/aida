@@ -1,0 +1,59 @@
+id: 01a1f76b-23a7-7cb1-8487-529067137cda
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-175
+title: 'Review PR-4354: [AI:claude] fix(mandate): promotion branches no longer name a spec in the ship cover (BUG-2702)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f73a`) for branch `bug-b6b1278890774ef993d2ebc327862470-464`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4354>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-464` → `main`
+
+  ## Covers
+
+  - BUG-2702
+  - BUG-2696
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4354` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T05:25:56.263699191Z
+modified_at: 2026-11-20T05:26:04.725732456Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1f733-b147-7fd1-8f38-7254c7be25eb
+  created_at: 2026-11-20T05:25:59.155329935Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a1f153-9dae-7782-85b1-8041df21cece
+  created_at: 2026-11-20T05:26:04.725700625Z
+  created_by: dirtlab
+history:
+- id: 01a1f76b-35f9-74d0-ae7d-fb866ef85d7f
+  author: dirtlab
+  timestamp: 2026-11-20T05:26:00.953021802Z
+  session_id: 01a1f73a92b0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f76b-4bbe-7570-8fdc-5da63be40f7c
+  author: dirtlab
+  timestamp: 2026-11-20T05:26:06.526698419Z
+  session_id: 01a1f73a92b0
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: e5faadc10c5156df0b91961aa2da62fc8c7c9e1f
+  branch: bug-b6b1278890774ef993d2ebc327862470-464
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 140977cdd5
+  vendor: claude
+  session: 01a1f73a92b0
+  harness_version: 2.1.319 (Claude Code)
