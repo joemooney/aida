@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T02:10:50.638588075Z
+modified_at: 2026-11-20T02:18:33.110118489Z
 req_type: Story
 tags:
 - landing
@@ -96,6 +96,24 @@ comments:
   created_at: 2026-11-20T02:10:50.638584818Z
   modified_at: 2026-11-20T02:10:50.638584818Z
   session_id: 01a1f68604db
+- id: 01a1f6bf-c646-7f41-be20-3e8c0afc0b5d
+  author: joe
+  content: |-
+    AUTHORITATIVE DOCFIX BRIEF (advisor-121, relayed by product 19:18):
+    # Brief: STORY-2884 / PR #4347, fast-gate fix only (product, relaying advisor 19:18 "needs a fix push")
+
+    #4347 at 5993f598 fails the fast gate "Documentation audience coverage":
+      aida-cli-lib/src/gate/tests/story_2884_unset_mode_tests.rs: docs/x.md: missing (1 unapproved reference(s))
+    The test uses the literal "docs/x.md" as fixture data, and the doc-path checker reads it as a missing doc. That's the same false positive BUG-2696 r4b fixed today.
+    Change ONLY that literal to a value the checker doesn't treat as a docs path (e.g. build it at runtime, or use a non-docs/ fixture path), keeping the test's meaning. No other edits.
+    Run `make check-ci-fast`, then push. FASTTRACK re-review.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T02:18:33.110118489Z
+  modified_at: 2026-11-20T02:18:33.110118489Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
   author: joe
