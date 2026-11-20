@@ -1,0 +1,31 @@
+id: 01a1faee-c7b8-7e11-9976-05ed3f799bf8
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1161
+title: 'Review follow-up: rework_bindings.rs:84 — Recovery collects every related verdict payload in memory at once,'
+description: |-
+  From BUG-2629
+  Reviewed sha: ccb4768ffb5cdc991267cc009deb368679d1fca2
+
+  rework_bindings.rs:84 — Recovery collects every related verdict payload in memory at once, then clones events for each view. There is no aggregate byte limit, even when recovery was triggered by a discovery-budget refusal. Stream the evidence or bound retained payloads and handle exhaustion explicitly.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T21:48:35.128538161Z
+modified_at: 2026-11-20T21:48:35.128538161Z
+req_type: Task
+tags:
+- carried-from:BUG-2629
+- finding-hash:976d35a5
+- from-review:BUG-2629
+relationships:
+- rel_type: References
+  target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
+  created_at: 2026-11-20T21:48:48.063015858Z
+filed_at:
+  code_sha: ccb4768ffb5cdc991267cc009deb368679d1fca2
+  branch: pr-4380
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1faec22ab
