@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: c778a0e587ee0ff8abc1553be5b9d64bcfd33211
 
   [P2] Replace the nonexistent documentation path in the follow-up fixture. The literal docs/plans/p.md at publication_completion.rs:546 is treated as a tracked documentation reference by the Documentation audience coverage guard. Exact-head CI job 135693254023 reports this location as missing and exits 2; aggregate Build job 135702227564 fails because GATES=failure while COMPILE=success. Use a fixture value outside the docs path namespace, such as plan-fixture.md, preserving the followup-src: prefix and both assertions. This is a concrete fixture/CI defect, with no observed runtime completion defect; it is nonblocking under the configured p2 policy. Evidence is the existing CI log and source inspection; no local test or build was run.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T16:26:44.973890478Z
-modified_at: 2026-11-20T02:39:10.522966445Z
+modified_at: 2026-11-20T03:09:47.766345273Z
 req_type: Task
 tags:
 - carried-from:BUG-2696
@@ -59,6 +59,12 @@ comments:
   modified_at: 2026-11-20T02:39:10.522966445Z
   session_id: 01a1f6ce133e
   harness_version: codex-cli 0.167.0
+- id: 01a1f6ee-7f76-7db3-958a-a2c277cf5ed6
+  author: aida-publication-done
+  content: Implementer push c079d5267134 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T03:09:47.766344708Z
+  modified_at: 2026-11-20T03:09:47.766344708Z
+  session_id: 01a1f6ce133e
 history:
 - id: 01a1f594-1a3f-7ca0-9d49-1718e585e981
   author: joe
@@ -88,6 +94,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f6ee-7f76-7db3-958a-a2bfafad2452
+  author: aida-publication-done
+  timestamp: 2026-11-20T03:09:47.766342520Z
+  session_id: 01a1f6ce133e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: c778a0e587ee0ff8abc1553be5b9d64bcfd33211
