@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-20T11:24:07.337440064Z
+modified_at: 2026-11-20T15:56:09.737131664Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -605,6 +605,13 @@ comments:
   content: 'Product 04:24: the b41fd68 main rerun (run 44717407861, attempt 2) is GREEN, so task_3792_train_check_bounds_discovery_and_member_subprocesses (''fetch: timed-out descendant still running'', story_2824_train_check_tests.rs:638) was a flake. No fix-forward yet. Per advisor 04:02, a recurrence triggers a test-only codex fix with a bounded wait for descendant exit.'
   created_at: 2026-11-20T11:24:07.337440064Z
   modified_at: 2026-11-20T11:24:07.337440064Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9ac-501c-7fa0-b102-c2c1d2bb0bdc
+  author: joe
+  content: 'Product 08:57: RECURRENCE of the task_3792 timing family, in a different test of the same file. task_3792_approval_local_git_reads_share_the_deadline (story_2824_train_check_tests.rs:973) failed twice in #4344''s full-tier run 44751169717 (07:12), unrelated to #4344''s lease change. This blocked an APPROVED PR for ~1.7h, and nothing merged to main for ~3h. Per advisor 04:02, a recurrence triggers a test-only fix-forward (bounded waits instead of tight deadline asserts) covering BOTH task_3792 tests in story_2824_train_check_tests.rs. Rerun started.'
+  created_at: 2026-11-20T15:56:09.737131664Z
+  modified_at: 2026-11-20T15:56:09.737131664Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
