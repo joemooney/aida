@@ -19,7 +19,7 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-19T08:10:22.337973035Z
-modified_at: 2026-11-20T01:02:37.359425948Z
+modified_at: 2026-11-20T01:10:22.865374107Z
 req_type: Task
 tags:
 - from-advisor:TASK-3812
@@ -33,6 +33,13 @@ comments:
   created_at: 2026-11-20T01:02:37.359425948Z
   modified_at: 2026-11-20T01:02:37.359425948Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f681-6e8c-7af2-86fd-639e0484d836
+  author: joe
+  content: 'Product 18:11 (deploy, AC1): dell1 ~/bin/aida-autobuild.sh is replaced with the repo scripts/aida-autobuild.sh from the dell1 primary checkout (contains #4327 ed269f3a8), per docs/advanced/lane-host-checklist.md. Backups: ~/bin/aida-autobuild.sh.pre-task3153-20261119-1810 and ~/lanes/crontab-backup-20261119-1810.txt. The existing */30 cron line already invokes ~/bin/aida-autobuild.sh with the lane PATH, unchanged. Dry run: ''skip: CI for 6ff4b5c4f9 is in_progress'' (expected). Pre-deploy note: the old script did promote once today (16:34, be435bcf38). Pending: AC2 (override survives a config-changing ff) and AC3 (''promoted and verified'' line). Tip-CI starvation remains until BUG-2687 (lane running).'
+  created_at: 2026-11-20T01:10:22.865374107Z
+  modified_at: 2026-11-20T01:10:22.865374107Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f2f1-adf7-7901-8f89-288863688baa
