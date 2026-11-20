@@ -360,9 +360,9 @@ relays (the product seat's machine). Claude and Codex lanes take the same path.
    (`max_concurrent_cold_starts`) is applied by the lane launch itself, which
    queues for a slot; the relay adds no limit of its own.
 
-The host recognises the spec by any of its ids (the display id such as
-`TASK-12` and the store's canonical id), so the running-lane check, the round
-and the admission record agree whichever one the relay or a lane was given.
+The host recognises the spec by any of its ids (the display id it is listed
+under and the store's canonical id), so the running-lane check, the round and
+the admission record agree whichever one the relay or a lane was given.
 
 The command prints its progress, appends it to `.aida/lane-relay/relay.log`,
 exits 0 once the lane is admitted and exits 2 on a stop. Every stop is
