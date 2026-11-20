@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T21:42:23.178585Z
-modified_at: 2026-11-20T00:14:01.972794698Z
+modified_at: 2026-11-20T00:14:23.853148776Z
 req_type: Task
 tags:
 - fix-forward
@@ -313,6 +313,13 @@ comments:
     Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
   created_at: 2026-11-20T00:14:01.972794698Z
   modified_at: 2026-11-20T00:14:01.972794698Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f64e-1aa2-70a3-af1d-653859348a49
+  author: joe
+  content: 'Product 17:14: R2 lane queued on dell1 (claude), branch task-b6b1278890774ef993d2ebc327862470-1127. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
+  created_at: 2026-11-20T00:14:23.853148776Z
+  modified_at: 2026-11-20T00:14:23.853148776Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
