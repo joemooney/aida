@@ -2686,7 +2686,7 @@ pub(crate) fn reviewer_prompt_for_round(pr: u64, round: usize) -> String {
         return base;
     }
     format!(
-        "{base}\n\nROUND 1 FULL-SWEEP CONTRACT: Before choosing a verdict, enumerate EVERY acceptance criterion from every covered spec and write one status line per criterion: `verified by <test/evidence>`, `unverified`, or `not-applicable-because <reason>`. Inspect the whole diff and list EVERY defect you find, not only the first. The verdict file's `findings` array must carry the complete actionable defect list so one rework round can address the full review surface."
+        "{base}\n\nROUND 1 FULL-SWEEP CONTRACT: Before choosing a verdict, use the generated review worksheet. For completing specs, enumerate EVERY acceptance criterion and write one status line per criterion: `verified by <test/evidence>`, `unverified`, or `not-applicable-because <reason>`. For Refs-only slices, follow the worksheet’s scope: verify covered criteria, retain pre-marked deferrals as N/A, and treat uncovered criteria in an undeclared slice as informational. Inspect the whole diff and list EVERY defect you find, not only the first. The verdict file's `findings` array must carry the complete actionable defect list so one rework round can address the full review surface."
     )
 }
 

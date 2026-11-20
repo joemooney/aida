@@ -21,7 +21,7 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 1. Resolve the PR number from the active session lease's scope, or accept `--pr N`
 1a. `aida review claim --pr N` to mark PR-N under review, so a merge surface refuses to land it before your verdict; `aida review record` (step 6) clears it
 2. `aida review prompt --pr N --write .aida/review-prompt-pr-N.md` to generate the per-spec checklist (STORY-67)
-3. Walk each spec: read the diff against acceptance criteria, run the test plan, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence; approve despite pending CI; use WAITING only for independent host evidence or a specific named test result needed for judgment
+3. Walk each spec: read the diff against the applicable criteria in the generated worksheet, check the evidence, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence; approve despite pending CI; use WAITING only for independent host evidence or a specific named test result needed for judgment
 4. Fix-forward mechanical issues (fmt drift, cfg-gated tests, typos) as small commits; never fix-forward semantic gaps
 5. Record approval independently of pending CI, applying the review decision fixtures below. Gate merging on required CI green. If independent host evidence or a specific named test result needed for judgment is unavailable, record `waiting` with dependency, responsible actor and resume condition, omit `--finding`, then stop for a fresh review at the current head.
 **Standalone headless draft contract:** when the launch prompt supplies an
@@ -55,7 +55,7 @@ validates and records it; do not claim in-sandbox recording succeeded.
 7. Post a consolidated review comment with the verdict table
 8. Interactive sessions: pause for explicit user confirmation before `gh pr merge N --squash`.
    Headless (`--no-human`) sessions: never prompt — act on the verdict-file default
-9. After merge: `aida edit X --status completed` for every spec that PASSed; leave partials/fails In Progress
+9. After merge: `aida edit X --status completed` for each passing completing spec. Leave Refs-only specs and partials/fails In Progress
 10. If a STORY-66 auto-queued `Review PR-N` story exists, mark it Completed too via `aida queue done`
 11. Hand off — the user runs `aida session end` themselves from outside the worktree
 
