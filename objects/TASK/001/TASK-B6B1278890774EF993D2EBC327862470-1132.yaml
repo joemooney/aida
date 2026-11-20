@@ -16,12 +16,12 @@ description: |
   2. A config comment marks this TEMPORARY with a pointer to the revert task.
   3. No other config changes. check-ci-fast green.
   Protected path (.aida/config.toml): ships under the active mandate (includes protected paths). Claude lane, light review.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:39:12.885207714Z
-modified_at: 2026-11-20T15:43:33.927443430Z
+modified_at: 2026-11-20T15:46:29.335196298Z
 req_type: Task
 tags:
 - config
@@ -62,6 +62,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f9a3-4557-7951-8b5b-685d45ef8f51
+  author: aida-session-start
+  timestamp: 2026-11-20T15:46:29.335194991Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
