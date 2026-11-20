@@ -24,12 +24,31 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T10:14:27.369204398Z
-modified_at: 2026-11-20T10:15:38.777546562Z
+modified_at: 2026-11-20T10:18:34.436577267Z
 req_type: Bug
 tags:
 - fast-gate
 - lanes
 - publication
+comments:
+- id: 01a1f877-3d4a-7661-b523-906098f76e0a
+  author: joe
+  content: |-
+    Product 03:18: Claude fresh-start lane queued on dell1, brief:
+    # Brief: BUG-2705 (fresh start; advisor-121 03:16: APPROVED, drain, HIGH, Claude, STRICT)
+
+    Seat-clone lanes leave edits uncommitted, as instructed ("Native seats must leave edits uncommitted for host publication", lane_fast_gate.rs:779), and the host is meant to commit them after exit (ship_from_seat::post_exit_commit_reported, called around lane_fast_gate.rs:500) before snapshot() requires a clean seat (lane_fast_gate.rs:509-525). Tonight that post-exit commit did NOT run in three seat-clone lanes (STORY-2884 docfix 19:19, STORY-2884 r4 02:03, BUG-2697 r2 02:04). Each ended "fast_gate=fail: fast gate needs a clean committed seat", and each lost a round. Evidence and seat paths are in the spec comments and on STORY-2884/BUG-2697.
+    Implement the acceptance criteria in the spec description:
+    (1) Root-cause and fix why post_exit_commit_reported is skipped or returns NotASeat/Failed for seat-clone (host_recorded_clone) seats, so the lane's uncommitted edits are committed before the clean-seat check.
+    (2) When the post-exit commit is skipped or fails, the gate reports the exact reason (in the lane log and implementer exit line), never just "fast_gate=fail".
+    (3) Regression through the REAL lane exit path for a seat-clone lane that leaves edits uncommitted: they're committed, the fast gate runs on the committed head, and publication proceeds.
+    Trailer (BUG-2705) if complete, otherwise (Refs BUG-2705).
+    IMPORTANT until this lands: COMMIT your own work before finishing, so your seat is clean for the host gate.
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T10:18:34.436577267Z
+  modified_at: 2026-11-20T10:18:34.436577267Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f874-487d-7913-ba35-94353334404c
   author: joe
