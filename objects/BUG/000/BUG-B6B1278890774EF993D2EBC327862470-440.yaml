@@ -10,12 +10,12 @@ description: |
   Likely a dell1 environment difference (AppArmor or bwrap profile, CARGO_TARGET_DIR shared with the primary checkout, or a non-seeded seat cargo target).
 
   Acceptance: both pass on dell1 with the documented lane-host setup (docs/advanced/lane-host-checklist.md); or the tests detect the unsupported environment and skip with a named reason, and the checklist is updated.
-status: InProgress
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-20T18:29:37.308350586Z
+modified_at: 2026-11-20T18:30:06.587495082Z
 req_type: Bug
 tags:
 - bwrap
@@ -203,6 +203,15 @@ history:
   timestamp: 2026-11-20T15:39:18.204559256Z
   session_id: 01a1f95b9c6f
   changes: []
+- id: 01a1fa39-11fb-7eb1-a362-869898e8f92a
+  author: joe
+  timestamp: 2026-11-20T18:30:06.587488631Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 processing_record:
 - id: 01a1f52f-614c-7811-ba25-20efe4bd456a
   timestamp: 2026-11-19T19:01:25.452762937Z
@@ -221,5 +230,6 @@ filed_at:
   harness_version: 2.1.326 (Claude Code)
 implementation_info:
   implemented: false
+  completed_at: 2026-11-20T18:29:53.499479966Z
   completion_sha: 3c527fa4b7269c2d47d45d94f7b56a6313905532
   reopened_at_sha: 12f6c394147679755176d4434e637a30ad81e6f5
