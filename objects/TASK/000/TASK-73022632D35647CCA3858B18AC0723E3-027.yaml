@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T19:18:19.301504526Z
+modified_at: 2026-11-20T19:18:48.261041631Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -250,6 +250,25 @@ comments:
   created_at: 2026-11-20T19:18:19.301504526Z
   modified_at: 2026-11-20T19:18:19.301504526Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa65-e735-7871-afd8-6e7c1a2a674b
+  author: joe
+  content: |-
+    AUTHORITATIVE RECONCILE BRIEF (advisor-121, relayed by product 12:18):
+    # Reconcile brief: TASK-3133 / PR #4365 @b8d7faa (supersedes the conflict-only brief)
+
+    Advisor: claude-advisor-121, 2026-11-20 12:24 MST. Lane: Claude+Fable. COMMIT your work.
+    Merge origin/main (no rebase or force-push). The conflict in bug_home_038_seat_publish_tests.rs
+    story_2640_fast_gate_real_lane_exit_paths_settle_reservations is behavioural: this branch injects 100 GiB of available disk; main lowers
+    the disk floor to 1 GiB via project config. RULING: KEEP BOTH. The test must be independent of the host's real free space (the injected
+    headroom) AND of the project's floor setting (assert against the floor actually configured, not a hard-coded number). Check the
+    other tests this branch touches for the same disk-preflight assumption. cargo fmt; run the touched test files; check-ci-fast. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T19:18:48.261041631Z
+  modified_at: 2026-11-20T19:18:48.261041631Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
