@@ -50,6 +50,108 @@ fn parse_version(text: &str) -> std::result::Result<aida_core::Requirement, Stri
     Ok(req)
 }
 
+/// BUG-2704: the most resolutions one conflicted version expands to before
+/// it is refused as unreadable (fail closed).
+// trace:BUG-2704 | ai:claude
+const MAX_CONFLICT_RESOLUTIONS: usize = 256;
+
+/// BUG-2704: one historical object body as the versions exclusion judges.
+/// A body holding git conflict markers (a stash re-applied in the store
+/// worktree and committed, as in store commit 7124c0f) is every resolution
+/// of it: each hunk taken as ours, as the diff3 base when recorded, or as
+/// theirs, in every combination, so a class one side's fields carry — or
+/// only a mix of two hunks' sides makes — is still seen. Every resolution is
+/// judged and any exclusion found in one counts. `Err` (fail closed) when
+/// the markers are malformed, nested or unterminated, the combinations
+/// exceed [`MAX_CONFLICT_RESOLUTIONS`], or any resolution does not parse.
+// trace:BUG-2704 | ai:claude
+fn parse_versions(text: &str) -> std::result::Result<Vec<aida_core::Requirement>, String> {
+    let resolutions = match conflict_resolutions(text) {
+        None => return parse_version(text).map(|req| vec![req]),
+        Some(resolutions) => {
+            resolutions.map_err(|e| format!("unparseable version: conflict markers: {e}"))?
+        }
+    };
+    let total = resolutions.len();
+    resolutions
+        .iter()
+        .enumerate()
+        .map(|(i, side)| {
+            parse_version(side)
+                .map_err(|e| format!("conflicted version, resolution {} of {total}: {e}", i + 1))
+        })
+        .collect()
+}
+
+/// BUG-2704: every resolution of a body holding git conflict markers
+/// (recognised by the store writers' own [`aida_core::git_ops::conflict_marker`]),
+/// or `None` when it holds none. Lines outside a hunk belong to every
+/// resolution; line terminators are kept as written.
+// trace:BUG-2704 | ai:claude
+fn conflict_resolutions(text: &str) -> Option<std::result::Result<Vec<String>, String>> {
+    use aida_core::git_ops::conflict_marker;
+    if !text.lines().any(|line| conflict_marker(line).is_some()) {
+        return None;
+    }
+    #[derive(Clone, Copy, PartialEq)]
+    enum At {
+        Outside,
+        Ours,
+        Base,
+        Theirs,
+    }
+    let mut state = At::Outside;
+    let mut resolutions = vec![String::new()];
+    let mut sides: Vec<String> = Vec::new();
+    for (n, raw) in text.split_inclusive('\n').enumerate() {
+        let line = raw.strip_suffix('\n').unwrap_or(raw);
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        match (state, conflict_marker(line)) {
+            (At::Outside, None) => resolutions.iter_mut().for_each(|r| r.push_str(raw)),
+            // Inside a hunk `sides` always holds the side being read.
+            (_, None) => sides
+                .iter_mut()
+                .last()
+                .into_iter()
+                .for_each(|side| side.push_str(raw)),
+            (At::Outside, Some("<<<<<<<")) => {
+                sides = vec![String::new()];
+                state = At::Ours;
+            }
+            (At::Ours, Some("|||||||")) => {
+                sides.push(String::new());
+                state = At::Base;
+            }
+            (At::Ours | At::Base, Some("=======")) => {
+                sides.push(String::new());
+                state = At::Theirs;
+            }
+            (At::Theirs, Some(">>>>>>>")) => {
+                if resolutions.len() * sides.len() > MAX_CONFLICT_RESOLUTIONS {
+                    return Some(Err(format!(
+                        "more than {MAX_CONFLICT_RESOLUTIONS} resolutions"
+                    )));
+                }
+                let mut next: Vec<String> = resolutions
+                    .iter()
+                    .flat_map(|r| sides.iter().map(move |side| format!("{r}{side}")))
+                    .collect();
+                next.sort_unstable();
+                next.dedup();
+                resolutions = next;
+                state = At::Outside;
+            }
+            (_, Some(marker)) => {
+                return Some(Err(format!("unexpected {marker} at line {}", n + 1)));
+            }
+        }
+    }
+    if state != At::Outside {
+        return Some(Err("a conflict hunk is never closed".into()));
+    }
+    Some(Ok(resolutions))
+}
+
 /// One git invocation in the store repository; `Err` carries git's stderr.
 // trace:BUG-2179 | ai:claude
 fn store_git(
@@ -229,16 +331,20 @@ impl StoreHistoryBatch {
                 continue;
             };
             let spec = obj.split_once(':').map_or(obj.as_str(), |(sha, _)| sha);
+            // BUG-2704: a conflicted version is every resolution of it.
+            // trace:BUG-2704 | ai:claude
             let parsed = body
                 .ok_or_else(|| format!("cannot read {key} at {spec}: missing object"))
                 .and_then(|text| {
-                    parse_version(&String::from_utf8_lossy(text))
+                    parse_versions(&String::from_utf8_lossy(text))
                         .map_err(|e| format!("{key} at {spec}: {e}"))
                 });
             match parsed {
-                Ok(req) => {
-                    versions.extend(field_change_versions(&req));
-                    versions.push(req);
+                Ok(reqs) => {
+                    for req in reqs {
+                        versions.extend(field_change_versions(&req));
+                        versions.push(req);
+                    }
                 }
                 Err(e) => {
                     batch.versions.insert(key.clone(), Err(e));
@@ -1705,3 +1811,7 @@ mod task_3820_tests {
         assert_eq!(grant_audit_lines(&unreachable).len(), 1);
     }
 }
+
+#[cfg(test)]
+#[path = "tests/bug_2704_conflict_version_tests.rs"]
+mod bug_2704_conflict_version_tests;

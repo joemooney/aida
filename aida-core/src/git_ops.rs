@@ -7638,13 +7638,26 @@ pub fn load_requirements_strict(store: &Path) -> Result<Vec<crate::models::Requi
         .collect()
 }
 
+/// The git conflict marker `line` opens (`<<<<<<<`), separates (`=======`),
+/// closes (`>>>>>>>`) or starts the diff3 base of (`|||||||`): the marker
+/// alone, or followed by a space and a label. One predicate for the store
+/// writers that refuse a conflicted object and the mandate history reader
+/// that judges both sides of one already committed. `line` carries no line
+/// terminator (as from [`str::lines`]).
+// trace:BUG-2490 | ai:codex
+// trace:BUG-2704 | ai:claude
+pub fn conflict_marker(line: &str) -> Option<&'static str> {
+    ["<<<<<<<", "=======", ">>>>>>>", "|||||||"]
+        .into_iter()
+        .find(|marker| {
+            line.strip_prefix(marker)
+                .is_some_and(|rest| rest.is_empty() || rest.starts_with(' '))
+        })
+}
+
 // trace:BUG-2490 | ai:codex
 fn validate_object_text(path: &str, text: &str) -> Result<()> {
-    if text.lines().any(|line| {
-        ["<<<<<<<", "=======", ">>>>>>>", "|||||||"]
-            .iter()
-            .any(|marker| line == *marker || line.starts_with(&format!("{marker} ")))
-    }) {
+    if text.lines().any(|line| conflict_marker(line).is_some()) {
         anyhow::bail!("store object {path} contains Git conflict markers; resolve the conflict before committing");
     }
     serde_yaml::from_str::<crate::models::Requirement>(text)
@@ -7730,8 +7743,11 @@ fn validate_pending_store_objects(repo: &Path) -> Result<()> {
 
 // git commit -- <pathspec> uses worktree copies, including directory and glob
 // pathspecs. Inspect only their tracked/untracked matches; deletions are valid.
+// BUG-2704: public so a writer can refuse BEFORE staging, never leaving a
+// conflicted object's bytes in the index for every later store commit.
 // trace:BUG-2490 | ai:codex
-fn validate_store_worktree_paths(repo: &Path, paths: &[&str]) -> Result<()> {
+// trace:BUG-2704 | ai:claude
+pub fn validate_store_worktree_paths(repo: &Path, paths: &[&str]) -> Result<()> {
     let output = host_git_command(repo)
         .args([
             "ls-files",
