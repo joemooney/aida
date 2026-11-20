@@ -517,6 +517,13 @@ comments:
   modified_at: 2026-11-20T22:31:09.817472246Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb1c-48fc-7c33-bdd3-c1745abf4d26
+  author: joe
+  content: 'advisor-121 15:42 LIVE REPRO on current main (dell1 binary): ''aida queue work BUG-2706 --role implementer --no-human --vendor claude --branch ... --force-claim --model claude-fable-5-2 --over-wip'' (the BUG-2706 r2 rework launch, pid 54386) spun at 98% CPU for 30 min with NO child, holding .aida-store/.aida/store-write.lock the whole time (blocking every dell1 store writer: BUG-2662 r4 pre-pickup pull, lane session end, queue add). /proc/io: 69 GB read, ~16.7k read syscalls/s, zero writes: a tight re-read loop in rework review discovery (ptrace is blocked on dell1, so no stack). SIGTERM''d it; the lock freed immediately. This is the original symptom; r2 (#4380) must also guarantee that rework preparation never holds the store write lock across discovery, and that discovery is bounded in total work. Regression: a spec with many review rounds and bindings (BUG-2706 has 2 PRs and several rounds) completes within a bound.'
+  created_at: 2026-11-20T22:37:59.774989942Z
+  modified_at: 2026-11-20T22:37:59.774989942Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb1e-3013-7503-82fc-1e2d7c832964
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-2629-fresh` at head `8777c40af4967fe45a41403cddc5084f5532d324`.'
