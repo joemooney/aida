@@ -359,7 +359,7 @@ pub(crate) fn route_rework(root: &Path, pr: u64, head: &str) -> Result<()> {
     if freshness::decision_exists(root, pr, head, "rework-routed")? {
         return Ok(());
     }
-    let (ids, _, _, _) = crate::pr_cmd::pr_gate_subject(root, pr, &[], None);
+    let ids = crate::pr_cmd::pr_gate_subject(root, pr, &[], None).ids;
     anyhow::ensure!(
         !ids.is_empty(),
         "conflicting PR has no unambiguous implementer subject; route manually"

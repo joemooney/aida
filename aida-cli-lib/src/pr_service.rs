@@ -74,6 +74,18 @@ pub(crate) fn fetch_change_info_via_resolved_forge(
     n: u64,
     forge_kind: crate::forge::ForgeKind,
 ) -> Result<pr_rebase::PrInfo> {
+    fetch_change_info_and_title_via_resolved_forge(project_root, n, forge_kind)
+        .map(|(info, _)| info)
+}
+
+/// [`fetch_change_info_via_resolved_forge`] plus the change's title, from the
+/// same forge read.
+// trace:BUG-2702 | ai:claude
+pub(crate) fn fetch_change_info_and_title_via_resolved_forge(
+    project_root: &std::path::Path,
+    n: u64,
+    forge_kind: crate::forge::ForgeKind,
+) -> Result<(pr_rebase::PrInfo, String)> {
     let noun = forge_kind.change_noun();
     let cli = forge_kind.cli_name();
     let m = crate::forge::forge_for_kind(project_root, forge_kind)
@@ -99,15 +111,18 @@ pub(crate) fn fetch_change_info_via_resolved_forge(
         !m.head_sha.is_empty(),
         "the forge did not return a head SHA for {noun} {n}"
     );
-    Ok(pr_rebase::PrInfo {
-        n,
-        base_ref: m.base_ref,
-        head_ref: m.head_ref,
-        head_oid: m.head_sha,
-        is_cross_repository: m.is_cross_repository,
-        head_repo_owner: m.head_repo,
-        is_draft: m.is_draft,
-    })
+    Ok((
+        pr_rebase::PrInfo {
+            n,
+            base_ref: m.base_ref,
+            head_ref: m.head_ref,
+            head_oid: m.head_sha,
+            is_cross_repository: m.is_cross_repository,
+            head_repo_owner: m.head_repo,
+            is_draft: m.is_draft,
+        },
+        m.title,
+    ))
 }
 
 /// Run `gh pr view <N> --json …` and return the parsed JSON. Pulled
@@ -394,13 +409,104 @@ pub(crate) fn ship_refusal_release(
 /// what the local title/branch claim, so the caller must judge authorship
 /// against EVERY author (fail closed), using the ids only to find verdicts.
 // trace:BUG-1918 | ai:claude
+// trace:BUG-2702 | ai:claude
 pub(crate) fn pr_gate_subject(
     main_worktree: &std::path::Path,
     pr: u64,
     known_ids: &[String],
     head_branch: Option<&str>,
-) -> (Vec<String>, Option<String>, bool, Vec<String>) {
+) -> PrGateSubject {
+    pr_gate_subject_parts(main_worktree, pr, known_ids, head_branch)
+}
+
+/// What [`pr_gate_subject`] resolved, with the provenance the mandate cover
+/// needs to tell a branch-only ID from one a commit trailer names.
+// trace:BUG-2702 | ai:claude
+#[derive(Debug, Clone, Default)]
+pub(crate) struct PrGateSubject {
+    /// The coverage-filtered gate IDs (as [`pr_gate_subject`] returns).
+    pub(crate) ids: Vec<String>,
+    /// The forge's head ref when known, else the caller's branch.
+    pub(crate) branch: Option<String>,
+    /// Whether the forge answered.
+    pub(crate) forge_resolved: bool,
+    /// The authorship IDs (as [`pr_gate_subject`] returns).
+    pub(crate) authorship_ids: Vec<String>,
+    /// Every ID the caller's branch or the forge head ref carries by branch
+    /// convention ([`pr_ship::extract_branch_spec_ids`]).
+    pub(crate) branch_ids: Vec<String>,
+    /// Every ID a forge commit subject names as a trailer or `(Refs …)`.
+    pub(crate) trailer_ids: Vec<String>,
+}
+
+impl PrGateSubject {
+    /// `(ids, branch, forge_resolved, authorship_ids)`, the subject without
+    /// its provenance.
+    // trace:BUG-2702 | ai:claude
+    pub(crate) fn into_tuple(self) -> (Vec<String>, Option<String>, bool, Vec<String>) {
+        (
+            self.ids,
+            self.branch,
+            self.forge_resolved,
+            self.authorship_ids,
+        )
+    }
+
+    /// BUG-2702: the branch-derived IDs that neither a commit trailer nor
+    /// PR `pr`'s title names, the title read from the forge. Empty when the
+    /// forge did not answer (here or for the subject): without the title and
+    /// trailers no ID can be shown to come from the branch alone, so every
+    /// named ID keeps its fail-closed weight.
+    // trace:BUG-2702 | ai:claude
+    pub(crate) fn branch_only_ids(&self, main_worktree: &std::path::Path, pr: u64) -> Vec<String> {
+        if !self.forge_resolved || self.branch_ids.is_empty() {
+            return Vec::new();
+        }
+        match fetch_change_info_and_title_via_resolved_forge(
+            main_worktree,
+            pr,
+            crate::forge::resolve_open_change_forge_kind(main_worktree),
+        ) {
+            Ok((_, title)) => self.branch_only_ids_given_title(&title),
+            Err(_) => Vec::new(),
+        }
+    }
+
+    /// [`Self::branch_only_ids`] for a known PR `title`.
+    // trace:BUG-2702 | ai:claude
+    pub(crate) fn branch_only_ids_given_title(&self, title: &str) -> Vec<String> {
+        if !self.forge_resolved {
+            return Vec::new();
+        }
+        let asserted: Vec<String> = self
+            .trailer_ids
+            .iter()
+            .cloned()
+            .chain(pr_ship::extract_spec_ids_from_text(title))
+            .collect();
+        normalized_spec_ids(&self.branch_ids)
+            .into_iter()
+            .filter(|id| {
+                !asserted
+                    .iter()
+                    .any(|a| aida_core::id_identity::same_id(a, id))
+            })
+            .collect()
+    }
+}
+
+/// [`pr_gate_subject`] with its provenance.
+// trace:BUG-1918 | ai:claude
+// trace:BUG-2702 | ai:claude
+fn pr_gate_subject_parts(
+    main_worktree: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+) -> PrGateSubject {
     let mut ids = known_ids.to_vec();
+    let mut branch_ids: Vec<String> = Vec::new();
+    let mut trailer_ids: Vec<String> = Vec::new();
     // `(Refs X)` subjects name the work's spec for authorship only, never
     // for verdict lookup or completion. trace:BUG-2199 | ai:claude
     let mut refs_ids: Vec<String> = Vec::new();
@@ -409,20 +515,26 @@ pub(crate) fn pr_gate_subject(
         .map(str::trim)
         .filter(|b| !b.is_empty())
         .map(str::to_string);
+    // BUG-2702: a branch names a spec only by AIDA branch convention, so
+    // `promote/integration-23` contributes nothing. trace:BUG-2702 | ai:claude
     if let Some(b) = &branch {
-        ids.extend(pr_ship::extract_spec_ids_from_text(b));
+        branch_ids.extend(pr_ship::extract_branch_spec_ids(b));
     }
     match crate::review_pr_subject_from_forge(main_worktree, pr) {
         Ok(subject) => {
             forge_resolved = true;
             let head = subject.head_ref.trim();
             if !head.is_empty() {
-                ids.extend(pr_ship::extract_spec_ids_from_text(head));
+                branch_ids.extend(pr_ship::extract_branch_spec_ids(head));
                 branch = Some(head.to_string());
             }
             for s in &subject.commit_subjects {
-                ids.extend(pr_ship::extract_trailing_spec_ids_from_subject(s));
-                refs_ids.extend(pr_ship::extract_authorship_spec_ids_from_subject(s));
+                let trailing = pr_ship::extract_trailing_spec_ids_from_subject(s);
+                let authorship = pr_ship::extract_authorship_spec_ids_from_subject(s);
+                trailer_ids.extend(trailing.iter().cloned());
+                trailer_ids.extend(authorship.iter().cloned());
+                ids.extend(trailing);
+                refs_ids.extend(authorship);
             }
         }
         Err(e) => eprintln!(
@@ -430,6 +542,7 @@ pub(crate) fn pr_gate_subject(
              every recorded author is treated as one of its authors"
         ),
     }
+    ids.extend(branch_ids.iter().cloned());
     // BUG-HOME-048: the commit-subject trailers pass the PR's coverage, so a
     // verdict is never looked up under a foreign bare id.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
@@ -440,12 +553,14 @@ pub(crate) fn pr_gate_subject(
         ids,
     );
     refs_ids.extend(ids.iter().cloned());
-    (
-        normalized_spec_ids(&ids),
+    PrGateSubject {
+        ids: normalized_spec_ids(&ids),
         branch,
         forge_resolved,
-        normalized_spec_ids(&refs_ids),
-    )
+        authorship_ids: normalized_spec_ids(&refs_ids),
+        branch_ids: normalized_spec_ids(&branch_ids),
+        trailer_ids: normalized_spec_ids(&trailer_ids),
+    }
 }
 
 /// The spec IDs the ship approval gate looks verdicts up under: the gate
@@ -468,10 +583,9 @@ pub(crate) fn ship_gate_known_ids(
         .into_iter()
         .map(|(id, _, _)| id)
         .collect();
-    ids.extend(pr_ship::extract_spec_ids_from_text(branch));
-    if let Some(title) = title {
-        ids.extend(pr_ship::extract_spec_ids_from_text(title));
-    }
+    // BUG-2702: the branch by convention only; the title as written.
+    // trace:BUG-2702 | ai:claude
+    ids.extend(pr_ship::extract_pr_spec_ids(branch, title.unwrap_or("")));
     crate::gate::trailer_coverage::covered_gate_ids(project_root, branch, pr, ids)
 }
 
@@ -580,15 +694,14 @@ pub(crate) fn ship_author_ids(
     known_ids: &[String],
     head_branch: Option<&str>,
 ) -> (Vec<String>, Option<String>) {
-    let (_, branch, forge_resolved, authorship_ids) =
-        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
+    let subject = pr_gate_subject(main_worktree, pr, known_ids, head_branch);
     (
-        if forge_resolved {
-            authorship_ids
+        if subject.forge_resolved {
+            subject.authorship_ids
         } else {
             Vec::new()
         },
-        branch,
+        subject.branch,
     )
 }
 
