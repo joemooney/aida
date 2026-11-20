@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T17:37:42.122579452Z
+modified_at: 2026-11-20T17:44:17.163253372Z
 req_type: Story
 tags:
 - landing
@@ -911,6 +911,11 @@ history:
   timestamp: 2026-11-20T16:58:23.238790680Z
   session_id: 01a1f9e02f27
   changes: []
+- id: 01a1fa0f-50d2-7582-995c-a85fa7e5f207
+  author: joe
+  timestamp: 2026-11-20T17:44:30.162663267Z
+  session_id: 01a1fa0ca2d8
+  changes: []
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
@@ -924,7 +929,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: 'STORY-2897 S3 (red-main watch) at c7f63d5: AC3 as amended is not met. Blocking: store effects escape the claimed pass bound (P1); re-run confirmation fires while the re-run is still running, defeating flake damping; evidence freshness keyed on the max attempt; a failed log read is never retried; a torn journal line halts the watch and `aida land metrics`. Non-blocking: failed re-run request never retried, older commit turning red is never attributed, lost smoke trigger, revert detection by subject only. AC1/2/4 were delivered by earlier slices and are untouched; AC5 docs verified; AC6 watch tests exist but do not cover these cases. Diff read against origin/integration (0 behind). CI pending at review time: full-tier shards cli-0, cli-1, contracts, rest passed, lib-0/lib-1/gates running; the reported Build failure is the fast-tier run cancelled by the ci:full relabel, not a code failure. No cargo run.'
+  detail: 'Reviewed the exact pinned head against the STORY-2897 signed S3 sketch, flake-damping amendment and authoritative round-2/round-4 rework briefs, using source and existing CI evidence only. Episode ordering, transition replay, pending notice delivery, configuration duration validation, metrics clipping and observational merge integration are present. Two claimed acceptance areas remain incomplete: successful store-lock acquisition still permits unbounded synchronous store Git operations, and evidence freshness conflates sibling jobs within one workflow run. Both findings block as unmet claimed acceptance criteria; the former is also P1. The reported Build (ubuntu-latest) failure is the aggregate of the cancelled FAST run (TIER/BUILD/GATES/COMPILE all cancelled), rather than a reported test failure. Replacement FULL CI was still running when inspected; CI status is not the reason for this verdict. No local build or test commands were run and no branch changes were made.'
   recovery_hint: address the review findings, move STORY-2897 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-20T16:58:23.073742585Z
+  shelved_at: 2026-11-20T17:44:17.163253372Z
