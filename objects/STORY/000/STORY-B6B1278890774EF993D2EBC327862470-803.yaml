@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-20T04:41:25.624112162Z
+modified_at: 2026-11-20T12:23:29.040206967Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -221,6 +221,13 @@ comments:
   content: 'advisor-121 21:44: promotion 23 #4324 landing path: exclusive error: "admission busy: PID 2921307, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:174088457 (pidns 4026531836), purpose legacy review-watch; PID 2910319, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:174074023 (pidns 4026531836), purpose legacy auto-train" is starved by the loop workers'' lifetime shared claims (BUG-2703), and SIGTERM''d workers respawn within minutes. A train runs in the SHARED admission mode, and a human at a terminal naming the PR satisfies the supervised rule, so Joe lands it with error: "admission busy: PID 2921307, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:174088457 (pidns 4026531836), purpose legacy review-watch; PID 2910319, start cbeb5f7c-e184-4cc3-887a-1c8c5d4b7d9b:174074023 (pidns 4026531836), purpose legacy auto-train". The mandate cannot cover it until BUG-2702 lands.'
   created_at: 2026-11-20T04:41:25.624112162Z
   modified_at: 2026-11-20T04:41:25.624112162Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f8e9-9974-7d43-9ad7-6256f485797e
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-20 05:28): COMPLETE. Delivered to main by promotion 23 (#4324 -> 9025b1b0 via train #4360, Refs trailer). Integration slices #4279 (S1c), #4292 (S1t-a) and #4308 (S1t-b), plus promotion-review rounds r1-r4 (per-attempt landing guards for GitHub and GitLab, checked C2 authorship, protected gate placement, per-pass mode refresh, failed-fetch stand-down, final grant validation after the slow reads), STRICT-approved at 774878b; the conflict-only re-cut was approved at 95edb31.'
+  created_at: 2026-11-20T12:23:29.040206967Z
+  modified_at: 2026-11-20T12:23:29.040206967Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
