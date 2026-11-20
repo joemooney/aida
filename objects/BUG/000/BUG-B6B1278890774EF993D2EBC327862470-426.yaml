@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T19:48:30.008024026Z
+modified_at: 2026-11-20T20:45:23.795296642Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -214,6 +214,40 @@ comments:
   created_at: 2026-11-20T19:48:30.008018910Z
   modified_at: 2026-11-20T19:48:30.008018910Z
   session_id: 01a1fa43d4bc
+- id: 01a1fab4-edd3-7821-870f-7d88f2fed116
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 74968c72e1 (round 2 of PR #4378; addresses all 11 findings of the review at ccaa611, none disputed).
+
+    Acceptance evidence [behavioral-test], aida-cli-lib --lib, agent profile, run through the lane job runner:
+    - 1 two-spec repeat: bug_2662_same_review_for_a_sibling_spec_is_not_a_repeat
+    - 2 mixed refusal, one event after failed and successful filing: bug_2662_mixed_refusal_retry_keeps_one_verdict_event
+    - 3 repeated refusal leaves the change ledger byte-identical; lost hold is restored: bug_2662_repeated_refusal_leaves_the_change_ledger_unchanged
+    - 4 change-wide history (change key, sibling spec, unbound): bug_2662_differently_labelled_refusal_during_delivery_refuses_the_approval
+    - 5 malformed line, torn line, unreadable by-spec file refuse: bug_2662_incomplete_history_refuses_the_approval
+    - 6 both locks held through compare and append; a concurrent unbound writer waits: bug_2662_unbound_append_cannot_slip_between_the_final_read_and_the_append
+    - 7 repeat decided under the lock: bug_2662_repeat_is_revalidated_under_the_ledger_lock
+    - 8 digest-indexed admit: bug_2662_unchanged_long_history_is_admitted (functional only; no timing assertion)
+    - 9/10 operator receipts: bug_2662_operator_repeat_reuses_a_valid_standing_receipt
+    - 11 comment on the verdict writer rewritten (documentation-inspection).
+    Result: 155 passed, 1 failed in the final targeted run (bug_2662, standalone_review_verdict_parent, story_2698, story_2913, bug_2564, merge_hold). The one failure, story_1917 reviewer_worktree_cleanup_preserves_merge_hold_and_refuses_live_occupant, fails in this sandbox on the mail writer-admission scan and does not reach the changed code.
+
+    Probe findings fixed before commit:
+    - with_lock would self-deadlock: the spec index lock and the unbound ledger lock are the same file (by-spec/<SPEC>.lock). with_lock is now re-entrant per thread.
+    - A mixed refusal whose first filing failed was never announced, because its retry is a repeat. The retry that places the missing hold now emits the coordination event.
+
+    Residual risks:
+    - make check-ci-fast could not run whole here: tool calls are capped at 60s and the containment conformance gate needs AF_UNIX sockets the sandbox denies. Run individually and passing: cargo fmt --all --check, store-writer inventory, help-golden co-change, test portability, executable fixture, ExecContext, crate glob import, gate downward dependency, glyph lint, glyph padding, trace stranding, git auto-maintenance, structural guards (python and aida-ci-guards, 51 tests), and the aida-cli-lib ratchet groups (87 tests). Clippy was not run.
+    - A wider run (filters ledger review hold findings_gate verdict) left 5 failures after the CLI binary was built, all sandbox-bound (mail writer scan, foreign namespace, contained-launch refusal); CI is the full-suite evidence.
+    - A change ledger with a torn or malformed line now refuses every review record for that change until it is quarantined (the gates' checked reader already refuses it).
+    - After A then B are approved on one PR, re-approving A is a new round, not unchanged: the act standing for the change is B's.
+    - If a human repeat reuses a receipt and a concurrent review lands before the lock, the new round carries the reused receipt id.
+    - A repeated refusal still calls the spec-shelving step; only the ledger and the follow-up count are asserted unchanged.
+  created_at: 2026-11-20T20:45:23.795296642Z
+  modified_at: 2026-11-20T20:45:23.795296642Z
+  session_id: 01a1fa82d1b0
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
