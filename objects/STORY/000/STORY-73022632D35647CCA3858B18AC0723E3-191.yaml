@@ -1,5 +1,6 @@
 id: 01a1faa7-6bbd-78e0-8c1d-72008df3031a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-191
+agreed_id: STORY-2995
 title: 'Review PR-4377: [AI:claude] feat(ci): route only train and main heavy shards to dell1 and build from the host-prepared source (Refs STORY-2695)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1fa7d`) for branch `story-b6b1278890774ef993d2ebc327862470-618`.
@@ -35,6 +36,12 @@ history:
 - id: 01a1faa8-0def-7fc0-854f-1f17deeb7916
   author: dirtlab
   timestamp: 2026-11-20T20:31:20.047105550Z
+  changes: []
+- id: 01a1fab8-361d-7fd0-9f0a-bac4ee179c4a
+  author: joe
+  timestamp: 2026-11-20T20:48:58.909924085Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
