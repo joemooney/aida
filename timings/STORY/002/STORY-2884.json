@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "spec": "STORY-2884",
+  "publishes": [
+    {
+      "at": "2026-11-20T11:47:43.493996337Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-20T03:15:53.459692875Z",
+      "spec": "STORY-2884",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4347,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "dfe7a9938ffd81ccfdb0c30cd28fe861f1c8ce12"
+      }
+    },
+    {
+      "ts": "2026-11-20T03:15:57.443978684Z",
+      "spec": "STORY-2884",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Full landed-diff review completed against pinned main 2b42e9f896c63a9152a2508fd50211741e6ee72d / landed tree 04486174b3a59478aa6acf7115c61f0a7c1b4bf6, attesting original PR head only. Four actionable defects: protected-policy read failures drop custom protections, ship path supervision is not pinned to the later authorized head, show ignores explicit carrier modes, and the new diff read bypasses the train-check timeout. Completing STORY-2884 criterion statuses: ac14a117 verified by default-policy source/test inspection and implementer-reported legacy truth-table results; ac604e5b unverified because findings 1-2 violate protected-path supervision despite ordinary-case matrix tests; ac90eb51 unverified because finding 3 misreports carrier-aware mode; ac67a09f verified by config-guide and both two-seat protocol updates, with repository opt-in left to the operator. All criteria enumerated in the generated worksheet. GitHub FAST gates/compile and Build aggregate green; full Rust execution skipped. No local builds/tests run under reviewer policy. Parent must validate and record this draft.",
+        "recovery_hint": "address the review findings, move STORY-2884 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-20T03:17:19.979136151Z",
+      "spec": "STORY-2884",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-20T03:59:21.511031572Z",
+      "spec": "STORY-2884",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4347,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "1de9926e14b71b647c0df6458a2101f7e7244423"
+      }
+    },
+    {
+      "ts": "2026-11-20T03:59:25.434288115Z",
+      "spec": "STORY-2884",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Read the complete 99,644-byte supplied review diff and reviewed the change as landed on pinned main ccd9832894397b0541985d2e6ebfb8d97f0705ba, landed tree fda309cd1865483823b046b041a4f72efb0d09a8, attesting only original PR head 1de9926e14b71b647c0df6458a2101f7e7244423. The four prior implementation defects are addressed in source: protection policy and committed protected paths share one trusted config body and parse failures withhold the default; checked heads are compared to preflight and final heads remain pinned through the existing gate; show follows carrier execution modes; changed_paths uses the scoped deadline runner. STORY-2884 AC1 PASS by source/default-policy and existing test inspection (legacy truth-table execution is implementer-reported); AC2 PARTIAL because the matrix and train integration are present but the ship head-race enforcement has only a detached helper test, leaving one blocking ADR-76 mutation-kill test gap; AC3 PASS by carrier-aware source and label-test inspection; AC4 PASS by config reference, generated showcase and both two-seat protocol copies, with repository opt-in left unchanged. No additional semantic defects found. The one finding is independent of the newer base commit. Existing exact-head GitHub CI evidence: FAST source gates green, FAST compile still running and merge-hold status pending at review time; CI pending is not the reason for request-changes. No local Cargo, test or build commands were run. Standalone draft for parent validation and recording; no canonical verdict record was attempted.",
+        "recovery_hint": "address the review findings, move STORY-2884 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-20T04:11:33.881742678Z",
+      "spec": "STORY-2884",
+      "seat": "advisor",
+      "kind": {
+        "event": "SpecRequeued",
+        "via": "queue-rework",
+        "actor": "joe",
+        "from": "Needs Attention",
+        "to": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-20T09:41:22.070023398Z",
+      "spec": "STORY-2884",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4347,
+        "verdict": "APPROVED",
+        "reviewed_sha": "d728fb758720c5dee8f6572e3984286d39b67bdc"
+      }
+    },
+    {
+      "ts": "2026-11-20T10:46:14.993604645Z",
+      "spec": "STORY-2884",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4347,
+        "verdict": "APPROVED",
+        "reviewed_sha": "810aabf4121b96c10023cd3509bb5639b014399c"
+      }
+    },
+    {
+      "ts": "2026-11-20T11:37:17.045469909Z",
+      "spec": "STORY-2884",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4347
+      }
+    },
+    {
+      "ts": "2026-11-20T11:47:43.290043367Z",
+      "spec": "STORY-2884",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "e7ea0d906995868bda6a14b0ef68d64174a574c7",
+        "pr": 4347,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
