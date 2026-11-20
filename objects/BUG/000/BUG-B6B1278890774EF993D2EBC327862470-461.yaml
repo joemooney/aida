@@ -309,6 +309,13 @@ comments:
   modified_at: 2026-11-20T18:41:48.337679562Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa44-771f-7230-936a-13d921beaca1
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-20 12:02): COMPLETE on #4344 (861eb515, AC3/AC4: release and heal claims from pre-spawn admission failures). AC1/AC2/AC5 are WITHDRAWN as an INVALID PREMISE, verified by the advisor: disrad-dvp98b3puw is dell1''s real kernel hostname (hostname = /etc/hostname = disrad-dvp98b3puw, initial UTS ns 4026531838), and AIDA''s bwrap launches (contained.rs:305, seat_clone.rs:1282) use --unshare-all with no --hostname, so leases correctly record the host. ''dell1'' is only an ssh alias. The two unhealable claims (01a1f4f93790, 01a1f5182ee1) failed because admission never spawned a worker (no lease, no lane), which #4344 fixes. Earlier comments here (mine and product''s) blaming a ''sandbox UTS hostname'' are WRONG; read them with this correction. Credit to the BUG-2697 lane for punting with evidence rather than implementing a false premise.'
+  created_at: 2026-11-20T18:42:20.988946150Z
+  modified_at: 2026-11-20T18:42:20.988946150Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe
