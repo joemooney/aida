@@ -991,6 +991,41 @@ Publication failures retain the seat for recovery.
 This host step replaces the advisor's manual auto-publish workaround.
 <!-- trace:STORY-2475 | ai:codex -->
 
+## Declaring acceptance scope for a Refs-only review
+<!-- trace:BUG-2683 | ai:codex -->
+
+For a PR or MR with a `(Refs SPEC-ID)` title or commit trailer, add one
+standalone line per acceptance criterion to its description. For example:
+
+```text
+Slice-Scope: <spec-id> AC1 covered
+Slice-Scope: <spec-id> AC2 deferred slice-2
+Slice-Scope: <spec-id> AC3 deferred <destination-spec-id>
+```
+
+Use the criterion labels from `aida criteria <spec-id>` (the part after the
+spec ID and dot). The deferred destination is one token, such as a spec ID
+or slice name, using letters, digits, hyphens, underscores, periods, slashes,
+or hashes. Repeat the spec ID on each line to declare scope for multiple specs.
+
+An advisor can also record scope in a top-level spec comment. Start the
+comment with the exact heading `## Advisor slice scope` and put the same
+`Slice-Scope:` lines below it. The heading identifies the declaration format.
+The worksheet uses the last such comment in the spec's comment list when the
+PR or MR description has no scope rows for that spec. A description with rows
+for that spec takes precedence, even if those rows are invalid. The worksheet
+uses one declaration per spec and does not combine rows across sources.
+
+`aida review prompt --pr <N>` pre-marks deferred criteria as N/A and asks
+reviewers to verify covered criteria. Missing, incomplete, or conflicting
+rows within the selected declaration use an undeclared-slice checklist.
+Reviewers verify the diff's claims and report uncovered criteria as informational.
+A completing trailer for the same spec keeps the whole-spec checklist.
+If the forge metadata read fails, the worksheet treats all acceptance criteria
+for specs identified by commit trailers as claimed and asks the reviewer to
+recover metadata and regenerate before deciding. If no commit trailer identifies
+a spec, generation fails until the metadata can be read.
+
 ## Watching for new review heads
 
 Manual merge trains cooperate with review-watch: unrelated reviews and a live

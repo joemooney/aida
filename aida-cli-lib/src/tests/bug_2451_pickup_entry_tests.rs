@@ -4,6 +4,105 @@ use super::tests::{fixture, git_ok};
 use crate::session_start::{session_start_with_receipt, PathReentry};
 use std::path::Path;
 
+// trace:BUG-2211 | ai:codex
+#[test]
+fn bug_2211_session_reuses_local_and_remote_only_branches_without_config_writes() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for (local, explicit_reuse) in [(true, true), (true, false), (false, true)] {
+        let fx = fixture();
+        let _ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let branch = "retained-work";
+        let tip = git_ok(
+            &fx.main,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit-tree",
+                "HEAD^{tree}",
+                "-p",
+                "HEAD",
+                "-m",
+                "retained work",
+            ],
+        );
+        git_ok(&fx.main, &["config", "branch.autoSetupMerge", "always"]);
+        if local {
+            git_ok(&fx.main, &["branch", "--no-track", branch, &tip]);
+            git_ok(
+                &fx.main,
+                &["branch", "--set-upstream-to=origin/main", branch],
+            );
+        } else {
+            git_ok(
+                &fx.main,
+                &[
+                    "-c",
+                    "maintenance.auto=false",
+                    "-c",
+                    "gc.auto=0",
+                    "push",
+                    "-q",
+                    "origin",
+                    &format!("{tip}:refs/heads/retained-work"),
+                ],
+            );
+            assert!(!super::tests::ref_exists(
+                &fx.main,
+                "refs/heads/retained-work"
+            ));
+        }
+        let config_path = fx.main.join(".git/config");
+        let config_before = std::fs::read(&config_path).unwrap();
+        let seat = fx.root.join("reuse-seat");
+        let mut receipt = session_start_with_receipt(
+            "BUG-2211",
+            Some(branch),
+            None,
+            explicit_reuse,
+            seat.to_str(),
+            None,
+            "auto",
+            false,
+            None,
+            false,
+            None,
+            None,
+            false,
+            Some("implementer".into()),
+            false,
+            Some(false),
+            true,
+            None,
+            false,
+            true,
+            PathReentry::None,
+            Some(None),
+            false,
+        )
+        .unwrap_or_else(|err| panic!("local={local}, explicit_reuse={explicit_reuse}: {err:#}"));
+        receipt.disarm();
+
+        assert_eq!(git_ok(&seat, &["branch", "--show-current"]), branch);
+        assert_eq!(git_ok(&seat, &["rev-parse", "HEAD"]), tip);
+        assert_eq!(std::fs::read(config_path).unwrap(), config_before);
+        assert!(!fx.main.join(".git/config.lock").exists());
+        let upstream = git_ok(
+            &seat,
+            &[
+                "for-each-ref",
+                "--format=%(upstream:short)",
+                "refs/heads/retained-work",
+            ],
+        );
+        assert_eq!(upstream, if local { "origin/main" } else { "" });
+    }
+}
+
 fn start(
     scope: &str,
     path: &Path,
