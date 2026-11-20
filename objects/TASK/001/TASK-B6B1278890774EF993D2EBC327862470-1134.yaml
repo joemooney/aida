@@ -20,13 +20,30 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T15:56:38.591487997Z
-modified_at: 2026-11-20T15:57:14.973188923Z
+modified_at: 2026-11-20T15:59:49.468876802Z
 req_type: Task
 tags:
 - fix-forward
 - flaky-test
 - linked:STORY-2695
 - linked:TASK-3792
+comments:
+- id: 01a1f9af-bb2e-7df2-821b-c89956d2d3a0
+  author: joe
+  content: |-
+    Product 08:59: codex (gpt-6.2-astra) fresh-start lane queued on dell1, brief:
+    # Brief: TASK-3825 (fresh start; advisor-121 08:57: approved, drain, high; codex gpt-6.2-astra; FASTTRACK)
+
+    Make BOTH TASK-3792 deadline tests in aida-cli-lib/src/tests/story_2824_train_check_tests.rs load-tolerant:
+    - task_3792_train_check_bounds_discovery_and_member_subprocesses (~:638; flaked on main 11-20 03:59, "fetch: timed-out descendant still running")
+    - task_3792_approval_local_git_reads_share_the_deadline (~:973; failed twice in #4344's full tier at 07:12 and blocked an approved PR ~1.7h)
+    Add a bounded wait for descendant exit and an elapsed-time grace, but keep every assertion's meaning: a child that was never killed must still fail the test. TEST-ONLY: no production code changes.
+    Prove stability: run both tests in a 20/20 loop and quote the result in the PR body.
+    Trailer (TASK-3825). Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T15:59:49.468876802Z
+  modified_at: 2026-11-20T15:59:49.468876802Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9ad-17c2-75a3-ad6a-024eaa66592b
   author: joe
