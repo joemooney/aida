@@ -24,12 +24,31 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T08:15:41.246362956Z
-modified_at: 2026-11-20T08:16:09.907692700Z
+modified_at: 2026-11-20T08:18:45.310341126Z
 req_type: Bug
 tags:
 - mandate
 - promotion
 - store
+comments:
+- id: 01a1f809-8ae9-7af1-9a74-e47447b422fe
+  author: joe
+  content: |-
+    Product 01:18: Claude fresh-start lane queued on dell1, brief:
+    # Brief: BUG-2704 (fresh start; advisor-121 01:16: APPROVED, drain, HIGH, Claude, STRICT)
+
+    Mandate cover refuses promotion 23 (#4324) because a historical store version of STORY-2642 (store commit 7124c0f, 2026-11-07, a contained reviewer session) contains committed git conflict markers (<<<<<<< Updated upstream ... ======= ... >>>>>>> Stashed changes). The history reader can't parse it, so the spec is treated as excluded (fail-closed, correct as far as it goes).
+    Implement the acceptance criteria in the spec description:
+    (1) The store history reader recognizes a conflict-marked version and evaluates BOTH sides. The spec counts as excluded if EITHER side is excluded; it is never silently dropped and never silently included. It stays fail-closed for anything still unparseable.
+    (2) A store-writer guard refuses to commit a spec file containing git conflict markers (pre-commit check in the store write path), with a clear error.
+    Regressions: a fixture store whose history contains the 7124c0f-shaped conflict version, checked through the mandate ship-cover entry point (mandate_ship_cover_for_ship) with real fixture commits; plus the writer guard refusing a conflicted write.
+    Do NOT rewrite store history in this PR (separate operator decision).
+    Trailer (BUG-2704) if complete, otherwise (Refs BUG-2704).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py` (the new guard is a store-writer site; classify it).
+  created_at: 2026-11-20T08:18:45.310341126Z
+  modified_at: 2026-11-20T08:18:45.310341126Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f806-f52a-7b93-85f0-93a09733af5c
   author: joe
