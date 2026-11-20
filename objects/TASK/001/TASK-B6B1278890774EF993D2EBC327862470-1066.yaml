@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-20T15:14:12.410738866Z
+modified_at: 2026-11-20T15:14:30.415312734Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -211,6 +211,12 @@ comments:
   content: Reference merge `b82066836029b7ef323861eb91d1dbd4967a3096` left unfinished work with no lease or open PR; returned to Approved.
   created_at: 2026-11-20T15:12:41.523317950Z
   modified_at: 2026-11-20T15:12:41.523317950Z
+- id: 01a1f985-fd8f-7803-bda5-064a0f0acc33
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-3786-pr-cmd-dir` at head `78b437097cbccc7025e7529f2f06ff0f092c8495`.'
+  created_at: 2026-11-20T15:14:30.415306378Z
+  modified_at: 2026-11-20T15:14:30.415306378Z
+  session_id: 01a1f984f41d
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
   author: joe
