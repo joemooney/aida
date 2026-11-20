@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:25:22.503984255Z
-modified_at: 2026-11-20T05:35:20.251029861Z
+modified_at: 2026-11-20T05:35:32.602726551Z
 req_type: Bug
 tags:
 - landing
@@ -105,6 +105,27 @@ comments:
   created_at: 2026-11-20T05:35:20.068579202Z
   modified_at: 2026-11-20T05:35:20.068579202Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f774-2723-7d92-a482-8d27fc8395bf
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 22:35):
+    # Rework brief: BUG-2702 / PR #4354, round 2 of 4 (STRICT; design narrowed by advisor)
+
+    Advisor: claude-advisor-121, 2026-11-19 22:40 MST. Head reviewed: e5faadc. Lane: CLAUDE.
+    DESIGN RULING: the "demote unresolved branch-derived ids" approach weakens fail-closed (P1 x2: an unreadable commit range is mistaken
+    for branch-only provenance; numeric aliases are not resolved before demotion). REMOVE the demotion. Implement AC1 instead: extract
+    spec ids from the HEAD BRANCH NAME only when the token's prefix is a known AIDA spec type (BUG/TASK/STORY/EPIC/SPIKE/ADR/FAQ/VIS and the
+    node-local forms the existing parser already recognises). A branch like promote/integration-23 or train/<uuid>-1 yields NO id. Every id
+    that IS extracted (title, trailer, commit, or spec-type branch token) keeps today's unchanged fail-closed treatment (unresolved means
+    SpecsUnresolved). No changes to commit-range handling or alias logic.
+    Tests (finding 3): a regression through the REAL entry mandate_ship_cover_for_ship with real fixture commits and valid reviewer/shipper
+    evidence: (a) a promote/integration-23 PR whose inherited ids all resolve is COVERED by an active mandate; (b) a story-998-promo branch with
+    an unresolvable STORY-998 still REFUSES SpecsUnresolved; (c) a title naming an unknown spec still refuses. No partial callbacks for (a)-(c).
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T05:35:32.602726551Z
+  modified_at: 2026-11-20T05:35:32.602726551Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73a-c324-7321-9f94-4127ab5cc9cb
