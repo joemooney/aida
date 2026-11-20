@@ -43,80 +43,6 @@ struct Receipt {
     // trace:TASK-3815 | ai:codex
     #[serde(default, skip_serializing_if = "Option::is_none")]
     self_review: Option<String>,
-    /// The seat that launched the lane, when the launcher ran in one.
-    // trace:TASK-3827 | ai:claude
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    launched_by: Option<String>,
-}
-
-/// A receipt as the throughput guard reads it: the terminal result of one
-/// lane attempt, or an attempt that has not finished.
-// trace:TASK-3827 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct Recorded {
-    pub attempt: String,
-    pub spec: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub finished_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub result: Option<Kind>,
-    pub reason_code: Option<String>,
-    pub detail: Option<String>,
-    pub launched_by: Option<String>,
-}
-
-impl Kind {
-    /// The word the receipt and the implementer's exit line carry.
-    // trace:TASK-3827 | ai:claude
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Kind::Pushed => "pushed",
-            Kind::NoChangeWithReason => "no-change-with-reason",
-            Kind::RefusedBeforeStart => "refused-before-start",
-            Kind::Punted => "punted",
-            Kind::Held => "held",
-            Kind::FailedAfterStart => "failed-after-start",
-        }
-    }
-}
-
-/// Every readable receipt under `.aida/lane-results/`. A file that cannot be
-/// read or parsed is counted in the second value, never guessed at.
-// trace:TASK-3827 | ai:claude
-pub(crate) fn recorded(main: &Path) -> (Vec<Recorded>, usize) {
-    let dir = crate::main_worktree_root_from(main).join(".aida/lane-results");
-    let Ok(entries) = std::fs::read_dir(&dir) else {
-        return (Vec::new(), 0);
-    };
-    let mut out = Vec::new();
-    let mut unreadable = 0;
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("json") {
-            continue;
-        }
-        match std::fs::read(&path)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice::<Receipt>(&bytes).ok())
-        {
-            Some(r) => out.push(Recorded {
-                attempt: r.attempt.to_string(),
-                spec: r.spec,
-                created_at: r.created_at,
-                finished_at: r.finished_at,
-                result: r.result,
-                reason_code: r.reason_code,
-                detail: r.detail,
-                launched_by: r.launched_by,
-            }),
-            None => unreadable += 1,
-        }
-    }
-    out.sort_by(|a, b| {
-        a.created_at
-            .cmp(&b.created_at)
-            .then(a.attempt.cmp(&b.attempt))
-    });
-    (out, unreadable)
 }
 
 pub(crate) struct Attempt {
@@ -152,7 +78,6 @@ impl Attempt {
                 cleanup_warning: None,
                 retained_tree: None,
                 self_review: None,
-                launched_by: crate::events::active_seat(),
             }),
             start_error: RefCell::new(None),
             seat_tree: RefCell::new(None),
@@ -594,60 +519,6 @@ pub(crate) fn retained_work_line(line: String, tree: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    // trace:TASK-3827 | ai:claude
-    #[test]
-    fn task_3827_recorded_reads_finished_and_unfinished_receipts_and_counts_bad_files() {
-        let tmp = tempfile::tempdir().unwrap();
-        let out = crate::test_git::git_command()
-            .arg("-C")
-            .arg(tmp.path())
-            .args(["init", "-q", "-b", "main"])
-            .output()
-            .unwrap();
-        assert!(out.status.success());
-        let refused = Attempt::begin(tmp.path(), "TASK-1", Some("task-1")).unwrap();
-        refused
-            .finish(
-                Kind::RefusedBeforeStart,
-                "fast-gate",
-                "fast gate needs a clean committed seat",
-                None,
-                None,
-                true,
-            )
-            .unwrap();
-        let _running = Attempt::begin(tmp.path(), "TASK-2", None).unwrap();
-        let dir = crate::main_worktree_root_from(tmp.path()).join(".aida/lane-results");
-        std::fs::write(dir.join("broken.json"), "{").unwrap();
-        std::fs::write(dir.join("ignored.pending"), "{").unwrap();
-        let (receipts, unreadable) = recorded(tmp.path());
-        assert_eq!(unreadable, 1);
-        assert_eq!(receipts.len(), 2);
-        let done = receipts.iter().find(|r| r.spec == "TASK-1").unwrap();
-        assert_eq!(done.result, Some(Kind::RefusedBeforeStart));
-        assert_eq!(done.result.unwrap().label(), "refused-before-start");
-        assert_eq!(done.reason_code.as_deref(), Some("fast-gate"));
-        assert_eq!(
-            done.detail.as_deref(),
-            Some("fast gate needs a clean committed seat")
-        );
-        assert!(done.finished_at.is_some());
-        let open = receipts.iter().find(|r| r.spec == "TASK-2").unwrap();
-        assert_eq!((open.result, open.finished_at), (None, None));
-        // The label is the word the receipt itself carries.
-        for kind in [
-            Kind::Pushed,
-            Kind::NoChangeWithReason,
-            Kind::RefusedBeforeStart,
-            Kind::Punted,
-            Kind::Held,
-            Kind::FailedAfterStart,
-        ] {
-            assert_eq!(serde_json::to_value(kind).unwrap(), kind.label());
-        }
-        assert_eq!(recorded(&tmp.path().join("missing")).0, Vec::new());
-    }
 
     // trace:TASK-3815 | ai:codex
     #[test]

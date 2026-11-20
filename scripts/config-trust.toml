@@ -1022,6 +1022,15 @@ max_effort = "policy"
 excluded_tags = "policy"
 checks = "command"
 
+# TASK-3827: the throughput guard opens one SSH connection per host named
+# here (recorded host name = SSH alias) to read its memory. An SSH destination
+# is something AIDA opens and authenticates to, so the table is read from the
+# default-branch copy only (trusted_config, local refs); the guard's thresholds
+# stay branch-local policy.
+# trace:TASK-3827 | ai:claude
+[keys.trusted."throughput_guard.remote_hosts"]
+"*" = "command"
+
 # STORY-2220: the docs sweep reads its whole table from the default-branch
 # copy (trusted_config, local refs), because `regenerate` runs shell commands.
 # trace:STORY-2220 | ai:claude

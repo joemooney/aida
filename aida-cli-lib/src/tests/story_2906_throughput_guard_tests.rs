@@ -780,7 +780,6 @@ fn check_run(id: u64, name: &str, conclusion: &str) -> crate::ci_failures::Check
         status: "completed".into(),
         conclusion: conclusion.into(),
         html_url: String::new(),
-        completed_at: String::new(),
     }
 }
 
@@ -975,6 +974,7 @@ fn the_report_counts_landings_lists_hosts_and_escalates_only_after_two_dry_hours
             host: "dell1".into(),
             lanes: 4,
             memory: "20.0 GiB available of 64.0 GiB".into(),
+            ..HostLine::default()
         }],
         ..Facts::default()
     };
@@ -1057,11 +1057,13 @@ fn a_scheduled_run_saves_landings_and_each_hosts_lanes_and_memory_even_with_no_s
                 host: "dell1".into(),
                 lanes: 4,
                 memory: "20.0 GiB available of 64.0 GiB".into(),
+                ..HostLine::default()
             },
             HostLine {
                 host: "disrad-x".into(),
                 lanes: 1,
                 memory: NO_REMOTE_MEMORY.into(),
+                ..HostLine::default()
             },
         ],
         ..Facts::default()
@@ -1565,38 +1567,40 @@ fn a_stale_or_unknown_base_without_failed_checks_is_not_called_red() {
     ));
 }
 
-// This host's memory is measured; another host's comes from a record of it
-// when there is one, and is otherwise unknown with the reason.
+// This host's memory is measured; another host's is unknown with the reason
+// unless the default branch's configuration names it for a probe (the probe
+// and the lane counts are covered in task_3827_throughput_guard_tests.rs).
 #[test]
 fn host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown() {
     let local = || "20.0 GiB available of 64.0 GiB".to_string();
-    let lines = host_lines_from("dell1", 4, &["disrad-x", "", "disrad-x"], &local, &|_| None);
+    let never = |_: &str| -> std::result::Result<String, String> { panic!("probed") };
+    let others: BTreeMap<String, crate::lane_hosts::HostCount> = [
+        (
+            "disrad-x".to_string(),
+            crate::lane_hosts::HostCount {
+                reporting: 2,
+                silent: 0,
+                newest_report_mins: Some(3),
+            },
+        ),
+        (
+            "other".to_string(),
+            crate::lane_hosts::HostCount {
+                reporting: 1,
+                silent: 0,
+                newest_report_mins: Some(0),
+            },
+        ),
+    ]
+    .into();
+    // A host the project did not name is never probed.
+    let lines = host_lines_with("dell1", 4, &others, &Policy::default(), &local, &never);
     let line = |host: &str| lines.iter().find(|line| line.host == host).unwrap();
     assert_eq!(lines.len(), 3);
     assert_eq!((line("dell1").lanes, line("disrad-x").lanes), (4, 2));
     assert_eq!(line("dell1").memory, "20.0 GiB available of 64.0 GiB");
     assert_eq!(line("disrad-x").memory, "unknown (no remote memory source)");
-    assert_eq!(line("unknown").memory, NO_REMOTE_MEMORY);
-
-    // A record of the foreign host is used, for that host only.
-    let recorded =
-        |host: &str| (host == "disrad-x").then(|| "3.0 GiB available of 16.0 GiB".to_string());
-    let lines = host_lines_from("dell1", 0, &["disrad-x", "other"], &local, &recorded);
-    let memory = |host: &str| {
-        lines
-            .iter()
-            .find(|line| line.host == host)
-            .unwrap()
-            .memory
-            .clone()
-    };
-    assert_eq!(memory("disrad-x"), "3.0 GiB available of 16.0 GiB");
-    assert_eq!(memory("other"), NO_REMOTE_MEMORY);
-    assert_eq!(memory("dell1"), "20.0 GiB available of 64.0 GiB");
-
-    // A host the project did not name is never probed (TASK-3827 added the
-    // probe for the ones it names).
-    let never = |_: &str| -> std::result::Result<String, String> { panic!("probed") };
+    assert_eq!(line("other").memory, NO_REMOTE_MEMORY);
     assert_eq!(remote_memory(&Policy::default(), "disrad-x", &never), None);
     let report = Report {
         hosts: lines,
@@ -1608,6 +1612,6 @@ fn host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown() {
         )
     };
     assert!(
-        render(&report).contains("Host other: 1 lane(s); memory unknown (no remote memory source)")
+        render(&report).contains("Host other: 1 lane(s) by the host's own records, newest report 0 min ago; memory unknown (no remote memory source)")
     );
 }

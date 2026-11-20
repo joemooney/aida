@@ -299,6 +299,9 @@ mod queue_misc;
 // trace:STORY-1688 | ai:antigravity
 mod landing_health;
 mod lane_liveness;
+// The one reader of the lanes other hosts report on the shared store.
+// trace:TASK-3827 | ai:claude
+mod lane_hosts;
 mod loose_objects;
 mod rel_cards;
 mod relay_mail;

@@ -797,37 +797,6 @@ pub(crate) fn claim_worker_has_exited(
         )
 }
 
-/// Whether the worker recorded for lease `lease_id` of the clone at `root`
-/// may still be running: its lane record is readable, names this lease,
-/// carries no exit stamp, and its process is not provably gone. `false` says
-/// only that no such record speaks for the lease.
-// trace:TASK-3827 | ai:claude
-pub(crate) fn lane_worker_may_be_running(
-    root: &Path,
-    lease_id: &str,
-    pid_namespace: Option<u64>,
-) -> bool {
-    if lease_id.is_empty()
-        || !lease_id
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
-    {
-        return false;
-    }
-    std::fs::read_to_string(headless_record_path(root, lease_id))
-        .ok()
-        .and_then(|raw| serde_json::from_str::<HeadlessLaneRecord>(&raw).ok())
-        .is_some_and(|record| {
-            record.lease_id == lease_id
-                && record.exited_at.is_none()
-                && !crate::ownership::reader::local_claim_process_is_dead(
-                    record.pid,
-                    record.pid_start_time.as_deref(),
-                    pid_namespace,
-                )
-        })
-}
-
 // A bound claim whose admission never spawned a worker: its clone is present
 // here and holds no lane record for the claim's lease. Only a confirmed absence
 // counts; an unreadable record or a missing clone is not evidence.

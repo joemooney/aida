@@ -171,7 +171,10 @@ fn version(host: &str) -> Result<String> {
 }
 
 /// `/proc/meminfo` of a lane host, read over one bounded, non-interactive SSH
-/// call. `host` is an SSH alias; anything else is refused before SSH runs.
+/// call that forwards nothing (no agent, no X11, no ports). `host` is an SSH
+/// alias; anything else is refused before SSH runs. The caller answers for
+/// where the alias comes from: the throughput guard takes it only from the
+/// default branch's configuration.
 // trace:TASK-3827 | ai:claude
 pub(crate) fn meminfo(host: &str, timeout: Duration) -> Result<String> {
     anyhow::ensure!(
@@ -187,6 +190,10 @@ pub(crate) fn meminfo(host: &str, timeout: Duration) -> Result<String> {
         "ConnectTimeout=5",
         "-o",
         "ClearAllForwardings=yes",
+        "-o",
+        "ForwardAgent=no",
+        "-o",
+        "ForwardX11=no",
         "-o",
         "StrictHostKeyChecking=yes",
         "-o",

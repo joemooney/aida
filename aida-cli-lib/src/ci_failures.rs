@@ -30,9 +30,6 @@ pub(crate) struct CheckRun {
     /// `success`, `failure`, `timed_out`, … (empty while not completed).
     pub conclusion: String,
     pub html_url: String,
-    /// When the run finished (RFC 3339); empty while it has not.
-    // trace:TASK-3827 | ai:claude
-    pub completed_at: String,
 }
 
 impl CheckRun {
@@ -171,7 +168,6 @@ pub(crate) fn parse_check_runs(json: &str) -> Result<Vec<CheckRun>, String> {
                 status: text(run, "status"),
                 conclusion: text(run, "conclusion"),
                 html_url: text(run, "html_url"),
-                completed_at: text(run, "completed_at"),
             })
         })
         .collect())
@@ -435,7 +431,6 @@ mod tests {
             status: "completed".into(),
             conclusion: "failure".into(),
             html_url: "https://example.test/job/42".into(),
-            completed_at: String::new(),
         };
         let text = render_section(
             7,
