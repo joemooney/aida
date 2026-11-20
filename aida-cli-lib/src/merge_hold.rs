@@ -1492,11 +1492,11 @@ fn run_forge_cli_stdout(
 ) -> Result<(bool, String), String> {
     // trace:STORY-2401 | ai:codex
     crate::pr_train::before_train_forge_call("read hold labels").map_err(|e| format!("{e:#}"))?;
-    let out = std::process::Command::new(cli)
-        .current_dir(project_root)
-        .args(args)
-        .output_retrying_etxtbsy()
-        .map_err(|e| format!("could not run {cli}: {e}"))?;
+    let mut cmd = std::process::Command::new(cli);
+    cmd.current_dir(project_root).args(args);
+    let out =
+        crate::forge_lookup::deadline_output(cmd, std::process::Command::output_retrying_etxtbsy)
+            .map_err(|e| format!("could not run {cli}: {e}"))?;
     Ok((
         out.status.success(),
         String::from_utf8_lossy(&out.stdout).to_string(),
