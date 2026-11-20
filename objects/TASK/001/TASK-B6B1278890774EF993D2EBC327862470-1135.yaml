@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-20T18:42:10.506341861Z
+modified_at: 2026-11-20T19:24:45.813809452Z
 req_type: Task
 tags:
 - codify
@@ -164,6 +164,40 @@ comments:
   modified_at: 2026-11-20T18:39:27.888356481Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa6b-1b75-70e0-beb1-efacab0f9889
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: c3a15b8530 (PR #4373, round 2, `(Refs TASK-3826)`)
+
+    **Round-2 findings, evidence** (tests in aida-cli-lib/src/tests/task_3826_lane_relay_tests.rs)
+    - P3 rustfmt: [evidence: configuration-validation] `cargo fmt --all --check` clean; CI's `Check formatting` gate passes locally.
+    - P1 head gate through admission: [evidence: behavioral-test] `a_head_that_moves_after_host_admission_stops_the_launch`, `a_change_closed_or_unreadable_after_admission_stops_the_launch`. `relay-host launch` carries `--pr/--head`; the launcher gets them in `AIDA_LANE_RELAY_GATE` and `lane_relay::admit_launch` runs right after `Startup::acquire` in both launch paths (standalone_implementer.rs, session/headless.rs). Limitation: the two call sites are wired by inspection; the tests run the same gate code from a fake launcher, not through `aida queue work`.
+    - P2 fence: [evidence: behavioral-test] `a_relay_superseded_by_a_later_one_launches_nothing`, `an_older_relay_does_not_mark_a_newer_relays_brief`. Per-spec round in `.aida/lane-relay/<SPEC>.round` under flock; launch also refuses while a lane runs.
+    - P2 spec identity: [evidence: behavioral-test] `the_spec_is_matched_by_any_of_its_ids_on_the_host`. One matcher (`names_spec`) for processes, receipts, pending briefs, round file.
+    - P2 framed byte limit: [evidence: behavioral-test] `the_pickup_size_limit_applies_to_the_framed_brief`.
+    - P2 typed stops: [evidence: behavioral-test] `operational_failures_are_typed_stops_that_withdraw_the_brief` (forge read, delivery, launch, malformed replies, fieldless probe).
+    - P2 Fresh mode: [evidence: behavioral-test] `fresh_work_never_continues_an_open_change` for the gate and the relay's handling; the `queue_cmd/work.rs` wiring (`route_launch`, canonical resume disabled) is by inspection only.
+    - P2 wall-time bounds: [evidence: behavioral-test] `waits_are_bounded_in_wall_time_including_host_operations`.
+    - P2 production boundary: [evidence: behavioral-test] `the_real_machine_starts_the_launcher_and_sees_it_running` (real setsid spawn, argv, env, /proc detection, retract) and `the_live_relay_reaches_the_lane_host_through_ssh` (real `Live`, stub ssh on PATH, remote shell, argv round-trip).
+
+    **Validation**
+    - `cargo test --profile agent -p aida-cli-lib --lib -- lane_relay`: 27 passed.
+    - Ratchet filters plus lane_result/brief/rework_direction: 211 passed, 5 failed. All 5 are `bug_2398_*` process fixtures that need a built `aida` binary ("build the matching CLI before these process fixtures"), pulled in by my broad filter; the ratchet tests themselves passed.
+    - check-ci-fast, run gate by gate (60s tool limit): 44 of 47 source gates pass. `Containment conformance evidence tests`, `Store mutation channel tests` and `Self-hosted routing security fixtures` fail on the seat sandbox denying sockets (same three as round 1). Not run: `Rust structural ratchets` and the `aida-cli` format-json audit (cargo, need a build).
+    - Fixed on the way: store-writer inventory (5 new host_only rows for the round file), help golden regenerated, portability and executable-fixture ratchets.
+
+    **Residual risks**
+    - The gate travels in the launcher's environment: a custom `launcher` that clears its environment drops it (documented in docs/cli/03-work-autonomy.md).
+    - Rounds are per lane host; two relays for one spec aimed at different hosts are not fenced against each other.
+    - Fresh work with a leftover unmerged canonical branch is refused by the existing branch allocation rather than given a new branch.
+    - After `launch-failed` or a malformed launch reply the launcher may already have started; the brief is withdrawn, so that launcher fails on its missing `--brief`.
+    - AC8 still open: `.aida/tmp/relay-rework.sh` is untracked on the product seat's machine and must be retired there.
+    - No live run against a real lane host.
+  created_at: 2026-11-20T19:24:45.813809452Z
+  modified_at: 2026-11-20T19:24:45.813809452Z
+  session_id: 01a1fa43e7b7
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
   author: joe
