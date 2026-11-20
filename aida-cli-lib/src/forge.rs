@@ -3220,19 +3220,11 @@ impl Forge for GitHubForge {
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
-        let jobs = commit_ci_api(
-            &gh,
-            &self.project_root,
-            &format!(
-                "repos/{{owner}}/{{repo}}/actions/runs/{run_id}/jobs?filter=latest&per_page=100"
-            ),
-        )?;
-        let value: serde_json::Value =
-            serde_json::from_slice(&jobs).context("invalid workflow jobs JSON")?;
-        let jobs = value["jobs"]
-            .as_array()
-            .context("the workflow run lists no jobs")?;
-        let failed_steps = failed_steps_of(jobs, job)?;
+        // Every page, with the listing's completeness checked: the failed job
+        // can be past the first hundred.
+        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        let jobs = github_run_jobs("{owner}/{repo}", run_id, &mut api)?;
+        let failed_steps = failed_steps_of(&jobs, job)?;
         let found = jobs
             .iter()
             .find(|j| j["name"].as_str() == Some(job))

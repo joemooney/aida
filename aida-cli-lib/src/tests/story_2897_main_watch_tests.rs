@@ -65,6 +65,7 @@ struct Fake {
     fail_operator: bool,
     fail_human: bool,
     fail_file: bool,
+    fail_rerun: bool,
 }
 
 impl Fake {
@@ -142,6 +143,7 @@ impl Ports for Fake {
         Ok(found)
     }
     fn rerun_failed(&mut self, run_id: &str) -> Result<()> {
+        anyhow::ensure!(!self.fail_rerun, "deadline reached");
         self.reruns.push(run_id.into());
         Ok(())
     }
@@ -549,11 +551,14 @@ fn the_fix_window_is_the_configured_one() {
 fn a_smoke_failure_on_an_episode_commit_recommends_a_revert() {
     let (dir, mut fake) = red_on_green();
     run(dir.path(), &mut fake);
-    assert!(
-        !note_smoke_failure(dir.path(), &sha(9)).unwrap(),
-        "not in the episode"
+    assert_eq!(
+        note_smoke_failure(dir.path(), &sha(9)).unwrap(),
+        SmokeNote::NotInEpisode
     );
-    assert!(note_smoke_failure(dir.path(), &sha(2)).unwrap());
+    assert_eq!(
+        note_smoke_failure(dir.path(), &sha(2)).unwrap(),
+        SmokeNote::Recorded
+    );
     fake.at(31);
     run(dir.path(), &mut fake);
     let smoke = format!("main-red-{}-revert-smoke-fail", sha(2));
@@ -908,9 +913,23 @@ fn a_busy_watch_lock_is_skipped_not_awaited() {
     let notes = run(dir.path(), &mut fake);
     assert!(notes.iter().any(|n| n.contains("skipped")), "{notes:?}");
     let started = std::time::Instant::now();
-    assert!(note_smoke_failure(dir.path(), &sha(2)).is_err());
+    // A busy watch keeps the smoke failure in its spool; never waits.
+    assert_eq!(
+        note_smoke_failure(dir.path(), &sha(2)).unwrap(),
+        SmokeNote::Spooled
+    );
     assert!(started.elapsed() < std::time::Duration::from_secs(10));
     drop(held);
+    // The next pass replays the spool onto the episode.
+    run(dir.path(), &mut fake);
+    assert_eq!(
+        state(dir.path()).episode.unwrap().smoke_failed,
+        Some(sha(2))
+    );
+    assert!(
+        !dir.path().join(SMOKE_SPOOL).exists(),
+        "the spool is consumed"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1335,4 +1354,99 @@ fn durations_display_without_loss() {
             "round-trips"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Post-cap P2 fixes.
+// ---------------------------------------------------------------------------
+
+/// P2-1: a final line without its newline is uncommitted, even when it
+/// parses: the flush appends the transition, and nothing is lost.
+#[test]
+fn an_unterminated_final_line_is_uncommitted_and_the_transition_is_kept() {
+    let (dir, mut fake) = red_on_green();
+    fail_at(Some("journal"));
+    assert!(try_run(dir.path(), &mut fake).is_err());
+    fail_at(None);
+    let pending = state(dir.path()).pending;
+    assert_eq!(pending.len(), 1);
+    // The append wrote the whole event but crashed before its newline.
+    let journal_path = dir.path().join(JOURNAL);
+    std::fs::write(&journal_path, serde_json::to_vec(&pending[0]).unwrap()).unwrap();
+    assert!(
+        read_journal(dir.path()).unwrap().is_empty(),
+        "not committed"
+    );
+    run(dir.path(), &mut fake);
+    let raw = std::fs::read_to_string(&journal_path).unwrap();
+    assert!(raw.ends_with('\n'), "{raw}");
+    assert_eq!(raw.matches(&pending[0].id).count(), 1, "{raw}");
+    assert_eq!(count(dir.path(), "red_start"), 1);
+}
+
+/// P2-2: a failed re-run request is asked again; an accepted one never.
+#[test]
+fn a_failed_rerun_request_is_retried_and_an_accepted_one_is_not_repeated() {
+    let (dir, mut fake) = red_on_green();
+    fake.fail_rerun = true;
+    run(dir.path(), &mut fake);
+    assert!(fake.reruns.is_empty());
+    assert!(!state(dir.path()).episode.unwrap().rerun_requested);
+    fake.fail_rerun = false;
+    fake.at(2);
+    run(dir.path(), &mut fake);
+    fake.at(4);
+    run(dir.path(), &mut fake);
+    assert_eq!(fake.reruns, vec!["200".to_string()]);
+    assert!(state(dir.path()).episode.unwrap().rerun_requested);
+}
+
+/// P2-4: the jobs of a run are read past the first page.
+#[test]
+fn run_jobs_are_read_past_the_first_page() {
+    use serde_json::json;
+    let page1: Vec<serde_json::Value> = (0..100)
+        .map(|i| json!({"name": format!("j{i}"), "id": i, "status": "completed", "steps": []}))
+        .collect();
+    let page2 = vec![json!({"name": "target", "id": 500, "status": "completed",
+        "steps": [{"name": "Build all packages", "conclusion": "failure"}]})];
+    let mut api = |endpoint: &str| -> Result<Vec<u8>> {
+        let jobs = if endpoint.ends_with("page=1") {
+            &page1
+        } else {
+            &page2
+        };
+        Ok(serde_json::to_vec(&json!({"total_count": 101, "jobs": jobs})).unwrap())
+    };
+    let jobs = crate::forge::github_run_jobs("o/r", "9", &mut api).unwrap();
+    assert_eq!(jobs.len(), 101);
+    assert_eq!(
+        crate::forge::failed_steps_of(&jobs, "target").unwrap(),
+        vec!["Build all packages".to_string()]
+    );
+    let mut short = |_: &str| -> Result<Vec<u8>> {
+        Ok(serde_json::to_vec(&json!({"total_count": 101, "jobs": page2})).unwrap())
+    };
+    assert!(
+        crate::forge::github_run_jobs("o/r", "9", &mut short).is_err(),
+        "an incomplete listing is refused"
+    );
+}
+
+/// P2-5: a green with no sign of the fix spec is "unattributed"; the fix
+/// spec completing makes it "fixed".
+#[test]
+fn a_green_without_the_fix_is_unattributed_and_a_completed_fix_is_fixed() {
+    let (dir, mut fake) = confirmed();
+    fake.push(3, "docs: unrelated (#12)", green("300"));
+    fake.at(40);
+    run(dir.path(), &mut fake);
+    assert_eq!(outcomes(dir.path()), vec!["unattributed".to_string()]);
+
+    let (dir, mut fake) = confirmed();
+    fake.fix_state.completed = true;
+    fake.push(3, "docs: unrelated (#12)", green("300"));
+    fake.at(40);
+    run(dir.path(), &mut fake);
+    assert_eq!(outcomes(dir.path()), vec!["fixed".to_string()]);
 }

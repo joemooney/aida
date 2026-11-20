@@ -898,12 +898,23 @@ pub(crate) fn run_dev_build(
     let smoked_head = state.head.clone();
     let smoke_failed = |e: anyhow::Error| {
         // A smoke failure on a commit of an open red-main episode is a
-        // revert trigger. trace:STORY-2897 | ai:claude
-        if let Some(sha) = smoked_head.as_deref() {
-            let _ = crate::main_watch::note_smoke_failure(&layout.repo, sha);
-        }
+        // revert trigger; a busy watch keeps it for its next pass, and the
+        // build output says so. trace:STORY-2897 | ai:claude
+        let watch = match smoked_head
+            .as_deref()
+            .map(|sha| crate::main_watch::note_smoke_failure(&layout.repo, sha))
+        {
+            Some(Ok(crate::main_watch::SmokeNote::Spooled)) => {
+                "\nThe red-main watch was busy: this smoke failure is kept and recorded on its next pass."
+                    .to_string()
+            }
+            Some(Err(e)) => {
+                format!("\nThe red-main watch could not record this smoke failure: {e:#}")
+            }
+            _ => String::new(),
+        };
         anyhow!(
-            "smoke test of the new build failed: {e:#}\nThe live binaries were not touched.\nHint: {CLEAN_HINT}"
+            "smoke test of the new build failed: {e:#}\nThe live binaries were not touched.\nHint: {CLEAN_HINT}{watch}"
         )
     };
 

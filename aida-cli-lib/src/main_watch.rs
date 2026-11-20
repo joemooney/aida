@@ -38,6 +38,8 @@ use crate::forge::{CheckOutcome, CommitChecks};
 pub(crate) const STATE: &str = ".aida/land/main-watch.json";
 pub(crate) const JOURNAL: &str = ".aida/land/main-watch.jsonl";
 const LOCK: &str = ".aida/land/main-watch.lock";
+/// Smoke failures noted while a pass held the lock, replayed by the next.
+pub(crate) const SMOKE_SPOOL: &str = ".aida/land/main-watch-smoke.spool";
 /// How many first-parent commits one pass reads back from the tip.
 pub(crate) const SEARCH: usize = 50;
 /// A red not cleared by its re-run is confirmed after this long anyway.
@@ -150,6 +152,10 @@ pub(crate) struct Episode {
     /// Owning CI run id -> its attempt when the episode opened.
     pub attempts: BTreeMap<String, u64>,
     pub rerun_requested: bool,
+    /// Runs whose re-run request the forge accepted; a failed or skipped
+    /// request is asked again on a later pass, an accepted one never.
+    #[serde(default)]
+    pub reruns_done: BTreeSet<String>,
     pub confirmed_at: Option<DateTime<Utc>>,
     pub fix_spec: Option<String>,
     /// Failure evidence per failing check.
@@ -205,7 +211,8 @@ pub(crate) struct Event {
     pub red_sha: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sha: Option<String>,
-    /// `red_end`: `flake`, `cleared`, `fixed` or `reverted`.
+    /// `red_end`: `flake`, `cleared`, `fixed`, `unattributed` (green with no
+    /// sign of the fix spec) or `reverted`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub outcome: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -375,20 +382,21 @@ fn append(root: &Path, event: &Event) -> Result<()> {
 pub(crate) fn read_journal(root: &Path) -> Result<Vec<Event>> {
     let events: Vec<Event> = match std::fs::read_to_string(root.join(JOURNAL)) {
         Ok(text) => {
-            let lines: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
-            let mut events = Vec::new();
-            for (i, line) in lines.iter().enumerate() {
-                match serde_json::from_str(line) {
-                    Ok(event) => events.push(event),
-                    // A crash mid-append leaves a torn last line: skip it;
-                    // the next append truncates it away.
-                    Err(e) if i + 1 == lines.len() => {
-                        eprintln!("red-main watch: ignoring a torn last line in {JOURNAL}: {e}");
-                    }
-                    Err(e) => return Err(e).with_context(|| format!("invalid line in {JOURNAL}")),
-                }
+            // Only newline-terminated lines are committed. An unterminated
+            // tail is an append a crash cut short, even when it parses: it is
+            // not journaled (so its pending transition replays), and the next
+            // append cuts it away.
+            let committed = text.rfind('\n').map_or("", |end| &text[..=end]);
+            if committed.len() < text.len() {
+                eprintln!("red-main watch: ignoring an unfinished last line in {JOURNAL}");
             }
-            events
+            committed
+                .lines()
+                .filter(|l| !l.trim().is_empty())
+                .map(|l| {
+                    serde_json::from_str(l).with_context(|| format!("invalid line in {JOURNAL}"))
+                })
+                .collect::<Result<_>>()?
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
         Err(e) => return Err(e.into()),
@@ -624,6 +632,7 @@ pub(crate) fn pass(
         }
     }
 
+    replay_smoke_spool(root, &mut state, now)?;
     if state.episode.is_some() {
         advance(root, &mut state, window, now, ports, &mut notes)?;
     }
@@ -802,6 +811,7 @@ fn open(
             .filter_map(|f| Some((f.run_id.clone()?, f.attempt?)))
             .collect(),
         rerun_requested: false,
+        reruns_done: BTreeSet::new(),
         confirmed_at: None,
         fix_spec: None,
         evidence: Vec::new(),
@@ -866,14 +876,26 @@ fn advance(
     // One confirming re-run of the failed jobs. A re-run asked twice after a
     // crash is harmless.
     if !episode.rerun_requested {
-        for run in episode.attempts.keys() {
-            if let Err(e) = ports.rerun_failed(run) {
-                notes.push(format!(
-                    "red-main watch: CI run {run} was not re-run: {e:#}"
-                ));
+        let runs: Vec<String> = episode.attempts.keys().cloned().collect();
+        for run in runs {
+            if episode.reruns_done.contains(&run) {
+                continue;
+            }
+            match ports.rerun_failed(&run) {
+                Ok(()) => {
+                    episode.reruns_done.insert(run);
+                    state.episode = Some(episode.clone());
+                    write_state(root, state)?;
+                }
+                Err(e) => notes.push(format!(
+                    "red-main watch: CI run {run} was not re-run; asked again next pass: {e:#}"
+                )),
             }
         }
-        episode.rerun_requested = true;
+        episode.rerun_requested = episode
+            .attempts
+            .keys()
+            .all(|run| episode.reruns_done.contains(run));
         state.episode = Some(episode.clone());
         write_state(root, state)?;
     }
@@ -1104,11 +1126,29 @@ fn close(
         .iter()
         .any(|c| c.subject.starts_with(&revert_subject));
     let confirmed = episode.confirmed_at.is_some();
+    // "fixed" only with evidence of the fix: the fix spec completed, or a
+    // commit in the closing range names it.
+    let attributed = episode.fix_spec.as_deref().is_some_and(|id| {
+        let completed = match ports.fix_spec_state(id) {
+            Ok(fix) => fix.completed,
+            Err(e) => {
+                notes.push(format!("red-main watch: {id} could not be read: {e:#}"));
+                false
+            }
+        };
+        completed
+            || closing.iter().any(|c| {
+                crate::pr_ship::extract_authorship_spec_ids_from_subject(&c.subject)
+                    .iter()
+                    .any(|named| named == id)
+            })
+    });
     let outcome = match (confirmed, rerun_green) {
         (true, _) if reverted => "reverted",
         (false, true) => "flake",
         (false, false) | (true, true) => "cleared",
-        (true, false) => "fixed",
+        (true, false) if attributed => "fixed",
+        (true, false) => "unattributed",
     };
     let minutes = (now - episode.opened_at).num_minutes();
     let mut body = format!(
@@ -1183,25 +1223,92 @@ pub(crate) fn status_line(root: &Path) -> Result<String> {
 /// `aida dev build` saw the build of `sha` fail its smoke test: when `sha`
 /// belongs to the open episode, record it as a revert trigger. Never waits
 /// on a running pass for long: a busy watch is reported, not awaited.
-pub(crate) fn note_smoke_failure(root: &Path, sha: &str) -> Result<bool> {
+pub(crate) fn note_smoke_failure(root: &Path, sha: &str) -> Result<SmokeNote> {
     if !root.join(STATE).exists() {
-        return Ok(false);
+        return Ok(SmokeNote::NoWatch);
     }
     let Some(_lock) = try_lock(root, std::time::Duration::ZERO)? else {
-        anyhow::bail!("the red-main watch is busy; the smoke failure of {sha} was not recorded");
+        // Never wait on a running pass: keep the evidence for its next one.
+        let mut spool = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(root.join(SMOKE_SPOOL))
+            .with_context(|| format!("opening {SMOKE_SPOOL}"))?;
+        spool.write_all(format!("{sha}\t{}\n", Utc::now().to_rfc3339()).as_bytes())?;
+        spool.sync_data()?;
+        return Ok(SmokeNote::Spooled);
     };
     let mut state = read_state(root)?;
+    if apply_smoke(&mut state, sha) {
+        write_state(root, &state)?;
+        return Ok(SmokeNote::Recorded);
+    }
+    Ok(SmokeNote::NotInEpisode)
+}
+
+/// What [`note_smoke_failure`] did with a smoke failure.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SmokeNote {
+    /// Recorded on the open episode.
+    Recorded,
+    /// The watch was busy: kept in the spool for its next pass.
+    Spooled,
+    /// No open episode has this commit.
+    NotInEpisode,
+    /// The watch has never run here.
+    NoWatch,
+}
+
+/// Record a smoke failure on the open episode when `sha` belongs to it.
+fn apply_smoke(state: &mut State, sha: &str) -> bool {
     let Some(episode) = state.episode.as_mut() else {
-        return Ok(false);
+        return false;
     };
     if episode.red_sha != sha && !episode.red_merges.iter().any(|s| s == sha) {
-        return Ok(false);
+        return false;
     }
     if episode.smoke_failed.is_none() {
         episode.smoke_failed = Some(sha.to_string());
-        write_state(root, &state)?;
     }
-    Ok(true)
+    true
+}
+
+/// Apply the smoke failures spooled while the watch was busy. An entry for
+/// a commit outside the open episode is kept for a day, in case its episode
+/// opens later.
+fn replay_smoke_spool(root: &Path, state: &mut State, now: DateTime<Utc>) -> Result<()> {
+    let path = root.join(SMOKE_SPOOL);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e).with_context(|| format!("reading {SMOKE_SPOOL}")),
+    };
+    let mut kept = String::new();
+    let mut applied = false;
+    for line in text.lines() {
+        let Some((sha, at)) = line.split_once('\t') else {
+            continue;
+        };
+        if apply_smoke(state, sha) {
+            applied = true;
+            continue;
+        }
+        let fresh = DateTime::parse_from_rfc3339(at)
+            .is_ok_and(|at| now - at.with_timezone(&Utc) < Duration::hours(24));
+        if fresh {
+            kept.push_str(line);
+            kept.push('\n');
+        }
+    }
+    if applied {
+        write_state(root, state)?;
+    }
+    if kept.is_empty() {
+        std::fs::remove_file(&path).with_context(|| format!("removing {SMOKE_SPOOL}"))?;
+    } else {
+        std::fs::write(&path, kept).with_context(|| format!("writing {SMOKE_SPOOL}"))?;
+    }
+    Ok(())
 }
 
 /// The red-main block of `aida land metrics` for `[since, until)`. Only what

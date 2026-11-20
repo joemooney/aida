@@ -583,6 +583,17 @@ pub(crate) fn github_run_job_failed_steps(
     job: &str,
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<Vec<String>> {
+    failed_steps_of(&github_run_jobs(repo, run, api)?, job)
+}
+
+/// GitHub: every job of workflow run `run` (its latest attempt), read page
+/// by page; `Err` when a page cannot be read or the listing is incomplete.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn github_run_jobs(
+    repo: &str,
+    run: &str,
+    api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
+) -> Result<Vec<serde_json::Value>> {
     anyhow::ensure!(
         !run.is_empty() && run.bytes().all(|b| b.is_ascii_digit()),
         "invalid CI run id `{run}`"
@@ -616,7 +627,7 @@ pub(crate) fn github_run_job_failed_steps(
                 "workflow run {run} listed {} of {count} jobs; the listing is incomplete",
                 jobs.len()
             );
-            return failed_steps_of(&jobs, job);
+            return Ok(jobs);
         }
     }
     anyhow::bail!("jobs of workflow run {run} exceed {MAX_PAGES} pages")
