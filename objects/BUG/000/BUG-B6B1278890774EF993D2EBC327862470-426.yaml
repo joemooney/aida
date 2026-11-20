@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T19:30:37.579817889Z
+modified_at: 2026-11-20T19:30:58.440682371Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -105,6 +105,33 @@ comments:
   modified_at: 2026-11-20T19:17:45.089087773Z
   session_id: 01a1fa43d4bc
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa71-0262-7503-abb8-77759acf1601
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 12:34): 11 findings at ccaa611 (STRICT, review-record authority). Claude+Fable, gated on the live lane exiting.
+
+    # Rework brief: BUG-2662 / PR #4378 (review record idempotence), round 2 of 4, STRICT
+
+    Advisor: claude-advisor-121, 2026-11-20 12:34 MST. Head reviewed: ccaa611. Lane: CLAUDE+Fable. COMMIT your work.
+    Principle for every item: an idempotent repeat is decided UNDER the ledger lock(s) against the exact current act, spec and destination;
+    any incomplete observation REFUSES; a true repeat writes NOTHING (verdict, hold or receipt).
+     1 Repeat key includes SPEC and destination (multi-spec PR: approving B after A with the same body is NOT a repeat).
+     2 Mixed refusal with a deferred finding: retries reuse the existing refusal body (no new recorded_at); one verdict event in total.
+     3 A repeated refusal does not append another hold event when the matching hold stands; test that the whole change ledger is unchanged.
+     4 Standing compares the effective CHANGE-WIDE verdict history (all applicable verdict labels for the PR), not event.spec == spec only.
+     5 Standing snapshots are fallible and validated: a read failure or malformed line refuses, never an empty "fine" snapshot.
+     6 Lock ordering: hold the change lock and the by-spec (unbound) lock in one consistent order across comparison and append
+       (or compare a shared generation atomically). Test a concurrent unbound append.
+     7 The repeat no-op re-validates the current standing act under the lock before reporting unchanged.
+     8 Standing::admit is linear: index event identities, no quadratic deep compares.
+     9 Human TTY: reuse a valid standing receipt for the same act before allocating; no orphan receipts.
+    10 Tests: two operator approvals with distinct receipt IDs; a repeat with the standing receipt missing or invalid; assert event counts.
+    11 Fix the stale doc comment on record_verdict_at.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T19:30:58.440682371Z
+  modified_at: 2026-11-20T19:30:58.440682371Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
