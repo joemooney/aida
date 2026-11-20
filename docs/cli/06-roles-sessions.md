@@ -1176,8 +1176,11 @@ takes it back while that train is still running.
 
 To keep the loops off admission for longer, for example during a long
 landing session, use `aida advisor loops drain --reason "<why>" --for 2h`
-(default 1h, maximum 24h). Do not signal the worker processes. An unseated
-operator or an advisor with a valid grant can drain. While a drain is
+(default 1h, maximum 24h). Do not signal the worker processes. An advisor
+with a valid grant can drain or resume, and so can an operator at an
+interactive terminal outside any agent session. A process without a grant
+that has no terminal, or that an agent identity, a session id or a headless
+lane marks as AIDA-managed, is refused. While a drain is
 active, both controllers give up their claims at their next pass boundary
 and take no new one. The deputy's supervisor does not restart an exited
 loop worker. Running reviews and trains finish first. `aida advisor loops
@@ -1315,8 +1318,11 @@ hours also apply.
 
 #### Pausing review launches
 
-An unseated operator or an advisor with a valid grant can run
+An advisor with a valid grant, or an operator at an interactive terminal
+outside any agent session, can run
 `aida review watch pause --reason "landing-driver cutover" --for 1h`.
+A process without a grant that has no terminal or belongs to an agent
+session is refused.
 `--for` accepts seconds or a duration such as `30m` or `2h`. The default and
 maximum come from `[review] watch_pause_default` and `[review] watch_pause_max`
 in `.aida/config.toml` (1h and 24h when unset; the maximum cannot exceed 7 days).

@@ -4534,6 +4534,66 @@ fn bug2703_loop_claims(root: &Path) -> Vec<String> {
         .collect()
 }
 
+/// Review round 4, finding 1, at the review-watch pause: the control shares
+/// the loops drain's authority check. Without a grant, a process with no
+/// terminal and a process an agent identity marks as managed can neither
+/// pause nor resume, and the journal is left as it was; the operator at a
+/// terminal outside any agent session can do both.
+// trace:BUG-2703 | ai:claude
+#[test]
+fn bug2703_pause_control_refuses_a_managed_process_without_a_grant() {
+    const REFUSAL: &str = "review-watch pause control requires an advisor grant or an operator at an interactive terminal outside any agent session";
+    let (temp, store) = fixture();
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
+        temp.path(),
+        None,
+        &[
+            ("AIDA_AGENT_NAME", None),
+            ("AIDA_AGENT_TYPE", None),
+            ("AIDA_SESSION_ID", None),
+            ("AIDA_HEADLESS", None),
+        ],
+    );
+    let pause = pause::Control::Pause {
+        reason: "landing-driver cutover".into(),
+        duration: None,
+    };
+    let paused = || {
+        pause::current(&store, chrono::Utc::now())
+            .unwrap()
+            .is_some()
+    };
+    let refused = |what: &str, expect_paused: bool| {
+        for control in [&pause, &pause::Control::Resume] {
+            let error = format!("{:#}", pause::run(&store, control).expect_err(what));
+            assert!(error.contains(REFUSAL), "{what}: {error}");
+            assert_eq!(paused(), expect_paused, "{what}");
+        }
+    };
+    for expect_paused in [false, true] {
+        if expect_paused {
+            // The operator's own pause, which no refused caller may clear.
+            env.set_terminal(true);
+            pause::run(&store, &pause).unwrap();
+            assert!(paused());
+        }
+        env.set_terminal(false);
+        refused("no grant and no terminal", expect_paused);
+        env.set_terminal(true);
+        for (key, value) in [
+            ("AIDA_AGENT_NAME", "claude-implementer"),
+            ("AIDA_AGENT_TYPE", "claude"),
+            ("AIDA_SESSION_ID", "01a1fad87977"),
+        ] {
+            env.set_key(key, value);
+            refused(key, expect_paused);
+            env.unset_key(key);
+        }
+    }
+    pause::run(&store, &pause::Control::Resume).unwrap();
+    assert!(!paused());
+}
+
 // trace:BUG-2703 | ai:claude
 fn bug2703_wait_for(what: &str, mut ready: impl FnMut() -> bool) {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
@@ -4565,10 +4625,11 @@ fn bug2703_ship_gets_admission_while_both_loop_workers_run() {
     let review = {
         let (root, stop) = (root.clone(), stop.clone());
         std::thread::spawn(move || {
+            let store = Store::open(&root, "github:github.com/owner/repo").unwrap();
             let mut claim = None;
             while !stop.load(Ordering::SeqCst) {
                 hold_admission(&root, &mut claim, false).unwrap();
-                idle_yielding(&root, 1, &mut claim).unwrap();
+                idle_yielding(&root, &store, 1, &mut claim).unwrap();
             }
         })
     };
@@ -4608,6 +4669,124 @@ fn bug2703_ship_gets_admission_while_both_loop_workers_run() {
     stop.store(true, Ordering::SeqCst);
     review.join().unwrap();
     train.join().unwrap();
+}
+
+/// Review round 4, AC ac6ca3ea: settlement does not wait for the discovery
+/// interval. A watcher with `--interval 3600` (twenty times the default ship
+/// bound) is in its idle sleep, holding its claim, when a ship arrives. It
+/// yields within a second; the superseding review still in flight exits a
+/// little later, well inside that sleep. The idle watcher settles it on its
+/// own short cadence, so the ship crosses admission within its bound. Before
+/// this, the attempt stayed active until the next pass, an hour away, and
+/// the ship gave up with both workers idle and the review already gone.
+// trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug2703_idle_watcher_with_an_hour_interval_settles_a_review_that_exits() {
+    use std::time::{Duration, Instant};
+    const INTERVAL: u64 = 3600;
+    const BOUND: u64 = 60;
+    assert!(SETTLEMENT_CADENCE_SECS * 4 <= BOUND && BOUND < INTERVAL);
+    let (temp, store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        format!("[admission]\nwait_secs = {BOUND}\n"),
+    )
+    .unwrap();
+    // In flight: a claimed review being superseded, signals already sent.
+    let (process, stdin, exit) = bug2703_review_process();
+    let c = change(4324, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    store
+        .transaction(&c.key(), |state| {
+            let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+            let now = chrono::Utc::now();
+            a.identity = Some(process.clone());
+            a.phase = Phase::Superseding;
+            a.supersede = Some(Supersede {
+                by: format!("{:040x}", 3),
+                requested_at: now,
+                term_at: Some(now),
+                kill_at: Some(now),
+                diagnostic: None,
+            });
+            Ok(())
+        })
+        .unwrap();
+    // The watcher, as its loop runs it after a pass: claim held, then the
+    // idle sleep of a whole discovery interval.
+    let watcher = {
+        let root = root.clone();
+        std::thread::spawn(move || {
+            let store = Store::open(&root, "github:github.com/owner/repo").unwrap();
+            let mut claim = None;
+            assert_eq!(hold_admission(&root, &mut claim, false).unwrap(), None);
+            let started = Instant::now();
+            let result = idle_yielding(&root, &store, INTERVAL, &mut claim);
+            (result, started.elapsed(), claim.is_some())
+        })
+    };
+    let holds = |root: &Path| {
+        bug2703_loop_claims(root)
+            .iter()
+            .any(|p| p == "legacy review-watch")
+    };
+    bug2703_wait_for("the watcher holds its claim", || holds(&root));
+    // Once the watcher has yielded to the ship (its settlement at that
+    // moment finds the review still running), the review exits on its own.
+    let reviewer = {
+        let root = root.clone();
+        let store = Store::open(&root, "github:github.com/owner/repo").unwrap();
+        std::thread::spawn(move || {
+            bug2703_wait_for("the ship registered its intent", || {
+                crate::admission_owner::yield_reason(&root, "legacy review-watch").is_some()
+            });
+            bug2703_wait_for("the watcher yielded", || !holds(&root));
+            std::thread::sleep(Duration::from_millis(1500));
+            let in_flight = store
+                .load()
+                .unwrap()
+                .entries
+                .values()
+                .flat_map(|e| &e.attempts)
+                .all(active);
+            drop(stdin);
+            in_flight
+        })
+    };
+    let started = Instant::now();
+    let ship = crate::admission_owner::ship_admission(&root);
+    let waited = started.elapsed();
+    assert!(reviewer.join().unwrap(), "the review was still in flight");
+    assert!(
+        exit.join().unwrap().success(),
+        "the review was not signalled"
+    );
+    let ship = ship
+        .unwrap_or_else(|error| panic!("refused after {waited:?}: {error:#}"))
+        .expect("a claim of its own");
+    assert!(waited >= Duration::from_millis(1500), "{waited:?}");
+    assert!(waited < Duration::from_secs(BOUND), "{waited:?}");
+    // Only the idle watcher can have settled it: nothing else runs here.
+    let state = store.load().unwrap();
+    assert_eq!(
+        state.entries["PR-4324"].attempts[0].phase,
+        Phase::Superseded
+    );
+    drop(ship);
+    // The watcher is still inside the same idle sleep, without its claim.
+    assert!(!watcher.is_finished());
+    crate::review_watch::stop_test_loops(&root);
+    let (result, idled, claimed) = watcher.join().unwrap();
+    let error = result.expect_err("stopped by the fixture");
+    assert!(
+        format!("{error:#}").contains("test fixture stopped the loop"),
+        "{error:#}"
+    );
+    assert!(idled < Duration::from_secs(INTERVAL), "{idled:?}");
+    assert!(!claimed);
 }
 
 /// AC3 control: a waiting ship never interrupts work in progress. A review

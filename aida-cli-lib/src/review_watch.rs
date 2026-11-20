@@ -2902,13 +2902,13 @@ pub(crate) fn run_with_program(
                 &service::PassCounts::default(),
                 &[format!("admission yielded: {reason}")],
             );
-            idle_yielding(&root, args.interval, &mut admission)?;
+            idle_yielding(&root, &store, args.interval, &mut admission)?;
             continue;
         }
         sweep_on_first_claim(&root, admission.is_some(), &mut swept);
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
-            idle_yielding(&root, args.interval, &mut admission)?;
+            idle_yielding(&root, &store, args.interval, &mut admission)?;
             continue;
         }
         let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
@@ -2922,7 +2922,7 @@ pub(crate) fn run_with_program(
                     &service::PassCounts::default(),
                     &[format!("discovery refused: {error:#}")],
                 );
-                idle_yielding(&root, args.interval, &mut admission)?;
+                idle_yielding(&root, &store, args.interval, &mut admission)?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -3017,7 +3017,7 @@ pub(crate) fn run_with_program(
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
-        idle_yielding(&root, args.interval, &mut admission)?;
+        idle_yielding(&root, &store, args.interval, &mut admission)?;
     }
 }
 
@@ -3121,21 +3121,39 @@ fn hold_admission(
     Ok(None)
 }
 
+/// How often an idle watcher settles prior attempts, whatever its discovery
+/// interval: well inside the default 180-second bound of a waiting ship.
+// trace:BUG-2703 | ai:claude
+const SETTLEMENT_CADENCE_SECS: u64 = 5;
+
 /// Idle between passes, releasing the shared claim within a second of a
-/// waiting land/ship or a drain. No review is launched while idle.
+/// waiting land/ship or a drain. No review is launched while idle, and
+/// nothing is discovered. Settlement does not wait for the next pass: it
+/// runs as soon as the claim is given up and then every
+/// [`SETTLEMENT_CADENCE_SECS`], claim or no claim, so with a long
+/// `--interval` a review whose processes exit during the sleep becomes
+/// quiescent within seconds and a waiting land/ship gets in (review round 4,
+/// AC ac6ca3ea).
 // trace:BUG-2703 | ai:claude
 fn idle_yielding(
     root: &Path,
+    store: &Store,
     seconds: u64,
     admission: &mut Option<crate::admission_owner::Claim>,
 ) -> Result<()> {
-    for _ in 0..seconds {
+    for slice in 1..=seconds {
         service::idle(root, 1)?;
+        let mut yielded = false;
         if admission.is_some() {
             if let Some(reason) = crate::admission_owner::yield_reason(root, ADMISSION_PURPOSE) {
                 admission.take();
+                yielded = true;
                 eprintln!("review-watch: admission yielded: {reason}");
             }
+        }
+        // Not after the last slice: the pass that follows settles anyway.
+        if yielded || (slice < seconds && slice % SETTLEMENT_CADENCE_SECS == 0) {
+            settle_while_yielded(store)?;
         }
     }
     Ok(())

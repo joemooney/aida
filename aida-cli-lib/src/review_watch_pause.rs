@@ -237,8 +237,33 @@ pub(super) fn check_launch(store: &Store) -> Result<()> {
     }
 }
 
-/// The audited actor of a loop control: an advisor grant, or an unseated
-/// operator. Shared by the review-watch pause and the advisor loops drain.
+/// Environment that marks a process as an AIDA-managed session rather than a
+/// person's own shell: a seat, an agent identity, a session, a headless lane.
+// trace:BUG-2703 | ai:claude
+const MANAGED_SESSION_ENV: [&str; 5] = [
+    "AIDA_SESSION_ROLE",
+    "AIDA_AGENT_NAME",
+    "AIDA_AGENT_TYPE",
+    "AIDA_SESSION_ID",
+    "AIDA_HEADLESS",
+];
+
+/// Positive evidence of a human operator, which the absence of a grant and
+/// of a role is not: the process is attached to an interactive terminal
+/// (stdin and stderr, as for a direct seat grant) and nothing in its
+/// environment identifies an AIDA-managed session. A variable that is set at
+/// all counts, whatever its value: unknown is not an operator.
+// trace:BUG-2703 | ai:claude
+fn human_operator(env: &aida_core::exec_context::Environment) -> bool {
+    MANAGED_SESSION_ENV.iter().all(|key| env.get(key).is_none())
+        && crate::gate::kernel_deps::authority_stdin_is_terminal()
+        && crate::gate::kernel_deps::authority_stderr_is_terminal()
+}
+
+/// The audited actor of a loop control: an advisor grant, or a human
+/// operator at a terminal ([`human_operator`]). A managed process without a
+/// grant is neither, and is refused. Shared by the review-watch pause and
+/// the advisor loops drain; both call it under the lock they mutate under.
 // trace:BUG-2703 | ai:claude
 pub(crate) fn control_actor(root: &Path, control: &str) -> Result<String> {
     use crate::gate::seat_authority::{grant_check, GrantCheck};
@@ -247,12 +272,14 @@ pub(crate) fn control_actor(root: &Path, control: &str) -> Result<String> {
         GrantCheck::Valid(grant) if grant.seat == "advisor" => {
             Ok(format!("{} (advisor {})", grant.principal, grant.subject))
         }
-        GrantCheck::Absent if env.get("AIDA_SESSION_ROLE").is_none() => Ok(format!(
+        GrantCheck::Absent if human_operator(&env) => Ok(format!(
             "{} (uid {})",
             crate::gate::kernel_deps::operator_principal_from(&env),
             effective_uid()
         )),
-        _ => anyhow::bail!("{control} requires an advisor grant or an unseated operator"),
+        _ => anyhow::bail!(
+            "{control} requires an advisor grant or an operator at an interactive terminal outside any agent session"
+        ),
     }
 }
 
@@ -292,9 +319,12 @@ pub(super) fn run(store: &Store, control: &Control) -> Result<()> {
         }
         return Ok(());
     }
-    let actor = control_actor(&store.root, "review-watch pause control")?;
     let limits = limits(&store.root)?;
     let _lock = store.dir.lock(LOCK)?;
+    // Authority and the operation time are taken under the lock the journal
+    // is written under, as for the loops drain: a grant revoked during the
+    // wait for it writes nothing. trace:BUG-2703 | ai:claude
+    let actor = control_actor(&store.root, "review-watch pause control")?;
     let message = change_locked(store, control, actor, Utc::now(), limits)?;
     println!("{message}");
     Ok(())

@@ -505,7 +505,9 @@ mod tests {
             drop(held);
             let error = format!("{:#}", waiter.join().unwrap().expect_err("refused"));
             assert!(
-                error.contains("requires an advisor grant or an unseated operator"),
+                error.contains(
+                    "requires an advisor grant or an operator at an interactive terminal"
+                ),
                 "{error}"
             );
             assert_eq!(journal(), before, "the journal changed");
@@ -540,8 +542,10 @@ mod tests {
 
     /// Review round 3, finding 1: the refusal side of the authority gate,
     /// through the real `drain()` and `resume()`. A valid grant for a seat
-    /// other than advisor, a seated session with no grant and an invalid
-    /// grant are all refused, and the journal is left exactly as it was.
+    /// other than advisor, a seated session with no grant, an invalid grant
+    /// and (review round 4, finding 1) a grantless process that is not a
+    /// person at a terminal outside any agent session are all refused, and
+    /// the journal is left exactly as it was.
     /// Each seat grant is asserted Valid first, so only the advisor guard in
     /// `control_actor` can refuse it: accept any seat there, or drop the
     /// call from `drain()` or `resume()`, and this test fails.
@@ -555,7 +559,8 @@ mod tests {
         if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
             return;
         }
-        const REFUSAL: &str = "requires an advisor grant or an unseated operator";
+        const REFUSAL: &str =
+            "requires an advisor grant or an operator at an interactive terminal outside any agent session";
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("repo");
         let home = temp.path().join("home");
@@ -569,6 +574,11 @@ mod tests {
             &[
                 ("HOME", Some(home.to_str().unwrap())),
                 ("AIDA_HOME", Some(home.to_str().unwrap())),
+                // The suite may itself run inside an agent session.
+                ("AIDA_AGENT_NAME", None),
+                ("AIDA_AGENT_TYPE", None),
+                ("AIDA_SESSION_ID", None),
+                ("AIDA_HEADLESS", None),
             ],
         );
         // Mint in the pinned home, as the session's launcher would.
@@ -628,17 +638,44 @@ mod tests {
             refused("invalid grant, seated", &before);
             env.unset_key("AIDA_SESSION_ROLE");
             refused("invalid grant, unseated", &before);
+            // (d) Review round 4, finding 1: no grant and no role is not an
+            // operator. A process with no terminal is refused, and so is
+            // one at a terminal that an agent identity, a session id or a
+            // headless lane marks as AIDA-managed, each on its own.
+            env.unset_key(GRANT_ENV);
+            assert!(matches!(grant_check(&root), GrantCheck::Absent));
+            refused("no grant, no role, no terminal", &before);
+            env.set_terminal(true);
+            for (key, value) in [
+                ("AIDA_AGENT_NAME", "claude-implementer"),
+                ("AIDA_AGENT_TYPE", "claude"),
+                ("AIDA_SESSION_ID", "01a1fad87977"),
+                ("AIDA_HEADLESS", "1"),
+                // Set at all counts: an empty identity is not an operator.
+                ("AIDA_AGENT_TYPE", ""),
+            ] {
+                env.set_key(key, value);
+                refused(&format!("managed process ({key}) without a grant"), &before);
+                env.unset_key(key);
+            }
+            env.set_key("AIDA_SESSION_ROLE", "advisor");
+            refused("seated at a terminal without a grant", &before);
+            env.unset_key("AIDA_SESSION_ROLE");
+            env.set_terminal(false);
             assert_eq!(active(&root).unwrap().is_some(), drained);
         }
         // The same calls succeed with the authority, and name their actor:
-        // the unseated operator resumes, the advisor drains.
+        // the operator at a terminal resumes, the advisor drains.
         env.unset_key(GRANT_ENV);
         env.unset_key("AIDA_SESSION_ROLE");
+        env.set_terminal(true);
         assert_eq!(resume(&root).unwrap(), "Advisor loops drain cleared.");
         assert!(matches!(
             load(&root).unwrap().events.last(),
             Some(Event::Resume { actor, .. }) if actor.contains("(uid ")
         ));
+        // The advisor's grant needs no terminal: its worker has none.
+        env.set_terminal(false);
         env.set_key("AIDA_SESSION_ROLE", "advisor");
         env.set_key(GRANT_ENV, &advisor);
         drain(&root, "land #4324", None).unwrap();

@@ -826,12 +826,29 @@ fn register_intent(
     Ok(IntentGuard(path, deadline.until()))
 }
 
-/// Acquire `mode`, retrying an [`AdmissionBusy`] refusal once a second for up
-/// to `bound`; no attempt starts after the bound has passed. While it waits it registers an intent, so loop controllers
+/// The pause between two admission attempts under `bound`: a tenth of the
+/// bound, from 50 ms up to a second. A one-second bound is polled every
+/// 100 ms, so a holder that leaves just after the waiter registered its
+/// intent is acquired within the bound (review round 4, AC ac336622).
+// trace:BUG-2703 | ai:claude
+fn poll_step(bound: Duration) -> Duration {
+    (bound / 10).clamp(Duration::from_millis(50), Duration::from_secs(1))
+}
+
+/// How close to the bound the last attempt is made, so the refusal names
+/// who holds admission when the wait ends, not who held it a pause earlier.
+// trace:BUG-2703 | ai:claude
+const FINAL_ATTEMPT_MARGIN: Duration = Duration::from_millis(50);
+
+/// Acquire `mode`, retrying an [`AdmissionBusy`] refusal every
+/// [`poll_step`] for up to `bound`; no attempt starts after the bound has
+/// passed, and the last one is made within [`FINAL_ATTEMPT_MARGIN`] of it.
+/// While it waits it registers an intent, so loop controllers
 /// yield their shared claims at their next tick boundary and no new shared
 /// claim starts ahead of it. Running reviews and trains are never cut short:
 /// the quiescence and train checks still refuse until they finish. Giving up
-/// names the holders and the time waited. Any other error refuses at once.
+/// names the current holders and the time waited. Any other error refuses at
+/// once.
 // trace:BUG-2703 | ai:claude
 // Every serializer wait inside (preflight, acquisition, intent registration
 // and cleanup) ends by `deadline`, so a process stalled while holding
@@ -843,6 +860,7 @@ fn acquire_waiting(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -
     } else {
         IntentKind::Train
     };
+    let step = poll_step(deadline.bound);
     let mut intent: Option<IntentGuard> = None;
     loop {
         let error = match acquire_mode(root, purpose, mode, deadline) {
@@ -867,15 +885,29 @@ fn acquire_waiting(root: &Path, purpose: &str, mode: Mode, deadline: Deadline) -
                 register_intent(root, purpose, kind, deadline)
                     .map_err(|error| gave_up(error, deadline))?,
             );
+            // Registration may itself have waited for the serializer up to
+            // the deadline, so the refusal above can be that old. Whatever
+            // is left of the bound, try again at once: the holders may have
+            // changed meanwhile, and no attempt starts once the bound has
+            // passed (review round 4, finding 1).
+            if std::time::Instant::now() >= deadline.until() {
+                return Err(gave_up(error, deadline));
+            }
+            continue;
         }
-        // Measured after registration, which may itself have waited for the
-        // serializer up to the deadline: the pause before the next attempt
-        // is what is left of the bound now, and no attempt starts once the
-        // bound has passed (review round 4, finding 1).
+        // Measured now, never from before an attempt or a registration. The
+        // pauses are short enough that even a one-second bound is retried
+        // several times, and the last attempt lands just before the bound.
         let remaining = deadline
             .until()
             .saturating_duration_since(std::time::Instant::now());
-        std::thread::sleep(remaining.min(Duration::from_secs(1)));
+        if remaining <= FINAL_ATTEMPT_MARGIN {
+            // That was the last attempt: its refusal names the holders as
+            // the bound runs out.
+            std::thread::sleep(remaining);
+            return Err(gave_up(error, deadline));
+        }
+        std::thread::sleep(step.min(remaining - FINAL_ATTEMPT_MARGIN));
         if std::time::Instant::now() >= deadline.until() {
             return Err(gave_up(error, deadline));
         }
@@ -1118,6 +1150,101 @@ mod tests {
         .unwrap();
         assert!(!error.to_string().contains("gave up"));
         assert!(error.to_string().contains("purpose legacy review-watch"));
+    }
+
+    fn one_second_bound(root: &Path) {
+        std::fs::create_dir_all(root.join(".aida")).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[admission]\nwait_secs = 1\n",
+        )
+        .unwrap();
+    }
+
+    /// Review round 4, AC ac336622: the shortest positive bound is still
+    /// retried. With `wait_secs = 1` the only holder gives its claim up
+    /// shortly after the ship registered its intent; the ship takes
+    /// admission within that same second instead of sleeping the bound out.
+    // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
+    #[test]
+    fn bug2703_one_second_bound_acquires_a_holder_released_after_registration() {
+        assert_eq!(
+            poll_step(Duration::from_secs(1)),
+            Duration::from_millis(100)
+        );
+        assert_eq!(poll_step(Duration::from_secs(180)), Duration::from_secs(1));
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().to_path_buf();
+        one_second_bound(&root);
+        let watcher = acquire(&root, "legacy review-watch", true).unwrap();
+        let (registered, wait_registered) = std::sync::mpsc::channel::<()>();
+        let holder = {
+            let root = root.clone();
+            std::thread::spawn(move || {
+                // The first refusal has been reported; wait for the intent
+                // itself, let the waiter's immediate retry be refused too,
+                // then yield as a controller does at its tick boundary.
+                wait_registered.recv().unwrap();
+                let limit = std::time::Instant::now() + Duration::from_secs(10);
+                while intent_files(&root) == 0 {
+                    assert!(std::time::Instant::now() < limit, "no intent registered");
+                    std::thread::sleep(Duration::from_millis(5));
+                }
+                std::thread::sleep(Duration::from_millis(150));
+                drop(watcher);
+            })
+        };
+        BEFORE_INTENT.with(|cell| {
+            *cell.borrow_mut() = Some(Box::new(move || registered.send(()).unwrap()));
+        });
+        let started = std::time::Instant::now();
+        let result = ship_admission(&root);
+        let waited = started.elapsed();
+        holder.join().unwrap();
+        let claim = result
+            .unwrap_or_else(|error| panic!("refused after {waited:?}: {error:#}"))
+            .expect("a claim of its own");
+        assert!(waited < Duration::from_secs(1), "{waited:?}");
+        assert_eq!(intent_files(&root), 0, "the intent is removed");
+        assert!(acquire(&root, "legacy review-watch", true).is_err());
+        drop(claim);
+    }
+
+    /// The same bound, when the holders change during the wait: the refusal
+    /// names who holds admission as the bound runs out, never the holder
+    /// that was there for the first attempt and has since left. The hard
+    /// deadline stands: it gives up at one second.
+    // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
+    #[test]
+    fn bug2703_one_second_bound_refusal_names_the_current_holder() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().to_path_buf();
+        one_second_bound(&root);
+        let watcher = acquire(&root, "legacy review-watch", true).unwrap();
+        let land = std::rc::Rc::new(std::cell::RefCell::new(None));
+        BEFORE_INTENT.with(|cell| {
+            let (root, land) = (root.clone(), land.clone());
+            *cell.borrow_mut() = Some(Box::new(move || {
+                // After the first refusal, which named the watcher: the
+                // watcher leaves and a land takes the exclusive mode.
+                drop(watcher);
+                *land.borrow_mut() = Some(acquire(&root, "land run", false).unwrap());
+            }));
+        });
+        let started = std::time::Instant::now();
+        let error = ship_admission(&root).err().expect("refused at the bound");
+        let waited = started.elapsed();
+        assert!(waited >= Duration::from_secs(1), "{waited:?}");
+        assert!(waited < Duration::from_secs(15), "{waited:?}");
+        assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error:#}");
+        let text = error.to_string();
+        assert!(text.contains("purpose land run"), "{text}");
+        assert!(!text.contains("legacy review-watch"), "{text}");
+        assert!(text.contains("s (bound 1s, "), "{text}");
+        assert_eq!(intent_files(&root), 0);
+        assert!(land.borrow().is_some());
     }
 
     /// A waiting manual train asks only the auto-train to yield; review
