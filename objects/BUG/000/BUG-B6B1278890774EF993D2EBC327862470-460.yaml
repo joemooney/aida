@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T02:17:58.408671478Z
+modified_at: 2026-11-20T02:26:02.678190385Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1020,6 +1020,27 @@ comments:
   modified_at: 2026-11-20T02:17:58.408671478Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6c6-7136-7881-802d-babc12554587
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9b545c9671 (fresh branch bug-2696-d3 from origin/main 6ff4b5c; D3 reopen only).
+
+    Root cause (answers advisor-121 18:10 (a)/(b)): TASK-3821 r2 was a Claude standalone lane. host_publishes_implementer() is true only for contained Codex, so the child ran `git push origin HEAD:<branch>` itself (seen in its headless log). The host then took the self-published branch (standalone_implementer.rs, lane_fast_gate::pushed, which printed fast_gate=pass) and never called publish_queue_exit / run_from_with_reconciliation, so mark_done_after_push never ran. completes_spec was not the cause: the subject '(TASK-3821)' completes and the spec has no Parent children.
+
+    Fix: ship_from_seat::mark_done_after_self_published_round, called at all three self-published exits (standalone implementer, queue resume in queue_cmd/work.rs, drain lane in session/headless.rs) after the fast gate settles. Fail closed unless: clean exit; no host or seat punt/hold (an unreadable signal counts as a veto); fast gate not failed; known launch head; this run pushed (SeatState::pushed_since(launch head)); host fetch of origin/<branch> equals the pushed head. It then uses the existing mark_done_after_confirmed_push (subject trailer, slice graph re-read under the writer lock, shared-store push).
+
+    - AC1 [evidence: behavioral-test]: bug_2696_self_published_lane_completing_push_sets_done drives the REAL standalone runner (run_for_test, the function aida queue work launches) with a mock Claude child that commits and pushes itself. Completing push from InProgress -> Done; rework round from Approved -> Done; (Refs) push and a no-new-push round (origin already at an earlier completing tip) stay InProgress. Pass, 4/4 cases.
+    - A2 fail-closed [evidence: behavioral-test]: bug_2696_self_published_done_fails_closed covers unknown launch head, failed exit and hold, plus a positive control. Pass.
+    - Regression: 77 tests matching bug_2696|bug_2607|task_2902|bug_2488|bug_2648 pass.
+    - Gates: make check-ci-fast exit 0 via lane job j20261120T020855313-5-0. Two real findings were fixed on the way: a /bin/sh Command in the test (portability ratchet) and mock git without maintenance.auto=false (git maintenance ratchet). check-store-writers.py: reconciled, no new sinks.
+
+    Not touched: D4/landing, other ACs.
+    Residual risks: (1) a lane whose last commit is a merge of main gets that merge's subject from publication_subject. That subject has no trailer, so the round does not complete (fail-closed, pre-existing F2 behaviour). (2) Self-pushed Done adds up to two 20s-bounded origin calls at lane exit, only when the run pushed. (3) Clippy was not run locally; CI covers it.
+  created_at: 2026-11-20T02:26:02.678190385Z
+  modified_at: 2026-11-20T02:26:02.678190385Z
+  session_id: 01a1f691de2e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
