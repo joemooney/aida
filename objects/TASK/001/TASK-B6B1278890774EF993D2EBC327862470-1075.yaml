@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-20T11:02:03.267424193Z
+modified_at: 2026-11-20T11:24:07.337440064Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -599,6 +599,13 @@ comments:
   created_at: 2026-11-20T11:02:03.267424193Z
   modified_at: 2026-11-20T11:02:03.267424193Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f8b3-4059-7770-acfa-0b2181804198
+  author: joe
+  content: 'Product 04:24: the b41fd68 main rerun (run 44717407861, attempt 2) is GREEN, so task_3792_train_check_bounds_discovery_and_member_subprocesses (''fetch: timed-out descendant still running'', story_2824_train_check_tests.rs:638) was a flake. No fix-forward yet. Per advisor 04:02, a recurrence triggers a test-only codex fix with a bounded wait for descendant exit.'
+  created_at: 2026-11-20T11:24:07.337440064Z
+  modified_at: 2026-11-20T11:24:07.337440064Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f5-9672-7fb2-bcf3-1b9adda64aa2
