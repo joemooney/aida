@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T23:42:57.009952410Z
+modified_at: 2026-11-20T23:43:12.001242012Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -695,6 +695,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2629 AC1 passes by the five-second named progress notices, and AC2 passes for implementer rework because track admission precedes review I/O. AC3 remains partial: the 1,100-ledger tests bound payload reads but miss quadratic binding-directory scans on a healthy spec with many related changes. Recovery can also let refused evidence decide rework admission. Reviewed the landed tree against pinned main 29e77b852369. None of the findings depends on the intervening base change. Fast gates passed, CI pending at review time. Source and existing CI evidence only.. No triage reason was given.'
   created_at: 2026-11-20T23:42:57.009944979Z
   modified_at: 2026-11-20T23:42:57.009944979Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb57-b5ea-70c2-8a84-739028256670
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2629):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: fb1e88018a70
+    Recorded: 2026-11-20T23:40:07.543316873+00:00
+    Findings:
+    1. aida-cli-lib/src/queue_cmd/rework_bindings.rs:783 — BUG-2629 AC3 still fails on a healthy spec with many fingerprinted change reviews. Each ownership_checked call opens checked::discover again. Reusing its inventory invokes Inventory::current, which lists the spec’s bindings and stats every folded change. N target changes therefore cause quadratic filesystem work even when byte counters stay low. Reuse one Discovery across the batch and bound directory-entry visits in a healthy many-target regression.
+    2. aida-cli-lib/src/queue_cmd/rework_bindings.rs:406 — Recovery treats any deserializable GateEvent as belonging to the ledger being read. The strict reader checks the physical change key, supported version and advancing sequence. A misplaced later phase-3 record that strict discovery refused can therefore answer for this change during recovery and clear its wait or supply actionable findings. Validate the envelope against the source before judging any round, and refuse unknown evidence by name.
+    3. aida-cli-lib/src/queue_cmd/rework_bindings.rs:227 — ReadBudget::read follows symlinks through metadata and File::open, so a path rejected by strict discovery can supply authoritative findings during recovery. The check and blocking open are also separate, allowing a replaced FIFO to stall the command. Use the ledger reader’s pinned directory and no-follow, nonblocking open discipline and refuse invalid handles.
+    4. aida-cli-lib/src/queue_cmd/rework_bindings.rs:518 — A syntactically valid verdict event can contain a record missing its verdict field. That round can be ownership_free and newest, but settle maps its parse failure to Standing::Nothing. In recovery this can discard an earlier WAITING round and let queue rework proceed on Unavailable. Treat an unreadable verdict payload as unknown and retain any identifiable open wait.
+    5. aida-cli-lib/src/queue_cmd/rework_bindings.rs:543 — The legacy byte budget is debited only when checked_legacy_record returns a parsed verdict. Malformed or invalid-UTF-8 legacy files can each consume the full remaining allowance and recovery continues to other keys with that allowance intact. Charge bytes as consumed, including failed parses, or stop the pass on a read whose consumption cannot be accounted for.
+    6. aida-cli-lib/src/queue_cmd/rework_bindings.rs:256 — The fallback enforces a byte ceiling but omits the existing 200,000-attempt ceiling. parse_ledger tries every nonblank line and retains every failed line. Many short malformed lines can force millions of parses and a large vector even within the byte limit. Share an attempt counter across the fallback pass and refuse when it runs out.
+    7. aida-cli-lib/src/tests/queue_work_tests.rs:5114 — The lock-contention regression calls refuse_waiting_pickup directly. A caller that starts holding store-write.lock across that call would still pass this test, even though that is the reported headless queue work failure. Drive the production pickup entry or the caller that owns the lock lifetime while the contention probe is installed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T23:43:11.850305782Z
+  modified_at: 2026-11-20T23:43:11.850305782Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
