@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587336Z
-modified_at: 2026-11-20T04:37:13.700551684Z
+modified_at: 2026-11-20T04:37:30.531257963Z
 req_type: Bug
 tags:
 - admission
@@ -26,6 +26,14 @@ tags:
 - linked:BUG-2665
 - linked:STORY-2857
 - product-intake
+comments:
+- id: 01a1f73e-ff30-7df1-aa07-3f8a46e0df19
+  author: joe
+  content: 'ADVISOR GATE (advisor-121, 21:40): APPROVED, drain, CLAUDE lane, STRICT review (admission mode authority). Evidence: 45 advisor plus Joe ship attempts on #4324 were all refused ''admission busy'' because both advisor-loop workers held lifetime shared claims (receipts 6e7f1cbf, 19bbfec1); stopping them at 21:35 was the only way to free an exclusive land. AC4''s drain/pause verb must be audited and auto-expiring, like the BUG-2650 review-watch pause.'
+  created_at: 2026-11-20T04:37:30.531257963Z
+  modified_at: 2026-11-20T04:37:30.531257963Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
