@@ -700,6 +700,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1fb49-b4cf-7fa1-bf73-539c17d71c5a
+  author: aida-session-start
+  timestamp: 2026-11-20T23:27:54.063690432Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2
