@@ -291,19 +291,19 @@ fn no_cleanup_skips_the_post_merge_reap_and_pruning() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-033.acac633f | ai:claude
 #[test]
 fn merge_result_prints_before_post_merge_cleanup() {
-    let source = include_str!("../pr_cmd.rs");
+    let source = include_str!("../pr_cmd/mod.rs");
     let body_start = source
         .find("pub(crate) fn pr_ship_with_method_and_dispatch_ctx(")
         .expect("ship body");
-    let body = &source[body_start..];
+    let body = source[body_start..].split("\n}\n").next().unwrap();
     let merged_line = body
         .find("\"  {} merged PR-{}\"")
         .expect("step-3 merge line");
-    let cleanup = body
-        .find("run_post_merge_worktree_gc(")
-        .expect("step-6 cleanup call");
-    assert!(
-        merged_line < cleanup,
-        "the merge result must print before post-merge cleanup starts"
-    );
+    for call in ["run_ship_cleanup_attended(", "run_ship_cleanup_command("] {
+        let cleanup = body.find(call).expect("step-6 cleanup worker launch");
+        assert!(
+            merged_line < cleanup,
+            "the merge result must print before post-merge cleanup starts"
+        );
+    }
 }
