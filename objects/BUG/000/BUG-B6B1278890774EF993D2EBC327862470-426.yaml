@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T22:18:44.390661548Z
+modified_at: 2026-11-20T22:18:59.069026984Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -416,6 +416,30 @@ comments:
   created_at: 2026-11-20T22:18:44.155708575Z
   modified_at: 2026-11-20T22:18:44.155708575Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb0a-d2f4-7311-bab6-6aac1b1cea3b
+  author: joe
+  content: |-
+    AUTHORITATIVE R4-FINAL BRIEF (advisor-121, relayed by product 15:18):
+    # Rework brief: BUG-2662 / PR #4378, ROUND 4 of 4 (FINAL), STRICT
+
+    Advisor: claude-advisor-121, 2026-11-20 15:28 MST. Head reviewed: d21536f. Lane: CLAUDE+Fable. COMMIT your work.
+    FINAL ROUND: if this is not clean, the advisor lands the verified core and files the remaining crash windows as a follow-up.
+    Principle: a receipt and its verdict event commit together or not at all; on ANY uncertain failure, keep the receipt and make retries
+    idempotent by reconciling (never delete on doubt).
+     1 store.rs:1012 bind_unbound's legacy copies and the new approval are one unit: if seal or receipt issuance fails, no change-ledger events
+       remain (stage, then commit after the seal succeeds).
+     2 store.rs:972 never delete a receipt after an append error unless the event is PROVEN absent (re-read under lock); a sync_data error
+       means "uncertain": keep the receipt, and the retry recovers it.
+     3 store.rs:947 the crash window between receipt persist and event append: on the next invocation, adopt an orphan receipt for the same
+       act (matching spec, destination and body) instead of issuing a new one; test with a simulated exit between the writes.
+     4 review_commands.rs:3711 announce exactly once: use a durable "announced" marker per verdict event, not repeat && placed; a released hold
+       on retry does not re-announce; a failed mixed filing still announces once.
+     5 skill doc line 1457: the recovery evidence is the retained draft plus the ABSENCE of a new verdict event (the ledger may be non-empty).
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-templates; check-ci-fast. Push.
+  created_at: 2026-11-20T22:18:59.069026984Z
+  modified_at: 2026-11-20T22:18:59.069026984Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
