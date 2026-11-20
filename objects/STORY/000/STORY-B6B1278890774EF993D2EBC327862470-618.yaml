@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T23:18:16.777611331Z
+modified_at: 2026-11-20T23:31:49.489985978Z
 req_type: Story
 tags:
 - area:ci
@@ -522,6 +522,26 @@ comments:
   modified_at: 2026-11-20T23:15:32.863725857Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb4d-4c72-7d61-9903-84a1330aac80
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1a5f69f0ae (round 3 of 4, PR #4377, Refs slice; routing stays off).
+
+    Round-3 follow-ups:
+    1. pr_train.rs train_infrastructure_failure lists 'Adopt host-prepared exact source' and 'Verify self-hosted cargo-nextest location'; bug2671 test asserts InfraRed for each.
+    2. ci.yml nextest check resolves as cargo does: CARGO_HOME/bin first, then PATH. Three new fixture cases (seeded copy behind install-action on PATH, seeded copy off PATH, only copy off PATH) are refused; they passed the old check. Runbook wording updated.
+    3. Adopt refusal fixture gains: foreign rustc, cargo printing no version, cargo failing, unreadable index (cannot compare), report surviving clearing. The original review text was not available in the lane; I chose the cases by enumerating the step's 14 refuse sites, and the test now fails if any refusal has no case.
+    4. GITHUB_PATH removed from SELF_HOSTED_ONLY_VARIABLES; no step references it.
+    5. PR body updated: Train/ residual removed, per-class labels, operator notes.
+
+    Evidence: tests.test_self_hosted_runner.Routing + tests.test_gdma_ci 49 pass; cargo test bug2671 pass; aida-ci-guards 51 pass; fast gates one by one 45/48 (store-writer inventory passes, no new writer site). Not green in lane: Store mutation channel and the 16 tests.test_dell1_controller errors (AF_UNIX denied by the seat, unchanged from the parent), Containment conformance timed out at the 60 s cap; check-ratchets cargo groups not run.
+
+    Probes: refusal paths fail closed (a directory or dangling link at CARGO_HOME/bin/cargo-nextest is refused); no test weakened. Residual: ci.yml bytes changed again, so workflow_sha256 must be re-pinned after merge; runner-side behaviour (label dispatch, install directory, artifact upload through the link) still needs the runbook acceptance checks.
+  created_at: 2026-11-20T23:31:49.489985978Z
+  modified_at: 2026-11-20T23:31:49.489985978Z
+  session_id: 01a1fb40b082
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe

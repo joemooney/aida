@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T22:50:42.423159683Z
+modified_at: 2026-11-20T23:31:42.766011832Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -633,6 +633,39 @@ comments:
   modified_at: 2026-11-20T22:51:02.888859587Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb4d-322e-70d1-a422-b2c1601dc9ed
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fb1e88018a (round 5 of PR #4380; diff origin/main...HEAD)
+
+    Acceptance evidence
+    - AC1 [evidence: behavioral-test] bug_2629_a_slow_rework_phase_names_itself; bug_2629_rework_scan_is_bounded_on_a_ledger_of_over_1000_changes (batch read 60 KB of a 3.3 MB corpus, ~25 ms).
+    - AC2 [evidence: behavioral-test] bug_2629_track_refusal_precedes_any_gate_ledger_read.
+    - AC3 [evidence: behavioral-test] the 1100-ledger corpus tests. Bounds changed this round: a refused lost-binding read is now followed by one label pass, so a failed resolution reads about 2x the corpus (was 1x), asserted < 3x; never per key.
+
+    Round-5 findings
+    1. Refused/malformed legacy file is unknown: bug_2629_a_refused_legacy_file_is_unknown_not_absent (malformed and symlinked; with and without a wait).
+    2. Failed lost-binding scan falls back to one bounded label pass or refuses: bug_2629_a_refused_lost_binding_read_still_finds_the_waiting_change.
+    3. Unlistable directory / unreadable ledger refuse; only a proved-absent directory is empty: bug_2629_the_label_pass_refuses_what_it_cannot_inspect, bug_2629_an_unreadable_ledger_of_the_spec_refuses.
+    4. Reads capped on the open handle; legacy reads, signed bodies and kept findings charged to one budget: bug_2629_legacy_records_and_kept_findings_spend_the_recovery_budget, bug_2629_a_read_is_capped_at_the_remaining_budget.
+    5. Unverifiable publication is an error, not a signed request-changes: bug_2629_only_a_verified_publication_takes_signed_precedence (stubbed publication) and the real signing fixture in bug_2629_signed_approval_supersedes_a_withheld_raw_wait (committed symlink receipt; the raw wait refuses again).
+    6. Unbound review deduplicated only against a bound copy that answers without an ownership index: bug_2629_an_unbound_review_outlives_its_withheld_bound_copy.
+    7. resolve_rework_findings removed from the gate fixture; check-gate-dependencies.py --base origin/main: 150 edges, zero additions.
+    8. bug_2629_pickup_discovery_leaves_the_store_write_lock_to_other_writers: refuse_waiting_pickup on a spec with 2 bound PRs x 4 rounds; at every ledger step a foreign file description takes store-write.lock with LOCK_NB, healthy and recovery paths, with a negative control.
+
+    Probe findings / residual risks
+    - Finding 8: on this head nothing between handle_queue_work entry and pickup admission takes the store write lock (read of work.rs 4558-5510), so the holder in the 15:37 incident on main was not identified here. The test proves admission itself runs lock-free; it does not drive the whole handle_queue_work.
+    - A line that is not an event is passed over in the wide label pass unless it carries the spec label text (substring match, so BUG-1 also matches a torn BUG-10 line: over-refusal only). In the spec's own ledgers any such line refuses.
+    - Publication reads go through git and are not byte-capped while read; the body is charged before it is kept.
+    - ownership_checked and the hint/binding listing in discover still use the lossy readers shared with main.
+    - Strict tier: every new error path refuses (Waiting); no test weakened or deleted; two corpus-read bounds were raised as stated above.
+
+    Validation: cargo test -p aida-cli-lib --lib (bug_2629 bug_2500 bug_2403 bug_2430 bug_2525 queue_rework_tests review_publication bug_2618): 200 passed. Fast gates run one by one in the sandbox: all green except three that need sockets the sandbox denies (Containment conformance, Store mutation channel, Self-hosted routing: PermissionError) and two that exceed the 60 s call cap (PreCompact hook protocol; ExecContext unittest half, its check-exec-context.py --base origin/main passes).
+  created_at: 2026-11-20T23:31:42.766011832Z
+  modified_at: 2026-11-20T23:31:42.766011832Z
+  session_id: 01a1fb27787b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
