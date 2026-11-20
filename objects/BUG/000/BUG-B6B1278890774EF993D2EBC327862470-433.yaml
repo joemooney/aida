@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T18:39:45.542674942Z
+modified_at: 2026-11-20T18:50:31.476769452Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -50,6 +50,42 @@ comments:
   modified_at: 2026-11-20T18:33:29.470620935Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa4b-b661-7f61-93a6-3940d35488fd
+  author: dirtlab
+  content: |-
+    ## SKETCH (proposed, awaiting advisor signoff): retained-draft recovery after launcher exit
+    Full text: docs/plans/2026-11-20-bug-2669-retained-draft-recovery.md (commit 06d0850cdf on branch bug-b6b1278890774ef993d2ebc327862470-433).
+
+    Shape: recovery is a NEW act by the recovering launcher under its own reviewer delegation, never a continuation of the dead launch. No key copy, no rebinding, no presenting the first launch's grant.
+    1. Launch receipt: before spawn, the launcher writes ~/.aida/review-handoffs/<draft-uuid>.json (beside session-grants; not writable from a lane sandbox): PR, full head, worktree, draft dir dev+inode, routed reviewer session, launcher grant. No secret; not a capability.
+    2. Seal: after the reviewer exits and the draft validates, the draft SHA-256 goes into the receipt before the first record attempt.
+    3. Recovery (needs a live grant delegating reviewer): match receipt, dir identity, digest, current forge head, no newer verdict; mint a fresh reviewer child grant under the recovering launcher; record through the existing record_reviewer_draft path with the receipt's reviewer session as recorder identity (self-review and launcher-overlap checks unchanged); stamp reviewer_draft.recovered; mark consumed; revoke the recovery grant. A fresh grant is required anyway: the ship gate checks the attesting grant was authorized at recorded_at.
+    4. Supersession: a new launch in the worktree first recovers or supersedes earlier drafts, so a later vendor session cannot edit an earlier unsealed draft into an approval.
+    5. Triggers: reviewer launch (recover first, skip the vendor run), teardown/reap, and aida review draft list|recover|discard.
+
+    Decisions needed:
+    D1 unsealed drafts (launcher died while the reviewer ran): (a) recover any verdict automatically [recommended], (b) automatic for non-approvals, operator command for an unsealed approval, (c) never.
+    D2 receipt location: user AIDA home [recommended] or project store (writable from lane sandboxes).
+    D3 automatic recovery only within 24h of the receipt [recommended]; older needs the operator command.
+
+    Slices after signoff: (1) receipt+seal+list, (2) recovery core+supersession+launch trigger (strict-tier review), (3) teardown trigger+commands+docs. Drafts written before slice 1 have no receipt and stay manual.
+  created_at: 2026-11-20T18:50:28.321332025Z
+  modified_at: 2026-11-20T18:50:28.321332025Z
+  session_id: 01a1fa41b63c
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa4b-c2b4-7571-b80f-15e7985accd8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 06d0850cdf. Diff: one test in aida-cli-lib/src/review_draft.rs, one plan doc. No production code changed.
+    Acceptance evidence: (a) design sketch: [evidence: documentation-inspection] docs/plans/2026-11-20-bug-2669-retained-draft-recovery.md; advisor signoff still OUTSTANDING, so the commit is Refs-only. Regression after launcher restart: [evidence: behavioral-test] bug_2669_retained_draft_after_launcher_restart_is_not_recorded_and_stays_retained, 1 passed via lane job (cargo test --profile agent -p aida-cli-lib --lib).
+    Probes: doc claims checked against source (grant_authorized_at at review_authority.rs:1517, validate_child_delegation, unconsumed_draft_retention, MAX_GRANT_AGE 24h). Probe 5: no authority path added or changed; no test weakened. The test simulates the dead launcher by rebinding the child grant to a nonexistent pid, since a real second process is not available in a unit test.
+    Checks: rustfmt clean; check-store-writers pass; doc audience/link/path gates pass. make check-ci-fast could NOT complete in this lane: it stops at 'Containment conformance evidence tests' (AF_UNIX sockets denied by the sandbox, 7 errors unrelated to this diff), so the later fast gates and the ratchet set did not run locally.
+    Residual risk: the design's D1 (unsealed drafts) is the security-relevant choice and needs the advisor ruling.
+  created_at: 2026-11-20T18:50:31.476769452Z
+  modified_at: 2026-11-20T18:50:31.476769452Z
+  session_id: 01a1fa41b63c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe

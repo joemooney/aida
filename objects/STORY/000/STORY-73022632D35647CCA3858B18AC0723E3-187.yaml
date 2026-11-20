@@ -1,0 +1,49 @@
+id: 01a1fa4c-2119-7263-ab3a-89c4710a0b8f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-187
+title: 'Review PR-4376: [AI:claude] docs(review): propose authorized recovery of a retained reviewer draft after launcher exit (Refs BUG-2669)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1fa41`) for branch `bug-b6b1278890774ef993d2ebc327862470-433`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4376>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-433` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - BUG-2669
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4376` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T18:50:55.641507443Z
+modified_at: 2026-11-20T18:51:01.940804105Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: covers
+  target_id: 01a1ec45-5343-7720-a3ac-34f995c661c4
+  created_at: 2026-11-20T18:51:01.940741487Z
+  created_by: dirtlab
+history:
+- id: 01a1fa4c-4222-7410-b8a9-4cf3bef86a52
+  author: dirtlab
+  timestamp: 2026-11-20T18:51:04.098422462Z
+  session_id: 01a1fa41b63c
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 06d0850cdfca3fa6c056a544a13ee8d810c0c478
+  branch: bug-b6b1278890774ef993d2ebc327862470-433
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 58b0869658
+  vendor: claude
+  session: 01a1fa41b63c
+  harness_version: 2.1.319 (Claude Code)
