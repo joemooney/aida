@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T19:14:10.123842826Z
+modified_at: 2026-11-20T19:52:39.513006865Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -140,6 +140,26 @@ comments:
   created_at: 2026-11-20T19:14:10.123838907Z
   modified_at: 2026-11-20T19:14:10.123838907Z
   session_id: 01a1fa41b63c
+- id: 01a1fa84-a559-7a11-b372-f1e9f8a4af77
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: bd0a12f8a3 (slice 1: receipt, seal, `aida review draft list`; Refs-only, recovery not started).
+    Acceptance evidence (slice scope only):
+    - Receipt: [evidence: behavioral-test] review_handoff.rs register/load; tests bug_2669_register_writes_a_private_exclusive_receipt_beside_the_grant_store, bug_2669_only_a_launcher_delegating_reviewer_registers_a_receipt, bug_2669_load_refuses_tampered_misnamed_and_linked_receipts.
+    - Seal: [evidence: behavioral-test] bug_2669_seal_pins_one_digest_and_consumption_closes_the_receipt; end to end through the real headless launch in standalone_review_verdict_structured_child_reaches_parent_canonical_record (receipt consumed, seal digest and launch equal the ledger's reviewer_draft stamp, child grant recorded).
+    - draft list: [evidence: behavioral-test] bug_2669_list_reports_receipts_unreadable_files_and_draft_state; help golden regenerated.
+    - D2 contained lane cannot write a receipt: [evidence: behavioral-test] bug_2669_directory_leaf_refuses_review_handoff_receipts (unit) and bug_2669_contained_lane_cannot_create_or_modify_a_review_handoff_receipt (live bwrap; may have SKIPPED in this lane, where the job itself runs inside bubblewrap; CI's live shard is the evidence).
+    - Pinned regression bug_2669_retained_draft_after_launcher_restart_... unchanged and passing (slice 2 flips it).
+    Run: lane job cargo test --profile agent -p aida-cli-lib --lib -- bug_2669 help_surface_matches_golden_snapshot standalone_review_verdict: 28 passed, 0 failed.
+    Probes: launch id accepted only as canonical draft-<uuid> (traversal, case, missing hyphens refused); receipt read is no-follow, bounded, singly linked, closed schema, version and file-name bound; seal refuses a second digest and any non-open state; exclusive create by hard link (no overwrite, no partial file). Probe 5: no path reads a receipt to grant or record anything in this slice; register returns None without reviewer delegation; receipt write/seal/close failures warn and never turn a refusal into an allow; no test weakened.
+    Added beyond the brief: a 30-day sweep of receipts with no unrecorded draft (one file per review launch would otherwise accumulate), run at registration.
+    Checks: check-store-writers pass (13 new sites classified host_only/read_only); fmt, doc audience, help-golden co-change, trace/doc-header gates pass. NOT run locally: full make check-ci-fast (stops at containment conformance: AF_UNIX denied in this lane), base-dependent ratchets (CI-only env), check-ratchets.
+    Residual risks: draft_status in list is advisory (lstat only). Receipt accumulates for open receipts whose draft stays unrecorded (by design until slice 3 discard).
+  created_at: 2026-11-20T19:52:39.513006865Z
+  modified_at: 2026-11-20T19:52:39.513006865Z
+  session_id: 01a1fa63963c
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
