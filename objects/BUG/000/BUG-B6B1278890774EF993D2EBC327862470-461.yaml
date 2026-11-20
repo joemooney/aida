@@ -2,19 +2,24 @@ id: 01a1f1b7-e797-7202-af83-c100961b85cc
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-461
 agreed_id: BUG-2697
 title: Lease records store the contained sandbox's UTS hostname (e.g. disrad-dvp98b3puw) instead of the host's node identity, so a dell1 lease looks like it came from another machine
-description: |-
+description: |
   Observed 2026-11-18 19:49: TASK-3219 was refused at pickup on dell1 ('canonical branch task-...-878 still has a lease'). The lease .aida/sessions/01a1d2f8893c.toml recorded hostname = "disrad-dvp98b3puw", the UTS hostname of a contained lane sandbox on dell1, not dell1's own identity. The product seat initially read it as a lease from another machine (a work node) and escalated before ending it. Lease ownership and recovery decisions (end-finished, queue recover, cross-host checks) need the real node identity.
 
+  Impact widened 2026-11-19 (product-14; evidence in this spec's comments): the same sandbox host name in SHARED CLAIMS (.aida-store/coordination/leases/*.toml, process_backed=false) stranded four lanes in one day. A lane admission that fails BEFORE the agent spawns (memory floor, repair-journal refusal, dirty-seat force-claim refusal) leaves its shared claim behind. Every later --force-claim on that branch is refused with "holder state Unknown", and in two of four cases `aida doctor heal stale-leases --id shared-<claim>` answered "no eligible stale lease finding", so the advisor had to delete the record by hand with a store commit (STORY-2893 lease 01a1f4f93790, store commit 337e94d; BUG-2650 lease 01a1f5182ee1). BUG-2684 lease 01a1f27828ed was healable. TASK-3801 lease 01a1f2231f02 also blocked both fresh and --resume admission.
+
   Acceptance criteria:
-  1. New leases record the host's node identity (the same identity multinode/remote features use), not the sandbox UTS hostname. Inside a contained sandbox the value is taken from the launcher, not uname. Test: a lease created under a contained launch records the outer host identity.
+  1. New session leases AND shared claims record the host's node identity (the same identity multinode/remote features use), not the sandbox UTS hostname. Inside a contained sandbox the value is taken from the launcher, not uname. Test: a lease and a shared claim created under a contained launch both record the outer host identity.
   2. If the sandbox hostname is kept, it goes in a separate, clearly named field (e.g. sandbox_hostname).
-  3. Existing leases with a sandbox hostname are shown with a note in aida session leases --all (no data rewrite needed).
+  3. A lane admission that fails before the agent spawns releases the shared claim it created in that attempt (it never leaves a process_backed=false claim behind). Test: force a pre-spawn refusal (e.g. memory floor) and assert no shared claim remains for the branch.
+  4. `aida doctor check leases` reports, and `aida doctor heal stale-leases --id shared-<claim> --yes` heals, an expired shared claim (heartbeat + ttl in the past, process_backed=false, holder pid not running) whose recorded host is a sandbox UTS name of THIS node, as well as one recorded with the node identity. Regression test reproducing the 01a1f4f93790 record shape.
+  5. Existing leases and claims with a sandbox hostname are shown with a note in `aida session leases --all` (no data rewrite needed).
+  6. Until this lands, the manual release procedure in the advisor-121 ruling (comment of 2026-11-19 13:38) stays the documented stopgap; remove that note from the lane-host checklist when this ships.
 status: Draft
 priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-19T20:42:00.235397052Z
+modified_at: 2026-11-20T00:59:12.249580307Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -59,6 +64,33 @@ comments:
   modified_at: 2026-11-19T20:42:00.235397052Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+history:
+- id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
+  author: joe
+  timestamp: 2026-11-20T00:59:12.249579861Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: description
+    old_value: |-
+      Observed 2026-11-18 19:49: TASK-3219 was refused at pickup on dell1 ('canonical branch task-...-878 still has a lease'). The lease .aida/sessions/01a1d2f8893c.toml recorded hostname = "disrad-dvp98b3puw", the UTS hostname of a contained lane sandbox on dell1, not dell1's own identity. The product seat initially read it as a lease from another machine (a work node) and escalated before ending it. Lease ownership and recovery decisions (end-finished, queue recover, cross-host checks) need the real node identity.
+
+      Acceptance criteria:
+      1. New leases record the host's node identity (the same identity multinode/remote features use), not the sandbox UTS hostname. Inside a contained sandbox the value is taken from the launcher, not uname. Test: a lease created under a contained launch records the outer host identity.
+      2. If the sandbox hostname is kept, it goes in a separate, clearly named field (e.g. sandbox_hostname).
+      3. Existing leases with a sandbox hostname are shown with a note in aida session leases --all (no data rewrite needed).
+    new_value: |
+      Observed 2026-11-18 19:49: TASK-3219 was refused at pickup on dell1 ('canonical branch task-...-878 still has a lease'). The lease .aida/sessions/01a1d2f8893c.toml recorded hostname = "disrad-dvp98b3puw", the UTS hostname of a contained lane sandbox on dell1, not dell1's own identity. The product seat initially read it as a lease from another machine (a work node) and escalated before ending it. Lease ownership and recovery decisions (end-finished, queue recover, cross-host checks) need the real node identity.
+
+      Impact widened 2026-11-19 (product-14; evidence in this spec's comments): the same sandbox host name in SHARED CLAIMS (.aida-store/coordination/leases/*.toml, process_backed=false) stranded four lanes in one day. A lane admission that fails BEFORE the agent spawns (memory floor, repair-journal refusal, dirty-seat force-claim refusal) leaves its shared claim behind. Every later --force-claim on that branch is refused with "holder state Unknown", and in two of four cases `aida doctor heal stale-leases --id shared-<claim>` answered "no eligible stale lease finding", so the advisor had to delete the record by hand with a store commit (STORY-2893 lease 01a1f4f93790, store commit 337e94d; BUG-2650 lease 01a1f5182ee1). BUG-2684 lease 01a1f27828ed was healable. TASK-3801 lease 01a1f2231f02 also blocked both fresh and --resume admission.
+
+      Acceptance criteria:
+      1. New session leases AND shared claims record the host's node identity (the same identity multinode/remote features use), not the sandbox UTS hostname. Inside a contained sandbox the value is taken from the launcher, not uname. Test: a lease and a shared claim created under a contained launch both record the outer host identity.
+      2. If the sandbox hostname is kept, it goes in a separate, clearly named field (e.g. sandbox_hostname).
+      3. A lane admission that fails before the agent spawns releases the shared claim it created in that attempt (it never leaves a process_backed=false claim behind). Test: force a pre-spawn refusal (e.g. memory floor) and assert no shared claim remains for the branch.
+      4. `aida doctor check leases` reports, and `aida doctor heal stale-leases --id shared-<claim> --yes` heals, an expired shared claim (heartbeat + ttl in the past, process_backed=false, holder pid not running) whose recorded host is a sandbox UTS name of THIS node, as well as one recorded with the node identity. Regression test reproducing the 01a1f4f93790 record shape.
+      5. Existing leases and claims with a sandbox hostname are shown with a note in `aida session leases --all` (no data rewrite needed).
+      6. Until this lands, the manual release procedure in the advisor-121 ruling (comment of 2026-11-19 13:38) stays the documented stopgap; remove that note from the lane-host checklist when this ships.
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
   branch: main
