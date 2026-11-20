@@ -1,5 +1,6 @@
 id: 01a1f76b-23a7-7cb1-8487-529067137cda
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-175
+agreed_id: STORY-2981
 title: 'Review PR-4354: [AI:claude] fix(mandate): promotion branches no longer name a spec in the ship cover (BUG-2702)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f73a`) for branch `bug-b6b1278890774ef993d2ebc327862470-464`.
@@ -47,6 +48,12 @@ history:
   timestamp: 2026-11-20T05:26:06.526698419Z
   session_id: 01a1f73a92b0
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f79a-7eb9-7580-b0a1-dbbb7590df83
+  author: joe
+  timestamp: 2026-11-20T06:17:39.769470669Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: e5faadc10c5156df0b91961aa2da62fc8c7c9e1f
