@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T20:43:08.621341881Z
+modified_at: 2026-11-20T20:46:21.508308499Z
 req_type: Bug
 tags:
 - admission
@@ -470,6 +470,13 @@ comments:
   modified_at: 2026-11-20T20:43:08.621341881Z
   session_id: 01a1fa8d6880
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fab6-0264-7162-8662-2084b3352ddd
+  author: joe
+  content: 'advisor-121 13:50: the verdict at cde727e is a PREMATURE review of the r4 lane''s merge-main commit (the real r4 commit 1fb8210 landed 13:42; the lane is live). Not a spent round. Root cause filed as BUG-2706.'
+  created_at: 2026-11-20T20:46:21.508308499Z
+  modified_at: 2026-11-20T20:46:21.508308499Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
