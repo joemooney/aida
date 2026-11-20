@@ -1,13 +1,22 @@
 //! `aida lane relay`: hand an advisor's brief to an implementer lane on a
 //! lane host, as a rework of an open change or as fresh work.
 //!
-//! The relay posts the brief on the spec as its authoritative round brief
-//! (marking earlier ones superseded), waits until no lane for the spec runs
-//! on the host and the host is above its memory floor, re-checks the change
-//! against the head seen at invocation, then delivers the brief through the
-//! vendor's brief mailbox and starts the lane with that brief named
-//! explicitly. It then watches the lane's admission receipt. Every stop is
-//! typed, written to the spec and mailed to the advisor.
+//! The relay takes the spec's next relay round on the host, posts the brief
+//! on the spec as its authoritative round brief (marking earlier ones
+//! superseded), waits until no lane for the spec runs on the host and the
+//! host is above its memory floor, re-checks the change against the head
+//! seen at invocation, then delivers the brief through the vendor's brief
+//! mailbox and starts the lane with that brief named explicitly. It then
+//! watches the lane's admission receipt. Every stop is typed, written to the
+//! spec and mailed to the advisor.
+//!
+//! Two things keep a stale round from running. A later relay for the same
+//! spec takes a higher round, and every host step of an earlier relay then
+//! stops without launching. The launch itself carries a gate
+//! ([`LaunchGate`], in [`GATE_ENV`]): the launcher re-checks the change's
+//! head after the host admitted it, which can be long after the relay's own
+//! check, and fresh work refuses to continue an open change or an existing
+//! branch.
 //!
 //! The lane-host half (`aida lane relay-host …`) runs in the host's primary
 //! checkout, over SSH or in-process when the lane runs on this machine. The
@@ -24,11 +33,12 @@ use std::time::Duration;
 
 use crate::cli::{RelayArgs, RelayHostCommand};
 
-/// The brief plus its frontmatter must fit a pickup's limit (64 KiB).
-const BRIEF_LIMIT: usize = 60 * 1024;
 /// Consecutive "no lane process and no receipt" observations that mean the
 /// launcher exited without recording an attempt.
 const VANISHED_POLLS: u32 = 3;
+/// Carries a relayed launch's [`LaunchGate`] from the lane host's launch
+/// step to the launcher it starts. It only adds refusals.
+pub(crate) const GATE_ENV: &str = "AIDA_LANE_RELAY_GATE";
 const DEFAULT_LAUNCHER: [&str; 8] = [
     "bash",
     "scripts/lane-run.sh",
@@ -201,15 +211,52 @@ pub(crate) enum Mode {
 /// Why a relay did not end in an admitted lane.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Stop {
-    HeadMoved { pr: u64, from: String, to: String },
-    PrNotOpen { pr: u64, state: String },
-    PrUnreadable { pr: u64, why: String },
-    LaneStillRunning { secs: u64 },
-    HostCapacity { secs: u64, why: String },
-    HostUnreachable { secs: u64, why: String },
-    AdmissionRefused { reason: String, detail: String },
-    AdmissionUnconfirmed { secs: u64 },
-    LaunchVanished { log_tail: String },
+    HeadMoved {
+        pr: u64,
+        from: String,
+        to: String,
+    },
+    PrNotOpen {
+        pr: u64,
+        state: String,
+    },
+    PrUnreadable {
+        pr: u64,
+        why: String,
+    },
+    LaneStillRunning {
+        secs: u64,
+    },
+    HostCapacity {
+        secs: u64,
+        why: String,
+    },
+    HostUnreachable {
+        secs: u64,
+        why: String,
+    },
+    /// A later relay for the spec took over on the host.
+    Superseded,
+    /// The launcher's own gate stopped the launch after host admission.
+    GateRefused {
+        code: &'static str,
+        detail: String,
+    },
+    /// A relay step failed; `code` names the step.
+    Failed {
+        code: &'static str,
+        why: String,
+    },
+    AdmissionRefused {
+        reason: String,
+        detail: String,
+    },
+    AdmissionUnconfirmed {
+        secs: u64,
+    },
+    LaunchVanished {
+        log_tail: String,
+    },
 }
 
 fn short(sha: &str) -> &str {
@@ -227,15 +274,19 @@ impl Stop {
             Stop::LaneStillRunning { .. } => "lane-still-running",
             Stop::HostCapacity { .. } => "host-capacity",
             Stop::HostUnreachable { .. } => "host-unreachable",
+            Stop::Superseded => "relay-superseded",
+            Stop::GateRefused { code, .. } | Stop::Failed { code, .. } => *code,
             Stop::AdmissionRefused { .. } => "admission-refused",
             Stop::AdmissionUnconfirmed { .. } => "admission-unconfirmed",
             Stop::LaunchVanished { .. } => "launch-vanished",
         }
     }
 
-    /// Whether the lane was started before the stop. Before that, nothing
-    /// ran and the brief was not delivered.
-    pub(crate) fn launched(&self) -> bool {
+    /// Whether the relayed brief is still the round in force after the stop:
+    /// only when a launcher took it and may yet run it, or was refused for a
+    /// reason a retry of the same round can clear. Every other stop voids
+    /// the brief.
+    pub(crate) fn brief_stays(&self) -> bool {
         matches!(
             self,
             Stop::AdmissionRefused { .. }
@@ -248,6 +299,7 @@ impl Stop {
         match self {
             Stop::AdmissionRefused { .. } => "REFUSED",
             Stop::AdmissionUnconfirmed { .. } | Stop::LaunchVanished { .. } => "UNCONFIRMED",
+            Stop::Failed { .. } => "FAILED",
             _ => "SKIPPED",
         }
     }
@@ -255,7 +307,7 @@ impl Stop {
     fn explain(&self) -> String {
         match self {
             Stop::HeadMoved { pr, from, to } => format!(
-                "PR #{pr} head moved {} -> {} while waiting; the brief targeted the earlier round, so nothing was launched. Re-route needed.",
+                "PR #{pr} head moved {} -> {}; the brief targeted the earlier round, so nothing was launched. Re-route needed.",
                 short(from),
                 short(to)
             ),
@@ -263,7 +315,7 @@ impl Stop {
                 "PR #{pr} is {state}, not OPEN; the rework brief has no round left to run on, so nothing was launched."
             ),
             Stop::PrUnreadable { pr, why } => format!(
-                "PR #{pr} could not be read before the launch ({why}); its head is unverified, so nothing was launched."
+                "PR #{pr} could not be read ({why}); its head is unverified, so nothing was launched."
             ),
             Stop::LaneStillRunning { secs } => format!(
                 "a lane for this spec was still running on the host after {secs}s; nothing was launched."
@@ -273,6 +325,13 @@ impl Stop {
             ),
             Stop::HostUnreachable { secs, why } => format!(
                 "the lane host could not be probed for {secs}s ({why}); nothing was launched."
+            ),
+            Stop::Superseded => "a later relay for this spec took over on the lane host; this one launched nothing.".into(),
+            Stop::GateRefused { detail, .. } => format!(
+                "the launcher stopped after the host admitted it, before any agent started: {detail}"
+            ),
+            Stop::Failed { why, .. } => format!(
+                "{why}. The brief is withdrawn; if the lane host shows a lane for this spec, the launch got through before the failure."
             ),
             Stop::AdmissionRefused { reason, detail } => format!(
                 "the lane host refused the launch before the agent started: {reason}: {detail}"
@@ -309,221 +368,21 @@ pub(crate) enum Outcome {
     Stopped(Stop),
 }
 
-/// The relay's side effects, so tests drive the real flow against a fake
-/// forge, store and clock and a lane host rooted in a temp directory.
-pub(crate) trait World {
+/// Where a head check reads the change and waits between tries.
+pub(crate) trait HeadSource {
     fn pr(&mut self, pr: u64) -> Result<PrView>;
-    /// `(comment id, content)` for each top-level comment on the spec.
-    fn comments(&mut self, spec: &str) -> Result<Vec<(String, String)>>;
-    fn comment_add(&mut self, spec: &str, body: &str) -> Result<()>;
-    fn comment_edit(&mut self, spec: &str, id: &str, body: &str) -> Result<()>;
-    fn store_push(&mut self) -> Result<()>;
-    fn notify_advisor(&mut self, subject: &str, body: &str) -> Result<()>;
-    /// Run one lane-host operation and return its JSON.
-    fn host(&mut self, op: &RelayHostCommand) -> Result<serde_json::Value>;
-    fn sleep(&mut self, duration: Duration);
-    fn log(&mut self, line: &str);
-}
-
-fn read_brief(path: &Path, footer: Option<&str>) -> Result<String> {
-    let mut body = std::fs::read_to_string(path)
-        .with_context(|| format!("cannot read brief {}", path.display()))?;
-    if let Some(footer) = footer.map(str::trim).filter(|f| !f.is_empty()) {
-        if !body.contains(footer) {
-            body = format!("{}\n\n{footer}\n", body.trim_end());
-        }
-    }
-    anyhow::ensure!(
-        !body.trim().is_empty() && !body.contains('\0') && body.len() <= BRIEF_LIMIT,
-        "brief {} must be nonempty text of at most {BRIEF_LIMIT} bytes",
-        path.display()
-    );
-    Ok(body)
-}
-
-fn label_for(args: &RelayArgs, mode: &Mode) -> Result<String> {
-    let label = match &args.label {
-        Some(label) => label.trim().to_ascii_uppercase(),
-        None => match mode {
-            Mode::Rework { .. } => "REWORK".into(),
-            Mode::Fresh => "FRESH".into(),
-        },
-    };
-    anyhow::ensure!(
-        !label.is_empty()
-            && label.len() <= 40
-            && label
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_')),
-        "invalid --label `{label}`: use letters, digits, spaces, `-` and `_`"
-    );
-    Ok(label)
-}
-
-/// Whether a spec comment is a relayed round brief still in force.
-pub(crate) fn is_authoritative_brief(content: &str) -> bool {
-    crate::rework_direction::is_relayed_brief_lead(&crate::rework_direction::lead_line(content))
-}
-
-/// Post the round brief and its pointer comment, marking earlier round
-/// briefs superseded. Returns the new brief comment's id when it can be found.
-fn post_brief(
-    world: &mut dyn World,
-    spec: &str,
-    label: &str,
-    plan: &Plan,
-    mode: &Mode,
-    body: &str,
-) -> Result<Option<String>> {
-    let stamp = Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
-    let mut superseded = 0;
-    for (id, content) in world.comments(spec)? {
-        if is_authoritative_brief(&content) {
-            world.comment_edit(
-                spec,
-                &id,
-                &format!(
-                    "SUPERSEDED by the {label} brief relayed {stamp}. Do not act on this brief.\n\n{content}"
-                ),
-            )?;
-            superseded += 1;
-        }
-    }
-    let target = match mode {
-        Mode::Rework { pr, head, .. } => format!("; PR #{pr} at head {}", short(head)),
-        Mode::Fresh => String::new(),
-    };
-    let heading = format!(
-        "AUTHORITATIVE {label} BRIEF (relayed {stamp}; {} lane on {}{target}):",
-        plan.vendor,
-        plan.host_name()
-    );
-    let brief_comment = format!("{heading}\n{}", body.trim_end());
-    world.comment_add(spec, &brief_comment)?;
-    let branch = match mode {
-        Mode::Rework { branch, .. } => format!(", branch {branch}"),
-        Mode::Fresh => ", fresh work on a new branch".into(),
-    };
-    world.comment_add(
-        spec,
-        &format!(
-            "Lane relay {stamp}: {label} lane queued on {} ({}{branch}). Scope = the AUTHORITATIVE {label} BRIEF in the previous comment{}.",
-            plan.host_name(),
-            plan.vendor,
-            match superseded {
-                0 => String::new(),
-                n => format!("; {n} earlier round brief(s) marked SUPERSEDED"),
-            }
-        ),
-    )?;
-    Ok(world
-        .comments(spec)
-        .ok()
-        .and_then(|all| {
-            all.into_iter()
-                .rev()
-                .find(|(_, content)| content.trim() == brief_comment.trim())
-        })
-        .map(|(id, _)| id))
-}
-
-/// Record a stop where a person will see it: the relay log, the spec and the
-/// advisor's mailbox. A brief that never launched is marked so no later lane
-/// treats it as the round in force. None of this can fail the relay.
-fn report(
-    world: &mut dyn World,
-    spec: &str,
-    label: &str,
-    brief_comment: Option<&str>,
-    stop: &Stop,
-) {
-    let line = stop.line(spec, label);
-    world.log(&line);
-    if !stop.launched() {
-        if let Some(id) = brief_comment {
-            let marked = world.comments(spec).ok().and_then(|all| {
-                let (_, content) = all.into_iter().find(|(cid, _)| cid == id)?;
-                world
-                    .comment_edit(
-                        spec,
-                        id,
-                        &format!(
-                            "SUPERSEDED: not launched ({}). Do not act on this brief.\n\n{content}",
-                            stop.code()
-                        ),
-                    )
-                    .ok()
-            });
-            if marked.is_none() {
-                world.log("warning: could not mark the unlaunched brief comment superseded");
-            }
-        }
-    }
-    if let Err(err) = world.comment_add(spec, &line) {
-        world.log(&format!(
-            "warning: could not record the stop on {spec}: {err:#}"
-        ));
-    }
-    if let Err(err) = world.store_push() {
-        world.log(&format!("warning: store push failed: {err:#}"));
-    }
-    if let Err(err) = world.notify_advisor(
-        &format!("Lane relay {}: {spec} ({})", stop.verdict(), stop.code()),
-        &line,
-    ) {
-        world.log(&format!("warning: could not notify the advisor: {err:#}"));
-    }
-}
-
-/// Wait, bounded, until no lane for the spec runs on the host and the host
-/// is above its memory floor.
-fn wait_for_host(world: &mut dyn World, args: &RelayArgs, spec: &str) -> Option<Stop> {
-    let mut waited = 0;
-    let mut last = String::new();
-    loop {
-        let blocked = match world.host(&RelayHostCommand::Probe { spec: spec.into() }) {
-            Ok(probe) => {
-                // A reply without the field is not evidence the host is idle.
-                if probe["running"].as_bool() != Some(false) {
-                    Stop::LaneStillRunning { secs: waited }
-                } else if let Some(why) = probe["shortfall"].as_str() {
-                    Stop::HostCapacity {
-                        secs: waited,
-                        why: why.into(),
-                    }
-                } else {
-                    return None;
-                }
-            }
-            Err(err) => Stop::HostUnreachable {
-                secs: waited,
-                why: format!("{err:#}"),
-            },
-        };
-        if waited >= args.wait_timeout {
-            return Some(blocked);
-        }
-        if blocked.code() != last {
-            last = blocked.code().into();
-            world.log(&format!(
-                "waiting ({last}) before launching {spec}; checking every {}s for up to {}s",
-                args.poll, args.wait_timeout
-            ));
-        }
-        world.sleep(Duration::from_secs(args.poll));
-        waited += args.poll;
-    }
+    fn pause(&mut self, duration: Duration);
 }
 
 /// The head gate: the change must still be open at the head seen at
 /// invocation. An unreadable change is not a pass.
-fn head_gate(world: &mut dyn World, pr: u64, head: &str) -> Option<Stop> {
+fn head_gate(source: &mut dyn HeadSource, pr: u64, head: &str) -> Option<Stop> {
     let mut error = String::new();
     for attempt in 0..3 {
         if attempt > 0 {
-            world.sleep(Duration::from_secs(5));
+            source.pause(Duration::from_secs(5));
         }
-        match world.pr(pr) {
+        match source.pr(pr) {
             Ok(now) if !now.state.eq_ignore_ascii_case("OPEN") => {
                 return Some(Stop::PrNotOpen {
                     pr,
@@ -544,11 +403,548 @@ fn head_gate(world: &mut dyn World, pr: u64, head: &str) -> Option<Stop> {
     Some(Stop::PrUnreadable { pr, why: error })
 }
 
-fn text(value: &serde_json::Value, key: &str) -> Result<String> {
-    value[key]
+/// A launch the relay's gate stopped, in the launcher, before any agent
+/// started. `code` is recorded as the attempt's reason.
+#[derive(Debug)]
+pub(crate) struct GateRefusal {
+    pub(crate) code: &'static str,
+    pub(crate) detail: String,
+}
+
+impl std::fmt::Display for GateRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "relayed launch stopped ({}): {}", self.code, self.detail)
+    }
+}
+
+impl std::error::Error for GateRefusal {}
+
+/// The reason code of a [`GateRefusal`] anywhere under `error`.
+pub(crate) fn gate_refusal_code(error: &anyhow::Error) -> Option<&'static str> {
+    error.downcast_ref::<GateRefusal>().map(|r| r.code)
+}
+
+/// Reason codes a launcher records for a [`GateRefusal`].
+const GATE_CODES: [&str; 7] = [
+    "head-moved",
+    "pr-merged",
+    "pr-closed",
+    "pr-unreadable",
+    "fresh-blocked",
+    "rework-mismatch",
+    "relay-gate-invalid",
+];
+
+/// What a relayed launch is for, carried to the launcher in [`GATE_ENV`] so
+/// it is enforced where the lane actually starts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum LaunchGate {
+    /// Rework change `pr`, and only while it is open at `head`.
+    Rework { pr: u64, head: String },
+    /// New work: never a continuation of an open change or existing branch.
+    Fresh,
+}
+
+impl LaunchGate {
+    fn of(mode: &Mode) -> Self {
+        match mode {
+            Mode::Rework { pr, head, .. } => LaunchGate::Rework {
+                pr: *pr,
+                head: head.clone(),
+            },
+            Mode::Fresh => LaunchGate::Fresh,
+        }
+    }
+
+    pub(crate) fn encode(&self) -> String {
+        match self {
+            LaunchGate::Rework { pr, head } => format!("rework:{pr}:{head}"),
+            LaunchGate::Fresh => "fresh".into(),
+        }
+    }
+
+    /// A value that is set but unreadable refuses the launch.
+    pub(crate) fn parse(raw: &str) -> Result<Self, GateRefusal> {
+        let parsed = match raw.trim().split(':').collect::<Vec<_>>()[..] {
+            ["fresh"] => Some(LaunchGate::Fresh),
+            ["rework", pr, head] => pr
+                .parse()
+                .ok()
+                .filter(|_| {
+                    (7..=64).contains(&head.len()) && head.bytes().all(|b| b.is_ascii_hexdigit())
+                })
+                .map(|pr| LaunchGate::Rework {
+                    pr,
+                    head: head.into(),
+                }),
+            _ => None,
+        };
+        parsed.ok_or_else(|| GateRefusal {
+            code: "relay-gate-invalid",
+            detail: format!("{GATE_ENV} is set to `{raw}`, which names no relayed launch"),
+        })
+    }
+
+    /// The gate this process was launched under, if any.
+    pub(crate) fn from_env() -> Result<Option<Self>, GateRefusal> {
+        aida_core::exec_context::Environment::capture()
+            .get(GATE_ENV)
+            .map(|raw| Self::parse(&raw.to_string_lossy()))
+            .transpose()
+    }
+
+    /// The routing half, applied once the launcher knows which open change,
+    /// if any, the pickup would continue.
+    pub(crate) fn route(&self, open_change: Option<(u64, &str)>) -> Result<(), GateRefusal> {
+        match (self, open_change) {
+            (LaunchGate::Fresh, Some((pr, branch))) => Err(GateRefusal {
+                code: "fresh-blocked",
+                detail: format!(
+                    "the brief is for fresh work, but the spec has open change #{pr} on `{branch}`; relay it with `--pr {pr}` to rework that change, or close the change first"
+                ),
+            }),
+            (LaunchGate::Rework { pr, .. }, Some((open, branch))) if open != *pr => {
+                Err(GateRefusal {
+                    code: "rework-mismatch",
+                    detail: format!(
+                        "the brief reworks PR #{pr}, but the pickup would continue #{open} on `{branch}`"
+                    ),
+                })
+            }
+            _ => Ok(()),
+        }
+    }
+
+    /// The head half, applied after the host admitted the launch.
+    pub(crate) fn admit(&self, source: &mut dyn HeadSource) -> Result<(), GateRefusal> {
+        let LaunchGate::Rework { pr, head } = self else {
+            return Ok(());
+        };
+        match head_gate(source, *pr, head) {
+            None => Ok(()),
+            Some(stop) => Err(GateRefusal {
+                code: stop.code(),
+                detail: stop.explain(),
+            }),
+        }
+    }
+}
+
+fn forge_pr(root: &Path, pr: u64) -> Result<PrView> {
+    use crate::forge::ChangeState;
+    let change = crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(30), || {
+        crate::forge::forge_for(root).change_metadata(pr, &mut crate::network_retry::NoopSink)
+    })?;
+    Ok(PrView {
+        state: match change.state {
+            ChangeState::Open => "OPEN",
+            ChangeState::Merged => "MERGED",
+            ChangeState::Closed => "CLOSED",
+        }
+        .into(),
+        head: change.head_sha,
+        branch: change.head_ref,
+    })
+}
+
+struct ForgeHead<'a>(&'a Path);
+
+impl HeadSource for ForgeHead<'_> {
+    fn pr(&mut self, pr: u64) -> Result<PrView> {
+        forge_pr(self.0, pr)
+    }
+    fn pause(&mut self, duration: Duration) {
+        std::thread::sleep(duration);
+    }
+}
+
+/// In a launcher, right after the host admitted the launch (which may have
+/// waited for a start slot): a relayed rework goes on only if its change is
+/// still open at the relayed head. Launches the relay did not start pass.
+pub(crate) fn admit_launch(root: &Path) -> Result<()> {
+    if let Some(gate) = LaunchGate::from_env()? {
+        gate.admit(&mut ForgeHead(root))?;
+    }
+    Ok(())
+}
+
+/// In a launcher, once the pickup's open change is known: whether a relayed
+/// launch is fresh work, which must also not resume the spec's own branch.
+pub(crate) fn route_launch(open_change: Option<(u64, &str)>) -> Result<bool> {
+    let gate = LaunchGate::from_env()?;
+    if let Some(gate) = &gate {
+        gate.route(open_change)?;
+    }
+    Ok(gate == Some(LaunchGate::Fresh))
+}
+
+/// The relay's side effects, so tests drive the real flow against a fake
+/// forge, store and clock and a lane host rooted in a temp directory.
+pub(crate) trait World {
+    fn pr(&mut self, pr: u64) -> Result<PrView>;
+    /// `(comment id, content)` for each top-level comment on the spec.
+    fn comments(&mut self, spec: &str) -> Result<Vec<(String, String)>>;
+    fn comment_add(&mut self, spec: &str, body: &str) -> Result<()>;
+    fn comment_edit(&mut self, spec: &str, id: &str, body: &str) -> Result<()>;
+    fn store_push(&mut self) -> Result<()>;
+    fn notify_advisor(&mut self, subject: &str, body: &str) -> Result<()>;
+    /// Run one lane-host operation and return its JSON.
+    fn host(&mut self, op: &RelayHostCommand) -> Result<serde_json::Value>;
+    fn sleep(&mut self, duration: Duration);
+    /// Wall time since the run began, host operations included.
+    fn elapsed(&mut self) -> Duration;
+    fn log(&mut self, line: &str);
+}
+
+struct WorldHead<'a>(&'a mut dyn World);
+
+impl HeadSource for WorldHead<'_> {
+    fn pr(&mut self, pr: u64) -> Result<PrView> {
+        self.0.pr(pr)
+    }
+    fn pause(&mut self, duration: Duration) {
+        self.0.sleep(duration)
+    }
+}
+
+/// A bounded wait measured in wall time.
+struct Deadline {
+    start: Duration,
+    limit: Duration,
+}
+
+impl Deadline {
+    fn new(world: &mut dyn World, secs: u64) -> Self {
+        Self {
+            start: world.elapsed(),
+            limit: Duration::from_secs(secs),
+        }
+    }
+
+    fn spent(&self, world: &mut dyn World) -> Duration {
+        world.elapsed().saturating_sub(self.start)
+    }
+
+    /// Sleep one poll, or less when less is left. `false` once time is up.
+    fn nap(&self, world: &mut dyn World, poll: u64) -> bool {
+        let left = self.limit.saturating_sub(self.spent(world));
+        if left.is_zero() {
+            return false;
+        }
+        world.sleep(left.min(Duration::from_secs(poll)));
+        true
+    }
+}
+
+fn read_brief(path: &Path, footer: Option<&str>) -> Result<String> {
+    let mut body = std::fs::read_to_string(path)
+        .with_context(|| format!("cannot read brief {}", path.display()))?;
+    if let Some(footer) = footer.map(str::trim).filter(|f| !f.is_empty()) {
+        if !body.contains(footer) {
+            body = format!("{}\n\n{footer}\n", body.trim_end());
+        }
+    }
+    Ok(body)
+}
+
+fn file_stamp(now: DateTime<Utc>) -> String {
+    now.format("%Y-%m-%dT%H%M%SZ").to_string()
+}
+
+/// The brief as the lane's pickup reads it: frontmatter plus the indented
+/// body. The pickup's size limit applies to this text, so it is checked
+/// here, on both sides of the relay.
+fn frame_brief(
+    spec: &str,
+    vendor: &str,
+    label: &str,
+    body: &str,
+    now: DateTime<Utc>,
+) -> Result<String> {
+    anyhow::ensure!(
+        !body.trim().is_empty() && !body.contains('\0'),
+        "the brief must be nonempty text"
+    );
+    let framed = format!(
+        "---\nspec_id: {}\nagent: {vendor}\ngenerated_at: {}\ngenerated_by: {}\nnote: |-\n{}---\n",
+        crate::brief::yaml_scalar(spec),
+        file_stamp(now),
+        crate::brief::yaml_scalar(&format!("aida lane relay ({label})")),
+        crate::brief::indent_block(body.trim_end(), "  "),
+    );
+    let limit = crate::brief::PICKUP_BRIEF_LIMIT;
+    anyhow::ensure!(
+        framed.len() <= limit,
+        "the brief is {} bytes once framed for the lane's pickup; the limit is {limit}",
+        framed.len()
+    );
+    Ok(framed)
+}
+
+fn label_for(args: &RelayArgs, rework: bool) -> Result<String> {
+    let label = match &args.label {
+        Some(label) => label.trim().to_ascii_uppercase(),
+        None if rework => "REWORK".into(),
+        None => "FRESH".into(),
+    };
+    anyhow::ensure!(
+        !label.is_empty()
+            && label.len() <= 40
+            && label
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_')),
+        "invalid --label `{label}`: use letters, digits, spaces, `-` and `_`"
+    );
+    Ok(label)
+}
+
+/// Whether a spec comment is a relayed round brief still in force.
+pub(crate) fn is_authoritative_brief(content: &str) -> bool {
+    crate::rework_direction::is_relayed_brief_lead(&crate::rework_direction::lead_line(content))
+}
+
+/// The `relay <host>#<round>` tag in a relayed brief's heading.
+fn relay_tag(content: &str) -> Option<(String, u64)> {
+    let rest = content.lines().next()?.split_once("; relay ")?.1;
+    let (host, round) = rest.split([';', ')']).next()?.rsplit_once('#')?;
+    Some((host.trim().to_string(), round.trim().parse().ok()?))
+}
+
+/// What one relay run has put where, so a stop can take it back.
+struct Round {
+    label: String,
+    /// This relay's round on the lane host.
+    number: u64,
+    /// The brief comment's id on the spec, once posted and found.
+    comment: Option<String>,
+    /// Whether delivery to the lane host was attempted.
+    delivering: bool,
+    /// The brief's path on the lane host, once delivered.
+    placed: Option<String>,
+}
+
+/// Post the round brief and its pointer comment, marking earlier round
+/// briefs superseded. A brief a later relay on the same host posted is left
+/// alone: this run is the superseded one and its next host step says so.
+fn post_brief(
+    world: &mut dyn World,
+    spec: &str,
+    plan: &Plan,
+    mode: &Mode,
+    body: &str,
+    round: &mut Round,
+) -> Result<()> {
+    let label = round.label.clone();
+    let stamp = Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+    let target = match mode {
+        Mode::Rework { pr, head, .. } => format!("; PR #{pr} at head {}", short(head)),
+        Mode::Fresh => String::new(),
+    };
+    let heading = format!(
+        "AUTHORITATIVE {label} BRIEF (relayed {stamp}; {} lane on {}; relay {}#{}{target}):",
+        plan.vendor,
+        plan.host_name(),
+        plan.host_name(),
+        round.number
+    );
+    let brief_comment = format!("{heading}\n{}", body.trim_end());
+    world.comment_add(spec, &brief_comment)?;
+    let all = world.comments(spec)?;
+    round.comment = all
+        .iter()
+        .rev()
+        .find(|(_, content)| content.trim() == brief_comment.trim())
+        .map(|(id, _)| id.clone());
+    let mut superseded = 0;
+    for (id, content) in all {
+        let own =
+            round.comment.as_deref() == Some(id.as_str()) || content.trim() == brief_comment.trim();
+        let newer = relay_tag(&content)
+            .is_some_and(|(host, number)| host == plan.host_name() && number > round.number);
+        if own || newer || !is_authoritative_brief(&content) {
+            continue;
+        }
+        world.comment_edit(
+            spec,
+            &id,
+            &format!(
+                "SUPERSEDED by the {label} brief relayed {stamp}. Do not act on this brief.\n\n{content}"
+            ),
+        )?;
+        superseded += 1;
+    }
+    let branch = match mode {
+        Mode::Rework { branch, .. } => format!(", branch {branch}"),
+        Mode::Fresh => ", fresh work on a new branch".into(),
+    };
+    world.comment_add(
+        spec,
+        &format!(
+            "Lane relay {stamp}: {label} lane queued on {} ({}{branch}). Scope = the AUTHORITATIVE {label} BRIEF in the previous comment{}.",
+            plan.host_name(),
+            plan.vendor,
+            match superseded {
+                0 => String::new(),
+                n => format!("; {n} earlier round brief(s) marked SUPERSEDED"),
+            }
+        ),
+    )
+}
+
+/// Record a stop where a person will see it: the relay log, the spec and the
+/// advisor's mailbox. A brief the stop voids is marked on the spec and
+/// withdrawn from the lane host, so no later lane treats it as the round in
+/// force. None of this can fail the relay.
+fn report(world: &mut dyn World, spec: &str, vendor: &str, round: &Round, stop: &Stop) {
+    let line = stop.line(spec, &round.label);
+    world.log(&line);
+    if !stop.brief_stays() {
+        if let Some(id) = round.comment.as_deref() {
+            let marked = world.comments(spec).ok().and_then(|all| {
+                let (_, content) = all.into_iter().find(|(cid, _)| cid == id)?;
+                // A later relay's post already marked it.
+                if !is_authoritative_brief(&content) {
+                    return Some(());
+                }
+                world
+                    .comment_edit(
+                        spec,
+                        id,
+                        &format!(
+                            "SUPERSEDED: not launched ({}). Do not act on this brief.\n\n{content}",
+                            stop.code()
+                        ),
+                    )
+                    .ok()
+            });
+            if marked.is_none() {
+                world.log("warning: could not mark the unlaunched brief comment superseded");
+            }
+        }
+        // A delivery whose reply was lost may still have stored the brief.
+        if round.delivering && *stop != Stop::Superseded {
+            let retract = RelayHostCommand::Retract {
+                spec: spec.into(),
+                round: round.number,
+                vendor: vendor.into(),
+                brief: round.placed.as_ref().map(PathBuf::from),
+            };
+            if let Err(err) = world.host(&retract) {
+                world.log(&format!(
+                    "warning: could not withdraw the brief on the lane host: {err:#}"
+                ));
+            }
+        }
+    }
+    if let Err(err) = world.comment_add(spec, &line) {
+        world.log(&format!(
+            "warning: could not record the stop on {spec}: {err:#}"
+        ));
+    }
+    if let Err(err) = world.store_push() {
+        world.log(&format!("warning: store push failed: {err:#}"));
+    }
+    if let Err(err) = world.notify_advisor(
+        &format!("Lane relay {}: {spec} ({})", stop.verdict(), stop.code()),
+        &line,
+    ) {
+        world.log(&format!("warning: could not notify the advisor: {err:#}"));
+    }
+}
+
+fn malformed(what: &str, reply: &serde_json::Value) -> Stop {
+    Stop::Failed {
+        code: "host-reply-malformed",
+        why: format!("the lane host's {what} reply was not understood: {reply}"),
+    }
+}
+
+/// A stop the lane host itself declared in a reply.
+fn host_stop(what: &str, reply: &serde_json::Value) -> Option<Stop> {
+    match reply.get("stop").map(|stop| stop.as_str()) {
+        None => None,
+        Some(Some("relay-superseded")) => Some(Stop::Superseded),
+        Some(Some("lane-still-running")) => Some(Stop::LaneStillRunning { secs: 0 }),
+        Some(_) => Some(malformed(what, reply)),
+    }
+}
+
+/// Run a host step whose failure ends the relay with `code`.
+fn host_step(
+    world: &mut dyn World,
+    op: &RelayHostCommand,
+    what: &str,
+    code: &'static str,
+) -> Result<serde_json::Value, Stop> {
+    let reply = world.host(op).map_err(|err| Stop::Failed {
+        code,
+        why: format!("the lane host's {what} step failed: {err:#}"),
+    })?;
+    match host_stop(what, &reply) {
+        Some(stop) => Err(stop),
+        None => Ok(reply),
+    }
+}
+
+fn text(reply: &serde_json::Value, what: &str, key: &str) -> Result<String, Stop> {
+    reply[key]
         .as_str()
+        .filter(|value| !value.is_empty())
         .map(str::to_owned)
-        .with_context(|| format!("the reply has no `{key}`: {value}"))
+        .ok_or_else(|| malformed(what, reply))
+}
+
+/// Wait, bounded, until no lane for the spec runs on the host and the host
+/// is above its memory floor. A relay that is no longer the spec's newest
+/// stops at once.
+fn wait_for_host(world: &mut dyn World, args: &RelayArgs, spec: &str, round: u64) -> Option<Stop> {
+    let clock = Deadline::new(world, args.wait_timeout);
+    let probe = RelayHostCommand::Probe {
+        spec: spec.into(),
+        round,
+    };
+    let mut last = "";
+    loop {
+        let reply = world.host(&probe);
+        let secs = clock.spent(world).as_secs();
+        let blocked = match reply {
+            Ok(reply) => {
+                if let Some(stop) = host_stop("probe", &reply) {
+                    return Some(stop);
+                }
+                // A reply without a field is not evidence about the host.
+                match (reply["current"].as_bool(), reply["running"].as_bool()) {
+                    (Some(false), _) => return Some(Stop::Superseded),
+                    (Some(true), Some(false)) => match reply["shortfall"].as_str() {
+                        Some(why) => Stop::HostCapacity {
+                            secs,
+                            why: why.into(),
+                        },
+                        None => return None,
+                    },
+                    (Some(true), Some(true)) => Stop::LaneStillRunning { secs },
+                    _ => Stop::HostUnreachable {
+                        secs,
+                        why: format!("unreadable probe reply: {reply}"),
+                    },
+                }
+            }
+            Err(err) => Stop::HostUnreachable {
+                secs,
+                why: format!("{err:#}"),
+            },
+        };
+        if blocked.code() != last {
+            last = blocked.code();
+            world.log(&format!(
+                "waiting ({last}) before launching {spec}; checking every {}s for up to {}s",
+                args.poll, args.wait_timeout
+            ));
+        }
+        if !clock.nap(world, args.poll) {
+            return Some(blocked);
+        }
+    }
 }
 
 /// Watch, bounded, for the started lane's admission result.
@@ -564,18 +960,27 @@ fn watch_admission(
         launched_at: since.into(),
         log: log.into(),
     };
-    let (mut waited, mut vanished, mut announced) = (0, 0, false);
+    let clock = Deadline::new(world, args.admission_timeout);
+    let (mut vanished, mut announced) = (0, false);
     loop {
         match world.host(&op) {
-            Ok(reply) => match reply["state"].as_str().unwrap_or("pending") {
-                "started" | "finished" => return None,
-                "refused" => {
-                    return Some(Stop::AdmissionRefused {
-                        reason: reply["reason"].as_str().unwrap_or("unknown").into(),
-                        detail: reply["detail"].as_str().unwrap_or("").into(),
-                    })
+            Ok(reply) => match reply["state"].as_str() {
+                Some("started" | "finished") => return None,
+                Some("refused") => {
+                    let reason = reply["reason"].as_str().unwrap_or("unknown");
+                    let detail = reply["detail"].as_str().unwrap_or("").to_string();
+                    return Some(match GATE_CODES.iter().find(|code| **code == reason) {
+                        Some(code) => Stop::GateRefused {
+                            code: *code,
+                            detail,
+                        },
+                        None => Stop::AdmissionRefused {
+                            reason: reason.into(),
+                            detail,
+                        },
+                    });
                 }
-                "vanished" => {
+                Some("vanished") => {
                     vanished += 1;
                     if vanished >= VANISHED_POLLS {
                         return Some(Stop::LaunchVanished {
@@ -583,12 +988,10 @@ fn watch_admission(
                         });
                     }
                 }
-                _ => vanished = 0,
+                Some("pending") => vanished = 0,
+                _ => world.log(&format!("warning: unreadable admission reply: {reply}")),
             },
             Err(err) => world.log(&format!("warning: admission check failed: {err:#}")),
-        }
-        if waited >= args.admission_timeout {
-            return Some(Stop::AdmissionUnconfirmed { secs: waited });
         }
         if !announced {
             announced = true;
@@ -597,92 +1000,174 @@ fn watch_admission(
                 args.admission_timeout
             ));
         }
-        world.sleep(Duration::from_secs(args.poll));
-        waited += args.poll;
+        if !clock.nap(world, args.poll) {
+            return Some(Stop::AdmissionUnconfirmed {
+                secs: clock.spent(world).as_secs(),
+            });
+        }
     }
 }
 
-/// One relay run, start to recorded outcome.
+/// Everything after the round is taken: any error is a typed stop.
+fn deliver(
+    args: &RelayArgs,
+    plan: &Plan,
+    world: &mut dyn World,
+    mode: &Mode,
+    body: &str,
+    round: &mut Round,
+) -> Result<Outcome, Stop> {
+    let spec = args.spec.as_str();
+    post_brief(world, spec, plan, mode, body, round).map_err(|err| Stop::Failed {
+        code: "brief-record-failed",
+        why: format!("the brief could not be recorded on {spec}: {err:#}"),
+    })?;
+    if let Err(err) = world.store_push() {
+        world.log(&format!("warning: store push failed: {err:#}"));
+    }
+    world.log(&format!(
+        "queued {spec} ({}, {} on {}, relay round {})",
+        round.label,
+        plan.vendor,
+        plan.host_name(),
+        round.number
+    ));
+
+    if let Some(stop) = wait_for_host(world, args, spec, round.number) {
+        return Err(stop);
+    }
+    if let Mode::Rework { pr, head, .. } = mode {
+        if let Some(stop) = head_gate(&mut WorldHead(world), *pr, head) {
+            return Err(stop);
+        }
+    }
+
+    round.delivering = true;
+    let placed = host_step(
+        world,
+        &RelayHostCommand::PlaceBrief {
+            spec: spec.into(),
+            round: round.number,
+            vendor: plan.vendor.clone(),
+            label: round.label.clone(),
+            body_b64: base64::engine::general_purpose::STANDARD.encode(body),
+        },
+        "brief delivery",
+        "brief-delivery-failed",
+    )?;
+    let brief = text(&placed, "brief delivery", "path")?;
+    round.placed = Some(brief.clone());
+    let (branch, pr, head) = match mode {
+        Mode::Rework { pr, branch, head } => (Some(branch.clone()), Some(*pr), Some(head.clone())),
+        Mode::Fresh => (None, None, None),
+    };
+    let launched = host_step(
+        world,
+        &RelayHostCommand::Launch {
+            spec: spec.into(),
+            round: round.number,
+            vendor: plan.vendor.clone(),
+            branch,
+            pr,
+            head,
+            model: plan.model.clone(),
+            brief: PathBuf::from(&brief),
+        },
+        "launch",
+        "launch-failed",
+    )?;
+    let since = text(&launched, "launch", "since")?;
+    let log = text(&launched, "launch", "log")?;
+    if let Some(stop) = watch_admission(world, args, spec, &since, &log) {
+        return Err(stop);
+    }
+    world.log(&format!(
+        "admitted: {spec} ({}) is running on {}; brief {brief}; log {log}",
+        round.label,
+        plan.host_name()
+    ));
+    Ok(Outcome::Admitted {
+        mode: mode.clone(),
+        brief,
+        log,
+    })
+}
+
+/// One relay run, start to recorded outcome. An `Err` is a usage error
+/// found before anything was posted or delivered.
 pub(crate) fn relay(args: &RelayArgs, plan: &Plan, world: &mut dyn World) -> Result<Outcome> {
     let spec = args.spec.as_str();
     let body = read_brief(&args.brief, plan.footer.as_deref())?;
+    // Both default labels and any explicit one are checked before the forge
+    // or the host is asked anything.
+    let mut round = Round {
+        label: label_for(args, args.pr.is_some())?,
+        number: 0,
+        comment: None,
+        delivering: false,
+        placed: None,
+    };
+    frame_brief(spec, &plan.vendor, &round.label, &body, Utc::now())?;
+
     let mode = match args.pr {
-        None => Mode::Fresh,
-        Some(pr) => {
-            let view = world
-                .pr(pr)
-                .with_context(|| format!("cannot read PR #{pr}, so its head cannot be recorded"))?;
-            if view.state.eq_ignore_ascii_case("OPEN") {
-                plain_value("PR branch", &view.branch)?;
-                Mode::Rework {
-                    pr,
-                    branch: view.branch,
-                    head: view.head,
+        None => Ok(Mode::Fresh),
+        Some(pr) => match world.pr(pr) {
+            Err(err) => Err(Stop::PrUnreadable {
+                pr,
+                why: format!("{err:#}"),
+            }),
+            Ok(view) if view.state.eq_ignore_ascii_case("OPEN") => {
+                match plain_value("PR branch", &view.branch) {
+                    Ok(()) => Ok(Mode::Rework {
+                        pr,
+                        branch: view.branch,
+                        head: view.head,
+                    }),
+                    Err(err) => Err(Stop::PrUnreadable {
+                        pr,
+                        why: format!("{err:#}"),
+                    }),
                 }
-            } else {
+            }
+            Ok(view) => {
                 // A finished change has no round to rework: routing a lane
                 // onto its branch ends in a no-change exit.
                 world.log(&format!(
                     "PR #{pr} is {}: launching fresh work for {spec}, not a rework of that PR",
                     view.state
                 ));
-                Mode::Fresh
+                Ok(Mode::Fresh)
             }
-        }
+        },
     };
-    let label = label_for(args, &mode)?;
-    let brief_comment = post_brief(world, spec, &label, plan, &mode, &body)?;
-    if let Err(err) = world.store_push() {
-        world.log(&format!("warning: store push failed: {err:#}"));
-    }
-    world.log(&format!(
-        "queued {spec} ({label}, {} on {})",
-        plan.vendor,
-        plan.host_name()
-    ));
-
-    let mut stop = wait_for_host(world, args, spec);
-    if let (None, Mode::Rework { pr, head, .. }) = (&stop, &mode) {
-        stop = head_gate(world, *pr, head);
-    }
-    if let Some(stop) = stop {
-        report(world, spec, &label, brief_comment.as_deref(), &stop);
-        return Ok(Outcome::Stopped(stop));
-    }
-
-    let placed = world
-        .host(&RelayHostCommand::PlaceBrief {
-            spec: spec.into(),
-            vendor: plan.vendor.clone(),
-            label: label.clone(),
-            body_b64: base64::engine::general_purpose::STANDARD.encode(&body),
-        })
-        .context("could not deliver the brief to the lane host; nothing was launched")?;
-    let brief = text(&placed, "path")?;
-    let launched = world
-        .host(&RelayHostCommand::Launch {
-            spec: spec.into(),
-            vendor: plan.vendor.clone(),
-            branch: match &mode {
-                Mode::Rework { branch, .. } => Some(branch.clone()),
-                Mode::Fresh => None,
-            },
-            model: plan.model.clone(),
-            brief: PathBuf::from(&brief),
-        })
-        .with_context(|| {
-            format!("could not start the lane; the brief stays pending on the host at {brief}")
+    let stopped = mode.and_then(|mode| {
+        if mode == Mode::Fresh && args.label.is_none() {
+            round.label = "FRESH".into();
+        }
+        // Nothing is posted until the host has given this run its round.
+        let begun = host_step(
+            world,
+            &RelayHostCommand::Begin { spec: spec.into() },
+            "round",
+            "host-unreachable",
+        )
+        .map_err(|stop| match stop {
+            Stop::Failed { why, .. } => Stop::HostUnreachable { secs: 0, why },
+            other => other,
         })?;
-    let (since, log) = (text(&launched, "since")?, text(&launched, "log")?);
-    if let Some(stop) = watch_admission(world, args, spec, &since, &log) {
-        report(world, spec, &label, brief_comment.as_deref(), &stop);
-        return Ok(Outcome::Stopped(stop));
+        round.number = begun["round"]
+            .as_u64()
+            .filter(|number| *number > 0)
+            .ok_or_else(|| malformed("round", &begun))?;
+        deliver(args, plan, world, &mode, &body, &mut round)
+    });
+    match stopped {
+        Ok(admitted) => Ok(admitted),
+        Err(stop) => {
+            report(world, spec, &plan.vendor, &round, &stop);
+            Ok(Outcome::Stopped(stop))
+        }
     }
-    world.log(&format!(
-        "admitted: {spec} ({label}) is running on {}; brief {brief}; log {log}",
-        plan.host_name()
-    ));
-    Ok(Outcome::Admitted { mode, brief, log })
 }
 
 // ---------------------------------------------------------------------------
@@ -690,30 +1175,48 @@ pub(crate) fn relay(args: &RelayArgs, plan: &Plan, world: &mut dyn World) -> Res
 
 /// What the host operations need from the machine.
 pub(crate) trait HostSys {
-    /// Whether a lane launcher for `spec` is running.
-    fn lane_running(&self, spec: &str) -> bool;
+    /// Every id that names `spec` in the host's store (its canonical id, its
+    /// display id and the one given), the canonical one first. An error
+    /// means the host cannot tell, which no step treats as "no match".
+    fn spec_ids(&self, root: &Path, spec: &str) -> Result<Vec<String>>;
+    /// Whether a lane launcher for the spec named by `ids` is running.
+    fn lane_running(&self, ids: &[String]) -> bool;
     /// Why the host is below its memory floor, if it is.
     fn shortfall(&self) -> Option<String>;
-    /// Start `argv` detached in `cwd`, its output appended to `log`.
-    fn spawn(&mut self, argv: &[String], cwd: &Path, log: &Path) -> Result<()>;
+    /// Start `argv` detached in `cwd` with `env` added, its output appended
+    /// to `log`.
+    fn spawn(
+        &mut self,
+        argv: &[String],
+        env: &[(String, String)],
+        cwd: &Path,
+        log: &Path,
+    ) -> Result<()>;
     fn now(&self) -> DateTime<Utc>;
     /// The home directory holding this machine's relay settings.
     fn home(&self) -> Option<PathBuf>;
 }
 
-/// Whether a process's arguments are a lane launcher working `spec`: an
+/// Whether `candidate` names the spec `ids` names. Every place the relay
+/// compares a spec id (lane processes, admission receipts) uses this.
+pub(crate) fn names_spec(ids: &[String], candidate: &str) -> bool {
+    let candidate = aida_core::node_alias::expand_or_keep(candidate.trim());
+    ids.iter().any(|id| {
+        aida_core::id_identity::same_id(id, &candidate) || id.eq_ignore_ascii_case(&candidate)
+    })
+}
+
+/// Whether a process's arguments are a lane launcher working the spec: an
 /// `aida queue work <spec> …`, or a `lane-run.sh <spec> …` wrapper that has
 /// not reached it yet.
-pub(crate) fn cmdline_runs_lane(argv: &[String], spec: &str) -> bool {
-    let same =
-        |arg: &String| aida_core::id_identity::same_id(arg, spec) || arg.eq_ignore_ascii_case(spec);
+pub(crate) fn cmdline_runs_lane(argv: &[String], ids: &[String]) -> bool {
     argv.windows(3)
-        .any(|w| w[0] == "queue" && w[1] == "work" && same(&w[2]))
+        .any(|w| w[0] == "queue" && w[1] == "work" && names_spec(ids, &w[2]))
         || argv.windows(2).any(|w| {
             Path::new(&w[0])
                 .file_name()
                 .is_some_and(|name| name == "lane-run.sh")
-                && same(&w[1])
+                && names_spec(ids, &w[1])
         })
 }
 
@@ -729,17 +1232,104 @@ fn spec_file_stem(spec: &str) -> Result<&str> {
     Ok(spec)
 }
 
-fn file_stamp(now: DateTime<Utc>) -> String {
-    now.format("%Y-%m-%dT%H%M%SZ").to_string()
+/// The ids naming `spec` on this host, canonical first, the given one
+/// always among them.
+fn ids_for(root: &Path, spec: &str, sys: &dyn HostSys) -> Result<Vec<String>> {
+    spec_file_stem(spec)?;
+    let mut ids = sys.spec_ids(root, spec)?;
+    ids.retain(|id| spec_file_stem(id).is_ok());
+    if !ids.iter().any(|id| id == spec) {
+        ids.push(spec.to_string());
+    }
+    Ok(ids)
+}
+
+/// The spec's relay round on this host, held under an exclusive lock: the
+/// number the newest relay took. A relay whose number is lower has been
+/// superseded and may place or start nothing.
+struct Fence {
+    file: std::fs::File,
+    path: PathBuf,
+}
+
+impl Fence {
+    fn hold(root: &Path, ids: &[String]) -> Result<Self> {
+        let dir = root.join(".aida/lane-relay");
+        std::fs::create_dir_all(&dir)
+            .with_context(|| format!("cannot create {}", dir.display()))?;
+        // One file per spec whichever id the relay was given.
+        let path = dir.join(format!("{}.round", ids[0].to_ascii_uppercase()));
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)
+            .with_context(|| format!("cannot open {}", path.display()))?;
+        fs2::FileExt::lock_exclusive(&file)
+            .with_context(|| format!("cannot lock {}", path.display()))?;
+        Ok(Self { file, path })
+    }
+
+    fn current(&mut self) -> Result<u64> {
+        use std::io::{Read, Seek};
+        let mut text = String::new();
+        self.file.rewind()?;
+        self.file.read_to_string(&mut text)?;
+        match text.trim() {
+            "" => Ok(0),
+            number => number
+                .parse()
+                .with_context(|| format!("{} holds no round number", self.path.display())),
+        }
+    }
+
+    fn advance(&mut self) -> Result<u64> {
+        use std::io::{Seek, Write};
+        let next = self.current()? + 1;
+        self.file.rewind()?;
+        self.file.set_len(0)?;
+        writeln!(self.file, "{next}")?;
+        self.file.sync_all()?;
+        Ok(next)
+    }
+
+    /// The reply that stops a relay which is no longer the newest.
+    fn superseded(&mut self, round: u64) -> Result<Option<serde_json::Value>> {
+        let current = self.current()?;
+        Ok((current != round).then(|| {
+            serde_json::json!({
+                "stop": "relay-superseded",
+                "current_round": current,
+            })
+        }))
+    }
 }
 
 fn mailbox(root: &Path, vendor: &str) -> Result<PathBuf> {
     Ok(root.join(".aida/agent-briefs").join(vendor_name(vendor)?))
 }
 
+/// Only a brief this host stored for this vendor is handed to a lane or
+/// withdrawn.
+fn mailbox_brief(root: &Path, vendor: &str, brief: &Path) -> Result<PathBuf> {
+    let dir = mailbox(root, vendor)?.canonicalize()?;
+    let brief = brief
+        .canonicalize()
+        .with_context(|| format!("no brief at {}", brief.display()))?;
+    anyhow::ensure!(
+        brief.parent() == Some(dir.as_path()),
+        "brief {} is not in {}",
+        brief.display(),
+        dir.display()
+    );
+    Ok(brief)
+}
+
 /// Store `body` as the spec's one pending brief for `vendor`.
 fn place_brief(
     root: &Path,
+    ids: &[String],
     spec: &str,
     vendor: &str,
     label: &str,
@@ -747,20 +1337,10 @@ fn place_brief(
     now: DateTime<Utc>,
 ) -> Result<serde_json::Value> {
     let stem = spec_file_stem(spec)?;
-    anyhow::ensure!(
-        !body.trim().is_empty() && !body.contains('\0') && body.len() <= BRIEF_LIMIT,
-        "the brief must be nonempty text of at most {BRIEF_LIMIT} bytes"
-    );
+    let framed = frame_brief(spec, vendor, label, body, now)?;
     let dir = mailbox(root, vendor)?;
     std::fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
-    let superseded = crate::brief::supersede_pending_briefs(root, spec)?;
-    let framed = format!(
-        "---\nspec_id: {}\nagent: {vendor}\ngenerated_at: {}\ngenerated_by: {}\nnote: |-\n{}---\n",
-        crate::brief::yaml_scalar(spec),
-        file_stamp(now),
-        crate::brief::yaml_scalar(&format!("aida lane relay ({label})")),
-        crate::brief::indent_block(body.trim_end(), "  "),
-    );
+    let superseded = crate::brief::supersede_pending_briefs(root, ids)?;
     let path = dir.join(format!("{stem}-{}.md", file_stamp(now)));
     let staged = dir.join(format!(
         ".{stem}-{}.relay-{}",
@@ -790,34 +1370,31 @@ fn launcher(home: Option<&Path>) -> Result<Vec<String>> {
     Ok(launcher)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn launch(
     root: &Path,
     spec: &str,
     vendor: &str,
     branch: Option<&str>,
+    gate: &LaunchGate,
     model: Option<&str>,
     brief: &Path,
     sys: &mut dyn HostSys,
 ) -> Result<serde_json::Value> {
     let stem = spec_file_stem(spec)?;
-    // Only a brief this host stored for this vendor may be handed to a lane.
-    let dir = mailbox(root, vendor)?.canonicalize()?;
-    let brief = brief
-        .canonicalize()
-        .with_context(|| format!("no brief at {}", brief.display()))?;
-    anyhow::ensure!(
-        brief.parent() == Some(dir.as_path()),
-        "brief {} is not in {}",
-        brief.display(),
-        dir.display()
-    );
+    let brief = mailbox_brief(root, vendor, brief)?;
     let mut argv: Vec<String> = launcher(sys.home().as_deref())?
         .iter()
         .map(|arg| arg.replace("{spec}", spec).replace("{vendor}", vendor))
         .collect();
-    if let Some(branch) = branch {
-        plain_value("branch", branch)?;
-        argv.extend(["--branch".into(), branch.into()]);
+    match (gate, branch) {
+        (LaunchGate::Rework { .. }, Some(branch)) => {
+            plain_value("branch", branch)?;
+            argv.extend(["--branch".into(), branch.into()]);
+        }
+        (LaunchGate::Fresh, None) => {}
+        (LaunchGate::Rework { .. }, None) => anyhow::bail!("a rework launch names its branch"),
+        (LaunchGate::Fresh, Some(_)) => anyhow::bail!("a fresh launch names no branch"),
     }
     argv.push("--force-claim".into());
     if let Some(model) = model {
@@ -829,11 +1406,13 @@ fn launch(
     let logs = root.join(".aida/lane-relay");
     std::fs::create_dir_all(&logs).with_context(|| format!("cannot create {}", logs.display()))?;
     let log = logs.join(format!("{stem}-{}.log", file_stamp(since)));
-    sys.spawn(&argv, root, &log)?;
+    let gate = gate.encode();
+    sys.spawn(&argv, &[(GATE_ENV.to_string(), gate.clone())], root, &log)?;
     Ok(serde_json::json!({
         "since": since.to_rfc3339(),
         "log": log,
         "argv": argv,
+        "gate": gate,
     }))
 }
 
@@ -859,7 +1438,7 @@ fn log_tail(root: &Path, log: &Path) -> String {
 
 fn admission(
     root: &Path,
-    spec: &str,
+    ids: &[String],
     since: &str,
     log: &Path,
     sys: &dyn HostSys,
@@ -868,7 +1447,8 @@ fn admission(
     let since = DateTime::parse_from_rfc3339(since)
         .with_context(|| format!("invalid launch time `{since}`"))?
         .with_timezone(&Utc);
-    let record = crate::lane_result::admission_since(root, spec, since);
+    let record =
+        crate::lane_result::admission_since(root, since, &|recorded| names_spec(ids, recorded));
     let reply = match record {
         Some(r) if r.result == Some(Kind::RefusedBeforeStart) => serde_json::json!({
             "state": "refused",
@@ -881,7 +1461,7 @@ fn admission(
             "reason": r.reason_code,
         }),
         Some(r) if r.started => serde_json::json!({ "state": "started" }),
-        _ if sys.lane_running(spec) => serde_json::json!({ "state": "pending" }),
+        _ if sys.lane_running(ids) => serde_json::json!({ "state": "pending" }),
         _ => serde_json::json!({ "state": "vanished", "log_tail": log_tail(root, log) }),
     };
     Ok(reply)
@@ -894,12 +1474,23 @@ pub(crate) fn host_op(
     sys: &mut dyn HostSys,
 ) -> Result<serde_json::Value> {
     match op {
-        RelayHostCommand::Probe { spec } => Ok(serde_json::json!({
-            "running": sys.lane_running(spec),
-            "shortfall": sys.shortfall(),
-        })),
+        RelayHostCommand::Begin { spec } => {
+            let ids = ids_for(root, spec, sys)?;
+            let round = Fence::hold(root, &ids)?.advance()?;
+            Ok(serde_json::json!({ "round": round }))
+        }
+        RelayHostCommand::Probe { spec, round } => {
+            let ids = ids_for(root, spec, sys)?;
+            let current = Fence::hold(root, &ids)?.current()?;
+            Ok(serde_json::json!({
+                "current": current == *round,
+                "running": sys.lane_running(&ids),
+                "shortfall": sys.shortfall(),
+            }))
+        }
         RelayHostCommand::PlaceBrief {
             spec,
+            round,
             vendor,
             label,
             body_b64,
@@ -908,28 +1499,87 @@ pub(crate) fn host_op(
                 .decode(body_b64)
                 .context("the brief body is not base64")?;
             let body = String::from_utf8(body).context("the brief body is not UTF-8")?;
-            place_brief(root, spec, vendor, label, &body, sys.now())
+            let ids = ids_for(root, spec, sys)?;
+            let mut fence = Fence::hold(root, &ids)?;
+            if let Some(stop) = fence.superseded(*round)? {
+                return Ok(stop);
+            }
+            place_brief(root, &ids, spec, vendor, label, &body, sys.now())
         }
         RelayHostCommand::Launch {
             spec,
+            round,
             vendor,
             branch,
+            pr,
+            head,
             model,
             brief,
-        } => launch(
-            root,
+        } => {
+            let gate = match (pr, head) {
+                (Some(pr), Some(head)) => LaunchGate::parse(
+                    &LaunchGate::Rework {
+                        pr: *pr,
+                        head: head.clone(),
+                    }
+                    .encode(),
+                )?,
+                (None, None) => LaunchGate::Fresh,
+                _ => anyhow::bail!("a rework launch names both its PR and the expected head"),
+            };
+            let ids = ids_for(root, spec, sys)?;
+            // Held until the launcher is started, so two relays cannot both
+            // pass the checks below.
+            let mut fence = Fence::hold(root, &ids)?;
+            if let Some(stop) = fence.superseded(*round)? {
+                return Ok(stop);
+            }
+            if sys.lane_running(&ids) {
+                return Ok(serde_json::json!({ "stop": "lane-still-running" }));
+            }
+            launch(
+                root,
+                spec,
+                vendor,
+                branch.as_deref(),
+                &gate,
+                model.as_deref(),
+                brief,
+                sys,
+            )
+        }
+        RelayHostCommand::Retract {
             spec,
+            round,
             vendor,
-            branch.as_deref(),
-            model.as_deref(),
             brief,
-            sys,
-        ),
+        } => {
+            let ids = ids_for(root, spec, sys)?;
+            let mut fence = Fence::hold(root, &ids)?;
+            // A later round's delivery already retired this one's brief, and
+            // what is pending now is that round's.
+            if fence.current()? != *round {
+                return Ok(serde_json::json!({ "retired": [] }));
+            }
+            let retired = match brief {
+                None => crate::brief::supersede_pending_briefs(root, &ids)?,
+                Some(brief) => match mailbox_brief(root, vendor, brief) {
+                    Ok(brief) => crate::brief::retire_brief(&brief)?.into_iter().collect(),
+                    // Already taken by a lane, or already withdrawn.
+                    Err(_) if !brief.exists() => Vec::new(),
+                    Err(err) => return Err(err),
+                },
+            };
+            Ok(serde_json::json!({ "retired": retired }))
+        }
         RelayHostCommand::Admission {
             spec,
             launched_at,
             log,
-        } => admission(root, spec, launched_at, log, sys),
+        } => {
+            let ids = ids_for(root, spec, sys)?;
+            admission(root, &ids, launched_at, log, sys)
+        }
     }
 }
 
@@ -938,9 +1588,16 @@ pub(crate) fn host_argv(op: &RelayHostCommand) -> Vec<String> {
     let path = |p: &Path| p.to_string_lossy().into_owned();
     let mut argv: Vec<String> = vec!["lane".into(), "relay-host".into()];
     match op {
-        RelayHostCommand::Probe { spec } => argv.extend(["probe".into(), spec.clone()]),
+        RelayHostCommand::Begin { spec } => argv.extend(["begin".into(), spec.clone()]),
+        RelayHostCommand::Probe { spec, round } => argv.extend([
+            "probe".into(),
+            spec.clone(),
+            "--round".into(),
+            round.to_string(),
+        ]),
         RelayHostCommand::PlaceBrief {
             spec,
+            round,
             vendor,
             label,
             body_b64,
@@ -948,6 +1605,8 @@ pub(crate) fn host_argv(op: &RelayHostCommand) -> Vec<String> {
             [
                 "place-brief",
                 spec,
+                "--round",
+                &round.to_string(),
                 "--vendor",
                 vendor,
                 "--label",
@@ -959,19 +1618,59 @@ pub(crate) fn host_argv(op: &RelayHostCommand) -> Vec<String> {
         ),
         RelayHostCommand::Launch {
             spec,
+            round,
             vendor,
             branch,
+            pr,
+            head,
             model,
             brief,
         } => {
-            argv.extend(["launch", spec, "--vendor", vendor].map(String::from));
+            argv.extend(
+                [
+                    "launch",
+                    spec,
+                    "--round",
+                    &round.to_string(),
+                    "--vendor",
+                    vendor,
+                ]
+                .map(String::from),
+            );
             if let Some(branch) = branch {
                 argv.extend(["--branch".into(), branch.clone()]);
+            }
+            if let Some(pr) = pr {
+                argv.extend(["--pr".into(), pr.to_string()]);
+            }
+            if let Some(head) = head {
+                argv.extend(["--head".into(), head.clone()]);
             }
             if let Some(model) = model {
                 argv.extend(["--model".into(), model.clone()]);
             }
             argv.extend(["--brief".into(), path(brief)]);
+        }
+        RelayHostCommand::Retract {
+            spec,
+            round,
+            vendor,
+            brief,
+        } => {
+            argv.extend(
+                [
+                    "retract",
+                    spec,
+                    "--round",
+                    &round.to_string(),
+                    "--vendor",
+                    vendor,
+                ]
+                .map(String::from),
+            );
+            if let Some(brief) = brief {
+                argv.extend(["--brief".into(), path(brief)]);
+            }
         }
         RelayHostCommand::Admission {
             spec,
@@ -989,11 +1688,65 @@ pub(crate) fn host_argv(op: &RelayHostCommand) -> Vec<String> {
     argv
 }
 
+fn bounded(mut cmd: std::process::Command, secs: u64, what: &str) -> Result<String> {
+    cmd.stdin(std::process::Stdio::null());
+    match crate::command_output_with_timeout_detail(cmd, Duration::from_secs(secs)) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => {
+            Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+        }
+        crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+            "{what} exited {}: {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        crate::BoundedCommandOutput::SpawnFailed => anyhow::bail!("{what} could not be started"),
+        crate::BoundedCommandOutput::TimedOut => anyhow::bail!("{what} timed out after {secs}s"),
+    }
+}
+
+/// `aida show <spec> --format json`, run with `aida` in `root`.
+fn show_spec(aida: &Path, root: &Path, spec: &str) -> Result<serde_json::Value> {
+    let mut cmd = std::process::Command::new(aida);
+    cmd.current_dir(root)
+        .args(["show", spec, "--format", "json"]);
+    let out = bounded(cmd, 60, "`aida show`")?;
+    serde_json::from_str(&out).context("`aida show --format json` returned non-JSON")
+}
+
 /// The real machine.
-struct Machine;
+struct Machine {
+    /// The `aida` that reads the host's store.
+    aida: PathBuf,
+    /// The home directory holding this machine's relay settings.
+    home: Option<PathBuf>,
+}
+
+impl Machine {
+    fn new(aida: PathBuf) -> Self {
+        Self {
+            aida,
+            home: aida_core::home::home_dir(),
+        }
+    }
+}
 
 impl HostSys for Machine {
-    fn lane_running(&self, spec: &str) -> bool {
+    fn spec_ids(&self, root: &Path, spec: &str) -> Result<Vec<String>> {
+        let shown = show_spec(&self.aida, root, spec)
+            .with_context(|| format!("cannot resolve {spec} in this host's store"))?;
+        let mut ids = Vec::new();
+        for key in ["spec_id", "agreed_id", "display_id"] {
+            if let Some(id) = shown[key].as_str().filter(|id| !id.is_empty()) {
+                if !ids.iter().any(|known| known == id) {
+                    ids.push(id.to_string());
+                }
+            }
+        }
+        anyhow::ensure!(!ids.is_empty(), "{spec} has no id in this host's store");
+        Ok(ids)
+    }
+
+    fn lane_running(&self, ids: &[String]) -> bool {
         // An unreadable process table is not evidence that no lane runs.
         let Ok(processes) = std::fs::read_dir("/proc") else {
             return true;
@@ -1017,7 +1770,7 @@ impl HostSys for Machine {
                 .split(|byte| *byte == 0)
                 .map(|arg| String::from_utf8_lossy(arg).into_owned())
                 .collect();
-            cmdline_runs_lane(&argv, spec)
+            cmdline_runs_lane(&argv, ids)
         })
     }
 
@@ -1028,7 +1781,13 @@ impl HostSys for Machine {
         }
     }
 
-    fn spawn(&mut self, argv: &[String], cwd: &Path, log: &Path) -> Result<()> {
+    fn spawn(
+        &mut self,
+        argv: &[String],
+        env: &[(String, String)],
+        cwd: &Path,
+        log: &Path,
+    ) -> Result<()> {
         let out = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
@@ -1041,6 +1800,7 @@ impl HostSys for Machine {
             .args(argv)
             .current_dir(cwd)
             .env_remove("AIDA_SESSION_PURPOSE")
+            .envs(env.iter().map(|(key, value)| (key, value)))
             .stdin(std::process::Stdio::null())
             .stdout(out.try_clone()?)
             .stderr(out)
@@ -1055,42 +1815,33 @@ impl HostSys for Machine {
     }
 
     fn home(&self) -> Option<PathBuf> {
-        aida_core::home::home_dir()
+        self.home.clone()
     }
 }
 
 /// `aida lane relay-host <op>`: run in the lane host's primary checkout.
 pub(crate) fn run_host(op: &RelayHostCommand) -> Result<()> {
     let root = crate::main_worktree_root_from(&std::env::current_dir()?);
-    println!("{}", host_op(&root, op, &mut Machine)?);
+    let mut machine = Machine::new(crate::resolve_aida_exe());
+    println!("{}", host_op(&root, op, &mut machine)?);
     Ok(())
 }
 
 /// The real forge, store, mailbox and lane host.
 struct Live {
     root: PathBuf,
+    /// The lane host's SSH alias and the project directory there.
     host: Option<(String, String)>,
-}
-
-fn bounded(mut cmd: std::process::Command, secs: u64, what: &str) -> Result<String> {
-    cmd.stdin(std::process::Stdio::null());
-    match crate::command_output_with_timeout_detail(cmd, Duration::from_secs(secs)) {
-        crate::BoundedCommandOutput::Completed(out) if out.status.success() => {
-            Ok(String::from_utf8_lossy(&out.stdout).into_owned())
-        }
-        crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
-            "{what} exited {}: {}",
-            out.status,
-            String::from_utf8_lossy(&out.stderr).trim()
-        ),
-        crate::BoundedCommandOutput::SpawnFailed => anyhow::bail!("{what} could not be started"),
-        crate::BoundedCommandOutput::TimedOut => anyhow::bail!("{what} timed out after {secs}s"),
-    }
+    /// The `aida` that reads and writes the spec.
+    aida: PathBuf,
+    /// Added to the SSH client's environment; empty outside tests.
+    ssh_env: Vec<(String, String)>,
+    started: std::time::Instant,
 }
 
 impl Live {
     fn aida(&self, args: &[&str]) -> std::process::Command {
-        let mut cmd = std::process::Command::new(crate::resolve_aida_exe());
+        let mut cmd = std::process::Command::new(&self.aida);
         cmd.current_dir(&self.root).args(args);
         cmd
     }
@@ -1104,32 +1855,11 @@ impl Live {
 
 impl World for Live {
     fn pr(&mut self, pr: u64) -> Result<PrView> {
-        use crate::forge::ChangeState;
-        let change =
-            crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(30), || {
-                crate::forge::forge_for(&self.root)
-                    .change_metadata(pr, &mut crate::network_retry::NoopSink)
-            })?;
-        Ok(PrView {
-            state: match change.state {
-                ChangeState::Open => "OPEN",
-                ChangeState::Merged => "MERGED",
-                ChangeState::Closed => "CLOSED",
-            }
-            .into(),
-            head: change.head_sha,
-            branch: change.head_ref,
-        })
+        forge_pr(&self.root, pr)
     }
 
     fn comments(&mut self, spec: &str) -> Result<Vec<(String, String)>> {
-        let out = bounded(
-            self.aida(&["show", spec, "--format", "json"]),
-            60,
-            "`aida show`",
-        )?;
-        let json: serde_json::Value =
-            serde_json::from_str(&out).context("`aida show --format json` returned non-JSON")?;
+        let json = show_spec(&self.aida, &self.root, spec)?;
         Ok(json["comments"]
             .as_array()
             .map(|comments| {
@@ -1194,7 +1924,7 @@ impl World for Live {
 
     fn host(&mut self, op: &RelayHostCommand) -> Result<serde_json::Value> {
         let Some((host, dir)) = &self.host else {
-            return host_op(&self.root, op, &mut Machine);
+            return host_op(&self.root, op, &mut Machine::new(self.aida.clone()));
         };
         let remote = format!(
             r#"export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"; cd -- {} && exec aida {}"#,
@@ -1216,18 +1946,28 @@ impl World for Live {
             host,
             &remote,
         ]);
+        cmd.envs(self.ssh_env.iter().map(|(key, value)| (key, value)));
         let out = bounded(cmd, 90, &format!("the lane host command on {host}"))?;
         let line = out
             .lines()
             .rev()
             .find(|l| !l.trim().is_empty())
             .unwrap_or("");
-        serde_json::from_str(line)
-            .with_context(|| format!("{host} returned no JSON result: {}", out.trim()))
+        let reply: serde_json::Value = serde_json::from_str(line)
+            .with_context(|| format!("{host} returned no JSON result: {}", out.trim()))?;
+        anyhow::ensure!(
+            reply.is_object(),
+            "{host} returned a result that is not a JSON object: {line}"
+        );
+        Ok(reply)
     }
 
     fn sleep(&mut self, duration: Duration) {
         std::thread::sleep(duration);
+    }
+
+    fn elapsed(&mut self) -> Duration {
+        self.started.elapsed()
     }
 
     fn log(&mut self, line: &str) {
@@ -1271,7 +2011,13 @@ pub(crate) fn run(args: &RelayArgs) -> Result<()> {
         Some(host) => Some((host.clone(), remote_dir(&plan, &root)?)),
         None => None,
     };
-    let mut world = Live { root, host };
+    let mut world = Live {
+        root,
+        host,
+        aida: crate::resolve_aida_exe(),
+        ssh_env: Vec::new(),
+        started: std::time::Instant::now(),
+    };
     match relay(args, &plan, &mut world)? {
         Outcome::Admitted { .. } => Ok(()),
         Outcome::Stopped(_) => {

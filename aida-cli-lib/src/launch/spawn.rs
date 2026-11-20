@@ -78,6 +78,8 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     // nested launch would reuse it without its own decision.
     // trace:BUG-2682 | ai:claude
     cmd.env_remove(crate::lane_admission::OVERRIDE_ENV);
+    // The relay's gate covers the one launch it started. trace:TASK-3826 | ai:claude
+    cmd.env_remove(crate::lane_relay::GATE_ENV);
     cmd.args(ctx.argv());
     if ctx.sets_cwd() {
         cmd.current_dir(ctx.cwd());

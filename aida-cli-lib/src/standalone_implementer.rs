@@ -1576,6 +1576,10 @@ fn run(
         Some(launch.spec),
         crate::lane_admission::HostOverride::from_env()?.as_ref(),
     )?;
+    // A relayed rework is re-checked against its change's head here, after
+    // any wait for a start slot and before anything is claimed or started.
+    // trace:TASK-3826 | ai:claude
+    crate::lane_relay::admit_launch(&main_root)?;
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // Resolve transport now, but retain the prior veto until command policy

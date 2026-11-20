@@ -377,6 +377,14 @@ impl Attempt {
             },
             if started {
                 "lane-failed"
+            } else if let Some(code) = result
+                .as_ref()
+                .err()
+                .and_then(crate::lane_relay::gate_refusal_code)
+            {
+                // A relayed launch its own gate stopped: the relay reads
+                // this reason. trace:TASK-3826 | ai:claude
+                code
             } else if result
                 .as_ref()
                 .is_err_and(|e| crate::lane_disk_deferral::refusal(e).is_some())
@@ -471,14 +479,18 @@ pub(crate) struct AdmissionRecord {
     pub(crate) detail: Option<String>,
 }
 
-/// The newest attempt for `spec` created at or after `since`, for a caller
-/// that started a lane and watches whether the host admitted it. Unreadable
-/// receipts are skipped: they belong to other attempts or are mid-write.
+/// The newest attempt created at or after `since` whose recorded spec
+/// `names_spec` accepts, for a caller that started a lane and watches
+/// whether the host admitted it. A receipt records whichever id the pickup
+/// resolved (the display id once routed, the launcher's argument before), so
+/// the caller decides identity with the resolver it uses everywhere else.
+/// Unreadable receipts are skipped: they belong to other attempts or are
+/// mid-write.
 // trace:TASK-3826 | ai:claude
 pub(crate) fn admission_since(
     main: &Path,
-    spec: &str,
     since: chrono::DateTime<chrono::Utc>,
+    names_spec: &dyn Fn(&str) -> bool,
 ) -> Option<AdmissionRecord> {
     let dir = crate::main_worktree_root_from(main).join(".aida/lane-results");
     std::fs::read_dir(dir)
@@ -490,11 +502,7 @@ pub(crate) fn admission_since(
             }
             serde_json::from_slice::<Receipt>(&std::fs::read(path).ok()?).ok()
         })
-        .filter(|r| {
-            r.created_at >= since
-                && (aida_core::id_identity::same_id(&r.spec, spec)
-                    || r.spec.trim().eq_ignore_ascii_case(spec.trim()))
-        })
+        .filter(|r| r.created_at >= since && names_spec(&r.spec))
         .max_by_key(|r| r.created_at)
         .map(|r| AdmissionRecord {
             started: r.started,

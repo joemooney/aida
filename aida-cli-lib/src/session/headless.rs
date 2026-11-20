@@ -1987,6 +1987,9 @@ pub(crate) fn run_vendor_headless_to_exit(
                 spec.as_deref(),
                 crate::lane_admission::HostOverride::from_env()?.as_ref(),
             )?;
+            // trace:TASK-3826 | ai:claude — a relayed rework's head, re-checked
+            // after the slot wait.
+            crate::lane_relay::admit_launch(&record_root)?;
             if vendor == HeadlessVendor::Codex {
                 crate::native_publication::prepare(&main, tree)?;
             }

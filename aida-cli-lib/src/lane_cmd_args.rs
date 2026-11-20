@@ -93,11 +93,20 @@ pub struct RelayArgs {
 // trace:TASK-3826 | ai:claude
 #[derive(Subcommand, Debug, Clone, PartialEq, Eq)]
 pub enum RelayHostCommand {
-    /// Whether a lane for the spec is running, and any memory shortfall.
-    Probe { spec: String },
+    /// Take the spec's next relay round; earlier relays for it then stop.
+    Begin { spec: String },
+    /// Whether the round is still the spec's newest, whether a lane for the
+    /// spec is running, and any memory shortfall.
+    Probe {
+        spec: String,
+        #[clap(long)]
+        round: u64,
+    },
     /// Store a brief for the vendor and retire earlier pending ones.
     PlaceBrief {
         spec: String,
+        #[clap(long)]
+        round: u64,
         #[clap(long, value_parser = crate::vendors::launch_vendor_name)]
         vendor: String,
         #[clap(long)]
@@ -106,17 +115,39 @@ pub enum RelayHostCommand {
         #[clap(long)]
         body_b64: String,
     },
-    /// Start the lane, detached.
+    /// Start the lane, detached, unless the round was superseded or a lane
+    /// for the spec already runs. With `--pr` and `--head` the launcher
+    /// reworks that change and re-checks its head once the host admits it;
+    /// without them it starts fresh work only.
     Launch {
         spec: String,
+        #[clap(long)]
+        round: u64,
         #[clap(long, value_parser = crate::vendors::launch_vendor_name)]
         vendor: String,
-        #[clap(long)]
+        #[clap(long, requires_all = ["pr", "head"])]
         branch: Option<String>,
+        #[clap(long, requires_all = ["branch", "head"])]
+        pr: Option<u64>,
+        /// The head the change must still be at when the lane starts.
+        #[clap(long, requires_all = ["branch", "pr"])]
+        head: Option<String>,
         #[clap(long)]
         model: Option<String>,
         #[clap(long)]
         brief: PathBuf,
+    },
+    /// Withdraw a delivered brief no lane should run: the one named, or
+    /// every pending brief for the spec when the relay never learned the
+    /// path. Does nothing once a later round has taken over.
+    Retract {
+        spec: String,
+        #[clap(long)]
+        round: u64,
+        #[clap(long, value_parser = crate::vendors::launch_vendor_name)]
+        vendor: String,
+        #[clap(long)]
+        brief: Option<PathBuf>,
     },
     /// The admission result of the lane a launch started.
     Admission {

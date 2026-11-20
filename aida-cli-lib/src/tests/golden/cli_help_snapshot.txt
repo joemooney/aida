@@ -32065,9 +32065,16 @@ The lane-host side of `aida lane relay`
 Usage: aida lane relay-host [OPTIONS] <COMMAND>
 
 Commands:
-  probe        Whether a lane for the spec is running, and any memory shortfall
+  begin        Take the spec's next relay round; earlier relays for it then stop
+  probe        Whether the round is still the spec's newest, whether a lane for the spec is running,
+               and any memory shortfall
   place-brief  Store a brief for the vendor and retire earlier pending ones
-  launch       Start the lane, detached
+  launch       Start the lane, detached, unless the round was superseded or a lane for the spec
+               already runs. With `--pr` and `--head` the launcher reworks that change and re-checks
+               its head once the host admits it; without them it starts fresh work only
+  retract      Withdraw a delivered brief no lane should run: the one named, or every pending brief
+               for the spec when the relay never learned the path. Does nothing once a later round
+               has taken over
   admission    The admission result of the lane a launch started
   help         Print this message or the help of the given subcommand(s)
 
@@ -32088,10 +32095,10 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
-===== aida lane relay-host probe
-Whether a lane for the spec is running, and any memory shortfall
+===== aida lane relay-host begin
+Take the spec's next relay round; earlier relays for it then stop
 
-Usage: aida lane relay-host probe [OPTIONS] <SPEC>
+Usage: aida lane relay-host begin [OPTIONS] <SPEC>
 
 Arguments:
   <SPEC>
@@ -32114,16 +32121,49 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
-===== aida lane relay-host place-brief
-Store a brief for the vendor and retire earlier pending ones
+===== aida lane relay-host probe
+Whether the round is still the spec's newest, whether a lane for the spec is running, and any memory
+shortfall
 
-Usage: aida lane relay-host place-brief [OPTIONS] --vendor <VENDOR> --label <LABEL> --body-b64 <BODY_B64> <SPEC>
+Usage: aida lane relay-host probe [OPTIONS] --round <ROUND> <SPEC>
 
 Arguments:
   <SPEC>
           
 
 Options:
+      --round <ROUND>
+          
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay-host place-brief
+Store a brief for the vendor and retire earlier pending ones
+
+Usage: aida lane relay-host place-brief [OPTIONS] --round <ROUND> --vendor <VENDOR> --label <LABEL> --body-b64 <BODY_B64> <SPEC>
+
+Arguments:
+  <SPEC>
+          
+
+Options:
+      --round <ROUND>
+          
+
       --vendor <VENDOR>
           
 
@@ -32150,22 +32190,69 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 ===== aida lane relay-host launch
-Start the lane, detached
+Start the lane, detached, unless the round was superseded or a lane for the spec already runs. With
+`--pr` and `--head` the launcher reworks that change and re-checks its head once the host admits it;
+without them it starts fresh work only
 
-Usage: aida lane relay-host launch [OPTIONS] --vendor <VENDOR> --brief <BRIEF> <SPEC>
+Usage: aida lane relay-host launch [OPTIONS] --round <ROUND> --vendor <VENDOR> --brief <BRIEF> <SPEC>
 
 Arguments:
   <SPEC>
           
 
 Options:
+      --round <ROUND>
+          
+
       --vendor <VENDOR>
           
 
       --branch <BRANCH>
           
 
+      --pr <PR>
+          
+
+      --head <HEAD>
+          The head the change must still be at when the lane starts
+
       --model <MODEL>
+          
+
+      --brief <BRIEF>
+          
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay-host retract
+Withdraw a delivered brief no lane should run: the one named, or every pending brief for the spec
+when the relay never learned the path. Does nothing once a later round has taken over
+
+Usage: aida lane relay-host retract [OPTIONS] --round <ROUND> --vendor <VENDOR> <SPEC>
+
+Arguments:
+  <SPEC>
+          
+
+Options:
+      --round <ROUND>
+          
+
+      --vendor <VENDOR>
           
 
       --brief <BRIEF>
@@ -65449,9 +65536,9 @@ Working on aida itself
       "aida",
       "lane",
       "relay-host",
-      "probe"
+      "begin"
     ],
-    "about": "Whether a lane for the spec is running, and any memory shortfall",
+    "about": "Take the spec's next relay round; earlier relays for it then stop",
     "flags": [
       {
         "name": "canonical-ids",
@@ -65467,6 +65554,38 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay-host",
+      "probe"
+    ],
+    "about": "Whether the round is still the spec's newest, whether a lane for the spec is running, and any memory shortfall",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "round",
+        "takes_value": true,
+        "help": ""
       }
     ],
     "hidden": true
@@ -65506,6 +65625,11 @@ Working on aida itself
         "help": ""
       },
       {
+        "name": "round",
+        "takes_value": true,
+        "help": ""
+      },
+      {
         "name": "vendor",
         "takes_value": true,
         "help": ""
@@ -65520,7 +65644,7 @@ Working on aida itself
       "relay-host",
       "launch"
     ],
-    "about": "Start the lane, detached",
+    "about": "Start the lane, detached, unless the round was superseded or a lane for the spec already runs. With `--pr` and `--head` the launcher reworks that change and re-checks its head once the host admits it; without them it starts fresh work only",
     "flags": [
       {
         "name": "branch",
@@ -65543,12 +65667,69 @@ Working on aida itself
         "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
       },
       {
+        "name": "head",
+        "takes_value": true,
+        "help": "The head the change must still be at when the lane starts"
+      },
+      {
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
       },
       {
         "name": "model",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "round",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": ""
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay-host",
+      "retract"
+    ],
+    "about": "Withdraw a delivered brief no lane should run: the one named, or every pending brief for the spec when the relay never learned the path. Does nothing once a later round has taken over",
+    "flags": [
+      {
+        "name": "brief",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "round",
         "takes_value": true,
         "help": ""
       },

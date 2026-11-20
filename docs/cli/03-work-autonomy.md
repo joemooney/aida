@@ -321,49 +321,84 @@ relays (the product seat's machine). Claude and Codex lanes take the same path.
    on its branch and records the change's head. Without `--pr`, or when change
    N is already merged or closed, it starts fresh work on a new branch. A
    finished change is never handed to a lane as a rework.
-2. **Brief on the spec.** The brief is posted on the spec as
+2. **Round.** The lane host gives the run the spec's next relay round (a
+   counter in `.aida/lane-relay/<SPEC>.round` on the host). A later relay for
+   the same spec takes a higher round, and every later host step of the
+   earlier run then stops with `relay-superseded` without delivering or
+   launching anything. Two relays for one spec cannot both launch.
+3. **Brief on the spec.** The brief is posted on the spec as
    `AUTHORITATIVE <LABEL> BRIEF (…)`, followed by a pointer comment naming the
    host, vendor and branch. Earlier round briefs on the spec are rewritten to
    lead with `SUPERSEDED …`, so a rework prompt leads with the newest one
    only. The store is then pushed.
-3. **Wait.** It waits, checking every `--poll` seconds for up to
+4. **Wait.** It waits, checking every `--poll` seconds for up to
    `--wait-timeout` seconds (six hours), until no lane for the spec is running
    on the host and the host is above its memory floor
-   (`min_memory_headroom_gib` in the host's `/etc/aida/lanes.toml`).
-4. **Head gate.** For a rework it reads the change again. It launches only if
+   (`min_memory_headroom_gib` in the host's `/etc/aida/lanes.toml`). The bound
+   is wall time, including the time the host checks themselves take.
+5. **Head gate.** For a rework it reads the change again. It launches only if
    the change is still open at the recorded head. A moved head, a merged or
    closed change, and a change that cannot be read all stop the relay.
-5. **Deliver and launch.** The brief is written to the vendor's mailbox on the
+6. **Deliver and launch.** The brief is written to the vendor's mailbox on the
    host (`.aida/agent-briefs/<vendor>/<SPEC>-<time>.md`); any older pending
    brief for the spec, in either vendor's mailbox, is renamed `*.superseded`.
    The lane is started detached with that file as its explicit `--brief`, so
    the agent is handed that brief and no other, and the brief is acknowledged
-   on delivery.
-6. **Admission.** It watches the new lane's attempt record for up to
+   on delivery. The host refuses the launch if a lane for the spec started
+   meanwhile.
+7. **Gate at the lane's start.** The launcher is started with what the launch
+   is for (`AIDA_LANE_RELAY_GATE`: the change and its recorded head, or fresh
+   work). Once the host admits it, which can be long after step 5 when it
+   queued for a start slot, a rework reads the change once more and stops if
+   the head moved or the change is no longer open. Fresh work stops if the
+   spec has an open change, and never resumes the spec's existing branch (a
+   leftover unmerged branch refuses the launch instead). No agent starts in
+   either case. A custom `launcher` must pass that variable through to
+   `aida queue work`; one that clears its environment removes the gate.
+8. **Admission.** It watches the new lane's attempt record for up to
    `--admission-timeout` seconds (40 minutes). The host's cold-start cap
    (`max_concurrent_cold_starts`) is applied by the lane launch itself, which
    queues for a slot; the relay adds no limit of its own.
+
+The host recognises the spec by any of its ids (the display id such as
+`TASK-12` and the store's canonical id), so the running-lane check, the round
+and the admission record agree whichever one the relay or a lane was given.
 
 The command prints its progress, appends it to `.aida/lane-relay/relay.log`,
 exits 0 once the lane is admitted and exits 2 on a stop. Every stop is
 written as a spec comment and mailed to the advisor with one of these reasons:
 
-| Reason | Meaning | Launched? |
+| Reason | Meaning | Brief still in force? |
 |---|---|---|
-| `head-moved` | The change's head changed while waiting; the brief targeted an earlier round | no |
-| `pr-merged`, `pr-closed` | The change stopped being open while waiting | no |
-| `pr-unreadable` | The forge could not be read before the launch | no |
-| `lane-still-running` | A lane for the spec outlasted `--wait-timeout` | no |
+| `head-moved` | The change's head changed, while waiting or while the lane queued for a start slot; the brief targeted an earlier round | no |
+| `pr-merged`, `pr-closed` | The change stopped being open, at either check | no |
+| `pr-unreadable` | The forge could not be read at invocation, before the launch or at the lane's start | no |
+| `fresh-blocked` | Fresh work was relayed but the spec has an open change; relay it with `--pr` | no |
+| `rework-mismatch` | The lane would have continued a different change than the one relayed | no |
+| `relay-superseded` | A later relay for the spec took over on the host | no |
+| `lane-still-running` | A lane for the spec outlasted `--wait-timeout`, or started just before the launch | no |
 | `host-capacity` | The host stayed below its memory floor for `--wait-timeout` | no |
-| `host-unreachable` | The host could not be probed for `--wait-timeout` | no |
+| `host-unreachable` | The host could not be reached for a round, or probed for `--wait-timeout` | no |
+| `brief-record-failed` | The brief could not be posted on the spec | no |
+| `brief-delivery-failed` | The host could not store the brief | no |
+| `launch-failed` | The host could not start the launcher | no |
+| `host-reply-malformed` | A host step answered with something the relay could not read | no |
 | `admission-refused` | The host refused the launch before the agent started; the comment carries the host's reason | yes |
 | `admission-unconfirmed` | Not admitted within `--admission-timeout`, usually still queued for a start slot | yes |
 | `launch-vanished` | The launcher exited without recording an attempt; the comment carries the launch log's tail | yes |
 
-When nothing was launched, the brief was not delivered and its spec comment is
-marked `SUPERSEDED: not launched`. The command runs in the foreground for as
+When the brief is no longer in force, its spec comment is marked
+`SUPERSEDED: not launched` and a delivered copy is withdrawn from the host's
+mailbox (renamed `*.superseded`), so no later lane picks it up. No agent
+started for any of those reasons, with one exception to check by hand: after
+`launch-failed` or `host-reply-malformed` on the launch step, the launcher may
+have started before the failure. The command runs in the foreground for as
 long as it waits; start it with `setsid nohup … &` for a long wait. Stopping it
-before the launch leaves nothing on the host.
+before the launch leaves nothing on the host but the round it took.
+
+The brief must fit the lane's 64 KiB pickup limit after it is framed for the
+mailbox (frontmatter added, every line indented two spaces); a brief that
+does not is refused before anything is posted.
 
 Settings come from flags, then from two files. No vendor, model or host is
 built in. `--vendor` takes any agent the launch registry knows (`claude`,
