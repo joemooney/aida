@@ -1,0 +1,37 @@
+id: 01a1fb3f-678e-7d73-abdd-dd5dcebab408
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-815
+agreed_id: STORY-2996
+title: 'Review PR-4384: [AI:claude] chore(integration): red-main watch, fix-forward routing and red-main metrics [promotion 24] (Refs STORY-2897)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1d5e4`) for branch `promote/integration-24`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4384>
+  - Branch: `promote/integration-24` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2897
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4384` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T23:16:38.926272712Z
+modified_at: 2026-11-20T23:16:38.926272712Z
+req_type: Story
+filed_at:
+  code_sha: 5b9312db1c175e77e79d758da56729bef9eb7fa2
+  branch: integ-p24
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
