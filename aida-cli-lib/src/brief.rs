@@ -1264,6 +1264,81 @@ pub(crate) fn pickup_briefs(
     Ok(briefs)
 }
 
+/// Retire every pending pickup brief for `spec`, in every vendor's mailbox
+/// under `root`: each is renamed `<name>.superseded`, which no pickup reads.
+/// A relayed round brief replaces the ones before it, so a lane is never
+/// handed an older round next to the newest. Returns the retired paths.
+// trace:TASK-3826 | ai:claude
+pub(crate) fn supersede_pending_briefs(
+    root: &std::path::Path,
+    spec: &str,
+) -> Result<Vec<std::path::PathBuf>> {
+    let mailbox_root = root.join(".aida/agent-briefs");
+    let mut retired = Vec::new();
+    let mailboxes = match std::fs::read_dir(&mailbox_root) {
+        Ok(entries) => entries,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(retired),
+        Err(err) => {
+            return Err(err).with_context(|| format!("cannot read {}", mailbox_root.display()))
+        }
+    };
+    for mailbox in mailboxes {
+        let mailbox = mailbox?;
+        // A symlinked mailbox is never followed.
+        if !mailbox.file_type()?.is_dir() {
+            continue;
+        }
+        for entry in std::fs::read_dir(mailbox.path())? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.extension().is_none_or(|ext| ext != "md") || !entry.file_type()?.is_file() {
+                continue;
+            }
+            let named_for_spec = entry
+                .file_name()
+                .to_str()
+                .and_then(spec_id_from_brief_filename)
+                .is_some_and(|id| pickup_brief_filename_matches(&id, spec, spec));
+            // The same rule a pickup applies: the frontmatter decides, the
+            // filename only when the brief names no spec.
+            let matches = match read_pickup_brief(&path) {
+                Ok(body) => frontmatter_value(&body, "spec_id")
+                    .map_or(named_for_spec, |id| pickup_brief_matches(&id, spec, spec)),
+                Err(_) => named_for_spec,
+            };
+            if !matches {
+                continue;
+            }
+            let mut index = 0;
+            loop {
+                let mut target = path.as_os_str().to_owned();
+                target.push(if index == 0 {
+                    ".superseded".to_string()
+                } else {
+                    format!(".superseded.{index}")
+                });
+                match aida_core::mailbox_lifecycle::rename_noreplace(&path, target.as_ref()) {
+                    Ok(()) => {
+                        retired.push(target.into());
+                        break;
+                    }
+                    Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists && index < 100 => {
+                        index += 1
+                    }
+                    // Consumed by a lane that started meanwhile.
+                    Err(err) if err.kind() == std::io::ErrorKind::NotFound => break,
+                    Err(err) => {
+                        return Err(err)
+                            .with_context(|| format!("cannot retire brief {}", path.display()))
+                    }
+                }
+            }
+        }
+    }
+    retired.sort();
+    Ok(retired)
+}
+
 pub(crate) const PICKUP_BRIEF_HEADING: &str = "\n\n---\n## Pickup brief\n\n";
 
 pub(crate) fn append_pickup_briefs(prompt: &mut String, briefs: &[PickupBrief]) {

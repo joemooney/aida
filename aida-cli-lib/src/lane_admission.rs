@@ -174,6 +174,15 @@ fn memory_shortfall(settings: &Settings, memory: &impl Fn() -> Result<u64>) -> O
     }
 }
 
+/// Why this host is below its memory floor right now, or `None` when it is
+/// not: the same settings and measurement a launch is admitted under, for a
+/// caller that waits for headroom instead of launching into the refusal.
+// trace:TASK-3826 | ai:claude
+#[cfg_attr(test, allow(dead_code))]
+pub(crate) fn memory_floor_shortfall() -> Result<Option<String>> {
+    Ok(memory_shortfall(&Settings::load()?, &memory_headroom))
+}
+
 fn reserve(settings: &Settings, prefix: &str) -> Result<Option<UnixDatagram>> {
     for index in 0..settings.max_concurrent_cold_starts {
         // Abstract sockets are scoped to the host launchers' network

@@ -309,6 +309,92 @@ exits remain `untested=true`,
 as do `cargo check` and `cargo build`. Missing or unreadable result evidence
 also reports `untested=true`.
 
+#### `aida lane relay`: hand a brief to a lane on a lane host
+
+<!-- trace:TASK-3826 | ai:claude -->
+`aida lane relay <SPEC> [--pr N] --brief FILE [--vendor claude|codex] [--model M]
+[--host H] [--label L]` carries out an advisor's "launch this spec on that
+vendor with this brief". Run it from the primary checkout of the machine that
+relays (the product seat's machine). Claude and Codex lanes take the same path.
+
+1. **Mode.** With `--pr N` on an open change it starts a rework of that change
+   on its branch and records the change's head. Without `--pr`, or when change
+   N is already merged or closed, it starts fresh work on a new branch. A
+   finished change is never handed to a lane as a rework.
+2. **Brief on the spec.** The brief is posted on the spec as
+   `AUTHORITATIVE <LABEL> BRIEF (…)`, followed by a pointer comment naming the
+   host, vendor and branch. Earlier round briefs on the spec are rewritten to
+   lead with `SUPERSEDED …`, so a rework prompt leads with the newest one
+   only. The store is then pushed.
+3. **Wait.** It waits, checking every `--poll` seconds for up to
+   `--wait-timeout` seconds (six hours), until no lane for the spec is running
+   on the host and the host is above its memory floor
+   (`min_memory_headroom_gib` in the host's `/etc/aida/lanes.toml`).
+4. **Head gate.** For a rework it reads the change again. It launches only if
+   the change is still open at the recorded head. A moved head, a merged or
+   closed change, and a change that cannot be read all stop the relay.
+5. **Deliver and launch.** The brief is written to the vendor's mailbox on the
+   host (`.aida/agent-briefs/<vendor>/<SPEC>-<time>.md`); any older pending
+   brief for the spec, in either vendor's mailbox, is renamed `*.superseded`.
+   The lane is started detached with that file as its explicit `--brief`, so
+   the agent is handed that brief and no other, and the brief is acknowledged
+   on delivery.
+6. **Admission.** It watches the new lane's attempt record for up to
+   `--admission-timeout` seconds (40 minutes). The host's cold-start cap
+   (`max_concurrent_cold_starts`) is applied by the lane launch itself, which
+   queues for a slot; the relay adds no limit of its own.
+
+The command prints its progress, appends it to `.aida/lane-relay/relay.log`,
+exits 0 once the lane is admitted and exits 2 on a stop. Every stop is
+written as a spec comment and mailed to the advisor with one of these reasons:
+
+| Reason | Meaning | Launched? |
+|---|---|---|
+| `head-moved` | The change's head changed while waiting; the brief targeted an earlier round | no |
+| `pr-merged`, `pr-closed` | The change stopped being open while waiting | no |
+| `pr-unreadable` | The forge could not be read before the launch | no |
+| `lane-still-running` | A lane for the spec outlasted `--wait-timeout` | no |
+| `host-capacity` | The host stayed below its memory floor for `--wait-timeout` | no |
+| `host-unreachable` | The host could not be probed for `--wait-timeout` | no |
+| `admission-refused` | The host refused the launch before the agent started; the comment carries the host's reason | yes |
+| `admission-unconfirmed` | Not admitted within `--admission-timeout`, usually still queued for a start slot | yes |
+| `launch-vanished` | The launcher exited without recording an attempt; the comment carries the launch log's tail | yes |
+
+When nothing was launched, the brief was not delivered and its spec comment is
+marked `SUPERSEDED: not launched`. The command runs in the foreground for as
+long as it waits; start it with `setsid nohup … &` for a long wait. Stopping it
+before the launch leaves nothing on the host.
+
+Settings come from flags, then from two files. No vendor, model or host is
+built in. `--vendor` takes any agent the launch registry knows (`claude`,
+`codex`, …).
+
+```toml
+# .aida/config.toml (tracked): policy only
+[lane_relay]
+vendor = "codex"            # default --vendor; else the project's [agents] vendor
+brief_footer = "Before pushing, run `make check-ci-fast`."   # appended to every relayed brief
+```
+
+```toml
+# ~/.aida/lane-relay.toml (per machine, never in a checkout)
+host = "lanehost"           # relaying machine: default --host (an SSH alias); unset starts the lane on this machine
+host_dir = "ai/project"     # relaying machine: default --host-dir, the checkout on the host
+# Lane host: the launcher. The relay appends --branch, --force-claim, --model and --brief.
+launcher = ["bash", "scripts/lane-run.sh", "{spec}", "--role", "implementer", "--no-human", "--vendor", "{vendor}"]
+```
+
+The SSH destination and the launcher program are read from the home
+directory because a tracked file can be changed by a branch. The model is
+`--model`, else the vendor's implementer model
+(`[agents.<vendor>.seats] implementer = { model = "…" }`, then
+`[agents.<vendor>] model`) in the relaying checkout's config. With neither,
+no model is passed and the lane host's own configuration decides. `launcher`
+shown above is the default; a host that needs its own wrapper names it in its
+own `~/.aida/lane-relay.toml`. The host must have `aida` on the login path
+(`~/.local/bin`), `setsid`, and non-interactive SSH access from the relaying
+machine. The change is read through the project's forge (GitHub or GitLab).
+
 Both headless implementer launches get the runner: a standalone implementer
 (`aida queue work <SPEC> --no-human`) and the `--auto-complete --no-human`
 drain's implementer phase, for Claude, Codex and Antigravity alike. Claude's

@@ -16,6 +16,14 @@ pub(crate) fn heartbeat_vendor_name(
     aida_core::vendors::LaunchVendor::parse(raw).map(|vendor| vendor.as_str().to_owned())
 }
 
+/// The canonical name of a launchable agent, or why `raw` is not one.
+// trace:TASK-3826 | ai:claude
+pub(crate) fn launch_vendor_name(raw: &str) -> Result<String, String> {
+    aida_core::vendors::LaunchVendor::parse(raw)
+        .map(|vendor| vendor.as_str().to_owned())
+        .map_err(|unknown| unknown.to_string())
+}
+
 // Read-only projection for declaration rendering and preview classification.
 // trace:STORY-1486 | ai:codex
 pub(crate) struct LaunchPreviewOptions<'a> {

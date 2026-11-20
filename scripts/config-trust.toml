@@ -721,6 +721,13 @@ required_checks = "policy"
 max_concurrent = "policy" # Bounds reviewer count; selects no executable. TASK-3472.
 failure_escalation_threshold = "policy" # Tunes alert timing only. BUG-2640.
 
+# `vendor` names a registered launch agent (validated against the launch
+# registry, which owns the executable); `brief_footer` is text appended to a
+# relayed brief. Neither selects a program, a host or a credential. TASK-3826.
+[keys.worktree.lane_relay]
+vendor = "policy"
+brief_footer = "policy"
+
 # A count the `aida now` screen compares open changes against; it selects
 # nothing and launches nothing. STORY-2768.
 [keys.worktree.land]
@@ -1092,6 +1099,11 @@ channels = ["write"]
 sites = 1
 
 # STORY-2641: host Cargo config selects the lane wrapper; never seat config.
+# The relay reads policy only (default lane agent, brief footer). Its SSH
+# host and launcher program come from ~/.aida/lane-relay.toml. trace:TASK-3826 | ai:claude
+[readers."aida-cli-lib/src/lane_relay.rs"]
+channels = ["worktree"]
+sites = 1
 [readers."aida-cli-lib/src/lane_job.rs"]
 channels = ["other-file"]
 sites = 1

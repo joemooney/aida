@@ -15,6 +15,25 @@ silently becoming its approver. <!-- trace:STORY-1351 | ai:codex -->
 4. Product launches another eligible wave when the scheduler reports that the
    queue is ready and the drain lock is free.
 
+### Relaying an advisor launch
+
+<!-- trace:TASK-3826 | ai:claude -->
+When the advisor rules "launch SPEC on VENDOR with this brief", product runs
+`aida lane relay SPEC [--pr N] --brief FILE --vendor claude|codex` and nothing
+else: no host-local relay script, no hand-placed brief file, no hand-written
+"authoritative brief" comment. Pass `--pr N` for a rework of an open change and
+omit it for fresh work. The command posts the brief on the spec, supersedes
+earlier round briefs, waits for the spec's running lane and the host's memory
+floor, refuses a round whose head moved or whose change closed, delivers the
+brief to either vendor the same way, and reports a stop or an admission refusal
+to the advisor. Claude and Codex lanes are equal paths; the vendor and model
+come from the ruling and project config (`[lane_relay]`,
+`[agents.<vendor>.seats]`), and the lane host from `~/.aida/lane-relay.toml`,
+never from memory. A `SKIPPED`, `REFUSED` or
+`UNCONFIRMED` result goes back to the advisor for a new ruling; product does
+not relaunch it on its own. See `aida lane relay --help` and the CLI
+reference's `aida lane` section.
+
 Product never merges implementation or approves its own disputed judgment.
 Advisor never writes the implementation it will later gate, never merges its
 own code, and never clears an unresolved gate merely to preserve momentum.

@@ -461,6 +461,49 @@ impl Attempt {
     }
 }
 
+/// What the newest attempt for a spec recorded about its admission.
+// trace:TASK-3826 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AdmissionRecord {
+    pub(crate) started: bool,
+    pub(crate) result: Option<Kind>,
+    pub(crate) reason_code: Option<String>,
+    pub(crate) detail: Option<String>,
+}
+
+/// The newest attempt for `spec` created at or after `since`, for a caller
+/// that started a lane and watches whether the host admitted it. Unreadable
+/// receipts are skipped: they belong to other attempts or are mid-write.
+// trace:TASK-3826 | ai:claude
+pub(crate) fn admission_since(
+    main: &Path,
+    spec: &str,
+    since: chrono::DateTime<chrono::Utc>,
+) -> Option<AdmissionRecord> {
+    let dir = crate::main_worktree_root_from(main).join(".aida/lane-results");
+    std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            if path.extension()? != "json" {
+                return None;
+            }
+            serde_json::from_slice::<Receipt>(&std::fs::read(path).ok()?).ok()
+        })
+        .filter(|r| {
+            r.created_at >= since
+                && (aida_core::id_identity::same_id(&r.spec, spec)
+                    || r.spec.trim().eq_ignore_ascii_case(spec.trim()))
+        })
+        .max_by_key(|r| r.created_at)
+        .map(|r| AdmissionRecord {
+            started: r.started,
+            result: r.result,
+            reason_code: r.reason_code,
+            detail: r.detail,
+        })
+}
+
 // Clone seats an early refusal may have left for this scope: those on the
 // receipt branch, on the scope's canonical branch, or leased for the scope.
 // Pickup gates (an occupied canonical branch, a waiting review) can refuse
