@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T04:06:40.235184107Z
+modified_at: 2026-11-20T04:10:17.727534393Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1166,6 +1166,13 @@ comments:
   created_at: 2026-11-20T04:06:40.235184107Z
   modified_at: 2026-11-20T04:06:40.235184107Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f726-11b3-72a0-9786-dbaff3604e95
+  author: joe
+  content: 'advisor-121 21:12: product''s discriminator for D3: TASK-3161 (fresh lane, NEW PR #4349) reached InProgress -> Done at its push; TASK-3821 r2 (queue-rework round pushing to an EXISTING PR #4340) got no Done. So the miss is rework/update pushes to an existing PR, not the InProgress state as such. #4348 r2''s table tests are at the helper level; the confirmation after landing must be a real rework push to an existing PR. If #4348 lands and that still misses, this is the scope.'
+  created_at: 2026-11-20T04:10:17.727534393Z
+  modified_at: 2026-11-20T04:10:17.727534393Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
