@@ -10,12 +10,12 @@ description: |
   2. Mechanical move only: no logic changes; existing tests pass unchanged; trace comments move with their code.
   3. Ratchets (store-writers, ExecContext, crate-glob, gate inventory) pass without growing any baseline.
   Codex lane, FASTTRACK-sized review if the diff is a pure move.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:16:46.260567298Z
-modified_at: 2026-11-20T15:20:56.753852744Z
+modified_at: 2026-11-20T15:24:51.264120692Z
 req_type: Task
 tags:
 - crate-split
@@ -51,6 +51,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f98f-76c0-7e91-abe3-b51277209b6d
+  author: aida-session-start
+  timestamp: 2026-11-20T15:24:51.264119291Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
