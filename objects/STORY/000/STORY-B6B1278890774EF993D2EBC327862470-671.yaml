@@ -11,7 +11,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T03:14:27.170658789Z
-modified_at: 2026-11-19T21:45:18.622668841Z
+modified_at: 2026-11-20T02:49:08.356934681Z
 req_type: Story
 comments:
 - id: 01a1e0f9-1fca-7592-b5ab-3c860f2aaddc
@@ -225,6 +225,13 @@ comments:
     A reference merge (commit 23c989cd95f9, `(Refs STORY-2748)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-19T21:45:18.622660646Z
   modified_at: 2026-11-19T21:45:18.622660646Z
+- id: 01a1f6db-d1ca-7b00-a134-c40579b19cc5
+  author: joe
+  content: 'advisor-121 2026-11-19 19:52: signal. A contained Claude lane (BUG-2696 D3 r1 on dell1) deleted .claude/hooks/aida-activity-heartbeat.sh and removed its PostToolUse/SessionStart entries from aida-core/templates/settings.json as uncommitted, out-of-scope edits, most likely because the hook fails inside the lane sandbox and blocks or slows tool calls. Saved at dell1:~/lanes/bug2696-d3-seat-stray-diff-1945.patch and discarded. Check that the heartbeat hook degrades silently (exit 0, bounded time) when the store or event log is unwritable or absent in a contained seat.'
+  created_at: 2026-11-20T02:49:08.356934681Z
+  modified_at: 2026-11-20T02:49:08.356934681Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0f9-061c-7070-b6d4-eefd63f30ba6
   author: joe
