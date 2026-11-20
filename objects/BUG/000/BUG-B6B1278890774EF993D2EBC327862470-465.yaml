@@ -2,31 +2,23 @@ id: 01a1f73c-f2d4-7ad3-85a1-7b10d07388d2
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-465
 agreed_id: BUG-2703
 title: 'Long-lived shared admission claims of the advisor loop workers starve every exclusive land: aida pr ship gets ''admission busy'' indefinitely while review-watch and auto-train run'
-description: 'Observed 2026-11-19 (product-14, advisor-121): `aida pr ship 4324` (promotion 23) could never acquire admission. The advisor''s own ship attempts were "starved by admission for 40 min", and the operator''s retry loop never got through: "admission busy: PID 2247524 ... purpose legacy review-watch; PID 2425465 ... purpose legacy auto-train".
+description: |
+  Observed 2026-11-19 (product-14, advisor-121): `aida pr ship 4324` (promotion 23) could never acquire admission. The advisor's own ship attempts were "starved by admission for 40 min", and the operator's retry loop never got through: "admission busy: PID 2247524 ... purpose legacy review-watch; PID 2425465 ... purpose legacy auto-train".
 
-
-  Cause (aida-cli-lib/src/admission_owner.rs, STORY-2857 cooperative admission): `.aida/admission-owner/mode.lock` is a readers-writer flock. Review controllers and cooperative trains take it SHARED (try_lock_shared); a land takes it EXCLUSIVE (try_lock_exclusive), which fails whenever any shared holder exists, and it never waits. The two `aida advisor loops` workers (review-watch and train-worker) each take their shared claim at worker start and hold it for the worker''s lifetime, not per tick: receipts 6e7f1cbf (19:39) and 19bbfec1 (19:58). So while the loops run, an exclusive land is starved indefinitely and every retry fails. The only way through was the advisor sending SIGTERM to both workers (21:35), which also stops all auto-review and auto-train. `aida advisor loops` has no supported stop/pause/drain verb, and `aida review watch pause` only pauses new review launches, not the claim.
-
+  Cause (aida-cli-lib/src/admission_owner.rs, STORY-2857 cooperative admission): `.aida/admission-owner/mode.lock` is a readers-writer flock. Review controllers and cooperative trains take it SHARED (try_lock_shared); a land takes it EXCLUSIVE (try_lock_exclusive), which fails whenever any shared holder exists, and it never waits. The two `aida advisor loops` workers (review-watch and train-worker) each take their shared claim at worker start and hold it for the worker's lifetime, not per tick: receipts 6e7f1cbf (19:39) and 19bbfec1 (19:58). So while the loops run, an exclusive land is starved indefinitely and every retry fails. The only way through was the advisor sending SIGTERM to both workers (21:35), which also stops all auto-review and auto-train. `aida advisor loops` has no supported stop/pause/drain verb, and `aida review watch pause` only pauses new review launches, not the claim.
   Related: BUG-2665 (auto-train starving behind review-watch; a different pair).
 
-
   Acceptance criteria:
-
   1. A land/ship requesting the exclusive mode is not starved by long-lived shared holders: either the loop workers hold the shared claim only for the duration of each tick or attempt (released between ticks), or an exclusive requester registers intent and new shared acquisitions defer to it (writer preference) until it has run.
-
   2. `aida pr ship` on a busy admission waits up to a bounded time (configurable, default a few minutes) for the exclusive mode instead of failing on the first try_lock, and reports the holders and how long it waited if it gives up.
-
   3. Regression through the production path: with both loop workers running, an `aida pr ship` of an approved PR acquires admission within the bound. A control proves an in-progress review launch or train stack is never interrupted mid-operation.
-
-  4. `aida advisor loops` gains a supported, audited way to drain or pause both workers'' admission claims (so no operator or advisor ever needs to SIGTERM them), and `aida advisor loops status` shows each worker''s claim age.
-
-  '
-status: Approved
+  4. `aida advisor loops` gains a supported, audited way to drain or pause both workers' admission claims (so no operator or advisor ever needs to SIGTERM them), and `aida advisor loops status` shows each worker's claim age.
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-20 04:35:29.108587+00:00
-modified_at: 2026-11-20 15:04:32.594699+00:00
+created_at: 2026-11-20T04:35:29.108587Z
+modified_at: 2026-11-20T15:14:36.954797274Z
 req_type: Bug
 tags:
 - admission
@@ -34,163 +26,186 @@ tags:
 - linked:BUG-2665
 - linked:STORY-2857
 - product-intake
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f971-aa96-7ce2-8704-f2e827f0d160
+  created_at: 2026-11-20T14:52:29.860118Z
+  created_by: dirtlab
 comments:
 - id: 01a1f73e-ff30-7df1-aa07-3f8a46e0df19
   author: joe
   content: 'ADVISOR GATE (advisor-121, 21:40): APPROVED, drain, CLAUDE lane, STRICT review (admission mode authority). Evidence: 45 advisor plus Joe ship attempts on #4324 were all refused ''admission busy'' because both advisor-loop workers held lifetime shared claims (receipts 6e7f1cbf, 19bbfec1); stopping them at 21:35 was the only way to free an exclusive land. AC4''s drain/pause verb must be audited and auto-expiring, like the BUG-2650 review-watch pause.'
-  created_at: 2026-11-20 04:37:30.531257+00:00
-  modified_at: 2026-11-20 04:37:30.531257+00:00
+  created_at: 2026-11-20T04:37:30.531257Z
+  modified_at: 2026-11-20T04:37:30.531257Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f742-561e-7fe0-b7e9-89303919567c
   author: joe
   content: 'Product 21:42: stopping the workers is not durable. After the advisor''s SIGTERM at ~21:35, both ''aida advisor loops'' workers respawned within minutes (train-worker pid 2910319, review-watch pid 2921307) with fresh shared receipts, and train #4353 started, so the exclusive ship is blocked again. AC4 (a supported drain/pause) must also hold the supervisor''s respawn, not just the current worker processes.'
-  created_at: 2026-11-20 04:41:10.189483+00:00
-  modified_at: 2026-11-20 04:41:10.189483+00:00
+  created_at: 2026-11-20T04:41:10.189483Z
+  modified_at: 2026-11-20T04:41:10.189483Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f742-a73e-78b3-9fd7-15deafa65653
   author: joe
   content: 'Product 21:43 (per advisor-121): the respawn is confirmed. The loop workers'' supervisor respawns them within ~2-4 min of SIGTERM, so a stop is not durable and there is no supported pause. Stopping them also closed the in-flight train #4352. WORKING PATH for exclusive-starved ships until this lands: a single-PR cooperative train from a human terminal, `aida pr train <PR>`. Trains share the admission mode with the loops, and a human at the terminal naming the PR satisfies the supervised-spec rule.'
-  created_at: 2026-11-20 04:41:31.007135+00:00
-  modified_at: 2026-11-20 04:41:31.007135+00:00
+  created_at: 2026-11-20T04:41:31.007135Z
+  modified_at: 2026-11-20T04:41:31.007135Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f746-9b6c-7782-82fc-f579f48f7eb3
   author: joe
   content: 'Product 21:47 CORRECTION to the 21:43 workaround: ''aida pr train <PR>'' from a human terminal is ALSO refused while the loops run. admission_owner.rs:252-258 serializes trains: a CooperativeTrain (or legacy auto-train) is refused whenever any receipt has purpose ''legacy auto-train'' or ''cooperative manual train'', and the auto-train worker holds its ''legacy auto-train'' receipt for its lifetime. Net effect: while the loop workers run, the ONLY thing that can land a PR is auto-train itself; no human ship or manual train can. Seen with Joe''s ''aida pr train 4324'' at 21:45. Add an AC: a human-initiated single-PR ship or train must be able to run (or queue into auto-train) while the loops are up.'
-  created_at: 2026-11-20 04:45:49.949879+00:00
-  modified_at: 2026-11-20 04:45:49.949879+00:00
+  created_at: 2026-11-20T04:45:49.949879Z
+  modified_at: 2026-11-20T04:45:49.949879Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f747-2c66-71c3-a514-a5a909247c83
   author: joe
   content: 'Product 21:50: options for landing an exclusive-starved PR while the loops run (2026-11-19, promotion 23 #4324). (A) advisor-121''s race: after any in-flight train finishes, in ONE command ''pkill -TERM -f "aida advisor loops (worker|train-worker)"; sleep 3; aida pr ship <PR>''. Dead holders don''t block, and the supervisor respawns within ~2-4 min. Product''s caveats: Exclusive mode also runs review_watch::admission_quiescent (admission_owner.rs:275), so in-flight review attempts can still refuse it; killing review-watch mid-pass can leave unsettled attempts; and it races the respawn. (B) wait for the mandate-cover fix (BUG-2702) so auto-train lands it. Both are workarounds for exactly what this bug must fix.'
-  created_at: 2026-11-20 04:46:26.901681+00:00
-  modified_at: 2026-11-20 04:46:26.901681+00:00
+  created_at: 2026-11-20T04:46:26.901681Z
+  modified_at: 2026-11-20T04:46:26.901681Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f94e-3ef6-70d1-bc30-bc65a6559aee
   author: joe
-  content: 'Product 07:13: Claude fresh-start lane queued on dell1, brief:
-
+  content: |-
+    Product 07:13: Claude fresh-start lane queued on dell1, brief:
     # Brief: BUG-2703 (fresh start; approved + drain by advisor-121; Claude, STRICT: admission/authority code)
 
-
-    Implement the acceptance criteria in the spec description. The evidence is in the description and comments (2026-11-19 21:15-21:50). In short: the `aida advisor loops` workers (review-watch and train-worker) each hold a SHARED admission claim on .aida/admission-owner/mode.lock for their whole lifetime. A land/ship needs EXCLUSIVE (try_lock_exclusive), so it''s starved indefinitely. A manual `aida pr train` is also refused while the auto-train worker''s ''legacy auto-train'' receipt exists (admission_owner.rs:252-258 serializes trains). Stopping the workers isn''t durable: the supervisor respawns them in ~2-4 min.
-
-    ACs (see spec): (1) release shared claims between ticks/attempts, or writer preference so an exclusive request isn''t starved; (2) `aida pr ship` waits a bounded, configurable time for exclusive instead of failing on the first try_lock, and names the holders and the wait if it gives up; (3) a production-path regression with both loop workers running, plus a control that an in-progress review launch or train stack is never interrupted; (4) a supported, audited drain/pause for `advisor loops` that also holds the supervisor''s respawn, with claim age shown in `advisor loops status`; plus (from the 21:47 comment) a human-initiated single-PR ship or train must be able to run, or queue into auto-train, while the loops are up.
-
+    Implement the acceptance criteria in the spec description. The evidence is in the description and comments (2026-11-19 21:15-21:50). In short: the `aida advisor loops` workers (review-watch and train-worker) each hold a SHARED admission claim on .aida/admission-owner/mode.lock for their whole lifetime. A land/ship needs EXCLUSIVE (try_lock_exclusive), so it's starved indefinitely. A manual `aida pr train` is also refused while the auto-train worker's 'legacy auto-train' receipt exists (admission_owner.rs:252-258 serializes trains). Stopping the workers isn't durable: the supervisor respawns them in ~2-4 min.
+    ACs (see spec): (1) release shared claims between ticks/attempts, or writer preference so an exclusive request isn't starved; (2) `aida pr ship` waits a bounded, configurable time for exclusive instead of failing on the first try_lock, and names the holders and the wait if it gives up; (3) a production-path regression with both loop workers running, plus a control that an in-progress review launch or train stack is never interrupted; (4) a supported, audited drain/pause for `advisor loops` that also holds the supervisor's respawn, with claim age shown in `advisor loops status`; plus (from the 21:47 comment) a human-initiated single-PR ship or train must be able to run, or queue into auto-train, while the loops are up.
     This touches admission (STORY-2857) and authority paths: fail closed, never break trains or reviews that are mid-operation. If a design fork appears (e.g. writer preference vs per-tick release), stop and punt to the advisor with the options.
-
     Trailer (BUG-2703) only if every AC is met; otherwise (Refs BUG-2703).
-
-    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.'
-  created_at: 2026-11-20 14:13:25.204687+00:00
-  modified_at: 2026-11-20 14:13:25.204687+00:00
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T14:13:25.204687Z
+  modified_at: 2026-11-20T14:13:25.204687Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f970-e8d0-76b1-835f-6ac051795cb7
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: 36e1d02a7a (git diff origin/main...HEAD).
-
 
     Design (AC1 offered either option; implemented both, as one coherent mechanism — no fork): writer-preference intent files (*.intent) under .aida/admission-owner/ + loop workers hold the shared claim per pass and release at pass boundaries/idle when an intent or drain applies.
 
-
     Acceptance evidence:
-
     - AC1 [behavioral-test]: admission_owner::tests::bug2703_waiting_exclusive_gets_in_once_shared_holders_yield (new shared claims refused while an exclusive waits; holder sees yield reason; exclusive gets in once it yields). Workers: review_watch::hold_admission/idle_yielding, advisor_loop_train::hold_admission/idle.
-
-    - AC2 [behavioral-test]: bug2703_bounded_wait_gives_up_naming_holders_and_wait (holders + ''gave up after waiting Ns (bound Ns)''); bug2703_wait_bound_config ([admission] wait_secs, default 180, 0..=3600).
-
-    - AC3 [behavioral-test]: review_watch::tests::bug2703_ship_gets_admission_while_both_loop_workers_run (both workers'' real claim/yield functions looping in threads; ship_admission — the exact call pr ship makes — acquires within bound; loops resume after). Control: bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress (in-flight review attempt untouched, ship gives up ''not quiescent''; a train pass keeps its claim).
-
+    - AC2 [behavioral-test]: bug2703_bounded_wait_gives_up_naming_holders_and_wait (holders + 'gave up after waiting Ns (bound Ns)'); bug2703_wait_bound_config ([admission] wait_secs, default 180, 0..=3600).
+    - AC3 [behavioral-test]: review_watch::tests::bug2703_ship_gets_admission_while_both_loop_workers_run (both workers' real claim/yield functions looping in threads; ship_admission — the exact call pr ship makes — acquires within bound; loops resume after). Control: bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress (in-flight review attempt untouched, ship gives up 'not quiescent'; a train pass keeps its claim).
     - AC4 [behavioral-test]: admission_drain tests (audited actor/reason, bounded 24h, auto-expiry journaled, unreadable = drained); loop_tests::bug2703_drain_holds_the_supervisor_respawn (no launch while drained, unreadable journal refuses, launches after resume); bug2703_status_shows_claim_age_drain_and_waiters.
-
     - 21:47 AC (human ship/train while loops up) [behavioral-test]: bug2703_manual_train_waits_for_the_auto_train_only + ship test above.
-
 
     Probe findings fixed during review: drain journal first named drain.json would have been parsed as a claim receipt by every admission (renamed loops-drain.journal); holders() lock-free scan now skips a receipt removed mid-scan; review-watch no longer exits (and alerts) when it starts while drained — it starts yielded.
 
-
     Strict-tier: intents/drain only WITHHOLD shared claims, never grant; exclusive still needs flock + quiescence + no train/children. Fail-closed: unreadable/malformed/over-long intent refuses shared claims and tells holders to yield; unreadable drain refuses Legacy claims and blocks respawn (counted refusal); bad wait config refuses the ship. No existing test weakened; one fixture (story2857_cross_process_worker_blocks_land_and_manual) sets wait_secs=1 so the manual-train refusal stays fast.
 
-
-    Residual risks: ship now waits (default 3 min) instead of refusing at once; a long in-flight review can still outlast the bound (reported with holders). Older loop binaries ignore intents until upgraded. A drained review-watch reports status ''degraded'' with ''admission yielded: drained…'' (intentional visibility). Local validation: targeted cargo tests (38 pass), fmt, store-writers, trace-header, glyph, crate-glob, exec-context, structural guards; full make check-ci-fast could not complete inside this lane''s 60s tool cap — CI is the evidence.'
-  created_at: 2026-11-20 14:51:28.848060+00:00
-  modified_at: 2026-11-20 14:51:28.848060+00:00
+    Residual risks: ship now waits (default 3 min) instead of refusing at once; a long in-flight review can still outlast the bound (reported with holders). Older loop binaries ignore intents until upgraded. A drained review-watch reports status 'degraded' with 'admission yielded: drained…' (intentional visibility). Local validation: targeted cargo tests (38 pass), fmt, store-writers, trace-header, glyph, crate-glob, exec-context, structural guards; full make check-ci-fast could not complete inside this lane's 60s tool cap — CI is the evidence.
+  created_at: 2026-11-20T14:51:28.848060Z
+  modified_at: 2026-11-20T14:51:28.848060Z
   session_id: 01a1f94f7ef5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f971-348c-74b1-9461-816d86a40954
   author: aida-publication-done
   content: Implementer push 36e1d02a7af0 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20 14:51:48.236033+00:00
-  modified_at: 2026-11-20 14:51:48.236033+00:00
+  created_at: 2026-11-20T14:51:48.236033Z
+  modified_at: 2026-11-20T14:51:48.236033Z
   session_id: 01a1f94f7ef5
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f97b-c5e9-7100-b882-d3bf5164601f
   author: joe
-  content: "AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 08:08): four findings at 36e1d02 (the deadline must cover receipts.lock; keep settlement maintenance while yielding; a real worker plus ship regression with a no-interrupt control; loops status shows both workers). Claude, gated on the live lane exiting.\n\n# Rework brief: BUG-2703 / PR #4363, round 2 of 4\n\nAdvisor: claude-advisor-121, 2026-11-20 08:08 MST. Head reviewed: 36e1d02. Lane: CLAUDE, STRICT (admission authority). All four findings:\n1. [unmet AC] admission_owner.rs:386-390: receipts.lock is taken with a blocking lock_exclusive BEFORE the wait deadline starts; acquire_mode,\n   register_intent and IntentGuard::drop also block on it. Carry ONE deadline through preflight, acquisition and intent cleanup; use bounded\n   try-locks; on expiry, report the holder and return. Regression: a process holding receipts.lock stalled, so `pr ship --wait 1` returns by the\n   deadline with a holder report.\n2. [defect] review_watch.rs:2881-2888:\
-    \ when yielding admission to a waiting ship, review-watch must STILL run settlement maintenance\n   (store.prune plus advance), so prior attempts (including claimed Superseding ones whose descendants exited) become quiescent. Yield only\n   new LAUNCHES, not maintenance. Regression: a Superseding attempt with exited descendants, a waiting ship, then the attempt is confirmed and\n   cleared, so the ship acquires.\n3. [unmet AC, test gap] add a regression through the REAL worker loops (review-watch and auto-train workers running) and the real pr ship\n   handler on an approved fixture PR: the ship acquires within its bound; plus a control where an in-progress review launch or train stack is\n   NOT interrupted mid-operation.\n4. [unmet AC] `aida advisor loops status` (human and JSON) shows BOTH workers' claims and ages (review-watch AND auto-train), with unknown age\n   for legacy receipts.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. COMMIT your\
-    \ work. Push."
-  created_at: 2026-11-20 15:03:08.809173+00:00
-  modified_at: 2026-11-20 15:03:08.809173+00:00
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 08:08): four findings at 36e1d02 (the deadline must cover receipts.lock; keep settlement maintenance while yielding; a real worker plus ship regression with a no-interrupt control; loops status shows both workers). Claude, gated on the live lane exiting.
+
+    # Rework brief: BUG-2703 / PR #4363, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 08:08 MST. Head reviewed: 36e1d02. Lane: CLAUDE, STRICT (admission authority). All four findings:
+    1. [unmet AC] admission_owner.rs:386-390: receipts.lock is taken with a blocking lock_exclusive BEFORE the wait deadline starts; acquire_mode,
+       register_intent and IntentGuard::drop also block on it. Carry ONE deadline through preflight, acquisition and intent cleanup; use bounded
+       try-locks; on expiry, report the holder and return. Regression: a process holding receipts.lock stalled, so `pr ship --wait 1` returns by the
+       deadline with a holder report.
+    2. [defect] review_watch.rs:2881-2888: when yielding admission to a waiting ship, review-watch must STILL run settlement maintenance
+       (store.prune plus advance), so prior attempts (including claimed Superseding ones whose descendants exited) become quiescent. Yield only
+       new LAUNCHES, not maintenance. Regression: a Superseding attempt with exited descendants, a waiting ship, then the attempt is confirmed and
+       cleared, so the ship acquires.
+    3. [unmet AC, test gap] add a regression through the REAL worker loops (review-watch and auto-train workers running) and the real pr ship
+       handler on an approved fixture PR: the ship acquires within its bound; plus a control where an in-progress review launch or train stack is
+       NOT interrupted mid-operation.
+    4. [unmet AC] `aida advisor loops status` (human and JSON) shows BOTH workers' claims and ages (review-watch AND auto-train), with unknown age
+       for legacy receipts.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. COMMIT your work. Push.
+  created_at: 2026-11-20T15:03:08.809173Z
+  modified_at: 2026-11-20T15:03:08.809173Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f97c-3d13-7483-9dfc-42ddbeda7963
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES: three unmet claimed acceptance criteria and one additional settlement-progress defect. Read the entire 16-file pinned review diff against protected main 78b437097cbccc7025e7529f2f06ff0f092c8495 and landed tree aebfdb617fc81a21ea84b0e90baae52ab283d296; this verdict targets original PR head 36e1d02a7af0338feb8ff4c6de2f1ef92ecc5171. Used the generated review worksheet; all four criteria are claimed, with no declared slice or deferrals.. No triage reason was given.'
-  created_at: 2026-11-20 15:03:51.315196+00:00
-  modified_at: 2026-11-20 15:03:51.315196+00:00
+  created_at: 2026-11-20T15:03:51.315196Z
+  modified_at: 2026-11-20T15:03:51.315196Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f97c-7aab-7dc1-ae61-a0cd7025660b
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2703):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2703):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 36e1d02a7af0
-
     Recorded: 2026-11-20T15:02:17.925457925+00:00
-
     Findings:
-
     1. [P2] Include receipt serialization in the admission deadline (BUG-b6b1278890774ef993d2ebc327862470-465.ac336622). aida-cli-lib/src/admission_owner.rs:386-390 takes receipts.lock with blocking lock_exclusive before acquire_waiting even starts its timer. acquire_mode, register_intent and IntentGuard::drop also block on that serializer without consulting the deadline. A live process paused or stalled while holding receipts.lock makes pr ship wait indefinitely even with wait_secs=1 (or 0), with no timeout/holder report. Carry a single deadline through the preflight, acquisition and intent cleanup, use bounded try-lock retries, and cover a separate process retaining the serializer beyond the configured bound.
-
-    2. [P2] Continue settlement maintenance while review-watch yields admission. aida-cli-lib/src/review_watch.rs:2881-2888 continues before store.prune and advance, so a waiting ship suppresses the maintenance needed to make prior attempts quiescent. In particular, a claimed Superseding attempt remains active even after every descendant exits: transition_classified deliberately leaves it Superseding, reap_dispatchers only terminalizes unclaimed attempts, and only advance confirms and clears it. admission_quiescent rejects active attempts before confirming process exit. Thus the ship''s intent keeps the watcher from clearing the very attempt blocking that ship until the ship times out; an active drain can retain the condition for hours. Run settlement-only reconciliation while yielding, without discovery or new launches, and add a regression with a superseding claimed review whose descendants finish during the wait.
-
+    2. [P2] Continue settlement maintenance while review-watch yields admission. aida-cli-lib/src/review_watch.rs:2881-2888 continues before store.prune and advance, so a waiting ship suppresses the maintenance needed to make prior attempts quiescent. In particular, a claimed Superseding attempt remains active even after every descendant exits: transition_classified deliberately leaves it Superseding, reap_dispatchers only terminalizes unclaimed attempts, and only advance confirms and clears it. admission_quiescent rejects active attempts before confirming process exit. Thus the ship's intent keeps the watcher from clearing the very attempt blocking that ship until the ship times out; an active drain can retain the condition for hours. Run settlement-only reconciliation while yielding, without discovery or new launches, and add a regression with a superseding claimed review whose descendants finish during the wait.
     3. [P2] Supply the claimed production-path regression and real in-progress controls (BUG-b6b1278890774ef993d2ebc327862470-465.acc625bf). aida-cli-lib/src/tests/task_1993_review_watch_tests.rs:4553-4592 constructs replacement thread loops calling hold_admission/idle helpers and invokes ship_admission directly. It never runs either production worker loop, invokes the pr ship handler/CLI, or supplies an approved PR. The control likewise uses a synthetic active attempt and an Option<Claim>, rather than an in-progress review launch or train stack. It would still pass if pr_ship_with_method_and_dispatch_ctx reverted to the old immediate-refusal API or the production loops stopped yielding. Add a fixture-driven invocation through the actual ship and worker entry points, with approved-PR evidence and controlled live review/train operations, proving admission within the bound and preservation of in-progress work.
-
-    4. [P2] Show both workers'' claim ages in loops status (BUG-b6b1278890774ef993d2ebc327862470-465.ac00712a). aida-cli-lib/src/advisor_loop_service.rs:282-303 filters all holder rows down to one HOLDER_PURPOSE and the current service worker PID. advisor_cmd_root routes loops status only to the review-watch service, so its human and JSON outputs omit the auto-train claim and age even when both workers hold admission. Requiring a separate train-status command does not satisfy the claimed loops status view of each worker. Aggregate both service claims in loops status, preserving unknown ages for legacy receipts, and test the command projection with both workers present.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-20 15:04:07.083399+00:00
-  modified_at: 2026-11-20 15:04:07.083399+00:00
+    4. [P2] Show both workers' claim ages in loops status (BUG-b6b1278890774ef993d2ebc327862470-465.ac00712a). aida-cli-lib/src/advisor_loop_service.rs:282-303 filters all holder rows down to one HOLDER_PURPOSE and the current service worker PID. advisor_cmd_root routes loops status only to the review-watch service, so its human and JSON outputs omit the auto-train claim and age even when both workers hold admission. Requiring a separate train-status command does not satisfy the claimed loops status view of each worker. Aggregate both service claims in loops status, preserving unknown ages for legacy receipts, and test the command projection with both workers present.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T15:04:07.083399Z
+  modified_at: 2026-11-20T15:04:07.083399Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f97c-d6df-73d0-8ffe-a7e6ba65ffd1
   author: joe
-  content: "AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 08:04):\n# Rework brief: BUG-2703 / PR #4363, round 2 of 4\n\nAdvisor: claude-advisor-121, 2026-11-20 08:08 MST. Head reviewed: 36e1d02. Lane: CLAUDE, STRICT (admission authority). All four findings:\n1. [unmet AC] admission_owner.rs:386-390: receipts.lock is taken with a blocking lock_exclusive BEFORE the wait deadline starts; acquire_mode,\n   register_intent and IntentGuard::drop also block on it. Carry ONE deadline through preflight, acquisition and intent cleanup; use bounded\n   try-locks; on expiry, report the holder and return. Regression: a process holding receipts.lock stalled, so `pr ship --wait 1` returns by the\n   deadline with a holder report.\n2. [defect] review_watch.rs:2881-2888: when yielding admission to a waiting ship, review-watch must STILL run settlement maintenance\n   (store.prune plus advance), so prior attempts (including claimed Superseding ones whose descendants exited) become quiescent. Yield\
-    \ only\n   new LAUNCHES, not maintenance. Regression: a Superseding attempt with exited descendants, a waiting ship, then the attempt is confirmed and\n   cleared, so the ship acquires.\n3. [unmet AC, test gap] add a regression through the REAL worker loops (review-watch and auto-train workers running) and the real pr ship\n   handler on an approved fixture PR: the ship acquires within its bound; plus a control where an in-progress review launch or train stack is\n   NOT interrupted mid-operation.\n4. [unmet AC] `aida advisor loops status` (human and JSON) shows BOTH workers' claims and ages (review-watch AND auto-train), with unknown age\n   for legacy receipts.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. COMMIT your work. Push."
-  created_at: 2026-11-20 15:04:18.704561+00:00
-  modified_at: 2026-11-20 15:04:18.704561+00:00
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 08:04):
+    # Rework brief: BUG-2703 / PR #4363, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 08:08 MST. Head reviewed: 36e1d02. Lane: CLAUDE, STRICT (admission authority). All four findings:
+    1. [unmet AC] admission_owner.rs:386-390: receipts.lock is taken with a blocking lock_exclusive BEFORE the wait deadline starts; acquire_mode,
+       register_intent and IntentGuard::drop also block on it. Carry ONE deadline through preflight, acquisition and intent cleanup; use bounded
+       try-locks; on expiry, report the holder and return. Regression: a process holding receipts.lock stalled, so `pr ship --wait 1` returns by the
+       deadline with a holder report.
+    2. [defect] review_watch.rs:2881-2888: when yielding admission to a waiting ship, review-watch must STILL run settlement maintenance
+       (store.prune plus advance), so prior attempts (including claimed Superseding ones whose descendants exited) become quiescent. Yield only
+       new LAUNCHES, not maintenance. Regression: a Superseding attempt with exited descendants, a waiting ship, then the attempt is confirmed and
+       cleared, so the ship acquires.
+    3. [unmet AC, test gap] add a regression through the REAL worker loops (review-watch and auto-train workers running) and the real pr ship
+       handler on an approved fixture PR: the ship acquires within its bound; plus a control where an in-progress review launch or train stack is
+       NOT interrupted mid-operation.
+    4. [unmet AC] `aida advisor loops status` (human and JSON) shows BOTH workers' claims and ages (review-watch AND auto-train), with unknown age
+       for legacy receipts.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. COMMIT your work. Push.
+  created_at: 2026-11-20T15:04:18.704561Z
+  modified_at: 2026-11-20T15:04:18.704561Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f97d-0cfe-7e12-943c-52cd9ed48c1d
   author: joe
   content: 'Product 08:04: R2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-465. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
-  created_at: 2026-11-20 15:04:32.594699+00:00
-  modified_at: 2026-11-20 15:04:32.594699+00:00
+  created_at: 2026-11-20T15:04:32.594699Z
+  modified_at: 2026-11-20T15:04:32.594699Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f986-171a-7f73-9095-7319832f7d45
+  author: aida-publication-done
+  content: Implementer push 36e1d02a7af0 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T15:14:36.954796786Z
+  modified_at: 2026-11-20T15:14:36.954796786Z
+  session_id: 01a1f94f7ef5
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
-  timestamp: 2026-11-20 04:37:11.329717+00:00
+  timestamp: 2026-11-20T04:37:11.329717Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
@@ -199,20 +214,20 @@ history:
     new_value: Approved
 - id: 01a1f73e-bef6-7092-b76c-f62eaf796059
   author: joe
-  timestamp: 2026-11-20 04:37:26.902412+00:00
+  timestamp: 2026-11-20T04:37:26.902412Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
 - id: 01a1f94f-aabb-7151-9f29-b7299517bb61
   author: aida-session-start
-  timestamp: 2026-11-20 14:15:10.267007+00:00
+  timestamp: 2026-11-20T14:15:10.267007Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f971-348c-74b1-9461-815facdb330f
   author: aida-publication-done
-  timestamp: 2026-11-20 14:51:48.236030+00:00
+  timestamp: 2026-11-20T14:51:48.236030Z
   session_id: 01a1f94f7ef5
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -221,13 +236,13 @@ history:
     new_value: Done
 - id: 01a1f971-e5f0-7401-9495-93cd7c669114
   author: dirtlab
-  timestamp: 2026-11-20 14:52:33.648587+00:00
+  timestamp: 2026-11-20T14:52:33.648587Z
   session_id: 01a1f94f7ef5
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1f97b-441f-74e3-a73e-1678cfd622b9
   author: aida-orchestrator
-  timestamp: 2026-11-20 15:02:47.583955+00:00
+  timestamp: 2026-11-20T15:02:47.583955Z
   session_id: 01a1f976bead
   changes:
   - field_name: status
@@ -235,13 +250,21 @@ history:
     new_value: NeedsAttention
 - id: 01a1f97c-3d13-7483-9dfc-42c584da22a3
   author: joe
-  timestamp: 2026-11-20 15:03:51.315181+00:00
+  timestamp: 2026-11-20T15:03:51.315181Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1f986-171a-7f73-9095-7308aac552ad
+  author: aida-publication-done
+  timestamp: 2026-11-20T15:14:36.954794982Z
+  session_id: 01a1f94f7ef5
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 140977cdd550b1f043ea5a57eb4bb91e52211313
@@ -252,9 +275,3 @@ filed_at:
   vendor: claude
   session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
-relationships:
-- rel_type:
-    custom: implemented-by
-  target_id: 01a1f971-aa96-7ce2-8704-f2e827f0d160
-  created_at: 2026-11-20 14:52:29.860118+00:00
-  created_by: dirtlab
