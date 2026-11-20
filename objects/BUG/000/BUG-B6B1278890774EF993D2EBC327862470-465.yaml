@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T19:58:33.236555404Z
+modified_at: 2026-11-20T19:58:48.807544151Z
 req_type: Bug
 tags:
 - admission
@@ -392,6 +392,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2703 AC1 passes for ordinary live intents. Both workers yield at pass boundaries. AC2 fails on deadline accounting and holder diagnostics. AC3 covers in-flight work but omits the approved PR. AC4 shows both claim ages but permits a stale-grant write and a journal that disables resume and expiry. Exact-head FAST CI passed. Review used source and existing CI evidence.. No triage reason was given.'
   created_at: 2026-11-20T19:58:33.236552327Z
   modified_at: 2026-11-20T19:58:33.236552327Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa8a-474d-7fe0-8a01-521b81a1f8ff
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2703):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d0d953c3461a
+    Recorded: 2026-11-20T19:56:35.337610378+00:00
+    Findings:
+    1. AC2. The retry sleeps using the time sampled before intent registration waits for receipts.lock. Registration near the deadline can add a full second and allow acquisition after timeout. IntentGuard cleanup also starts a fresh 500 ms wait. Recompute the remaining time after registration and use the original deadline for cleanup.
+    2. AC2. Once the workers yield, a running review can be the only blocker. admission_quiescent reports only that prior reviews are not quiescent even when the change key and live process identities are known. Include the key and available PID in the final busy refusal.
+    3. Drain and resume validate the advisor grant before waiting on drain.lock. A grant can expire or be revoked during that unbounded wait and the caller still mutates the journal. Validate authority and sample the operation time after acquiring the lock. Cover revocation while waiting.
+    4. AC4. save can write more than load’s 256 KiB limit. A permitted 512-byte reason consisting of backslashes takes 1024 bytes in JSON before event overhead, and up to 256 drain renewals are retained. A successful renewal can therefore make resume, expiry and both workers fail indefinitely. Ensure every journal the writer emits fits the reader and exercise repeated maximum-size escaped reasons.
+    5. Yielded settlement snapshots keys before prune acquires admission.lock and reloads state. Another watcher already in a pass can reserve a new change between those reads. prune treats that new key as closed and can discard the unclaimed local reservation before dispatch. Reconcile lost dispatchers under the lock without filtering on an older key set.
+    6. parse_intent checks expiry only relative to registered_at. After a backwards clock correction a future-dated intent with a live or unknown owner can withhold claims beyond the maximum. Adding slack to an extreme representable timestamp can also panic during admission or status. Use checked arithmetic and bound the remaining lifetime relative to observation time.
+    7. AC3. The production-handler regression proves admission and preserves in-flight work, but the fixture supplies no approved PR. Its forge lists zero changes and ship ends with a detached-HEAD lease error. Provide an approved head and assert that ship reaches a post-admission check for that PR. A real merge is unnecessary.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T19:58:48.653966405Z
+  modified_at: 2026-11-20T19:58:48.653966405Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
