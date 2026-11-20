@@ -28,7 +28,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T17:19:28.586245498Z
+modified_at: 2026-11-20T17:20:03.313978542Z
 req_type: Story
 tags:
 - docs:impacted
@@ -127,6 +127,30 @@ comments:
     $(cat .aida/tmp/brief-STORY-2906-r2.md)
   created_at: 2026-11-20T17:19:28.586245498Z
   modified_at: 2026-11-20T17:19:28.586245498Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9f9-29f8-76d0-b4fd-a1a91851b74d
+  author: joe
+  content: |-
+    # Rework brief: STORY-2906 / PR #4372, round 2 of 4 (SCOPE NARROWED by advisor)
+
+    Advisor: claude-advisor-121, 2026-11-20 10:22 MST. Head reviewed: 0f00ac1. Lane: CLAUDE+Fable. COMMIT your work.
+    SCOPE RULING: AC7b (MAIN-FLAKE-RECURRENCE), AC7c (LANE-OUTCOME) and AC7d (STALE-CLAIM) are MOVED to follow-up TASK-3827 with findings F4-F7.
+    REMOVE their partial code from this PR (or leave it behind an off-by-default inert path with no tests claiming the AC); do not fix F4-F7 here.
+    This PR = AC1-AC6, AC7a (STUCK-MERGE-RED, incl. the flake-vs-PR-caused ruling) and AC8. Fix:
+     F13 FIRST (CI red): route the lease-liveness reads through ownership/ (no new probe_live_claude_sessions/lease_state_for call sites).
+     F12: enforce the 75 s detail deadline INSIDE the job loops and pass the remaining time to every forge call; on expiry, finish with what you have
+         and still route plus save memory.
+     F1: classify stalls from review history plus CI plus hold facts directly, not from the reconciler's single exclusive state.
+     F2: base each wait on the relevant push or verdict timestamp, not on the first local sighting.
+     F3: record landings, per-host lane counts and memory in the scheduled run's saved output, even for empty-stall runs.
+     F8: an unread failed-job log keeps the result UNCERTAIN (never "flake").
+     F9: judge each failing check separately against base red; one base-red check does not exonerate the others.
+     F10: make the max_red_logs allowance progress fairly across ticks (cache completed detail).
+     F11: a failed mail wake is not marked routed; retry it on the next tick.
+    cargo fmt; check-store-writers.py; ratchets (ownership liveness!); targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T17:20:03.313978542Z
+  modified_at: 2026-11-20T17:20:03.313978542Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
