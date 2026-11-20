@@ -5,9 +5,32 @@
     {
       "at": "2026-11-19T19:01:30.318021463Z",
       "closed_by": "auto-bump"
+    },
+    {
+      "at": "2026-11-20T18:30:09.354034879Z",
+      "closed_by": "edit"
     }
   ],
   "events": [
+    {
+      "ts": "2026-11-18T05:01:16.120554590Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-440",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-18T05:01:32.534204686Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-440",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
     {
       "ts": "2026-11-19T16:00:28.170052944Z",
       "spec": "BUG-b6b1278890774ef993d2ebc327862470-440",
@@ -19,6 +42,16 @@
       }
     },
     {
+      "ts": "2026-11-19T18:39:30.654122845Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-440",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Approved"
+      }
+    },
+    {
       "ts": "2026-11-19T19:01:30.218658295Z",
       "spec": "BUG-b6b1278890774ef993d2ebc327862470-440",
       "kind": {
@@ -26,6 +59,35 @@
         "commit": "3c527fa4b7269c2d47d45d94f7b56a6313905532",
         "pr": 4316,
         "closed_by": "auto-bump"
+      }
+    },
+    {
+      "ts": "2026-11-20T01:15:45.533140527Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-440",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Completed",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-20T18:30:09.184022470Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-440",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "In Progress",
+        "after": "Completed"
+      }
+    },
+    {
+      "ts": "2026-11-20T18:30:09.203749367Z",
+      "spec": "BUG-b6b1278890774ef993d2ebc327862470-440",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "",
+        "closed_by": "edit"
       }
     }
   ]
