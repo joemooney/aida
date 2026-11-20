@@ -2860,16 +2860,11 @@ pub(crate) fn run_with_program(
     resolved.max_concurrent = Some(resolve_max_concurrent(&root, args.max_concurrent)?);
     let args = &resolved;
     // trace:TASK-1955 | ai:claude (TASK-1-413)
-    // Only under the claim, as before; a watcher that starts yielded skips it.
+    // Only under the claim, as before, and once: a watcher that starts
+    // yielded sweeps the first time it takes its claim.
     // trace:BUG-2703 | ai:claude
-    let swept = if admission.is_some() {
-        forge::sweep_probe_refs(&root)
-    } else {
-        0
-    };
-    if swept > 0 {
-        eprintln!("review-watch: removed {swept} leaked probe ref(s)");
-    }
+    let mut swept = false;
+    sweep_on_first_claim(&root, admission.is_some(), &mut swept);
     let mut children = Vec::<Dispatcher>::new();
     let mut reported_trains = BTreeSet::new();
     loop {
@@ -2892,6 +2887,7 @@ pub(crate) fn run_with_program(
             idle_yielding(&root, args.interval, &mut admission)?;
             continue;
         }
+        sweep_on_first_claim(&root, admission.is_some(), &mut swept);
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
             idle_yielding(&root, args.interval, &mut admission)?;
@@ -3056,6 +3052,22 @@ fn settle_while_yielded(store: &Store) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// Remove leaked probe refs once per watcher, the first time it holds its
+/// claim (at startup, or at the first pass after it started yielded).
+/// Returns how many were removed.
+// trace:BUG-2703 | ai:claude
+fn sweep_on_first_claim(root: &Path, held: bool, swept: &mut bool) -> usize {
+    if !held || *swept {
+        return 0;
+    }
+    *swept = true;
+    let removed = forge::sweep_probe_refs(root);
+    if removed > 0 {
+        eprintln!("review-watch: removed {removed} leaked probe ref(s)");
+    }
+    removed
 }
 
 /// At a pass boundary: give up the shared claim when a land/ship is waiting

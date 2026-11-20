@@ -97,7 +97,7 @@ pub(super) fn hold_admission(
     }
     if let Some(reason) = crate::admission_owner::yield_reason(root, ADMISSION_PURPOSE) {
         *held = None;
-        anyhow::bail!("admission yielded: {reason}");
+        return Err(Yielded(reason).into());
     }
     if held.is_none() {
         *held = Some(crate::admission_owner::acquire(
@@ -110,6 +110,29 @@ pub(super) fn hold_admission(
 }
 
 const ADMISSION_PURPOSE: &str = "legacy auto-train";
+
+/// The auto-train gave its admission up to a waiting land, ship or manual
+/// train, or to a drain, named by the string.
+// trace:BUG-2703 | ai:claude
+#[derive(Debug)]
+pub(super) struct Yielded(pub(super) String);
+impl std::fmt::Display for Yielded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "yielded admission to {}", self.0)
+    }
+}
+impl std::error::Error for Yielded {}
+
+/// The service-log line for a pass that did not run because admission is
+/// not held. A yield says who it yielded to; anything else (another holder
+/// has the claim) keeps its own wording. Neither is a landing-policy fault.
+// trace:BUG-2703 | ai:claude
+pub(super) fn not_held_line(error: &anyhow::Error) -> String {
+    match error.downcast_ref::<Yielded>() {
+        Some(yielded) => format!("not running: {yielded}"),
+        None => format!("not running: admission is not held ({error:#})"),
+    }
+}
 
 pub(super) fn run(root: &Path) -> Result<()> {
     run_passes(root, 180, crate::pr_train::advisor_train_handler)
@@ -130,9 +153,14 @@ pub(super) fn run_passes(
         if let Err(error) = crate::ci_startup_monitor::check(root) {
             eprintln!("auto-train: startup monitor unavailable: {error:#}");
         }
-        let mut stand_down = crate::gate::landing_merge::train_stand_down(root);
+        let stand_down = crate::gate::landing_merge::train_stand_down(root);
+        // A pass without admission does not run, and says why in its own
+        // words: it is not a landing-policy fault. trace:BUG-2703 | ai:claude
         if let Err(error) = hold_admission(root, &stand_down, &mut admission) {
-            stand_down = Err(format!("admission is not held ({error:#})"));
+            eprintln!("auto-train: {}", not_held_line(&error));
+            train_service::record_failure(root, None)?;
+            idle(root, idle_seconds, &mut admission)?;
+            continue;
         }
         // In review-gated mode the land loop is the one merge hand, and a
         // policy that cannot be read runs nothing: the pass decision is
@@ -257,5 +285,46 @@ mod story2905_admission_tests {
             crate::admission_owner::acquire(root, "land run", false)
                 .expect("the land loop takes admission"),
         );
+    }
+
+    /// Review round 3, finding 7: a pass that yielded says who it yielded
+    /// to, and no admission refusal is worded as an unknown landing policy.
+    // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+    #[test]
+    fn bug2703_a_yielded_pass_is_logged_as_a_yield() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let mut held = None;
+        hold_admission(root, &Ok(None), &mut held).unwrap();
+        crate::admission_drain::fixture_drain(
+            root,
+            "joe (uid 1)",
+            "land #4324",
+            600,
+            chrono::Utc::now(),
+        )
+        .unwrap();
+        let error = hold_admission(root, &Ok(None), &mut held).unwrap_err();
+        assert!(held.is_none(), "the claim is given up");
+        let line = not_held_line(&error);
+        assert!(
+            line.starts_with(
+                "not running: yielded admission to advisor loops drained by joe (uid 1)"
+            ),
+            "{line}"
+        );
+        assert!(!line.contains("landing policy"), "{line}");
+        // Another holder is not a yield, and not a policy fault either.
+        let temp = tempfile::tempdir().unwrap();
+        let _land = crate::admission_owner::acquire(temp.path(), "land run", false).unwrap();
+        let error = hold_admission(temp.path(), &Ok(None), &mut held).unwrap_err();
+        let line = not_held_line(&error);
+        assert!(
+            line.starts_with("not running: admission is not held (admission busy: "),
+            "{line}"
+        );
+        assert!(line.contains("purpose land run"), "{line}");
+        assert!(!line.contains("landing policy"), "{line}");
     }
 }

@@ -4549,6 +4549,8 @@ fn bug2703_wait_for(what: &str, mut ready: impl FnMut() -> bool) {
 /// within the configured bound, take none while it holds the exclusive mode,
 /// and take theirs again afterwards.
 // trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.acc625bf | ai:claude
 #[test]
 fn bug2703_ship_gets_admission_while_both_loop_workers_run() {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -4613,6 +4615,8 @@ fn bug2703_ship_gets_admission_while_both_loop_workers_run() {
 /// up at its bound, naming it), and a train pass that has not reached its
 /// boundary keeps its claim.
 // trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.acc625bf | ai:claude
 #[test]
 fn bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress() {
     let (temp, store) = fixture();
@@ -4729,6 +4733,9 @@ fn bug2703_review_process() -> (
 /// step (this fixture's detached HEAD has no ship lease), which no admission
 /// refusal can produce. Afterwards both workers take their claims again.
 // trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.acc625bf | ai:claude
 #[cfg(target_os = "linux")]
 #[test]
 fn bug2703_real_worker_loops_yield_to_the_real_ship_handler() {
@@ -5028,4 +5035,160 @@ fn bug2703_real_worker_loops_yield_to_the_real_ship_handler() {
         train_passes.load(Ordering::SeqCst) >= 2,
         "the auto-train passed again"
     );
+}
+
+/// Review round 3, finding 3 (the BUG-2650 coexistence survives a yield):
+/// the watcher holds its claim beside a running manual cooperative train; a
+/// ship arrives, the watcher yields to its intent at the pass boundary; the
+/// ship cannot get in (the train is running) and gives up at its bound; the
+/// watcher then takes its claim back while that train is still running, and
+/// the train's own claim was never disturbed.
+// trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+#[test]
+fn bug2703_watcher_retakes_its_claim_beside_a_manual_train_after_a_ship_gives_up() {
+    use fs2::FileExt;
+    let (temp, _store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 2\n",
+    )
+    .unwrap();
+    let mut watcher = None;
+    assert_eq!(hold_admission(&root, &mut watcher, false).unwrap(), None);
+    // A manual train takes its cooperative claim and runs (holds run.lock).
+    let train = crate::admission_owner::manual_train_admission(&root, false)
+        .unwrap()
+        .expect("the manual train coexists with the watcher");
+    std::fs::create_dir_all(root.join(".aida/train")).unwrap();
+    let run = std::fs::File::create(root.join(".aida/train/run.lock")).unwrap();
+    run.lock_exclusive().unwrap();
+    assert!(crate::pr_train::admission_train_running(&root).unwrap());
+    assert_eq!(hold_admission(&root, &mut watcher, false).unwrap(), None);
+    let coexisting = vec![
+        "legacy review-watch".to_string(),
+        "cooperative manual train".to_string(),
+    ];
+    assert_eq!(bug2703_loop_claims(&root), coexisting);
+
+    // A ship comes: the watcher yields at its boundary and stays yielded.
+    let ship = {
+        let root = root.clone();
+        std::thread::spawn(move || {
+            crate::admission_owner::ship_admission(&root).map(|c| c.is_some())
+        })
+    };
+    bug2703_wait_for("ship registers its intent", || {
+        crate::admission_owner::yield_reason(&root, "legacy review-watch").is_some()
+    });
+    let reason = hold_admission(&root, &mut watcher, false)
+        .unwrap()
+        .expect("the watcher yields to the waiting ship");
+    assert!(reason.contains("exclusive admission requested"), "{reason}");
+    assert!(watcher.is_none());
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["cooperative manual train".to_string()]
+    );
+    // The ship never gets in beside the running train, and gives up.
+    let error = ship.join().unwrap().expect_err("the ship gives up");
+    let text = format!("{error:#}");
+    assert!(text.contains("gave up after waiting"), "{text}");
+    assert!(text.contains("cooperative manual train"), "{text}");
+
+    // The intent is gone: the watcher retakes its claim, train still running.
+    assert_eq!(
+        crate::admission_owner::yield_reason(&root, "legacy review-watch"),
+        None
+    );
+    assert!(crate::pr_train::admission_train_running(&root).unwrap());
+    assert_eq!(
+        hold_admission(&root, &mut watcher, false).unwrap(),
+        None,
+        "the watcher rejoins the running manual train"
+    );
+    assert!(watcher.is_some());
+    let mut claims = bug2703_loop_claims(&root);
+    claims.sort();
+    let mut want = coexisting;
+    want.sort();
+    assert_eq!(claims, want);
+    // The same holds after a drain and its resume.
+    crate::admission_drain::fixture_drain(&root, "joe (uid 1)", "x", 600, chrono::Utc::now())
+        .unwrap();
+    assert!(hold_admission(&root, &mut watcher, false)
+        .unwrap()
+        .is_some());
+    assert!(watcher.is_none());
+    crate::admission_drain::fixture_resume(&root, "joe (uid 1)").unwrap();
+    assert_eq!(hold_admission(&root, &mut watcher, false).unwrap(), None);
+    assert!(watcher.is_some());
+    drop(train);
+    FileExt::unlock(&run).unwrap();
+}
+
+/// Review round 3, finding 8: a watcher that starts yielded (drained, or a
+/// ship waiting) still sweeps leaked probe refs, the first time it takes
+/// its claim, and only once.
+// trace:BUG-2703 | ai:claude
+#[test]
+fn bug2703_probe_refs_are_swept_the_first_time_the_claim_is_taken() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&[
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "s",
+    ]);
+    let head = git(&["rev-parse", "HEAD"]);
+    let leak = |name: &str| {
+        let name = format!(
+            "refs/aida/review-watch/4000000001-t{}-{name}/base",
+            chrono::Utc::now().timestamp() - 3600
+        );
+        git(&["update-ref", &name, &head]);
+    };
+    let leaked = || {
+        git(&[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/aida/review-watch/",
+        ])
+    };
+    leak("0b7c6a52-1f3e-4c1d-9a7e-5d2f8c3b4a10");
+    // The watcher starts drained: no claim, so no sweep yet.
+    crate::admission_drain::fixture_drain(root, "joe (uid 1)", "x", 600, chrono::Utc::now())
+        .unwrap();
+    let (mut claim, mut swept) = (None, false);
+    assert!(hold_admission(root, &mut claim, false).unwrap().is_some());
+    assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 0);
+    assert!(!swept);
+    assert!(!leaked().is_empty());
+    // The first pass that holds the claim sweeps.
+    crate::admission_drain::fixture_resume(root, "joe (uid 1)").unwrap();
+    assert_eq!(hold_admission(root, &mut claim, false).unwrap(), None);
+    assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 1);
+    assert!(swept);
+    assert_eq!(leaked(), "");
+    // Later passes do not sweep again.
+    leak("1c2d3e4f-1f3e-4c1d-9a7e-5d2f8c3b4a10");
+    assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 0);
+    assert!(!leaked().is_empty());
 }

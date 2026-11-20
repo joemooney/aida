@@ -3252,6 +3252,7 @@ mod loop_tests {
     /// AC4: an active drain holds the supervisor's respawn (no launch, no
     /// failure), and once it ends the supervisor launches again.
     // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac00712a | ai:claude
     #[test]
     fn bug2703_drain_holds_the_supervisor_respawn() {
         let temp = tempfile::tempdir().unwrap();
@@ -3295,6 +3296,7 @@ mod loop_tests {
     /// AC4: status shows the controller's claim and its age, the drain and
     /// any waiting land, ship or train.
     // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac00712a | ai:claude
     #[test]
     fn bug2703_status_shows_claim_age_drain_and_waiters() {
         let temp = tempfile::tempdir().unwrap();
@@ -3341,6 +3343,7 @@ mod loop_tests {
     /// claims and ages: its own controller's and the auto-train's, whose
     /// legacy receipt (no acquisition time) shows an unknown age, not zero.
     // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac00712a | ai:claude
     #[test]
     fn bug2703_loops_status_projects_both_workers_claims() {
         if TRAIN {

@@ -286,10 +286,16 @@ pub(crate) fn fixture_drain(
 }
 
 #[cfg(test)]
+pub(crate) fn fixture_resume(root: &Path, actor: &str) -> Result<String> {
+    change(root, None, actor.into(), Utc::now())
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
     // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac00712a | ai:claude
     #[test]
     fn bug2703_drain_is_audited_bounded_and_expires() {
         let temp = tempfile::tempdir().unwrap();
@@ -327,5 +333,113 @@ mod tests {
         std::fs::create_dir_all(directory(temp.path())).unwrap();
         std::fs::write(directory(temp.path()).join(FILE), b"{broken").unwrap();
         assert!(active(temp.path()).is_err());
+    }
+
+    /// Review round 3, finding 1: the refusal side of the authority gate,
+    /// through the real `drain()` and `resume()`. A valid grant for a seat
+    /// other than advisor, a seated session with no grant and an invalid
+    /// grant are all refused, and the journal is left exactly as it was.
+    /// Each seat grant is asserted Valid first, so only the advisor guard in
+    /// `control_actor` can refuse it: accept any seat there, or drop the
+    /// call from `drain()` or `resume()`, and this test fails.
+    // trace:BUG-2703 | ai:claude
+    // trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac00712a | ai:claude
+    #[test]
+    fn bug2703_drain_and_resume_refuse_without_advisor_authority() {
+        use crate::gate::seat_authority::GRANT_ENV;
+        use crate::gate::seat_authority::{grant_check, test_support::mint_grant_for, GrantCheck};
+        // The grant store lives under a pinned HOME: run in its own process.
+        if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+            return;
+        }
+        const REFUSAL: &str = "requires an advisor grant or an unseated operator";
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("repo");
+        let home = temp.path().join("home");
+        for dir in [&root, &home] {
+            std::fs::create_dir(dir).unwrap();
+        }
+        let mut env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &root,
+            "advisor",
+            &[],
+            &[
+                ("HOME", Some(home.to_str().unwrap())),
+                ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ],
+        );
+        // Mint in the pinned home, as the session's launcher would.
+        let mint =
+            |seat: &str| mint_grant_for(&root, crate::test_env::HERMETIC_TEST_USER, seat, &[]);
+        let advisor = mint("advisor");
+        let journal = || std::fs::read(directory(&root).join(FILE)).ok();
+        let refused = |what: &str, journal_before: &Option<Vec<u8>>| {
+            for (control, result) in [
+                (
+                    "advisor loops drain",
+                    drain(&root, "land #4324", Some("10m")),
+                ),
+                ("advisor loops resume", resume(&root)),
+            ] {
+                let error = format!("{:#}", result.expect_err(what));
+                assert!(
+                    error.contains(&format!("{control} {REFUSAL}")),
+                    "{what}: {error}"
+                );
+            }
+            assert_eq!(&journal(), journal_before, "{what}: the journal changed");
+        };
+        // Run every refusal twice: with no drain recorded (nothing may be
+        // written) and with an advisor's drain active (it may not be
+        // cleared, replaced or extended).
+        for drained in [false, true] {
+            if drained {
+                env.set_key("AIDA_SESSION_ROLE", "advisor");
+                env.set_key(GRANT_ENV, &advisor);
+                drain(&root, "advisor's own drain", Some("10m")).unwrap();
+                assert!(active(&root).unwrap().is_some());
+            } else {
+                assert_eq!(journal(), None);
+            }
+            let before = journal();
+            // (a) A valid grant for a seat that is not the advisor.
+            for seat in ["implementer", "reviewer"] {
+                let grant = mint(seat);
+                env.set_key("AIDA_SESSION_ROLE", seat);
+                env.set_key(GRANT_ENV, &grant);
+                assert!(
+                    matches!(grant_check(&root), GrantCheck::Valid(ref g) if g.seat == seat),
+                    "fixture {seat} grant must validate so only the seat guard can refuse"
+                );
+                refused(seat, &before);
+            }
+            // (b) A seated session with no grant at all.
+            env.unset_key(GRANT_ENV);
+            for seat in ["implementer", "advisor"] {
+                env.set_key("AIDA_SESSION_ROLE", seat);
+                assert!(matches!(grant_check(&root), GrantCheck::Absent));
+                refused("seated without a grant", &before);
+            }
+            // (c) A grant handle that does not validate, seated or not.
+            env.set_key(GRANT_ENV, "invalid-grant");
+            refused("invalid grant, seated", &before);
+            env.unset_key("AIDA_SESSION_ROLE");
+            refused("invalid grant, unseated", &before);
+            assert_eq!(active(&root).unwrap().is_some(), drained);
+        }
+        // The same calls succeed with the authority, and name their actor:
+        // the unseated operator resumes, the advisor drains.
+        env.unset_key(GRANT_ENV);
+        env.unset_key("AIDA_SESSION_ROLE");
+        assert_eq!(resume(&root).unwrap(), "Advisor loops drain cleared.");
+        assert!(matches!(
+            load(&root).unwrap().events.last(),
+            Some(Event::Resume { actor, .. }) if actor.contains("(uid ")
+        ));
+        env.set_key("AIDA_SESSION_ROLE", "advisor");
+        env.set_key(GRANT_ENV, &advisor);
+        drain(&root, "land #4324", None).unwrap();
+        let drained = active(&root).unwrap().unwrap();
+        assert!(drained.actor.contains("(advisor "), "{}", drained.actor);
     }
 }

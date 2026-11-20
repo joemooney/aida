@@ -1164,7 +1164,12 @@ against the same bound, so a stalled process holding that lock cannot keep
 the requester waiting past it. The refusal then names the lock's holder.
 A waiting request is removed when its requester gets
 admission, gives up or dies. Each request also expires 30 seconds after its
-bound. <!-- trace:BUG-2703 | ai:claude -->
+bound. Requests and holder receipts are written by rename, so a reader never
+sees one half written. A request file that cannot be parsed (left by an
+interrupted write) blocks nothing: it is ignored and removed once it is 30
+seconds old. A review-watch that gave up its claim during a manual train
+takes it back while that train is still running.
+<!-- trace:BUG-2703 | ai:claude -->
 
 To keep the loops off admission for longer, for example during a long
 landing session, use `aida advisor loops drain --reason "<why>" --for 2h`
