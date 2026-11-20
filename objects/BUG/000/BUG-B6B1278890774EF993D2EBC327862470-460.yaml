@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T13:24:25.546882318Z
+modified_at: 2026-11-20T14:11:38.244262934Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1198,6 +1198,13 @@ comments:
   content: 'advisor-121 2026-11-20 06:25: D4 EDGE CASE (one occurrence, watching). BUG-2705 reached Done at its r1 push (04:03) and stayed Done; #4358 (full trailer) landed via train #4361 at ~05:49 while main was RED at 9025b1b0 (a flake, green again 06:00 at 78b43709). 30 min later it was still not Completed (manual call 06:25). It differs from tonight''s four D4 successes in two ways: (1) it merged while main was red; (2) a later rework round (r2, 04:17) pushed again after Done without a status transition. Check whether the landing scan skips or defers commits merged during a red main, or ignores a Done spec whose latest PR head came from a post-Done rework push.'
   created_at: 2026-11-20T13:24:25.546882318Z
   modified_at: 2026-11-20T13:24:25.546882318Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f94c-9d29-7ab0-8bd9-67427834b38c
+  author: joe
+  content: 'advisor-121 07:12 correction to the 06:25 D4 edge case: the landing scan for #4358 DID run, at ~07:10 (it auto-completed #4358''s review story at 78b43709), ~80 min after the merge and after main went green and autopromote advanced live. So the BUG-2705 ''miss'' was most likely a DELAY (scan deferred while main was red or until the next tick), not a skip; my manual call at 06:25 pre-empted it. The open question is narrower: should a Done spec''s landing completion wait for a green main or the next promotion? An 80-minute delay is acceptable; no fix needed unless delays exceed a tick or two.'
+  created_at: 2026-11-20T14:11:38.244262934Z
+  modified_at: 2026-11-20T14:11:38.244262934Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
