@@ -7431,6 +7431,7 @@ fn run_tracked_agent_after_spawn(
         let supervision = crate::agent_rotation::Supervision {
             policy: crate::agent_rotation::RotationPolicy::default(),
             on_gap: &mut no_probe,
+            tick: &mut || std::thread::sleep(std::time::Duration::from_secs(1)),
         };
         match run_rotating_agent(
             binary,
@@ -7574,8 +7575,13 @@ fn run_rotating_agent(
     on_spawn: impl FnOnce(),
 ) -> Result<crate::agent_rotation::RotationOutcome> {
     use crate::agent_rotation::{self, RotationDecision, RotationOutcome};
+    use crate::gate::seat_authority::ChildGrantRefused;
     use crate::relay_mail::TerminalReason;
-    let agent_rotation::Supervision { policy, on_gap } = supervision;
+    let agent_rotation::Supervision {
+        policy,
+        on_gap,
+        tick,
+    } = supervision;
     // ONE seat for the supervisor, the child's handoff commands and its
     // SessionStart hook: the child gets it as AIDA_ROTATION_SEAT.
     // An explicit `--seat` names it; else the role (or vendor). trace:STORY-2745 | ai:claude
@@ -7654,9 +7660,10 @@ fn run_rotating_agent(
             );
             match attempt {
                 Ok(exit) => break (exit, spawned_at),
-                Err(error) if generation > 1 && relay_grant_held(&plan) => {
+                // trace:BUG-2653 | ai:codex
+                Err(error) if generation > 1 && ChildGrantRefused::is_parent_expired(&error) => {
                     eprintln!("rotation: the child grant was refused: {error:#}");
-                    if !relaunch_gate(&plan, generation, policy.countdown_secs)? {
+                    if !relaunch_gate(&plan, generation, policy.countdown_secs, tick)? {
                         return Ok(cancel_rotation(&mut run, &plan));
                     }
                 }
@@ -7698,7 +7705,7 @@ fn run_rotating_agent(
             run.end(TerminalReason::Exit);
             return Ok(RotationOutcome::Exited(status));
         };
-        if !relaunch_gate(&plan, generation + 1, policy.countdown_secs)? {
+        if !relaunch_gate(&plan, generation + 1, policy.countdown_secs, tick)? {
             return Ok(cancel_rotation(&mut run, &plan));
         }
         if let Some(lease_id) = &plan.lease_id {
@@ -7732,22 +7739,17 @@ pub(crate) struct GenerationExit {
     native_session_id: Option<String>,
 }
 
-/// Whether the relay's grant is expired with no usable renewal, so a
-/// refused child grant is a hold, not a failure.
-// trace:BUG-2585 | ai:claude
-fn relay_grant_held(plan: &AgentLaunchPlan) -> bool {
-    plan.role.as_deref().is_some_and(|role| {
-        crate::relay_grant::hold(&plan.project_root, &canonical_role_name(role), false).is_some()
-    })
-}
-
 /// The relaunch gate before generation `next`: hold while the relay grant
 /// is expired, count down, and hold again if the grant expired during the
 /// countdown. `false` when the operator stopped it.
 // trace:BUG-2585 | ai:claude
-fn relaunch_gate(plan: &AgentLaunchPlan, next: u64, countdown_secs: u64) -> Result<bool> {
+fn relaunch_gate(
+    plan: &AgentLaunchPlan,
+    next: u64,
+    countdown_secs: u64,
+    tick: &mut dyn FnMut(),
+) -> Result<bool> {
     let stop = crate::agent_rotation::StopFlag::install()?;
-    let mut tick = || std::thread::sleep(std::time::Duration::from_secs(1));
     let mut countdown = |flag: &std::sync::atomic::AtomicBool,
                          tick: &mut dyn FnMut(),
                          out: &mut dyn std::io::Write| {
@@ -7759,11 +7761,11 @@ fn relaunch_gate(plan: &AgentLaunchPlan, next: u64, countdown_secs: u64) -> Resu
             &plan.name,
             &canonical_role_name(role),
             &stop.flag,
-            &mut tick,
+            tick,
             &mut std::io::stderr(),
             &mut countdown,
         ),
-        None => countdown(&stop.flag, &mut tick, &mut std::io::stderr()),
+        None => countdown(&stop.flag, tick, &mut std::io::stderr()),
     };
     drop(stop);
     Ok(proceed)

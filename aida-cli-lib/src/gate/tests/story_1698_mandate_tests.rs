@@ -571,7 +571,7 @@ fn statusline_shows_an_active_mandate_only() {
 
 #[test]
 fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     let handler = src
         .split("pub(crate) fn pr_ship_handler(")
         .nth(1)
@@ -593,7 +593,10 @@ fn pr_ship_consults_the_mandate_at_every_hold_gate_and_before_the_merge() {
         train.contains("release_hold_under_mandate("),
         "the train releases through the shared sequence, not a copy"
     );
-    let before_merge = handler.split(".merge_change(").next().expect("merge call");
+    let before_merge = handler
+        .split("landing_merge::merge(")
+        .next()
+        .expect("merge call");
     assert!(
         before_merge.contains("mandate_cover_still_active(cover)"),
         "the mandate is re-read immediately before the merge call"
@@ -1104,7 +1107,7 @@ fn a_mandate_released_hold_is_re_armed_after_a_merge_failure() {
 
 #[test]
 fn every_failure_after_a_mandate_release_re_arms_the_hold() {
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     let handler = src.split("pub(crate) fn pr_ship_handler(").nth(1).unwrap();
     let release = handler
         .find("crate::gate::merge_hold_core::release_hold(")
@@ -3955,4 +3958,335 @@ fn bug_2572_stalled_batch_read_times_out() {
     let err = StoreHistoryBatch::read(tmp.path(), &ids).unwrap_err();
     assert!(err.contains("timed out"), "{err}");
     assert!(started.elapsed() < std::time::Duration::from_secs(20));
+}
+
+// ── STORY-2893: the next-actor preview collects without writing ───────────
+
+/// Every file under `dir` with its bytes, so a test can assert a collection
+/// left a directory exactly as it found it.
+// trace:STORY-2893 | ai:claude
+fn story_2893_tree(dir: &Path) -> std::collections::BTreeMap<PathBuf, Vec<u8>> {
+    let mut out = std::collections::BTreeMap::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if let Ok(bytes) = std::fs::read(&path) {
+                out.insert(path, bytes);
+            }
+        }
+    }
+    out
+}
+
+/// A PR-42 fixture shipping TASK-1 under an active mandate. With `excluded`,
+/// its code also traces TASK-176, the agreed ID of TASK-1-152 whose store
+/// history once carried a `security` tag: an operator-only exclusion that a
+/// recording collection appends to the sticky exclusion ledger.
+// trace:STORY-2893 | ai:claude
+fn story_2893_preview_fixture(
+    root: &Path,
+    excluded: bool,
+) -> (crate::test_env::AmbientGuard, String) {
+    let git_out = |dir: &Path, args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git_out(root, &["init", "-q"]);
+    git_out(
+        root,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/fixture/project.git",
+        ],
+    );
+    let trace = if excluded { "//! trace:TASK-176\n" } else { "" };
+    std::fs::write(
+        root.join("code.rs"),
+        format!("//! trace:TASK-1\n{trace}fn changed() {{ let x = 1; }}\n"),
+    )
+    .unwrap();
+    git_out(root, &["add", "code.rs"]);
+    git_out(root, &["commit", "-qm", "base"]);
+    let base = git_out(root, &["rev-parse", "HEAD"]);
+    git_out(root, &["update-ref", "refs/remotes/origin/main", &base]);
+    std::fs::write(
+        root.join("code.rs"),
+        format!("//! trace:TASK-1\n{trace}fn changed() {{ let x = 2; }}\n"),
+    )
+    .unwrap();
+    git_out(root, &["add", "code.rs"]);
+    git_out(root, &["commit", "-qm", "change (TASK-1)"]);
+    let head = git_out(root, &["rev-parse", "HEAD"]);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "store_path = '.aida-store'\n",
+    )
+    .unwrap();
+    let store = root.join(".aida-store");
+    std::fs::create_dir(&store).unwrap();
+    git_out(&store, &["init", "-q"]);
+    let put = |id: &str, req: &aida_core::Requirement| {
+        let path = store.join(aida_core::object_store::relative_object_path(id).unwrap());
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, serde_yaml::to_string(req).unwrap()).unwrap();
+    };
+    let mut task = plain();
+    task.spec_id = Some("TASK-1".into());
+    put("TASK-1", &task);
+    let mut alias = plain();
+    alias.spec_id = Some("TASK-1-152".into());
+    alias.agreed_id = Some("TASK-176".into());
+    if excluded {
+        alias.tags.insert("security".into());
+    }
+    put("TASK-1-152", &alias);
+    git_out(&store, &["add", "-A"]);
+    git_out(&store, &["commit", "-qm", "v1 store"]);
+    if excluded {
+        // Only the store history now holds the exclusion.
+        alias.tags.clear();
+        put("TASK-1-152", &alias);
+        git_out(&store, &["add", "-A"]);
+        git_out(&store, &["commit", "-qm", "v2 strip tag"]);
+    }
+    let gh = root.join("gh-stub");
+    crate::test_exec::write_executable(&gh, format!("#!/bin/sh\nprintf '%s\\n' '{{\"baseRefName\":\"main\",\"headRefName\":\"feature\",\"headRefOid\":\"{head}\"}}'\n"));
+    let ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        root,
+        "advisor",
+        &[],
+        &[
+            ("USER", Some(crate::test_env::HERMETIC_TEST_USER)),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+        ],
+    );
+    git_out(&store, &["add", "-A"]);
+    git_out(
+        &store,
+        &["commit", "--allow-empty", "-qm", "seed fixture seat roster"],
+    );
+    let mut mandate = active(false);
+    mandate.principal = crate::current_user_id(None);
+    mandate.issued_at = Utc::now() - Duration::minutes(1);
+    mandate.expires_at = Utc::now() + Duration::hours(1);
+    plant(&mandate_dir().unwrap(), &mandate, 0o600);
+    // A held PR, as the mandate path ships it (supervision hold).
+    let hold = crate::gate::merge_hold_core::typed_hold(
+        42,
+        crate::gate::merge_hold_core::HoldReasonKind::Supervision,
+        "operator review",
+        None,
+    );
+    crate::gate::merge_hold_core::place_hold(root, &hold).unwrap();
+    (ambient, head)
+}
+
+fn story_2893_subject<T>(f: impl FnOnce() -> T) -> T {
+    crate::with_review_pr_subject(
+        crate::ReviewPrSubject {
+            head_ref: "feature".into(),
+            commit_subjects: vec!["change (TASK-1)".into()],
+        },
+        f,
+    )
+}
+
+/// A covering decision that still reads the collected facts: every traced
+/// spec resolved and the sticky exclusion ledger readable and empty.
+fn story_2893_cover_when_clean(
+    check: &ShipCheck<'_>,
+) -> std::result::Result<String, MandateRefusal> {
+    match check.ledger {
+        Ok(ledger) if ledger.is_empty() && check.specs_resolved => {
+            Ok("6f1c1d6e-0000-4000-8000-000000000001".into())
+        }
+        other => Err(MandateRefusal::TraceEvidenceUnreadable(format!(
+            "resolved={} ledger={other:?} specs={:?}",
+            check.specs_resolved,
+            check.specs.iter().map(|s| &s.id).collect::<Vec<_>>()
+        ))),
+    }
+}
+
+// ADR-76 fixture for the read-only preview behind `aida pr` next-actor
+// reporting: the real collector, the real exclusion ledger and gate ledger.
+// trace:STORY-2893 | ai:claude
+#[test]
+fn story_2893_preview_matches_the_ship_cover_and_writes_no_gate_evidence() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let ids = ["TASK-1".to_string()];
+
+    // The covered case runs first: the refused case's ship appends to the
+    // process-wide sticky exclusion ledger.
+    // Covered: with nothing excluded, preview and ship cover alike under the
+    // same decision, and the preview again writes nothing.
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (_ambient, head) = story_2893_preview_fixture(root, false);
+        let watched = || {
+            (
+                story_2893_tree(&mandate_dir().unwrap()),
+                story_2893_tree(&root.join(".aida")),
+            )
+        };
+        let before = watched();
+        let preview = story_2893_subject(|| {
+            crate::gate::mandate_ship::preview_cover_deciding(
+                root,
+                root,
+                root,
+                42,
+                &ids,
+                "feature",
+                &head,
+                story_2893_cover_when_clean,
+            )
+        })
+        .expect("a clean preview covers");
+        assert!(before == watched(), "a covering preview writes nothing");
+        let ship = story_2893_subject(|| {
+            crate::gate::mandate_ship::mandate_ship_cover(
+                root,
+                root,
+                root,
+                42,
+                &ids,
+                Some("feature"),
+                || Some(head.clone()),
+                false,
+                story_2893_cover_when_clean,
+                true,
+                None,
+            )
+        })
+        .expect("the ship covers too");
+        assert_eq!(preview.id, ship.id);
+    }
+
+    // Refused: a history-only security exclusion is an operator refusal.
+    {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let (_ambient, head) = story_2893_preview_fixture(root, true);
+        let watched = || {
+            (
+                story_2893_tree(&mandate_dir().unwrap()),
+                story_2893_tree(&root.join(".aida")),
+            )
+        };
+        let before = watched();
+        let preview = story_2893_subject(|| {
+            crate::gate::mandate_ship::preview_ship_cover(
+                root, root, root, 42, &ids, "feature", &head,
+            )
+        });
+        assert!(
+            matches!(preview, Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-176"),
+            "{preview:?}"
+        );
+        assert!(
+            before == watched(),
+            "a preview must not append sticky exclusions or gate evidence"
+        );
+        // Moving evidence: a head the forge no longer reports refuses
+        // closed, and still writes nothing.
+        let moved = story_2893_subject(|| {
+            crate::gate::mandate_ship::preview_ship_cover(
+                root,
+                root,
+                root,
+                42,
+                &ids,
+                "feature",
+                &"0".repeat(40),
+            )
+        });
+        assert!(moved.is_err(), "{moved:?}");
+        assert!(before == watched(), "a refused preview writes nothing");
+        // The recording ship reaches the same refusal, and does write: the
+        // fixture is sensitive to the preview's read-only controls.
+        let ship = story_2893_subject(|| {
+            crate::gate::mandate_ship::mandate_ship_cover(
+                root,
+                root,
+                root,
+                42,
+                &ids,
+                Some("feature"),
+                || Some(head.clone()),
+                false,
+                crate::gate::mandate::ship_decision,
+                true,
+                None,
+            )
+        });
+        // Same decision; only the reason's provenance differs (the ship
+        // reads back the exclusion it just recorded).
+        assert!(
+            matches!(ship, Err(MandateRefusal::Excluded { ref spec, .. }) if spec == "TASK-176"),
+            "preview and ship decide alike: {ship:?}"
+        );
+        let after = watched();
+        assert!(
+            after.0 != before.0,
+            "the ship records the sticky exclusion the preview left alone"
+        );
+    }
+}
+
+/// The preview's carry-over proof runs on a read-only site: it still proves a
+/// clean main merge, but leaves no proof on the gate ledger; the recording
+/// site does append one.
+// trace:STORY-2893 | ai:claude
+#[test]
+fn story_2893_preview_carry_over_proves_without_appending() {
+    use crate::gate::review_carryover::tests as fx;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fx::fixture();
+    let repo = tmp.path();
+    let candidates = vec![approval(&approved)];
+    let clean = fx::clean_merge(repo);
+    let prove = |record: bool| {
+        let site = crate::gate::mandate_ship::carry_over_site(repo, Some("main"), record);
+        crate::gate::mandate_ship::mandate_carry_over_at_site(&site, 42, &candidates, Some(&clean))
+    };
+    assert_eq!(prove(false), Some(Ok(clean.clone())));
+    assert!(
+        fx::proof_event(repo, &clean).is_none(),
+        "a preview leaves no carry-over evidence"
+    );
+    assert_eq!(prove(true), Some(Ok(clean.clone())));
+    assert!(fx::proof_event(repo, &clean).is_some());
 }

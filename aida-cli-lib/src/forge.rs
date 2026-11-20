@@ -1132,6 +1132,24 @@ pub trait Forge {
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult>;
 
+    /// [`Forge::merge_change`] with `guard` run immediately before EACH
+    /// mutating transport call, retries and post-wait attempts included: a
+    /// guard error stops the merge before that call is sent. The merge
+    /// boundary passes its landing recheck here, so authority, policy or
+    /// base that changed during a wait is judged again before the next
+    /// attempt (promotion 23 review F1). There is deliberately no default:
+    /// a single guard around a merge that retries or waits internally would
+    /// let a later attempt go unchecked, so every forge places the guard
+    /// inside its own attempt loop (review round 3).
+    // trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<MergeResult>;
+
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
     /// Only a normal invocation's verified train context can enter this path.
     fn merge_train_change(
@@ -1770,12 +1788,13 @@ pub fn forge_cli_status(project_root: &Path) -> (ForgeKind, String) {
 
 /// Read `origin`'s URL via `git remote get-url origin`.
 pub fn origin_url(project_root: &Path) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
+    // A scoped read deadline (`train --check --timeout`) bounds the read.
+    // trace:TASK-3792 | ai:claude
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(project_root)
-        .args(["remote", "get-url", "origin"])
-        .output()
-        .ok()?;
+        .args(["remote", "get-url", "origin"]);
+    let out = crate::forge_lookup::deadline_output(cmd, Command::output).ok()?;
     if !out.status.success() {
         return None;
     }
@@ -1976,14 +1995,8 @@ pub fn forge_for_open_change(project_root: &Path) -> Box<dyn Forge> {
 // trace:BUG-1774 | ai:claude
 // trace:BUG-B6B1278890774EF993D2EBC327862470-048 | ai:claude
 pub(crate) fn corpus_gate_spec_hints(project_root: &Path, c: &ChangeRef) -> Vec<String> {
-    let mut ids = crate::pr_ship::extract_spec_ids_from_text(&c.branch);
-    if let Some(title) = c.title.as_deref() {
-        for id in crate::pr_ship::extract_spec_ids_from_text(title) {
-            if !ids.contains(&id) {
-                ids.push(id);
-            }
-        }
-    }
+    // BUG-2702: the branch by convention only. trace:BUG-2702 | ai:claude
+    let ids = crate::pr_ship::extract_pr_spec_ids(&c.branch, c.title.as_deref().unwrap_or(""));
     crate::gate::trailer_coverage::covered_gate_ids(project_root, &c.branch, Some(c.id), ids)
 }
 
@@ -2062,6 +2075,7 @@ impl GitHubForge {
         opts: &MergeOptions,
         sink: &mut dyn crate::network_retry::RetrySink,
         mut train: Option<&mut crate::pr_train::VerifiedTrainMerge<'_>>,
+        mut guard: Option<&mut dyn FnMut() -> Result<()>>,
     ) -> Result<MergeResult> {
         // STORY-516: route the pre-EPIC-35 `aida pr ship` / orchestrator merge
         // through here without changing behaviour. Two things the inline call
@@ -2127,6 +2141,11 @@ impl GitHubForge {
                     context
                         .enforce(self, &self.project_root, c, opts)
                         .map_err(std::io::Error::other)?;
+                }
+                // The caller's per-attempt guard (the merge boundary's landing
+                // recheck), before every attempt. trace:STORY-2903 | ai:claude
+                if let Some(guard) = guard.as_deref_mut() {
+                    guard().map_err(std::io::Error::other)?;
                 }
                 crate::pr_train::before_train_forge_call("GitHub merge attempt")
                     .map_err(std::io::Error::other)?;
@@ -2223,10 +2242,9 @@ impl GitHubForge {
         let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
             anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
         })?;
-        Command::new(&gh)
-            .current_dir(&self.project_root)
-            .args(args)
-            .output_retrying_etxtbsy()
+        let mut cmd = Command::new(&gh);
+        cmd.current_dir(&self.project_root).args(args);
+        crate::forge_lookup::deadline_output(cmd, Command::output_retrying_etxtbsy)
             .context("could not invoke `gh` — is the GitHub CLI installed?")
     }
 
@@ -2962,22 +2980,34 @@ impl Forge for GitHubForge {
         let cfg = crate::network_retry::RetryConfig::load(&self.project_root);
         let label = format!("gh pr view {id} --json metadata");
         let project_root = self.project_root.clone();
-        let out = crate::network_retry::run_with_retry_checked(&label, &cfg, sink, || {
-            // The final verified-train gate also uses this legacy reader.
-            // Checkpoint every attempt, including retries after transport errors.
-            // trace:STORY-2401 | ai:codex
-            crate::pr_train::before_train_forge_call("GitHub metadata attempt")
-                .map_err(std::io::Error::other)?;
-            let mut c = Command::new(&gh);
-            c.current_dir(&project_root).args([
-                "pr",
-                "view",
-                &id_str,
-                "--json",
-                "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
-            ]);
-            Ok(c)
-        })
+        // A scoped read deadline (`train --check --timeout`, whose approval
+        // gate reads the base through here) bounds every attempt and the
+        // backoff between them. trace:TASK-3792 | ai:claude
+        let out = crate::network_retry::retry_output(
+            &label,
+            &cfg,
+            sink,
+            crate::forge_lookup::forge_lookup_deadline(),
+            || {
+                // The final verified-train gate also uses this legacy reader.
+                // Checkpoint every attempt, including retries after transport errors.
+                // trace:STORY-2401 | ai:codex
+                crate::pr_train::before_train_forge_call("GitHub metadata attempt")
+                    .map_err(std::io::Error::other)?;
+                let mut c = Command::new(&gh);
+                c.current_dir(&project_root).args([
+                    "pr",
+                    "view",
+                    &id_str,
+                    "--json",
+                    "state,title,author,mergedAt,baseRefName,headRefName,headRefOid,isCrossRepository,headRepository,isDraft",
+                ]);
+                crate::forge_lookup::deadline_output(
+                    c,
+                    crate::process_retry::command_output_retrying_etxtbsy,
+                )
+            },
+        )
         .context("could not invoke `gh pr view`")?;
         anyhow::ensure!(
             out.status.success(),
@@ -3240,7 +3270,18 @@ impl Forge for GitHubForge {
         opts: &MergeOptions,
         sink: &mut dyn crate::network_retry::RetrySink,
     ) -> Result<MergeResult> {
-        self.merge_checked(c, opts, sink, None)
+        self.merge_checked(c, opts, sink, None, None)
+    }
+
+    // trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<MergeResult> {
+        self.merge_checked(c, opts, sink, None, Some(guard))
     }
 
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
@@ -3251,7 +3292,7 @@ impl Forge for GitHubForge {
         sink: &mut dyn crate::network_retry::RetrySink,
         context: &mut crate::pr_train::VerifiedTrainMerge<'_>,
     ) -> Result<MergeResult> {
-        self.merge_checked(c, opts, sink, Some(context))
+        self.merge_checked(c, opts, sink, Some(context), None)
     }
 
     fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
@@ -4034,7 +4075,18 @@ impl Forge for GitLabForge {
         &self,
         c: &ChangeRef,
         opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+    ) -> Result<MergeResult> {
+        self.merge_change_guarded(c, opts, sink, &mut || Ok(()))
+    }
+
+    // trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
         _sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> Result<()>,
     ) -> Result<MergeResult> {
         // BUG-1774: the corpus half of the merge chokepoint, same contract as
         // the GitHub provider. trace:BUG-1774 | ai:claude
@@ -4117,6 +4169,10 @@ impl Forge for GitLabForge {
                             &snapshot.head_sha,
                             &snapshot.title,
                         );
+                        // The caller's guard immediately before every mutating
+                        // call, after each wait (promotion 23 review r3).
+                        // trace:STORY-2903 | ai:claude
+                        guard()?;
                         let rebased = self.glab_api_put(&request.path, &[])?;
                         anyhow::ensure!(
                             rebased.status.success(),
@@ -4139,6 +4195,8 @@ impl Forge for GitLabForge {
                         .iter()
                         .map(|(key, value)| (key.as_str(), value.as_str()))
                         .collect();
+                    // trace:STORY-2903 | ai:claude
+                    guard()?;
                     let merged = self.glab_api_put(&request.path, &fields)?;
                     if merged.status.success() {
                         return Ok(MergeResult {
@@ -4404,6 +4462,19 @@ impl Forge for PureGitForge {
         Ok(CiProbeResult::NoSignal(
             "no forge CI (pure-git)".to_string(),
         ))
+    }
+
+    // A pure-git merge is one local operation with no retry or wait, so the
+    // guard runs once, immediately before it. trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &ChangeRef,
+        opts: &MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> Result<()>,
+    ) -> Result<MergeResult> {
+        guard()?;
+        self.merge_change(c, opts, sink)
     }
 
     fn merge_change(
@@ -6135,6 +6206,19 @@ pub(crate) mod fake {
         // trace:TASK-2891 | ai:codex
         pub(crate) retitled: Arc<Mutex<Vec<(u64, String)>>>,
         pub(crate) retitle_error: Option<String>,
+        /// When set, `merge_change` records each change id here and merges
+        /// (after `merge_hold`); unset, it is not scripted and fails.
+        // trace:STORY-2905 | ai:claude
+        pub(crate) merges: Option<Arc<Mutex<Vec<u64>>>>,
+        pub(crate) merge_hold: std::time::Duration,
+        /// `merge_change_guarded` fails this many attempts transiently
+        /// first, running `between_attempts` in each retry wait, the way the
+        /// GitHub retry loop does.
+        // trace:STORY-2903 | ai:claude
+        pub(crate) transient_attempts: u32,
+        pub(crate) between_attempts: Option<Arc<dyn Fn() + Send + Sync>>,
+        /// Every transport attempt `merge_change_guarded` sent.
+        pub(crate) attempts: Arc<Mutex<u32>>,
     }
 
     impl RecordingForge {
@@ -6159,6 +6243,11 @@ pub(crate) mod fake {
                 opened: Arc::new(Mutex::new(Vec::new())),
                 retitled: Arc::new(Mutex::new(Vec::new())),
                 retitle_error: None,
+                merges: None,
+                merge_hold: std::time::Duration::ZERO,
+                transient_attempts: 0,
+                between_attempts: None,
+                attempts: Arc::new(Mutex::new(0)),
             }
         }
 
@@ -6304,11 +6393,41 @@ pub(crate) mod fake {
         }
         fn merge_change(
             &self,
-            _: &ChangeRef,
-            _: &MergeOptions,
+            c: &ChangeRef,
+            o: &MergeOptions,
             _: &mut dyn crate::network_retry::RetrySink,
         ) -> Result<MergeResult> {
-            anyhow::bail!("RecordingForge: merge_change not scripted")
+            let Some(merges) = &self.merges else {
+                anyhow::bail!("RecordingForge: merge_change not scripted")
+            };
+            merges.lock().unwrap().push(c.id);
+            std::thread::sleep(self.merge_hold);
+            Ok(MergeResult {
+                merged: true,
+                sha: None,
+                method: o.method,
+            })
+        }
+        // trace:STORY-2903 | ai:claude
+        fn merge_change_guarded(
+            &self,
+            c: &ChangeRef,
+            o: &MergeOptions,
+            sink: &mut dyn crate::network_retry::RetrySink,
+            guard: &mut dyn FnMut() -> Result<()>,
+        ) -> Result<MergeResult> {
+            let mut failing = self.transient_attempts;
+            loop {
+                guard()?;
+                *self.attempts.lock().unwrap() += 1;
+                if failing == 0 {
+                    return self.merge_change(c, o, sink);
+                }
+                failing -= 1;
+                if let Some(wait) = &self.between_attempts {
+                    wait();
+                }
+            }
         }
         fn comment(&self, c: &ChangeRef, body: &str) -> Result<()> {
             self.commented
@@ -7179,6 +7298,36 @@ pub(crate) fn gh_api(root: &Path, args: &[&str], input: Option<&str>) -> Result<
             args.join(" "),
             String::from_utf8_lossy(&out.stderr).trim()
         );
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Bounded read port for the throughput guard (`aida land stalls`): check
+/// runs, job logs and the base branch's runs. Read-only. A call that does not
+/// finish in `timeout`, or exits non-zero, is an error with gh's first line.
+// trace:STORY-2906 | ai:claude
+pub(crate) fn github_stall_read(
+    root: &Path,
+    args: &[&str],
+    timeout: std::time::Duration,
+) -> std::result::Result<String, String> {
+    let gh = crate::resolve_gh_binary().ok_or("gh is not installed")?;
+    let mut command = std::process::Command::new(gh);
+    command
+        .current_dir(root)
+        .env("GH_PROMPT_DISABLED", "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .stdin(std::process::Stdio::null())
+        .args(args);
+    let out = crate::command_output_with_timeout(command, timeout)
+        .ok_or_else(|| format!("gh timed out after {}s or did not start", timeout.as_secs()))?;
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr)
+            .lines()
+            .next()
+            .unwrap_or("gh failed")
+            .trim()
+            .to_string());
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }

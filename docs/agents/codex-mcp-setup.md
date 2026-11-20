@@ -293,7 +293,7 @@ Recommended pattern:
 Use a sibling worktree for implementation:
 
 ```bash
-git worktree add /path/to/project-<spec> -b <branch> origin/main
+git worktree add --no-track /path/to/project-<spec> -b <branch> origin/main
 cd /path/to/project-<spec>
 ln -s /path/to/project/.aida-store .aida-store
 ```

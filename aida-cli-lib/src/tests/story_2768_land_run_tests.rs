@@ -66,6 +66,8 @@ struct Fake {
     release: Option<String>,
     /// The recorded children were started by a run that has exited.
     inherited: bool,
+    /// Why this caller may not merge (review-gated ship).
+    merge_refusal: Option<String>,
 }
 
 impl Acts for Fake {
@@ -97,6 +99,14 @@ impl Acts for Fake {
             head: String::new(),
             ..child(Kind::Train, 0, 0)
         })
+    }
+    fn may_merge(&mut self, pr: &Pr) -> std::result::Result<(), String> {
+        self.calls.push(format!("may-merge? {}", pr.id));
+        self.merge_refusal.clone().map_or(Ok(()), Err)
+    }
+    fn ship(&mut self, pr: &Pr) -> Result<String> {
+        self.calls.push(format!("ship {}", pr.id));
+        Ok(format!("#{}: shipped", pr.id))
     }
     fn train_blocker(&mut self) -> Option<String> {
         self.train_blocker.clone()
@@ -645,6 +655,99 @@ fn only_one_background_hygiene_pass_runs_at_a_time() {
     );
 }
 
+/// STORY-2903 S1c: in review-gated mode there is no train. A ready change is
+/// shipped exactly once by a caller who may merge it; a caller who may not
+/// only reports it. Nothing boards a train either way.
+// trace:STORY-2903 | ai:claude
+#[test]
+fn review_gated_ready_changes_ship_once_for_a_caller_who_may_merge() {
+    let changes = vec![change(4, "main")];
+    let rows = vec![row(4, State::Ready, Action::Train)];
+    let limits = Limits {
+        review_gated: true,
+        ..Limits::default()
+    };
+    let trees = BTreeMap::new();
+
+    let (mut book, mut fake) = (Book::default(), Fake::default());
+    let notes = act(
+        &changes, &rows, &trees, &mut book, &limits, &mut fake, false,
+    );
+    assert_eq!(fake.calls, ["may-merge? 4", "ship 4"], "{notes:?}");
+    assert!(notes.iter().any(|n| n == "#4: shipped"), "{notes:?}");
+
+    let mut fake = Fake {
+        merge_refusal: Some("this session's seat is `implementer`".into()),
+        ..Fake::default()
+    };
+    let notes = act(
+        &changes, &rows, &trees, &mut book, &limits, &mut fake, false,
+    );
+    assert_eq!(fake.calls, ["may-merge? 4"], "report only: {notes:?}");
+    assert!(
+        notes[0].contains("#4: ready to merge; not merged by this run"),
+        "{notes:?}"
+    );
+
+    // The dry run says what it would do and does nothing.
+    let mut fake = Fake::default();
+    let notes = act(&changes, &rows, &trees, &mut book, &limits, &mut fake, true);
+    assert_eq!(fake.calls, ["may-merge? 4"]);
+    assert_eq!(notes, ["#4: would ship"]);
+}
+
+/// STORY-2903 F7, at process level through a real pseudo-terminal: when
+/// the run holds the operator's floor authority, the ship child it starts
+/// keeps the operator's terminal (so the ship is judged with the same
+/// authority the run decided with); without it, the child gets none. The
+/// test re-runs itself under `script`, which supplies the terminal.
+// trace:STORY-2903 | ai:claude
+#[cfg(unix)]
+#[test]
+fn the_ship_child_keeps_the_operators_terminal_only_under_floor_authority() {
+    const HELPER: &str = "AIDA_TEST_OPERATOR_TERMINAL_FLOOR";
+    let env = aida_core::exec_context::Environment::capture();
+    if let Some(floor) = env.get(HELPER).and_then(|v| v.to_str()) {
+        // Inside `script`: start a child as the land run does (null input
+        // first), apply the terminal rule, report what the child sees.
+        let mut child = std::process::Command::new("sh");
+        child
+            .args([
+                "-c",
+                "if test -t 0; then echo CHILD-TTY; else echo CHILD-NOTTY; fi",
+            ])
+            .stdin(std::process::Stdio::null());
+        super::operator_terminal(&mut child, floor == "1");
+        let out = child.output().unwrap();
+        print!("{}", String::from_utf8_lossy(&out.stdout));
+        return;
+    }
+    if std::process::Command::new("script")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        eprintln!("skipped: `script` is not installed");
+        return;
+    }
+    let exe = crate::test_exec::current_test_runner();
+    let name =
+        "land::run::tests::the_ship_child_keeps_the_operators_terminal_only_under_floor_authority";
+    for (floor, want) in [("1", "CHILD-TTY"), ("0", "CHILD-NOTTY")] {
+        let inner = format!(
+            "{} --exact {name} --nocapture --test-threads=1",
+            exe.display()
+        );
+        let out = std::process::Command::new("script")
+            .args(["-qec", &inner, "/dev/null"])
+            .env(HELPER, floor)
+            .output()
+            .unwrap();
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(text.contains(want), "floor={floor}: {text}");
+    }
+}
+
 // trace:BUG-2690 | ai:codex
 #[test]
 fn bug_2690_lander_only_updates_a_stale_branch_and_dry_run_only_reports() {
@@ -666,4 +769,89 @@ fn bug_2690_lander_only_updates_a_stale_branch_and_dry_run_only_reports() {
     acted(&changes, &rows, &mut book, &mut fake);
     assert_eq!(fake.calls, [format!("update 7 {HEAD}")]);
     assert!(book.children.is_empty());
+}
+
+/// Promotion 23 review F4 (STORY-2903 AC2): the land loop resolves the
+/// effective trusted landing mode on EACH pass. One `Limits`, as one
+/// running loop holds: ci-gated, then the default branch switches to
+/// review-gated, then back, each seen on the next pass with no restart. A
+/// mode that cannot be established leaves the limits as they were and the
+/// pass lands nothing.
+// trace:STORY-2903 | ai:claude
+#[test]
+fn the_landing_mode_is_resolved_on_every_pass_without_a_restart() {
+    fn git(dir: &std::path::Path, args: &[&str]) {
+        let out = crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}: {out:?}");
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let base = temp.path().canonicalize().unwrap();
+    let origin = base.join("origin.git");
+    git(
+        &base,
+        &[
+            "init",
+            "-q",
+            "--bare",
+            "-b",
+            "main",
+            origin.to_str().unwrap(),
+        ],
+    );
+    let repo = base.join("repo");
+    git(&base, &["clone", "-q", origin.to_str().unwrap(), "repo"]);
+    let other = base.join("other");
+    git(&base, &["clone", "-q", origin.to_str().unwrap(), "other"]);
+    let set_mode = |mode: &str| {
+        std::fs::create_dir_all(other.join(".aida")).unwrap();
+        std::fs::write(
+            other.join(".aida/config.toml"),
+            format!("[landing]\nmode = \"{mode}\"\n"),
+        )
+        .unwrap();
+        git(&other, &["add", "."]);
+        git(
+            &other,
+            &[
+                "-c",
+                "user.name=T",
+                "-c",
+                "user.email=t@example.invalid",
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                mode,
+            ],
+        );
+        git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    };
+    set_mode("ci-gated");
+    git(&repo, &["fetch", "-q", "origin"]);
+    git(&repo, &["checkout", "-q", "main"]);
+    let mut limits = Limits::default();
+    for (mode, review_gated) in [
+        ("ci-gated", false),
+        ("review-gated", true),
+        ("ci-gated", false),
+    ] {
+        set_mode(mode);
+        super::refresh_landing_mode(&repo, &mut limits).unwrap();
+        assert_eq!(
+            limits.review_gated, review_gated,
+            "after switching to {mode}"
+        );
+    }
+    set_mode("review-gated");
+    git(
+        &repo,
+        &["remote", "set-url", "origin", "/nonexistent/origin.git"],
+    );
+    let why = super::refresh_landing_mode(&repo, &mut limits).unwrap_err();
+    assert!(why.contains("cannot be established"), "{why}");
+    assert!(!limits.review_gated, "an unknown mode changes nothing");
 }

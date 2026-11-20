@@ -28,6 +28,15 @@ pub enum LandCommand {
     /// terminal that holds a seat grant, with autoland and the review
     /// watcher stopped.
     Run(RunArgs),
+    /// Print which open changes are stuck, why, and which seat can move
+    /// them. Also lists recent landings and lanes per host. Nothing is
+    /// routed.
+    // trace:STORY-2906 | ai:claude
+    Stalls {
+        /// Machine-readable JSON report.
+        #[clap(long)]
+        json: bool,
+    },
     /// Show or change the landing mode, keeping the forge's required checks
     /// in step with it.
     // trace:STORY-2897 | ai:claude

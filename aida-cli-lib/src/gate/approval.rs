@@ -556,6 +556,59 @@ pub(crate) fn ship_approval_policy(
     } else {
         crate::gate::review_authority::author_sessions_at(main_worktree, &ids, head_branch)
     };
+    approval_policy_with_authors(main_worktree, author_sessions, candidates)
+}
+
+/// The specs whose author sessions may not merge this change: the full
+/// authorship subject `merge_approval_inputs` and the mandate path use (the
+/// gate ids plus `(Refs X)` contributors) and the PR's head branch, when the
+/// forge resolves the PR; otherwise no ids, which the approval policy reads
+/// as every recorded author (fail closed).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn ship_author_ids(
+    main_worktree: &std::path::Path,
+    pr: u64,
+    known_ids: &[String],
+    head_branch: Option<&str>,
+) -> (Vec<String>, Option<String>) {
+    let (_, branch, forge_resolved, authorship_ids) =
+        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
+    (
+        if forge_resolved {
+            authorship_ids
+        } else {
+            Vec::new()
+        },
+        branch,
+    )
+}
+
+/// The author policy a MERGE decision (C2) judges: [`ship_approval_policy`]
+/// with its authors from one checked ledger read
+/// ([`crate::gate::review_authority::author_sessions_checked`]). `Err(why)`
+/// when the authorship ledger is missing, unreadable or malformed, which
+/// the merge refuses on (promotion 23 review F2).
+// trace:STORY-2903 trace:STORY-2905 | ai:claude
+pub(crate) fn merge_author_policy(
+    main_worktree: &std::path::Path,
+    spec_ids: &[String],
+    head_branch: Option<&str>,
+) -> Result<crate::gate::ship::ShipApprovalPolicy, String> {
+    let ids = normalized_spec_ids(spec_ids);
+    let author_sessions =
+        crate::gate::review_authority::author_sessions_checked(main_worktree, &ids, head_branch)?;
+    Ok(approval_policy_with_authors(
+        main_worktree,
+        author_sessions,
+        &[],
+    ))
+}
+
+fn approval_policy_with_authors(
+    main_worktree: &std::path::Path,
+    author_sessions: Vec<crate::gate::ship::AuthorSession>,
+    candidates: &[crate::gate::review_verdict::RecordedVerdict],
+) -> crate::gate::ship::ShipApprovalPolicy {
     let approvals: Vec<crate::gate::review_verdict::RecordedVerdict> = candidates
         .iter()
         .filter(|v| v.kind.approves() && !v.is_closed())
@@ -599,17 +652,19 @@ fn commit_committed_at_fetching(
         // Missing review objects can trigger a nested remote read during a
         // train gate. Unknown timestamp evidence grants no authority.
         // trace:STORY-2401 | ai:codex
-        crate::pr_train::before_train_forge_call("fetch approval timestamp").ok()?;
-        let fetched = std::process::Command::new("git")
-            .arg("-C")
+        // A scoped read deadline (`train --check --timeout`) bounds the fetch.
+        // trace:TASK-3792 | ai:claude
+        let deadline = crate::pr_train::before_train_forge_call("fetch approval timestamp").ok()?;
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C")
             .arg(repo)
             .args(["fetch", "--quiet", "--no-tags", "origin", sha])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             // trace:BUG-2181 | ai:claude
-            .remote_credentials(repo, "origin")
-            .status()
-            .is_ok_and(|s| s.success());
+            .remote_credentials(repo, "origin");
+        let fetched = crate::gate::kernel_deps::output_before(cmd, deadline)
+            .is_ok_and(|out| out.status.success());
         fetched.then(|| commit_committed_at(repo, sha)).flatten()
     })
 }

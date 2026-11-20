@@ -15,6 +15,40 @@
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
+    // trace:STORY-2903 trace:STORY-2905 | ai:claude
+    (
+        "landing_merge.rs",
+        "the one merge boundary: drives the forge merge, fetches the base and default branch, and reads the landing policy, authors and claim around its landing decisions",
+        &[
+            "crate::forge::ChangeRef",
+            "crate::forge::Forge",
+            "crate::forge::MergeOptions",
+            "crate::forge::MergeResult",
+            "crate::forge::default_branch_of",
+            "crate::landing_policy::LandingMode::ReviewGated",
+            "crate::landing_policy::LandingPolicy",
+            "crate::landing_policy::load",
+            "crate::landing_policy::load_checked",
+            "crate::landing_policy::policy_change_refusal",
+            "crate::network_retry::RetrySink",
+            "crate::trusted_config::local_default_branch_name",
+            "crate::trusted_config::rev_parse_commit",
+        ],
+    ),
+    // trace:STORY-2905 | ai:claude
+    (
+        "merge_claim.rs",
+        "one merge hand per PR: host-local claim files under the coordination lock, judging a holder's liveness",
+        &[
+            "aida_core::proc_identity::HolderRecord",
+            "aida_core::proc_identity::HolderRecord::capture",
+            "aida_core::proc_identity::ProcIdentity",
+            "aida_core::proc_identity::Verdict",
+            "aida_core::proc_identity::Verdict::Alive",
+            "aida_core::proc_identity::Verdict::Dead",
+            "crate::worktree_gc::main_worktree_root_from",
+        ],
+    ),
     // trace:STORY-2856 | ai:codex
     (
         "ci_startup.rs",
@@ -327,6 +361,23 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::trailer_coverage::rewrite_body_trailers",
             "crate::trailer_coverage::short_title",
             "crate::trailer_coverage::uncovered_phrase",
+        ],
+    ),
+    // trace:STORY-2884 | ai:claude
+    (
+        "unset_mode.rs",
+        "unset execution mode default: reads the trusted default-branch config and the change's files through git; the effective mode it resolves is pure",
+        &[
+            "aida_core::ExecutionMode",
+            "aida_core::ExecutionMode::Drain",
+            "aida_core::RelationshipType::SupersededBy",
+            "aida_core::Requirement",
+            "aida_core::RequirementType",
+            "aida_core::RequirementType::ALL",
+            "aida_core::git_ops::host_git_command",
+            "aida_core::node_alias::display_spec_id",
+            "crate::forge_lookup::deadline_output",
+            "crate::trusted_config::read_trusted_config_toml_local",
         ],
     ),
 ];

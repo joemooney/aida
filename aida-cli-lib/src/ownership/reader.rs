@@ -51,6 +51,18 @@ pub(crate) fn local_claim_process_is_dead(
         }
 }
 
+/// Advisory death observation for local deputy processes. The caller must
+/// establish that the process is visible in the reader's PID namespace.
+// trace:TASK-3801 | ai:codex
+pub(crate) fn local_deputy_process_is_dead(pid: u32, recorded_start: Option<&str>) -> bool {
+    pid > 0
+        && pid <= i32::MAX as u32
+        && matches!(
+            aida_core::proc_identity::observe_legacy_registry(pid, recorded_start, None),
+            aida_core::proc_identity::Verdict::Dead(_)
+        )
+}
+
 pub(crate) fn load(root: &Path, key: &WorkKey) -> Result<Option<Ownership>> {
     match super::store::OwnershipStore::for_project(root)? {
         Some(store) => store.load(key),
@@ -422,9 +434,14 @@ fn review_finished_reason(lease: &crate::SessionLease) -> Result<String> {
 // the supervisor receipt; foreign/unreadable recorded workers remain protected.
 // trace:BUG-2498 | ai:codex
 fn review_completion_matches(lease: &crate::SessionLease, why: &str) -> bool {
-    if !review_finished_reason(lease).is_ok_and(|expected| why == expected) {
-        return false;
-    }
+    review_finished_reason(lease).is_ok_and(|expected| why == expected)
+        && finished_review_worker_is_gone(lease)
+}
+
+/// After supervised exit, veto cleanup when the recorded worker remains
+/// alive or its identity cannot be verified.
+// trace:BUG-2498 BUG-2684 | ai:codex
+pub(crate) fn finished_review_worker_is_gone(lease: &crate::SessionLease) -> bool {
     if crate::leases::lease_holder_record(lease).is_some() {
         return matches!(
             crate::leases::lease_process_verdict(lease),

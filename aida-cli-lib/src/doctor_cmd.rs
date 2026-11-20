@@ -31,6 +31,9 @@ use colored::Colorize;
 pub(crate) mod doctor_cmd_args;
 pub(crate) use doctor_cmd_args::*;
 
+#[path = "doctor/lane_binaries.rs"]
+mod lane_binaries;
+
 use crate::cli::Command;
 use crate::db_block::{
     doctor_migrate_counter_scope_in_store, doctor_repair_dangling_relationships_in_store,
@@ -183,6 +186,20 @@ pub(crate) fn handle_doctor_command(
             {
                 return doctor_check_store_free_light(
                     crate::codex_mail_health::CATEGORY,
+                    *json,
+                    *fail_on_findings,
+                );
+            }
+            // The throughput guard reads the forge, the gate ledger and
+            // lane liveness; no requirements store.
+            // trace:STORY-2906 | ai:claude
+            if !all
+                && !*sub_all
+                && normalize_doctor_category(category).ok().as_deref()
+                    == Some(crate::land::stalls::CATEGORY)
+            {
+                return doctor_check_store_free_light(
+                    crate::land::stalls::CATEGORY,
                     *json,
                     *fail_on_findings,
                 );
@@ -834,6 +851,16 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // The throughput guard (opt-in append path: only when --category is
+    // explicitly passed, since it runs a landing pass against the forge).
+    // trace:STORY-2906 | ai:claude
+    if opts.category.is_some()
+        && doctor_category_selected(opts.category.as_deref(), crate::land::stalls::CATEGORY)?
+    {
+        findings.extend(crate::land::stalls::scan_and_route(&project_root, false)?);
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // STORY-HOME-128: mail backlog (opt-in append path: only when --category
     // is explicitly passed, like lane-liveness). trace:STORY-HOME-128 | ai:claude
     if opts.category.is_some()
@@ -1382,6 +1409,13 @@ fn doctor_check_store_free_light(category: &str, json: bool, fail_on_findings: b
         crate::advisor_handshake::DOCTOR_CATEGORY => {
             // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
             DoctorReport::from_findings(crate::advisor_handshake::doctor_report(&project_root))
+        }
+        // Routes like lane-liveness: only the scheduled tick routes, and a
+        // routed stall is not a job failure. trace:STORY-2906 | ai:claude
+        crate::land::stalls::CATEGORY => {
+            let route = aida_core::exec_context::Environment::capture().var("AIDA_SCHEDULE_CHILD")
+                == Ok("1");
+            DoctorReport::from_findings(crate::land::stalls::scan_and_route(&project_root, route)?)
         }
         // Routes like lane-liveness: only the scheduled tick nudges, and a
         // nudged backlog is not a job failure. trace:STORY-HOME-128 | ai:claude
@@ -2334,6 +2368,11 @@ pub(crate) struct DoctorArgs {
     #[clap(long, conflicts_with_all = ["lane_capacity", "heal", "fix_sandbox", "contradictions", "yes", "category", "force", "all", "since", "dry_run", "mapping", "tree_only", "preserve", "contradictions_limit", "contradictions_offset"])]
     pub lane_host: bool,
 
+    /// Compare lane hosts' launcher binaries with local origin/main (repeat for each SSH alias).
+    // trace:TASK-3812 | ai:codex
+    #[clap(long, value_name = "HOST", conflicts_with_all = ["lane_host", "lane_codegraph", "lane_capacity", "heal", "fix", "fix_sandbox", "contradictions", "yes", "category", "force", "all", "since", "dry_run", "mapping", "tree_only", "preserve", "contradictions_limit", "contradictions_offset"])]
+    pub lane_binaries: Vec<String>,
+
     /// Report the host codegraph snapshot age as seen from this lane.
     // trace:STORY-2630 | ai:claude
     #[clap(long, conflicts_with_all = ["lane_host", "heal", "fix", "fix_sandbox", "contradictions"])]
@@ -2456,6 +2495,7 @@ fn run_doctor(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> 
     let args = <DoctorArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let DoctorArgs {
         lane_host,
+        lane_binaries,
         lane_codegraph,
         heal,
         yes,
@@ -2476,6 +2516,12 @@ fn run_doctor(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> 
         lane_capacity,
         cmd,
     } = &args;
+    // trace:TASK-3812 | ai:codex
+    if !lane_binaries.is_empty() {
+        anyhow::ensure!(cmd.is_none(), "--lane-binaries is a standalone report");
+        let root = crate::find_project_root()?;
+        return lane_binaries::run(&root, lane_binaries, *json);
+    }
     // trace:STORY-2642 | ai:codex
     if *lane_host {
         if fix.as_deref().is_some_and(|v| v != "lane-host") || *dry_run || cmd.is_some() {

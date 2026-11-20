@@ -1958,45 +1958,53 @@ pub(crate) fn run_vendor_headless_to_exit(
     let drain_lane = drain_resume_lane(vendor, seat, lease_id, lane_tree);
     let host_published = vendor == HeadlessVendor::Codex && contained;
     let publish_native = std::cell::Cell::new(host_published);
-    // trace:TASK-2902 | ai:codex
-    let startup = if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree) {
-        let main = crate::main_worktree_root_from(&headless_worktree_root());
-        crate::machine_readiness::lane_disk_preflight(&main)?;
-        // trace:BUG-2682 | ai:claude
-        let record_root = host_main.map_or_else(|| main.clone(), Path::to_path_buf);
-        let spec = lease_id.and_then(|id| {
-            crate::list_leases(&record_root)
-                .into_iter()
-                .find(|lease| lease.id == id)
-                .map(|lease| lease.scope)
-        });
-        let startup = crate::lane_admission::Startup::acquire(
-            &record_root,
-            spec.as_deref(),
-            crate::lane_admission::HostOverride::from_env()?.as_ref(),
-        )?;
-        if vendor == HeadlessVendor::Codex {
-            crate::native_publication::prepare(&main, tree)?;
-        }
-        // Prior-attempt signals remain until the final spawn boundary below.
-        Some(startup)
-    } else {
-        None
-    };
-
     // BUG-2383: the drain's phase-1 implementer gets the standalone launch's
     // lane job runner too, so it can run its targeted tests outside its
     // 60-second tool-call cap, and a lane that ran none is reported untested.
     // This process is the seat's host side (it launches the sandboxed
     // vendor), so the runner runs here. trace:BUG-2383 | ai:claude
     let main_root = crate::main_worktree_root_from(&headless_worktree_root());
-    // trace:STORY-2640 | ai:codex
-    let mut _fast_gate = implementer_job_lane(seat, lease_id, lane_tree)
-        .map(|(_, (_, branch))| {
-            crate::lane_fast_gate::reserve(&main_root, branch)
-                .map(crate::lane_fast_gate::Reservation::with_result_line)
-        })
-        .transpose()?;
+    // BUG-2697: every refusal in this admission block precedes the agent
+    // spawn, so it is marked as such: the pickup then rolls back its setup
+    // (and releases its shared claim) although its launch mark is already set.
+    // trace:BUG-2697 | ai:claude
+    let (startup, mut _fast_gate) = (|| -> anyhow::Result<_> {
+        // trace:TASK-2902 | ai:codex
+        let startup = if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree)
+        {
+            let main = crate::main_worktree_root_from(&headless_worktree_root());
+            crate::machine_readiness::lane_disk_preflight(&main)?;
+            // trace:BUG-2682 | ai:claude
+            let record_root = host_main.map_or_else(|| main.clone(), Path::to_path_buf);
+            let spec = lease_id.and_then(|id| {
+                crate::list_leases(&record_root)
+                    .into_iter()
+                    .find(|lease| lease.id == id)
+                    .map(|lease| lease.scope)
+            });
+            let startup = crate::lane_admission::Startup::acquire(
+                &record_root,
+                spec.as_deref(),
+                crate::lane_admission::HostOverride::from_env()?.as_ref(),
+            )?;
+            if vendor == HeadlessVendor::Codex {
+                crate::native_publication::prepare(&main, tree)?;
+            }
+            // Prior-attempt signals remain until the final spawn boundary below.
+            Some(startup)
+        } else {
+            None
+        };
+        // trace:STORY-2640 | ai:codex
+        let fast_gate = implementer_job_lane(seat, lease_id, lane_tree)
+            .map(|(_, (_, branch))| {
+                crate::lane_fast_gate::reserve(&main_root, branch)
+                    .map(crate::lane_fast_gate::Reservation::with_result_line)
+            })
+            .transpose()?;
+        Ok((startup, fast_gate))
+    })()
+    .map_err(crate::lane_admission::refused_before_spawn)?;
     let result = with_implementer_jobs(
         &main_root,
         seat,
@@ -2052,6 +2060,16 @@ pub(crate) fn run_vendor_headless_to_exit(
             // standalone launch's resume safety net, through the same loop: a lane
             // that parks on its own build is waited for and resumed, bounded.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+            // D3 (BUG-2696 reopen): a self-published round sets Done only for
+            // its own push; remember the seat head before the child runs.
+            // trace:BUG-2696 | ai:claude
+            let launch_head = if host_published {
+                None
+            } else {
+                implementer_job_lane(seat, lease_id, lane_tree).and_then(|(_, (tree, _))| {
+                    crate::standalone_implementer::implementer_launch_head(&main_root, tree)
+                })
+            };
             let result = match drain_lane {
                 None => run_once(prompt, log_path, false, None),
                 Some((lease, (worktree, branch))) => drain_lane_with_resume(
@@ -2114,11 +2132,21 @@ pub(crate) fn run_vendor_headless_to_exit(
                         )?;
                         eprintln!(
                             "fast_gate={}",
-                            crate::lane_fast_gate::marker(&main_root, branch)
+                            // trace:BUG-2705 | ai:claude
+                            crate::lane_fast_gate::marker_with_reason(&main_root, branch)
                         );
                         anyhow::ensure!(
                             !queued,
                             "fast gate failed; one rework round queued before review"
+                        );
+                        // trace:BUG-2696 | ai:claude
+                        crate::ship_from_seat::mark_done_after_self_published_round(
+                            &main_root,
+                            tree,
+                            &scope,
+                            branch,
+                            launch_head.as_deref(),
+                            status.success(),
                         );
                     }
                 }

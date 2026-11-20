@@ -815,6 +815,15 @@ it refuses with that reason and the same host-terminal guidance.
 - **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
 - **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead native runner is recorded as orphaned on the next runner start or job status read. Status includes the recorded runner PID when available, and `aida awaiting` shows the job as a failure until acknowledged. The job is never re-run. <!-- trace:BUG-2625 | ai:codex --> A job the older bash runner (`aida-deputy-shell`) left `running` in its `jobs/<id>/meta.json` becomes `abandoned` on the next native runner start, `aida deputy shell list` or `aida deputy shell status <id>`, once the runner that claimed it is gone. Each job is judged by its own runner. If the PID in `runner.pid` is gone or now belongs to an unrelated process, the job records that dead PID. If the bash runner was restarted, its new PID is in `runner.pid`, so a job record last written before that restart belongs to the earlier, dead runner. That job records which runner replaced it and is not attributed to the new runner. A job the live runner claimed, a missing `runner.pid`, or a sandbox that cannot see host processes leaves the job alone. <!-- trace:BUG-2625 | ai:claude -->
 - **Records.** `jobs/<id>/` keeps the script, its sha256, the submitter, timestamps, exit code and transcript for 30 days; `audit.jsonl` records every step and is never truncated. Failed script jobs show in `aida awaiting` beside failed command jobs.
+- **Dead runners.** When the host can prove a script deputy's last runner
+  died, `aida awaiting` shows its name, last PID, last runner record time and
+  when it was observed dead. It lists queued and interrupted jobs as stranded,
+  scoped to the current project and, in a session, to that session's jobs.
+  Legacy bash job records lack project and session IDs. The operator view
+  shows those host-wide stranded jobs using the last PID and write time from
+  `runner.pid` when it can prove the legacy runner died.
+  The exact time of death is unavailable. A subsequent native runner start
+  recovers interrupted jobs. <!-- trace:TASK-3801 | ai:codex -->
 - **Grant.** Between jobs the runner re-mints its advisor grant every `--refresh`, or when less than an hour is left. If that fails it claims nothing more and exits when the grant expires.
 <!-- trace:STORY-2338 | ai:claude -->
 <!-- trace:STORY-2343 | ai:claude -->
@@ -981,6 +990,41 @@ unpushed commits publish those commits without sending a no-change request.
 Publication failures retain the seat for recovery.
 This host step replaces the advisor's manual auto-publish workaround.
 <!-- trace:STORY-2475 | ai:codex -->
+
+## Declaring acceptance scope for a Refs-only review
+<!-- trace:BUG-2683 | ai:codex -->
+
+For a PR or MR with a `(Refs SPEC-ID)` title or commit trailer, add one
+standalone line per acceptance criterion to its description. For example:
+
+```text
+Slice-Scope: <spec-id> AC1 covered
+Slice-Scope: <spec-id> AC2 deferred slice-2
+Slice-Scope: <spec-id> AC3 deferred <destination-spec-id>
+```
+
+Use the criterion labels from `aida criteria <spec-id>` (the part after the
+spec ID and dot). The deferred destination is one token, such as a spec ID
+or slice name, using letters, digits, hyphens, underscores, periods, slashes,
+or hashes. Repeat the spec ID on each line to declare scope for multiple specs.
+
+An advisor can also record scope in a top-level spec comment. Start the
+comment with the exact heading `## Advisor slice scope` and put the same
+`Slice-Scope:` lines below it. The heading identifies the declaration format.
+The worksheet uses the last such comment in the spec's comment list when the
+PR or MR description has no scope rows for that spec. A description with rows
+for that spec takes precedence, even if those rows are invalid. The worksheet
+uses one declaration per spec and does not combine rows across sources.
+
+`aida review prompt --pr <N>` pre-marks deferred criteria as N/A and asks
+reviewers to verify covered criteria. Missing, incomplete, or conflicting
+rows within the selected declaration use an undeclared-slice checklist.
+Reviewers verify the diff's claims and report uncovered criteria as informational.
+A completing trailer for the same spec keeps the whole-spec checklist.
+If the forge metadata read fails, the worksheet treats all acceptance criteria
+for specs identified by commit trailers as claimed and asks the reviewer to
+recover metadata and regenerate before deciding. If no commit trailer identifies
+a spec, generation fails until the metadata can be read.
 
 ## Watching for new review heads
 
@@ -1221,6 +1265,37 @@ hours also apply.
 
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
 
+#### Pausing review launches
+
+An unseated operator or an advisor with a valid grant can run
+`aida review watch pause --reason "landing-driver cutover" --for 1h`.
+`--for` accepts seconds or a duration such as `30m` or `2h`. The default and
+maximum come from `[review] watch_pause_default` and `[review] watch_pause_max`
+in `.aida/config.toml` (1h and 24h when unset; the maximum cannot exceed 7 days).
+A second pause replaces the current deadline and records a new audit event.
+`aida review watch status` shows the effective pause and outstanding review
+reservations. `aida review watch resume` clears an active pause.
+
+The pause is a record, not a lock. Watchers that share the project's
+main-worktree runtime read it where they would launch a new review and skip
+the launch, logging who paused and why. A reserved dispatcher checks again
+before it starts queue work. Already launched queue work and its reviewers
+continue to completion. Merge-train member reservations, reaping and
+stale-head reconciliation are unaffected.
+The versioned local journal at `.aida/review-watch/pause.json` survives watcher
+restart and retains the latest 256 pause, resume and expiry events. Pause
+records include the actor, reason, issue time and expiry time; resume records
+include the actor. A pause expires on its own at its deadline, and the expiry
+is recorded the next time a watcher or `status` reads the pause.
+
+For the landing-driver cutover, pause review launches before stopping the
+legacy controllers through their supervisor and confirming their descendants
+have exited. A live controller retains its land-exclusion lock during a pause.
+On rollback, stop the land driver and confirm its descendants have exited,
+then use `aida review watch resume` before restarting the legacy review
+watcher. Restored launches still require the ordinary grant, controller and
+review checks. <!-- trace:BUG-2650 | ai:claude -->
+
 A refusal or setup failure for one change is reported against that change and
 leaves the watcher processing the other changes in the same pass, including
 with `--once`. The reason is visible in `aida awaiting`; observed pickup exits
@@ -1434,6 +1509,17 @@ remains pinned to the current head. `aida review verdict PR-N` reports
 an optional `coverage` object with `reviewed_sha`, `head_sha` and the full
 `proof`. Reading the verdict does not record a new approval or proof.
 <!-- trace:STORY-2694 | ai:codex -->
+
+An approval at the current head shows the observed next actor. A pending STRICT
+pre-merge review appears on its own line when the approval or corpus gate still
+requires review under strict freshness. Hold-clear wake lines identify the
+superseded review head when known and report whether current-head approval was
+verified during clearance. `aida session handoff --write` checks explicit
+operator-waiting claims on lines or lists containing `#N` or `PR-N` references.
+It warns with the observed next actor when the operator ask is unsupported and
+saves the handoff as written.
+<!-- trace:STORY-2893 | ai:codex -->
+
 
 New gate-ledger verdict events also record a versioned advisory risk assessment,
 computed from the committed diff against the pinned protected-base tip. The tier

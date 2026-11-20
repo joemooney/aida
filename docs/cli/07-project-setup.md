@@ -464,6 +464,44 @@ GitLab reports shared failures at job-script granularity; individual script
 step timing remains unknown.
 <!-- trace:STORY-2849 | ai:codex -->
 
+### Throughput guard
+
+`aida doctor check throughput-guard` reports stuck changes: approved but not
+landed, approved with red CI, pushed but not reviewed, with changes requested
+and no lane, or conflicting with no owner. `aida land stalls` prints the same
+classification with every open change, the recent landings and the lanes per
+host. The classes, what each wait counts from and the red-CI reasoning are
+described in [Landing](../advanced/landing.md#stuck-changes-the-throughput-guard).
+
+The check does nothing unless `[throughput_guard] enabled = true`. Settings,
+in minutes: `merge_mins` (default 20), `review_mins` (30), `rework_mins` (30),
+`conflict_mins` (30), `landings_window_mins` (60) and `escalate_after_mins`
+(120). `max_red_logs` (6) is the number of red changes whose job logs one run
+reads; a log read once is kept, so the rest are read on the following runs.
+
+To run it on a schedule, add a job:
+
+```toml
+[throughput_guard]
+enabled = true
+
+[[schedule.jobs]]
+name = "throughput-guard"
+command = "doctor check throughput-guard"
+every = "20m"
+enabled = true
+```
+
+The scheduled run routes each new stall once, as a
+`throughput-guard-route-<seat>` due job and a mail to that seat, and escalates
+to the operator when nothing has landed for `escalate_after_mins` while
+something is stuck. The route jobs are built in. Routing uses only due jobs and
+mail, so a seat receives the same work under every vendor. Every scheduled run
+also saves the landings and each host's lanes and memory in
+`.aida/throughput-guard/state.json`, whether or not anything is stuck. This repository
+enables the job every 20 minutes.
+<!-- trace:STORY-2906 | ai:claude -->
+
 
 ### `aida defer`
 
@@ -991,6 +1029,15 @@ It prints PASS/FAIL rows and a fix hint for each failure; `--json` emits the
 same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.
 `aida init` prints local checks without a live store-network probe or blocking setup.
+
+From the operator checkout, use `aida doctor --lane-binaries HOST` with one
+flag per SSH alias to report the launcher's binary SHA and build age for each
+host against the locally recorded `origin/main`. Fetch first to refresh that
+reference. `--json` includes the pinned SHA and per-host results, with
+`unknown` for unavailable evidence. See the
+[lane host checklist](../advanced/lane-host-checklist.md#scheduled-autobuild)
+for installing and verifying scheduled builds.
+<!-- trace:TASK-3812 | ai:codex -->
 
 <!-- trace:BUG-2682 | ai:codex -->
 <!-- trace:BUG-2682 | ai:claude -->

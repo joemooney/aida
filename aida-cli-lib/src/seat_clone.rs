@@ -1602,21 +1602,30 @@ git status --porcelain=v1 -z --untracked-files=all --ignore-submodules=all
     .map_err(|error| anyhow::anyhow!("{error}"))
 }
 
+const PENDING_MERGE_PATH: &str = r#"set -eu
+merge=$(git rev-parse --git-path MERGE_HEAD)
+test -x "$(dirname -- "$merge")"
+if [ -e "$merge" ] || [ -L "$merge" ]; then
+    if [ "${1:-}" = parent ]; then
+        test ! -L "$merge" && test -f "$merge" || exit 2
+        printf "present:"
+        cat -- "$merge"
+    else
+        printf pending
+    fi
+fi"#;
+
 /// Read the merge pseudoref by path. Porcelain can be empty when the
 /// staged resolution matches HEAD, and normal refs can also be named MERGE_HEAD.
 // trace:BUG-2679 | ai:codex
 pub(crate) fn has_pending_merge(main: &Path, tree: &Path) -> Result<bool> {
     let timeout = std::time::Duration::from_secs(5);
     if let Some(seat) = host_recorded_clone(main, tree) {
-        let script = r#"set -eu
-merge=$(git rev-parse --git-path MERGE_HEAD)
-test -x "$(dirname -- "$merge")"
-if [ -e "$merge" ] || [ -L "$merge" ]; then printf pending; fi"#;
         let out = run_sandboxed_until(
             &seat.root,
             &seat.main,
             "sh",
-            &["-c".as_ref(), script.as_ref()],
+            &["-c".as_ref(), PENDING_MERGE_PATH.as_ref()],
             PROBE_OUTPUT_CAP,
             Some(std::time::Instant::now() + timeout),
         )
@@ -3381,6 +3390,7 @@ fn prepare_rework_merge_with_base(
     }
     // Recovery depends on the host's recorded tree kind, never seat configuration.
     // trace:BUG-2504 | ai:codex
+    let repair_key = std::cell::RefCell::new(None);
     let pending_resume = resume
         && execute(&["status", "--porcelain", "--untracked-files=all"])
             .is_ok_and(|status| !status.is_empty());
@@ -3390,7 +3400,15 @@ fn prepare_rework_merge_with_base(
         branch,
         resume,
         |tip| publish_rework_merge(main, tree, branch, tip),
-        |base, restore_only| regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only),
+        |base, restore_only| {
+            let head = execute(&["rev-parse", "HEAD"])?;
+            *repair_key.borrow_mut() = Some(crate::repair_journal::RepairKey {
+                repository: main.into(),
+                pr,
+                original_head: head,
+            });
+            regenerate_repair_outputs(tree, main, base, &identity, &execution_environment, restore_only)
+        },
         || {
             // trace:BUG-2603 | ai:codex
             let base = discover_base()?;
@@ -3398,6 +3416,9 @@ fn prepare_rework_merge_with_base(
         },
     )
     .map_err(|error| {
+        if let Some(key) = repair_key.into_inner() {
+            report_repair_refusal(main, &key, &error);
+        }
         let recovery = if pending_resume {
             if clone.is_some() {
                 format!(
@@ -4479,9 +4500,11 @@ mod rework_merge_tests {
             anyhow::ensure!(out.status.success(), "probe failed: {:?}", out);
             Ok(out.stdout)
         };
+        g(&["branch", "MERGE_HEAD"]);
         refuse_pending_conflict_markers(&ordinary_probe, None).unwrap();
         g(&["add", "conflict-guide.md"]);
         refuse_pending_conflict_markers(&ordinary_probe, None).unwrap();
+        g(&["branch", "-D", "MERGE_HEAD"]);
         g(&["commit", "-qm", "explain markers"]);
         // Even absent a merge, an unreadable probe must fail closed.
         assert!(
@@ -5323,6 +5346,29 @@ pub(crate) fn commit_pending(
     branch: &str,
     message: &str,
 ) -> Result<Option<String>> {
+    commit_pending_with(
+        main,
+        clone,
+        branch,
+        message,
+        &crate::lane_job::check_repair_tree,
+    )
+}
+
+/// Compile a snapshot of the staged repair tree: `(main, seat, lease,
+/// snapshot)` -> the policy command that ran and its outcome.
+// trace:TASK-3804 | ai:claude
+pub(crate) type RepairCompile<'a> =
+    &'a dyn Fn(&Path, &Path, &str, &Path) -> (Vec<String>, Result<()>);
+
+// trace:TASK-3804 | ai:codex
+fn commit_pending_with(
+    main: &Path,
+    clone: &Path,
+    branch: &str,
+    message: &str,
+    compile: RepairCompile<'_>,
+) -> Result<Option<String>> {
     anyhow::ensure!(
         !message.trim().is_empty(),
         "refusing to commit the seat's pending work with an empty message"
@@ -5377,29 +5423,46 @@ pub(crate) fn commit_pending(
     ];
     status_args.extend(pathspec);
     let status = probe_text(&status_args)?;
-    if status.is_empty()
-        && probe_text(&[os("rev-parse"), os("-q"), os("--verify"), os("MERGE_HEAD")]).is_err()
-    {
+    // Resolve the pseudoref only after proving the file exists. A corrupt
+    // pseudoref or a failed Git/sandbox probe must stop even a clean seat.
+    // trace:BUG-2558 TASK-3804 | ai:codex
+    let inspect_merge = || {
+        pending_merge_parent(&|program, args| {
+            run_sandboxed_until(
+                clone,
+                main,
+                program,
+                args,
+                PROBE_OUTPUT_CAP,
+                Some(std::time::Instant::now() + std::time::Duration::from_secs(5)),
+            )
+            .map_err(|why| anyhow::anyhow!("{why}"))
+        })
+        .context("could not inspect seat merge state")
+    };
+    let merge_base = inspect_merge()?;
+    if status.is_empty() && merge_base.is_none() {
         return Ok(None);
     }
-    // The lane cannot update the index: resolved files still have unmerged
-    // entries until this host stages them. Check working-tree bytes first,
-    // including staged resolutions on a retry, before any index mutation.
-    // trace:STORY-2710 | ai:codex
-    let merge_base =
-        probe_text(&[os("rev-parse"), os("-q"), os("--verify"), os("MERGE_HEAD")]).ok();
-    let repair_paths = if let Some(base) = merge_base.as_deref() {
+    let repair = if let Some(base) = merge_base.as_deref() {
         let original_head = probe_text(&[os("rev-parse"), os("HEAD")])?;
         let journal = crate::repair_journal::RepairGuard::lock(main)?;
         let entry = journal.for_tree(clone, branch, &original_head, base)?;
-        entry.require_prepared()?;
-        Some(
+        if let Err(error) = entry.require_prepared() {
+            let key = entry.key.clone();
+            drop(journal);
+            report_repair_refusal(main, &key, &error);
+            return Err(error);
+        }
+        Some((
+            entry.key.clone(),
+            entry.lane_id.clone(),
             entry
                 .original_conflict_paths
                 .iter()
                 .map(std::ffi::OsString::from)
                 .collect::<Vec<_>>(),
-        )
+        ))
     } else {
         None
     };
@@ -5412,10 +5475,16 @@ pub(crate) fn commit_pending(
                 run_sandboxed(clone, main, program, args, PROBE_OUTPUT_CAP)
                     .map_err(|why| anyhow::anyhow!("could not inspect conflict markers: {why}"))
             },
-            repair_paths.as_deref(),
+            repair.as_ref().map(|(_, _, paths)| paths.as_slice()),
         )
     };
-    check_repair_markers()?;
+    let report_refusal = |error: anyhow::Error| {
+        if let Some((key, _, _)) = &repair {
+            report_repair_refusal(main, key, &error);
+        }
+        error
+    };
+    check_repair_markers().map_err(report_refusal)?;
     let identity: [(&'static str, std::ffi::OsString); 4] = [
         ("GIT_AUTHOR_NAME", name.clone().into()),
         ("GIT_AUTHOR_EMAIL", email.clone().into()),
@@ -5535,17 +5604,55 @@ pub(crate) fn commit_pending(
         if merge_base.is_none() {
             unstage_marker()?;
         }
-        if let Some(base) = merge_base.as_deref() {
-            let head = head_before.as_deref().context("missing repair head")?;
-            let staged_tree = String::from_utf8(
-                run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
-                    .map_err(|failure| recovery("verify regenerated tree", failure))?,
-            )?
-            .trim()
-            .to_owned();
-            let journal = crate::repair_journal::RepairGuard::lock(main)?;
-            let entry = journal.for_tree(clone, branch, head, base)?;
-            entry.require_regenerated_tree(&staged_tree)?;
+        if let Some((key, lane, _)) = &repair {
+            let write_tree = || -> Result<String> {
+                Ok(String::from_utf8(
+                    run_commit_sandboxed(clone, main, &[os("write-tree")], &identity)
+                        .map_err(|failure| recovery("verify staged repair tree", failure))?,
+                )?
+                .trim()
+                .to_owned())
+            };
+            let staged_tree = write_tree()?;
+            crate::repair_journal::RepairGuard::lock(main)?
+                .for_tree(
+                    clone,
+                    branch,
+                    &key.original_head,
+                    merge_base.as_deref().unwrap(),
+                )?
+                .require_regenerated_tree(&staged_tree)?;
+            let snapshot = tempfile::tempdir()?;
+            let mut command = Vec::new();
+            let checked = snapshot_repair_tree(main, clone, &staged_tree, snapshot.path())
+                .and_then(|()| {
+                    let (ran, result) = compile(main, clone, lane, snapshot.path());
+                    command = ran;
+                    result
+                })
+                .and_then(|()| {
+                    anyhow::ensure!(
+                        write_tree()? == staged_tree
+                            && inspect_merge()? == merge_base
+                            && probe_text(&[os("rev-parse"), os("HEAD")])? == key.original_head
+                            && probe_text(&[os("symbolic-ref"), os("-q"), os("HEAD")])? == want,
+                        "staged repair tree, branch or parent changed during compile validation; retry publication"
+                    );
+                    Ok(())
+                });
+            let recorded =
+                crate::repair_journal::RepairGuard::lock(main).and_then(|mut journal| {
+                    journal.record_validation(key, &staged_tree, &command, checked.is_ok())
+                });
+            match (checked, recorded) {
+                (Err(error), Err(record_error)) => {
+                    return Err(error.context(format!(
+                        "could not record repair validation: {record_error:#}"
+                    )));
+                }
+                (Err(error), _) | (_, Err(error)) => return Err(error),
+                (Ok(()), Ok(())) => {}
+            }
         }
         ensure_dir_identity(clone, pinned)?;
         run_commit_sandboxed(
@@ -5569,7 +5676,7 @@ pub(crate) fn commit_pending(
         Ok(tip) => Ok(Some(tip)),
         Err(error) => {
             let Some(index_tree) = index_tree else {
-                return Err(error.context("pending repair merge retained with its staged index; retry uses the same host-recorded original conflict paths"));
+                return Err(report_refusal(error).context("pending repair merge retained with its staged index; retry uses the same host-recorded original conflict paths"));
             };
             // Put the index back exactly, but only while HEAD has not moved:
             // after a commit that landed, the index matches the new HEAD and
@@ -5604,6 +5711,101 @@ pub(crate) fn commit_pending(
     }
 }
 
+// trace:TASK-3804 | ai:codex
+fn report_repair_refusal(
+    main: &Path,
+    key: &crate::repair_journal::RepairKey,
+    error: &anyhow::Error,
+) {
+    if let Err(mail) = crate::repair_journal::notify_refusal(main, key, &format!("{error:#}")) {
+        eprintln!("could not record or deliver repair refusal: {mail:#}");
+    }
+}
+
+// trace:TASK-3804 | ai:codex
+fn pending_merge_parent(
+    execute: &dyn Fn(&str, &[&std::ffi::OsStr]) -> Result<Vec<u8>>,
+) -> Result<Option<String>> {
+    let pending = execute(
+        "sh",
+        &[
+            "-c".as_ref(),
+            PENDING_MERGE_PATH.as_ref(),
+            "merge-state".as_ref(),
+            "parent".as_ref(),
+        ],
+    )?;
+    if pending.is_empty() {
+        return Ok(None);
+    }
+    let parent = std::str::from_utf8(&pending)?
+        .strip_prefix("present:")
+        .context("unexpected merge state response")?
+        .trim();
+    anyhow::ensure!(
+        matches!(parent.len(), 40 | 64) && parent.bytes().all(|byte| byte.is_ascii_hexdigit()),
+        "invalid MERGE_HEAD commit id"
+    );
+    let revision = format!("{parent}^{{commit}}");
+    let resolved = execute(
+        "git",
+        &["rev-parse".as_ref(), "--verify".as_ref(), revision.as_ref()],
+    )?;
+    anyhow::ensure!(
+        std::str::from_utf8(&resolved)?.trim() == parent,
+        "MERGE_HEAD does not name a commit"
+    );
+    Ok(Some(parent.to_owned()))
+}
+
+// Materialize the pinned tree with a private index and the host Git config.
+// The checkout cannot observe unstaged files or export-ignore attributes.
+// trace:TASK-3804 | ai:codex
+fn snapshot_repair_tree(main: &Path, clone: &Path, tree: &str, dest: &Path) -> Result<()> {
+    use std::io::Write;
+    let mut config = tempfile::NamedTempFile::new()?;
+    config.write_all(probe_repo_config(main, clone).as_bytes())?;
+    let mut args = probe_sandbox_args(
+        clone,
+        main,
+        &crate::session::contained_read_allowlist(main),
+        config.path(),
+    );
+    let scratch = tempfile::tempdir()?;
+    args.pop(); // Move the command delimiter after the snapshot mounts.
+    args.extend(
+        [
+            "--bind".as_ref(),
+            scratch.path().as_os_str(),
+            "/tmp/aida-index".as_ref(),
+            "--bind".as_ref(),
+            dest.as_os_str(),
+            "/tmp/aida-tree".as_ref(),
+            "--".as_ref(),
+            "sh".as_ref(),
+            "-ec".as_ref(),
+            r#"export GIT_INDEX_FILE=/tmp/aida-index/index GIT_WORK_TREE=/tmp/aida-tree
+git read-tree "$1"
+git checkout-index --all --prefix=/tmp/aida-tree/"#
+                .as_ref(),
+            "snapshot-repair".as_ref(),
+            tree.as_ref(),
+        ]
+        .into_iter()
+        .map(std::ffi::OsStr::to_os_string),
+    );
+    let mut cmd = std::process::Command::new("bwrap");
+    cmd.args(args).stdin(std::process::Stdio::null());
+    match crate::command_output_with_timeout_detail(cmd, PROBE_TIMEOUT) {
+        crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
+        crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
+            "could not materialize staged repair tree: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        _ => anyhow::bail!("could not materialize staged repair tree within the sandbox budget"),
+    }
+}
+
 /// Scan only the host-recorded original conflicts, including on staged retries.
 /// The caller must obtain these from the shared repair journal, never reconstruct
 /// them from changed paths or the current index. Missing evidence refuses pending
@@ -5618,19 +5820,7 @@ fn refuse_pending_conflict_markers(
 ) -> Result<()> {
     use std::ffi::{OsStr, OsString};
     use std::os::unix::ffi::OsStringExt;
-    // A missing MERGE_HEAD is ordinary publication, not conflict repair. Keep
-    // actual probe failures distinct from git's documented quiet no-ref exit.
-    // trace:STORY-2710 | ai:codex
-    let pending = execute(
-        "sh",
-        &[
-            OsStr::new("-c"),
-            OsStr::new(
-                r#"git rev-parse --verify --quiet MERGE_HEAD; result=$?; if [ "$result" -eq 1 ]; then exit 0; else exit "$result"; fi"#,
-            ),
-        ],
-    )?;
-    if pending.is_empty() {
+    if pending_merge_parent(execute)?.is_none() {
         return Ok(());
     }
     let original = original_conflict_paths.context(
@@ -6265,6 +6455,11 @@ mod seat_clone_mailbox_tests;
 #[cfg(test)]
 #[path = "tests/bug_home_038_seat_publish_tests.rs"]
 pub(crate) mod seat_publish_tests;
+
+// trace:BUG-2705 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2705_seat_clone_leftover_tests.rs"]
+mod bug_2705_seat_clone_leftover_tests;
 
 // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
 #[cfg(test)]

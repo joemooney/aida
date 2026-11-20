@@ -309,7 +309,7 @@ fn override_is_recorded_durably_with_both_shas_and_pins_the_overridden_head() {
 
 #[test]
 fn pr_ship_handler_pins_its_merge_through_the_approval_gate() {
-    let src = include_str!("../../pr_cmd.rs");
+    let src = include_str!("../../pr_cmd/mod.rs");
     let start = src
         .find(concat!("pub(crate) fn pr_ship_", "handler("))
         .expect("handler");
@@ -321,7 +321,7 @@ fn pr_ship_handler_pins_its_merge_through_the_approval_gate() {
         .find(concat!("match_head, // trace:", "TASK-1458"))
         .expect("the gate's pin reaches MergeOptions");
     let merge = body
-        .find(concat!(".merge_", "change("))
+        .find(concat!("landing_merge::", "merge("))
         .expect("the handler merges");
     assert!(gate < opts && opts < merge, "gate → pin → merge order");
 }

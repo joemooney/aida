@@ -182,10 +182,12 @@ pub(crate) fn stale_base_note(
 
 /// True when `rev` names a commit in the repo at `project_root`.
 fn git_rev_resolves(project_root: &std::path::Path, rev: &str) -> bool {
-    aida_core::git_ops::host_git_command(project_root)
-        .args(["rev-parse", "--verify", "--quiet"])
-        .arg(format!("{rev}^{{commit}}"))
-        .output()
+    let mut cmd = aida_core::git_ops::host_git_command(project_root);
+    cmd.args(["rev-parse", "--verify", "--quiet"])
+        .arg(format!("{rev}^{{commit}}"));
+    // A scoped read deadline (`train --check --timeout`) bounds the read.
+    // trace:TASK-3792 | ai:claude
+    crate::forge_lookup::deadline_output(cmd, std::process::Command::output)
         .map(|o| o.status.success())
         .unwrap_or(false)
 }
@@ -251,9 +253,9 @@ pub(crate) fn completion_range(repo: &std::path::Path, base: &str, head: &str) -
         if reverse {
             cmd.arg("--reverse");
         }
-        let out = cmd
-            .args([git_arg_guard::END_OF_OPTIONS, range, "--"])
-            .output()?;
+        cmd.args([git_arg_guard::END_OF_OPTIONS, range, "--"]);
+        // trace:TASK-3792 | ai:claude
+        let out = crate::forge_lookup::deadline_output(cmd, std::process::Command::output)?;
         anyhow::ensure!(
             out.status.success(),
             "cannot inspect completion range {range}: {}",
@@ -495,8 +497,8 @@ pub(crate) fn git_log_messages(
     let (base, head) = resolve_log_range(project_root, base, head);
     let range = completion_range(project_root, &base, &head)
         .with_context(|| format!("cannot read commits {base}..{head}"))?;
-    let out = std::process::Command::new("git")
-        .arg("-C")
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C")
         .arg(project_root)
         // trace:BUG-1622 | ai:claude
         .args([
@@ -505,8 +507,9 @@ pub(crate) fn git_log_messages(
             git_arg_guard::END_OF_OPTIONS,
             &range,
             "--",
-        ])
-        .output()
+        ]);
+    // trace:TASK-3792 | ai:claude
+    let out = crate::forge_lookup::deadline_output(cmd, std::process::Command::output)
         .with_context(|| format!("running git log {}", range))?;
     if !out.status.success() {
         anyhow::bail!(

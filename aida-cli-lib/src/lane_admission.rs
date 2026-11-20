@@ -28,6 +28,31 @@ const KIB_PER_GIB: u64 = 1024 * 1024;
 /// independent of `--over-wip` and of any configuration file.
 pub(crate) const OVERRIDE_ENV: &str = "AIDA_OVER_HOST_LIMIT";
 
+/// BUG-2697: marks a launch error that happened before the agent spawned
+/// (host admission, disk floor, gate reservation), so the pickup rolls back
+/// its setup and releases its shared claim even after its launch mark.
+// trace:BUG-2697 | ai:claude
+#[derive(Debug)]
+pub(crate) struct RefusedBeforeSpawn;
+
+impl std::fmt::Display for RefusedBeforeSpawn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("lane admission refused before the agent started")
+    }
+}
+
+/// Mark `error` as a refusal before any agent spawned.
+// trace:BUG-2697 | ai:claude
+pub(crate) fn refused_before_spawn(error: anyhow::Error) -> anyhow::Error {
+    error.context(RefusedBeforeSpawn)
+}
+
+/// Whether `error`, under any later context, carries [`RefusedBeforeSpawn`].
+// trace:BUG-2697 | ai:claude
+pub(crate) fn is_refused_before_spawn(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<RefusedBeforeSpawn>().is_some()
+}
+
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct HostConfig {

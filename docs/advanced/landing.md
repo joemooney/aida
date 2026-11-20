@@ -17,9 +17,30 @@ itself is described in the
 
 In `ci-gated` mode, which is the rest of this page, `aida pr ship` waits for CI on the head, and the train admits only a green full-tier head.
 
-In `review-gated` mode, `aida pr ship` merges as soon as the change has an independent approval at its exact head and no hold. It does not wait for CI, and CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the merge itself must also come from a session that authored none of the change.
+In `review-gated` mode, a change merges as soon as it has an independent approval at its exact head and no hold. Nothing waits for CI; CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the advisor seat (or the operator at a terminal) performs the merge, and only for a change it authored none of.
 
-`aida pr train` and `aida land run` do not follow the mode yet: a change behind its base is routed to the train exactly as before.
+There is no train in `review-gated` mode. A head behind its base merges as it is when none of the base's new commits touched a file it changes (an edit later reverted still counts) and it changes no protected (gate or authority) path. Otherwise it is refused until the branch is updated and the update is reviewed. Every merging command judges this at the moment it merges, against the base as the forge has it then.
+
+<!-- trace:STORY-2903 | ai:claude -->
+
+Every AIDA command that merges follows the mode, and each re-checks it immediately before the merge: if the mode on the default branch changed while it waited, or the caller's authority lapsed, nothing merges.
+
+| Command | `ci-gated` | `review-gated` |
+|---|---|---|
+| `aida pr ship` | waits for CI on the head | merges on the approval; the advisor or the operator only |
+| `aida queue work` (the drain's merge phase) | waits for CI on the head | merges on the approval; the advisor or the operator only |
+| `aida burndown` (the wave merge) | waits for CI on the head | merges on the approval; the advisor or the operator only |
+| `aida release --after-pr` | waits for CI on the head | waits for CI on the head (a release must build) |
+| `aida land run` | boards ready changes onto the train | ships each ready change once when the run may merge it; otherwise reports it |
+| `aida pr train` | as described below | the advisor or the operator only; each car's authority is judged before the merge |
+
+<!-- trace:STORY-2905 | ai:claude -->
+
+One merge hand per pull request: before any of these commands merges a pull request, it claims it on this host, and a pull request another command is already merging (or a train has boarded) is refused rather than merged twice; the refusal for a boarded pull request names how to wait for the train or release it. Claims are local to the host, so only the primary host merges; every merge also names the exact head it merges (`--match-head-commit`), which stops a second host's stale merge at the forge. A claim left by a process that has exited is taken over; one whose holder cannot be checked refuses.
+
+A train's merge is judged again before each merge attempt, and once more as the last step before the forge call, after every wait: the landing policy must be readable and the one it was proved under, the advisor-merger rule and the author rule apply to every car, and the base must still be the commit the train was built and proved on; anything else stops the train before it merges.
+
+In `review-gated` mode the auto-train stands down: each pass does nothing and says so (`standing down: landing.mode=review-gated`, also shown by `aida pr train --status`). `aida land run` is the merge hand. In `ci-gated` mode the auto-train runs as before.
 
 ### Changing the mode
 
@@ -125,6 +146,89 @@ The check applies to a repository whose workflow files under
 no `ci-tier: full` run is left out, whatever other checks it carries. A
 repository whose CI has a single tier is admitted as before.
 
+
+## Stuck changes: the throughput guard
+
+<!-- trace:STORY-2906 | ai:claude -->
+
+`aida land stalls` prints which open changes are stuck and who can move them.
+It runs the same pass as `aida land status` and reads the same evidence fact by
+fact. The reconciler's state is one label in a fixed order (a red head is
+`CI-FAILED` before its review history is read), so the guard does not classify
+from it: an unreviewed head with red CI is still `STUCK-REVIEW`, and an approved
+head behind a hold nothing releases is still `STUCK-MERGE`. The `STATE` column
+shows the reconciler's label for reference. Use `--json` for the same report as
+JSON. The command only reads and prints; it routes nothing.
+
+| Class | Meaning | Wait counted from | Routed to |
+|---|---|---|---|
+| `STUCK-MERGE` | approved at the head, not landed for more than `merge_mins` | the approval (the head's commit, when an approval was carried over a newer head) | advisor |
+| `STUCK-MERGE-RED` | approved at the head, CI red there, no lane on it, for more than `merge_mins` | the same | advisor |
+| `STUCK-REVIEW` | no verdict at the head and no reviewer for more than `review_mins` | the head's commit | advisor |
+| `STUCK-REWORK` | changes requested at the head, no lane or session on it, for more than `rework_mins` | the verdict | advisor |
+| `STUCK-CONFLICT` | conflicts with its base, nobody on it, for more than `conflict_mins` | the base commit that first conflicted, or the head's commit when that is newer | advisor |
+| `moving` | none of the above | - | - |
+
+Each wait counts from the event that started it, not from when the guard first
+looked, so a head pushed hours ago is stuck on the first run that sees it. The
+head's time is its commit date. A change whose time or evidence cannot be read
+is listed under `Not read` and is not called stuck. A train, a promotion, a
+change under review and an approved change stacked on another change's branch
+are moving. An unreviewed red head with a lane on it is moving too: the lane is
+about to replace the head.
+
+A `STUCK-MERGE-RED` line names the failing tests and says why CI is red. Each
+failed check is judged on its own, and the line gives one reason per check:
+
+- **probable flake**: no failing test of the check is in a file the change
+  touches, and the same check passes at the base branch's tip.
+- **the change plausibly caused it**: the change touches a file a failing test
+  covers.
+- **the base branch is red**: the same check is red on the base too.
+- **undetermined**: the check's log, the changed files or the base's CI could
+  not be read, or the log names no test. The line says which.
+
+The action follows from the checks together. Any check the change plausibly
+caused means rework. Otherwise any undetermined check means reading the failed
+job: a red head is called a flake only when every failed check was read and is
+one. Then the action is one rerun, and if the rerun fails again, a fix-forward
+for the test, not rework of the change. A check that is red on the base adds a
+fix-forward of the base to whatever the other checks call for; it never
+excuses them.
+
+Tests are matched to files by module path (`queue::tests::drains` matches
+`src/queue.rs`), so this is a heuristic and the line always shows what it
+compared. Failing test names are read on GitHub only; on another forge the line
+says so. One run reads the job logs of at most `max_red_logs` red changes and
+spends at most 75 seconds on CI detail. A log read once is kept, so the next
+runs read the changes that are still missing; anything not read yet is
+reported as undetermined, with the reason.
+
+The report also counts landings on the default branch in the last
+`landings_window_mins` and lists live lanes per host, with available memory for
+the host the command runs on. Another host's memory is not measured from here;
+that host's own scheduled run records it.
+
+The scheduled `throughput-guard` job runs `aida doctor check throughput-guard`,
+which computes the same report. On the scheduler's tick each stall not routed
+before goes out once: one `throughput-guard-route-<seat>` due job per seat,
+carrying all of that seat's current stalls, and a short mail to the seat. If
+the mail cannot be written, the next run sends it again without raising the due
+job a second time. A change with a new head, or a red whose remedy changed, is
+a new stall. When nothing has landed for `escalate_after_mins` while something
+is stuck, the operator gets `throughput-guard-route-operator` in `aida awaiting`
+(at most once per window) and a push if `[notify]` is configured. No model
+runs, and the guard never launches, merges or releases anything.
+
+Every scheduled run, including one that finds nothing stuck, saves what it
+observed in `.aida/throughput-guard/state.json` under `runs`: the time, the
+landings in the window, each host's lane count and memory, and how many changes
+were open and stuck. The last 72 runs are kept, and `aida land stalls` prints
+the newest.
+
+The guard is off unless the project sets `[throughput_guard] enabled = true`
+and enables the `throughput-guard` job; see `[throughput_guard]` in
+[Project setup](../cli/07-project-setup.md#throughput-guard).
 
 ## Landing metrics
 

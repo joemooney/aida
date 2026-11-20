@@ -136,7 +136,7 @@ fn alias_defers_to_the_store_dispatcher_instead_of_running_early() {
 // trace:TASK-1715.aca65124 trace:TASK-1715.ac6152c7 | ai:claude
 #[test]
 fn alias_reuses_the_queue_dispatch_rather_than_a_second_pipeline() {
-    let src = include_str!("../pr_cmd.rs");
+    let src = include_str!("../pr_cmd/mod.rs");
     let start = src.find("fn run_pr(").expect("run_pr");
     let body = &src[start..start + src[start..].find("\n}\n").unwrap()];
     assert!(body.contains("crate::queue_cmd::dispatch_queue_args("));

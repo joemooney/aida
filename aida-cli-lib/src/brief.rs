@@ -321,9 +321,11 @@ pub(crate) fn render_agent_brief(
             out.push_str("```bash\n");
             out.push_str(&format!("cd {project_root_display}\n"));
             out.push_str("git fetch origin main\n");
+            // Materialize the branch without writing shared tracking config.
+            // trace:BUG-2211 | ai:codex
             if *remote_only {
                 out.push_str(&format!(
-                    "git worktree add {worktree_display} -B {branch} origin/{branch}\n"
+                    "git worktree add --no-track {worktree_display} -B {branch} origin/{branch}\n"
                 ));
             } else {
                 out.push_str(&format!("git worktree add {worktree_display} {branch}\n"));
@@ -345,7 +347,7 @@ pub(crate) fn render_agent_brief(
             out.push_str(&format!("cd {project_root_display}\n"));
             out.push_str("git fetch origin main\n");
             out.push_str(&format!(
-                "git worktree add {worktree_display} -b {branch} origin/main\n"
+                "git worktree add --no-track {worktree_display} -b {branch} origin/main\n"
             ));
             out.push_str(&format!("cd {worktree_display}\n"));
             // BUG-331: no `.aida-store` symlink needed — sibling worktrees now

@@ -101,6 +101,7 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida land mode set` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida land mode reconcile` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida land status` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida land stalls` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida now` | COULD NOT VERIFY | Dedicated --json exists; needs command-specific state or external service |
 | `aida load` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida load queue` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
@@ -632,6 +633,9 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida review nodes revoke` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review nodes publisher` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review watch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review watch pause` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review watch resume` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida review watch status` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review prompt` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review assemble` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida review record` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

@@ -26,12 +26,16 @@ pub(crate) mod effective;
 pub(crate) mod fleet_lanes;
 pub(crate) mod hold_collect;
 pub(crate) mod kernel_deps;
+// The one merge boundary and its per-PR merge claim: landing decisions sit
+// on the gate floor (promotion 23 review F3). trace:STORY-2903 STORY-2905 | ai:claude
+pub(crate) mod landing_merge;
 pub(crate) mod ledger;
 pub(crate) mod mandate;
 pub(crate) mod mandate_drive;
 pub(crate) mod mandate_gates;
 pub(crate) mod mandate_ship;
 pub(crate) mod mandate_traces;
+pub(crate) mod merge_claim;
 pub(crate) mod merge_hold_core;
 pub(crate) mod operator_hold;
 pub(crate) mod orchestrator_leaves;
@@ -55,6 +59,8 @@ pub(crate) mod ship;
 pub(crate) mod solo_review;
 // BUG-HOME-048: completion trailers complete only the specs a PR covers.
 pub(crate) mod trailer_coverage;
+// STORY-2884: the project default for an unset execution mode.
+pub(crate) mod unset_mode;
 
 // TASK-2707: the shared cache is never consulted for authority.
 // trace:TASK-2707 | ai:claude

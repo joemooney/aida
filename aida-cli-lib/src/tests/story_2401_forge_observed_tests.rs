@@ -232,6 +232,17 @@ fn change() -> ChangeRef {
 }
 
 impl crate::forge::Forge for StubForge {
+    // A single-attempt test fake: the guard runs once. trace:STORY-2903 | ai:claude
+    fn merge_change_guarded(
+        &self,
+        c: &crate::forge::ChangeRef,
+        opts: &crate::forge::MergeOptions,
+        sink: &mut dyn crate::network_retry::RetrySink,
+        guard: &mut dyn FnMut() -> anyhow::Result<()>,
+    ) -> anyhow::Result<crate::forge::MergeResult> {
+        guard()?;
+        self.merge_change(c, opts, sink)
+    }
     fn kind(&self) -> crate::forge::ForgeKind {
         crate::forge::ForgeKind::GitHub
     }

@@ -2548,9 +2548,10 @@ pub(crate) fn prepare_lane_worktree(
             aida_core::mailbox_lifecycle::guard::retire_checkout(wt_path, "lane reuse")
                 .map_err(|refusal| anyhow::anyhow!("refusing to reuse worktree: {refusal}"))?;
         // The quiet re-check runs right before the checkout. trace:STORY-1843 | ai:claude
+        // Keep branch resets from writing inferred upstream config. trace:BUG-2211 | ai:codex
         let checkout = || {
             aida_core::git_ops::host_git_command(wt_path)
-                .args(["checkout", "-B", branch, &resolved_start])
+                .args(["checkout", "--no-track", "-B", branch, &resolved_start])
                 .output()
                 .with_context(|| format!("failed to checkout {branch} in {}", wt_path.display()))
                 .and_then(|out| {
@@ -2573,7 +2574,7 @@ pub(crate) fn prepare_lane_worktree(
         )?;
     } else {
         let out = aida_core::git_ops::host_git_command(main_worktree)
-            .args(["worktree", "add", "-B", branch])
+            .args(["worktree", "add", "--no-track", "-B", branch])
             .arg(wt_path)
             .arg(&resolved_start)
             .output()
