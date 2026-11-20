@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T01:07:48.729061405Z
+modified_at: 2026-11-20T05:50:55.782088844Z
 req_type: Bug
 tags:
 - dell1
@@ -670,6 +670,16 @@ comments:
     A reference merge (commit 6ff4b5c4f9c4, `(Refs BUG-2684)`) landed while this spec was In Progress, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-20T01:07:48.729055090Z
   modified_at: 2026-11-20T01:07:48.729055090Z
+- id: 01a1f782-34e4-7832-8fb9-3f953c08e6cf
+  author: joe
+  content: |-
+    advisor-121 2026-11-19 22:50: two related defects. (a) Pulling from origin/aida-store...
+      Pull complete.
+    error: "PR-4354 already has a CHANGES REQUESTED verdict at this exact head; a duplicate review is unnecessary. If the review contract changed after that verdict, an advisor can admit one fresh review at this head with `--rereview <reason>`", run as a deputy job, blocked on an INTERACTIVE 'Choice [1/2/3/4]' prompt about stale reviewer lease 01a1f76fcee1 (its aida-pr-4354 worktree no longer exists and the lease is absent from session leases --all). --no-human and no-TTY contexts must never prompt: refuse with a typed reason instead. (b) The stale-reviewer-lease check fires even when the tree is already gone; it should auto-release a lease whose worktree is absent and whose holder is dead.
+  created_at: 2026-11-20T05:50:55.782088844Z
+  modified_at: 2026-11-20T05:50:55.782088844Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
