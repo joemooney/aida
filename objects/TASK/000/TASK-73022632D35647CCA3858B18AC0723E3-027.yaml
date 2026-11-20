@@ -352,6 +352,22 @@ comments:
   modified_at: 2026-11-20T23:31:57.464844188Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb4f-aa2e-72c0-a08b-186b4226414b
+  author: joe
+  content: |-
+    Product 16:36: evidence-only Claude lane queued on dell1 (lane-job run of the seat_clone:: suite at origin/main with AIDA_CARGO_FORCE_BUILD=1; post counts and failing names; no code), brief:
+    # Brief: TASK-3133 completion-gate EVIDENCE lane (advisor-121 16:32). NO CODE CHANGES.
+
+    Goal: produce the lane-job evidence the advisor needs to complete TASK-3133. Do not edit any file.
+    1. In your seat (at current origin/main, which includes #4365 29e77b8), run the suite AS A LANE JOB, inside the contained lane environment:
+       `AIDA_CARGO_FORCE_BUILD=1 aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`
+       (use `aida lane job wait` if it outlives --wait). AIDA_CARGO_FORCE_BUILD=1 is REQUIRED: without it the cargo wrapper skips an unmodified main checkout and reports a fake 1-second pass.
+    2. Post ONE comment on TASK-3133 with: the lane job id, the passed/failed/ignored counts, and the exact names of every failing test (classified as the spec's AC1 classes a/b/c where you can).
+    3. Then punt with "evidence posted", making no commits and opening no PR.
+  created_at: 2026-11-20T23:34:11.964154003Z
+  modified_at: 2026-11-20T23:34:11.964154003Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb4f-d26b-7942-aced-5b5a20562158
   author: aida-auto-bump
   content: |-
