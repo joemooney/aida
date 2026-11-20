@@ -316,6 +316,13 @@ comments:
   modified_at: 2026-11-20T18:42:20.988946150Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa44-b1b3-7120-9742-5be2e0d96980
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was punted on: design-fork: AC1/AC2/AC5 have no target on this lane host, re-verified 2026-11-20 from this lane (same result as the 2026-11-20 01:34 implementer finding, which the 09:48 completion call did not address). disrad-dvp98b3puw is dell1''s own kernel hostname, not a sandbox UTS name: /proc/self/ns/uts = uts:[4026531838] (initial UTS namespace), /etc/hostname = disrad-dvp98b3puw, all 57 local session leases and all 79 shared claims from this machine record it, and every claim records pid_namespace 4026531836 (initial PID namespace = host-side launcher). AIDA''s bwrap launches (launch/contained.rs:305, seat_clone.rs:1282) pass --unshare-all with no --hostname, so a contained seat reports the same name as the host. No code path writes a sandbox name into a lease or claim, so there is nothing to move to a sandbox_hostname field (AC2) and no way to tell a legacy ''sandbox'' record from a normal one (AC5). ''dell1'' is an operator label that no node registry entry carries. AC3 and AC4 are on main via #4344 (861eb51576): the two unhealable claims (01a1f4f93790, 01a1f5182ee1) were unhealable because their admission never spawned a worker (no lease, no lane record), not because of a host mismatch; regression coordination.rs bug2697_doctor_reports_and_heals_a_claim_whose_admission_never_spawned reproduces that shape with host == this node, plus bug2697_never_spawned_heal_refuses_without_complete_evidence for the refusal paths. No code change made in this lane. Decision needed: close AC1/AC2/AC5 as not reproducible, or restate them.. No triage reason was given.'
+  created_at: 2026-11-20T18:42:48.371792400Z
+  modified_at: 2026-11-20T18:42:48.371792400Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe
@@ -412,6 +419,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1fa44-b1b3-7120-9742-5bda3631da7b
+  author: joe
+  timestamp: 2026-11-20T18:42:48.371771755Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 9f2f93cc432277dadb7781e7ddefe397bdc65b81
