@@ -1,5 +1,6 @@
 id: 01a1f6fa-247f-70f3-acfb-de984615446c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-174
+agreed_id: STORY-2979
 title: 'Review PR-4348: [AI:claude] fix(lifecycle): set Done when a self-publishing lane''s own push completes its spec (BUG-2696)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1f6da`) for branch `bug-2696-d3`.
@@ -23,6 +24,13 @@ feature: Uncategorized
 created_at: 2026-11-20T03:22:30.911410438Z
 modified_at: 2026-11-20T03:22:30.911410438Z
 req_type: Story
+history:
+- id: 01a1f720-2c03-7362-ab8c-f633f273e7ef
+  author: joe
+  timestamp: 2026-11-20T04:04:03.203984789Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2b42e9f896c63a9152a2508fd50211741e6ee72d
   branch: main

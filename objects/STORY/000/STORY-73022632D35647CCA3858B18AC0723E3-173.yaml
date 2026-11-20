@@ -1,5 +1,6 @@
 id: 01a1f6ee-b7ec-71d1-b8c1-c88b7fc2427a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-173
+agreed_id: STORY-2980
 title: 'Review PR-4349: [AI:codex] fix(ci): ignore Rust test fixtures in the doc-path checker (TASK-3161)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f6ce`) for branch `task-b6b1278890774ef993d2ebc327862470-1121`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-20T03:10:17.016916794Z
   session_id: 01a1f6ce133e
+  changes: []
+- id: 01a1f720-5b62-7ff0-85d0-6beebf1715e4
+  author: joe
+  timestamp: 2026-11-20T04:04:15.330428879Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 2b42e9f896c63a9152a2508fd50211741e6ee72d
