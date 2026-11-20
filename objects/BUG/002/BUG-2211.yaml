@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-10-23T17:20:13.687947949Z
-modified_at: 2026-11-20T00:00:04.981800593Z
+modified_at: 2026-11-20T00:37:28.132761315Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -197,6 +197,13 @@ comments:
   content: 'advisor-121 2026-11-19 17:03: trains #4338 and #4339 were both refused because the merge gate read a STALE legacy spec-keyed verdict file, .aida/review-verdicts/BUG-2211.json (recorded 2026-10-23 for PR #2863 at 0fb55cc, from this spec''s earlier fix before the reopen), as BUG-2211''s verdict for the train PR. Moved aside as BUG-2211.json.stale-2026-10-23.advisor121-bak (not deleted). The current approval at 484438b lives in the gate ledger. Underlying defect: a legacy spec-keyed file outranks or shadows the ledger approval for the current change; noted on BUG-2662.'
   created_at: 2026-11-20T00:00:04.981800593Z
   modified_at: 2026-11-20T00:00:04.981800593Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f663-4634-7a90-88e7-f1fe724a599a
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 17:40): COMPLETE. #4333 landed with a full (BUG-2211) trailer: worktree setup skips upstream tracking, so a sandboxed git no longer leaves a stale read-only .git/config.lock, and --no-track is passed only for remote-only branch creation (the r2 P1 fix, approved at 484438b). Manual call: the r2 lane ran the pre-BUG-2696 dell1 binary, so it never set Done. Two trains (#4338, #4339) were refused by a stale legacy BUG-2211.json verdict file, now moved aside. If .git/config.lock recurs, reopen this spec with evidence.'
+  created_at: 2026-11-20T00:37:28.132761315Z
+  modified_at: 2026-11-20T00:37:28.132761315Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
