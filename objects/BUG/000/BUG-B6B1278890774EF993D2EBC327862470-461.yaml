@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T10:11:05.527837127Z
+modified_at: 2026-11-20T10:27:00.334503687Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -228,6 +228,24 @@ comments:
   modified_at: 2026-11-20T10:11:05.527837127Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f87e-c66e-7d40-aa8b-ea24aa1bbd62
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6863c05249 (PR #4344, r2; started from the saved WIP 055c8f29b2, checked against all three r2 findings).
+
+    Findings addressed:
+    1. [AC3] session_start.rs:2681-2689: the Unavailable arm now hands the receipt to UnleasedClaimRelease when no launch rollback is armed, so a push error that returns Some(receipt) is released by a later pre-lease failure. Release refreshes first, then compare-and-deletes the exact receipt (coordination.rs:1351), so it can never delete a successor's claim. Regression: bug_2697_an_errored_claim_push_is_released_when_an_unrolled_start_fails (a flaky receive-pack lets origin accept the claim, then fails the push; rollback_failed_setup=false; failpoint before the lease write; asserts the claim is absent on origin).
+    2. [ADR-76] bug_2697_a_memory_floor_refusal_at_the_drain_launcher_releases_the_shared_claim drives the real run_vendor_headless_to_exit admission (memory floor) under a session_start_with_receipt setup with a distributed store, and asserts the shared claim is gone locally and on origin, along with the lease and tree. Mutation check: removing .map_err(refused_before_spawn) at session/headless.rs:2007 makes it FAIL (panic at 'the refused launch started no agent'); reverted.
+    3. [CI] coordination.rs:2653-2659: the fixture uses aida_core::toml_quote::toml_string with no extra quotes. scripts/check-portability.sh rc=0.
+
+    Validation: lane job cargo test -p aida-cli-lib --lib 'bug2697|pickup_launch_rollback': 17 passed, 0 failed. cargo fmt --check clean; check-store-writers.py OK.
+    Not run locally: make check-ci-fast and check-ratchets.py (each takes longer than this lane's 60s per-call cap); they're left to the host fast gate and CI at 6863c05249.
+    Residual: if the release push itself fails, the claim stays and doctor heal stale-leases (AC4) is the fallback. AC5 and AC6 are still open, so the commit is Refs.
+  created_at: 2026-11-20T10:27:00.334503687Z
+  modified_at: 2026-11-20T10:27:00.334503687Z
+  session_id: 01a1f87409e4
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe

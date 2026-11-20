@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T10:14:27.369204398Z
-modified_at: 2026-11-20T10:23:03.887370814Z
+modified_at: 2026-11-20T10:26:27.332086018Z
 req_type: Bug
 tags:
 - fast-gate
@@ -49,6 +49,32 @@ comments:
   modified_at: 2026-11-20T10:18:34.436577267Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f87e-4584-7f81-bb39-80b844247ccb
+  author: dirtlab
+  content: |-
+    ## Implementer approach
+
+    ### Root cause (from code + lane-results cf10881d / 72f44b2d)
+    The failing lanes were Claude lanes. `vendors::headless::host_publishes_implementer` is Codex-only, so for Claude, `standalone_implementer` never calls `lane_fast_gate::native` and so never calls `post_exit_commit_reported`. These lanes self-publish. On a fast-gate repair round, the queued repair brief (`lane_fast_gate::repair_prompt`, used by `pushed_inner` too) tells every lane "Native seats must leave edits uncommitted for host publication". The Claude lane obeyed, nothing committed its edits, and `pushed_inner` → `snapshot()` errored. `infrastructure()` then printed `fast_gate=fail: fast gate needs a clean committed seat` (marker stays `fail` because repair_used). The final lane line and the lane-result detail ("lane did not publish a new head") carried no reason.
+
+    ### Acceptance criteria and evidence
+    - AC2 (fix), **unit**: `repair_prompt` is lane-aware. Host-published lanes are told to leave edits uncommitted; self-published lanes are told to commit (and publish) their fix. Test in `lane_fast_gate` tests.
+    - AC1/AC3 (host commit), **command-level/unit through the real exit helper**: a self-published seat-clone lane that exits cleanly with uncommitted edits gets the host post-exit commit (`post_exit_commit_reported`, with a vendor-correct `[AI:<tool>]` tag) before `publish_unpushed` and the pushed fast gate. The work is published, and the gate runs on the committed head. Tested via a factored exit-step helper using `with_post_exit_step`, plus a real seat-clone fixture where the existing harness allows it.
+    - AC1 (reason), **unit**: the fast-gate receipt records the infrastructure reason. `result_line` appends it, the dirty-seat error names the dirty paths and says the host commit did not run, a NotASeat skip in `native` prints why, and the lane-result `detail` gets the reason appended.
+
+    ### Expected files
+    - `aida-cli-lib/src/lane_fast_gate.rs`
+    - `aida-cli-lib/src/ship_from_seat.rs`
+    - `aida-cli-lib/src/standalone_implementer.rs`
+    - `aida-cli-lib/src/lane_result.rs`
+    - tests under `aida-cli-lib/src/tests/`
+
+    ### Ambiguities / conflicts as questions
+    - Should a self-published lane whose child exited non-zero also get a host salvage commit? Proposed: no. Keep the uncommitted-seat stall and report its reason (a failed exit must not publish).
+  created_at: 2026-11-20T10:26:27.332086018Z
+  modified_at: 2026-11-20T10:26:27.332086018Z
+  session_id: 01a1f87af1a2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f874-487d-7913-ba35-94353334404c
   author: joe
