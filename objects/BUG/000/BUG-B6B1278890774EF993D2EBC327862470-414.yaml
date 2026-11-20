@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768Z
-modified_at: 2026-11-19T23:39:06.783402400Z
+modified_at: 2026-11-20T00:07:31.886101550Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -532,6 +532,27 @@ comments:
   modified_at: 2026-11-19T23:35:22.421485412Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f647-a24a-7113-8c4a-da3a00fdc2c7
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 0efea633202a38e6a9e1ef328dcaa3dfc2ae431e. Also reviewed the host-staged merge of be435bcf3807a9e0c892e2d7def934a25c4b1942 and the unstaged inventory resolution. No untracked additions.
+
+    AC1: [evidence: behavioral-test] S1's selected-member isolation and all-ready ejection regressions remain in task_1993_review_watch_tests.rs:4143 and :4233. The S2 test at :4326 reserves train members during an active pause and extends the pause while member locks are held.
+
+    AC4: [evidence: behavioral-test] task_1993_review_watch_tests.rs:4143 holds an unrelated review reservation while the selected train members reserve successfully.
+    AC2: [evidence: behavioral-test] — task_1993_review_watch_tests.rs:4164 retains the terminal-attempt regression and the confirmed-dead descendant requirement.
+    AC3: [evidence: behavioral-test] — task_1993_review_watch_tests.rs:4358, :4429 and :4451 cover new-launch skips, continued running-review completion, expiry and resume actor audit. The real dispatch/control fixture beginning at :874 covers pre-spawn cancellation and invalid, implementer and reviewer grant refusals. Review-watch selection uses the existing skip action and watch_change retains Result<Admission>.
+    AC3 rollback usage: [evidence: documentation-inspection] — docs/cli/06-roles-sessions.md:1257 preserves the pause-before-cutover and resume-before-legacy-restart commands. The external STORY-2868 A2 rollback job was not executed in this lane.
+
+    Probe findings: checked duration units and config keys against CLI help and trust inventory, quoted reason JSON round trips, repeated pause/resume behavior, invalid journal refusal, and advisor/operator authority at the production control entry. No test removal or relaxation in the merge resolution. The only repair was scripts/store-writers.toml. Its parsed result exactly matches main plus the two pause audit writers, preserving policy metadata. Main's working tree uses DatabaseBackend::update_atomically at pr_merge_gate.rs:510, so the obsolete update_spec_atomically sink is absent. Conflict markers and whitespace checks are clean. Git staging and publication are host-owned.
+
+    Validation passed: cargo fmt --check, git diff --check HEAD, store-writer regeneration and validation, ExecContext (19 fixtures and zero new ledger sites), TASK-2143 (4 tests), shared Rust guards (51), focused BUG-2650 (12), and make check-ci-fast (j20261119T234402409-2-0). The first broad review-watch run had one BUG-2645 worker-image digest assertion fail. The assertion passed in isolation and the full review_watch:: rerun passed (j20261119T234924911-2-0).
+  created_at: 2026-11-20T00:07:31.886101550Z
+  modified_at: 2026-11-20T00:07:31.886101550Z
+  session_id: 01a1f62d68fc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e864-f3f4-7203-a3a1-3695e324acd7
   author: joe
