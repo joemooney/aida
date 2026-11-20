@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-17T04:31:20.159152225Z
-modified_at: 2026-11-20T18:18:39.907923688Z
+modified_at: 2026-11-20T18:34:00.059414730Z
 req_type: Bug
 comments:
 - id: 01a1fa2e-d289-7250-af88-722dec7fe8c5
@@ -17,6 +17,13 @@ comments:
   created_at: 2026-11-20T18:18:39.907923688Z
   modified_at: 2026-11-20T18:18:39.907923688Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa3c-d3e0-7771-88e6-66f0f533178c
+  author: joe
+  content: "Product 11:33: claude lane queued on dell1 (advisor 11:19 batch), brief:\n# Brief: BUG-2646 (fresh start; advisor-121 11:19 batch: approved, drain; claude)\n\nScope: rework admission recovery: unverified approvals and closed terminal waits mis-handled when ownership discovery fails. STRICT review: admission/authority, fail closed.\n\nImplement ONLY the still-unmet acceptance criteria on origin/main; earlier slices on main: \nTrailer (BUG-2646) only if your PR plus main meets every AC; otherwise (Refs BUG-2646). If every AC is already met, make no change: punt with per-AC evidence.\nBefore pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`."
+  created_at: 2026-11-20T18:34:00.059414730Z
+  modified_at: 2026-11-20T18:34:00.059414730Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e7c6-40ba-7180-99c5-2c906894848b
