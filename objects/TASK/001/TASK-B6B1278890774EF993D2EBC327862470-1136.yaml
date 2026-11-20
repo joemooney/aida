@@ -13,12 +13,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T17:19:10.001216805Z
+modified_at: 2026-11-20T18:07:57.019489695Z
 req_type: Task
 tags:
 - landing
 - linked:STORY-2906
 - throughput
+comments:
+- id: 01a1fa25-052e-7e70-b232-7f01ebfb1bc4
+  author: joe
+  content: 'advisor-121 11:12: also carry from STORY-2906 AC2: a real per-host memory observation for FOREIGN lane hosts (e.g. dell1), via a host heartbeat field or a bounded remote probe; #4372 reports an explicit ''unknown (no remote memory source)'' until then.'
+  created_at: 2026-11-20T18:07:57.019489695Z
+  modified_at: 2026-11-20T18:07:57.019489695Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
