@@ -2265,6 +2265,7 @@ esac
                     None,
                     "[AI:codex] fix: requested completion (BUG-1)",
                     false,
+                    false,
                 )
                 .unwrap();
             }
@@ -2290,9 +2291,16 @@ esac
                 "{outcome:?}"
             );
             let subject = git_ok(&clone, &["log", "-1", "--format=%s"]);
-            assert!(subject.ends_with(trailer), "{subject}");
-            let calls = std::fs::read_to_string(bin.join("called")).unwrap();
-            assert!(calls.contains("--head refs-pr"), "{calls}");
+            // BUG-2696 D2: a declaration's trailer derives from its declared
+            // completeness, not from the existing PR title; only the host's
+            // undeclared default keeps the TASK-2879 title rule.
+            // trace:BUG-2696 | ai:claude
+            let want = if declared { "(BUG-1)" } else { trailer };
+            assert!(subject.ends_with(want), "{subject}");
+            if !declared {
+                let calls = std::fs::read_to_string(bin.join("called")).unwrap();
+                assert!(calls.contains("--head refs-pr"), "{calls}");
+            }
             if declared {
                 assert!(
                     subject.starts_with("[AI:codex] fix: requested completion"),
@@ -2569,25 +2577,48 @@ fn task_2902_declared_subject_survives_host_commit_and_pr_title() {
     use crate::ship_from_seat::{post_exit_commit, PostExitCommit};
     let fx = fixture();
     let clone = seat_with_publication_pending(&fx, "declaration", "c0ffee290201", "declared");
-    for (clean, requested, expected) in [
+    // BUG-2696: the fourth field is `--partial-slice`; the last is whether
+    // the published push marks BUG-1 Done (D3).
+    for (clean, requested, expected, partial, done) in [
         (
             true,
             "[AI:codex] feat(seat): partial slice (Refs BUG-1)",
             "[AI:codex] feat(seat): partial slice (Refs BUG-1)",
+            false,
+            false,
         ),
         (
             true,
             "[AI:codex] feat(seat): complete slice (BUG-1)",
             "[AI:codex] feat(seat): complete slice (BUG-1)",
+            false,
+            true,
+        ),
+        (
+            true,
+            "[AI:codex] feat(seat): declared slice (BUG-1)",
+            "[AI:codex] feat(seat): declared slice (Refs BUG-1)",
+            true,
+            false,
         ),
         (
             false,
             "[AI:codex] feat(seat): interrupted slice (BUG-1)",
             "[AI:codex] feat(seat): interrupted slice (Refs BUG-1)",
+            false,
+            false,
         ),
     ] {
+        let storage = aida_core::Storage::new(fx.main.join("requirements.yaml"));
+        storage
+            .update_atomically(|s| {
+                s.get_requirement_by_spec_id_mut("BUG-1").unwrap().status =
+                    aida_core::RequirementStatus::Approved;
+            })
+            .unwrap();
         crate::native_publication::prepare(&fx.main, &clone).unwrap();
-        crate::native_publication::declare(&clone, Some("BUG-1"), requested, false).unwrap();
+        crate::native_publication::declare(&clone, Some("BUG-1"), requested, partial, false)
+            .unwrap();
         std::fs::write(clone.join("slice.txt"), requested).unwrap();
         let result = post_exit_commit(&fx.main, &clone, "BUG-1", "test", clean, &test_commit);
         assert!(matches!(result, PostExitCommit::Committed(_)), "{result:?}");
@@ -2620,7 +2651,90 @@ fn task_2902_declared_subject_survives_host_commit_and_pr_title() {
             ),
             expected
         );
+        // trace:BUG-2696 | ai:claude
+        let status = storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-1")
+            .unwrap()
+            .status
+            .clone();
+        let want = if done {
+            aida_core::RequirementStatus::Done
+        } else {
+            aida_core::RequirementStatus::Approved
+        };
+        assert_eq!(status, want, "{requested}");
     }
+}
+
+/// BUG-2696 AC4: a punted lane's publication is refused before the push, so
+/// a completing declaration never sets the spec Done.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_punted_publication_never_sets_done() {
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "punted", "c0ffee269601", "punted");
+    let storage = aida_core::Storage::new(fx.main.join("requirements.yaml"));
+    storage
+        .update_atomically(|s| {
+            s.get_requirement_by_spec_id_mut("BUG-1").unwrap().status =
+                aida_core::RequirementStatus::InProgress;
+        })
+        .unwrap();
+    crate::native_publication::prepare(&fx.main, &clone).unwrap();
+    let requested = "[AI:codex] fix: complete (BUG-1)";
+    crate::native_publication::declare(&clone, Some("BUG-1"), requested, false, false).unwrap();
+    std::fs::write(clone.join("punted.txt"), requested).unwrap();
+    let result = crate::ship_from_seat::post_exit_commit(
+        &fx.main,
+        &clone,
+        "BUG-1",
+        "test",
+        true,
+        &test_commit,
+    );
+    assert!(
+        matches!(result, crate::ship_from_seat::PostExitCommit::Committed(_)),
+        "{result:?}"
+    );
+    let punt = crate::punt::signal_path(&fx.main, "BUG-1");
+    std::fs::create_dir_all(punt.parent().unwrap()).unwrap();
+    crate::punt::write_signal(
+        &punt,
+        &crate::punt::PuntSignal {
+            spec: "BUG-1".into(),
+            category: aida_core::PuntCategory::DesignFork,
+            detail: "design fork".into(),
+            lean: None,
+        },
+    )
+    .unwrap();
+    let forge = crate::forge::fake::RecordingForge {
+        opens_as: Some(77),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let refused = crate::ship_from_seat::run_from(
+        &fx.main,
+        opts(&clone, false, false),
+        &crate::ship_from_seat::Deps {
+            bundle: &test_bundle,
+            commit: &no_commit,
+            forge: &|_| Box::new(forge.clone()),
+            after_open: &|_, _| {},
+        },
+    );
+    assert!(refused.is_err());
+    assert!(forge.opened.lock().unwrap().is_empty());
+    let status = storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-1")
+        .unwrap()
+        .status
+        .clone();
+    assert_eq!(status, aida_core::RequirementStatus::InProgress);
 }
 
 // trace:BUG-2493 | ai:codex
@@ -2640,7 +2754,7 @@ fn task_3736_bug_2493_declared_body_survives_host_commit_and_refs_downgrade() {
         let body =
             "# Explanation with (BUG-2) in prose.  \n\nHelp-Golden: unchanged\n\nDone (BUG-2)\n";
         let message = format!("[AI:codex] fix: body (BUG-1)\n\n{body}");
-        crate::native_publication::declare(&clone, Some("BUG-1"), &message, false).unwrap();
+        crate::native_publication::declare(&clone, Some("BUG-1"), &message, false, false).unwrap();
         let surface = clone.join("aida-cli-lib/src/example_args.rs");
         std::fs::create_dir_all(surface.parent().unwrap()).unwrap();
         std::fs::write(surface, format!("// changed {clean}")).unwrap();
@@ -2709,8 +2823,14 @@ fn task_2902_stale_invalid_and_mismatched_declarations_refuse_before_commit() {
     let clone = seat_with_publication_pending(&fx, "stale", "c0ffee290202", "stale");
     let path = clone.join(".aida/native-publication.json");
     crate::native_publication::prepare(&fx.main, &clone).unwrap();
-    crate::native_publication::declare(&clone, None, "[AI:codex] feat: slice (Refs BUG-1)", false)
-        .unwrap();
+    crate::native_publication::declare(
+        &clone,
+        None,
+        "[AI:codex] feat: slice (Refs BUG-1)",
+        false,
+        false,
+    )
+    .unwrap();
     let old = std::fs::read(&path).unwrap();
     crate::native_publication::prepare(&fx.main, &clone).unwrap();
     assert!(!path.exists());
@@ -2736,7 +2856,7 @@ fn task_2902_stale_invalid_and_mismatched_declarations_refuse_before_commit() {
         "slice (BUG-1)\nbody",
     ] {
         assert!(
-            crate::native_publication::declare(&clone, None, subject, false).is_err(),
+            crate::native_publication::declare(&clone, None, subject, false, false).is_err(),
             "{subject}"
         );
     }
@@ -2744,7 +2864,7 @@ fn task_2902_stale_invalid_and_mismatched_declarations_refuse_before_commit() {
     // body again before invoking its commit callback.
     // trace:BUG-2493 | ai:codex
     let subject = "fix: body validation (BUG-1)";
-    crate::native_publication::declare(&clone, None, subject, false).unwrap();
+    crate::native_publication::declare(&clone, None, subject, false, false).unwrap();
     let mut declaration: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     declaration["body"] = serde_json::json!("Help-Golden: unchanged\n\0hidden");
@@ -3136,7 +3256,7 @@ fn task_2902_rotation_retains_intent_and_lease_release_cleans_binding() {
         let clone = seat_with_publication_pending(&fx, "rotation", lease, "rotation");
         let requested = "[AI:codex] fix: partial rotation (Refs BUG-1)";
         crate::native_publication::prepare_generation(&fx.main, &clone, generation).unwrap();
-        crate::native_publication::declare(&clone, None, requested, false).unwrap();
+        crate::native_publication::declare(&clone, None, requested, false, false).unwrap();
         let expected = fx
             .main
             .join(format!(".aida/native-publications/{lease}.json"));
@@ -3191,9 +3311,11 @@ fn task_2902_launch_paths_preserve_signals_on_refused_spawn() {
     use crate::session::HeadlessVendor;
     let fx = fixture();
     std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    // Use the smallest supported fixture floor so this reaches publication setup.
+    // trace:TASK-3133 | ai:codex
     std::fs::write(
         fx.main.join(".aida/config.toml"),
-        "[contained.vendors]\ncodex = \"native\"\n",
+        "[contained.vendors]\ncodex = \"native\"\n\n[doctor.disk_headroom]\nmin_free_gib = 1\n",
     )
     .unwrap();
     git_ok(&fx.main, &["add", ".aida/config.toml"]);
@@ -3577,6 +3699,12 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
     }
     use crate::session::{HeadlessResume, HeadlessVendor};
     let fx = fixture();
+    // Exercise reservation cleanup on fixture filesystems smaller than the default floor.
+    // trace:TASK-3133 | ai:codex
+    crate::test_env::write_project_config_fixture(
+        &fx.main,
+        "[doctor.disk_headroom]\nmin_free_gib = 1\n",
+    );
     let lease = "c0ffee264002";
     let branch = "gate-exits";
     let clone = seat_with_publication_pending(&fx, "gate-exits", lease, branch);
@@ -5548,6 +5676,389 @@ fn bug_2648_failed_queue_exit_preserves_seat_then_clean_exit_can_publish() {
     assert_ne!(git_ok(&clone, &["rev-parse", "HEAD"]), before);
     assert!(ref_exists(&fx.origin, "refs/heads/exit-policy"));
     assert_eq!(forge.opened.lock().unwrap().len(), 1);
+}
+
+// ---------------------------------------------------------------------------
+// BUG-2696 round 2: fail-closed completion (advisor amendments A1, A2).
+// ---------------------------------------------------------------------------
+
+fn bug_1_status(fx: &Fixture) -> aida_core::RequirementStatus {
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-1")
+        .unwrap()
+        .status
+        .clone()
+}
+
+fn set_bug_1_status(fx: &Fixture, status: aida_core::RequirementStatus) {
+    aida_core::Storage::new(fx.main.join("requirements.yaml"))
+        .update_atomically(|s| s.get_requirement_by_spec_id_mut("BUG-1").unwrap().status = status)
+        .unwrap();
+}
+
+/// F3: the host's slice-plan veto does not depend on the seat-controlled
+/// `completes_spec` field. Removing it or setting it null with a child slice
+/// outstanding still yields a partial publication; so does a missing field
+/// with no outstanding child (A2: missing means not completing), and an
+/// unavailable store never yields a completing one.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_f3_declaration_cannot_lift_the_host_slice_veto() {
+    let fx = fixture();
+    let clone = seat_with_publication_pending(&fx, "veto", "c0ffee269610", "veto");
+    crate::native_publication::prepare(&fx.main, &clone).unwrap();
+    crate::native_publication::declare(
+        &clone,
+        Some("BUG-1"),
+        "[AI:codex] fix: whole (BUG-1)",
+        false,
+        false,
+    )
+    .unwrap();
+    let path = clone.join(".aida/native-publication.json");
+    let declared: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert_eq!(declared["completes_spec"], true);
+    let write = |edit: &dyn Fn(&mut serde_json::Map<String, serde_json::Value>)| {
+        let mut value = declared.clone();
+        edit(value.as_object_mut().unwrap());
+        std::fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+    };
+    let read = || crate::native_publication::read(&fx.main, &clone, "BUG-1");
+    let partial = "[AI:codex] fix: whole (Refs BUG-1)";
+    let complete = "[AI:codex] fix: whole (BUG-1)";
+    assert_eq!(read().unwrap().as_deref(), Some(complete));
+
+    // An advisor decomposes BUG-1: a child slice is outstanding.
+    let storage = aida_core::Storage::new(fx.main.join("requirements.yaml"));
+    storage
+        .update_atomically(|s| {
+            let mut child = aida_core::Requirement::new("later slice".into(), String::new());
+            child.spec_id = Some("TASK-2".into());
+            let child_id = child.id;
+            s.requirements.push(child);
+            s.get_requirement_by_spec_id_mut("BUG-1")
+                .unwrap()
+                .relationships
+                .push(aida_core::Relationship {
+                    rel_type: aida_core::RelationshipType::Parent,
+                    target_id: child_id,
+                    created_at: None,
+                    created_by: None,
+                });
+        })
+        .unwrap();
+    for (label, edit) in [
+        (
+            "true",
+            &(|_: &mut serde_json::Map<_, _>| {}) as &dyn Fn(&mut serde_json::Map<_, _>),
+        ),
+        ("missing", &|m| {
+            m.remove("completes_spec");
+        }),
+        ("null", &|m| {
+            m.insert("completes_spec".into(), serde_json::Value::Null);
+        }),
+    ] {
+        write(edit);
+        assert_eq!(read().unwrap().as_deref(), Some(partial), "{label}");
+    }
+
+    // No child outstanding any more: a missing or null field is still not
+    // a completing declaration.
+    storage
+        .update_atomically(|s| {
+            s.get_requirement_by_spec_id_mut("TASK-2").unwrap().status =
+                aida_core::RequirementStatus::Completed;
+        })
+        .unwrap();
+    write(&|m| {
+        m.remove("completes_spec");
+    });
+    assert_eq!(read().unwrap().as_deref(), Some(partial));
+    write(&|_| {});
+    assert_eq!(read().unwrap().as_deref(), Some(complete));
+
+    // Unavailable store: never a completing publication.
+    std::fs::rename(
+        fx.main.join("requirements.yaml"),
+        fx.main.join("requirements.yaml.away"),
+    )
+    .unwrap();
+    match read() {
+        Ok(Some(message)) => assert_eq!(message, partial),
+        Ok(None) => {}
+        Err(e) => assert!(!format!("{e:#}").is_empty()),
+    }
+}
+
+/// F2: the host's publication subject reads past its own reconciliation
+/// merge to the publication commit; an unreadable tip yields nothing.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_f2_publication_subject_skips_host_reconciliation() {
+    let fx = fixture();
+    std::fs::write(fx.main.join("work.txt"), "work\n").unwrap();
+    git_ok(&fx.main, &["add", "work.txt"]);
+    git_ok(&fx.main, &["commit", "-qm", "[AI:codex] fix: work (BUG-1)"]);
+    git_ok(&fx.main, &["checkout", "-qb", "remote-side", "HEAD~1"]);
+    std::fs::write(fx.main.join("remote.txt"), "remote\n").unwrap();
+    git_ok(&fx.main, &["add", "remote.txt"]);
+    git_ok(&fx.main, &["commit", "-qm", "remote work (Refs BUG-1)"]);
+    git_ok(&fx.main, &["checkout", "-q", "main"]);
+    let host = format!(
+        "{} (Refs BUG-1)",
+        crate::ship_from_seat::HOST_RECONCILE_SUBJECT
+    );
+    git_ok(
+        &fx.main,
+        &["merge", "-q", "--no-ff", "-m", &host, "remote-side"],
+    );
+    let tip = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        crate::ship_from_seat::publication_subject(&fx.main, &tip).as_deref(),
+        Some("[AI:codex] fix: work (BUG-1)")
+    );
+    assert_eq!(
+        crate::ship_from_seat::publication_subject(&fx.main, &"0".repeat(40)),
+        None
+    );
+    // A round whose only new commit is the reconciliation merge has no
+    // publication subject: the walk never reaches default-branch history.
+    git_ok(&fx.main, &["checkout", "-qb", "merge-only", "origin/main"]);
+    git_ok(
+        &fx.main,
+        &["merge", "-q", "--no-ff", "-m", &host, "remote-side"],
+    );
+    let tip = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        crate::ship_from_seat::publication_subject(&fx.main, &tip),
+        None
+    );
+}
+
+/// F2 end to end: a completing rework whose published tip is the host's
+/// `(Refs …)` reconciliation merge still sets the spec Done and retitles the
+/// existing Refs PR to the completing trailer.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_f2_completing_rework_survives_host_reconciliation() {
+    let fx = fixture();
+    let branch = "reconciled";
+    let clone = seat_with_publication_pending(&fx, "reconciled", "c0ffee269611", branch);
+    set_bug_1_status(&fx, aida_core::RequirementStatus::Approved);
+    let subject = "[AI:codex] fix: rework (BUG-1)";
+    test_commit(&fx.main, &clone, branch, subject)
+        .unwrap()
+        .unwrap();
+    // The remote PR head moved meanwhile (a diverged earlier round).
+    git_ok(
+        &fx.main,
+        &["checkout", "-qb", "remote-round", "origin/main"],
+    );
+    std::fs::write(fx.main.join("remote.txt"), "remote\n").unwrap();
+    git_ok(&fx.main, &["add", "remote.txt"]);
+    git_ok(&fx.main, &["commit", "-qm", "earlier round (Refs BUG-1)"]);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", &format!("HEAD:refs/heads/{branch}")],
+    );
+    git_ok(&fx.main, &["checkout", "-q", "main"]);
+    // The host reconciliation merge, in the shape `merge_publication_head`
+    // leaves: first parent the seat's own tip.
+    let origin = fx.origin.to_str().unwrap().to_string();
+    git_ok(
+        &clone,
+        &["fetch", "-q", &origin, &format!("refs/heads/{branch}")],
+    );
+    let host = format!(
+        "{} (Refs BUG-1)",
+        crate::ship_from_seat::HOST_RECONCILE_SUBJECT
+    );
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "user.name=Host",
+            "-c",
+            "user.email=host@example.com",
+            "merge",
+            "-q",
+            "--no-ff",
+            "-m",
+            &host,
+            "FETCH_HEAD",
+        ],
+    );
+    assert_eq!(git_ok(&clone, &["log", "-1", "--format=%s"]), host);
+    let forge = crate::forge::fake::RecordingForge {
+        open_for_branch: crate::forge::ChangeLookup::Found(crate::forge::ChangeRef {
+            id: 77,
+            url: "https://example.test/pull/77".into(),
+            branch: branch.into(),
+            base: "main".into(),
+            title: Some("[AI:codex] fix: rework (Refs BUG-1)".into()),
+        }),
+        metadata_branch: branch.into(),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    crate::ship_from_seat::run_from(
+        &fx.main,
+        opts(&clone, false, false),
+        &crate::ship_from_seat::Deps {
+            bundle: &test_bundle,
+            commit: &no_commit,
+            forge: &|_| Box::new(forge.clone()),
+            after_open: &|_, _| {},
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        git_ok(
+            &fx.origin,
+            &["log", "-1", "--format=%s", &format!("refs/heads/{branch}")]
+        ),
+        host
+    );
+    assert_eq!(bug_1_status(&fx), aida_core::RequirementStatus::Done);
+    assert_eq!(
+        forge.retitled.lock().unwrap().as_slice(),
+        [(77, "[AI:codex] fix: rework (BUG-1)".to_string())]
+    );
+}
+
+/// Round-4 finding 1: origin accepts a completing rework push and the forge
+/// then fails (the open-PR lookup errors). The PR bookkeeping fails the
+/// publication, but the pushed complete work is still Done.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_r4_done_survives_forge_failure_after_confirmed_push() {
+    let fx = fixture();
+    let branch = "forge-down";
+    let clone = seat_with_publication_pending(&fx, "forge-down", "c0ffee269641", branch);
+    // A rework round: the spec went back to Approved.
+    set_bug_1_status(&fx, aida_core::RequirementStatus::Approved);
+    let subject = "[AI:codex] fix: rework (BUG-1)";
+    test_commit(&fx.main, &clone, branch, subject)
+        .unwrap()
+        .unwrap();
+    let forge = crate::forge::fake::RecordingForge {
+        open_for_branch: crate::forge::ChangeLookup::CliFailed("forge unavailable".into()),
+        ..crate::forge::fake::RecordingForge::new()
+    };
+    let err = crate::ship_from_seat::run_from(
+        &fx.main,
+        opts(&clone, false, false),
+        &crate::ship_from_seat::Deps {
+            bundle: &test_bundle,
+            commit: &no_commit,
+            forge: &|_| Box::new(forge.clone()),
+            after_open: &|_, _| {},
+        },
+    )
+    .expect_err("the failed PR lookup fails the publication");
+    assert!(format!("{err:#}").contains("was pushed"), "{err:#}");
+    assert_eq!(
+        git_ok(
+            &fx.origin,
+            &["log", "-1", "--format=%s", &format!("refs/heads/{branch}")]
+        ),
+        subject,
+        "origin accepted the push"
+    );
+    assert_eq!(bug_1_status(&fx), aida_core::RequirementStatus::Done);
+}
+
+/// AC4 / F7: a launch refused before start never sets Done, even with a
+/// completing declaration and completing work already committed in the seat.
+/// Drives the real standalone implementer launch to its refusal receipt and
+/// then reloads the spec.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_f7_refused_before_start_never_sets_done() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::session::HeadlessVendor;
+    let fx = fixture();
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[contained.vendors]\ncodex = \"native\"\n",
+    )
+    .unwrap();
+    git_ok(&fx.main, &["add", ".aida/config.toml"]);
+    git_ok(&fx.main, &["commit", "-qm", "native policy"]);
+    git_ok(
+        &fx.main,
+        &["update-ref", "refs/remotes/origin/main", "HEAD"],
+    );
+    let lease = "c0ffee269612";
+    let clone = seat_with_publication_pending(&fx, "refused", lease, "refused");
+    set_bug_1_status(&fx, aida_core::RequirementStatus::InProgress);
+    // Retained publication evidence: a completing declaration and a
+    // completing commit already in the seat.
+    crate::native_publication::prepare(&fx.main, &clone).unwrap();
+    let requested = "[AI:codex] fix: complete (BUG-1)";
+    crate::native_publication::declare(&clone, Some("BUG-1"), requested, false, false).unwrap();
+    test_commit(&fx.main, &clone, "refused", requested)
+        .unwrap()
+        .unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_OS_WRAP", Some("0")),
+        ("AIDA_CONTAINED", None),
+        ("AIDA_AGENT_CMD", Some("/bin/true")),
+        ("AIDA_HOME", Some(fx.root.to_str().unwrap())),
+        ("HOME", Some(fx.root.to_str().unwrap())),
+        ("AIDA_SESSION_GRANT", None),
+        ("AIDA_SESSION_ROLE", None),
+    ]);
+    let _cwd = crate::session::contained_cwd_seam::pin(&fx.main);
+    // An unwritable host binding destination refuses the launch before any
+    // child can spawn.
+    let binding = fx
+        .main
+        .join(format!(".aida/native-publications/{lease}.json"));
+    let _ = std::fs::remove_file(&binding);
+    std::fs::create_dir_all(&binding).unwrap();
+    let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
+        cause: "test".into(),
+    };
+    let error =
+        crate::standalone_implementer::run_for_test(crate::standalone_implementer::Launch {
+            project_root: &fx.main,
+            vendor: HeadlessVendor::Codex,
+            prompt: "go",
+            session_id: "test",
+            spec: "BUG-1",
+            lease_id: lease,
+            branch: "refused",
+            contained: false,
+            child_grant: &grant,
+            host_main: Some(&fx.main),
+        })
+        .expect_err("the launch must be refused before start");
+    let receipts: Vec<_> = std::fs::read_dir(fx.main.join(".aida/lane-results"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(receipts.len(), 1, "{error:#}");
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&receipts[0]).unwrap()).unwrap();
+    assert_eq!(receipt["result"], "refused-before-start");
+    assert_eq!(receipt["started"], false);
+    assert_eq!(
+        bug_1_status(&fx),
+        aida_core::RequirementStatus::InProgress,
+        "a refused-before-start launch must never set Done"
+    );
 }
 
 // The one terminal result line a production lane boundary emitted, checked

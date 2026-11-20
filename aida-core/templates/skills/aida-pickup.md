@@ -46,13 +46,16 @@ supersedes the commit/push/PR/queue-done exit gates below: implement and run
 targeted tests, leave the edits uncommitted, then end with a handoff naming
 changed files, validation results and blockers. Do not run `aida queue done`
 from the seat. After the child process exits, the host launcher commits and
-publishes; the host must finish queue completion after publication. An existing
-Refs PR keeps non-completing commit trailers. Every native lane must declare
-its descriptive publication subject before exiting: use
-`aida ship -m '[AI:codex] type(scope): subject (ID)'` for completed work, or
-`aida ship -m '[AI:codex] type(scope): subject (Refs ID)'` for an approved
-partial slice. In a native seat this only records a lease-bound declaration;
-the host commits and publishes after exit. For required commit-body trailers,
+publishes; the host must finish queue completion after publication. Every
+native lane must declare its descriptive publication subject before exiting:
+`aida ship -m '[AI:codex] type(scope): subject (ID)'`. Always write `(ID)`;
+for an approved partial slice add `--partial-slice`. The commit and PR trailer
+is derived from that declaration (`(ID)` completes, `(Refs ID)` otherwise, and
+outstanding child slices always make it partial; only child specs count as a
+slice plan, never a plan written in prose). A completing push marks the
+spec Done, on every rework round too. In a native seat this only records a
+lease-bound declaration; the host commits and publishes after exit.
+<!-- trace:BUG-2696 | ai:claude --> For required commit-body trailers,
 write a UTF-8 body file outside the checkout (for example under `/tmp`) and add
 `--commit-body-file <file>` to the declaration
 (for example, a file containing `Help-Golden: unchanged`). The host also accepts

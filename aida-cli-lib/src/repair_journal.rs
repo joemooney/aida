@@ -471,7 +471,7 @@ fn notify_refusal_with(
             });
             let error = error.context(format!(
                 "repair refusal for PR #{} head {} was not sent: its delivery state is \
-                 unknown. Repair or remove the unreadable mailbox message, then retry",
+                 unknown. Restore the unreadable mailbox message from an intact copy, then retry",
                 key.pr, key.original_head
             ));
             match recorded {
@@ -704,13 +704,17 @@ mod tests {
         assert_ne!(refusal_delivery_id(&lost), refusal_delivery_id(&timed_out));
     }
 
-    // The mailbox accepted the notice and the journal receipt was lost, but
-    // the accepted copy is now malformed. The real mailbox reader must not
-    // read that as "absent": no second send, and the journal records that
-    // the delivery state is unknown.
-    // trace:TASK-3804 | ai:claude
+    // trace:TASK-3804 | ai:codex
     #[test]
-    fn task_3804_malformed_accepted_notice_fails_closed_through_real_mailbox() {
+    fn task_3804_accepted_notice_read_and_parse_failures_block_resend() {
+        for canonical in [false, true] {
+            for unreadable in [false, true] {
+                check_accepted_notice_reconciliation(canonical, unreadable);
+            }
+        }
+    }
+
+    fn check_accepted_notice_reconciliation(canonical: bool, unreadable: bool) {
         let temp = tempfile::tempdir().unwrap();
         let main = temp.path();
         let key = reserved(main, &"f".repeat(40));
@@ -735,21 +739,28 @@ mod tests {
             relayed_from: None,
         };
         crate::mailbox_store::write_message(main, &accepted).unwrap();
-        // A readable accepted notice is adopted through the real reader.
+        let mut file = crate::mailbox_store::mailbox_dir(main).join("accepted-refusal.json");
+        if canonical {
+            let dir = crate::mailbox_store::canonical_dir(&main.join(".aida-store"));
+            std::fs::create_dir_all(&dir).unwrap();
+            let canonical_file = dir.join(file.file_name().unwrap());
+            std::fs::rename(&file, &canonical_file).unwrap();
+            file = canonical_file;
+        }
         notify_refusal(main, &key, "refused").unwrap();
-        // The journal receipt is lost, then the accepted copy is mangled.
         {
             let mut guard = RepairGuard::lock(main).unwrap();
             guard.entry_mut(&key).unwrap().refusal_notice = None;
             guard.save().unwrap();
         }
-        let file = crate::mailbox_store::mailbox_dir(main).join("accepted-refusal.json");
-        std::fs::write(&file, b"{\"id\": \"accepted-refusal\", \"thread_id\": ").unwrap();
-        // The tolerant inbox reader skips it: the defect this guards against.
-        assert!(!crate::mailbox_store::read_local_messages(main)
-            .unwrap()
-            .iter()
-            .any(|m| m.thread_id == delivery));
+        let intact = std::fs::read(&file).unwrap();
+        if unreadable {
+            // A directory in place of the message fails even under a privileged test user.
+            std::fs::remove_file(&file).unwrap();
+            std::fs::create_dir(&file).unwrap();
+        } else {
+            std::fs::write(&file, b"{\"id\": \"accepted-refusal\", \"thread_id\": ").unwrap();
+        }
         for _ in 0..2 {
             let error = notify_refusal_with(
                 main,
@@ -759,33 +770,33 @@ mod tests {
                 |_, _, _| panic!("an unproven delivery state must not send"),
             )
             .unwrap_err();
-            assert!(
-                format!("{error:#}").contains("delivery state is unknown"),
-                "{error:#}"
-            );
+            let detail = format!("{error:#}");
+            assert!(detail.contains("delivery state is unknown"), "{detail}");
+            assert!(detail.contains(&file.display().to_string()), "{detail}");
+            if unreadable {
+                assert!(detail.contains("reading message"), "{detail}");
+            } else {
+                assert!(detail.contains("is not valid"), "{detail}");
+            }
         }
         let guard = RepairGuard::lock(main).unwrap();
         let notice = guard.journal.entries[0].refusal_notice.as_ref().unwrap();
         assert!(notice.accepted_delivery.is_none());
-        assert!(notice
-            .delivery_unknown
-            .as_deref()
-            .unwrap()
-            .contains("delivery state unknown"));
+        assert!(notice.delivery_unknown.is_some());
         drop(guard);
-        // Exactly the one accepted message exists; nothing was resent.
-        let files = std::fs::read_dir(crate::mailbox_store::mailbox_dir(main))
-            .unwrap()
-            .filter(|e| {
-                e.as_ref()
-                    .unwrap()
-                    .path()
-                    .extension()
-                    .and_then(|x| x.to_str())
-                    == Some("json")
-            })
-            .count();
-        assert_eq!(files, 1);
+
+        if unreadable {
+            std::fs::remove_dir(&file).unwrap();
+        }
+        std::fs::write(&file, intact).unwrap();
+        notify_refusal(main, &key, "refused").unwrap();
+        let guard = RepairGuard::lock(main).unwrap();
+        let notice = guard.journal.entries[0].refusal_notice.as_ref().unwrap();
+        assert_eq!(
+            notice.accepted_delivery.as_deref(),
+            Some(format!("adopted from mailbox thread {delivery}").as_str())
+        );
+        assert!(notice.delivery_unknown.is_none());
     }
 
     #[test]

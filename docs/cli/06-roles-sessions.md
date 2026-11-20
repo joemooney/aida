@@ -815,6 +815,15 @@ it refuses with that reason and the same host-terminal guidance.
 - **Before a job runs.** It is refused (exit code 126) unless its submitter resolves to a live session with a valid, allow-listed grant on this machine; the reason names the failed check (`unattributed`, `unattested`, `foreign-host`, `grant`, `seat`, `not-live`, `schema`). The script is shown on your terminal first.
 - **How it runs.** `bash --noprofile --norc script.sh` in its own session on a fresh terminal, from your home directory, with your terminal relayed to it and its output copied to a transcript. A timeout records 124; a cancel 130; a job left running by a dead native runner is recorded as orphaned on the next runner start or job status read. Status includes the recorded runner PID when available, and `aida awaiting` shows the job as a failure until acknowledged. The job is never re-run. <!-- trace:BUG-2625 | ai:codex --> A job the older bash runner (`aida-deputy-shell`) left `running` in its `jobs/<id>/meta.json` becomes `abandoned` on the next native runner start, `aida deputy shell list` or `aida deputy shell status <id>`, once the runner that claimed it is gone. Each job is judged by its own runner. If the PID in `runner.pid` is gone or now belongs to an unrelated process, the job records that dead PID. If the bash runner was restarted, its new PID is in `runner.pid`, so a job record last written before that restart belongs to the earlier, dead runner. That job records which runner replaced it and is not attributed to the new runner. A job the live runner claimed, a missing `runner.pid`, or a sandbox that cannot see host processes leaves the job alone. <!-- trace:BUG-2625 | ai:claude -->
 - **Records.** `jobs/<id>/` keeps the script, its sha256, the submitter, timestamps, exit code and transcript for 30 days; `audit.jsonl` records every step and is never truncated. Failed script jobs show in `aida awaiting` beside failed command jobs.
+- **Dead runners.** When the host can prove a script deputy's last runner
+  died, `aida awaiting` shows its name, last PID, last runner record time and
+  when it was observed dead. It lists queued and interrupted jobs as stranded,
+  scoped to the current project and, in a session, to that session's jobs.
+  Legacy bash job records lack project and session IDs. The operator view
+  shows those host-wide stranded jobs using the last PID and write time from
+  `runner.pid` when it can prove the legacy runner died.
+  The exact time of death is unavailable. A subsequent native runner start
+  recovers interrupted jobs. <!-- trace:TASK-3801 | ai:codex -->
 - **Grant.** Between jobs the runner re-mints its advisor grant every `--refresh`, or when less than an hour is left. If that fails it claims nothing more and exits when the grant expires.
 <!-- trace:STORY-2338 | ai:claude -->
 <!-- trace:STORY-2343 | ai:claude -->
@@ -1434,6 +1443,17 @@ remains pinned to the current head. `aida review verdict PR-N` reports
 an optional `coverage` object with `reviewed_sha`, `head_sha` and the full
 `proof`. Reading the verdict does not record a new approval or proof.
 <!-- trace:STORY-2694 | ai:codex -->
+
+An approval at the current head shows the observed next actor. A pending STRICT
+pre-merge review appears on its own line when the approval or corpus gate still
+requires review under strict freshness. Hold-clear wake lines identify the
+superseded review head when known and report whether current-head approval was
+verified during clearance. `aida session handoff --write` checks explicit
+operator-waiting claims on lines or lists containing `#N` or `PR-N` references.
+It warns with the observed next actor when the operator ask is unsupported and
+saves the handoff as written.
+<!-- trace:STORY-2893 | ai:codex -->
+
 
 New gate-ledger verdict events also record a versioned advisory risk assessment,
 computed from the committed diff against the pinned protected-base tip. The tier

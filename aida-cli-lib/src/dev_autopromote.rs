@@ -531,6 +531,15 @@ pub(crate) fn run_tick(
         return Ok(outcome);
     }
     let skipped = |s: Skip| Ok(TickOutcome::Skipped(s));
+    let build_lock = if repo.join(".git").is_dir() {
+        let Some(lock) = crate::dev_build::try_checkout_build_lock(repo)? else {
+            return skipped(Skip::InFlight("build in progress in this checkout".into()));
+        };
+        Some(lock)
+    } else {
+        // The host cron only accepts a checkout with an in-tree Git directory.
+        None
+    };
     let checkout = match steps.probe(repo) {
         Ok(c) => c,
         Err(e) => return skipped(Skip::Dirty(format!("could not read the checkout: {e:#}"))),
@@ -637,6 +646,8 @@ pub(crate) fn run_tick(
                     write_state(live, &state)?;
                 }
             }
+            // The child takes the state lock before the checkout lock.
+            drop(build_lock);
             drop(lock);
             Ok(TickOutcome::Launched { sha: target, how })
         }
@@ -674,6 +685,14 @@ pub(crate) fn run_child(
     state.pid = Some(pid);
     write_state(live, &state)?;
     let result = (|| -> Result<BuildOutcome> {
+        let _build_lock = if layout.repo.join(".git").is_dir() {
+            let lock = crate::dev_build::try_checkout_build_lock(&layout.repo)?;
+            Some(lock.ok_or_else(|| {
+                crate::dev_build::PromotionRefused("build in progress in this checkout".into())
+            })?)
+        } else {
+            None
+        };
         let head = build_steps.probe(&layout.repo)?.head.unwrap_or_default();
         if head != sha {
             return Err(crate::dev_build::PromotionRefused(format!(
