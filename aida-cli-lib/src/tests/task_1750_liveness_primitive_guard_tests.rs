@@ -118,6 +118,9 @@ fn proc_identity_legacy_decisions_do_not_expand() {
     // stamp_lease_holder_at: pre-existing; previously missed by the early-stop scanner (TASK-3787)
     // stamp_lease_detached_worker_with_holder_at: pre-existing; previously missed by the early-stop scanner (TASK-3787)
     // trace:TASK-3787 | ai:codex
+    // dev_build.rs baseline: its `.probe(` calls are `BuildSteps::probe`, a
+    // git checkout read, not a process decision; the third re-checks HEAD
+    // before the build. trace:BUG-2687 | ai:claude
     let baseline: std::collections::BTreeMap<String, usize> =
         serde_json::from_str(include_str!("fixtures/proc_identity_legacy_baseline.json")).unwrap();
     let pattern = regex::Regex::new(IDENTITY_PATTERN).unwrap();
