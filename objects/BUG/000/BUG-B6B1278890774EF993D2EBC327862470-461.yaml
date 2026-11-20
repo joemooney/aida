@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T10:43:20.740506726Z
+modified_at: 2026-11-20T14:26:37.710107466Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -252,6 +252,13 @@ comments:
   created_at: 2026-11-20T10:43:20.740503270Z
   modified_at: 2026-11-20T10:43:20.740503270Z
   session_id: 01a1f87409e4
+- id: 01a1f95a-55e7-7673-a05e-c8dd17793f31
+  author: joe
+  content: 'Product 07:26: another stale shared claim (BUG-2676 lease 01a1f4895588, claim 31704ce9, host disrad-dvp98b3puw, pid 1981133 gone, heartbeat 11-19 16:00Z) refused a fresh start. ''aida doctor heal stale-leases --id shared-31704ce9-... --yes'' healed it, so no manual release was needed. Backup on dell1 at ~/lanes/lease-backup-bug2676-*.toml.'
+  created_at: 2026-11-20T14:26:37.710107466Z
+  modified_at: 2026-11-20T14:26:37.710107466Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe
