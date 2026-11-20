@@ -56,6 +56,41 @@ comments:
   modified_at: 2026-11-20 20:49:38.682949+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fac1-1d2c-7502-b7b9-05afb5990beb
+  author: dirtlab
+  content: '## Implementer approach
+
+
+    Root cause (store history, 2026-11-20): the foreign-host deferral does see dell1 claims, but a session claim''s heartbeat is written once at claim time and never refreshed (`coordination.rs` build_claim: "Slice 2 refreshes periodically" was never built). A watcher on another host can only judge such a claim by TTL (1800s), so the deferral lapses 30 min after the lane starts: BUG-2684 claimed 12:45:07, PR-4364 review claimed 13:22:27; BUG-2703 claimed 13:02:17, PR-4363 review claimed 13:40:04.
+
+
+    ### Acceptance criteria and evidence
+
+    - **AC1 [behavioral-test, unit]:** the lane launcher refreshes its own session claim''s heartbeat on the shared store while the lane runs (`coordination` heartbeat test against a real origin store: only the claim bound to this lease on this host is refreshed, committed and pushed). Gate test with a fake foreign lane host: a claim started 45 min ago with a fresh heartbeat defers.
+
+    - **AC2 [behavioral-test, unit]:** same fake foreign host: head deferred while the heartbeat is fresh regardless of what the head is; after the claim is released the gate returns no deferral, and the existing review-watch test shows the then-current head is admitted once.
+
+    - **AC3 [behavioral-test, unit]:** a foreign implementer claim that is still present but whose heartbeat is past its TTL is "state unknown": deferred until expiry + `[review] lane_unknown_defer_mins` (default 20), then reviewed with a logged reason. Tests for the default, a configured value, and the lapse.
+
+
+    ### Expected files
+
+    - `aida-cli-lib/src/review_implementer_gate.rs`
+
+    - `aida-cli-lib/src/coordination.rs`, new `aida-cli-lib/src/coordination_heartbeat.rs`
+
+    - `aida-cli-lib/src/standalone_implementer.rs` (start/stop the heartbeat around the lane)
+
+    - `docs/cli/07-project-setup.md`, `scripts/store-writers.toml`
+
+
+    ### Ambiguities / conflicts as questions
+
+    - AC3 "lane-host state cannot be read": no separate lane-host record exists on main (aida lane relay, TASK-3826, is unmerged); I read it as "the host''s claim is present but its heartbeat stopped". Is that the intended meaning? Proceeding on that reading.'
+  created_at: 2026-11-20 20:58:42.348657+00:00
+  modified_at: 2026-11-20 20:58:42.348657+00:00
+  session_id: 01a1fabbb213
+  harness_version: 2.1.319 (Claude Code)
 - id: 01a1faca-c362-7502-a03d-d0109db7ee08
   author: joe
   content: 'advisor-121 14:14: the throughput guard shows the same foreign-lane blindness (2 lanes reported vs 7 live on dell1; a false STUCK-REWORK on #4376 with its lane live). One shared lane-host visibility source should serve both; coordinate with TASK-3827.'
