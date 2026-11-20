@@ -1,5 +1,6 @@
 id: 01a1f996-16f0-7ca2-84f3-c0af488389bc
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-180
+agreed_id: STORY-2987
 title: 'Review PR-4365: [AI:codex] test(seat-clone): isolate lane fixtures (Refs TASK-3133)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f959`) for branch `task-73022632d35647cca3858b18ac0723e3-027`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-20T15:32:15.954410484Z
   session_id: 01a1f959d1a3
+  changes: []
+- id: 01a1f99f-7e0c-7943-b139-675532d65aab
+  author: joe
+  timestamp: 2026-11-20T15:42:21.708227343Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
