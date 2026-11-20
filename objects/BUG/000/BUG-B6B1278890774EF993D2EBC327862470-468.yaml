@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T21:57:25.936424870Z
+modified_at: 2026-11-20T21:57:40.367094550Z
 req_type: Bug
 tags:
 - lanes
@@ -221,6 +221,13 @@ comments:
     The foreign-host lane-visibility reader (live lanes on registered lane hosts, with age) is being built in TASK-3827's PR-A (#4381 r2). BUG-2706's review deferral must REUSE that reader, not add a parallel one. If PR-A hasn't landed when you start, build against its interface as described on TASK-3827, or coordinate via the spec comments; don't fork the reader.
   created_at: 2026-11-20T21:57:25.936424870Z
   modified_at: 2026-11-20T21:57:25.936424870Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1faf7-4acc-7f92-b832-2dc701c4cdf3
+  author: joe
+  content: 'Product 14:57: R2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-468. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
+  created_at: 2026-11-20T21:57:40.367094550Z
+  modified_at: 2026-11-20T21:57:40.367094550Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
