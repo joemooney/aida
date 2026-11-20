@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T05:00:31.853530204Z
-modified_at: 2026-11-20T15:40:01.546132416Z
+modified_at: 2026-11-20T18:29:37.308350586Z
 req_type: Bug
 tags:
 - bwrap
@@ -125,6 +125,13 @@ comments:
   created_at: 2026-11-20T15:40:01.546129162Z
   modified_at: 2026-11-20T15:40:01.546129162Z
   session_id: 01a1f95b9c6f
+- id: 01a1fa38-d610-7d83-92c6-a8344461a784
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-20 11:32): COMPLETE. Both dell1 test failures are fixed: #4316 (task_2712 live Codex seat fixture detects an unsupported extra-root sandbox) and #4366 (bug_2415 explicit-refspec session teardown isolated; approved at a2e5e16, landed via train #4375). REOPEN if either test fails again on dell1.'
+  created_at: 2026-11-20T18:29:37.308350586Z
+  modified_at: 2026-11-20T18:29:37.308350586Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ed07-d146-7933-8d9c-342df690cc7a
   author: joe
