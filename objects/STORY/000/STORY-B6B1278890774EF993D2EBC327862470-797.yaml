@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T16:58:23.073742585Z
+modified_at: 2026-11-20T17:37:42.122579452Z
 req_type: Story
 tags:
 - landing
@@ -727,6 +727,14 @@ comments:
   created_at: 2026-11-20T16:49:53.537675497Z
   modified_at: 2026-11-20T16:49:53.537675497Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa09-46a5-71f3-8b23-c93c8ea8e576
+  author: joe
+  content: |
+    S3 #4362 round 4 (final) pushed at 2513492393d: the five findings only. P1 zero-wait store-lock try (aida_core::db::with_store_write_lock_try) around every watch store effect; busy => effect stays pending, retried next pass (held-lock regression returns <5s, succeeds after release). P2 run_in_progress from the owning run status (rerun in progress = pending, reader + watch regressions; gates unchanged). P2 evidence freshness per run:attempt (A@3 + B@1->@2 regression). P2 unread log kept as incomplete evidence, retried, then follow-up mail + fix-spec comment. P2 torn last journal line skipped and cut before the next append (replay regression). 42 watch tests; check-ci-fast exit 0; ci:full relabelled after the push run started.
+  created_at: 2026-11-20T17:37:42.122579452Z
+  modified_at: 2026-11-20T17:37:42.122579452Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
