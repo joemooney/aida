@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T23:19:38.570305344Z
+modified_at: 2026-11-20T23:33:23.388777289Z
 req_type: Bug
 tags:
 - dell1
@@ -967,6 +967,29 @@ comments:
   modified_at: 2026-11-20T23:16:51.979527342Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb4e-bb3c-7183-b2e6-e1aa9d9f1d42
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e3a9fa58a6 (PR #4364, round 4 of 4).
+
+    Acceptance evidence (advisor-121 round-4 items):
+    1. Holder-less Closed record whose reason does not bind the lease refuses: bug_2684_only_the_lease_bound_completion_receipt_ends_a_holderless_review (another lease's receipt, operator reason, empty reason).
+    2. Each verdict source: bug_2684_each_local_verdict_source_counts_as_recorded_at_its_head (legacy file, archived rounds, gate ledger, MR- key) and bug_2684_synced_publication_alone_counts_as_recorded_at_its_head (signed fixture).
+    3. include_str! assertion replaced by bug_2684_no_human_review_pickup_passes_no_human_to_session_start, which observes session start's no_human on the real queue-work path (cfg(test) thread-local recorder).
+    4. stale_review_lease_ended accepts the lease-bound completion receipt (ownership/reader.rs review_completion_receipt_bound); tree-gone stays enforced by release_proven_dead_gone_worktree_lease.
+    5. lease_processes_proven_gone refuses a lease recorded on another host; test has a same-host control.
+    6. PR body rewritten to match the head.
+
+    Probe findings: authority paths fail closed (unreadable record is never a receipt; foreign host, unobservable pid namespace, replacement holder all keep the lease). No test weakened; one source-text test replaced by a behavioural one.
+
+    Validation: lane job at e3a9fa58a6, filter 'bug_2684 bug_home_024 story_2315 bug_2457': 63 passed, 1 failed. The failure, prc_safe_end_retires_dead_pushed_seat_without_force (STORY-2325, untouched), is refused by the live mail writer-admission scan in the lane sandbox; not compared against main. Gates run individually (fmt, store-writers, exec-context, trace headers, four ratchets); check-ci-fast not run as one command (60 s tool cap).
+
+    Residual risks: the bound receipt is accepted for a foreign-host lease on the supervisor's word (existing pickup_owner behaviour); an empty hostname on both sides compares equal.
+  created_at: 2026-11-20T23:33:23.388777289Z
+  modified_at: 2026-11-20T23:33:23.388777289Z
+  session_id: 01a1fb41f0c5
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
