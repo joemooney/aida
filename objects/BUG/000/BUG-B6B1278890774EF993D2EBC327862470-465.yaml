@@ -13,12 +13,12 @@ description: |
   2. `aida pr ship` on a busy admission waits up to a bounded time (configurable, default a few minutes) for the exclusive mode instead of failing on the first try_lock, and reports the holders and how long it waited if it gives up.
   3. Regression through the production path: with both loop workers running, an `aida pr ship` of an approved PR acquires admission within the bound. A control proves an in-progress review launch or train stack is never interrupted mid-operation.
   4. `aida advisor loops` gains a supported, audited way to drain or pause both workers' admission claims (so no operator or advisor ever needs to SIGTERM them), and `aida advisor loops status` shows each worker's claim age.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T19:37:21.118166508Z
+modified_at: 2026-11-20T19:55:47.216745572Z
 req_type: Bug
 tags:
 - admission
@@ -361,6 +361,12 @@ comments:
   modified_at: 2026-11-20T19:37:21.118166508Z
   session_id: 01a1fa57e750
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa87-8290-7841-8ad6-85267b10527b
+  author: aida-publication-done
+  content: Implementer push d0d953c3461a declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T19:55:47.216744975Z
+  modified_at: 2026-11-20T19:55:47.216744975Z
+  session_id: 01a1fa57e750
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
@@ -448,6 +454,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fa87-8290-7841-8ad6-8514c4533606
+  author: aida-publication-done
+  timestamp: 2026-11-20T19:55:47.216743011Z
+  session_id: 01a1fa57e750
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 140977cdd550b1f043ea5a57eb4bb91e52211313
