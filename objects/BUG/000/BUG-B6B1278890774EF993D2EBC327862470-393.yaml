@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T22:30:48.602236497Z
+modified_at: 2026-11-20T22:31:09.817472246Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -509,6 +509,13 @@ comments:
   created_at: 2026-11-20T21:51:43.077135892Z
   modified_at: 2026-11-20T21:51:43.077135892Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb15-f119-77b0-a50e-53a44db1948c
+  author: joe
+  content: 'advisor-121 15:34: the verdict at 45d57bc is a PREMATURE review of the r2 lane''s merge-main commit (the lane is live); its findings repeat r1''s. Not a spent round.'
+  created_at: 2026-11-20T22:31:09.817472246Z
+  modified_at: 2026-11-20T22:31:09.817472246Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
