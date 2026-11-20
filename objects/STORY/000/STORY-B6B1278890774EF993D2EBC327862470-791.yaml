@@ -20,12 +20,12 @@ description: |
   2. With `default = "drain"` and a type list, an unattended `aida pr ship`/train ships a PR whose specs are all unset-mode, of a listed type, not sensitive, and not touching protected paths. Every other gate (independent APPROVE at head, green pinned CI, no holds) still applies. A test covers the matrix: type in or out of the list × sensitive or not × protected path or not × explicit mode.
   3. The refusal text and `aida show` name the effective mode and where it came from, for example `drain (project default for unset bug)`.
   4. The knob is documented in the config reference and the two-seat protocol. Setting it for this repository is the operator's call and is recorded separately.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T03:55:12.322603489Z
+modified_at: 2026-11-20T03:59:24.149406438Z
 req_type: Story
 tags:
 - landing
@@ -327,6 +327,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f71b-e9f5-7512-a520-c6cdf92aef71
+  author: aida-orchestrator
+  timestamp: 2026-11-20T03:59:24.149519489Z
+  session_id: 01a1f718f474
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
@@ -337,3 +345,11 @@ filed_at:
   vendor: claude
   session: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Read the complete 99,644-byte supplied review diff and reviewed the change as landed on pinned main ccd9832894397b0541985d2e6ebfb8d97f0705ba, landed tree fda309cd1865483823b046b041a4f72efb0d09a8, attesting only original PR head 1de9926e14b71b647c0df6458a2101f7e7244423. The four prior implementation defects are addressed in source: protection policy and committed protected paths share one trusted config body and parse failures withhold the default; checked heads are compared to preflight and final heads remain pinned through the existing gate; show follows carrier execution modes; changed_paths uses the scoped deadline runner. STORY-2884 AC1 PASS by source/default-policy and existing test inspection (legacy truth-table execution is implementer-reported); AC2 PARTIAL because the matrix and train integration are present but the ship head-race enforcement has only a detached helper test, leaving one blocking ADR-76 mutation-kill test gap; AC3 PASS by carrier-aware source and label-test inspection; AC4 PASS by config reference, generated showcase and both two-seat protocol copies, with repository opt-in left unchanged. No additional semantic defects found. The one finding is independent of the newer base commit. Existing exact-head GitHub CI evidence: FAST source gates green, FAST compile still running and merge-hold status pending at review time; CI pending is not the reason for request-changes. No local Cargo, test or build commands were run. Standalone draft for parent validation and recording; no canonical verdict record was attempted.'
+  recovery_hint: address the review findings, move STORY-2884 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-20T03:59:24.149406438Z
