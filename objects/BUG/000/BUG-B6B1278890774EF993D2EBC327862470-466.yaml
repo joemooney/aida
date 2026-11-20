@@ -24,7 +24,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T08:15:41.246362956Z
-modified_at: 2026-11-20T08:26:13.494770841Z
+modified_at: 2026-11-20T08:41:49.505325032Z
 req_type: Bug
 tags:
 - mandate
@@ -70,6 +70,24 @@ comments:
     - None; AC3 guard pre-exists (BUG-2490) so this PR hardens and re-proves it rather than adding a second guard. No store history rewrite.
   created_at: 2026-11-20T08:26:13.494770841Z
   modified_at: 2026-11-20T08:26:13.494770841Z
+  session_id: 01a1f80c0105
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f81e-7ac1-70c2-b310-f0eb51e677ee
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a00e0b84fe (diff origin/main...HEAD, 6 files).
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: aida-cli-lib/src/mandate.rs parse_versions/conflict_resolutions expand a conflict-marked version into every resolution (ours/base/theirs per hunk, cartesian, cap 256); StoreHistoryBatch::read_listed judges each. Unit: mandate::bug_2704_conflict_version_tests (2 tests: sides, diff3 base, 2-hunk mix, CRLF; malformed/nested/unterminated/too-many/unparseable-side stay Err).
+    - AC2 [behavioral-test]: gate::mandate_ship::bug_2704_conflicted_history_tests through mandate_ship_cover_for_ship on real fixture store commits (promotion 23 fixture from BUG-2702): modified_at-only conflict => covered; stashed side operator-only => AlwaysHuman STORY-1; other unparseable version => HistoryUnreadable. Lane job: 8/8 pass (bug_2704 + bug_2702 filters).
+    - AC3: root cause = BUG-2490 (#3652, merged 2026-11-08, after 7124c0f): contained reviewer session's stash re-apply left markers; launcher commit_store_writes_since committed them. Guard already in git_ops::validate_object_text on every store commit path. Hardened: commit_store_writes_since now validates the child's changed spec objects before staging (no corrupt bytes left in the index). Regression child_store_commit::tests::bug_2704_child_commit_refuses_conflict_markers_before_staging (HEAD+index+worktree unchanged). Marker predicate shared (git_ops::conflict_marker) so reader and writer agree.
+
+    Probes: (1) reader/writer marker predicate is the same function; reader additionally strips a lone trailing CR (more permissive recognition only, still fail-closed). (2) diff3 base and CRLF handled; labels ignored. (3) 0 hunks => single version as before; N hunks combinations, capped => Err. (4) markers inside indented block scalars are not markers on either side (consistent). (5) authority: path changes a refusal into a judgment only when every resolution parses; any excluded resolution refuses; refusal paths tested (AlwaysHuman, HistoryUnreadable, malformed units). No tests weakened; BUG-2702 fixture items made pub(super) for reuse only.
+    Fixes during review: git-maintenance ratchet flagged unguarded git commit in new test -> guarded helper.
+    Residual risk: store history is not rewritten (per brief); store-writers ratchet passes (guard reads only, no new sink).
+  created_at: 2026-11-20T08:41:49.505325032Z
+  modified_at: 2026-11-20T08:41:49.505325032Z
   session_id: 01a1f80c0105
   harness_version: 2.1.319 (Claude Code)
 history:
