@@ -22272,6 +22272,7 @@ Commands:
   list            List recorded review verdicts
   classes         Count review findings per defect class across every recorded verdict, including
                   archived rounds. Alias of `aida findings classes`
+  check-draft     Check a standalone reviewer's draft verdict before the reviewer exits
   normalize-shas  One-time repair: expand every abbreviated `reviewed_sha` on disk to its full
                   commit sha where this repo can still resolve it, and mark the rest explicitly
                   unresolvable. Never invents a value and never touches an already-full or sha-less
@@ -22896,6 +22897,44 @@ Options:
 
       --json
           Emit the report as JSON
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review check-draft
+Check a standalone reviewer's draft verdict before the reviewer exits.
+
+Run it on the draft file the launch prompt named, after every write. It applies the checks the
+launcher and the recorder apply later: the closed draft format, and the rule that any unresolved
+finding means request-changes. An `approved` draft may carry only findings the recorder files as
+deferred follow-ups. A refusal says what to change; rewrite the draft and run the check again until
+it passes. Reads only: nothing is recorded.
+
+Usage: aida review check-draft [OPTIONS] <PATH>
+
+Arguments:
+  <PATH>
+          The draft file to check
+
+Options:
+      --pr <N>
+          Pull request the launch named; the draft must match it
+
+      --sha <SHA>
+          Full head commit the launch named; the draft must match it
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -56169,6 +56208,42 @@ Working on aida itself
         "name": "since",
         "takes_value": true,
         "help": "Only count rounds recorded since this point: a relative window (`45m`, `12h`, `30d`, `2w`, or `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a zone-less ISO datetime (`2026-05-01T10:00`, local time), or an RFC3339 timestamp"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "check-draft"
+    ],
+    "about": "Check a standalone reviewer's draft verdict before the reviewer exits",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": "Pull request the launch named; the draft must match it"
+      },
+      {
+        "name": "sha",
+        "takes_value": true,
+        "help": "Full head commit the launch named; the draft must match it"
       }
     ],
     "hidden": false

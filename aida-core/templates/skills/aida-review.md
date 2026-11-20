@@ -696,6 +696,24 @@ aida orchestrator status               # `orchestrated` → also STOP before mer
   name the dependency, responsible actor and resume condition in the summary.
   Stop before merge or rework routing; resume only with a fresh review at the head.
 
+**Any unresolved finding means request-changes.** There is no approval with
+open findings: the recorder refuses an `approved` verdict that carries one and
+records nothing, so the round is wasted. Before choosing `Approved`, sort every
+finding you are about to record:
+
+- an unresolved finding, including a minor, p3, style or test-gap one that you
+  only want noted → the verdict is `RequestChanges`;
+- a finding the recorder will file as a deferred follow-up → it may ride an
+  `Approved` verdict. That takes the structured finding JSON described under
+  *Finding disposition and approval-time sweep*: `text`, `severity`, a registry
+  `blocking_tier` and, while no blocking-class list is in force, an explicit
+  `"disposition":"deferred"` with a one-line `rationale`. Plain-text findings
+  never defer.
+
+A sentence such as "no finding is in a blocking class; follow-ups recorded" in
+the summary does not change this: the findings array decides.
+<!-- trace:BUG-2707 | ai:claude -->
+
 **Stamp the `mode`.** Corroborate orchestrator context with `aida
 orchestrator status` — a bare `AIDA_AUTO_COMPLETE` env var is not proof (an
 unverifiable stale value misfired both ways before BUG-233; only
@@ -708,7 +726,12 @@ unverifiable stale value misfired both ways before BUG-233; only
 absolute `draft.json` path and closed version-1 JSON contract supersede the
 recording and metadata-enrichment instructions below. Write the complete
 summary and all findings there, including an empty findings array when there
-are none, then exit. Do not run `aida review record` or add identity, grants,
+are none. Then run the check the launch prompt names,
+`aida review check-draft <draft.json> --pr <N> --sha <FULL-REVIEWED-SHA>`,
+after every write. It applies the launcher's format checks and the rule above
+(an `approved` draft carrying an unresolved finding is refused) while you can
+still fix the draft; when it refuses, rewrite the draft as the message says and
+run it again. Exit only once it passes. Do not run `aida review record` or add identity, grants,
 attestations, receipts, commands, covered specs, or ledger destinations. If a
 legacy record attempt was refused, still write the draft. The parent validates
 and records the draft; never claim recording succeeded inside the sandbox.
@@ -716,6 +739,7 @@ Fresh and resumed launches each supply their own absolute draft path.
 Interactive and orchestrated reviews without this contract retain the canonical
 record route below.
 <!-- trace:BUG-2564 | ai:codex -->
+<!-- trace:BUG-2707 | ai:claude -->
 
 Record the verdict through the canonical writer. It stamps `recorded_by`,
 `recorded_at`, the reviewed SHA, and any displaced round at write time. Raw

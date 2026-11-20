@@ -233,6 +233,30 @@ pub enum ReviewCommand {
         json: bool,
     },
 
+    /// Check a standalone reviewer's draft verdict before the reviewer exits.
+    ///
+    /// Run it on the draft file the launch prompt named, after every write.
+    /// It applies the checks the launcher and the recorder apply later: the
+    /// closed draft format, and the rule that any unresolved finding means
+    /// request-changes. An `approved` draft may carry only findings the
+    /// recorder files as deferred follow-ups. A refusal says what to change;
+    /// rewrite the draft and run the check again until it passes. Reads
+    /// only: nothing is recorded.
+    // trace:BUG-2707 | ai:claude
+    CheckDraft {
+        /// The draft file to check.
+        #[clap(value_name = "PATH")]
+        path: std::path::PathBuf,
+
+        /// Pull request the launch named; the draft must match it.
+        #[clap(long, value_name = "N")]
+        pr: Option<u64>,
+
+        /// Full head commit the launch named; the draft must match it.
+        #[clap(long, value_name = "SHA")]
+        sha: Option<String>,
+    },
+
     /// One-time repair: expand every abbreviated `reviewed_sha` on disk to
     /// its full commit sha where this repo can still resolve it, and mark
     /// the rest explicitly unresolvable. Never invents a value and never

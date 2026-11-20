@@ -86,7 +86,7 @@ impl LaunchDraft {
     }
 
     pub(crate) fn prompt(&self, prompt: &str) -> String {
-        format!("{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording): write UTF-8 JSON data to the absolute path `{}` before exiting, on fresh and resumed reviews alike. Do not run `aida review record`. If a legacy record attempt was refused, still write this draft. The parent validates and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{},\"reviewed_sha\":\"{}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Once the draft is written, give a brief final response and exit. Never claim the parent has recorded it.", self.path.display(), self.pr, self.head)
+        format!("{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording): write UTF-8 JSON data to the absolute path `{}` before exiting, on fresh and resumed reviews alike. Do not run `aida review record`. If a legacy record attempt was refused, still write this draft. The parent validates and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{},\"reviewed_sha\":\"{}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. Any unresolved finding means request-changes: an approved draft may carry only findings written as deferred follow-ups, and the parent refuses any other approved draft, recording nothing. After every write, run `aida review check-draft {path} --pr {pr} --sha {head}`; when it refuses, rewrite the draft as it says and run it again, and exit only once it passes. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Once the draft is written, give a brief final response and exit. Never claim the parent has recorded it.", self.path.display(), self.pr, self.head, path = self.path.display(), pr = self.pr, head = self.head)
     }
 
     pub(crate) fn read(&self) -> Result<ReviewerDraft> {
@@ -107,32 +107,11 @@ impl LaunchDraft {
             body.len() as u64 <= LIMIT,
             "reviewer draft exceeds size limit"
         );
-        let draft: ReviewerDraft =
-            serde_json::from_str(&body).context("rejected malformed reviewer draft")?;
+        let draft = parse_draft(&body)?;
+        ensure!(draft.pr == self.pr, "reviewer draft version or PR mismatch");
         ensure!(
-            draft.version == 1 && draft.pr == self.pr,
-            "reviewer draft version or PR mismatch"
-        );
-        ensure!(
-            full_sha(&draft.reviewed_sha) && draft.reviewed_sha == self.head,
+            draft.reviewed_sha == self.head,
             "reviewer draft does not match the full launch head"
-        );
-        ensure!(
-            !draft.summary.trim().is_empty(),
-            "reviewer draft requires a complete summary"
-        );
-        ensure!(
-            rv::VerdictKind::parse(&draft.verdict) != rv::VerdictKind::Unknown,
-            "unrecognized reviewer draft verdict"
-        );
-        ensure!(
-            rv::VerdictKind::parse(&draft.verdict) != rv::VerdictKind::Waiting
-                || draft.findings.is_empty(),
-            "waiting cannot carry substantive findings"
-        );
-        ensure!(
-            draft.findings.iter().all(|f| !f.trim().is_empty()),
-            "empty draft finding"
         );
         Ok(draft)
     }
@@ -224,6 +203,167 @@ pub(crate) fn unconsumed_draft_retention(worktree: &Path) -> Option<String> {
         )),
         Err(e) => Some(format!("its reviewer drafts could not be inspected ({e:#})")),
     }
+}
+
+/// The closed-schema checks every draft passes, wherever it is read: the
+/// launcher's collection and the reviewer's own in-session check share them.
+// trace:BUG-2707 | ai:claude
+fn parse_draft(body: &str) -> Result<ReviewerDraft> {
+    let draft: ReviewerDraft =
+        serde_json::from_str(body).context("rejected malformed reviewer draft")?;
+    ensure!(draft.version == 1, "reviewer draft version or PR mismatch");
+    ensure!(
+        full_sha(&draft.reviewed_sha),
+        "reviewer draft does not match the full launch head"
+    );
+    ensure!(
+        !draft.summary.trim().is_empty(),
+        "reviewer draft requires a complete summary"
+    );
+    ensure!(
+        rv::VerdictKind::parse(&draft.verdict) != rv::VerdictKind::Unknown,
+        "unrecognized reviewer draft verdict"
+    );
+    ensure!(
+        rv::VerdictKind::parse(&draft.verdict) != rv::VerdictKind::Waiting
+            || draft.findings.is_empty(),
+        "waiting cannot carry substantive findings"
+    );
+    ensure!(
+        draft.findings.iter().all(|f| !f.trim().is_empty()),
+        "empty draft finding"
+    );
+    Ok(draft)
+}
+
+/// Why the recorder would refuse this draft's approval, or `None` when the
+/// draft is consistent. The contract is the gate's: any unresolved finding
+/// means request-changes. An `approved` draft may carry only findings the
+/// recorder files as deferred follow-ups, decided here by the same policy
+/// application and disposition rule the recorder runs
+/// (`apply_policy` then `incoming_disposition`).
+// trace:BUG-2707 | ai:claude
+pub(crate) fn approval_refusal(
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+    draft: &ReviewerDraft,
+) -> Option<String> {
+    use crate::gate::kernel_deps::review_blocking as rb;
+    if rv::VerdictKind::parse(&draft.verdict) != rv::VerdictKind::Approved {
+        return None;
+    }
+    let decided = rb::apply_policy(effective, &draft.record_findings(), &[]);
+    if rv::incoming_disposition(&draft.verdict, &decided) == rv::VerdictKind::Approved {
+        return None;
+    }
+    // Name each finding the recorder would not file as a deferred follow-up.
+    let unresolved: Vec<String> = decided
+        .iter()
+        .enumerate()
+        .filter_map(|(i, raw)| {
+            let (texts, metadata) = rv::finding_values(std::slice::from_ref(raw));
+            if metadata.first().is_some_and(rv::finding_is_deferred) {
+                return None;
+            }
+            let text = texts
+                .first()
+                .and_then(|t| t.as_str())
+                .unwrap_or(raw.as_str());
+            let mut short: String = text.chars().take(60).collect();
+            if text.chars().count() > 60 {
+                short.push('…');
+            }
+            Some(format!("#{} \"{short}\"", i + 1))
+        })
+        .collect();
+    let tiers = rb::registry_names().join(", ");
+    let defer = match &effective.policy {
+        _ if effective.fails_closed() => "This project's blocking-class list cannot be read, so \
+             every finding blocks and none can be deferred: use request-changes."
+            .to_string(),
+        rb::Policy::Tiers(set) => format!(
+            "(b) only for a finding outside the project's blocking classes ({}): write it as a \
+             JSON-object string with \"text\", \"severity\", \"blocking_tier\" (one of {tiers}) \
+             and, when a second class applies, \"class\"; the recorder sets its disposition and \
+             files it as a follow-up task. A finding in a blocking class, or one without a \
+             registry \"blocking_tier\", cannot be deferred.",
+            set.iter().copied().collect::<Vec<_>>().join(", ")
+        ),
+        rb::Policy::AllBlock => format!(
+            "(b) only for a finding that is acceptable as a follow-up: write it as a JSON-object \
+             string with \"text\", \"severity\", \"blocking_tier\" (one of {tiers}), \
+             \"disposition\":\"deferred\" and a one-line \"rationale\" saying why a follow-up \
+             is acceptable; the recorder files it as a follow-up task."
+        ),
+    };
+    let lead = if effective.fails_closed() {
+        ""
+    } else {
+        "either (a) "
+    };
+    let then = if effective.fails_closed() {
+        ". "
+    } else {
+        ", or "
+    };
+    Some(format!(
+        "reviewer draft refused: verdict \"approved\" carries {} unresolved finding{} ({}). Any \
+         unresolved finding means request-changes. Rewrite the draft: {lead}set \"verdict\" to \
+         \"request-changes\" and keep every finding{then}{defer} Never drop a finding to make the \
+         draft pass.",
+        unresolved.len(),
+        if unresolved.len() == 1 { "" } else { "s" },
+        unresolved.join(", "),
+    ))
+}
+
+/// Validate a reviewer draft the way the launcher and the recorder will,
+/// while the reviewer is still running. `pr` and `sha`, when given, are the
+/// launch's values the draft must match.
+// trace:BUG-2707 | ai:claude
+pub(crate) fn check_draft_file(
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+    path: &Path,
+    pr: Option<u64>,
+    sha: Option<&str>,
+) -> Result<ReviewerDraft> {
+    let meta = std::fs::symlink_metadata(path)
+        .with_context(|| format!("no reviewer draft at {}", path.display()))?;
+    ensure!(
+        meta.is_file() && meta.nlink() == 1 && meta.len() <= LIMIT,
+        "rejected reviewer draft: expected bounded singly linked regular file"
+    );
+    let body = std::fs::read_to_string(path)
+        .with_context(|| format!("cannot read reviewer draft {}", path.display()))?;
+    let draft = parse_draft(&body)?;
+    ensure!(
+        pr.is_none_or(|pr| pr == draft.pr),
+        "reviewer draft names PR {}, not this launch's PR",
+        draft.pr
+    );
+    ensure!(
+        sha.is_none_or(|sha| sha == draft.reviewed_sha),
+        "reviewer draft does not match the full launch head"
+    );
+    if let Some(why) = approval_refusal(effective, &draft) {
+        anyhow::bail!(why);
+    }
+    Ok(draft)
+}
+
+/// `aida review check-draft`: the reviewer's in-session check of its draft.
+// trace:BUG-2707 | ai:claude
+pub(crate) fn handle_check_draft(path: &Path, pr: Option<u64>, sha: Option<&str>) -> Result<()> {
+    let root = crate::find_project_root()?;
+    let effective = crate::gate::kernel_deps::review_blocking::effective_warned(&root);
+    let draft = check_draft_file(&effective, path, pr, sha)?;
+    println!(
+        "{} reviewer draft is consistent: {} with {} finding{}; the launcher records it after you exit",
+        crate::glyph(crate::glyphs::Glyph::Check),
+        draft.verdict,
+        draft.findings.len(),
+        if draft.findings.len() == 1 { "" } else { "s" },
+    );
+    Ok(())
 }
 
 fn full_sha(sha: &str) -> bool {
@@ -439,6 +579,212 @@ mod standalone_review_verdict_draft_tests {
             assert!(rendered.contains("Do not run `aida review record`"));
             assert!(rendered.contains("still write this draft"));
         }
+    }
+    // trace:BUG-2707 | ai:claude
+    fn policy(text: &str) -> crate::gate::kernel_deps::review_blocking::Effective {
+        crate::gate::kernel_deps::review_blocking::from_config_text(text)
+    }
+    fn approved(findings: serde_json::Value) -> serde_json::Value {
+        let mut value = payload();
+        value["verdict"] = "approved".into();
+        value["findings"] = findings;
+        value
+    }
+    fn finding(tier: &str, extra: serde_json::Value) -> String {
+        let mut detail = serde_json::json!({"text": format!("{tier} observation"),
+            "severity": "minor", "blocking_tier": tier});
+        for (k, v) in extra.as_object().unwrap() {
+            detail[k] = v.clone();
+        }
+        detail.to_string()
+    }
+    fn check(
+        launch: &LaunchDraft,
+        effective: &crate::gate::kernel_deps::review_blocking::Effective,
+    ) -> Result<ReviewerDraft> {
+        check_draft_file(effective, &launch.path, Some(59), Some(HEAD))
+    }
+    /// The 2026-11-20 shape (#4364, #4377): APPROVED carrying p3 and style
+    /// findings as plain follow-up notes. The check refuses it while the
+    /// reviewer still runs, names the findings and says what to change.
+    // trace:BUG-2707 | ai:claude
+    #[test]
+    fn bug_2707_approved_draft_with_unresolved_findings_is_refused_at_write() {
+        let (_tmp, launch) = fixture();
+        let unset = policy("");
+        let tiers = policy("[review]\nblocking_tiers = [\"p1\", \"p2\"]\n");
+        for (name, findings, effective) in [
+            (
+                "plain text",
+                serde_json::json!(["P3: rename the helper", "style: wrap the long line"]),
+                &unset,
+            ),
+            (
+                "tiered but no deferral",
+                serde_json::json!([
+                    finding("p3", serde_json::json!({})),
+                    finding("style", serde_json::json!({}))
+                ]),
+                &unset,
+            ),
+            (
+                "deferral without a rationale",
+                serde_json::json!([finding("p3", serde_json::json!({"disposition":"deferred"}))]),
+                &unset,
+            ),
+            (
+                "plain text under a list",
+                serde_json::json!(["P3: rename the helper", "style: wrap the long line"]),
+                &tiers,
+            ),
+            (
+                "listed class under a list",
+                serde_json::json!([
+                    finding("style", serde_json::json!({})),
+                    finding(
+                        "p2",
+                        serde_json::json!({"disposition":"deferred","rationale":"later"})
+                    )
+                ]),
+                &tiers,
+            ),
+        ] {
+            write(&launch, &approved(findings));
+            // The launcher's schema read still accepts the file: only the
+            // contract check, run in-session, catches the contradiction early.
+            assert!(launch.read().is_ok(), "{name}");
+            let err = check(&launch, effective).unwrap_err().to_string();
+            assert!(err.contains("reviewer draft refused"), "{name}: {err}");
+            assert!(err.contains("unresolved finding"), "{name}: {err}");
+            assert!(err.contains("\"request-changes\""), "{name}: {err}");
+            assert!(err.contains("\"blocking_tier\""), "{name}: {err}");
+            assert!(err.contains("Never drop a finding"), "{name}: {err}");
+        }
+        // Only the finding the recorder would not defer is named.
+        write(
+            &launch,
+            &approved(serde_json::json!([
+                finding("style", serde_json::json!({})),
+                finding("p2", serde_json::json!({}))
+            ])),
+        );
+        let err = check(&launch, &tiers).unwrap_err().to_string();
+        assert!(
+            err.contains("1 unresolved finding (#2 \"p2 observation\")"),
+            "{err}"
+        );
+        // Under the default policy the message asks for the explicit deferral.
+        write(
+            &launch,
+            &approved(serde_json::json!(["P3: rename the helper"])),
+        );
+        let err = check(&launch, &unset).unwrap_err().to_string();
+        assert!(err.contains("\"disposition\":\"deferred\""), "{err}");
+        assert!(err.contains("\"rationale\""), "{err}");
+    }
+    /// The check agrees with the recorder on everything it accepts.
+    // trace:BUG-2707 | ai:claude
+    #[test]
+    fn bug_2707_consistent_drafts_pass_the_check() {
+        let (_tmp, launch) = fixture();
+        let unset = policy("");
+        let tiers = policy("[review]\nblocking_tiers = [\"p1\", \"p2\"]\n");
+        let deferred = serde_json::json!({"disposition":"deferred","rationale":"cosmetic; a follow-up is enough"});
+        for (name, value, effective) in [
+            (
+                "approved, no findings",
+                approved(serde_json::json!([])),
+                &unset,
+            ),
+            (
+                "approved, explicit deferrals",
+                approved(serde_json::json!([
+                    finding("p3", deferred.clone()),
+                    finding("style", deferred.clone())
+                ])),
+                &unset,
+            ),
+            (
+                "approved, below the list",
+                approved(serde_json::json!([
+                    finding("p3", serde_json::json!({})),
+                    finding("style", serde_json::json!({}))
+                ])),
+                &tiers,
+            ),
+            ("request-changes, plain findings", payload(), &unset),
+            ("request-changes under a list", payload(), &tiers),
+        ] {
+            write(&launch, &value);
+            let draft = check(&launch, effective).unwrap_or_else(|e| panic!("{name}: {e:#}"));
+            // What the check accepts, the recorder's own decision accepts.
+            let decided = crate::gate::kernel_deps::review_blocking::apply_policy(
+                effective,
+                &draft.record_findings(),
+                &[],
+            );
+            assert_eq!(
+                rv::incoming_disposition(&draft.verdict, &decided),
+                rv::VerdictKind::parse(&draft.verdict),
+                "{name}"
+            );
+        }
+    }
+    /// A list that cannot be honoured blocks every finding, deferrals
+    /// included, and the message offers request-changes only.
+    // trace:BUG-2707 | ai:claude
+    #[test]
+    fn bug_2707_unreadable_policy_refuses_even_a_deferred_approval() {
+        let (_tmp, launch) = fixture();
+        let invalid = policy("[review]\nblocking_tiers = [\"nonsense\"]\n");
+        assert!(invalid.fails_closed());
+        let deferred = serde_json::json!({"disposition":"deferred","rationale":"later is fine"});
+        write(
+            &launch,
+            &approved(serde_json::json!([finding("p3", deferred)])),
+        );
+        let err = check(&launch, &invalid).unwrap_err().to_string();
+        assert!(err.contains("none can be deferred"), "{err}");
+        assert!(!err.contains("(b)"), "{err}");
+        write(&launch, &approved(serde_json::json!([])));
+        assert!(check(&launch, &invalid).is_ok());
+    }
+    /// The in-session check applies the launcher's schema and launch binding.
+    // trace:BUG-2707 | ai:claude
+    #[test]
+    fn bug_2707_check_applies_the_schema_and_launch_binding() {
+        let (_tmp, launch) = fixture();
+        let unset = policy("");
+        write(&launch, &payload());
+        assert!(check_draft_file(&unset, &launch.path, None, None).is_ok());
+        assert!(check_draft_file(&unset, &launch.path, Some(60), Some(HEAD)).is_err());
+        let other = "ffffffffffffffffffffffffffffffffffffffff";
+        assert!(check_draft_file(&unset, &launch.path, Some(59), Some(other)).is_err());
+        for (field, value) in [
+            ("version", serde_json::json!(2)),
+            ("reviewed_sha", serde_json::json!("0123456")),
+            ("verdict", serde_json::json!("approved if green")),
+            ("summary", serde_json::json!(" ")),
+            ("recorded_by", serde_json::json!("forged")),
+        ] {
+            let mut data = payload();
+            data[field] = value;
+            write(&launch, &data);
+            assert!(check(&launch, &unset).is_err(), "{field}");
+        }
+        let mut waiting = payload();
+        waiting["verdict"] = "waiting".into();
+        write(&launch, &waiting);
+        assert!(check(&launch, &unset).is_err());
+        std::fs::remove_file(&launch.path).unwrap();
+        let err = check(&launch, &unset).unwrap_err().to_string();
+        assert!(err.contains("no reviewer draft at"), "{err}");
+        let rendered = launch.prompt("fresh review");
+        assert!(rendered.contains(&format!(
+            "aida review check-draft {} --pr 59 --sha {HEAD}",
+            launch.path.display()
+        )));
+        assert!(rendered.contains("Any unresolved finding means request-changes"));
     }
     #[test]
     fn standalone_review_verdict_draft_rejects_wrong_missing_and_authority_fields() {
@@ -836,6 +1182,48 @@ mod standalone_review_verdict_parent_tests {
             crate::gate::ledger::project::verdict_records(&f.root, "PR-59").len(),
             before
         );
+    }
+    /// One contract on both sides: the approved draft with plain p3 and style
+    /// findings that the in-session check refuses is the draft the recorder
+    /// refuses (nothing recorded), and the deferred approval the check
+    /// accepts is recorded as an approval.
+    // trace:BUG-2707 | ai:claude
+    #[test]
+    fn bug_2707_check_and_recorder_agree_on_approved_with_findings() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let effective = crate::gate::kernel_deps::review_blocking::effective(&f.root);
+        let launch = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+        let body = serde_json::json!({"version":1,"pr":59,"reviewed_sha":f.head,"verdict":"approved",
+            "summary":"complete child rationale",
+            "findings":["P3: rename the helper", "style: wrap the long line"]});
+        std::fs::write(&launch.path, body.to_string()).unwrap();
+        let why = check_draft_file(&effective, &launch.path, Some(59), Some(&f.head))
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains("2 unresolved findings"), "{why}");
+        let draft = launch.read().unwrap();
+        let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
+        let refused = f
+            .record(&draft.verdict, &draft.record_findings(), Some(&reviewer))
+            .unwrap_err();
+        assert!(
+            format!("{refused:#}").contains(rv::EXPLICIT_APPROVAL_REFUSAL),
+            "{refused:#}"
+        );
+        assert!(rv::read_recorded_verdict(&f.root, "PR-59").is_none());
+
+        let launch = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+        let draft = approved_with_deferred(&f, &launch);
+        check_draft_file(&effective, &launch.path, Some(59), Some(&f.head)).unwrap();
+        let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
+        f.record(&draft.verdict, &draft.record_findings(), Some(&reviewer))
+            .unwrap();
+        let recorded = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(recorded.kind, rv::VerdictKind::Approved);
+        assert_eq!(recorded.findings, ["P3 follow-up 1", "P3 follow-up 2"]);
     }
     /// A completed request-changes draft whose p2 finding the `["p1"]` list
     /// deferred was recorded as an approval. Replaying that same launch after
