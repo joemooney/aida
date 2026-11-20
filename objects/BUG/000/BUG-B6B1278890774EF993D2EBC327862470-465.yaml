@@ -13,12 +13,12 @@ description: |
   2. `aida pr ship` on a busy admission waits up to a bounded time (configurable, default a few minutes) for the exclusive mode instead of failing on the first try_lock, and reports the holders and how long it waited if it gives up.
   3. Regression through the production path: with both loop workers running, an `aida pr ship` of an approved PR acquires admission within the bound. A control proves an in-progress review launch or train stack is never interrupted mid-operation.
   4. `aida advisor loops` gains a supported, audited way to drain or pause both workers' admission claims (so no operator or advisor ever needs to SIGTERM them), and `aida advisor loops status` shows each worker's claim age.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T18:59:44.568035019Z
+modified_at: 2026-11-20T19:00:31.590963801Z
 req_type: Bug
 tags:
 - admission
@@ -282,6 +282,13 @@ comments:
   modified_at: 2026-11-20T18:59:44.568035019Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa54-eae6-77a2-9826-a3a784a8677e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES on one blocking finding; the design and the four criteria are otherwise met. Criteria at head 634d82e8: ac6ca3ea verified by bug2703_waiting_exclusive_gets_in_once_shared_holders_yield and bug2703_manual_train_waits_for_the_auto_train_only; ac336622 verified by bug2703_bounded_wait_gives_up_naming_holders_and_wait, bug2703_wait_bound_config and bug2703_stalled_serializer_holder_cannot_outlast_the_bound, wired through ship_admission/land_admission/manual_train_admission; acc625bf verified by bug2703_real_worker_loops_yield_to_the_real_ship_handler (run_with_program + run_passes + pr_ship_handler) with control bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress; ac00712a happy path verified by bug2703_drain_is_audited_bounded_and_expires, bug2703_drain_withholds_loop_claims_only, bug2703_drain_holds_the_supervisor_respawn and the three status tests, but the refusal path of drain/resume for a seat without advisor authority is unverified (blocking, untested-path under ADR-76). Eight further findings (two p2, five p3, one style) are non-blocking follow-ups. No fail-open path found: unreadable drain journal, malformed intent and a stalled serializer all refuse or yield; no existing test was weakened. CI at review time: fast tier green (fast gates, fast compile, Build); the test shards were skipped on this head, so the new tests are compiled but not shown executed, and I ran no cargo. Stale base: head is 5 commits behind main and scripts/store-writers.toml also changed there; no finding depends on base-changed code, but the writer inventory must be regenerated/rechecked on the landed tree.. No triage reason was given.'
+  created_at: 2026-11-20T19:00:31.590957687Z
+  modified_at: 2026-11-20T19:00:31.590957687Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
@@ -353,6 +360,15 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1fa54-eae6-77a2-9826-a39c7e2e0e18
+  author: joe
+  timestamp: 2026-11-20T19:00:31.590942524Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 140977cdd550b1f043ea5a57eb4bb91e52211313
@@ -363,11 +379,3 @@ filed_at:
   vendor: claude
   session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'REQUEST CHANGES on one blocking finding; the design and the four criteria are otherwise met. Criteria at head 634d82e8: ac6ca3ea verified by bug2703_waiting_exclusive_gets_in_once_shared_holders_yield and bug2703_manual_train_waits_for_the_auto_train_only; ac336622 verified by bug2703_bounded_wait_gives_up_naming_holders_and_wait, bug2703_wait_bound_config and bug2703_stalled_serializer_holder_cannot_outlast_the_bound, wired through ship_admission/land_admission/manual_train_admission; acc625bf verified by bug2703_real_worker_loops_yield_to_the_real_ship_handler (run_with_program + run_passes + pr_ship_handler) with control bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress; ac00712a happy path verified by bug2703_drain_is_audited_bounded_and_expires, bug2703_drain_withholds_loop_claims_only, bug2703_drain_holds_the_supervisor_respawn and the three status tests, but the refusal path of drain/resume for a seat without advisor authority is unverified (blocking, untested-path under ADR-76). Eight further findings (two p2, five p3, one style) are non-blocking follow-ups. No fail-open path found: unreadable drain journal, malformed intent and a stalled serializer all refuse or yield; no existing test was weakened. CI at review time: fast tier green (fast gates, fast compile, Build); the test shards were skipped on this head, so the new tests are compiled but not shown executed, and I ran no cargo. Stale base: head is 5 commits behind main and scripts/store-writers.toml also changed there; no finding depends on base-changed code, but the writer inventory must be regenerated/rechecked on the landed tree.'
-  recovery_hint: address the review findings, move BUG-2703 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-20T18:59:18.338304287Z
