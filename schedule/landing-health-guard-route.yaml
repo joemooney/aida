@@ -9,6 +9,6 @@ note: 'advisor-121 10:58: timeout, not a finding (hand run 123 s, 0 findings). E
 due_since: 2026-11-19T19:45:42.743327061Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-20T15:42:59.725085388Z
+  trip_id: landing-health-guard@2026-11-20T15:58:00.368107528Z
   job: landing-health-guard
-  error: 'exit 1: landing-health: main tip age 178 minutes; 7 open PRs; #4366: awaiting review; #4365: conflict; #4364: awaiting review; #4363: merge hold; #4362: merge hold; #4344: CI red: Build (ubuntu-latest); #4306: merge hold'
+  error: 'exit 1: landing-health: main tip age 198 minutes; 7 open PRs; #4366: awaiting review; #4365: conflict; #4364: awaiting review; #4363: merge hold; #4362: merge hold; #4344: awaiting review; #4306: merge hold'
