@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-19T21:45:23.316707414Z
+modified_at: 2026-11-20T14:14:50.233814427Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -147,6 +147,13 @@ comments:
     A reference merge (commit 7d36925c193a, `(Refs TASK-3133)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-19T21:45:23.316701877Z
   modified_at: 2026-11-19T21:45:23.316701877Z
+- id: 01a1f94f-95cb-7561-9724-69d5979cb660
+  author: joe
+  content: 'ADVISOR SCOPE for the next lane (advisor-121, 07:20): (a) AC2: against the AC1 baseline, confirm every class (a) seat_clone test is hermetic and fix stragglers; (b) AC3 lane part: run the seat_clone:: filter 3 consecutive times in the dell1 lane job and post the job ids. The 3 primary-host runs are for the product seat. Refs unless the PR also carries all AC3 evidence.'
+  created_at: 2026-11-20T14:14:50.233814427Z
+  modified_at: 2026-11-20T14:14:50.233814427Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
