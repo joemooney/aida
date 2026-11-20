@@ -894,7 +894,7 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
         doc: "How long a confirmed red main may wait for a fix before the red-main watch recommends a revert (a duration such as `2h` or `90m`).",
         default: "2h",
         edit: EditSafety::ReadOnly {
-            reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml",
+            reason: "landing policy is read from the default branch only: change it in a reviewed PR to the project config",
         },
     },
     // --- [telemetry]. ---
