@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T22:51:18.063945941Z
+modified_at: 2026-11-20T22:51:54.977835916Z
 req_type: Bug
 tags:
 - lanes
@@ -288,6 +288,13 @@ comments:
   created_at: 2026-11-20T22:51:18.063945941Z
   modified_at: 2026-11-20T22:51:18.063945941Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb28-f1f1-7b01-864d-7ad1b86fffaf
+  author: joe
+  content: 'Product 15:52: HELD per advisor (blocked-by BUG-2629). The r2 relaunch at 15:44 reproduced the rework-discovery spin, and the product watcher killed it at 15:49. r2 (brief .aida/tmp/brief-BUG-2706-r2.md, gate 9a5565b) relaunches right after #4380 lands. A product spin-guard now kills any dell1 queue-work launcher at >=90% CPU with no child for >=3 min until then.'
+  created_at: 2026-11-20T22:51:54.977835916Z
+  modified_at: 2026-11-20T22:51:54.977835916Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
