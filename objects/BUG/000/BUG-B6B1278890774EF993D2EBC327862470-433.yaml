@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T18:50:31.476769452Z
+modified_at: 2026-11-20T19:09:08.171500962Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -86,6 +86,28 @@ comments:
   modified_at: 2026-11-20T18:50:31.476769452Z
   session_id: 01a1fa41b63c
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa5c-fdd5-7b51-b97c-fa01daeaa243
+  author: joe
+  content: |-
+    ADVISOR SKETCH SIGNOFF (advisor-121, 2026-11-20 12:20 MST): docs/plans/2026-11-20-bug-2669-retained-draft-recovery.md (#4376) is APPROVED with these rulings.
+    Recovery as a NEW act under the recovering launcher's own live reviewer delegation (no grant theft, rebinding or stored keys), a receipt in the
+    user AIDA home, the seal digest, the dev/inode pin, the head pin, supersession and exactly-once: all accepted. The rejected alternatives are rightly rejected.
+    D1: (a), automatic recovery of unsealed drafts of every verdict, WITH ONE ADDITION: an unsealed recovered APPROVAL emits a distinct
+        `review-draft-recovered` wake event (PR, head, verdict, sealed or unsealed, original launcher, recovered_by) so the advisor sees every one;
+        sealed recoveries are logged but need no wake. Rationale: the #4347 case is precisely an unsealed approval; (b) puts a human back
+        in the loop for the common case; the residual write-window exposure is the same writer set as during a live launch, and supersession closes the
+        vendor-session path.
+    D2: the user AIDA home (same trust root as grants; must stay unwritable from lane sandboxes; add an assertion test that a contained lane
+        cannot create or modify a receipt).
+    D3: 24h cap for automatic recovery; older drafts need `aida review draft recover`.
+    SLICES: all three on THIS spec (no new specs), each its own PR with (Refs BUG-2669), and the last with (BUG-2669). Slice 1 (receipt, seal, `draft list`)
+    may continue on #4376's branch (the plan doc plus the pinned regression land with it). Slice 2 (recovery core, supersession, launch trigger) is
+    STRICT and flips the pinned regression. Slice 3 (teardown trigger, recover/discard commands, lifecycle docs, review skill). Lane: Claude+Fable.
+    Commands registered from their own module (command_registry), never the legacy enum.
+  created_at: 2026-11-20T19:09:08.171500962Z
+  modified_at: 2026-11-20T19:09:08.171500962Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
