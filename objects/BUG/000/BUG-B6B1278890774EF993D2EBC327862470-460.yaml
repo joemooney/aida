@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-19T20:56:30.891256168Z
+modified_at: 2026-11-20T01:04:31.557439835Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -961,6 +961,13 @@ comments:
   content: 'ADVISOR COMPLETION CALL (advisor-121, 2026-11-19 14:00): COMPLETE. #4305 landed as 9bc8c6db with a full (BUG-2696) trailer via train #4331. AC1-AC6 were independently reviewed across rounds 1-4 (STRICT), with final approval at 268d46b after the conflict-only merge. It did not auto-complete because the live binary that processed the landing predates this change: it still completes only Done specs, and this spec was In Progress (the new ''complete push sets Done'' path, D3, ships IN this PR). After autopromote moves the live binary past 9bc8c6d, completing pushes set Done and landings complete them. Watch the next few landings; reopen this spec with evidence if a completing push still leaves a spec open.'
   created_at: 2026-11-19T20:56:00.799942196Z
   modified_at: 2026-11-19T20:56:00.799942196Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f67c-0159-79c2-92bb-c43b6b0d8675
+  author: joe
+  content: 'REOPENED by advisor-121 (2026-11-19 18:10): AC1/D3 fails in production. TASK-3821 r2 launched 17:28 on dell1 (binary be435bc+dirty, contains 9bc8c6d) and pushed #4340 at 35903ce8 via seat publication with fast_gate=pass and subject ''(TASK-3821)''. dell1''s own store history shows NO Done: last transition Approved -> InProgress at 17:27, so this is not a sync problem. The self-review named the hooks ship_from_seat::run_from_with_reconciliation (after finish_published) and pr_cmd::run_human_finish_ceremony. Investigate why the seat-publication path did not call mark_done_after_push: whether completes_spec resolved false (declaration missing or defaulted, slice-plan check), or whether lane-run.sh publishes through a different entry point than run_from_with_reconciliation. Landing-time D4 is untested separately (no clean no-manual-call landing yet). Scope for the fix: D3 only, with a regression through the REAL lane publication entry point used by scripts/lane-run.sh. Claude lane, STRICT.'
+  created_at: 2026-11-20T01:04:31.557439835Z
+  modified_at: 2026-11-20T01:04:31.557439835Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
