@@ -1,5 +1,6 @@
 id: 01a1fa4c-2119-7263-ab3a-89c4710a0b8f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-187
+agreed_id: STORY-2992
 title: 'Review PR-4376: [AI:claude] docs(review): propose authorized recovery of a retained reviewer draft after launcher exit (Refs BUG-2669)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1fa41`) for branch `bug-b6b1278890774ef993d2ebc327862470-433`.
@@ -37,6 +38,12 @@ history:
   timestamp: 2026-11-20T18:51:04.098422462Z
   session_id: 01a1fa41b63c
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1fa69-92c6-7311-9c1d-983b5f7a4a40
+  author: joe
+  timestamp: 2026-11-20T19:23:05.286521252Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: 06d0850cdfca3fa6c056a544a13ee8d810c0c478

@@ -1,5 +1,6 @@
 id: 01a1fa65-24c3-7100-a455-b9b92403f792
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-188
+agreed_id: STORY-2991
 title: 'Review PR-4378: [AI:claude] fix(review): one approval writes one verdict event; a refused approval writes none (BUG-2662)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1fa43`) for branch `bug-b6b1278890774ef993d2ebc327862470-426`.
@@ -35,6 +36,12 @@ history:
   timestamp: 2026-11-20T19:18:20.822935887Z
   session_id: 01a1fa43d4bc
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1fa69-5278-7a92-8fa7-c6e18b5fb060
+  author: joe
+  timestamp: 2026-11-20T19:22:48.824890697Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
   changes: []
 filed_at:
   code_sha: ccaa61189ceee258f860e576bd59e662a859f618
