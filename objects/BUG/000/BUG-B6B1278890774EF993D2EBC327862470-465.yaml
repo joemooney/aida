@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587336Z
-modified_at: 2026-11-20T04:41:31.007135839Z
+modified_at: 2026-11-20T04:45:49.949879562Z
 req_type: Bug
 tags:
 - admission
@@ -46,6 +46,13 @@ comments:
   content: 'Product 21:43 (per advisor-121): the respawn is confirmed. The loop workers'' supervisor respawns them within ~2-4 min of SIGTERM, so a stop is not durable and there is no supported pause. Stopping them also closed the in-flight train #4352. WORKING PATH for exclusive-starved ships until this lands: a single-PR cooperative train from a human terminal, `aida pr train <PR>`. Trains share the admission mode with the loops, and a human at the terminal naming the PR satisfies the supervised-spec rule.'
   created_at: 2026-11-20T04:41:31.007135839Z
   modified_at: 2026-11-20T04:41:31.007135839Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f746-9b6c-7782-82fc-f579f48f7eb3
+  author: joe
+  content: 'Product 21:47 CORRECTION to the 21:43 workaround: ''aida pr train <PR>'' from a human terminal is ALSO refused while the loops run. admission_owner.rs:252-258 serializes trains: a CooperativeTrain (or legacy auto-train) is refused whenever any receipt has purpose ''legacy auto-train'' or ''cooperative manual train'', and the auto-train worker holds its ''legacy auto-train'' receipt for its lifetime. Net effect: while the loop workers run, the ONLY thing that can land a PR is auto-train itself; no human ship or manual train can. Seen with Joe''s ''aida pr train 4324'' at 21:45. Add an AC: a human-initiated single-PR ship or train must be able to run (or queue into auto-train) while the loops are up.'
+  created_at: 2026-11-20T04:45:49.949879562Z
+  modified_at: 2026-11-20T04:45:49.949879562Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
