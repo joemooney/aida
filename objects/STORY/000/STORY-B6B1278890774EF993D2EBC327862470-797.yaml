@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T14:47:22.759421207Z
+modified_at: 2026-11-20T16:40:24.286432226Z
 req_type: Story
 tags:
 - landing
@@ -689,6 +689,15 @@ comments:
   created_at: 2026-11-20T14:47:22.759421207Z
   modified_at: 2026-11-20T14:47:22.759421207Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9d4-d099-7e52-b58f-f5a2349cbb3e
+  author: joe
+  content: |
+    S3 #4362 round 2 pushed at c7f63d5c8fa (s3-red-main-watch), all 14 STRICT findings addressed; check-ci-fast exit 0; main_watch suite 37 tests.
+    F12 bounded git/forge calls + scoped pass deadline + tried locks (stalled-fetch and busy-lock regressions); F1/F6 oldest-first boundaries; F7 closing-range revert; F8 state-first uuid transitions + replay + dedupe (fault injection at state/journal/flushed); F2 queue reconcile on reuse (real store, failure between save and queue add); F3/F4 persistent outbox + durable human-only aida human item opened on confirm, resolved on green; F9/F13 link+steps+log excerpt+held green in alert and fix spec via new Forge::run_job_report, retried probe; F10 DesignFork punt; F11 EditKind::Duration in aida config menu writing [landing.red_main]; F5/F14 window slicing + true median. Ready for STRICT re-review (round 3 of 4).
+  created_at: 2026-11-20T16:40:24.286432226Z
+  modified_at: 2026-11-20T16:40:24.286432226Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
