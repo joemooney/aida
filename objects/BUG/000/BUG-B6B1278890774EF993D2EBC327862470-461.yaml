@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T01:11:05.447472328Z
+modified_at: 2026-11-20T01:34:10.939615852Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -84,6 +84,31 @@ comments:
   modified_at: 2026-11-20T01:06:40.269790049Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f696-cfe4-7073-8323-6cc1bc64d416
+  author: dirtlab
+  content: |-
+    ## Implementer finding (claude lane, 2026-11-20): AC1/AC2/AC5 premise
+    On dell1, disrad-dvp98b3puw is the machine's own kernel hostname, not a sandbox UTS name. Evidence from this lane: /proc/self/ns/uts = uts:[4026531838] (the INITIAL UTS namespace, so nothing re-names the host), /etc/hostname = disrad-dvp98b3puw, all 58 local leases in .aida/sessions record it, and all 79 shared claims carrying it record pid_namespace = 4026531836 (the initial PID namespace, i.e. host-side launchers, not sandboxed seats). 'dell1' is an operator label; no node registry entry names it (this clone's WORK node is 73022632d356..., alias HOME = b6b12788...).
+    So the two unhealable claims were not unhealable because of a host mismatch: 01a1f4f93790 and 01a1f5182ee1 have NO session lease and NO .aida/lanes/headless-<lease>.json (their admission never spawned a worker), and the BUG-2655 heal required an exited-worker record. The healable 01a1f27828ed has a record with exited_at.
+    This PR fixes that root cause (AC3 + AC4) and ships as Refs. AC1/AC2/AC5 as written (record node identity instead of a sandbox hostname, plus a sandbox_hostname field and a legacy note) have no distinct sandbox name to act on here. Advisor: decide whether to close them as not reproducible or restate them as 'show the node label (HOME/dell1) beside the host in lease output'. AC6 (drop the stopgap note from the lane-host checklist) is a product-seat step once this merges; that checklist is not in the repo.
+  created_at: 2026-11-20T01:34:01.188236431Z
+  modified_at: 2026-11-20T01:34:01.188236431Z
+  session_id: 01a1f681aace
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f696-f5fb-70d0-88a1-0ea3a275594a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c32c84ad3e (branch bug-b6b1278890774ef993d2ebc327862470-461).
+    AC3 [behavioral-test]: drain-launch admission refusals after the launch mark (memory floor, cold-start cap, disk, fast-gate) are marked RefusedBeforeSpawn (session/headless.rs run_vendor_headless_to_exit; lane_admission.rs), and launch_refused_before_agent honors the marker (queue_cmd/work.rs), so the pickup rollback releases lease, tree and claim. Test: pickup_launch_rollback_tests::bug_2697_an_admission_refusal_after_the_mark_rolls_back. A session start without the armed rollback releases its own claim if it fails before the lease write (session_start.rs UnleasedClaimRelease). Test: coordination::tests::bug2697_failed_start_without_rollback_releases_only_its_own_claim (also covers disarm and claim_id mismatch, and checks origin). The standalone launch already marked its agent only at spawn.
+    AC4 [behavioral-test]: exited_holder_is_dead also accepts a claim with no exact lease and no lane record (lane_liveness::claim_worker_never_recorded); salvage is skipped for it. Tests: bug2697_doctor_reports_and_heals_a_claim_whose_admission_never_spawned (the 01a1f4f93790 shape, collect_doctor_findings_at + heal_exited_claim), bug2697_force_claim_replaces_..., bug2697_never_spawned_heal_refuses_without_complete_evidence (refuses on: fresh heartbeat, live creator, foreign PID namespace, other host, process_backed, review, unbound, absent clone, lane record present, lease present).
+    Probe findings: the authority widening (heal/--force-claim deleting a shared claim) needs a confirmed NotFound on both the exact lease and the lane record. Every read error refuses, and the existing BUG-2655 refusal tests pass unchanged.
+    Validation: cargo check --tests clean; 38 targeted tests pass (bug2697, bug2655, bug_2684, bug_2428, pickup_launch_rollback); check-store-writers OK; rustfmt clean. make check-ci-fast could not finish inside the lane's 60s tool cap: GitLab smoke, classifier inventory and test-touched planner passed, and it was killed in containment conformance (waiting for operator role entry). CI is the evidence.
+    Residual risks: a heal run from a seat in a different PID namespace than the creator still cannot see the claim (by design: run it from the lane host). AC1/AC2/AC5 are not implemented; see the finding comment.
+  created_at: 2026-11-20T01:34:10.939615852Z
+  modified_at: 2026-11-20T01:34:10.939615852Z
+  session_id: 01a1f681aace
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
   author: joe
