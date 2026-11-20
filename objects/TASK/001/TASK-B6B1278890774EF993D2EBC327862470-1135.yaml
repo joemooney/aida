@@ -21,7 +21,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-20T16:11:42.961886277Z
+modified_at: 2026-11-20T16:12:17.977941626Z
 req_type: Task
 tags:
 - codify
@@ -39,6 +39,23 @@ comments:
   created_at: 2026-11-20T16:11:42.961886277Z
   modified_at: 2026-11-20T16:11:42.961886277Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9bb-26ee-7ee1-967c-51c04f65c91f
+  author: joe
+  content: |-
+    Product 09:12: Claude (Fable 5.2) fresh-start lane queued on dell1 (after STORY-2906, TASK-3823, TASK-3825), brief:
+    # Brief: TASK-3826 `aida lane relay` (fresh start; advisor-121 09:11: APPROVED, drain, high; Claude+Fable; standard review)
+
+    Implement ACs 1-8 in the spec description, plus the advisor's AC3 addition (on the spec):
+    - Posting a new authoritative brief marks any earlier pending brief for the spec SUPERSEDED, so the lane sees only the newest.
+    - If the spec's last PR is merged or closed, the relay launches FRESH work, not a rework of that PR (this morning TASK-3786 was routed as a rework of merged #4309 and exited no-change, then punted). Add a regression for it.
+    Reference behaviour to preserve and replace: the product seat's .aida/tmp/relay-rework.sh on the primary host (read it for the head gate, brief placement, cap and RAM gate, SKIPPED logging). Reuse the existing lane-host cap and memory-headroom code; don't reimplement it.
+    Trailer (TASK-3826) only if every AC is met; otherwise (Refs TASK-3826).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+    (The brief also embeds the current relay-rework.sh as the reference implementation.)
+  created_at: 2026-11-20T16:12:17.977941626Z
+  modified_at: 2026-11-20T16:12:17.977941626Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
