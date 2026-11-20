@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:16:46.260567298Z
-modified_at: 2026-11-20T16:14:49.823799190Z
+modified_at: 2026-11-20T16:16:02.322072216Z
 req_type: Task
 tags:
 - crate-split
@@ -66,6 +66,12 @@ comments:
   content: Implementer push 3301620b15e4 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-20T16:14:05.655442171Z
   modified_at: 2026-11-20T16:14:05.655442171Z
+  session_id: 01a1f98f2065
+- id: 01a1f9be-5312-74b1-831e-cc186f440236
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `task-b6b1278890774ef993d2ebc327862470-1131` at head `3301620b15e4b33783aa350de7ff9f5aec9fa724`.'
+  created_at: 2026-11-20T16:16:02.322065862Z
+  modified_at: 2026-11-20T16:16:02.322065862Z
   session_id: 01a1f98f2065
 history:
 - id: 01a1f988-cecb-7802-bfe2-064cda85d46d
