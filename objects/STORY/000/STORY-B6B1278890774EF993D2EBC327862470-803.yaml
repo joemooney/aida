@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T14:21:06.728510761Z
-modified_at: 2026-11-19T19:02:08.868119625Z
+modified_at: 2026-11-20T04:10:03.895914282Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -207,6 +207,13 @@ comments:
     promotion and report ready with ci:full green.
   created_at: 2026-11-19T19:02:08.868119625Z
   modified_at: 2026-11-19T19:02:08.868119625Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f725-dbc1-7800-910b-96ede4ab4da3
+  author: joe
+  content: 'advisor-121 21:12: promotion 23 #4324 is READY at 95edb31 (STRICT r4 approval at 774878b plus a light approval of the conflict-only re-cut at 95edb31; full tier green, run 44668741777) but NOT merged. (1) aida pr ship was starved by admission contention (45 attempts: auto-train/review-watch). (2) The mandate REFUSES cover: ''what the PR ships could not be resolved to specs in the store''; the promotion inherits many supervised specs. The advisor will not hand-merge around a mandate refusal. NEEDS JOE at a terminal: aida pr ship 4324 (pinned to 95edb31). Follow-up gap: the mandate cannot cover integration promotions.'
+  created_at: 2026-11-20T04:10:03.895914282Z
+  modified_at: 2026-11-20T04:10:03.895914282Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
