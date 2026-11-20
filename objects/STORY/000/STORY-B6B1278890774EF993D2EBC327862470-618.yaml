@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T19:38:20.260988898Z
+modified_at: 2026-11-20T19:40:49.281022761Z
 req_type: Story
 tags:
 - area:ci
@@ -398,6 +398,30 @@ comments:
   created_at: 2026-11-20T19:37:55.437212652Z
   modified_at: 2026-11-20T19:37:55.437212652Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa79-ff8d-7f70-99cc-d284413c8a05
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 12:40):
+    # Rework brief: STORY-2695 / PR #4377 (dell1 CI runner routing), round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 12:42 MST. Head reviewed: bc0dcbf. Lane: CLAUDE+Fable. COMMIT your work.
+    CI infrastructure change: every item needs a fixture or test. Fix all 7:
+     1 ci.yml:153 request the per-route CLASS label (MAIN vs TRAIN), per the binding plan; a train must never dispatch to a MAIN-registering runner.
+     2 ci.yml:153 routing is CASE-SENSITIVE (no startsWith case folding): compute the route before the matrix; add a Train/x hosted fixture.
+     3 ci.yml:225 never expose stale reports: clear or exclude test-run.log, test-timings.json and nextest junit XML before exposing the target;
+       a failed warm job cannot publish the previous run's reports.
+     4 ci.yml:220 the exact-source check refuses ignored AND untracked files (git status --ignored), with an ignored-.env refusal fixture.
+     5 nextest install location: align the workflow, fixture and operator acceptance check with where install-action actually puts it.
+     6 test_self_hosted_runner.py:97 evaluate the FULL condition for the four self-hosted shards; cover the OR-branch mutation.
+     7 run-upstream.py:276 require exactly one validated producer for the paths and changes outputs in dependency order; test a removed selector.
+    Run the CI gates locally (make check-ci-fast plus the self-hosted runner tests). Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T19:40:49.281022761Z
+  modified_at: 2026-11-20T19:40:49.281022761Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
