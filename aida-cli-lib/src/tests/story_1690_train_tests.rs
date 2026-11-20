@@ -1186,7 +1186,7 @@ impl MemberChecks for FakeChecks {
         _head: &str,
     ) {
         let paths = self.paths.clone();
-        crate::pr_cmd::withdraw_unset_defaults(records, self.root.path(), || paths);
+        crate::pr_cmd::withdraw_unset_defaults(records, || paths);
     }
     fn interactive_tty(&self) -> bool {
         self.tty
@@ -1373,6 +1373,7 @@ fn live_gate_lands_a_project_default_drain_spec_only_off_protected_paths() {
         mode: Some(aida_core::ExecutionMode::Drain),
         source: ModeSource::ProjectDefault {
             req_type: "bug".into(),
+            protected: crate::gate::mandate_gates::ProtectedPaths::floor(),
         },
     };
     let member = |paths: Option<Vec<String>>| {

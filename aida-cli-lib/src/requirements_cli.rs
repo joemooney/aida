@@ -7102,7 +7102,9 @@ fn run_show(
                                         &m.to_string(),
                                     ));
                                 } else if let Some(label) = store_path.parent().and_then(|root| {
-                                    crate::gate::unset_mode::show_label(root, &req)
+                                    crate::gate::unset_mode::show_label(root, &req, || {
+                                        backend.load().ok().map(|s| s.requirements)
+                                    })
                                 }) {
                                     // STORY-2884: the project default an unset
                                     // mode takes. trace:STORY-2884 | ai:claude
@@ -7773,10 +7775,11 @@ fn run_show(
                                     m.to_string().cyan(),
                                     crate::do_dispatch::human_contract(m).dimmed()
                                 );
-                            } else if let Some(label) = store_path
-                                .parent()
-                                .and_then(|root| crate::gate::unset_mode::show_label(root, &req))
-                            {
+                            } else if let Some(label) = store_path.parent().and_then(|root| {
+                                crate::gate::unset_mode::show_label(root, &req, || {
+                                    backend.load().ok().map(|s| s.requirements)
+                                })
+                            }) {
                                 // STORY-2884: the project default an unset mode
                                 // takes at merge. trace:STORY-2884 | ai:claude
                                 println!("\n{} {}", "Effective mode:".bold(), label.cyan());

@@ -30,8 +30,7 @@ fn paths(ps: &[&str]) -> Option<Vec<String>> {
 
 /// The effective mode after the change-paths withdrawal, as ship applies it.
 fn at_change(mut mode: EffectiveMode, changed: Option<Vec<String>>) -> EffectiveMode {
-    let root = tempfile::tempdir().unwrap();
-    withdraw_defaults_for_change(std::iter::once(&mut mode), root.path(), || changed);
+    withdraw_defaults_for_change(std::iter::once(&mut mode), || changed);
     mode
 }
 
@@ -216,31 +215,84 @@ fn drain_default_matrix() {
     }
 }
 
-// The protected set is read from the gate config; an unreadable one is the
-// floor, so a non-repository root still protects `.aida/config.toml`.
+// The floor always protects `.aida/config.toml`.
 #[test]
-fn an_unreadable_gate_config_still_protects_the_floor() {
-    let root = tempfile::tempdir().unwrap();
-    let floor = protected_paths(root.path());
+fn the_floor_protects_the_gate_config() {
+    let floor = crate::gate::mandate_gates::ProtectedPaths::floor();
     assert!(protected_path_reason(paths(&[".aida/config.toml"]).as_deref(), &floor).is_some());
     assert!(protected_path_reason(paths(&["src/a.rs"]).as_deref(), &floor).is_none());
     assert!(protected_path_reason(Some(&[] as &[String]), &floor).is_none());
 }
 
+const DRAIN_BUG: &str = "[gate.unset_mode]\ndefault = \"drain\"\ndrain_types = [\"bug\"]\n";
+const PAYMENTS: &str = "[mandate.human_gates]\nprotected_paths = [\"src/payments/\"]\n";
+
+fn withheld(mode: &EffectiveMode) -> String {
+    match &mode.source {
+        ModeSource::Unset {
+            withheld: Some(why),
+        } => why.clone(),
+        other => panic!("not withheld: {other:?} {mode:?}"),
+    }
+}
+
+// Round 2, finding 1: the committed protected paths come from the same body
+// as the setting, so a custom protected path withdraws the default.
+#[test]
+fn committed_custom_protection_withdraws_the_default() {
+    let p = policy(&format!("{DRAIN_BUG}{PAYMENTS}"));
+    let mode = p.resolve(None, &plain_bug());
+    assert!(mode.is_project_default());
+    let hit = at_change(mode.clone(), paths(&["src/payments/charge.rs"]));
+    assert!(hit.requires_supervision());
+    assert!(withheld(&hit).contains("src/payments/"), "{hit:?}");
+    assert!(!at_change(mode, paths(&["src/list.rs"])).requires_supervision());
+}
+
+// Finding 1: a committed or operator gate layer that cannot be read leaves
+// the protection unknown, and no spec takes the default (fail closed).
+#[test]
+fn unreadable_protection_withdraws_every_default() {
+    // A committed `[mandate]` layer that does not parse.
+    let p = policy(&format!("{DRAIN_BUG}[mandate.human_gates]\nbogus = 1\n"));
+    assert!(p.protected.is_err());
+    let mode = p.resolve(None, &plain_bug());
+    assert!(mode.requires_supervision());
+    assert!(
+        withheld(&mode).contains("protected gate paths could not be read"),
+        "{mode:?}"
+    );
+    // An operator layer that cannot be read, with committed custom paths.
+    let p = policy(&format!("{DRAIN_BUG}{PAYMENTS}")).with_operator_layer(Err(anyhow::anyhow!(
+        "~/.aida/config.toml is not valid TOML"
+    )));
+    let mode = p.resolve(None, &plain_bug());
+    assert!(mode.requires_supervision());
+    assert!(withheld(&mode).contains("not valid TOML"), "{mode:?}");
+    // A readable operator layer adds its paths.
+    let operator =
+        crate::gate::mandate_gates::parse_layer(PAYMENTS.replace("payments", "ops").as_str(), "op")
+            .unwrap();
+    let p = policy(DRAIN_BUG).with_operator_layer(Ok(operator));
+    let mode = p.resolve(None, &plain_bug());
+    assert!(mode.is_project_default());
+    assert!(at_change(mode.clone(), paths(&["src/ops/a.rs"])).requires_supervision());
+    assert!(!at_change(mode, paths(&["src/a.rs"])).requires_supervision());
+}
+
 // The changed paths are read only when some spec takes the default.
 #[test]
 fn change_paths_are_read_only_for_a_project_default() {
-    let root = tempfile::tempdir().unwrap();
     let mut modes = vec![
         EffectiveMode::from(None),
         EffectiveMode::from(Some(ExecutionMode::Drive)),
     ];
-    withdraw_defaults_for_change(modes.iter_mut(), root.path(), || {
+    withdraw_defaults_for_change(modes.iter_mut(), || {
         panic!("no project default: the change's files are not read")
     });
     let mut read = false;
     let mut modes = vec![drain_bug_task().resolve(None, &plain_bug())];
-    withdraw_defaults_for_change(modes.iter_mut(), root.path(), || {
+    withdraw_defaults_for_change(modes.iter_mut(), || {
         read = true;
         paths(&["src/a.rs"])
     });
@@ -284,8 +336,7 @@ fn ship_holds_name_the_effective_mode() {
     assert!(crate::gate::ship::effective_supervised_merge_holds(&records, true).is_empty());
     // With the default withdrawn for a protected path, the bug holds too.
     let mut records = records;
-    let root = tempfile::tempdir().unwrap();
-    withdraw_defaults_for_change(records.iter_mut().map(|(_, _, m)| m), root.path(), || {
+    withdraw_defaults_for_change(records.iter_mut().map(|(_, _, m)| m), || {
         paths(&["aida-cli-lib/src/gate/mod.rs"])
     });
     let holds = crate::gate::ship::effective_supervised_merge_holds(&records, false);
@@ -314,6 +365,8 @@ fn effective_mode_serializes_as_the_mode() {
 // no effect, and no repository means the default.
 #[test]
 fn only_the_default_branch_config_counts() {
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", home.path().to_str())]);
     let dir = tempfile::tempdir().unwrap();
     let git = |args: &[&str]| {
         let out = crate::test_git::git_command()
@@ -352,19 +405,161 @@ fn only_the_default_branch_config_counts() {
         !UnsetModePolicy::load(dir.path()).drains_any(),
         "a feature branch cannot opt itself into the drain default"
     );
-    assert_eq!(show_label(dir.path(), &plain_bug()), None);
+    assert_eq!(show_label(dir.path(), &plain_bug(), || None), None);
     git(&["checkout", "-q", "main"]);
     git(&["merge", "-q", "--ff-only", "feature"]);
     assert!(UnsetModePolicy::load(dir.path()).drains_any());
     assert_eq!(
-        show_label(dir.path(), &plain_bug()).as_deref(),
+        show_label(dir.path(), &plain_bug(), || None).as_deref(),
         Some("drain (project default for unset bug)")
     );
     let mut set = plain_bug();
     set.execution_mode = Some(ExecutionMode::Drive);
     assert_eq!(
-        show_label(dir.path(), &set),
+        show_label(dir.path(), &set, || None),
         None,
         "a set mode prints as before"
     );
+}
+
+fn git_in(dir: &Path, args: &[&str]) {
+    let out = crate::test_git::git_command()
+        .args(args)
+        .current_dir(dir)
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@t")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@t")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+/// A repository whose default branch is `branch`, committing `config`.
+fn repo_on(branch: &str, config: &str) -> tempfile::TempDir {
+    let dir = tempfile::tempdir().unwrap();
+    git_in(dir.path(), &["init", "-q", "-b", branch]);
+    std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+    std::fs::write(dir.path().join(".aida/config.toml"), config).unwrap();
+    git_in(dir.path(), &["add", "."]);
+    git_in(dir.path(), &["commit", "-qm", "init"]);
+    dir
+}
+
+// Finding 1: a repository whose default branch is `master` reads the
+// committed protected paths from the same commit as the setting, and an
+// unreadable operator layer withdraws the default there too.
+#[test]
+fn a_master_default_branch_reads_its_protection_and_fails_closed() {
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", home.path().to_str())]);
+    let dir = repo_on("master", &format!("{DRAIN_BUG}{PAYMENTS}"));
+    let p = UnsetModePolicy::load(dir.path());
+    let mode = p.resolve(None, &plain_bug());
+    assert!(mode.is_project_default(), "{p:?}");
+    assert!(at_change(mode.clone(), paths(&["src/payments/a.rs"])).requires_supervision());
+    assert!(!at_change(mode, paths(&["src/a.rs"])).requires_supervision());
+    // A malformed operator config: protection unknown, no default.
+    std::fs::create_dir_all(home.path().join(".aida")).unwrap();
+    std::fs::write(home.path().join(".aida/config.toml"), "[mandate\n").unwrap();
+    let mode = UnsetModePolicy::load(dir.path()).resolve(None, &plain_bug());
+    assert!(mode.requires_supervision());
+    assert!(
+        withheld(&mode).contains("protected gate paths could not be read"),
+        "{mode:?}"
+    );
+}
+
+// Finding 2: the default is admitted for the head its files were read at;
+// a different (or unknown) preflight head is refused.
+#[test]
+fn a_head_moved_after_the_default_check_is_refused() {
+    let (h1, h2) = ("1".repeat(40), "2".repeat(40));
+    let heads = CheckedHeads::default();
+    assert_eq!(
+        heads.moved_refusal(7, Some(&h2)),
+        None,
+        "no default checked"
+    );
+    assert_eq!(heads.moved_refusal(7, None), None);
+    heads.record(&h1);
+    heads.record(&h1);
+    assert_eq!(heads.moved_refusal(7, Some(&h1)), None);
+    // H1 was ordinary; H2, pushed before preflight, touches a protected path
+    // the default never saw.
+    let refusal = heads
+        .moved_refusal(7, Some(&h2))
+        .expect("moved head refused");
+    assert!(
+        refusal.contains("PR-7") && refusal.contains(&h1[..12]),
+        "{refusal}"
+    );
+    assert!(
+        heads.moved_refusal(7, None).is_some(),
+        "unknown head refused"
+    );
+    heads.record(&h2);
+    assert!(
+        heads.moved_refusal(7, Some(&h2)).is_some(),
+        "H1 still unpinned"
+    );
+}
+
+fn superseded_into(child: &mut Requirement, carrier: &Requirement) {
+    child.relationships.push(aida_core::Relationship {
+        rel_type: aida_core::RelationshipType::SupersededBy,
+        target_id: carrier.id,
+        created_at: None,
+        created_by: None,
+    });
+}
+
+// Finding 3: `aida show` resolves a superseded unset spec through its
+// carrier, as the merge gate does, and names the carrier.
+#[test]
+fn show_label_follows_the_superseding_carrier() {
+    let home = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", home.path().to_str())]);
+    let dir = repo_on("main", DRAIN_BUG);
+    let carrier = |mode, id: &str| {
+        let mut c = spec(RequirementType::Story, "carrier", &[]);
+        c.spec_id = Some(id.into());
+        c.execution_mode = Some(mode);
+        c
+    };
+    for (mode, child_type, want) in [
+        (ExecutionMode::Guided, RequirementType::Bug, "guided"),
+        (ExecutionMode::Operator, RequirementType::Bug, "operator"),
+        (ExecutionMode::Drain, RequirementType::Story, "drain"),
+    ] {
+        let c = carrier(mode, "STORY-90");
+        let mut child = spec(child_type, "bundled child", &[]);
+        superseded_into(&mut child, &c);
+        let store = vec![child.clone(), c.clone()];
+        let label = show_label(dir.path(), &child, || Some(store)).unwrap();
+        assert!(label.starts_with(want), "{mode:?}: {label}");
+        assert!(label.contains("from its carrier"), "{label}");
+        assert!(!label.contains("project default"), "{label}");
+        // The merge gate's mode agrees.
+        let reqs = vec![child.clone(), c];
+        assert_eq!(
+            crate::gate::ship::gating_execution_mode(&reqs, &child),
+            Some(mode)
+        );
+    }
+    // An unreadable store: the carrier is unknown, so supervised.
+    let c = carrier(ExecutionMode::Drain, "STORY-91");
+    let mut child = plain_bug();
+    superseded_into(&mut child, &c);
+    let label = show_label(dir.path(), &child, || None).unwrap();
+    assert!(label.starts_with("unset (supervised"), "{label}");
+    // A carrier without a mode: the child takes the project default itself.
+    let mut c = c;
+    c.execution_mode = None;
+    let label = show_label(dir.path(), &child, || Some(vec![c])).unwrap();
+    assert_eq!(label, "drain (project default for unset bug)");
 }

@@ -253,22 +253,21 @@ pub(crate) fn supervised_specs_for_ship(
 ) -> Vec<(String, String)> {
     let mut records = ship_gate_spec_records(project_root);
     if !interactive_tty {
-        withdraw_unset_defaults(&mut records, project_root, change_paths);
+        withdraw_unset_defaults(&mut records, change_paths);
     }
     supervised_specs_in(records, interactive_tty)
 }
 
 /// STORY-2884: withdraw the project's unset-mode drain default from `records`
-/// when the change touches a protected gate path or its files are unknown.
+/// when the change touches a protected gate path (as read with the setting)
+/// or its files are unknown.
 // trace:STORY-2884 | ai:claude
 pub(crate) fn withdraw_unset_defaults(
     records: &mut [ShipGateSpecRecord],
-    project_root: &std::path::Path,
     change_paths: impl FnOnce() -> Option<Vec<String>>,
 ) {
     crate::gate::unset_mode::withdraw_defaults_for_change(
         records.iter_mut().map(|(_, _, mode)| mode),
-        project_root,
         change_paths,
     );
 }

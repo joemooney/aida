@@ -336,10 +336,13 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         &[
             "aida_core::ExecutionMode",
             "aida_core::ExecutionMode::Drain",
+            "aida_core::RelationshipType::SupersededBy",
             "aida_core::Requirement",
             "aida_core::RequirementType",
             "aida_core::RequirementType::ALL",
             "aida_core::git_ops::host_git_command",
+            "aida_core::node_alias::display_spec_id",
+            "crate::forge_lookup::deadline_output",
             "crate::trusted_config::read_trusted_config_toml_local",
         ],
     ),

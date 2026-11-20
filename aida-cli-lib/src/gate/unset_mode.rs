@@ -15,6 +15,11 @@
 //! protected gate path ([`withdraw_defaults_for_change`]). Every other
 //! merge gate still applies.
 //!
+//! The protected gate paths are read from the same trusted commit as the
+//! setting (its `[mandate.human_gates] protected_paths`), plus the operator
+//! layer `~/.aida/config.toml`. When either cannot be read the protection
+//! cannot be established, and no spec takes the default.
+//!
 //! The setting relaxes what a merge waits for, so — like `[landing]` — it is
 //! read only from the config on the trusted default branch, never from a
 //! feature branch's own copy. A missing, unreadable or malformed value keeps
@@ -22,6 +27,7 @@
 // trace:STORY-2884 | ai:claude
 // mandate-gate
 
+use crate::gate::mandate_gates::{GateLayer, PathSource, ProtectedPaths};
 use aida_core::{ExecutionMode, Requirement, RequirementType};
 use std::path::Path;
 
@@ -47,13 +53,28 @@ impl UnsetDefault {
 
 /// The resolved `[gate.unset_mode]` policy.
 // trace:STORY-2884 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct UnsetModePolicy {
     pub(crate) default: UnsetDefault,
     /// The spec types the drain default applies to. Empty: none.
     pub(crate) drain_types: Vec<RequirementType>,
     /// Values that were ignored, each with its reason.
     pub(crate) warnings: Vec<String>,
+    /// The protected gate paths a defaulted change may not touch, read from
+    /// the same trusted config (and the operator layer). `Err`: they could
+    /// not be read, so no spec takes the default (fail closed).
+    pub(crate) protected: Result<ProtectedPaths, String>,
+}
+
+impl Default for UnsetModePolicy {
+    fn default() -> Self {
+        Self {
+            default: UnsetDefault::default(),
+            drain_types: Vec::new(),
+            warnings: Vec::new(),
+            protected: Ok(ProtectedPaths::floor()),
+        }
+    }
 }
 
 /// A type name with case, spaces, hyphens and underscores removed, so
@@ -85,7 +106,7 @@ impl UnsetModePolicy {
     /// keeps the supervised default (or drops the bad list entry) and records
     /// a warning.
     // trace:STORY-2884 | ai:claude
-    pub(crate) fn from_config(config: Option<&toml::Value>) -> Self {
+    fn from_config(config: Option<&toml::Value>) -> Self {
         let mut policy = Self::default();
         let Some(section) = config
             .and_then(|c| c.get("gate"))
@@ -157,11 +178,29 @@ impl UnsetModePolicy {
     }
 
     /// The policy of a trusted config body (`None`: no config, the default).
+    /// With a drain default, the body's own `[mandate.human_gates]` layer
+    /// supplies the committed protected paths; a layer that does not parse
+    /// leaves the protection unknown.
     // trace:STORY-2884 | ai:claude
     pub(crate) fn from_body(body: Option<&str>) -> Self {
-        match body.map(str::parse::<toml::Value>) {
-            Some(Ok(value)) => Self::from_config(Some(&value)),
-            Some(Err(e)) => Self {
+        match body.map(|b| (b, b.parse::<toml::Value>())) {
+            Some((text, Ok(value))) => {
+                let mut policy = Self::from_config(Some(&value));
+                if policy.drains_any() {
+                    policy.protected = crate::gate::mandate_gates::parse_layer(
+                        text,
+                        "the default branch's config",
+                    )
+                    .map(|layer| {
+                        let mut protected = ProtectedPaths::floor();
+                        protected.extend(PathSource::Committed, layer.protected_paths);
+                        protected
+                    })
+                    .map_err(|e| format!("{e:#}"));
+                }
+                policy
+            }
+            Some((_, Err(e))) => Self {
                 warnings: vec![format!(
                     "the default branch's .aida/config.toml does not parse ({e}); an unset \
                      execution mode stays supervised"
@@ -173,10 +212,32 @@ impl UnsetModePolicy {
     }
 
     /// The policy of the project at `root`, from the default branch's config
-    /// (local refs only, never the worktree copy).
+    /// (local refs only, never the worktree copy), with the operator layer's
+    /// protected paths. The committed protected paths come from that same
+    /// commit, so a default branch other than `main` is read consistently.
     // trace:STORY-2884 | ai:claude
     pub(crate) fn load(root: &Path) -> Self {
-        Self::from_body(crate::trusted_config::read_trusted_config_toml_local(root).as_deref())
+        let policy =
+            Self::from_body(crate::trusted_config::read_trusted_config_toml_local(root).as_deref());
+        if !policy.drains_any() {
+            return policy;
+        }
+        policy.with_operator_layer(crate::gate::mandate_gates::operator_layer())
+    }
+
+    /// Add the operator layer's protected paths; a layer that cannot be read
+    /// leaves the protection unknown (fail closed).
+    // trace:STORY-2884 | ai:claude
+    pub(crate) fn with_operator_layer(mut self, layer: anyhow::Result<GateLayer>) -> Self {
+        self.protected = match (self.protected, layer) {
+            (Ok(mut protected), Ok(layer)) => {
+                protected.extend(PathSource::Operator, layer.protected_paths);
+                Ok(protected)
+            }
+            (Err(e), _) => Err(e),
+            (Ok(_), Err(e)) => Err(format!("{e:#}")),
+        };
+        self
     }
 
     /// Whether the project sets the drain default at all (any listed type).
@@ -202,22 +263,29 @@ impl UnsetModePolicy {
         }
         let word = type_word(&req.req_type);
         let withheld = if !self.drain_types.contains(&req.req_type) {
-            Some(format!(
+            Err(format!(
                 "the project's drain default does not cover type {word}"
             ))
+        } else if let Some(why) = sensitive_class(req) {
+            Err(format!("not defaulted, {why}"))
         } else {
-            sensitive_class(req).map(|why| format!("not defaulted, {why}"))
+            self.protected.as_ref().map_err(|e| {
+                format!("not defaulted, the protected gate paths could not be read ({e})")
+            })
         };
         match withheld {
-            Some(why) => EffectiveMode {
+            Err(why) => EffectiveMode {
                 mode: None,
                 source: ModeSource::Unset {
                     withheld: Some(why),
                 },
             },
-            None => EffectiveMode {
+            Ok(protected) => EffectiveMode {
                 mode: Some(ExecutionMode::Drain),
-                source: ModeSource::ProjectDefault { req_type: word },
+                source: ModeSource::ProjectDefault {
+                    req_type: word,
+                    protected: protected.clone(),
+                },
             },
         }
     }
@@ -226,15 +294,47 @@ impl UnsetModePolicy {
 /// STORY-2884: the effective-mode line `aida show` prints for a spec with no
 /// mode of its own, when the project sets a drain default; `None` otherwise
 /// (a set mode prints as before, and without the setting nothing changes).
+/// The mode is resolved as the merge gate resolves it: a spec superseded
+/// into a carrier gates on the carrier's mode, which the label names.
+/// `store` (the requirements, `None` when unreadable) is read only for a
+/// superseded spec.
 // trace:STORY-2884 | ai:claude
-pub(crate) fn show_label(root: &Path, req: &Requirement) -> Option<String> {
+pub(crate) fn show_label(
+    root: &Path,
+    req: &Requirement,
+    store: impl FnOnce() -> Option<Vec<Requirement>>,
+) -> Option<String> {
     if req.execution_mode.is_some() {
         return None;
     }
     let policy = UnsetModePolicy::load(root);
-    policy
-        .drains_any()
-        .then(|| policy.resolve(None, req).label())
+    if !policy.drains_any() {
+        return None;
+    }
+    let superseded = req
+        .relationships
+        .iter()
+        .any(|r| r.rel_type == aida_core::RelationshipType::SupersededBy);
+    if !superseded {
+        return Some(policy.resolve(None, req).label());
+    }
+    let Some(requirements) = store() else {
+        return Some("unset (supervised: its superseding carrier could not be read)".into());
+    };
+    match crate::gate::ship::gating_execution_source(&requirements, req) {
+        Some((mode, carrier)) => {
+            let carrier_id = carrier
+                .spec_id
+                .clone()
+                .unwrap_or_else(|| carrier.id.to_string());
+            Some(format!(
+                "{} (from its carrier {})",
+                policy.resolve(Some(mode), req).label(),
+                aida_core::node_alias::display_spec_id(&carrier_id)
+            ))
+        }
+        None => Some(policy.resolve(None, req).label()),
+    }
 }
 
 /// Why a spec is sensitive and never takes the project default: the classes
@@ -255,7 +355,12 @@ pub(crate) enum ModeSource {
     /// The spec's own mode, or its carrier's.
     Spec,
     /// No mode set; the project's `[gate.unset_mode]` drain default applies.
-    ProjectDefault { req_type: String },
+    /// `protected`: the protected gate paths read with the setting, which a
+    /// change must not touch for the default to stand.
+    ProjectDefault {
+        req_type: String,
+        protected: ProtectedPaths,
+    },
     /// No mode set and no default applies. `withheld` says why when the
     /// project has a drain default that did not apply.
     Unset { withheld: Option<String> },
@@ -293,7 +398,7 @@ impl EffectiveMode {
     // trace:STORY-2884 | ai:claude
     pub(crate) fn label(&self) -> String {
         match (&self.source, self.mode) {
-            (ModeSource::ProjectDefault { req_type }, _) => {
+            (ModeSource::ProjectDefault { req_type, .. }, _) => {
                 format!("drain (project default for unset {req_type})")
             }
             (
@@ -318,6 +423,18 @@ impl EffectiveMode {
         matches!(self.source, ModeSource::ProjectDefault { .. })
     }
 
+    /// Withdraw a project-default drain when `paths` (the change's files,
+    /// `None` when unknown) touch a protected gate path read with the setting.
+    // trace:STORY-2884 | ai:claude
+    pub(crate) fn withdraw_for_change(&mut self, paths: Option<&[String]>) {
+        let ModeSource::ProjectDefault { protected, .. } = &self.source else {
+            return;
+        };
+        if let Some(why) = protected_path_reason(paths, protected) {
+            self.withdraw(why);
+        }
+    }
+
     /// Withdraw a project-default drain (back to unset, supervised) with the
     /// reason. A mode the spec sets is never touched.
     // trace:STORY-2884 | ai:claude
@@ -336,7 +453,7 @@ impl EffectiveMode {
 // trace:STORY-2884 | ai:claude
 pub(crate) fn protected_path_reason(
     paths: Option<&[String]>,
-    protected: &crate::gate::mandate_gates::ProtectedPaths,
+    protected: &ProtectedPaths,
 ) -> Option<String> {
     match paths {
         None => Some("not defaulted, the change's files could not be read".into()),
@@ -346,13 +463,13 @@ pub(crate) fn protected_path_reason(
 }
 
 /// Withdraw every project-default drain in `modes` when the change touches a
-/// protected gate path or its files cannot be read. `paths` (the change's
-/// files; `None` when unknown) is called only when some mode is a project
-/// default, so a project without the setting pays no git read.
+/// protected gate path (as read with the setting) or its files cannot be
+/// read. `paths` (the change's files; `None` when unknown) is called only
+/// when some mode is a project default, so a project without the setting
+/// pays no git read.
 // trace:STORY-2884 | ai:claude
 pub(crate) fn withdraw_defaults_for_change<'a>(
     modes: impl IntoIterator<Item = &'a mut EffectiveMode>,
-    root: &Path,
     paths: impl FnOnce() -> Option<Vec<String>>,
 ) {
     let mut defaulted: Vec<&mut EffectiveMode> = modes
@@ -363,21 +480,50 @@ pub(crate) fn withdraw_defaults_for_change<'a>(
         return;
     }
     let paths = paths();
-    let protected = protected_paths(root);
-    if let Some(why) = protected_path_reason(paths.as_deref(), &protected) {
-        for mode in &mut defaulted {
-            mode.withdraw(why.clone());
-        }
+    for mode in &mut defaulted {
+        mode.withdraw_for_change(paths.as_deref());
     }
 }
 
-/// The protected gate paths of the project at `root` (the floor when the
-/// gate config is unreadable — fail closed).
+/// STORY-2884: the PR heads whose files a project default was checked
+/// against. The default is admitted for those heads only, so ship refuses a
+/// preflight (and so merge) head that differs: a push between the check and
+/// preflight could otherwise add a protected path the default never saw.
 // trace:STORY-2884 | ai:claude
-pub(crate) fn protected_paths(root: &Path) -> crate::gate::mandate_gates::ProtectedPaths {
-    crate::gate::mandate_gates::ProtectedPaths::of(&crate::gate::mandate_gates::load_human_gates(
-        root,
-    ))
+#[derive(Debug, Default)]
+pub(crate) struct CheckedHeads(std::cell::RefCell<Vec<String>>);
+
+impl CheckedHeads {
+    /// Note that a default was checked against `head`.
+    pub(crate) fn record(&self, head: &str) {
+        let mut heads = self.0.borrow_mut();
+        if !heads.iter().any(|h| h == head) {
+            heads.push(head.to_string());
+        }
+    }
+
+    /// Why the merge must stop: a default was checked at a head other than
+    /// `preflight` (or `preflight` is unknown). `None` when no default was
+    /// checked, or every check saw `preflight`.
+    pub(crate) fn moved_refusal(&self, pr: u64, preflight: Option<&str>) -> Option<String> {
+        let heads = self.0.borrow();
+        if heads.is_empty() {
+            return None;
+        }
+        let pinned = preflight.map(str::trim).filter(|p| !p.is_empty());
+        let moved = heads.iter().find(|h| Some(h.as_str()) != pinned)?;
+        Some(format!(
+            "PR-{pr} head moved after its unset execution mode took the project's drain \
+             default: checked at {}, preflight at {}. Re-run ship so the new head's files \
+             are checked.",
+            short_sha(moved),
+            pinned.map(short_sha).unwrap_or("an unknown head")
+        ))
+    }
+}
+
+fn short_sha(sha: &str) -> &str {
+    sha.get(..12).unwrap_or(sha)
 }
 
 /// Files `head` changes against its merge base with `base` (a ref such as
@@ -389,12 +535,14 @@ pub(crate) fn changed_paths(root: &Path, base: &str, head: &str) -> Option<Vec<S
     if base.is_empty() || head.is_empty() || base.starts_with('-') || head.starts_with('-') {
         return None;
     }
-    let out = aida_core::git_ops::host_git_command(root)
-        .args(["diff", "--name-only", "-z", "--no-renames"])
+    let mut cmd = aida_core::git_ops::host_git_command(root);
+    cmd.args(["diff", "--name-only", "-z", "--no-renames"])
         .arg(format!("{base}...{head}"))
-        .arg("--")
-        .output()
-        .ok()?;
+        .arg("--");
+    // A scoped read deadline (`train --check --timeout`) bounds the read; one
+    // it cut off reads as unknown paths, which withdraw the default.
+    // trace:STORY-2884 trace:TASK-3792 | ai:claude
+    let out = crate::forge_lookup::deadline_output(cmd, std::process::Command::output).ok()?;
     if !out.status.success() {
         return None;
     }

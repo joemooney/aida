@@ -203,7 +203,7 @@ fn today_answer(
     // STORY-2884: as ship reads them, with the unset-mode default withdrawn
     // for a change that touches a protected gate path. trace:STORY-2884 | ai:claude
     let head_ref = head.to_string();
-    crate::pr_cmd::withdraw_unset_defaults(&mut records, main, || {
+    crate::pr_cmd::withdraw_unset_defaults(&mut records, || {
         base.and_then(|b| {
             crate::gate::unset_mode::changed_paths(main, &format!("origin/{b}"), &head_ref)
         })

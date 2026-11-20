@@ -490,11 +490,21 @@ pub(crate) fn gating_execution_mode(
     requirements: &[aida_core::Requirement],
     req: &aida_core::Requirement,
 ) -> Option<aida_core::ExecutionMode> {
+    gating_execution_source(requirements, req).map(|(mode, _)| mode)
+}
+
+/// [`gating_execution_mode`] with the spec that sets it: `req` itself, or the
+/// carrier on its superseded-by chain (STORY-2884: `aida show` names it).
+// trace:BUG-2413 trace:STORY-2884 | ai:claude
+pub(crate) fn gating_execution_source<'a>(
+    requirements: &'a [aida_core::Requirement],
+    req: &'a aida_core::Requirement,
+) -> Option<(aida_core::ExecutionMode, &'a aida_core::Requirement)> {
     let mut current = req;
     // Bounded: a superseded-by cycle must not loop the gate.
     for _ in 0..8 {
         if let Some(mode) = current.execution_mode {
-            return Some(mode);
+            return Some((mode, current));
         }
         let carrier = current
             .relationships

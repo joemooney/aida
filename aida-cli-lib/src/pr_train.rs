@@ -2228,7 +2228,7 @@ impl MemberChecks for LiveChecks<'_> {
         head: &str,
     ) {
         let (root, base) = (self.main_worktree, self.base);
-        crate::pr_cmd::withdraw_unset_defaults(records, root, || {
+        crate::pr_cmd::withdraw_unset_defaults(records, || {
             crate::gate::unset_mode::changed_paths(root, &format!("origin/{base}"), head)
         });
     }

@@ -791,6 +791,7 @@ fn collect_mandate_cover(
                             });
                         }
                         let mut effective = unset_mode.resolve(mode, req);
+                        effective.withdraw_for_change(Some(changed_paths.as_slice()));
                         if let Some(why) = &unset_withheld {
                             effective.withdraw(why.clone());
                         }

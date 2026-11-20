@@ -1071,3 +1071,104 @@ fn story_2893_actor_follows_the_train_gate() {
         "unverified"
     );
 }
+
+// STORY-2884: a spec on the project's unset-mode drain default makes the
+// member gate read the change's files (`git diff`). Under the check's
+// deadline a stalled diff is killed with its descendants, and the unknown
+// files withdraw the default (the spec holds, supervised). Unstalled, the
+// same read answers and an ordinary change keeps the default.
+// trace:STORY-2884 trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn story_2884_defaulted_spec_diff_read_shares_the_deadline() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::gate::unset_mode::{ModeSource, UnsetModePolicy};
+    use crate::pr_train::{LiveChecks, MemberChecks};
+    use std::time::{Duration, Instant};
+
+    let root = repo();
+    let r = root.path();
+    let base = git(r, &["rev-parse", "HEAD"]).trim().to_string();
+    git(r, &["update-ref", "refs/remotes/origin/main", &base]);
+    write(r, "work.txt", "work\n");
+    let tip = commit(r, "work");
+    let bin = tempfile::tempdir().unwrap();
+    let s = bin.path();
+    crate::test_exec::write_executable(
+        &s.join("git"),
+        &r#"#!/bin/sh
+S='@S@'
+stall=$(cat "$S/stall")
+case "$*" in
+  *'diff --name-only'*)
+    [ -n "$@G@" ] || echo "git $*" >> "$S/unbounded"
+    if [ "$stall" = diff ]; then sleep 20 & echo "$!" > "$S/child-diff"; wait; fi ;;
+esac
+exec /usr/bin/git "$@"
+"#
+        .replace("@S@", &s.display().to_string())
+        .replace(
+            "@G@",
+            crate::bounded_process::test_hooks::SCOPED_DEADLINE_SPAWN_ENV,
+        ),
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(s);
+    let policy = UnsetModePolicy::from_body(Some(
+        "[gate.unset_mode]\ndefault = \"drain\"\ndrain_types = [\"bug\"]\n",
+    ));
+    let mut bug = aida_core::Requirement::new("fix the sort".into(), "d".into());
+    bug.req_type = aida_core::RequirementType::Bug;
+    let defaulted = || vec![("BUG-1".to_string(), Vec::new(), policy.resolve(None, &bug))];
+    assert!(defaulted()[0].2.is_project_default());
+    let forge = crate::forge::forge_for_kind(r, crate::forge::ForgeKind::GitHub);
+    let mut checks = LiveChecks {
+        project_root: r,
+        main_worktree: r,
+        forge: forge.as_ref(),
+        base: "main",
+        named: true,
+        read_only: true,
+        actor_probe: None,
+        request_full: false,
+        released_member: None,
+    };
+
+    std::fs::write(s.join("stall"), "diff").unwrap();
+    let mut records = defaulted();
+    let started = Instant::now();
+    crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(1), || {
+        checks.withdraw_unset_defaults(&mut records, &tip)
+    });
+    assert!(
+        started.elapsed() < Duration::from_secs(4),
+        "the diff read outlived the deadline: {:?}",
+        started.elapsed()
+    );
+    assert!(
+        task_3792_recorded_child_stopped(&s.join("child-diff")),
+        "the stalled diff's descendant is still running"
+    );
+    let mode = &records[0].2;
+    assert!(mode.requires_supervision(), "{mode:?}");
+    assert!(
+        matches!(&mode.source, ModeSource::Unset { withheld: Some(why) }
+            if why.contains("could not be read")),
+        "{mode:?}"
+    );
+
+    // Control: unstalled, the files are read and an ordinary change keeps
+    // the default.
+    std::fs::write(s.join("stall"), "none").unwrap();
+    let mut records = defaulted();
+    crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(5), || {
+        checks.withdraw_unset_defaults(&mut records, &tip)
+    });
+    assert!(records[0].2.is_project_default(), "{:?}", records[0].2);
+    assert!(
+        !s.join("unbounded").exists(),
+        "a diff spawned without the check's deadline: {}",
+        std::fs::read_to_string(s.join("unbounded")).unwrap_or_default()
+    );
+}
