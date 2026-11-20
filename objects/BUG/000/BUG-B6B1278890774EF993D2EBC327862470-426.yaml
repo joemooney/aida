@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-20T23:19:37.876673952Z
+modified_at: 2026-11-20T23:20:29.566138855Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -485,6 +485,26 @@ comments:
   created_at: 2026-11-20T23:17:09.002678318Z
   modified_at: 2026-11-20T23:17:09.002678318Z
   session_id: 01a1fb1ceb86
+- id: 01a1fb43-1d13-73a0-8cdb-06b3e5ad7c4f
+  author: joe
+  content: |-
+    ADVISOR CAP RULING (advisor-121, 16:35): r4 at 0ab2fa4 had 4 findings (1 blocking durability). Round 5 is a cap exception for exactly these 4, DELTA review only; clean means merge.
+
+    # CAP-EXCEPTION brief: BUG-2662 / PR #4378 round 5 (FOUR items; DELTA review only)
+
+    Advisor: claude-advisor-121, 2026-11-20 16:35 MST. Head reviewed: 0ab2fa4. Lane: CLAUDE+Fable. COMMIT your work. A clean delta means it merges; no more rounds.
+     1 [durability] store.rs:1157 a sync_data failure is UNCERTAIN, never Appended: do not publish or clear the claim; return an error that keeps the receipt;
+       an identical retry RE-SYNCS (fsync the ledger, and the directory where needed) before returning Unchanged. Regression with an injected sync failure.
+     2 review_commands.rs:3519 announce exactly once: claim the announcement mark atomically (create_new) UNDER the ledger lock before emitting; a crash between
+       claim and emit is recovered by re-emitting when the mark is claimed but the emit confirmation is absent (two-phase: pending, then done).
+     3 :3524 use a fallible emit; mark done only after the append succeeds; on failure leave it pending so a retry re-announces.
+     4 review_authority.rs HumanReceiptSettlement::receipt_id: if removing the old unreferenced receipt fails, reuse it (adopt) or refuse; never overwrite
+       the slot reservation and lose the recovery pointer.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-20T23:20:29.566138855Z
+  modified_at: 2026-11-20T23:20:29.566138855Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
