@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T22:50:07.258703372Z
+modified_at: 2026-11-20T22:56:37.201839061Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -294,6 +294,19 @@ comments:
   modified_at: 2026-11-20T22:42:50.933559742Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb2d-1151-7431-9d95-496200cd2f0c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f0d4294dc3 (CI-fix on slice 1 / PR #4376; one-sentence doc change over db59d813f9).
+    Fix: docs/cli/06-roles-sessions.md:1903 cited a bare `--all` inside a section still scoped to `aida own` by the manual verifier; it now cites `aida review draft list --all` in full, the same form as line 1900 which CI already resolved.
+    Evidence: python ratchet tests (ratchet set, structural guards, store-writer inventory, verify-manual) OK; verify-manual --static OK; check-store-writers.py OK (3834 sites reconciled, no new unclassified site); cargo build of aida exit 0 via lane job.
+    Not run: the dynamic verify-manual pass (the lane job's binary is not readable from the seat) and a complete make check-ci-fast (exceeds the 60s tool-call cap; the first five fast gates passed before the cut). CI at the new head is the evidence for both.
+    Probes: no other bare flag was added by this branch's doc diff; no test pins the edited sentence. Residual risk: none beyond the unrun gates.
+  created_at: 2026-11-20T22:56:37.201839061Z
+  modified_at: 2026-11-20T22:56:37.201839061Z
+  session_id: 01a1fb26e77a
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
