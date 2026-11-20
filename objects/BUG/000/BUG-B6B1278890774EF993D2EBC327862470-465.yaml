@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T16:23:13.091619528Z
+modified_at: 2026-11-20T18:36:36.798293208Z
 req_type: Bug
 tags:
 - admission
@@ -250,6 +250,13 @@ comments:
   created_at: 2026-11-20T16:23:13.091613882Z
   modified_at: 2026-11-20T16:23:13.091613882Z
   session_id: 01a1f9891835
+- id: 01a1fa3f-3627-7e21-bc36-fc34545b7a3f
+  author: joe
+  content: 'advisor-121 2026-11-20 11:42: LIVE EVIDENCE of admission starvation on the review path: review-watch logged ''watcher admission is busy'' 50 times today. #4365 went unreviewed for 3h (opened 08:31) and #4363 (this bug''s own r2) for 2h20m, while only one reviewer process was live. Both reviews launched by hand. The r2 fix must cover the review-watch admission path, not only ship/train.'
+  created_at: 2026-11-20T18:36:36.798293208Z
+  modified_at: 2026-11-20T18:36:36.798293208Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
