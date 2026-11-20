@@ -396,6 +396,13 @@ history:
   timestamp: 2026-11-20T17:16:59.391683594Z
   session_id: 01a1f9f08a5a
   changes: []
+- id: 01a1f9fc-f22a-7a63-9403-24f634268067
+  author: aida-session-start
+  timestamp: 2026-11-20T17:24:26.282409024Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 - id: 01a1fa23-b0c5-7d03-ab98-46c167418a70
   author: joe
   timestamp: 2026-11-20T18:06:45.445878789Z
