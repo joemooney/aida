@@ -1,0 +1,31 @@
+id: 01a1faf1-fab2-7931-b4ce-9cfff8712da3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1165
+title: 'Review follow-up: The pass budget equals the scheduler''s kill ceiling, so a slow pass is killed instead of d'
+description: |-
+  From STORY-2897
+  Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+  The pass budget equals the scheduler's kill ceiling, so a slow pass is killed instead of degrading. PASS_BUDGET is 120 s (main_watch.rs:52) and SCHEDULED_COMMAND_TIMEOUT is 120 s (maintenance_schedule.rs:3876). While an episode is open the scan does not stop at a green commit: every pass re-reads the checks of every commit since last_green, up to 50 (main_watch.rs:561-570), each costing several `gh api` calls, before advance() runs (line 637). In a long episode with many merges the child is killed during the scan on every pass, so confirmation, the fix spec, the fix-window escalation and the close never run, exactly when they matter. The fetch and git calls (30 s each) are also outside the forge deadline. Suggested fix: make PASS_BUDGET clearly shorter than the job timeout, and run the time-based part of advance() before or independently of the full rescan (or cache verdicts of commits already judged green/red at a completed attempt).
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T21:52:04.786390252Z
+modified_at: 2026-11-20T21:52:04.786390252Z
+req_type: Task
+tags:
+- carried-from:STORY-2897
+- finding-hash:24eeb1f1
+- from-review:STORY-2897
+relationships:
+- rel_type: References
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-20T21:52:04.786437928Z
+filed_at:
+  code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+  branch: pr-4362
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1faec8fa5

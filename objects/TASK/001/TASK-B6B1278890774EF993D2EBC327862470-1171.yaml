@@ -1,0 +1,31 @@
+id: 01a1faf2-03cd-7d43-9510-9b3d50fee54e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1171
+title: 'Review follow-up: The smoke spool can lose an entry. note_smoke_failure appends to the spool without a lock '
+description: |-
+  From STORY-2897
+  Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+  The smoke spool can lose an entry. note_smoke_failure appends to the spool without a lock precisely while a pass holds the watch lock (main_watch.rs:1230-1239), and that pass's replay_smoke_spool reads the file and then rewrites or removes it (lines 1279-1311). An entry appended between the read and the write/remove is dropped, although the build output said it was kept.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T21:52:07.117074996Z
+modified_at: 2026-11-20T21:52:07.117074996Z
+req_type: Task
+tags:
+- carried-from:STORY-2897
+- finding-hash:e2d5579f
+- from-review:STORY-2897
+relationships:
+- rel_type: References
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-20T21:52:07.117113752Z
+filed_at:
+  code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+  branch: pr-4362
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1faec8fa5

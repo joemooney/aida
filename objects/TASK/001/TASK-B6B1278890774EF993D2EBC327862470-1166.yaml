@@ -1,0 +1,31 @@
+id: 01a1faf1-fc35-7e70-981a-b6dcc983f147
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1166
+title: 'Review follow-up: A watch that keeps failing is silent. A corrupt state file (`fix or remove it`, main_watch'
+description: |-
+  From STORY-2897
+  Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+  A watch that keeps failing is silent. A corrupt state file (`fix or remove it`, main_watch.rs:332-339), an invalid journal line (read_journal fails flush at line 553), a failing `git fetch` (history, line 1462) or lapsed gh credentials fail every pass, and the only record is the schedule ledger: .aida/config.toml adds no `on = ["CronJobFailed:red-main-watch"]` route job, unlike hub-drift-guard, landing-health-guard, dev-autopromote and the other guards. A red main is then never reported and nobody is told the watch is down.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T21:52:05.173596810Z
+modified_at: 2026-11-20T21:52:05.173596810Z
+req_type: Task
+tags:
+- carried-from:STORY-2897
+- finding-hash:1cb426b7
+- from-review:STORY-2897
+relationships:
+- rel_type: References
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-20T21:52:05.173635867Z
+filed_at:
+  code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+  branch: pr-4362
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1faec8fa5

@@ -1,0 +1,31 @@
+id: 01a1faf2-0551-7021-824c-1644f1a133b7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1172
+title: 'Review follow-up: Two test gaps. (1) The `aida dev build` call site (dev_build.rs:898-915: note_smoke_failur'
+description: |-
+  From STORY-2897
+  Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+  Two test gaps. (1) The `aida dev build` call site (dev_build.rs:898-915: note_smoke_failure on a smoke failure, and the `kept for its next pass` text) has no test; the tests call note_smoke_failure directly. (2) no_merge_or_landing_path_reads_or_calls_the_red_main_watch exempts all of land.rs once the file contains `LandCommand::Watch`, so a second main_watch use elsewhere in land.rs would pass; count the references or check the enclosing match arm instead.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T21:52:07.505106693Z
+modified_at: 2026-11-20T21:52:07.505106693Z
+req_type: Task
+tags:
+- carried-from:STORY-2897
+- finding-hash:0e8bbc84
+- from-review:STORY-2897
+relationships:
+- rel_type: References
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-20T21:52:07.505147015Z
+filed_at:
+  code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+  branch: pr-4362
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1faec8fa5

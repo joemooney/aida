@@ -1,0 +1,31 @@
+id: 01a1faf1-f91b-7590-8a21-3f36232f079f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1164
+title: 'Review follow-up: Watch state is per checkout but the job is scheduled across clones. STATE/JOURNAL/SMOKE_SP'
+description: |-
+  From STORY-2897
+  Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+  Watch state is per checkout but the job is scheduled across clones. STATE/JOURNAL/SMOKE_SPOOL live under find_project_root() (main_watch.rs:38-42, land.rs:1573), while the `red-main-watch` job (.aida/config.toml:231-235) has no seat or primary-checkout restriction and its cadence is deduplicated by the cross-clone store ledger (maintenance_schedule.rs:357-359). Each clone or host whose timer tick runs the job keeps its own episode: it opens the same red again, restarts the 30-minute clock, asks for another re-run of the same CI run (reruns_done is local), and writes its own journal, so `aida land metrics` in any one checkout under-reports. On hosts with separate store clones the tag dedup in file_fix_spec_locked/human_open_locked can file a second fix bug and attention item before the stores sync. `aida dev build` notes a smoke failure in layout.repo, which need not be the checkout that holds the episode. Suggested fix: keep the watch files in one shared place (the primary checkout or the store) or restrict the job to the primary checkout as the bridge jobs are (maintenance_schedule.rs:906).
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-20T21:52:04.379681074Z
+modified_at: 2026-11-20T21:52:04.379681074Z
+req_type: Task
+tags:
+- carried-from:STORY-2897
+- finding-hash:582c2bd3
+- from-review:STORY-2897
+relationships:
+- rel_type: References
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-20T21:52:04.379734241Z
+filed_at:
+  code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+  branch: pr-4362
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1faec8fa5
