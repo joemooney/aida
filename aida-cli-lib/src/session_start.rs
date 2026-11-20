@@ -111,20 +111,21 @@ pub(crate) fn review_anchor_matches_change(
 }
 
 /// Whether a review lease conflict must be decided without a prompt: this
-/// invocation's `--no-human` flag, `AIDA_HEADLESS`, or no terminal on stdin.
+/// invocation's `--no-human` flag, `AIDA_HEADLESS` (`headless_env`), or no
+/// terminal on stdin.
 /// The persistent no-human acknowledgement markers do not count: they
 /// outlive the unattended run that wrote them, and an attended pickup on the
 /// same machine still gets its prompt.
 // trace:BUG-1205 | ai:claude
 // trace:BUG-2684 | ai:claude
-pub(crate) fn review_conflict_cannot_prompt(no_human: bool) -> bool {
+pub(crate) fn review_conflict_cannot_prompt(no_human: bool, headless_env: bool) -> bool {
     #[cfg(test)]
     if test_attended_terminal::forced() {
         return review_conflict_cannot_prompt_from(no_human, false, true);
     }
     review_conflict_cannot_prompt_from(
         no_human,
-        std::env::var_os("AIDA_HEADLESS").is_some(),
+        headless_env,
         std::io::IsTerminal::is_terminal(&std::io::stdin()),
     )
 }
@@ -3086,7 +3087,10 @@ pub(crate) fn session_start_with_receipt(
                 // automatically (the option a human would pick); a LIVE lease
                 // refuses with a typed message instead of a silent cancel.
                 // trace:BUG-1205 | ai:claude
-                let headless = review_conflict_cannot_prompt(no_human);
+                let headless = review_conflict_cannot_prompt(
+                    no_human,
+                    std::env::var_os("AIDA_HEADLESS").is_some(),
+                );
                 // trace:TASK-3420 | ai:codex
                 let is_live = crate::ownership::reader::lease_retained(&project_root, l);
                 // A provably dead lease whose tree is gone holds nothing a

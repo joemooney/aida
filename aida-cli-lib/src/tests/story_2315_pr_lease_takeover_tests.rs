@@ -706,21 +706,33 @@ fn bug2450_unrelated_host_branches_do_not_block_end_or_reclaim() {
 // Exercise session_start's AutoEnd -> Bail wiring, rather than calling the
 // notification helper directly. Both attempts must preserve the same lease.
 // trace:BUG-2450 | ai:codex
+//
+// BUG-2684: the third case runs the same conflict at an attended terminal
+// (no AIDA_HEADLESS, a tty on stdin) with this invocation's `--no-human`:
+// the conflict loop still decides from the substrate. A prompt there would
+// read stdin and exit the process. The persistent no-human acknowledgement
+// alone does not take the prompt away from an attended pickup.
+// trace:BUG-2684 | ai:claude
 #[test]
 fn bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
-    for dirty in [true, false] {
+    for (dirty, attended_no_human) in [(true, false), (false, false), (true, true)] {
         let fx = shipped_lane();
         let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
             &fx.main,
             None,
             &[
                 ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
-                ("AIDA_HEADLESS", Some("1")),
+                if attended_no_human {
+                    ("AIDA_NO_HUMAN_ACKNOWLEDGED", Some("1"))
+                } else {
+                    ("AIDA_HEADLESS", Some("1"))
+                },
             ],
         );
+        let _attended = attended_no_human.then(crate::session_start::test_attended_terminal::force);
         std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
         std::fs::write(
             fx.main.join(".aida/config.toml"),
@@ -732,6 +744,17 @@ fn bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease() {
         crate::test_exec::write_executable(&bin.join("gh"), "#!/bin/sh\nprintf 'feat\\n'\n");
         let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
         ambient.set_key("PATH", path);
+        if attended_no_human {
+            // The acknowledgement is on record, yet an attended pickup that
+            // did not pass `--no-human` may still be asked.
+            assert!(crate::drain_gate::no_human_ack_source().is_some());
+            assert!(!crate::session_start::review_conflict_cannot_prompt(
+                false, false
+            ));
+            assert!(crate::session_start::review_conflict_cannot_prompt(
+                true, false
+            ));
+        }
         if dirty {
             std::fs::write(fx.seat.join("precious.txt"), "keep dirty work").unwrap();
         } else {
@@ -743,28 +766,58 @@ fn bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease() {
         let original = toml::to_string(&lease).unwrap();
         std::fs::write(&path, &original).unwrap();
         for _ in 0..2 {
-            let error = crate::session_start::session_start(
-                "PR-42",
-                None,
-                None,
-                false,
-                None,
-                Some("github"),
-                "plain",
-                false,
-                None,
-                false,
-                None,
-                None,
-                false,
-                Some("reviewer".into()),
-                false,
-                Some(false),
-                false,
-                None,
-                false,
-            )
-            .unwrap_err();
+            let started = if attended_no_human {
+                crate::session_start::session_start_with_receipt(
+                    "PR-42",
+                    None,
+                    None,
+                    false,
+                    None,
+                    Some("github"),
+                    "plain",
+                    false,
+                    None,
+                    false,
+                    None,
+                    None,
+                    false,
+                    Some("reviewer".into()),
+                    /* force_claim */ false,
+                    /* use_pool */ Some(false),
+                    /* self_claim */ false,
+                    /* review_coexistence */ None,
+                    /* contained_seat */ false,
+                    /* rollback_failed_setup */ false,
+                    crate::session_start::PathReentry::None,
+                    None,
+                    /* done_rework_admitted */ false,
+                    /* no_human */ true,
+                )
+                .map(|mut receipt| receipt.disarm())
+            } else {
+                crate::session_start::session_start(
+                    "PR-42",
+                    None,
+                    None,
+                    false,
+                    None,
+                    Some("github"),
+                    "plain",
+                    false,
+                    None,
+                    false,
+                    None,
+                    None,
+                    false,
+                    Some("reviewer".into()),
+                    false,
+                    Some(false),
+                    false,
+                    None,
+                    false,
+                )
+            };
+            let error = started.unwrap_err();
             assert!(format!("{error:#}").contains(&lease.id), "{error:#}");
             assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
             assert!(fx.seat.join("precious.txt").exists());
@@ -777,90 +830,6 @@ fn bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease() {
         );
         assert!(messages[0].body.contains(&lease.id));
     }
-}
-
-/// BUG-2684: this invocation's `--no-human` decides a review lease conflict
-/// from the substrate even at an attended terminal, and the persistent
-/// no-human acknowledgement alone does not take the prompt away from an
-/// attended pickup. Driven through session start's conflict loop: a prompt
-/// here would read stdin and exit the process.
-// trace:BUG-2684 | ai:claude
-#[test]
-fn bug_2684_no_human_review_conflict_is_decided_without_a_prompt() {
-    if crate::test_env::run_path_isolated_test() {
-        return;
-    }
-    let fx = shipped_lane();
-    let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
-        &fx.main,
-        None,
-        &[
-            ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
-            ("AIDA_NO_HUMAN_ACKNOWLEDGED", Some("1")),
-        ],
-    );
-    let _attended = crate::session_start::test_attended_terminal::force();
-    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
-    std::fs::write(
-        fx.main.join(".aida/config.toml"),
-        "[worktree_pool]\nenabled = false\n",
-    )
-    .unwrap();
-    std::fs::write(fx.main.join(".aida/no-human-acknowledged"), "").unwrap();
-    let bin = fx._tmp.path().join("bin");
-    std::fs::create_dir(&bin).unwrap();
-    crate::test_exec::write_executable(&bin.join("gh"), "#!/bin/sh\nprintf 'feat\\n'\n");
-    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
-    ambient.set_key("PATH", path);
-
-    // The acknowledgement is on record, yet an attended pickup that did not
-    // pass `--no-human` may still be asked.
-    assert!(crate::drain_gate::no_human_ack_source().is_some());
-    assert!(!crate::session_start::review_conflict_cannot_prompt(false));
-    assert!(crate::session_start::review_conflict_cannot_prompt(true));
-
-    std::fs::write(fx.seat.join("precious.txt"), "keep dirty work").unwrap();
-    let lease = exited_lease(&fx);
-    let path = crate::lease_path(&fx.main, &lease.id);
-    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-    let original = toml::to_string(&lease).unwrap();
-    std::fs::write(&path, &original).unwrap();
-    let error = crate::session_start::session_start_with_receipt(
-        "PR-42",
-        None,
-        None,
-        false,
-        None,
-        Some("github"),
-        "plain",
-        false,
-        None,
-        false,
-        None,
-        None,
-        false,
-        Some("reviewer".into()),
-        /* force_claim */ false,
-        /* use_pool */ Some(false),
-        /* self_claim */ false,
-        /* review_coexistence */ None,
-        /* contained_seat */ false,
-        /* rollback_failed_setup */ false,
-        crate::session_start::PathReentry::None,
-        None,
-        /* done_rework_admitted */ false,
-        /* no_human */ true,
-    )
-    .err()
-    .expect("the unsafe exited lease is retained, not prompted over");
-    // The dead-lease end was planned and refused for the dirty seat: the
-    // substrate decision, with the same advisor notice a headless run sends.
-    assert!(format!("{error:#}").contains(&lease.id), "{error:#}");
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
-    assert!(fx.seat.join("precious.txt").exists());
-    let messages = aida_core::mailbox::read_local_messages(&fx.main).unwrap();
-    assert_eq!(messages.len(), 1);
-    assert!(messages[0].body.contains(&lease.id));
 }
 
 /// BUG-2684: `aida queue work --no-human` hands its flag to session start as
