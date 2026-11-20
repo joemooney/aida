@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T02:21:26.711901394Z
+modified_at: 2026-11-20T02:25:13.090276595Z
 req_type: Story
 tags:
 - landing
@@ -121,6 +121,18 @@ comments:
   modified_at: 2026-11-20T02:18:47.931723126Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6c5-af82-7242-a16b-0b71b1744a71
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8ce83d229b + uncommitted fast-gate fix (one line).
+    Fix: aida-cli-lib/src/gate/tests/story_2884_unset_mode_tests.rs:117 fixture path "docs/x.md" -> "notes/x.md". check-doc-paths.py read the old literal as a missing doc (same false positive as BUG-2696). The new path is outside docs/ and outside GATE_PROTECTED_PATHS, so drain_default_matrix still tests an ordinary, unprotected change.
+    Evidence: the CI 'Documentation audience coverage' step body run locally passes (0 invalid references). scripts/check-store-writers.py passes and this edit adds no store writer.
+    Residual: in this seat, make check-ci-fast stops at 'Containment conformance evidence tests', which this sandbox fails because it cannot create /tmp tempdirs or network namespaces. That gate and the ones after it, including check-ratchets, did not run here. The change is a string literal in one test, so it cannot affect compilation.
+  created_at: 2026-11-20T02:25:13.090276595Z
+  modified_at: 2026-11-20T02:25:13.090276595Z
+  session_id: 01a1f6c20e50
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
   author: joe
