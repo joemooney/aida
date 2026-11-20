@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T18:49:59.802203681Z
+modified_at: 2026-11-20T19:38:46.366017340Z
 req_type: Story
 tags:
 - landing
@@ -773,6 +773,14 @@ comments:
   created_at: 2026-11-20T18:49:59.802203681Z
   modified_at: 2026-11-20T18:49:59.802203681Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa78-22ec-7852-b74b-85fef8fb37fa
+  author: joe
+  content: |
+    S3 #4362 CI fix pushed at 4578245cc96 (that one change only): human_resolve_locked now completes the attention item through crate::completion::transition_to_completed (persist writes the completed copy back and saves under the zero-wait store lock; queue removal unchanged). story_1418_completion_seam 14/14 locally, main_watch 43/43, check-ci-fast exit 0. Diff: main_watch.rs (+19/-4) and the regenerated store-writers inventory (+1 sink line for the new save site). ci:full relabelled after the push run started.
+  created_at: 2026-11-20T19:38:46.366017340Z
+  modified_at: 2026-11-20T19:38:46.366017340Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
