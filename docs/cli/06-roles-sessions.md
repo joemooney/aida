@@ -1265,6 +1265,37 @@ hours also apply.
 
 `--vendor` uses the ordinary queue-work vendor selection when omitted.
 
+#### Pausing review launches
+
+An unseated operator or an advisor with a valid grant can run
+`aida review watch pause --reason "landing-driver cutover" --for 1h`.
+`--for` accepts seconds or a duration such as `30m` or `2h`. The default and
+maximum come from `[review] watch_pause_default` and `[review] watch_pause_max`
+in `.aida/config.toml` (1h and 24h when unset; the maximum cannot exceed 7 days).
+A second pause replaces the current deadline and records a new audit event.
+`aida review watch status` shows the effective pause and outstanding review
+reservations. `aida review watch resume` clears an active pause.
+
+The pause is a record, not a lock. Watchers that share the project's
+main-worktree runtime read it where they would launch a new review and skip
+the launch, logging who paused and why. A reserved dispatcher checks again
+before it starts queue work. Already launched queue work and its reviewers
+continue to completion. Merge-train member reservations, reaping and
+stale-head reconciliation are unaffected.
+The versioned local journal at `.aida/review-watch/pause.json` survives watcher
+restart and retains the latest 256 pause, resume and expiry events. Pause
+records include the actor, reason, issue time and expiry time; resume records
+include the actor. A pause expires on its own at its deadline, and the expiry
+is recorded the next time a watcher or `status` reads the pause.
+
+For the landing-driver cutover, pause review launches before stopping the
+legacy controllers through their supervisor and confirming their descendants
+have exited. A live controller retains its land-exclusion lock during a pause.
+On rollback, stop the land driver and confirm its descendants have exited,
+then use `aida review watch resume` before restarting the legacy review
+watcher. Restored launches still require the ordinary grant, controller and
+review checks. <!-- trace:BUG-2650 | ai:claude -->
+
 A refusal or setup failure for one change is reported against that change and
 leaves the watcher processing the other changes in the same pass, including
 with `--once`. The reason is visible in `aida awaiting`; observed pickup exits
