@@ -633,19 +633,37 @@ mod standalone_review_verdict_parent_tests {
             findings: &[String],
             reviewer: Option<&VerifiedReviewer>,
         ) -> Result<()> {
+            self.record_as(
+                "STORY-77",
+                verdict,
+                "complete child rationale",
+                findings,
+                reviewer,
+            )
+        }
+        /// [`Self::record`] for any spec PR-59 covers, with its own summary.
+        // trace:BUG-2662 | ai:claude
+        fn record_as(
+            &self,
+            spec: &str,
+            verdict: &str,
+            summary: &str,
+            findings: &[String],
+            reviewer: Option<&VerifiedReviewer>,
+        ) -> Result<()> {
             crate::with_review_pr_subject(
                 crate::ReviewPrSubject {
                     head_ref: "feature".into(),
-                    commit_subjects: vec!["change (STORY-77)".into()],
+                    commit_subjects: vec!["change (STORY-77)".into(), "more (STORY-78)".into()],
                 },
                 || {
                     crate::handle_review_record_context_at(
                         self.root.clone(),
-                        "STORY-77",
+                        spec,
                         verdict,
                         Some(&self.head),
                         Some("feature"),
-                        Some("complete child rationale"),
+                        Some(summary),
                         findings,
                         &[],
                         Some(59),
@@ -655,6 +673,26 @@ mod standalone_review_verdict_parent_tests {
                     )
                 },
             )
+        }
+        fn backend(&self) -> aida_core::CachedGitBackend {
+            let store = crate::detect_distributed_store_from(&self.root).unwrap();
+            crate::test_env::home_fixture_cached_backend(
+                &store,
+                &aida_core::CachedGitBackend::default_cache_path(&store),
+            )
+            .unwrap()
+        }
+        /// Every requirement in the store as `(id, description)`, sorted.
+        fn store_rows(&self) -> Vec<(String, String)> {
+            let mut rows: Vec<_> = self
+                .backend()
+                .list_requirements(true)
+                .unwrap()
+                .into_iter()
+                .map(|r| (r.id.to_string(), r.description))
+                .collect();
+            rows.sort();
+            rows
         }
     }
     #[cfg(unix)]
@@ -782,10 +820,9 @@ mod standalone_review_verdict_parent_tests {
         launch.read().unwrap()
     }
     /// The p18 shape (PR #4218, 2026-11-17): APPROVED with two deferred P3s
-    /// whose delivery failed after the barrier was written. Retrying the same
-    /// handoff completes the approval at the head; it never re-records the
-    /// barrier.
-    // trace:BUG-2564 | ai:claude
+    /// whose delivery failed. The failed attempt records nothing (BUG-2662),
+    /// and retrying the same handoff records the approval at the head.
+    // trace:BUG-2564 trace:BUG-2662 | ai:claude
     #[test]
     fn standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery() {
         if crate::test_env::run_path_isolated_test() {
@@ -796,16 +833,19 @@ mod standalone_review_verdict_parent_tests {
         let draft = approved_with_deferred(&f, &launch);
         let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
         crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
-        assert!(f
+        let error = f
             .record(&draft.verdict, &draft.findings, Some(&reviewer))
-            .is_err());
-        let pending = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
-        assert_eq!(
-            pending.kind,
-            rv::VerdictKind::RequestChanges,
-            "barrier stands"
+            .unwrap_err();
+        // The top-level message names the cause, not only the failed step.
+        let error = error.to_string();
+        assert!(
+            error.contains("deferred findings were not filed"),
+            "{error}"
         );
-        // The launch's own barrier is replay evidence, not a legacy conflict.
+        assert!(
+            crate::gate::ledger::project::verdict_records(&f.root, "PR-59").is_empty(),
+            "a failed approval records no verdict"
+        );
         rv::check_draft_legacy_conflicts(
             &f.root,
             &f.root,
@@ -836,6 +876,956 @@ mod standalone_review_verdict_parent_tests {
             crate::gate::ledger::project::verdict_records(&f.root, "PR-59").len(),
             before
         );
+    }
+    /// Every verdict event on PR-59's ledger, oldest first.
+    // trace:BUG-2662 | ai:claude
+    fn verdict_events(f: &Fixture) -> Vec<rv::JsonObj> {
+        let store = crate::gate::ledger::store_root(&f.root).unwrap();
+        crate::gate::ledger::store::read_file(&store, crate::gate::ledger::ChangeKey::pr(59))
+            .iter()
+            .filter_map(|e| e.verdict_record().cloned())
+            .collect()
+    }
+    /// Append `record` to PR-59's ledger for STORY-77, as another seat's
+    /// earlier write.
+    fn seed_verdict(f: &Fixture, record: serde_json::Value) {
+        let store = crate::gate::ledger::store_root(&f.root).unwrap();
+        let change = crate::gate::ledger::ChangeKey::pr(59);
+        let spec = crate::gate::ledger::GateSpec::resolve(&f.root, "STORY-77");
+        let event = crate::gate::ledger::event::verdict_event(
+            &store,
+            change,
+            record.as_object().unwrap(),
+            Some(&spec),
+        );
+        crate::gate::ledger::store::append(&store, change, vec![event]).unwrap();
+    }
+    fn word(record: &rv::JsonObj) -> &str {
+        record["verdict"].as_str().unwrap()
+    }
+    /// One `review record --verdict approved` is exactly one verdict event,
+    /// and an identical repeat adds none.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_one_approval_is_one_verdict_event_and_a_repeat_adds_none() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let reviewer = f.reviewer().unwrap();
+        f.record("approved", &[], Some(&reviewer)).unwrap();
+        let events = verdict_events(&f);
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert_eq!(word(&events[0]), "approved");
+        // The one record is the handshake the orchestrator reads.
+        assert_eq!(events[0]["mode"], crate::gate::ledger::project::PHASE3_MODE);
+        assert!(events[0]["release_grant"].is_object());
+        f.record("approved", &[], Some(&reviewer)).unwrap();
+        assert_eq!(
+            verdict_events(&f),
+            events,
+            "an unchanged record writes nothing"
+        );
+    }
+    /// The PR #4218 shape: the standing record is another reviewer's
+    /// delivery-pending barrier (shown as CHANGES REQUESTED) carrying a
+    /// deferred finding. One approval that inherits the finding appends one
+    /// approved event and no request-changes event; a repeat adds none.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_approval_over_pending_barrier_writes_one_approved_event() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let finding: serde_json::Value = serde_json::from_str(&deferred(1)).unwrap();
+        seed_verdict(
+            &f,
+            serde_json::json!({"verdict":"request-changes","sweep_pending":true,
+                "reviewed_sha":f.head,"recorded_by":"codex reviewer seat",
+                "recorded_at":"2026-11-17T17:40:00+00:00","summary":"barrier",
+                "findings":[finding["text"]],
+                "finding_dispositions":[{"severity":finding["severity"],
+                    "disposition":finding["disposition"],"rationale":finding["rationale"]}]}),
+        );
+        assert_eq!(
+            rv::read_recorded_verdict(&f.root, "PR-59").unwrap().kind,
+            rv::VerdictKind::RequestChanges
+        );
+        let reviewer = f.reviewer().unwrap();
+        f.record("approved", &[], Some(&reviewer)).unwrap();
+        let events = verdict_events(&f);
+        assert_eq!(events.len(), 2, "{events:?}");
+        assert_eq!(word(&events[1]), "approved");
+        assert_ne!(events[1].get("sweep_pending"), Some(&true.into()));
+        assert_eq!(events[1]["findings"], serde_json::json!(["P3 follow-up 1"]));
+        let recorded = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(recorded.kind, rv::VerdictKind::Approved);
+        f.record("approved", &[], Some(&reviewer)).unwrap();
+        assert_eq!(
+            verdict_events(&f),
+            events,
+            "an unchanged record writes nothing"
+        );
+    }
+    /// The PR #4290 shape: a reviewer's request-changes stands at the head and
+    /// an approval carrying a deferred finding cannot file it. The refused
+    /// approval writes no event (the refusal on record is still the other
+    /// reviewer's), the error names the cause, and a retry records once.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_refused_approval_over_standing_refusal_writes_nothing() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        seed_verdict(
+            &f,
+            serde_json::json!({"verdict":"request-changes","reviewed_sha":f.head,
+                "recorded_by":"codex reviewer seat",
+                "recorded_at":"2026-11-19T13:00:00+00:00","summary":"one blocker",
+                "findings":["blocker"]}),
+        );
+        let seeded = verdict_events(&f);
+        let reviewer = f.reviewer().unwrap();
+        crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
+        let error = f
+            .record("approved", &[deferred(1)], Some(&reviewer))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("could not write the review verdict"),
+            "{error}"
+        );
+        assert!(
+            error.contains("deferred findings were not filed"),
+            "{error}"
+        );
+        assert_eq!(
+            verdict_events(&f),
+            seeded,
+            "a refused approval writes nothing"
+        );
+        let standing = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(standing.kind, rv::VerdictKind::RequestChanges);
+        assert_eq!(standing.recorded_by.as_deref(), Some("codex reviewer seat"));
+        f.record("approved", &[deferred(1)], Some(&reviewer))
+            .unwrap();
+        let events = verdict_events(&f);
+        assert_eq!(events.len(), 2, "{events:?}");
+        assert_eq!(word(&events[1]), "approved");
+    }
+    /// Every event on PR-59's ledger, of any kind, oldest first.
+    // trace:BUG-2662 | ai:claude
+    fn ledger_events(f: &Fixture) -> Vec<crate::gate::ledger::GateEvent> {
+        let store = crate::gate::ledger::store_root(&f.root).unwrap();
+        crate::gate::ledger::store::read_file(&store, crate::gate::ledger::ChangeKey::pr(59))
+    }
+    /// PR-59's ledger file, byte for byte.
+    fn ledger_bytes(f: &Fixture) -> Vec<u8> {
+        let store = crate::gate::ledger::store_root(&f.root).unwrap();
+        std::fs::read(crate::gate::ledger::store::ledger_file(
+            &store,
+            crate::gate::ledger::ChangeKey::pr(59),
+        ))
+        .unwrap()
+    }
+    /// The spec labels of PR-59's verdict events, oldest first.
+    fn verdict_labels(f: &Fixture) -> Vec<Option<String>> {
+        ledger_events(f)
+            .into_iter()
+            .filter(|e| e.verdict_record().is_some())
+            .map(|e| e.spec)
+            .collect()
+    }
+    /// How many review-verdict coordination events the fixture has emitted.
+    fn announced(f: &Fixture) -> usize {
+        crate::events::read_all(&f.root)
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e.kind,
+                    crate::events::EventKind::ReviewVerdictRecorded { .. }
+                )
+            })
+            .count()
+    }
+    /// Run `hook` once, as a writer racing the next review append: after the
+    /// command made its reads and before the append takes its locks.
+    fn race_next_append(hook: impl Fn() + 'static) -> impl Drop {
+        struct Unhook;
+        impl Drop for Unhook {
+            fn drop(&mut self) {
+                crate::gate::ledger::store::REVIEW_APPEND_HOOK.with(|h| h.borrow_mut().take());
+            }
+        }
+        let fired = std::cell::Cell::new(false);
+        crate::gate::ledger::store::REVIEW_APPEND_HOOK.with(|h| {
+            *h.borrow_mut() = Some(Box::new(move |_, locked| {
+                if !locked && !fired.replace(true) {
+                    hook();
+                }
+            }))
+        });
+        Unhook
+    }
+    /// A PR covering two specs: after STORY-77 is approved, the same
+    /// reviewer's same summary, head and findings for STORY-78 is that spec's
+    /// first review, not a repeat. It gets its own event, binding and
+    /// follow-up delivery.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_same_review_for_a_sibling_spec_is_not_a_repeat() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let mut sibling = aida_core::Requirement::new("sibling change".into(), "fixture".into());
+        sibling.spec_id = Some("STORY-78".into());
+        f.backend().add_requirement(sibling).unwrap();
+        let reviewer = f.reviewer().unwrap();
+        let approve = |spec: &str| {
+            f.record_as(
+                spec,
+                "approved",
+                "complete child rationale",
+                &[deferred(1)],
+                Some(&reviewer),
+            )
+        };
+        approve("STORY-77").unwrap();
+        assert_eq!(verdict_labels(&f), [Some("STORY-77".to_string())]);
+        let filed_for_first = f.store_rows();
+        approve("STORY-78").unwrap();
+        assert_eq!(
+            verdict_labels(&f),
+            [Some("STORY-77".to_string()), Some("STORY-78".to_string())],
+            "the sibling spec's first review is recorded"
+        );
+        let store = crate::gate::ledger::store_root(&f.root).unwrap();
+        assert!(
+            crate::gate::ledger::project::changes_for_spec(&store, "STORY-78")
+                .contains(&crate::gate::ledger::ChangeKey::pr(59)),
+            "the sibling spec is bound to the change"
+        );
+        assert!(
+            rv::read_recorded_verdict(&f.root, "STORY-78")
+                .unwrap()
+                .kind
+                .approves(),
+            "the sibling spec answers for itself"
+        );
+        let filed_for_both = f.store_rows();
+        assert_ne!(
+            filed_for_both, filed_for_first,
+            "the sibling spec's follow-up is filed under its own source"
+        );
+        // STORY-78's approval now stands for the change: its repeat writes
+        // nothing, and STORY-77's is a new round rather than "unchanged".
+        let before = ledger_bytes(&f);
+        approve("STORY-78").unwrap();
+        assert_eq!(ledger_bytes(&f), before);
+        assert_eq!(f.store_rows(), filed_for_both);
+        approve("STORY-77").unwrap();
+        assert_eq!(verdict_labels(&f).len(), 3);
+    }
+    /// A refusal that carries a deferred follow-up beside a blocking finding
+    /// is one verdict event however its filing goes: a retry after a failed
+    /// filing, and a repeat after a successful one, file against the refusal
+    /// that stands and write no second event.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_mixed_refusal_retry_keeps_one_verdict_event() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let config = f.root.join(".aida/config.toml");
+        let original = std::fs::read_to_string(&config).unwrap_or_default();
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::write(
+            &config,
+            format!("{original}\n[review]\nblocking_tiers = [\"p1\"]\n"),
+        )
+        .unwrap();
+        crate::review_blocking::commit_config_for_test(&f.root);
+        let findings = [
+            serde_json::json!({"text":"blocking defect","severity":"major","blocking_tier":"p1"})
+                .to_string(),
+            crate::review_blocking::tests::p2_finding(),
+        ];
+        let reviewer = f.reviewer().unwrap();
+        let refuse = || f.record("request-changes", &findings, Some(&reviewer));
+        let rows_before = f.store_rows();
+        crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
+        let error = refuse().unwrap_err().to_string();
+        assert!(error.contains("deferred findings pending"), "{error}");
+        let events = verdict_events(&f);
+        assert_eq!(events.len(), 1, "{events:?}");
+        assert_eq!(word(&events[0]), "request-changes");
+        assert_eq!(f.store_rows(), rows_before, "the filing failed");
+        assert_eq!(announced(&f), 0, "the failed recording announced nothing");
+        // The retry files against the refusal on record and protects the PR.
+        refuse().unwrap();
+        assert_eq!(announced(&f), 1, "the completed recording is announced");
+        assert_eq!(
+            verdict_events(&f),
+            events,
+            "a retried filing writes no second verdict event"
+        );
+        let rows_filed = f.store_rows();
+        assert!(
+            rows_filed.len() > rows_before.len(),
+            "the follow-up is filed"
+        );
+        assert!(crate::gate::merge_hold_core::read_hold(&f.root, 59).is_some());
+        // A repeat after a successful filing changes nothing at all.
+        let ledger = ledger_bytes(&f);
+        refuse().unwrap();
+        assert_eq!(ledger_bytes(&f), ledger);
+        assert_eq!(f.store_rows().len(), rows_filed.len());
+        assert_eq!(announced(&f), 1, "a repeat announces nothing");
+    }
+    /// A repeated refusal leaves the whole change ledger as it was: no second
+    /// verdict event and, while its hold stands, no second hold event. When
+    /// the hold is gone, the repeat restores it.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_repeated_refusal_leaves_the_change_ledger_unchanged() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let reviewer = f.reviewer().unwrap();
+        let refuse = || f.record("request-changes", &["blocker".into()], Some(&reviewer));
+        refuse().unwrap();
+        let holds = |f: &Fixture| {
+            ledger_events(f)
+                .iter()
+                .filter(|e| matches!(e.body, crate::gate::ledger::EventBody::Hold { .. }))
+                .count()
+        };
+        assert_eq!(verdict_events(&f).len(), 1);
+        assert_eq!(holds(&f), 1);
+        assert_eq!(announced(&f), 1);
+        let ledger = ledger_bytes(&f);
+        for _ in 0..2 {
+            refuse().unwrap();
+            assert_eq!(announced(&f), 1, "a repeat announces nothing");
+            assert_eq!(
+                ledger_bytes(&f),
+                ledger,
+                "a repeated refusal writes no verdict, hold or label event"
+            );
+        }
+        // Protection lost since the refusal is reconciled by its repeat.
+        let clearance = serde_json::json!({"cleared_by":"test","reason":"simulated loss"});
+        crate::gate::ledger::hold::release(&f.root, 59, clearance.as_object().unwrap().clone())
+            .unwrap();
+        assert!(crate::gate::merge_hold_core::read_hold(&f.root, 59).is_none());
+        refuse().unwrap();
+        assert!(crate::gate::merge_hold_core::read_hold(&f.root, 59).is_some());
+        assert_eq!(verdict_events(&f).len(), 1, "still one verdict event");
+        assert_eq!(holds(&f), 2);
+    }
+    /// A refusal recorded after a repeat made its reads and before its append
+    /// took the ledger locks: the repeat is decided under those locks against
+    /// the act standing then, so it is never reported as unchanged. A plain
+    /// approval is a new round; one with follow-ups already filed is refused.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_repeat_is_revalidated_under_the_ledger_lock() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        for findings in [vec![], vec![deferred(1)]] {
+            let f = Fixture::new();
+            let reviewer = f.reviewer().unwrap();
+            f.record("approved", &findings, Some(&reviewer)).unwrap();
+            assert_eq!(verdict_events(&f).len(), 1);
+            let root = f.root.clone();
+            let head = f.head.clone();
+            let _race = race_next_append(move || {
+                let store = crate::gate::ledger::store_root(&root).unwrap();
+                let change = crate::gate::ledger::ChangeKey::pr(59);
+                let refusal = serde_json::json!({"verdict":"request-changes",
+                    "reviewed_sha":head,"recorded_by":"codex reviewer seat",
+                    "recorded_at":"2026-11-20T19:00:00+00:00","findings":["blocker"]});
+                let event = crate::gate::ledger::event::verdict_event(
+                    &store,
+                    change,
+                    refusal.as_object().unwrap(),
+                    None,
+                );
+                crate::gate::ledger::store::append(&store, change, vec![event]).unwrap();
+            });
+            let repeated = f.record("approved", &findings, Some(&reviewer));
+            let words: Vec<String> = verdict_events(&f)
+                .iter()
+                .map(|r| word(r).to_string())
+                .collect();
+            if findings.is_empty() {
+                repeated.unwrap();
+                assert_eq!(words, ["approved", "request-changes", "approved"]);
+            } else {
+                let error = repeated.unwrap_err().to_string();
+                assert!(error.contains("another review was recorded"), "{error}");
+                assert_eq!(words, ["approved", "request-changes"]);
+                assert_eq!(
+                    rv::read_recorded_verdict(&f.root, "PR-59").unwrap().kind,
+                    rv::VerdictKind::RequestChanges
+                );
+            }
+        }
+    }
+    /// The human-review receipts in the fixture's AIDA home, sorted by id.
+    // trace:BUG-2662 | ai:claude
+    fn receipts(f: &Fixture) -> Vec<String> {
+        let dir = f.tmp.path().join("home/.aida/review-receipts");
+        let mut ids: Vec<String> = std::fs::read_dir(dir)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .filter_map(|e| {
+                        e.path()
+                            .file_stem()
+                            .map(|s| s.to_string_lossy().into_owned())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        ids.sort();
+        ids
+    }
+    /// The receipt each of PR-59's verdict events names, oldest first.
+    fn event_receipts(f: &Fixture) -> Vec<String> {
+        verdict_events(f)
+            .iter()
+            .map(|r| {
+                r[rv::ATTESTATION_KEY]["receipt_id"]
+                    .as_str()
+                    .expect("an operator approval names its receipt")
+                    .to_string()
+            })
+            .collect()
+    }
+    /// The operator at a terminal (the PR #4218 recorder). Two approvals that
+    /// differ are two events with their own receipts. A repeat answers with
+    /// the standing receipt: no event and no second receipt. When that
+    /// receipt is missing or no longer vouches for the commit, the repeat is
+    /// a new round under a new receipt, which is the one the record names.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_operator_repeat_reuses_a_valid_standing_receipt() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let approve = |summary: &str| {
+            let source = ra::IdentitySource {
+                session_ids: vec!["operator-terminal-session".into()],
+                ..Default::default()
+            };
+            ra::with_identity_source(source, || {
+                crate::gate::solo_review::with_test_human_terminal("", || {
+                    f.record_as("STORY-77", "approved", summary, &[], None)
+                })
+            })
+        };
+        let valid = |id: &str| ra::human_receipt_for(id, &f.head).is_some();
+        approve("first pass").unwrap();
+        let first = event_receipts(&f);
+        assert_eq!(first.len(), 1);
+        assert_eq!(receipts(&f), first, "one approval, one receipt");
+        let recorded = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert!(recorded.attestation.unwrap().human_at_tty);
+
+        // A repeat: no event, no receipt left behind.
+        approve("first pass").unwrap();
+        assert_eq!(event_receipts(&f), first);
+        assert_eq!(receipts(&f), first, "a repeat allocates no receipt");
+
+        // A second, different approval: its own event and receipt.
+        approve("second pass").unwrap();
+        let two = event_receipts(&f);
+        assert_eq!(two.len(), 2);
+        assert_ne!(two[0], two[1], "distinct receipts");
+        assert_eq!(receipts(&f).len(), 2);
+        assert!(valid(&two[0]) && valid(&two[1]));
+        approve("second pass").unwrap();
+        assert_eq!(event_receipts(&f), two);
+        assert_eq!(receipts(&f).len(), 2);
+
+        // The standing receipt is missing: the repeat is a new round under a
+        // new receipt, the only one that vouches for the standing record.
+        let dir = f.tmp.path().join("home/.aida/review-receipts");
+        std::fs::remove_file(dir.join(format!("{}.json", two[1]))).unwrap();
+        approve("second pass").unwrap();
+        let three = event_receipts(&f);
+        assert_eq!(three.len(), 3);
+        assert_eq!(three[..2], two[..]);
+        assert!(!two.contains(&three[2]));
+        assert!(valid(&three[2]) && !valid(&two[1]));
+        assert_eq!(receipts(&f).len(), 2, "the lost receipt is replaced once");
+
+        // The standing receipt no longer vouches for this commit.
+        let path = dir.join(format!("{}.json", three[2]));
+        let mut receipt: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        receipt["sha"] = "0".repeat(40).into();
+        std::fs::write(&path, receipt.to_string()).unwrap();
+        assert!(!valid(&three[2]));
+        approve("second pass").unwrap();
+        let four = event_receipts(&f);
+        assert_eq!(four.len(), 4);
+        assert_eq!(four[..3], three[..]);
+        assert!(valid(&four[3]), "the newest record names a valid receipt");
+        let standing = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(
+            standing.attestation.unwrap().receipt_id.as_deref(),
+            Some(four[3].as_str())
+        );
+        // And that record repeats without another receipt.
+        let count = receipts(&f).len();
+        approve("second pass").unwrap();
+        assert_eq!(event_receipts(&f), four);
+        assert_eq!(receipts(&f).len(), count);
+    }
+    /// Run `f` as the operator at a terminal (the PR #4218 recorder).
+    // trace:BUG-2662 | ai:claude
+    fn as_operator<R>(f: impl FnOnce() -> R) -> R {
+        let source = ra::IdentitySource {
+            session_ids: vec!["operator-terminal-session".into()],
+            ..Default::default()
+        };
+        ra::with_identity_source(source, || {
+            crate::gate::solo_review::with_test_human_terminal("", f)
+        })
+    }
+    /// A human-at-TTY approval that is not recorded leaves no receipt: not
+    /// when its follow-up findings cannot be filed (the receipt is not yet
+    /// issued), and not when the ledger write fails after the receipt was
+    /// issued under the lock (the record is proved absent, so it is removed
+    /// again). The retry that lands
+    /// names the one receipt that exists.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_unrecorded_operator_approval_leaves_no_receipt() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let approve = |findings: &[String]| {
+            as_operator(|| f.record_as("STORY-77", "approved", "first pass", findings, None))
+        };
+        for findings in [vec![deferred(1)], vec![]] {
+            if !findings.is_empty() {
+                crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
+                let error = approve(&findings).unwrap_err().to_string();
+                assert!(
+                    error.contains("deferred findings were not filed"),
+                    "{error}"
+                );
+                assert!(receipts(&f).is_empty(), "a failed filing issues no receipt");
+            }
+            let before = verdict_events(&f);
+            let kept = receipts(&f);
+            crate::gate::ledger::store::FAIL_NEXT_REVIEW_WRITE.with(|c| c.set(true));
+            let error = approve(&findings).unwrap_err().to_string();
+            assert!(error.contains("injected review write failure"), "{error}");
+            assert_eq!(
+                verdict_events(&f),
+                before,
+                "the failed write appended nothing"
+            );
+            assert_eq!(receipts(&f), kept, "its receipt was removed again");
+        }
+        assert!(verdict_events(&f).is_empty());
+        approve(&[deferred(1)]).unwrap();
+        let named = event_receipts(&f);
+        assert_eq!(named.len(), 1);
+        assert_eq!(receipts(&f), named, "the one receipt is the one on record");
+        assert!(ra::human_receipt_for(&named[0], &f.head).is_some());
+        let recorded = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(
+            recorded.attestation.unwrap().receipt_id.as_deref(),
+            Some(named[0].as_str())
+        );
+    }
+    /// How many receipt reservations the fixture's AIDA home holds.
+    // trace:BUG-2662 | ai:claude
+    fn reservations(f: &Fixture) -> usize {
+        std::fs::read_dir(f.tmp.path().join("home/.aida/review-receipt-reservations"))
+            .map(|entries| entries.count())
+            .unwrap_or(0)
+    }
+    /// A first PR approval for a spec that already has an unbound verdict
+    /// binds that verdict to the change in the same append as the approval:
+    /// when the receipt cannot be issued, or the write fails after it was,
+    /// the change's ledger is left as it was and no receipt remains; when it
+    /// lands, the change holds the bound copy and the one approval.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_binding_and_first_approval_land_together_or_not_at_all() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let store = crate::gate::ledger::store_root(&f.root).unwrap();
+        let spec = crate::gate::ledger::GateSpec::resolve(&f.root, "STORY-77");
+        let earlier = serde_json::json!({"verdict":"request-changes","reviewed_sha":f.head,
+            "recorded_by":"reviewer-a","recorded_at":"2026-11-08T00:00:00Z"});
+        let earlier = earlier.as_object().unwrap();
+        crate::gate::ledger::store::append_unbound(&store, &spec, earlier).unwrap();
+        let approve =
+            || as_operator(|| f.record_as("STORY-77", "approved", "first pass", &[], None));
+        assert!(ledger_events(&f).is_empty());
+
+        // The receipt cannot be issued.
+        let blocked = f.tmp.path().join("home/.aida/review-receipt-reservations");
+        std::fs::create_dir_all(blocked.parent().unwrap()).unwrap();
+        std::fs::write(&blocked, "").unwrap();
+        let error = format!("{:#}", approve().unwrap_err());
+        assert!(error.contains("human-review receipt"), "{error}");
+        assert!(ledger_events(&f).is_empty(), "nothing was bound");
+        assert!(receipts(&f).is_empty());
+        std::fs::remove_file(&blocked).unwrap();
+
+        // The write fails after the receipt was issued.
+        crate::gate::ledger::store::FAIL_NEXT_REVIEW_WRITE.with(|c| c.set(true));
+        let error = format!("{:#}", approve().unwrap_err());
+        assert!(error.contains("injected review write failure"), "{error}");
+        assert!(ledger_events(&f).is_empty(), "nothing was bound");
+        assert!(receipts(&f).is_empty());
+        assert_eq!(reservations(&f), 0);
+
+        // It lands: the bound copy, then the one approval.
+        approve().unwrap();
+        let events = verdict_events(&f);
+        assert_eq!(events.len(), 2, "{events:?}");
+        assert_eq!(&events[0], earlier, "the unbound verdict, as it was");
+        assert_eq!(word(&events[1]), "approved");
+        let named = events[1][rv::ATTESTATION_KEY]["receipt_id"]
+            .as_str()
+            .unwrap();
+        assert_eq!(receipts(&f), [named.to_string()]);
+        let standing = rv::read_recorded_verdict(&f.root, "PR-59").unwrap();
+        assert_eq!(standing.kind, rv::VerdictKind::Approved);
+        let ledger = ledger_bytes(&f);
+        approve().unwrap();
+        assert_eq!(
+            ledger_bytes(&f),
+            ledger,
+            "a repeat binds and records nothing"
+        );
+        assert_eq!(receipts(&f).len(), 1);
+    }
+    /// The ledger write completes and its sync reports an I/O error: the
+    /// event may be on the ledger, but it is not confirmed durable, so the
+    /// recording is refused, nothing is announced and its receipt is kept.
+    /// The retry is a repeat of that act: it syncs the ledger before it
+    /// answers (and is refused again while the sync fails), appends no second
+    /// event, issues no second receipt and announces the act once.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_approval_whose_sync_failed_is_unconfirmed_until_a_retry_syncs_it() {
+        use crate::gate::ledger::store::{ReviewFault, NEXT_REVIEW_FAULT};
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let approve =
+            |summary: &str| as_operator(|| f.record_as("STORY-77", "approved", summary, &[], None));
+        NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::Unsynced)));
+        let error = format!("{:#}", approve("first pass").unwrap_err());
+        assert!(error.contains("not confirmed durable"), "{error}");
+        assert_eq!(NEXT_REVIEW_FAULT.with(|c| c.get()), None, "the fault fired");
+        let named = event_receipts(&f);
+        assert_eq!(named.len(), 1, "the event is on the ledger");
+        assert_eq!(receipts(&f), named, "and its receipt was not removed");
+        assert!(ra::human_receipt_for(&named[0], &f.head).is_some());
+        assert_eq!(announced(&f), 0, "an unconfirmed act is not announced");
+        let ledger = ledger_bytes(&f);
+
+        // The retry's own sync fails: still unconfirmed, still refused.
+        NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::Unsynced)));
+        let error = format!("{:#}", approve("first pass").unwrap_err());
+        assert!(error.contains("could not be synced"), "{error}");
+        assert_eq!(
+            NEXT_REVIEW_FAULT.with(|c| c.get()),
+            None,
+            "the retry synced"
+        );
+        assert_eq!(ledger_bytes(&f), ledger);
+        assert_eq!(receipts(&f), named);
+        assert_eq!(announced(&f), 0);
+
+        approve("first pass").unwrap();
+        assert_eq!(ledger_bytes(&f), ledger, "the retry appends nothing");
+        assert_eq!(receipts(&f), named, "and issues no second receipt");
+        assert_eq!(announced(&f), 1, "the confirmed act is announced");
+        approve("first pass").unwrap();
+        assert_eq!(announced(&f), 1, "once");
+        // A later act leaves the kept receipt alone: a record names it.
+        approve("second pass").unwrap();
+        let two = event_receipts(&f);
+        assert_eq!(two.len(), 2);
+        assert_eq!(two[0], named[0]);
+        assert_eq!(receipts(&f).len(), 2);
+        assert!(ra::human_receipt_for(&named[0], &f.head).is_some());
+        assert_eq!(reservations(&f), 0);
+    }
+    /// The event feed cannot be appended to while a review is recorded: the
+    /// record stands, its announcement stays pending, and repeating the
+    /// record announces it, once.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_announcement_whose_emit_failed_stays_pending_for_the_retry() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let approve =
+            || as_operator(|| f.record_as("STORY-77", "approved", "first pass", &[], None));
+        let marks = || -> Vec<serde_json::Value> {
+            let store = crate::gate::ledger::store_root(&f.root).unwrap();
+            std::fs::read_dir(store.join(".aida/review-announced"))
+                .map(|entries| {
+                    entries
+                        .filter_map(|e| e.ok())
+                        .filter(|e| e.path().extension().is_some_and(|x| x == "json"))
+                        .map(|e| serde_json::from_slice(&std::fs::read(e.path()).unwrap()).unwrap())
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        // A directory where the feed's file belongs: every append fails.
+        let feed = crate::events::events_path(&f.root);
+        let aside = feed.with_extension("aside");
+        let had_feed = feed.exists();
+        if had_feed {
+            std::fs::rename(&feed, &aside).unwrap();
+        }
+        std::fs::create_dir_all(&feed).unwrap();
+        approve().unwrap();
+        std::fs::remove_dir(&feed).unwrap();
+        if had_feed {
+            std::fs::rename(&aside, &feed).unwrap();
+        }
+        assert_eq!(verdict_events(&f).len(), 1, "the review is on record");
+        assert_eq!(announced(&f), 0);
+        let pending = marks();
+        assert_eq!(pending.len(), 1, "the announcement was claimed");
+        assert!(pending[0].get("announced_at").is_none(), "{pending:?}");
+
+        approve().unwrap();
+        assert_eq!(verdict_events(&f).len(), 1);
+        assert_eq!(announced(&f), 1, "the retry announces the pending act");
+        let done = marks();
+        assert_eq!(done.len(), 1);
+        assert!(done[0].get("announced_at").is_some(), "{done:?}");
+        approve().unwrap();
+        assert_eq!(announced(&f), 1, "and only once");
+    }
+    /// The next act at a destination cannot remove the receipt a stopped
+    /// recording of another act reserved there: it adopts that receipt's id
+    /// rather than reserve a new one over it, so the slot never loses track
+    /// of a receipt. One receipt exists, the one on record.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_reserved_receipt_that_cannot_be_removed_is_adopted_not_orphaned() {
+        use crate::gate::ledger::store::{ReviewFault, NEXT_REVIEW_FAULT};
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let approve =
+            |summary: &str| as_operator(|| f.record_as("STORY-77", "approved", summary, &[], None));
+        NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::ExitAfterReceipt)));
+        approve("first pass").unwrap_err();
+        let orphan = receipts(&f);
+        assert_eq!(orphan.len(), 1, "the receipt was persisted");
+        assert_eq!(reservations(&f), 1);
+
+        ra::FAIL_NEXT_RESERVED_RECEIPT_REMOVAL.with(|c| c.set(true));
+        approve("another pass").unwrap();
+        assert!(
+            !ra::FAIL_NEXT_RESERVED_RECEIPT_REMOVAL.with(|c| c.get()),
+            "the removal was attempted"
+        );
+        let named = event_receipts(&f);
+        assert_eq!(named, orphan, "the reserved id was adopted");
+        assert_eq!(receipts(&f), named, "no second receipt, no orphan");
+        assert!(ra::human_receipt_for(&named[0], &f.head).is_some());
+        assert_eq!(reservations(&f), 0);
+    }
+    /// The recorder exits after its receipt is persisted and before the
+    /// ledger write, so nothing settles the receipt. The next recording at
+    /// that destination recovers it: the same act adopts it, and any other
+    /// act removes it and names its own. Either way one receipt exists, the
+    /// one on record.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_receipt_of_a_recorder_that_exited_is_recovered_by_the_next_attempt() {
+        use crate::gate::ledger::store::{ReviewFault, NEXT_REVIEW_FAULT};
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        for same_act in [true, false] {
+            let mut f = Fixture::new();
+            f._env.unset_key("AIDA_AGENT_TYPE");
+            f._env.unset_key("AIDA_AGENT_NAME");
+            let approve = |summary: &str| {
+                as_operator(|| f.record_as("STORY-77", "approved", summary, &[], None))
+            };
+            NEXT_REVIEW_FAULT.with(|c| c.set(Some(ReviewFault::ExitAfterReceipt)));
+            let error = format!("{:#}", approve("first pass").unwrap_err());
+            assert!(error.contains("injected recorder exit"), "{error}");
+            assert!(verdict_events(&f).is_empty(), "the event was never written");
+            let orphan = receipts(&f);
+            assert_eq!(orphan.len(), 1, "the receipt was persisted");
+            assert_eq!(reservations(&f), 1, "and is reserved for its attempt");
+
+            approve(if same_act {
+                "first pass"
+            } else {
+                "another pass"
+            })
+            .unwrap();
+            let named = event_receipts(&f);
+            assert_eq!(named.len(), 1);
+            assert_eq!(
+                receipts(&f),
+                named,
+                "same_act={same_act}: no orphan is left"
+            );
+            assert_eq!(named == orphan, same_act, "the same act adopts the receipt");
+            assert!(ra::human_receipt_for(&named[0], &f.head).is_some());
+            assert_eq!(reservations(&f), 0);
+        }
+    }
+    /// A recorded refusal is announced once, whatever becomes of its hold:
+    /// a repeat after the hold was released restores the hold and announces
+    /// nothing, and a mixed refusal whose filing failed is announced by the
+    /// retry that completes it even though an equal hold already stands.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_refusal_is_announced_once_whatever_its_hold() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let config = f.root.join(".aida/config.toml");
+        let original = std::fs::read_to_string(&config).unwrap_or_default();
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::write(
+            &config,
+            format!("{original}\n[review]\nblocking_tiers = [\"p1\"]\n"),
+        )
+        .unwrap();
+        crate::review_blocking::commit_config_for_test(&f.root);
+        let findings = [
+            serde_json::json!({"text":"blocking defect","severity":"major","blocking_tier":"p1"})
+                .to_string(),
+            crate::review_blocking::tests::p2_finding(),
+        ];
+        let reviewer = f.reviewer().unwrap();
+        let refuse = |summary: &str| {
+            f.record_as(
+                "STORY-77",
+                "request-changes",
+                summary,
+                &findings,
+                Some(&reviewer),
+            )
+        };
+        let hold_events = |f: &Fixture| {
+            ledger_events(f)
+                .iter()
+                .filter(|e| matches!(e.body, crate::gate::ledger::EventBody::Hold { .. }))
+                .count()
+        };
+        refuse("first refusal").unwrap();
+        assert_eq!(announced(&f), 1);
+
+        // Announced, then its hold released: the repeat restores the hold
+        // and does not announce the refusal a second time.
+        let hold = crate::gate::merge_hold_core::read_hold_record(&f.root, 59).unwrap();
+        crate::gate::merge_hold_core::release_hold_by(&f.root, &hold, "operator", None).unwrap();
+        assert!(crate::gate::merge_hold_core::read_hold_record(&f.root, 59).is_none());
+        refuse("first refusal").unwrap();
+        assert!(crate::gate::merge_hold_core::read_hold_record(&f.root, 59).is_some());
+        assert_eq!(verdict_events(&f).len(), 1);
+        assert_eq!(
+            announced(&f),
+            1,
+            "an announced refusal is not announced again"
+        );
+
+        // A second refusal whose follow-up filing fails after it is on
+        // record: nothing announced yet. The retry finds an equal hold
+        // standing, places none, and still announces the refusal, once.
+        crate::gate::ledger::FAIL_NEXT_FINDING_DELIVERY.with(|c| c.set(true));
+        let error = refuse("second refusal").unwrap_err().to_string();
+        assert!(error.contains("deferred findings pending"), "{error}");
+        assert_eq!(verdict_events(&f).len(), 2);
+        assert_eq!(announced(&f), 1, "the failed recording announced nothing");
+        let holds = hold_events(&f);
+        refuse("second refusal").unwrap();
+        assert_eq!(verdict_events(&f).len(), 2);
+        assert_eq!(hold_events(&f), holds, "the standing hold was enough");
+        assert_eq!(announced(&f), 2, "the completed recording is announced");
+        refuse("second refusal").unwrap();
+        assert_eq!(announced(&f), 2, "and only once");
+    }
+    /// Two identical human-at-TTY approvals at once: the second lands after
+    /// the first made its reads and before it takes the ledger locks. The
+    /// receipt is chosen under those locks, so the later one answers with the
+    /// receipt already on record: one event, one receipt.
+    // trace:BUG-2662 | ai:claude
+    #[test]
+    fn bug_2662_simultaneous_operator_approvals_share_one_receipt() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        f._env.unset_key("AIDA_AGENT_TYPE");
+        f._env.unset_key("AIDA_AGENT_NAME");
+        let (root, head) = (f.root.clone(), f.head.clone());
+        let _race = race_next_append(move || {
+            crate::handle_review_record_context_at(
+                root.clone(),
+                "STORY-77",
+                "approved",
+                Some(&head),
+                Some("feature"),
+                Some("first pass"),
+                &[],
+                &[],
+                Some(59),
+                false,
+                |_, _| Ok(head.clone()),
+                None,
+            )
+            .unwrap();
+        });
+        as_operator(|| f.record_as("STORY-77", "approved", "first pass", &[], None)).unwrap();
+        let named = event_receipts(&f);
+        assert_eq!(named.len(), 1, "one verdict event for both");
+        assert_eq!(receipts(&f), named, "and one receipt, the one it names");
+        assert_eq!(announced(&f), 1, "the later repeat announces nothing");
     }
     /// A completed request-changes draft whose p2 finding the `["p1"]` list
     /// deferred was recorded as an approval. Replaying that same launch after

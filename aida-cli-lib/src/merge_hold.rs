@@ -1342,6 +1342,45 @@ pub(crate) fn sync_label(project_root: &Path, pr: u64, held: bool) -> Result<(),
     sync_label_via(project_root, pr, held, run_forge_cli, run_forge_cli_stdout)
 }
 
+/// BUG-2662: reconcile the forge labels of a hold that already stands (a
+/// repeated refusal). The label state recorded on the hold is what the last
+/// sync left, not what the forge shows now: a hold label removed on the forge
+/// leaves it `synced`. So the forge is read first, and the sync is skipped
+/// (no forge write, no ledger event) only when that read shows the hold
+/// labels in place. A missing label, a stale cleared label, an unreadable
+/// forge or a hold not recorded as synced all run [`sync_label`].
+// trace:BUG-2662 | ai:claude
+pub(crate) fn reconcile_held_label(project_root: &Path, pr: u64) -> Result<(), LabelSyncError> {
+    reconcile_held_label_via(project_root, pr, run_forge_cli, run_forge_cli_stdout)
+}
+
+/// [`reconcile_held_label`] with both forge calls injected.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn reconcile_held_label_via(
+    project_root: &Path,
+    pr: u64,
+    runner: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+    read: impl Fn(&Path, &str, &[String]) -> Result<(bool, String), String>,
+) -> Result<(), LabelSyncError> {
+    if read_label_state(project_root, pr) == LabelState::Synced {
+        let kind = crate::forge::resolve_forge_kind(project_root);
+        match resolve_pinned_repo(project_root, kind) {
+            // pure-git has no forge label to lose.
+            Ok(None) => return Ok(()),
+            Ok(Some(pin)) => {
+                let armed = fetch_pinned_change_with(project_root, &pin, pr, read)
+                    .is_ok_and(|c| c.hold_label && c.recorded_label && !c.cleared_label);
+                if armed {
+                    return Ok(());
+                }
+            }
+            // The sync below reports an unpinned repo.
+            Err(_) => {}
+        }
+    }
+    sync_label_with_probe(project_root, pr, true, runner, |_| Ok(true))
+}
+
 /// [`sync_label`] with both forge calls injected: `runner` writes labels and
 /// `read` is the pinned change read that answers whether a hold was recorded.
 // trace:TASK-1951 | ai:claude

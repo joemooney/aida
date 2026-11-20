@@ -509,6 +509,102 @@ fn sync_label_refuses_and_records_when_the_repo_cannot_be_pinned() {
     assert!(matches!(read_label_state(root, 5), LabelState::Unsynced(_)));
 }
 
+/// BUG-2662: a repeated refusal finds its hold standing with a label state
+/// of `synced`. That state is what the last sync left, so the forge is read:
+/// labels still in place cost no forge write and no ledger event, while a
+/// hold label removed on the forge (or a stale cleared label, or a forge
+/// that cannot be read) is synced again.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_standing_hold_label_is_verified_against_the_forge() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+    for args in [
+        vec!["init", "-q"],
+        vec!["remote", "add", "origin", "git@github.com:o/r.git"],
+    ] {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .status()
+            .unwrap();
+    }
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    write_hold(root, 42, "drive").unwrap();
+    let view = |labels: &'static str| {
+        move |_: &Path, _: &str, _: &[String]| {
+            Ok((
+                true,
+                format!(
+                    r#"{{"url":"https://github.com/o/r/pull/42","state":"OPEN","headRefOid":"abc","labels":[{labels}]}}"#
+                ),
+            ))
+        }
+    };
+    let ledger = || {
+        std::fs::read(crate::gate::ledger::store::ledger_file(
+            &crate::gate::ledger::store_root(root).unwrap(),
+            crate::gate::ledger::ChangeKey::pr(42),
+        ))
+        .unwrap_or_default()
+    };
+    let reconcile = |read: &dyn Fn(&Path, &str, &[String]) -> Result<(bool, String), String>| {
+        let writes = std::cell::RefCell::new(Vec::<Vec<String>>::new());
+        reconcile_held_label_via(
+            root,
+            42,
+            |_, _, args| {
+                writes.borrow_mut().push(args.to_vec());
+                Ok((true, String::new()))
+            },
+            read,
+        )
+        .unwrap();
+        writes.into_inner()
+    };
+    const ARMED: &str = r#"{"name":"aida:merge-hold"},{"name":"aida:merge-hold-recorded"}"#;
+    // Not yet recorded as synced: the labels are written without a read.
+    let writes = reconcile(&|_, _, _| panic!("an unsynced hold needs no forge read"));
+    assert_eq!(writes.len(), 1);
+    assert_eq!(read_label_state(root, 42), LabelState::Synced);
+    // Synced and still labelled on the forge: nothing is written anywhere.
+    let before = ledger();
+    assert!(reconcile(&view(ARMED)).is_empty());
+    assert_eq!(
+        ledger(),
+        before,
+        "an already synchronized repeat writes nothing"
+    );
+    // The hold label was removed on the forge; the recorded state still says
+    // synced. Each of these is restored by a label write.
+    for labels in [
+        r#"{"name":"aida:merge-hold-recorded"}"#,
+        r#"{"name":"aida:merge-hold"}"#,
+        "",
+        r#"{"name":"aida:merge-hold"},{"name":"aida:merge-hold-recorded"},{"name":"aida:merge-hold-cleared"}"#,
+    ] {
+        assert_eq!(read_label_state(root, 42), LabelState::Synced);
+        let writes = reconcile(&view(labels));
+        assert_eq!(writes.len(), 1, "labels [{labels}] are restored");
+        assert!(
+            writes[0]
+                .iter()
+                .any(|a| a.contains(HOLD_LABEL) && a.contains(HOLD_RECORDED_LABEL)),
+            "{writes:?}"
+        );
+    }
+    // A forge that cannot be read is never taken as labelled.
+    assert_eq!(reconcile(&|_, _, _| Err("HTTP 502".into())).len(), 1);
+}
+
 /// TASK-1951: an unhold adds `aida:merge-hold-cleared` only when the forge
 /// shows a recorded hold. A never-recorded PR has an orphaned cleared label
 /// removed, and an unreadable forge gets neither: the gate fails on a

@@ -223,6 +223,20 @@ fn parse_events(
     change: &str,
     budget: &mut Budget,
 ) -> Result<Vec<GateEvent>, Unsafe> {
+    parse_events_as(name, body, change, budget, false)
+}
+
+/// [`parse_events`]; with `newer`, an event of a format newer than this
+/// build writes is returned instead of refused, for a writer that refuses it
+/// by name ([`read_unbound_for_append`]).
+// trace:BUG-2662 | ai:claude
+fn parse_events_as(
+    name: &str,
+    body: &[u8],
+    change: &str,
+    budget: &mut Budget,
+    newer: bool,
+) -> Result<Vec<GateEvent>, Unsafe> {
     let text = std::str::from_utf8(body)
         .map_err(|_| Unsafe(format!("refusing gate-ledger entry {name}: not UTF-8")))?;
     if !text.is_empty() && !text.ends_with('\n') {
@@ -253,7 +267,7 @@ fn parse_events(
         discovery_work_tests::PARSE_ATTEMPTS.with(|n| n.set(n.get() + 1));
         let event: GateEvent =
             serde_json::from_str(line).map_err(|e| bad(&format!("does not parse ({e})")))?;
-        if event.v == 0 || event.v > EVENT_VERSION {
+        if event.v == 0 || (event.v > EVENT_VERSION && !newer) {
             return Err(bad(&format!("unsupported event version {}", event.v)));
         }
         if !event.change.eq_ignore_ascii_case(change) {
@@ -1553,6 +1567,67 @@ pub(crate) fn read_change_events(
     match discover(root)? {
         Some(mut d) => d.change_events(change, budget),
         None => Ok(Vec::new()),
+    }
+}
+
+/// BUG-2662: the two ledgers a review verdict is weighed against, each read
+/// whole and strictly: every event on `change`'s ledger and every event on
+/// `unbound`'s `by-spec` ledger (a spec label). An absent ledger or file is
+/// empty; a linked, unreadable, oversized, torn or unparseable one refuses.
+/// No ownership filter is applied: the caller compares the physical history.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn read_review_ledgers(
+    root: &Path,
+    change: Option<ChangeKey>,
+    unbound: Option<&str>,
+    budget: &mut Budget,
+) -> Result<(Vec<GateEvent>, Vec<GateEvent>), Unsafe> {
+    let Some((ledger, by_spec)) = ledger_dirs(root)? else {
+        return Ok(Default::default());
+    };
+    let bound = match change {
+        Some(change) => {
+            let key = change.as_key();
+            read_change(&ledger, &format!("{key}.jsonl"), &key, budget)?
+                .map(|(events, _, _)| events)
+                .unwrap_or_default()
+        }
+        None => Vec::new(),
+    };
+    let unbound = match (unbound, by_spec) {
+        (Some(spec), Some(by_spec)) => read_unbound_entry(&by_spec, spec, budget, false)?,
+        _ => Vec::new(),
+    };
+    Ok((bound, unbound))
+}
+
+fn read_unbound_entry(
+    by_spec: &File,
+    spec: &str,
+    budget: &mut Budget,
+    newer: bool,
+) -> Result<Vec<GateEvent>, Unsafe> {
+    let spec = spec.trim().to_ascii_uppercase();
+    let name = format!("{spec}.jsonl");
+    match read_entry(by_spec, &name, MAX_LEDGER_BYTES, budget)? {
+        Some(body) => parse_events_as(&name, &body, &spec, budget, newer),
+        None => Ok(Vec::new()),
+    }
+}
+
+/// `spec`'s unbound ledger for the writer about to append to it: read as
+/// [`read_review_ledgers`] reads it (no links, the per-file cap, the budget,
+/// every line parsed), except that an event of a newer format is returned,
+/// so the writer refuses it by name instead of as an unreadable history.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn read_unbound_for_append(
+    root: &Path,
+    spec: &str,
+    budget: &mut Budget,
+) -> Result<Vec<GateEvent>, Unsafe> {
+    match ledger_dirs(root)? {
+        Some((_, Some(by_spec))) => read_unbound_entry(&by_spec, spec, budget, true),
+        _ => Ok(Vec::new()),
     }
 }
 

@@ -1413,8 +1413,8 @@ authority, seat or containment code. Elsewhere `test-gap` follows the list.
 Classify an unmet acceptance criterion the change claims only as
 `unmet-claimed-ac`. Unknown classification blocks. The writer
 sets dispositions and files each deferred finding as a separate Draft task linked
-to the reviewed spec, with retry deduplication and a delivery barrier before
-approval. Name the source spec when recording. Do not drop any finding.
+to the reviewed spec, with retry deduplication, before the approval is
+recorded. Name the source spec when recording. Do not drop any finding.
 Nonblocking observations do not downgrade passing acceptance rows; record them
 as follow-ups and derive the overall verdict from the remaining blockers.
 This rule overrides blanket normal-severity or PARTIAL-based refusal rules and
@@ -1444,12 +1444,30 @@ blocking evidence. The prior round stays in history. An all-deferred verdict bec
 APPROVED. Mixed findings remain CHANGES REQUESTED; rejected and waiting retain
 their existing semantics.
 
-Before publishing approval, the host persists the complete record with
-`sweep_pending: true`, files its deferred findings into the open sweep under the
-store writer lock, then records approval. Contained reviewers hand this work to
-the collecting launcher. Failed delivery leaves a blocking pending record and
-returns an error. After repairing the reported store problem, repeat the review
-record command (or retry launcher collection with the original handoff); delivery
-is deduplicated by source and finding hash. Completion-time carry-forward remains
+Before recording approval, `aida review record` files the deferred findings
+into the open sweep under the store writer lock, then appends the approval as
+one verdict record. A failed filing records nothing and the error names the
+cause; an approval is also refused, with nothing recorded, when another review
+lands while the findings are filed. Contained reviewers do not record; which
+recovery evidence a failure leaves depends on how their launcher takes the
+verdict:
+
+- **Standalone draft handoff** (the launch prompt names a `draft.json` path):
+  the parent validates the draft and records it through this same direct
+  `aida review record` path. A failed filing adds nothing to the gate ledger:
+  no `sweep_pending` record and no new verdict event. The ledger itself may
+  not be empty, since a verdict recorded earlier (a previous round's refusal,
+  for instance) stays on it. The recovery evidence is the retained draft file
+  together with the absence of a new verdict event; the parent retries the
+  draft within the launch, and the next launch for the same head picks it up.
+- **Legacy verdict-file collection** (the reviewer wrote a verdict file the
+  launcher collects): the launcher persists the complete record with
+  `sweep_pending: true` first, so a failed delivery leaves that blocking
+  pending record on the ledger. Retry collection with the original handoff.
+
+After repairing the reported store problem, repeat the review record command
+or the matching launcher retry; delivery is deduplicated by source and finding
+hash. Repeating a record that is already on file unchanged writes nothing.
+Completion-time carry-forward remains
 a retry fallback. This slice changes no risk tier, review depth, hold-clearance
 or train eligibility policy.

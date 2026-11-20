@@ -62,6 +62,8 @@ use crate::SessionLease;
 const LEDGER_FILE: &str = "review-authorship.jsonl";
 /// Directory (under the user's AIDA home) holding human-review receipts.
 const RECEIPT_DIR: &str = "review-receipts";
+// trace:BUG-2662 | ai:claude
+const RESERVATION_DIR: &str = "review-receipt-reservations";
 
 // ── Identity tokens ─────────────────────────────────────────────────────────
 
@@ -1451,10 +1453,293 @@ pub(crate) fn write_human_receipt_policy(
         identity: identity.to_vec(),
         solo_human,
     };
-    std::fs::create_dir_all(dir)?;
-    let path = receipt_path(dir, &id).ok_or_else(|| anyhow::anyhow!("invalid receipt id"))?;
-    aida_core::write_atomic(&path, serde_json::to_string_pretty(&receipt)?)?;
+    persist_human_receipt(dir, &receipt)?;
     Ok(id)
+}
+
+/// Write `receipt` under its id in `dir`, replacing a receipt of that id.
+// trace:BUG-2662 | ai:claude
+fn persist_human_receipt(dir: &Path, receipt: &HumanReviewReceipt) -> anyhow::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let path =
+        receipt_path(dir, &receipt.id).ok_or_else(|| anyhow::anyhow!("invalid receipt id"))?;
+    aida_core::write_atomic(&path, serde_json::to_string_pretty(receipt)?)?;
+    Ok(())
+}
+
+/// BUG-2662: the receipt reserved for one recording attempt
+/// ([`crate::gate::ledger::store::Attempt`]), written before the receipt
+/// itself at `review-receipt-reservations/<slot>.json` beside the receipts
+/// (never among them: every file there is a receipt). It lets the next
+/// attempt at the same destination find a receipt whose recorder stopped
+/// before the ledger write.
+// trace:BUG-2662 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct ReservedReceipt {
+    act: String,
+    receipt_id: String,
+}
+
+/// Where the reservation of `slot` lives; `None` for a slot that is not a
+/// SHA-256 digest in hex.
+fn reservation_path(dir: &Path, slot: &str) -> Option<PathBuf> {
+    (slot.len() == 64 && slot.bytes().all(|b| b.is_ascii_hexdigit())).then(|| {
+        dir.with_file_name(RESERVATION_DIR)
+            .join(format!("{slot}.json"))
+    })
+}
+
+/// The reservation of `slot`, when one is readable and names a receipt id.
+fn reserved_receipt(dir: &Path, slot: &str) -> Option<ReservedReceipt> {
+    let body = std::fs::read(reservation_path(dir, slot)?).ok()?;
+    let reserved: ReservedReceipt = serde_json::from_slice(&body).ok()?;
+    receipt_path(dir, &reserved.receipt_id)?;
+    Some(reserved)
+}
+
+/// Reserve receipt `id` for `act` at `slot`, replacing the slot's reservation.
+fn reserve_receipt(dir: &Path, slot: &str, act: &str, id: &str) -> anyhow::Result<()> {
+    let path = reservation_path(dir, slot).ok_or_else(|| anyhow::anyhow!("invalid slot"))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let reserved = ReservedReceipt {
+        act: act.to_string(),
+        receipt_id: id.to_string(),
+    };
+    aida_core::write_atomic(&path, serde_json::to_string(&reserved)?)?;
+    Ok(())
+}
+
+/// Drop the reservation of `slot` while it still names receipt `id`.
+fn release_reservation(dir: &Path, slot: &str, id: &str) {
+    if reserved_receipt(dir, slot).is_some_and(|r| r.receipt_id == id) {
+        if let Some(path) = reservation_path(dir, slot) {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// Remove receipt `id` from `dir`: no recorded review names it. Absence is
+/// success.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn remove_human_receipt_in(dir: &Path, id: &str) -> std::io::Result<()> {
+    let Some(path) = receipt_path(dir, id) else {
+        return Ok(());
+    };
+    match std::fs::remove_file(path) {
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
+}
+
+#[cfg(test)]
+thread_local! {
+    /// BUG-2662 test seam: the next removal of an unreferenced reserved
+    /// receipt on this thread fails, as a transient unlink error would.
+    pub(crate) static FAIL_NEXT_RESERVED_RECEIPT_REMOVAL: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
+/// Remove the reserved receipt `id` another act left and no record names.
+// trace:BUG-2662 | ai:claude
+fn remove_unreferenced_receipt(dir: &Path, id: &str) -> std::io::Result<()> {
+    #[cfg(test)]
+    if FAIL_NEXT_RESERVED_RECEIPT_REMOVAL.with(|f| f.replace(false)) {
+        return Err(std::io::Error::other("injected receipt removal failure"));
+    }
+    remove_human_receipt_in(dir, id)
+}
+
+/// The receipt one act issued: its id, the attestation naming it and the
+/// attempt slot it is reserved under (none for a hand-off file).
+struct IssuedReceipt {
+    id: String,
+    attestation: serde_json::Value,
+    slot: Option<String>,
+}
+
+/// BUG-2662: the human-review receipt of one human-at-TTY approval, settled
+/// with the approval's ledger append ([`crate::gate::ledger::store::Receipt`]).
+/// Nothing is persisted when it is built. Under the append's locks a repeat
+/// of the standing act answers with that act's receipt
+/// ([`crate::gate::review_verdict::reusable_human_receipt`]); any other
+/// approval gets a receipt only once every refusal is behind it. That receipt
+/// is reserved for its recording attempt before it is written, so the next
+/// attempt at the same destination recovers one whose recorder stopped before
+/// the ledger write: the same act adopts it, any other act removes it once
+/// the history proves no record names it. After the write it is removed only
+/// when the record is proved absent. `attest` builds the recorder attestation
+/// that names a receipt id.
+// trace:BUG-2662 | ai:claude
+pub(crate) struct HumanReceiptSettlement<'a, F> {
+    pub(crate) attest: F,
+    pub(crate) sha: &'a str,
+    pub(crate) subject: &'a str,
+    pub(crate) identity: &'a [String],
+    pub(crate) solo_human: bool,
+    pub(crate) carry_eligible: bool,
+    /// The receipt this act issued.
+    issued: std::cell::RefCell<Option<IssuedReceipt>>,
+    /// The attestation that last answered with a standing act's receipt.
+    reused: std::cell::RefCell<Option<serde_json::Value>>,
+}
+
+impl<'a, F: Fn(Option<String>) -> anyhow::Result<serde_json::Value>> HumanReceiptSettlement<'a, F> {
+    pub(crate) fn new(
+        attest: F,
+        sha: &'a str,
+        subject: &'a str,
+        identity: &'a [String],
+        solo_human: bool,
+        carry_eligible: bool,
+    ) -> Self {
+        Self {
+            attest,
+            sha,
+            subject,
+            identity,
+            solo_human,
+            carry_eligible,
+            issued: Default::default(),
+            reused: Default::default(),
+        }
+    }
+
+    /// The attestation the act was settled with: the one naming its own
+    /// receipt, else (`repeat`: nothing was appended) the standing act's.
+    pub(crate) fn settled(&self, repeat: bool) -> Option<serde_json::Value> {
+        match self.issued.borrow().as_ref() {
+            Some(issued) => Some(issued.attestation.clone()),
+            None if repeat => self.reused.borrow().clone(),
+            None => None,
+        }
+    }
+
+    /// The receipt id `attempt` records under: the one a stopped recording
+    /// of the same act reserved at its slot, else a new one. A reserved
+    /// receipt no record of the history names, left by another act, is
+    /// removed; one a record names is left alone. When that removal fails
+    /// the reserved id is adopted instead: this act's receipt replaces the
+    /// old one under the same id, so the slot's reservation still points at
+    /// the only receipt of the slot and nothing is orphaned.
+    fn receipt_id(
+        &self,
+        dir: &Path,
+        attempt: Option<&crate::gate::ledger::store::Attempt<'_>>,
+    ) -> String {
+        let reserved = attempt
+            .and_then(|a| Some((a, reserved_receipt(dir, &a.slot)?)))
+            .filter(|(a, reserved)| !a.names(&reserved.receipt_id));
+        match reserved {
+            Some((a, reserved)) if reserved.act == a.act => return reserved.receipt_id,
+            Some((_, reserved)) => {
+                if remove_unreferenced_receipt(dir, &reserved.receipt_id).is_err() {
+                    return reserved.receipt_id;
+                }
+            }
+            None => {}
+        }
+        uuid::Uuid::new_v4().to_string()
+    }
+}
+
+impl<F: Fn(Option<String>) -> anyhow::Result<serde_json::Value>> crate::gate::ledger::store::Receipt
+    for HumanReceiptSettlement<'_, F>
+{
+    fn reuse(&self, standing: &crate::gate::review_verdict::JsonObj) -> Option<serde_json::Value> {
+        let id = crate::gate::review_verdict::reusable_human_receipt(
+            standing,
+            self.sha,
+            self.subject,
+            self.identity,
+            self.solo_human,
+            self.carry_eligible,
+        )?;
+        let attestation = (self.attest)(Some(id)).ok()?;
+        *self.reused.borrow_mut() = Some(attestation.clone());
+        Some(attestation)
+    }
+
+    fn issue(
+        &self,
+        attempt: Option<&crate::gate::ledger::store::Attempt<'_>>,
+    ) -> std::io::Result<serde_json::Value> {
+        let failed = |e: anyhow::Error| {
+            std::io::Error::other(format!("could not write the human-review receipt: {e:#}"))
+        };
+        let dir =
+            receipt_dir().ok_or_else(|| failed(anyhow::anyhow!("cannot locate the AIDA home")))?;
+        let id = self.receipt_id(&dir, attempt);
+        // Reserved before it exists, and tracked before anything else can
+        // fail, so a recorder that stops here leaves a receipt the next
+        // attempt finds and `settle` can take back.
+        if let Some(attempt) = attempt {
+            reserve_receipt(&dir, &attempt.slot, &attempt.act, &id).map_err(failed)?;
+        }
+        *self.issued.borrow_mut() = Some(IssuedReceipt {
+            id: id.clone(),
+            attestation: serde_json::Value::Null,
+            slot: attempt.map(|a| a.slot.clone()),
+        });
+        let receipt = HumanReviewReceipt {
+            carry_eligible: self.carry_eligible,
+            id: id.clone(),
+            sha: self.sha.trim().to_string(),
+            subject: self.subject.trim().to_string(),
+            recorded_at: chrono::Utc::now().to_rfc3339(),
+            identity: self.identity.to_vec(),
+            solo_human: self.solo_human,
+        };
+        persist_human_receipt(&dir, &receipt).map_err(failed)?;
+        let attestation = (self.attest)(Some(id)).map_err(failed)?;
+        if let Some(issued) = self.issued.borrow_mut().as_mut() {
+            issued.attestation = attestation.clone();
+        }
+        Ok(attestation)
+    }
+
+    fn settle(&self, settled: crate::gate::ledger::store::Settled) {
+        use crate::gate::ledger::store::Settled;
+        let Some(dir) = receipt_dir() else {
+            return;
+        };
+        match settled {
+            // In doubt the receipt and its reservation stay: the next attempt
+            // at this destination reconciles them against the ledger.
+            Settled::Kept => {}
+            Settled::Landed => {
+                if let Some(issued) = self.issued.borrow().as_ref() {
+                    if let Some(slot) = issued.slot.as_deref() {
+                        release_reservation(&dir, slot, &issued.id);
+                    }
+                }
+            }
+            Settled::Absent => {
+                let Some(issued) = self.issued.borrow_mut().take() else {
+                    return;
+                };
+                if let Err(e) = remove_human_receipt_in(&dir, &issued.id) {
+                    // Its reservation stays, so the next attempt removes it.
+                    eprintln!(
+                        "warning: human-review receipt {} names no recorded review and could not be removed: {e}",
+                        issued.id
+                    );
+                    return;
+                }
+                if let Some(slot) = issued.slot.as_deref() {
+                    release_reservation(&dir, slot, &issued.id);
+                }
+            }
+        }
+    }
+
+    fn issued(&self) -> Option<serde_json::Value> {
+        self.issued
+            .borrow()
+            .as_ref()
+            .map(|issued| issued.attestation.clone())
+    }
 }
 
 /// Receipt `id`, when it exists and vouches for exactly `sha`.
