@@ -17,12 +17,12 @@ description: |
   4. Red commits are never promoted; an in-progress tip never blocks an older green one; a commit whose CI run is missing counts as not green.
   5. scripts/aida-autobuild.sh (lane hosts and operator cron) uses the same newest-green rule instead of waiting on the tip, and keeps #4327's skip-worktree override handling.
   6. Tests: tip in-progress with an older green commit → promote the older one; tip red → promote the newest green before it; nothing newer than live is green → skip; origin/main moves mid-check → the chosen green commit is still promoted.
-status: Draft
+status: Approved
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-20T00:59:26.582606402Z
+modified_at: 2026-11-20T01:01:32.791075957Z
 req_type: Bug
 tags:
 - landing
@@ -73,6 +73,15 @@ history:
       4. Red commits are never promoted; an in-progress tip never blocks an older green one; a commit whose CI run is missing counts as not green.
       5. scripts/aida-autobuild.sh (lane hosts and operator cron) uses the same newest-green rule instead of waiting on the tip, and keeps #4327's skip-worktree override handling.
       6. Tests: tip in-progress with an older green commit → promote the older one; tip red → promote the newest green before it; nothing newer than live is green → skip; origin/main moves mid-check → the chosen green commit is still promoted.
+- id: 01a1f679-14f7-79c1-9c61-d46ed2a209a2
+  author: joe
+  timestamp: 2026-11-20T01:01:32.791067778Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: cca5773b3aec0e36e91af442a497ed49301a2ed3
   branch: main
