@@ -1,14 +1,17 @@
 //! A live seat with no registry row (BUG-HOME-151): SessionStart registration
 //! fails open on a contended lock and was never retried; the per-prompt
 //! heartbeat now refreshes and restores the row, a recycled pid's row is
-//! retired instead of erased, and the advisor handshake says "no registered
-//! advisor" (or "live but unregistered") instead of "no live advisor".
+//! retired instead of erased, and the advisor handshake reports registry
+//! status separately from grant holders.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
 
+// Registry identities are resolved repeatedly through ambient vendor markers.
+// Hold the shared lock so sibling identity fixtures cannot change the agent type
+// between writing a row and reading it back.
+// trace:TASK-3784 | ai:codex
 use super::*;
 use crate::advisor_handshake::{
-    presence_from, report_findings, save_record, state, unreachable_reason, AdvisorPresence,
-    Census, HelloRecord, HomeKind, Policy, State,
+    report_findings, save_record, Census, HelloRecord, HomeKind, Policy,
 };
 use crate::gate::seat_authority::{held_grants_in, HeldGrant};
 use chrono::Duration;
@@ -35,6 +38,7 @@ fn rewrite(root: &Path, entry: &AgentRegistryEntry) {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac7c7798 | ai:claude
 #[test]
 fn a_session_start_write_that_loses_the_lock_is_restored_by_the_next_prompt() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -59,6 +63,7 @@ fn a_session_start_write_that_loses_the_lock_is_restored_by_the_next_prompt() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac7c7798 | ai:claude
 #[test]
 fn a_deleted_live_row_is_back_after_the_prompt_heartbeat_with_a_newer_heartbeat() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -79,6 +84,7 @@ fn a_deleted_live_row_is_back_after_the_prompt_heartbeat_with_a_newer_heartbeat(
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn the_prompt_heartbeat_refreshes_last_active_at_and_keeps_started_at() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -104,6 +110,7 @@ fn the_prompt_heartbeat_refreshes_last_active_at_and_keeps_started_at() {
 // A gc that wrongly ended a live session's row is undone by its next prompt.
 #[test]
 fn a_live_sessions_ended_row_is_unended_by_its_heartbeat() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -133,6 +140,7 @@ fn recycled_row(pid: u32) -> AgentRegistryEntry {
         started_at: at,
         last_active_at: at + Duration::hours(2),
         role: Some("advisor".into()),
+        seat: None,
         current_spec: None,
         worktree_path: PathBuf::from("earlier-worktree"),
         source: "session-start-hook".into(),
@@ -165,6 +173,7 @@ fn retired_rows(root: &Path) -> Vec<AgentRegistryEntry> {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac2ed7f1 | ai:claude
 #[test]
 fn a_recycled_pids_row_is_retired_not_overwritten_at_session_start() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -184,6 +193,7 @@ fn a_recycled_pids_row_is_retired_not_overwritten_at_session_start() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac2ed7f1 | ai:claude
 #[test]
 fn a_recycled_pids_row_is_retired_by_the_launcher_and_the_mcp_touch() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -219,6 +229,7 @@ fn a_recycled_pids_row_is_retired_by_the_launcher_and_the_mcp_touch() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn gc_ends_a_dead_row_at_its_last_heartbeat_not_its_start() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let mut row = recycled_row(u32::MAX - 1);
@@ -237,6 +248,7 @@ fn gc_ends_a_dead_row_at_its_last_heartbeat_not_its_start() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn a_headless_lane_that_ends_hours_after_its_one_prompt_is_ended_at_its_exit() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let sid = "6f1c2a43-1d2e-4b7a-9c3f-2a1b0c9d8e7f";
@@ -268,6 +280,7 @@ fn a_headless_lane_that_ends_hours_after_its_one_prompt_is_ended_at_its_exit() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac551a24 | ai:claude
 #[test]
 fn mark_session_ended_touches_only_the_live_row_of_that_session() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let mut other = recycled_row(u32::MAX - 2);
@@ -292,6 +305,7 @@ fn mark_session_ended_touches_only_the_live_row_of_that_session() {
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
 #[test]
 fn a_reregistered_row_keeps_the_launch_mail_wake_and_records_the_thread() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let root = tmp.path();
     let pid = std::process::id();
@@ -342,40 +356,9 @@ fn overdue_record(main: &Path) -> HelloRecord {
     }
 }
 
-// AC3: the reason never asserts "no live advisor"; a live grant holder makes
-// the advisor "live but unregistered".
-// trace:BUG-B6B1278890774EF993D2EBC327862470-151.acecfc34 | ai:claude
-#[test]
-fn the_unreachable_reason_says_registered_or_live_but_unregistered() {
-    let tmp = TempDir::new().unwrap();
-    let rec = overdue_record(tmp.path());
-    let policy = Policy::default();
-
-    let none = unreachable_reason(&rec, &AdvisorPresence::Unknown, &policy);
-    assert!(none.starts_with("no registered advisor"), "{none}");
-    assert!(!none.contains("no live advisor"), "{none}");
-
-    let presence = presence_from(&[], &[grant("0123456789ab", vec![(4242, true)])], false);
-    let AdvisorPresence::Unregistered(evidence) = &presence else {
-        panic!("{presence:?}");
-    };
-    assert!(evidence.contains("pid 4242") && evidence.contains("01234567"));
-    let State::Unreachable(live) = state(&rec, || presence.clone(), &policy, Utc::now()) else {
-        panic!("expected unreachable");
-    };
-    assert!(live.contains("live but unregistered"), "{live}");
-
-    // A grant whose holder is gone is no evidence; a recent advisor turn is.
-    let dead = presence_from(&[], &[grant("dead", vec![(4243, false)])], false);
-    assert_eq!(dead, AdvisorPresence::Unknown);
-    assert!(matches!(
-        presence_from(&[], &[], true),
-        AdvisorPresence::Unregistered(_)
-    ));
-}
-
 #[test]
 fn held_grants_reads_only_unexpired_unrevoked_grants_for_the_seat() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let now = Utc::now();
     let write = |id: &str, seat: &str, expires: DateTime<Utc>, revoked: bool| {
@@ -400,41 +383,40 @@ fn held_grants_reads_only_unexpired_unrevoked_grants_for_the_seat() {
     assert_eq!(grants[0].live_holder(), Some(4242));
 }
 
-// AC4: the doctor check reports the registered advisors, the unregistered
-// evidence and the hello's state instead of nothing.
+// AC4: the doctor check reports the advisor status, grant holders and hello state.
+// trace:BUG-2638 | ai:codex
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151.ac561615 | ai:claude
 #[test]
-fn the_doctor_report_names_advisors_grant_evidence_and_hello_state() {
+fn bug_2638_deputy_grant_is_not_an_advisor_session() {
+    let _env = crate::test_env::env_lock();
     let tmp = TempDir::new().unwrap();
     let main = tmp.path();
     save_record(main, &overdue_record(main)).unwrap();
+    let mut deputy = register_role_enter_agent(main, "advisor", main.into()).unwrap();
+    deputy.name = Some("product-deputy".into());
+    let pid = deputy.pid;
     let census = Census::new(
         main,
         main.join(".aida-store"),
-        Vec::new(),
+        vec![deputy],
         Policy::default(),
         Utc::now(),
     );
-    let rows = report_findings(
-        &census,
-        &[grant("0123456789ab", vec![(4242, true)])],
-        false,
-        false,
-    );
+    let rows = report_findings(&census, &[grant("0123456789ab", vec![(pid, true)])], false);
     let summaries: Vec<&str> = rows.iter().map(|r| r.summary.as_str()).collect();
     let has = |needle: &str| summaries.iter().any(|s| s.contains(needle));
     assert!(has("registered advisors: none"), "{summaries:#?}");
     assert!(has("advisor seat grant 01234567"), "{summaries:#?}");
-    assert!(has("pid 4242 live"), "{summaries:#?}");
-    assert!(has("an advisor is live but unregistered"), "{summaries:#?}");
+    assert!(has(&format!("pid {pid} live")), "{summaries:#?}");
+    assert!(has("no advisor running"), "{summaries:#?}");
+    assert!(!has("live but unregistered"), "{summaries:#?}");
     assert!(
-        has("hello from claude-implementer-9") && has("live but unregistered"),
+        has("hello from claude-implementer-9") && has("no registered advisor"),
         "{summaries:#?}"
     );
-    assert!(!has("no live advisor"), "{summaries:#?}");
 
     // From a sandbox, a holder that reads as gone is reported unobservable.
-    let sandboxed = report_findings(&census, &[grant("feed", vec![(7, false)])], false, true);
+    let sandboxed = report_findings(&census, &[grant("feed", vec![(7, false)])], true);
     assert!(sandboxed
         .iter()
         .any(|r| r.summary.contains("not observable from this sandbox")));

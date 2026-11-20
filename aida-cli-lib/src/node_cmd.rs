@@ -12,6 +12,7 @@
 //! `aida init` (which also acquires a node) and stay in `main.rs`, reached
 //! via `crate::`.
 
+use crate::hostname;
 use anyhow::Result;
 use colored::Colorize;
 
@@ -28,7 +29,12 @@ mod node_inventory;
 #[path = "node_hub.rs"]
 mod node_hub;
 
-use crate::*;
+use crate::{
+    auto_allocate_initial_blocks, current_user_id, find_project_root_from, read_id_format_policy,
+    resolve_node_name, session_misc_cmd, team_cmd, NodeCommand, TeamCommand,
+};
+use anyhow::Context;
+use std::io::IsTerminal;
 
 /// Handle `aida node` subcommands. Operates on the orphan-store worktree
 /// at `store_path` (typically `.aida-store/`).
@@ -1161,7 +1167,6 @@ fn run_node(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <NodeArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

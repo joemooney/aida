@@ -326,6 +326,28 @@ mod sys {
     pub(super) fn invalidate(key: libc::c_long) -> bool {
         keyctl(KEYCTL_INVALIDATE, key, 0, 0) >= 0
     }
+
+    // trace:TASK-3820 | ai:claude
+    pub(super) fn set_timeout(key: libc::c_long, ttl_secs: u32) -> bool {
+        keyctl(KEYCTL_SET_TIMEOUT, key, ttl_secs.max(1) as libc::c_long, 0) >= 0
+    }
+}
+
+/// TASK-3820: move grant `id`'s key expiry to `ttl_secs` from now when this
+/// process possesses the key (the operator renews from the terminal that
+/// entered the role). `false` when the key is not reachable from here: a key
+/// in another terminal's session keyring keeps its earlier expiry.
+// trace:TASK-3820 | ai:claude
+pub(crate) fn extend(id: &str, ttl_secs: u32) -> bool {
+    #[cfg(target_os = "linux")]
+    {
+        matches!(sys::search(&description(id)), Ok(Some(key)) if sys::set_timeout(key, ttl_secs))
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (id, ttl_secs);
+        false
+    }
 }
 
 /// Whether this process can use a session keyring at all.

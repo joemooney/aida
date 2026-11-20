@@ -1,9 +1,21 @@
 # STORY-2704: porcelain crate sketch
 <!-- trace:STORY-2704 | ai:codex -->
 
-Date: 2026-11-10. Sketch only; implementation awaits sketch signoff.
-The advisor's 03:58 UTC brief controls this slice: documentation only, published
-with `(Refs STORY-2704)`. No command, crate, installer or authority change here.
+Date: 2026-11-10. Sketch signed off with changes at 04:13 UTC.
+The binding 08:58 UTC ruling authorizes slice 1 implementation: the workspace
+multi-call crate, flow tenant, public no-write ledger API and dev-build support.
+The built-in stays registered and temporarily includes the tenant's report source
+to keep the overlap identical. Nested dispatch is S2; release/install/upgrade is S3.
+The remaining sections retain the broader sketch as future-slice design context.
+
+Round-4 ruling (2026-11-10 15:59 UTC): remove
+`successful_reader_can_exceed_former_report_deadline`; do not add a test-time
+budget exception for its unconditional 46-second sleep. The test is removed.
+The accepted non-blocking environment-alias finding was assigned to S2; the
+current implementation already reuses core `output_format::parse_output_format`.
+`environment_alias_error_parity` covers `table`/`human` and `agent`/`toon` for
+invalid windows, missing readers and failed readers, including stream parity
+through both `aida-porcelain flow` and the `aida-flow` multicall entrypoint.
 
 ## Evidence and boundary
 
@@ -151,9 +163,10 @@ read-only tenants fit STORY-2698's proposed LOW tier without granting exemption.
 
 ## STORY-2699 migration and implementation checks
 
-STORY-2699's comments report a built-in module/registry implementation, but it
-is absent from this lane snapshot. Rebase/inspect the landed or host-published
-version before extracting it; this sketch neither duplicates nor completes it.
+STORY-2699 is present in [flow_cmd.rs](../../aida-cli-lib/src/flow_cmd.rs),
+with its parser in `flow_cmd_args.rs` and `FLOW` in `command_registry.rs`.
+Its early handler declares `StakeholderAction::Read`, but still depends on
+private project-root, gate-ledger, timeout, output-format and forge helpers.
 Move its report parser, aggregation, single classifier table and fixtures into
 `aida-porcelain/src/flow/`, preserving `aida flow report`, human/JSON output,
 window semantics, medians/p90 and existing argument errors. Remove its built-in
@@ -167,7 +180,14 @@ classification/severity. Keep recursive verdict semantics (kind `verdict`,
 record verdict/findings/recorded_at), unknown missing measurements, and refusal
 on unreadable evidence or truncated forge results. Extract ledger reads behind
 public read-only plumbing before moving calculations; do not copy private-file
-walks. Preserve timestamp/evidence limits and fixture/fake-forge coverage for
+walks. Specifically replace `read_ledger` and `train_members` (which directly
+walk `.aida/gate-ledger`) with a documented query for verdict events and train
+coverage. Move the fixed read operations behind `forge::flow_report_read` to
+a public read adapter or documented JSON query; do not export CLI internals
+just to make the move compile. Preserve the bounded Git `origin/main` history
+query, forge timeouts and truncation refusals. Use the existing report JSON as
+a before/after compatibility fixture, not a call back into `aida flow report`
+after its built-in registration is removed. Preserve fixture/fake-forge coverage for
 each metric; no live network requirement for regression tests.
 
 Implementation acceptance should extend STORY-1641 black-box coverage beside
@@ -178,3 +198,21 @@ Add multi-call argv[0], install conflict, upgrade, rollback/recovery and no-writ
 controls above. Update docs/cli and affected help goldens in implementation.
 Sketch signoff precedes those code changes; this document alone claims no
 runtime tests or completion credit for STORY-2704 or STORY-2699.
+
+## Round 2 implementation correction (2026-11-10)
+
+The advisor ruling supersedes the migration sketch during built-in overlap.
+The built-in owns flow evidence collection. Porcelain reads its public
+`aida flow report --json` output and renders it; it never spawns `gh`.
+The final round-3 ruling selects `AIDA_BIN`, then the running binary’s sibling
+`aida`, then PATH. It adds no report timeout and preserves child failure output
+and exit code instead of rendering the failure again.
+No porcelain exemption is added to the forge-read ratchet. The parity test
+runs without `ignore` against checkout-built binaries, with fixture forge
+responses and filesystem snapshots.
+
+Dev generations retain `.inventory.json` with their binary and alias names.
+Rollback removes members absent from the restored generation, including when
+rolling back the first porcelain adoption, and can roll forward again. Complete
+snapshots keep interrupted generation swaps replayable. Legacy generations
+without inventories use their actual installed members.

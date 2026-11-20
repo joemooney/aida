@@ -161,9 +161,16 @@ fn user_passthrough_add_dir_is_refused() {
 /// tree, not this process's cwd: a lane outside git gets the bare posture
 /// even though this test process runs inside a git checkout.
 // trace:TASK-2712 | ai:claude
+// The outside-repository fixture uses Linux's /tmp rather than inherited TMPDIR.
+// trace:BUG-2634 | ai:codex
+#[cfg(target_os = "linux")]
 #[test]
 fn a_native_resume_uses_the_resumed_lanes_tree() {
-    let tmp = tempfile::tempdir().unwrap();
+    // TMPDIR can be the lane's cargo scratch directory beneath a checkout.
+    // This case specifically needs a tree outside Git, independent of TMPDIR.
+    // trace:BUG-2634 | ai:codex
+    let tmp = tempfile::tempdir_in("/tmp").unwrap();
+    assert!(crate::find_project_root_from(tmp.path()).is_err());
     let lane = crate::session::CodexLane {
         tree: tmp.path(),
         role: Some("reviewer"),
@@ -338,7 +345,17 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
     // to the one helper: headless spawns and coordinators by seat,
     // `exec_codex_session` and the queue-work resume by the lane's role, the
     // interactive reviewer plan and the reviewer resume as `reviewer`.
-    let session: String = production_source("session.rs").split_whitespace().collect();
+    let session: String = [
+        "session/list.rs",
+        "session/interactive.rs",
+        "session/headless.rs",
+        "session/containment.rs",
+        "session/lease_lock.rs",
+    ]
+    .map(production_source)
+    .join("\n")
+    .split_whitespace()
+    .collect();
     assert!(
         session.contains(
             "rescope_native_codex_for_seat(host_main,vendor,&mutargs,&headless_worktree_root(),seat.as_str(),)?"
@@ -387,7 +404,11 @@ fn every_codex_spawn_path_gets_the_shared_write_set() {
     let queue: String = production_source("queue_cmd/work.rs")
         .split_whitespace()
         .collect();
-    assert!(queue.contains("child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),);"));
+    // trace:BUG-2699 | ai:claude — the brief-delivery hook trails the role;
+    // the lane's role still selects its write set.
+    assert!(queue.contains(
+        "child_grant_id.as_deref(),Some(&crate::canonical_role_name(&role)),on_brief_delivery,);"
+    ));
     // TASK-2032: the reviewer resume carries the pinned host main.
     assert!(queue.contains("role:Some(\"reviewer\"),host_main,"));
 }

@@ -2,10 +2,20 @@
 //! aida-cli-lib core helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_bin, build_banner, command_output_with_timeout_detail, config_parse_error_message,
+    config_path_for_project, is_executable, not_found, queue_cmd, resolve_aida_exe_from,
+    resolve_glab_binary, BoundedCommandOutput, Command,
+};
+use aida_core::{RequirementStatus, RequirementsStore};
+use anyhow::Result;
+use colored::Colorize;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
-/// Get the default author from AIDA_AUTHOR environment variable or fall back to system user.
-/// Format recommendation: "ai:claude:username" for AI-assisted work
+/// Resolve the human author: AIDA_AUTHOR, person-valued AIDA_USER, then USER.
+// trace:BUG-2614 | ai:codex
 pub fn get_default_author() -> String {
     // One resolution shared with the store's write events.
     // trace:STORY-1674 | ai:claude
@@ -299,6 +309,14 @@ pub(crate) fn resolve_forge_binary_before(
     debug_env: &str,
     deadline: Option<std::time::Instant>,
 ) -> Option<std::path::PathBuf> {
+    let scoped = crate::forge_lookup::forge_lookup_deadline();
+    let deadline = match (deadline, scoped) {
+        (Some(deadline), Some(scoped)) => Some(deadline.min(scoped)),
+        (deadline, scoped) => deadline.or(scoped),
+    };
+    if deadline.is_some_and(|deadline| std::time::Instant::now() >= deadline) {
+        return None;
+    }
     if !test_env.is_empty() {
         if let Ok(test_path) = std::env::var(test_env) {
             return Some(std::path::PathBuf::from(test_path));

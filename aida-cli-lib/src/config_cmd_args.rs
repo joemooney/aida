@@ -140,11 +140,15 @@ pub enum ConfigPermissionsCommand {
         #[clap(long)]
         json: bool,
     },
-    /// Show the resolved per-agent posture and diagnostics. Read-only.
+    /// Show a compact per-agent permission summary. Read-only.
+    // trace:TASK-3779 | ai:codex
     Show {
         /// Emit machine-readable JSON.
         #[clap(long)]
         json: bool,
+        /// Include launch flags, scope, findings and full refusal diagnostics.
+        #[clap(long, short)]
+        verbose: bool,
     },
 
     /// Apply a named agent permission posture to local or user config files.

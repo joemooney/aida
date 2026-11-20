@@ -206,3 +206,31 @@ fn the_idle_fallback_reads_activity_mtimes_not_started_at() {
         dispatch_health_ps::newest_mtime_age_secs(&paths, std::time::SystemTime::now()).unwrap();
     assert!(age < 60, "a just-touched worktree is not idle: {age}s");
 }
+
+// trace:BUG-2627 | ai:codex
+#[test]
+fn bug_2627_unknown_routes_reason_without_salvage_even_if_probe_marks_dirty() {
+    let probe = dispatch_health_ps::WorktreeGitProbe {
+        dirty: true,
+        error: Some("sandbox inspection denied".into()),
+        ..Default::default()
+    };
+    let item = unknown_probe_item("deadbeef1234", Path::new("/seat"), &probe).unwrap();
+    let outcome = HygieneOutcome {
+        unknown: vec![item],
+        ..Default::default()
+    };
+    let line = route_line(&keep_items(&outcome, 24));
+    assert!(
+        line.contains("dirty state unknown: sandbox inspection denied"),
+        "{line}"
+    );
+    assert!(!line.contains("salvage"), "{line}");
+    assert!(!line.contains("commit"), "{line}");
+    assert!(unknown_probe_item(
+        "dead",
+        Path::new("/seat"),
+        &dispatch_health_ps::WorktreeGitProbe::default()
+    )
+    .is_none());
+}

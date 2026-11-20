@@ -43,6 +43,15 @@
     ],
     "PostToolUse": [
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-activity-heartbeat.sh claude",
+            "timeout": 2
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -63,6 +72,15 @@
       }
     ],
     "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-activity-heartbeat.sh claude",
+            "timeout": 2
+          }
+        ]
+      },
       {
         "hooks": [
           {
@@ -136,6 +154,15 @@
         "hooks": [
           {
             "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-activity-heartbeat.sh claude",
+            "timeout": 2
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
             "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-subagent-stop.sh",
             "timeout": 5
           }
@@ -143,6 +170,15 @@
       }
     ],
     "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/aida-activity-heartbeat.sh claude",
+            "timeout": 2
+          }
+        ]
+      },
       {
         "hooks": [
           {

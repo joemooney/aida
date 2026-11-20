@@ -42,3 +42,9 @@ reason = "kept out of scaffolded skill catalogues to save per-call context"
 [[not_a_skill]]
 name = "aida-intent"
 reason = "kept out of scaffolded skill catalogues to save per-call context"
+
+# Explicit shared registration: aida-emergency-fix ships by derived inclusion
+# (no exclusion entry). Claude uses skills/aida-emergency-fix/SKILL.md; Codex
+# and Antigravity use skills-portable/aida-emergency-fix.md. The targeted
+# pr_emergency_land_skill_reaches_claude_and_portable_inventory test pins it.
+# trace:STORY-2732 | ai:codex

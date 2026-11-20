@@ -151,14 +151,16 @@ fn routine_status_and_drain_paths_run_no_host_git_in_a_seat_clone() {
 
 /// Doctor's lease heal and the other bulk lease cleanups go through
 /// `force_cleanup_lease`: for a clone lease it is `seat_clone::destroy`
-/// (salvage first), never `git worktree remove`, and the lease goes only
-/// once the clone is gone.
+/// (salvage first), never `git worktree remove`. Dirty clones and their leases
+/// remain recoverable; automatic cleanup does not authorize discard.
+/// trace:BUG-2606 | ai:codex
 #[cfg(target_os = "linux")]
 #[test]
-fn task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first() {
+fn task_2053_bwrap_bulk_lease_cleanup_retains_a_dirty_seat_clone_salvage_first() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    let inputs = aida_core::exec_context::Environment::capture();
     let live = std::process::Command::new("bwrap")
         .args(["--unshare-all", "--ro-bind", "/", "/", "--dev", "/dev"])
         .args(["--proc", "/proc", "true"])
@@ -166,18 +168,18 @@ fn task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first() {
         .is_ok_and(|o| o.status.success());
     if !live {
         assert!(
-            std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
+            inputs.get("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
             "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap cannot run here"
         );
         eprintln!("SKIP (bwrap unavailable)");
         return;
     }
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let clone = leased_clone(&fx, "heal", "c0ffee000042");
     std::fs::write(clone.join("wip.txt"), "unsaved\n").unwrap();
     let (shim_dir, log, _) = git_shim(&fx);
     let mut env = crate::test_env::EnvVarsGuard::snapshot(&["PATH", "AIDA_TRUST_PID_NAMESPACE"]);
-    let inputs = aida_core::exec_context::Environment::capture();
     let path = std::env::join_paths(std::iter::once(shim_dir).chain(std::env::split_paths(
         inputs.get("PATH").unwrap_or_default(),
     )))
@@ -195,11 +197,14 @@ fn task_2053_bwrap_bulk_lease_cleanup_destroys_a_seat_clone_salvage_first() {
         .into_iter()
         .find(|l| l.id == "c0ffee000042")
         .unwrap();
-    assert!(crate::leases::force_cleanup_lease(&fx.main, &lease));
-    assert!(!clone.exists());
+    assert!(!crate::leases::force_cleanup_lease(&fx.main, &lease));
+    assert_eq!(
+        std::fs::read_to_string(clone.join("wip.txt")).unwrap(),
+        "unsaved\n"
+    );
     assert!(crate::list_leases(&fx.main)
         .iter()
-        .all(|l| l.id != lease.id));
+        .any(|l| l.id == lease.id));
     let violations = untagged_in(&log, &clone);
     assert!(
         violations.is_empty(),
@@ -371,6 +376,9 @@ fn task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
         eprintln!("SKIP (bwrap unavailable)");
         return;
     }
+    // Supply writer admission for the fixture mailbox independently of host processes.
+    // trace:TASK-3133 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
     let _namespace = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
 
@@ -412,4 +420,100 @@ fn task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage() {
     assert!(crate::list_leases(&fx.main)
         .iter()
         .all(|l| l.id != lease.id));
+}
+
+// trace:BUG-2536 | ai:codex
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2536_clone_launch_head_allows_published_result() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let _namespace = crate::test_env::EnvVarGuard::set("AIDA_TRUST_PID_NAMESPACE", "1");
+    let clone = leased_clone(&fx, "published", "c0ffee002536");
+    let expected = super::tests::git_ok(&fx.main, &["rev-parse", "origin/main"]);
+    // Negative control: the former launch read deliberately refuses this tree.
+    assert_eq!(crate::headless_background::seat_head(&clone), None);
+    let head = crate::standalone_implementer::implementer_launch_head(&fx.main, &clone);
+    assert_eq!(head.as_deref(), Some(expected.as_str()));
+    assert_eq!(
+        crate::standalone_implementer::implementer_launch_head(&fx.main, &fx.main),
+        Some(super::tests::git_ok(&fx.main, &["rev-parse", "HEAD"]))
+    );
+    let attempt = crate::lane_result::Attempt::begin(&fx.main, "BUG-2536", Some("feat")).unwrap();
+    attempt
+        .bind("BUG-2536", "feat", None, head.as_deref())
+        .unwrap();
+    attempt.started(123);
+    super::tests::git_ok(&clone, &["config", "user.email", "test@example.com"]);
+    super::tests::git_ok(&clone, &["config", "user.name", "AIDA Test"]);
+    for args in [
+        ["commit", "--allow-empty", "-qm", "lane work"],
+        ["push", "-q", "origin", "HEAD:feat"],
+    ] {
+        let output = crate::test_git::git_command()
+            .current_dir(&clone)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let published = crate::headless_background::SeatState::read(&clone, "feat");
+    let new_head = published.pushed_head().expect("published clone head");
+    assert_ne!(head.as_deref(), Some(new_head));
+    assert_eq!(
+        attempt
+            .finish_outcome(
+                &crate::standalone_implementer::Outcome::PrOpened {
+                    pr: 42,
+                    head: Some(new_head.into()),
+                },
+                true,
+                false,
+                false,
+            )
+            .unwrap(),
+        crate::lane_result::Kind::Pushed
+    );
+    let line = attempt.line().unwrap();
+    assert!(
+        line.contains(&format!("reason=new-published-head pr=42 head={new_head}")),
+        "{line}"
+    );
+}
+
+// trace:BUG-2549 | ai:codex
+#[test]
+fn bug_2549_exit_head_uses_contained_clone_accessor() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "recovery", "c0ffee254901");
+    let expected = match probe(&fx.main, &clone) {
+        Probe::Known(facts) => facts.head,
+        _ => None,
+    };
+    let leases = crate::leases::list_leases_strict_all(&fx.main).unwrap();
+    let (shim_dir, log, _) = git_shim(&fx);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&shim_dir);
+    // Positive control: the recorder detects ordinary host Git in this clone.
+    std::process::Command::new("git")
+        .current_dir(&clone)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .unwrap();
+    assert!(!untagged_in(&log, &clone).is_empty());
+    std::fs::write(&log, "").unwrap();
+    let head = crate::lane_recovery::exit_head(&fx.main, "feat", &leases).unwrap();
+    assert_eq!(head, expected);
+    assert!(
+        untagged_in(&log, &clone).is_empty(),
+        "host Git ran in the seat clone"
+    );
 }

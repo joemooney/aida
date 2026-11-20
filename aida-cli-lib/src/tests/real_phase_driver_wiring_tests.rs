@@ -165,6 +165,7 @@ fn mint_lease(root: &std::path::Path, lease_id: &str, branch: &str, claude_id: O
         batch_name: None,
         agent_name: None,
         plan: None,
+        seat: None,
         items: vec![],
     };
     crate::session_manifest::save(
@@ -1969,6 +1970,85 @@ exit 0
     assert_eq!(driver.pr_number, None);
 }
 
+/// BUG-2684: a drain's phase-1 child whose lane disk preflight refused below
+/// the floor rolled its setup back and exits deferred. The phase reports a
+/// `DiskDeferred` failure at once: it is never shelved, never retried as a
+/// transient, and never spends the lost-child replacement launch, so the spec
+/// stays queued for the next ordinary admission.
+// trace:BUG-2684 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2684_phase1_disk_deferral_parks_nothing_and_launches_no_replacement() {
+    let tmp = tempfile::tempdir().unwrap();
+    let remote = tmp.path().join("origin.git");
+    let root = tmp.path().join("root");
+    git(tmp.path(), &["init", "--bare", "-b", "main", "origin.git"]);
+    std::fs::create_dir_all(&root).unwrap();
+    git(&root, &["init", "-q"]);
+    git(&root, &["config", "user.email", "aida@example.invalid"]);
+    git(&root, &["config", "user.name", "AIDA Test"]);
+    git(&root, &["checkout", "-q", "-b", "main"]);
+    git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    write_commit(&root, "README.md", "fixture\n", "chore: init");
+    git(&root, &["push", "-q", "-u", "origin", "main"]);
+    git(&root, &["remote", "set-head", "origin", "main"]);
+    git(&root, &["checkout", "-q", "-b", "story-9003-work"]);
+
+    // The child counts its launches, then exits as the deferred pickup does.
+    let launches = tmp.path().join("launches");
+    let fake_aida = tmp.path().join("aida");
+    crate::test_exec::write_executable(
+        &fake_aida,
+        &format!(
+            "#!/usr/bin/env bash\necho launched >> {}\nexit {}\n",
+            launches.display(),
+            crate::lane_disk_deferral::EXIT_CODE
+        ),
+    );
+    let _env = crate::test_env::EnvVarsGuard::set(&[
+        ("AIDA_EXIT_POLL_MS", "1"),
+        ("AIDA_GH_VERIFY_RETRIES", "0"),
+    ]);
+    let mut driver = driver(&root, "STORY-9003");
+    driver.aida_exe = fake_aida;
+    driver.no_human = Some(crate::auto_complete::NoHumanMode::Both);
+
+    let failure = match driver.run_implementer() {
+        Err(f) => f,
+        Ok(ok) => panic!("a deferred launch must not succeed: {ok:?}"),
+    };
+    assert_eq!(
+        failure.kind,
+        FailureKind::DiskDeferred,
+        "{}",
+        failure.reason
+    );
+    assert!(
+        failure.reason.contains("STORY-9003 stays queued"),
+        "{}",
+        failure.reason
+    );
+    assert_eq!(
+        std::fs::read_to_string(&launches).unwrap(),
+        "launched\n",
+        "no replacement launch is spent on a deferral"
+    );
+    assert!(
+        !FailureKind::DiskDeferred.is_shelvable(),
+        "nothing is parked"
+    );
+    assert!(!crate::auto_complete::is_transient_retry_cause(
+        FailureKind::DiskDeferred.cause_slug()
+    ));
+    assert_eq!(
+        driver.reconcile_failure(Phase::Implementer, &failure),
+        PhaseReconcile::GenuineFailure
+    );
+}
+
 // ============================================================================
 // TASK-1449: `RealPhaseDriver::rework_no_op_failure` refuses on unknowns and
 // compares against the blocking verdict's reviewed_sha on the DISPATCHED
@@ -2812,6 +2892,32 @@ fn t1458_fixture() -> (
     let older = git(&root, &["rev-parse", "HEAD"]);
     write_commit(&root, "a.txt", "b", "head");
     let head = git(&root, &["rev-parse", "HEAD"]);
+    // The merge boundary refreshes the base and the default branch before
+    // the merge (STORY-2903), so the origin URL resolves to a local bare
+    // clone. trace:STORY-2903 | ai:claude
+    let served = tmp.path().join("served.git");
+    git(
+        tmp.path(),
+        &["clone", "-q", "--bare", "repo", served.to_str().unwrap()],
+    );
+    // `insteadOf` rewrites the remote URL the forge is detected from, so
+    // the forge is named in config, as in the ship fixtures.
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    let config = root.join(".aida/config.toml");
+    let existing = std::fs::read_to_string(&config).unwrap_or_default();
+    std::fs::write(
+        &config,
+        format!("[forge]\nprovider = \"github\"\n{existing}"),
+    )
+    .unwrap();
+    git(
+        &root,
+        &[
+            "config",
+            &format!("url.{}.insteadOf", served.display()),
+            "https://github.com/acme/repo.git",
+        ],
+    );
     let bin = tmp.path().join("bin");
     std::fs::create_dir_all(&bin).unwrap();
     let calls = tmp.path().join("gh-calls");
@@ -3430,4 +3536,65 @@ fn story_2326_auto_punt_uses_phase_driver_control_fixture() {
     );
     driver.aida_exe = root.join("missing-control");
     assert!(driver.auto_punt_text_question(root, "session").is_none());
+}
+
+/// STORY-2903 round 2 (finding 1): a review-gated drain on a hosted forge
+/// skips the CI wait yet still binds the review to the PR's exact head, so
+/// the real driver passes from its CI phase into the review entry checks
+/// (which refused this state before), marked as a CI skip.
+// trace:STORY-2903 | ai:claude
+#[cfg(unix)]
+#[test]
+fn a_review_gated_drain_skips_ci_and_still_enters_review_at_the_exact_head() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, gh, _calls, head, _) = t1458_fixture();
+    // The default branch's policy: review-gated.
+    let config = root.join(".aida/config.toml");
+    let existing = std::fs::read_to_string(&config).unwrap_or_default();
+    std::fs::write(
+        &config,
+        format!("{existing}[landing]\nmode = \"review-gated\"\n"),
+    )
+    .unwrap();
+    git(&root, &["add", ".aida/config.toml"]);
+    git(&root, &["commit", "-q", "-m", "review-gated"]);
+    let inherited = aida_core::exec_context::Environment::capture()
+        .get("PATH")
+        .map(|p| p.to_os_string())
+        .unwrap_or_default();
+    let path = std::env::join_paths(
+        std::iter::once(gh.parent().unwrap().to_path_buf())
+            .chain(std::env::split_paths(&inherited)),
+    )
+    .unwrap();
+    let _env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "implementer",
+        &[],
+        &[
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+            ("PATH", Some(path.to_str().unwrap())),
+        ],
+    );
+    let mut d = driver(&root, "TASK-1458");
+    d.phase_done_pr = Some(77);
+    d.phase_done_head = Some(head.clone());
+    d.branch = Some("task-1458".into());
+    d.finish_ci()
+        .expect("the CI phase passes without waiting for CI");
+    assert_eq!(
+        d.ci_skipped,
+        Some(crate::phase_driver_trait::CI_SKIPPED_REVIEW_GATED)
+    );
+    assert_eq!(d.ci_terminal_sha.as_deref(), Some(head.as_str()));
+    assert!(
+        d.landing_entry
+            .as_ref()
+            .is_some_and(|e| !e.policy.waits_for_ci()),
+        "the merge will run under the snapshot that skipped CI"
+    );
+    d.verify_ci_for_review()
+        .expect("the review entry check passes at the bound head");
 }

@@ -15,7 +15,6 @@
 //!
 //! trace:SPIKE-30 | ai:claude
 
-use crate::process_retry::RetryEtxtbsy;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -37,6 +36,10 @@ pub struct ClaudeAgentEntry {
     pub name: Option<String>,
     #[serde(default)]
     pub status: Option<String>,
+    // Cross-session versions without prompt text still supply useful waiting evidence.
+    // trace:BUG-2631 | ai:codex
+    #[serde(default, alias = "promptText")]
+    pub prompt: Option<serde_json::Value>,
 }
 
 impl ClaudeAgentEntry {
@@ -53,10 +56,11 @@ pub fn list_agents() -> Option<Vec<ClaudeAgentEntry>> {
     // TASK-1081: route the vendor binary through the single headless-spawn
     // resolver so an `AIDA_AGENT_CMD` mock also serves the liveness query; unset
     // yields the native `claude` (byte-identical). trace:TASK-1081
-    let output = Command::new(crate::session::resolve_agent_program("claude"))
-        .args(["agents", "--json"])
-        .output_retrying_etxtbsy()
-        .ok()?;
+    // A cross-session observer must never hang behind the session it observes.
+    // trace:BUG-2631 | ai:codex
+    let mut command = Command::new(crate::session::resolve_agent_program("claude"));
+    command.args(["agents", "--json"]);
+    let output = crate::command_output_with_timeout(command, std::time::Duration::from_secs(2))?;
     if !output.status.success() {
         return None;
     }
@@ -104,6 +108,7 @@ mod tests {
             session_id: session_id.into(),
             name: None,
             status: None,
+            prompt: None,
         }
     }
 

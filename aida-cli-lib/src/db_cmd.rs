@@ -27,6 +27,9 @@ pub(crate) fn handle_db_command(
     requirements_path: &std::path::PathBuf,
 ) -> Result<()> {
     match cmd {
+        DbCommand::BackfillCompletedAt { .. } => {
+            anyhow::bail!("Completion-date backfill requires a git-backed store");
+        }
         DbCommand::Path => {
             // trace:FR-1-076 | ai:claude
             println!("{}", requirements_path.display());
@@ -547,13 +550,31 @@ fn run_db(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::db_block::{handle_block_command, handle_db_check_collisions};
+    use crate::db_reconcile::{
+        auto_bump_done_to_completed_with, auto_bump_enabled, handle_db_reconcile_status,
+        print_auto_bump_summary,
+    };
+    use crate::output_format::output_format_is_json;
+    use crate::rel_cards::load_dispenser;
+    use crate::role::enforce_team_gate;
+    use crate::{handle_retire_legacy_ids, permissions};
+    use aida_core::Storage;
     let args = <DbArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
         // The audit reads committed trees from the store path alone, before any
         // backend opens. trace:BUG-2017 | ai:claude
         Some(crate::cmdkit::StoreCtx::Distributed { store_path, .. }) => match &args {
+            // trace:BUG-2597 | ai:codex — a data-only audit needs no ID dispenser.
+            DbArgs {
+                inner: DbCommand::BackfillCompletedAt { dry_run: true },
+            } => {
+                let backend = aida_core::GitBackend::new(store_path)?;
+                backfill_completed_at(&backend, true)?;
+                Ok(crate::cmdkit::Flow::Return)
+            }
             DbArgs {
                 inner: DbCommand::AuditIds(audit),
             } => {
@@ -569,6 +590,12 @@ fn run_db(
             use crate::git_backend_cmd::*;
             let (store_path, backend) = (*store_path, *backend);
             match &args {
+                // trace:BUG-2597 | ai:codex
+                DbArgs {
+                    inner: DbCommand::BackfillCompletedAt { dry_run },
+                } => {
+                    backfill_completed_at(backend, *dry_run)?;
+                }
                 DbArgs {
                     inner: DbCommand::Path,
                 } => {
@@ -679,79 +706,148 @@ fn run_db(
                         anyhow::bail!("Not a git repository: {}", store_path.display());
                     }
 
-                    // trace:TASK-1717 | ai:claude — the pending commit, the pull
-                    // --rebase and its own cleanup, the collision scan and the
-                    // capture of the commit to push are ONE store-writer transaction
-                    // under the store write lock, so no spec edit, queue write,
-                    // mailbox digest or second sync can touch the index/HEAD between
-                    // them. The push, mirrors, auto-bump and maintenance run after
-                    // the lock is released.
-                    let window = aida_core::db::with_store_write_lock(store_path, || {
-                        db_sync_local_window(store_path, *pull, *push, message.as_deref())
-                    })?;
-                    let branch = window.branch.clone();
-                    let push_sha = window.head;
+                    // BUG-2565: the whole sync as one closure so a pull-only
+                    // sync can coalesce with a concurrent one. trace:BUG-2565 | ai:claude
+                    let sync = || -> Result<()> {
+                        // trace:TASK-1717 | ai:claude — the pending commit, the pull
+                        // --rebase and its own cleanup, the collision scan and the
+                        // capture of the commit to push are ONE store-writer transaction
+                        // under the store write lock, so no spec edit, queue write,
+                        // mailbox digest or second sync can touch the index/HEAD between
+                        // them. The push, mirrors, auto-bump and maintenance run after
+                        // the lock is released.
+                        // Use push's admitted snapshot and publication path, with local
+                        // reads before the store lock and writes inside the transaction.
+                        // trace:BUG-2615 | ai:codex
+                        let mailbox = push
+                            .then(|| {
+                                crate::store_push_pull::mailbox_publish_snapshot(
+                                    store_path, "db sync",
+                                )
+                            })
+                            .flatten();
+                        let window = aida_core::db::with_store_write_lock(store_path, || {
+                            aida_core::git_ops::has_changes_checked(store_path)?;
+                            let mailbox = mailbox;
+                            let published = mailbox
+                                .as_ref()
+                                .map(|publication| {
+                                    crate::store_push_pull::publish_mailbox_snapshot(
+                                        store_path,
+                                        publication,
+                                        "db sync",
+                                    )
+                                })
+                                .unwrap_or(0);
+                            let window =
+                                db_sync_local_window(store_path, *pull, *push, message.as_deref())?;
+                            crate::store_push_pull::report_mailbox_published(published, "db sync");
+                            Ok(window)
+                        })?;
+                        let branch = window.branch.clone();
+                        let push_sha = window.head;
 
-                    if let Some(conflicts) = &window.conflicts {
-                        if !conflicts.is_empty() {
-                            println!();
-                            println!("{}", "Conflicts detected:".red().bold());
-                            for conflict in conflicts {
+                        if let Some(conflicts) = &window.conflicts {
+                            if !conflicts.is_empty() {
                                 println!();
-                                print!("{}", conflict);
-                            }
-                            println!();
-                            println!(
+                                println!("{}", "Conflicts detected:".red().bold());
+                                for conflict in conflicts {
+                                    println!();
+                                    print!("{}", conflict);
+                                }
+                                println!();
+                                println!(
                             "Resolve with: aida edit <ID> --title/--status/... to pick the version you want."
                         );
-                        }
+                            }
 
-                        // STORY-86: also scan the code repo's default
-                        // branch for any spec-referencing commits that
-                        // arrived (possibly via a separate `git pull`)
-                        // and bump matching Done specs. `db sync --pull`
-                        // is decoupled from `git pull`, so we don't know
-                        // a pre_sha here — fall back to HEAD~50. The
-                        // `status == Done` guard inside the helper keeps
-                        // this idempotent. trace:STORY-86 | ai:claude
-                        if auto_bump_enabled() {
-                            if let Some(project_root) = store_path.parent() {
-                                let storage = Storage::new(store_path);
-                                match auto_bump_done_to_completed(
-                                    project_root,
-                                    store_path,
-                                    None,
-                                    &storage,
-                                ) {
-                                    Ok(flips) => print_auto_bump_summary(&flips),
-                                    Err(e) => {
-                                        eprintln!(
-                                            "  {} auto-bump failed: {}",
-                                            "Warning:".yellow().bold(),
-                                            e
-                                        );
+                            // STORY-86: also scan the code repo's default
+                            // branch for any spec-referencing commits that
+                            // arrived (possibly via a separate `git pull`)
+                            // and bump matching Done specs. `db sync --pull`
+                            // is decoupled from `git pull`, so we don't know
+                            // a pre_sha here — fall back to HEAD~50. The
+                            // `status == Done` guard inside the helper keeps
+                            // this idempotent. trace:STORY-86 | ai:claude
+                            // BUG-2565: skip the wide rescan when neither HEAD moved
+                            // since the last one completed. trace:BUG-2565 | ai:claude
+                            if auto_bump_enabled() {
+                                if let Some(project_root) = store_path.parent().filter(|root| {
+                                    !crate::store_pull_coalesce::reconcile_is_current(
+                                        root, store_path,
+                                    )
+                                }) {
+                                    let storage = Storage::new(store_path);
+                                    match auto_bump_done_to_completed_with(
+                                        project_root,
+                                        store_path,
+                                        None,
+                                        &storage,
+                                        true,
+                                    ) {
+                                        Ok((flips, scanned)) => {
+                                            print_auto_bump_summary(&flips);
+                                            if scanned {
+                                                crate::store_pull_coalesce::record_reconcile(
+                                                    project_root,
+                                                    store_path,
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!(
+                                                "  {} auto-bump failed: {}",
+                                                "Warning:".yellow().bold(),
+                                                e
+                                            );
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    if *push {
-                        db_sync_push_leg(store_path, &branch, push_sha)?;
-                    }
+                        if *push {
+                            db_sync_push_leg(store_path, &branch, push_sha)?;
+                        }
 
-                    if !pull && !push {
-                        println!("Use --pull and/or --push to sync with remote.");
-                        println!("  aida db sync --pull --push");
-                    }
+                        if !pull && !push {
+                            println!("Use --pull and/or --push to sync with remote.");
+                            println!("  aida db sync --pull --push");
+                        }
 
-                    // TASK-1033: opportunistic store maintenance after a sync that
-                    // touched the store — ensure the lowered gc.auto is set, then
-                    // `git gc --auto` (a cheap no-op unless the threshold is exceeded).
-                    // Best-effort; never fails the sync.
-                    if *pull || *push {
-                        aida_core::git_ops::opportunistic_store_gc(store_path);
+                        // TASK-1033: opportunistic store maintenance after a sync that
+                        // touched the store — ensure the lowered gc.auto is set, then
+                        // `git gc --auto` (a cheap no-op unless the threshold is exceeded).
+                        // Best-effort; never fails the sync.
+                        if *pull || *push {
+                            aida_core::git_ops::opportunistic_store_gc(store_path);
+                        }
+                        Ok(())
+                    };
+                    // BUG-2565: concurrent pull-only syncs of this checkout run
+                    // one pull; a caller that waited reuses its result unless
+                    // the store gained changes it did not commit.
+                    // trace:BUG-2565 | ai:claude
+                    if *pull && !*push {
+                        let project_root = store_path.parent().unwrap_or(store_path);
+                        let turn = crate::store_pull_coalesce::coalesce(
+                            store_path,
+                            project_root,
+                            "db-sync-pull",
+                            || crate::store_pull_coalesce::store_pull_reusable(store_path),
+                            sync,
+                        )?;
+                        if turn == crate::store_pull_coalesce::Turn::Reused {
+                            println!(
+                                "Store already pulled by a sync that just finished in this checkout — reused its result."
+                            );
+                        }
+                    } else {
+                        sync()?;
                     }
+                    // trace:BUG-2609 | ai:codex — include push retries, auto-bumps and
+                    // coalesced pulls before refreshing this caller's read cache.
+                    backend.ensure_cache_fresh_with_schema_retry()?;
                 }
                 // Status
                 DbArgs {
@@ -995,7 +1091,8 @@ fn db_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     crate::cmdkit::CmdPolicy {
         stakeholder: match inner {
             Some(
-                DbCommand::Path
+                DbCommand::BackfillCompletedAt { dry_run: true }
+                | DbCommand::Path
                 | DbCommand::Info
                 | DbCommand::Status
                 | DbCommand::AuditIds(_)
@@ -1009,5 +1106,61 @@ fn db_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
         per_write_auto_push: false,
         skip_role_restore_prompt: false,
         team_identity_write: false,
+    }
+}
+
+// trace:BUG-2597 | ai:codex
+fn backfill_completed_at<B: DatabaseBackend>(backend: &B, dry_run: bool) -> Result<()> {
+    let report = if dry_run {
+        aida_core::terminal_timestamps::backfill(&mut backend.load()?)
+    } else {
+        let mut report = None;
+        backend.update_atomically(|store| {
+            report = Some(aida_core::terminal_timestamps::backfill(store));
+        })?;
+        report.unwrap()
+    };
+    println!(
+        "{} completion date(s) {}",
+        report.updated,
+        if dry_run {
+            "would be backfilled"
+        } else {
+            "backfilled"
+        }
+    );
+    for reason in &report.unresolved {
+        println!("Unresolved: {reason}");
+    }
+    println!(
+        "{} Completed record(s) lack completion history",
+        report.unresolved.len()
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod completion_date_tests {
+    use super::*;
+
+    // trace:BUG-2597 | ai:codex
+    #[test]
+    fn bug2597_backfill_dry_run_has_read_policy_and_rewrite_requires_database_policy() {
+        use crate::stakeholder_role::StakeholderAction;
+        for dry_run in [true, false] {
+            let mut argv = vec!["db", "backfill-completed-at"];
+            if dry_run {
+                argv.push("--dry-run");
+            }
+            let matches = <DbArgs as clap::CommandFactory>::command()
+                .try_get_matches_from(argv)
+                .unwrap();
+            let policy = db_cli_policy(&matches);
+            assert!(if dry_run {
+                matches!(policy.stakeholder, StakeholderAction::Read)
+            } else {
+                matches!(policy.stakeholder, StakeholderAction::Database)
+            });
+        }
     }
 }

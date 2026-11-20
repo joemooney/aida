@@ -21,6 +21,19 @@ c = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(c)
 
 
+# trace:TASK-3095 | ai:codex
+@contextlib.contextmanager
+def fixture_home_directory():
+    # Keep output outside /tmp and /run without bypassing the production guard.
+    # The checkout is writable in native lanes; the operator's home need not be.
+    with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]) as directory:
+        home = Path(directory)
+        fixture_home = home / ".aida"
+        fixture_home.mkdir()
+        with mock.patch.object(Path, "home", return_value=home):
+            yield fixture_home
+
+
 # trace:BUG-2497 | ai:codex
 class RunCompletionTests(unittest.TestCase):
     def test_agy_verified_terminal_receipt_completes_run(self):
@@ -264,10 +277,11 @@ items = [{name = "preserved", enabled = true}]
 
     # trace:TASK-3048 | ai:codex
     def test_agy_aida_setup_uses_policy_from_selected_binary(self):
-        fixture_home = Path.home() / ".aida"
-        fixture_home.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+        with fixture_home_directory() as directory:
             root = Path(directory) / "experiment"
+            credential = Path.home() / "custom-runtime/custom-token"
+            credential.parent.mkdir()
+            credential.touch()
             calls = []
             def setup(argv, cwd, env, report, stage):
                 calls.append((stage, argv))
@@ -275,7 +289,8 @@ items = [{name = "preserved", enabled = true}]
                     (cwd / ".aida").mkdir()
                     (cwd / ".aida/config.toml").write_text('[contained]\nallowed_hosts = ["old.test"]\n')
                 if stage == "runtime-policy":
-                    return json.dumps({"auth_hosts": ["binary.fixture.test"]})
+                    return json.dumps({"auth_hosts": ["binary.fixture.test"],
+                                       "relative": "custom-runtime", "credential": "custom-token"})
                 if stage == "policy-add":
                     raise ValueError("test-stop-after-policy")
                 return "fixture"
@@ -300,12 +315,13 @@ items = [{name = "preserved", enabled = true}]
     # Relocating role authority must not silently relocate the credential source.
     # trace:TASK-3048 | ai:codex
     def test_agy_fixture_keeps_original_credential_source(self):
-        fixture_home = Path.home() / ".aida"
-        fixture_home.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+        with fixture_home_directory() as directory:
             root = Path(directory) / "experiment"
             runtime = {"auth_hosts": ["binary.fixture.test"], "relative": ".gemini/antigravity-cli",
                        "credential": "antigravity-oauth-token"}
+            credential = Path.home() / runtime["relative"] / runtime["credential"]
+            credential.parent.mkdir(parents=True)
+            credential.touch()
             def setup(argv, cwd, env, report, stage):
                 if stage == "init":
                     (cwd / ".aida").mkdir()
@@ -329,6 +345,19 @@ items = [{name = "preserved", enabled = true}]
                  mock.patch.object(c, "launch_aida_continuation", side_effect=continuation) as launched:
                 c.run_aida(args)
             launched.assert_called_once()
+            # The descriptor and original HOME still identify the source
+            # when it is absent. Refuse before issuing grants.
+            credential.unlink()
+            args.output = Path(directory) / "missing"
+            with mock.patch.object(c.shutil, "which", return_value=c.sys.executable), \
+                 mock.patch.object(c, "fixture_command", side_effect=setup), \
+                 mock.patch.object(c, "fixture_role_enter") as role_enter:
+                with self.assertRaises(ValueError) as refused:
+                    c.run_aida(args)
+            role_enter.assert_not_called()
+            self.assertEqual(str(refused.exception), f"credential not found at {credential}")
+            saved = json.loads((args.output / "report.json").read_text())
+            self.assertEqual(saved["unsupported_reason"], str(refused.exception))
 
     # trace:TASK-3048 | ai:codex
     def test_agy_queue_vendor_and_diagnostic_selection(self):
@@ -428,10 +457,47 @@ items = [{name = "preserved", enabled = true}]
             self.assertEqual(saved["production_admission"], "closed")
             network.close.assert_called_once()
 
+    # trace:BUG-2602 | ai:codex
+    def test_codex_refusal_references_existing_diagnostics(self):
+        for stage in ("seat-preflight", "launcher", "spawn"):
+            with self.subTest(stage=stage), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "repository").mkdir()
+                aida = root / "fixture-aida"
+                if stage != "spawn":
+                    aida.write_text("#!/bin/sh\ncase \"$1\" in\n"
+                                    "role) " + ("echo 'seat refused' >&2; exit 19" if stage == "seat-preflight"
+                                                else "exit 0") + ";;\n"
+                                    "queue) echo 'launcher refused' >&2; exit 23;;\nesac\n")
+                    aida.chmod(0o700)
+                c.write_json(root / "aida-state.json", {
+                    "report": {"vendor": "codex", "setup": [], "checks": {},
+                               "containment_receipt_sha256": None},
+                    "aida": str(aida), "spec": "TASK-1", "timeout": 1})
+                network = mock.Mock(config={}, receipts=list(range(8)))
+                with contextlib.ExitStack() as stack:
+                    stack.enter_context(mock.patch.object(c, "Network", return_value=network))
+                    stack.enter_context(mock.patch.object(c, "network_attempts", return_value={}))
+                    if stage == "spawn":
+                        stack.enter_context(mock.patch.object(c, "fixture_command"))
+                    with self.assertRaises(ValueError):
+                        c.continue_aida(root)
+                report = json.loads((root / "report.json").read_text())
+                self.assertFalse(report["production_launcher_credit"])
+                if stage == "seat-preflight":
+                    self.assertEqual(report["diagnostic_files"], ["report.json"])
+                    self.assertEqual(report["setup"][-1]["exit_code"], 19)
+                    self.assertEqual(report["setup"][-1]["stderr"], "seat refused\n")
+                else:
+                    self.assertEqual(report["diagnostic_files"],
+                                     ["report.json", "stdout.jsonl", "stderr.txt"])
+                    self.assertTrue(all((root / name).is_file() for name in report["diagnostic_files"]))
+                    self.assertEqual(report["launch"]["exit_code"], None if stage == "spawn" else 23)
+                    self.assertIn("No such file" if stage == "spawn" else "launcher refused",
+                                  (root / "stderr.txt").read_text())
+
     # trace:BUG-2462 | ai:codex
     def test_role_refusal_reports_actual_diagnostic_and_keeps_tty(self):
-        fixture_home = Path.home() / ".aida"
-        fixture_home.mkdir(exist_ok=True)
         diagnostics = [
             ("cannot check seat: the AIDA store has no team roster (registry/team.toml is missing)",
              "fixture-roster-missing"),
@@ -440,7 +506,7 @@ items = [{name = "preserved", enabled = true}]
             ("cannot check seat: unreadable roster", "fixture-role-enter-refused"),
         ]
         for diagnostic, reason in diagnostics:
-            with self.subTest(reason=reason), tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+            with self.subTest(reason=reason), fixture_home_directory() as directory:
                 root = Path(directory) / "experiment"
                 args = type("Args", (), {"vendor": "codex", "output": root, "timeout": 1})()
                 def fixture(argv, repo, env, report, stage):
@@ -817,15 +883,67 @@ assert termios.tcgetattr(0) == before
                 self.assertEqual(saved["unsupported_reason"], "fixture-" + refused + "-refused")
 
     def test_continuation_restores_terminal_stdin_without_secret_argv(self):
-        child = mock.MagicMock(returncode=0)
+        child = mock.MagicMock(returncode=0, pid=12345)
         child.__enter__.return_value = child
-        with mock.patch.object(c.subprocess, "Popen", return_value=child) as popen:
+        # No real terminal handoff or signal may use a synthetic child PID.
+        # trace:BUG-2624 | ai:codex
+        with mock.patch.object(c.subprocess, "Popen", return_value=child) as popen, \
+                mock.patch.object(c, "foreground_continuation", return_value=contextlib.nullcontext()), \
+                mock.patch.object(c.os, "killpg") as killpg:
             self.assertEqual(c.launch_aida_continuation("private-eval-block", Path("."), {}, 30), 0)
+        killpg.assert_not_called()
         self.assertNotIn("private-eval-block", str(popen.call_args))
         self.assertEqual(popen.call_args.args[0], ["bash", "-c", 'eval "$(cat)"'])
         fd = popen.call_args.kwargs["pass_fds"][0]
         self.assertEqual(child.communicate.call_args.args[0],
                          f"exec 0<&{fd}\nexec {fd}<&-\nprivate-eval-block")
+
+    # trace:BUG-2624 | ai:codex
+    def test_special_and_mock_groups_never_reach_signal_or_terminal_syscalls(self):
+        for group in (-100, -1, 0, 1, True, 2**31, os.getpgrp(), mock.MagicMock()):
+            with self.subTest(group=group), mock.patch.object(c.os, "killpg") as killpg, \
+                    mock.patch.object(c.os, "tcsetpgrp") as foreground:
+                for signum in (c.signal.SIGTERM, c.signal.SIGKILL):
+                    self.assertFalse(c.signal_child_group(group, signum))
+                with self.assertRaisesRegex(ValueError, "unsafe continuation"):
+                    with c.foreground_continuation(group):
+                        self.fail("unsafe group accepted")
+                killpg.assert_not_called()
+                foreground.assert_not_called()
+
+    # trace:BUG-2624 | ai:codex
+    def test_bounded_launch_cleanup_rejects_unsafe_group(self):
+        for group in (0, 1, -1, os.getpgrp(), mock.MagicMock()):
+            child = mock.MagicMock(pid=group, returncode=0)
+            child.poll.return_value = 0
+            with tempfile.TemporaryDirectory() as directory, \
+                    mock.patch.object(c.subprocess, "Popen", return_value=child), \
+                    mock.patch.object(c.os, "killpg") as killpg:
+                c.bounded_launch(["fixture"], Path("."), {}, Path(directory), 1)
+                killpg.assert_not_called()
+                child.wait.assert_called_once_with(timeout=5)
+
+    # trace:BUG-2624 | ai:codex
+    def test_safe_group_signal_and_already_exited_group(self):
+        with mock.patch.object(c.os, "getpgrp", return_value=23456), \
+                mock.patch.object(c.os, "killpg") as killpg:
+            self.assertTrue(c.signal_child_group(12345, c.signal.SIGTERM))
+            killpg.assert_called_once_with(12345, c.signal.SIGTERM)
+            killpg.side_effect = ProcessLookupError
+            self.assertTrue(c.signal_child_group(12345, c.signal.SIGKILL))
+
+    # Reproduce the original failure path without delivering any real signal.
+    # trace:BUG-2624 | ai:codex
+    def test_mock_pid_continuation_cleanup_never_signals(self):
+        for group in (1, 0, -1, os.getpgrp(), mock.MagicMock()):
+            child = mock.MagicMock(pid=group)
+            child.__enter__.return_value = child
+            child.wait.side_effect = [c.subprocess.TimeoutExpired("bash", 1), 0]
+            with mock.patch.object(c.subprocess, "Popen", return_value=child), \
+                    mock.patch.object(c.os, "killpg") as killpg:
+                with self.assertRaisesRegex(ValueError, "unsafe continuation"):
+                    c.launch_aida_continuation("script", Path("."), {}, 1)
+                killpg.assert_not_called()
 
     def test_continuation_preserves_actual_terminal_stdin(self):
         master, terminal = pty.openpty()
@@ -894,6 +1012,7 @@ assert termios.tcgetattr(0) == before
                     if needs_kill:
                         child.wait.side_effect = [c.subprocess.TimeoutExpired("bash", 10), 0]
                     with mock.patch.object(c.subprocess, "Popen") as popen, \
+                            mock.patch.object(c, "foreground_continuation", return_value=contextlib.nullcontext()), \
                             mock.patch.object(c.os, "killpg") as killpg:
                         popen.return_value = child
                         child.__enter__.return_value = child
@@ -934,9 +1053,7 @@ assert termios.tcgetattr(0) == before
             self.assertEqual(list(path.parent.iterdir()), [path])
 
     def test_outer_timeout_keeps_continuation_setup_and_budgets_setup_time(self):
-        fixture_home = Path.home() / ".aida"
-        fixture_home.mkdir(exist_ok=True)
-        with tempfile.TemporaryDirectory(dir=fixture_home) as directory:
+        with fixture_home_directory() as directory:
             root = Path(directory) / "experiment"
             args = type("Args", (), {"vendor": "codex", "output": root, "timeout": 123})()
             def fixture(argv, repo, env, report, stage):
@@ -1155,6 +1272,27 @@ class EvidenceTests(unittest.TestCase):
 
     def snapshot(self):
         return c.snapshot(self.writes)
+
+    # trace:BUG-2602 | ai:codex
+    def test_native_agy_reports_missing_token_at_discovered_runtime(self):
+        with fixture_home_directory() as directory:
+            home = Path.home()
+            (home / ".gemini").mkdir()
+            runtime = home / "relocated agy runtime"
+            (home / ".gemini/antigravity-cli").symlink_to(runtime, target_is_directory=True)
+            args = c.argparse.Namespace(vendor="agy", output=Path(directory) / "run", timeout=1)
+            network = mock.Mock(config={"ca": __file__}, receipts=list(range(8)))
+            with mock.patch.object(c.shutil, "which", return_value="/bin/true"), \
+                 mock.patch.object(c, "trusted_policy_sha", return_value="policy-tip"), \
+                 mock.patch.object(c, "Network", return_value=network), \
+                 mock.patch.object(c, "network_attempts", return_value={}), \
+                 mock.patch.object(c, "bounded_launch") as launch:
+                with self.assertRaises(ValueError) as refused:
+                    c.run(args)
+            self.assertEqual(str(refused.exception),
+                             f"credential not found at {runtime / 'antigravity-oauth-token'}")
+            launch.assert_not_called()
+            network.close.assert_called_once()
 
     def evaluate(self, results=None, receipts=(), receipt=False):
         return c.evaluate(self.writes, self.before, self.snapshot(), "nonce", results, receipts, receipt)

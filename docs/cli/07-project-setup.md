@@ -10,6 +10,20 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 
 *(Covered deeply in [Chapter 1](01-getting-started.md#aida-init).)* The one-time bootstrap that turns a git repo into an AIDA project — store + cache + selected agent scaffolding, plus first-machine-global defaults. MCP registration is explicit opt-in with `--with-mcp`; the CLI is the default surface for CLI-capable agents. See the [operator route](../operator-setup.md) for adopted projects and sibling-store setup. Everything else in this chapter either *re-runs a slice* of what `init` set up (`scaffold`, `memories`, `statusline`) or *configures* it after the fact (`config`, `type`, `feature`, `node`). If you're reading Chapter 7 to set up a project, start there.
 
+`aida init DIR --gitlab HOST/GROUP` checks project CI/CD after publication.
+Disabled CI/CD requires an affirmative terminal answer or explicit
+`--gitlab-enable-ci`; headless runs never prompt or enable it implicitly.
+A missing `.gitlab-ci.yml` receives a starter test job for detected Python,
+Rust or Node projects, with `--gitlab-runner-tags linux,docker` selecting tags.
+Existing pipelines are preserved. Review the generated dependency and test
+commands; a new project may still need tests or a lockfile before CI passes.
+The runner check requires an online, unpaused runner matching the selected tags;
+permission errors, policy restrictions and unknown availability are reported as
+incomplete setup. It does not register runners or change group/instance policy.
+After enabling previously disabled CI/CD, start a pipeline for the pushed branch
+in GitLab. On a resumed repository, commit and push any newly generated pipeline.
+<!-- trace:STORY-2701 | ai:codex -->
+
 ---
 
 ### `aida remote`
@@ -66,6 +80,24 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 - `bootstrap --revision` takes a full commit id because CI should name the revision it reviewed, not whatever the branch points at when the job starts.
 - `uninstall --dry-run` exists because uninstall deletes files; the dry run lists the same rows without removing anything.
 
+<!-- trace:TASK-3815 | ai:codex -->
+**Implementer self-review.** Set `[review] implementer_self_review = true` in
+`.aida/config.toml` to ask implementers to apply the review template's acceptance
+walk and adversarial probes before pushing. It defaults to false and takes
+effect after the config lands on the trusted default branch. Queue pickup and
+role launch briefs embed steps 3 and 4 directly from the reviewer skill template.
+Implementers fix findings, repeat relevant checks, and add a spec comment headed
+`## Implementer self-review`, naming the reviewed HEAD and evidence. Native lanes
+also inspect uncommitted changes and new files before handing publication to the
+host. This comment records self-review and grants no independent review credit.
+
+A pushed standalone lane result includes `self_review=recorded`,
+`self_review=missing-comment`, or `self_review=unknown` when enabled. A nonempty
+comment with the exact heading must have been created during this attempt;
+older comments do not count. Unreadable evidence is unknown. These observations
+never block publication and do not verify the quality or HEAD coverage of the
+comment. Disabled projects retain their existing result output.
+
 **Gotchas.** `aida init` in an adopted clone takes this path automatically, and `aida init --minimal`, `aida init --centralized`, `aida init --sibling` and `aida init --store-path`, which write product files, refuse there: it attaches the store worktree, projects the plane before anything else could create `.aida/config.toml`, and sets up the node identity, writing no `.gitignore`, config or scaffolding. If the clone shows adoption evidence (a locator, or an `adoption/` namespace) but the plane cannot be read, `init` refuses and writes nothing. A requirement write commits to `aida-store`, which is also the conventional plane, so `status` can read *stale* after an `aida add`; the next launch or `refresh` catches up. Harnesses started outside `aida agent` do not receive plane guidance, and tracked `AGENTS.md`/`CLAUDE.md` are never written to simulate it. `uninstall` leaves the clone adopted, so a later launch projects again.
 
 **Chains with** — `aida init` (which calls it), `aida agent` (which refreshes the projection and delivers its guidance), `aida config` (which refuses to edit a projected file and points at the plane).
@@ -88,6 +120,36 @@ The one-time and once-in-a-while plumbing: the commands that *establish* an AIDA
 - `hints` — toggles the state-transition hints printed inline (queue drained → open PR, etc.). `false` quiets them project-wide; the `AIDA_HINTS=false` env var overrides per-shell without writing config.
 - `user` — writes `~/.aida/preferences.toml` (preferred node id, fallback email). Machine-global, not per-project — it seeds defaults for future `init`s.
 - `menu` — a navigable TUI listing every configurable item — per row the knob's name, current value, built-in default, where it was set (scope: `.aida/config.toml` / env / built-in default), and a one-line explanation. The visual companion to `config show`: same resolved surface (it reuses the same policy registry), one scrollable screen, arrow-key navigation (↑/↓ or j/k, PgUp/PgDn, g/G, q/Esc). Read-only for now — edit knobs with the matching `config` subcommand or your `config.toml`. Needs a TTY; without one it prints a pointer to `config show` and exits cleanly.
+
+<!-- trace:STORY-2821 | ai:claude -->
+**Reviewer stale-base policy.** `[review] stale_base` in `.aida/config.toml`
+decides which stale change heads a reviewer launch refuses. It is listed by
+`aida config show` and `aida config menu`, and has three values:
+
+```toml
+[review]
+stale_base = "refuse-on-overlap"   # default
+```
+
+| Value | A reviewer is refused when |
+|---|---|
+| `refuse-on-overlap` | the base branch has moved and touched a file the change also touches |
+| `refuse-on-conflict` | the base branch no longer merges cleanly into the change's head |
+| `warn` | never |
+
+Every reviewer launch reads it: `aida queue work <PR-N> --role reviewer`, the
+review watcher, the drain's review phase, `aida review` and `aida human
+review` (the last two never refuse; there the setting decides whether the
+inline rebase offer defaults to yes).
+`aida queue work <PR-N> --role reviewer --allow-stale-base` overrides a refusal
+for one launch, as setting the `stale_base` key to `warn` would. Whatever the
+value, a reviewer launched on a
+stale head is told in its prompt how many commits behind the base the head is
+and which of its files changed there. A value outside the three is a
+configuration error that names them; it is never read as the default. Use the
+default where review is the last gate before merge; `refuse-on-conflict` or
+`warn` suit a project whose landing path rebuilds and retests each change on
+the current base.
 
 **Gotchas.** `config user` is *machine-global* (`~/.aida/`), while `config show`/`format`/`menu`/etc. are *project-local*. Same command noun, two scopes — don't expect `config user` to behave per-project.
 
@@ -359,11 +421,49 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 
+**Expired exited-worker claims.** `aida doctor check leases` also reports shared
+claims whose local session record has disappeared. On the holder's host, an
+expired non-process-backed claim is eligible only when its creator is provably
+dead and the exact headless worker record is stamped exited with a dead worker.
+Live processes, foreign PID namespaces and missing or mismatched worker records
+retain the claim. `aida doctor heal stale-leases --id shared-<claim-id> --yes`
+heals one reported generation; omitting `--id` uses the ordinary category-wide
+heal. Recovery saves dirty work first, rechecks the claim under the store lock,
+and releases only that shared claim, retaining local leases and worktrees.
+`aida session start --force-claim` accepts the same death evidence for relaunch.
+Failed or punted headless exits also attempt salvage and release of their own
+captured claim generation; successors and publication vetoes remain intact.
+<!-- trace:BUG-2655 | ai:codex -->
+
 **Stranded commits.** Work committed in an agent worktree can exist on one machine only: a branch that was never pushed, or a commit the session reset its branch past before pushing. Such a commit is reachable from the worktree's reflog alone, and `git gc` eventually deletes it. `aida doctor check stranded-commits` reports both shapes for every worktree: a branch with commits on no remote (with the ahead count, spec, tip and age), and a commit whose subject names a spec but which no branch, tag, remote or worktree `HEAD` reaches. A branch whose content already landed on the default branch, a commit whose rebased or amended rewrite is on a branch, and work for a closed spec are not reported. The check reads reflogs only (a bounded number of entries per worktree) and never runs `git fsck`. `aida doctor --heal --category stranded-commits` pins each dangling commit to a `recovered/<spec>` branch (or `recovered/<spec>-<sha>` when that name is taken); it never moves or deletes a ref, and it leaves unpushed branches for you to push. <!-- trace:TASK-1595 | ai:claude -->
+
+**Review-ledger bindings.** Review verdicts are read through an index that binds each spec to the changes reviewed for it, so a lookup reads those changes only and not the whole review history. A ledger written by an older AIDA has no such index, and every verdict lookup refuses until it is built, naming this fix. `aida doctor` reports it under `gate-ledger-bindings`, and `aida doctor --heal --yes --category gate-ledger-bindings` builds the index: it reads every change's review history once, while no other command writes, and marks the index complete at the end. If it is interrupted, run it again. Run it once after upgrading, before the next review. <!-- trace:BUG-2531 | ai:claude -->
 
 **Chains with** — the structural counterpart to the content lenses; pairs with `db` (Ch.10) for store-level repair.
 
 ---
+
+### Landing health
+
+`aida doctor check landing-health` answers why landing has slowed: it reports
+an old default-branch tip with open PRs, the same failing CI check and step
+across several PRs, and required steps approaching their timeout. Add
+`--fail-on-findings` for a scheduled guard. Forge reads supply the current base
+tip and step evidence; workflow timeout values come from that pinned base
+revision. Unsupported step timings and nonliteral timeout expressions appear
+as `unknown` coverage and do not fail the check.
+
+Project `[landing_health]` settings are `enabled`, `landing_gap_minutes`
+(default 90), `shared_failure_min_prs` (3), `step_headroom_ratio` (0.8), and
+`window_minutes` (1440, the failure/duration lookback). This repository enables
+`landing-health-guard` every 15 minutes. Its `landing-health-guard-route` job
+goes to advisor while a live advisor is registered, otherwise product. The
+prompt starts with diagnosing the shared CI cause and includes the doctor
+command to rerun. The schedule tick supplies this routing under every vendor.
+GitLab reports shared failures at job-script granularity; individual script
+step timing remains unknown.
+<!-- trace:STORY-2849 | ai:codex -->
+
 
 ### `aida defer`
 
@@ -451,7 +551,7 @@ Names resolve in a fixed order, and the first match wins:
 
 If nothing matches, you get the usual unrecognised-command error and exit code. When an installed extension has a similar name, a hint names it.
 
-The extension name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
+For a top-level extension, the name must be the first argument: `aida deploy --format json` works, `aida --format json deploy` does not. On Windows, `aida-<name>.exe`, `.cmd` and `.bat` are found as well.
 
 The extension receives its context in the environment:
 - `AIDA_PROJECT_ROOT` — the project root, when run inside an AIDA project (unset otherwise).
@@ -463,6 +563,26 @@ The extension receives its context in the environment:
 Extensions should read and change project state through `"$AIDA_BIN" ... --json` (or another machine output format), never by writing to the store or cache files directly. That keeps validation, history and sync in one place.
 
 Installed extensions are listed in an "External commands" group in `aida help`, `aida help --all` and `aida alias list`, and `aida help <name>` runs `aida-<name> --help`.
+
+<!-- trace:STORY-2704 | ai:codex -->
+A built-in parent also admits one installed child extension: for example,
+`aida review summary` runs `aida-review-summary`, passing only the arguments
+after `summary`. Built-in children, their aliases, and existing built-in argv
+rewrites win. Clap validates global and parent options, including their values,
+before dispatch; required positional
+operands are never extension slots. Optional parent operands coexist with named
+children, as in `review [SPEC]`. External parents own all of their remaining
+arguments: `aida flow report` runs `aida-flow report`.
+Nested extensions currently refuse explicit `--project`/`-p`, `--file`,
+`--server`/`-s` and `--canonical-ids` before the child name: their context comes
+from the current directory. Arguments after the child name belong to the
+extension, including any same-spelled options.
+
+`aida review --help` and `aida help review` list installed child extensions with
+their paths. `aida review summary --help` and `aida help review summary` delegate
+to the extension with `--help`. Top-level help and alias JSON show the full
+invocation (`aida review summary`), retaining the executable path. Discovery
+never executes a candidate. Missing extensions retain the usual parser result.
 
 ---
 
@@ -637,7 +757,27 @@ forwarding, and raw Git, other AIDA writers that do not go through the store
 backend, and foreign writers can bypass it. No history rewrite, clean export,
 live hub hook or automatic forwarding is provided.
 
-#### Per-vendor containment posture
+### `aida config permissions show` — per-vendor containment posture
+
+`aida config permissions show` prints one row per vendor with its tier,
+configured/refused launch state, and net effect. This is a configuration view,
+not a live launch probe.
+
+Use `aida config permissions show --verbose` for launch flags, scope, sandbox
+details, findings, and full refusal explanations. The equivalent short invocation
+is `aida config permissions show -v`.
+
+Use `aida config permissions show --json` for the complete structured report,
+regardless of verbosity.
+<!-- trace:TASK-3779 | ai:codex -->
+
+`aida config permissions show` prints one row per vendor with its tier,
+configured/refused launch state, and net effect. This is a configuration view,
+not a live launch probe. Use `aida config permissions show --verbose` (or
+`aida config permissions show -v`) for launch flags, scope, sandbox details,
+findings, and full refusal explanations. `aida config permissions show --json`
+retains the complete structured report regardless of verbosity.
+<!-- trace:TASK-3779 | ai:codex -->
 
 With containment enabled, opt Codex into its native sandbox in the trusted
 default-branch `.aida/config.toml` (the committed `origin/<default>` copy read
@@ -647,6 +787,17 @@ through `trusted_config`; local default branch only when no remote ref exists):
 [contained.vendors]
 codex = "native"
 ```
+
+Interactive `aida init` offers this opt-in when Codex is selected (including
+`--agent codex`). The separate consent defaults to no and warns that native
+sandboxing is weaker than AIDA containment. Existing vendor settings are preserved.
+Non-interactive init and `aida init --no-agent-config` do not grant the opt-in.
+
+`aida config permissions show` reports each vendor's configured containment-policy
+launch readiness separately from permission consistency: `ready` or `refused`
+with the reason and a fix command. JSON includes `launch_readiness` and
+`launch_fix` on each agent row. Readiness here does not verify credentials,
+installed executables, or launch-surface prerequisites.
 
 Branch-local edits cannot grant this opt-in. Merge the configuration into the
 default branch before launching Codex under containment. Missing or unreadable
@@ -841,6 +992,57 @@ same checks as one array. Required failures exit nonzero. Advisory NOTE rows
 carry `required: false` in JSON and do not fail the command.
 `aida init` prints local checks without a live store-network probe or blocking setup.
 
+From the operator checkout, use `aida doctor --lane-binaries HOST` with one
+flag per SSH alias to report the launcher's binary SHA and build age for each
+host against the locally recorded `origin/main`. Fetch first to refresh that
+reference. `--json` includes the pinned SHA and per-host results, with
+`unknown` for unavailable evidence. See the
+[lane host checklist](../advanced/lane-host-checklist.md#scheduled-autobuild)
+for installing and verifying scheduled builds.
+<!-- trace:TASK-3812 | ai:codex -->
+
+<!-- trace:BUG-2682 | ai:codex -->
+<!-- trace:BUG-2682 | ai:claude -->
+Managed headless implementer launches, including fresh reworks and drain
+implementers, share a startup cap across checkouts and users in the host
+network namespace. Set the per-machine policy in `/etc/aida/lanes.toml`.
+The defaults are two concurrent starts and 4 GiB of memory headroom. For
+dell1, set the cold-start cap to four.
+
+```toml
+[lanes]
+max_concurrent_cold_starts = 4
+min_memory_headroom_gib = 4
+```
+
+When startup slots are full, a launcher waits for a slot. A slot is released
+when the lane's first delegated `cargo build` or `cargo test` finishes
+building (Cargo reports `Finished`, or a crate fails to compile after its
+dependencies were built), the launch ends, or 30 minutes elapse. A job that
+builds nothing, such as `--help`, and a `cargo check` keep the slot. Available RAM plus free swap is measured at
+admission and while waiting. A reading below the floor or an unreadable
+measurement refuses the start with a diagnostic.
+
+`--over-wip` applies only to the project WIP limit; it never passes the
+cold-start cap or the memory floor. To start a lane past either host limit,
+set `AIDA_OVER_HOST_LIMIT` to the reason in the launching command's
+environment, for example
+`AIDA_OVER_HOST_LIMIT="recovering dell1 after a reboot" aida queue work <spec-id>`.
+A set but empty value refuses the launch. The launcher prints which limits it
+passed and records a `host-limit-override` event with the checks, the spec,
+the reason, the operator and the time; `.aida/events.jsonl` keeps the record.
+Use the same host network namespace for all managed launchers on the machine.
+Let existing startup reservations drain and stop queued launch commands before
+changing the host settings. New launch commands read the updated policy.
+
+<!-- trace:BUG-2519 | ai:codex -->
+The advisory `lane-cache-reuse` check compiles a tiny Rust library in two working
+directories, then retries in the first directory if reuse fails. It distinguishes
+path-sensitive misses from failure to cache the same compilation at all. This
+performance evidence is separate from required cache transport/write checks;
+a passing transport check alone does not prove cross-seat Rust reuse. See the
+[cache reuse investigation](../internal/testing/bug-2519-lane-cache-reuse.md).
+
 `aida doctor --lane-host --fix` applies the existing contained permission
 preset to the **user** agents and Codex config files, honoring `CODEX_HOME`
 for both config checks and writes (default `~/.codex`). It clears old extra
@@ -907,7 +1109,7 @@ a zero host override is an error. Lowering the cap prevents new starts and does
 not terminate existing lanes.
 
 Capacity uses the distinct `--lane-capacity` flag; host readiness checks
-remain a separate surface.
+use `--lane-host`, a separate surface.
 `aida doctor --lane-capacity --json` reports version-1 local capacity data: cap,
 source (`host`, `project`, or `cpu`), nproc, slot scope, occupied/free counts and
 reservation states. Without `--json` it prints the same observation for humans.
@@ -915,15 +1117,37 @@ It observes the standalone launcher's host-wide `~/.aida/standalone-implementers
 slot lock and records, shared across participating clones for the same host user;
 it neither initializes nor reaps slots. A busy writer or unreadable reservation
 returns an error rather than a false free-slot count. Reservations from an
-unobservable PID namespace (including unstamped legacy records in isolated seats) remain
-`unknown` and occupy capacity; admission never prunes them. The printed slot scope
-identifies the shared state. This is a capacity observation, not readiness
-certification. Stop old launchers in every clone before
-cutover: older binaries use checkout-local slots and cannot see the new shared
+unobservable PID namespace (including unstamped legacy records in isolated
+seats) remain `unknown` and occupy capacity; admission never prunes them.
+The printed slot scope identifies the shared state. This is a capacity
+observation, not readiness certification. Stop old launchers in every clone
+before cutover: older binaries use checkout-local slots and cannot see the shared
 state. The new binary refuses while a live legacy slot remains in the current
-project; it never removes that slot or terminates its owner.
+project. Unknown legacy-slot visibility also refuses with host-retry guidance;
+it never removes that slot or terminates its owner.
 
 The advisor-approved legacy `[lane_host] allow_ungranted = true` opt-in is
 reported as a warning. It grants no new authority in this slice: host placement,
 SSH dispatch, a remote grant issuer, unified remote leases/ps, and script
 retirement remain follow-up work.
+
+### Project validation commands
+
+Set project-specific commands in the default branch's `.aida/config.toml`:
+
+```toml
+[validation]
+format = "ruff format ."
+test = "python3 -m unittest discover"
+fast_check = "python3 -m unittest discover"
+```
+
+Lane launch prompts name `format` and `test`. The host runs `fast_check` via
+`/bin/sh -c` in the lane's existing fast-gate sandbox before publication, with
+network and host IPC isolated and a one-hour timeout. Commands run from the
+seat checkout. A failing check retains the existing single repair round.
+Missing or blank `fast_check` skips the gate with `skipped(unconfigured)` and a
+stated reason; no Makefile or Rust toolchain is assumed. Malformed configuration
+reports an infrastructure error instead of executing a command. These commands come only from trusted default-branch
+configuration; edits in a lane cannot select host gate commands.
+<!-- trace:BUG-2512 | ai:codex -->

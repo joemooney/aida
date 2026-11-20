@@ -32,6 +32,31 @@
 
 use std::path::{Path, PathBuf};
 
+/// Validate and collect an interactive child's original verdict on the protected
+/// floor. The caller must arm a refusing disposition before presenting or
+/// re-recording it; hold placement and forge labels remain parent orchestration.
+// trace:BUG-2522 | ai:codex
+pub(crate) fn collect_interactive_review_refusal(
+    project_root: &Path,
+    pr: u64,
+    spec: &str,
+    launched_at: std::time::SystemTime,
+    checks: &dyn VerdictCollectionChecks,
+) -> anyhow::Result<CollectedVerdict> {
+    let canonical = verdict_path(project_root, &format!("PR-{pr}"));
+    crate::gate::review_verdict::collect_standalone_verdict(
+        project_root,
+        project_root,
+        &canonical,
+        &[spec.to_string()],
+        launched_at,
+        checks,
+    )
+    .map_err(|why| {
+        anyhow::anyhow!("interactive review verdict was not collected for PR-{pr}: {why}")
+    })
+}
+
 /// The verdict word, normalized from whatever the reviewer/skill wrote.
 ///
 /// BUG-1505: this enum is the CANONICAL verdict vocabulary and
@@ -217,8 +242,15 @@ pub(crate) const ATTESTATION_KEY: &str = "recorder_attestation";
 /// re-stamps the verdict at a different `reviewed_sha` leaves the attestation
 /// pointing at the old commit, so it no longer vouches for the new one.
 // trace:BUG-1918 | ai:claude
-#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RecorderAttestation {
+    /// Reviewer policy: exact-head approval remains valid when false.
+    // trace:STORY-2696 | ai:codex
+    #[serde(
+        default = "carry_eligible_default",
+        skip_serializing_if = "std::clone::Clone::clone"
+    )]
+    pub carry_eligible: bool,
     /// The commit this attestation vouches for.
     pub sha: String,
     /// The seat of the validated session grant that recorded it, if any.
@@ -258,6 +290,27 @@ pub struct RecorderAttestation {
     pub grant_binding: Vec<String>,
 }
 
+// trace:STORY-2696 | ai:codex
+pub(crate) fn carry_eligible_default() -> bool {
+    true
+}
+
+impl Default for RecorderAttestation {
+    fn default() -> Self {
+        Self {
+            carry_eligible: true,
+            sha: String::new(),
+            seat: None,
+            grant_id: None,
+            human_at_tty: false,
+            identity: Vec::new(),
+            receipt_id: None,
+            solo_human: false,
+            grant_binding: Vec::new(),
+        }
+    }
+}
+
 impl RecorderAttestation {
     /// Does this attestation carry authority to approve on its own terms: a
     /// non-implementer seat grant or a human who passed the TTY floor, made
@@ -283,6 +336,9 @@ impl RecorderAttestation {
     /// attestation names neither, which never verifies.
     // trace:BUG-1918 | ai:claude
     pub(crate) fn authority_key(&self, recorded_at: Option<&str>) -> Option<String> {
+        // trace:STORY-2696 | ai:codex — a valid sibling cannot lend authority
+        // to the same receipt with a tampered policy. Keep legacy true keys.
+        let policy = if self.carry_eligible { "" } else { ":no-carry" };
         fn nonempty(v: Option<&str>) -> Option<&str> {
             v.map(str::trim).filter(|s| !s.is_empty())
         }
@@ -297,7 +353,7 @@ impl RecorderAttestation {
                 nonempty(self.receipt_id.as_deref()).filter(|id| id.starts_with("publication:"))
             {
                 return Some(format!(
-                    "{publication}:{}@{}",
+                    "{publication}:{}@{}{policy}",
                     self.sha,
                     nonempty(recorded_at)?
                 ));
@@ -308,11 +364,11 @@ impl RecorderAttestation {
             nonempty(self.seat.as_deref()),
         ) {
             let at = nonempty(recorded_at)?;
-            return Some(format!("grant:{grant}:{seat}@{at}"));
+            return Some(format!("grant:{grant}:{seat}@{at}{policy}"));
         }
         if self.human_at_tty {
             let receipt = nonempty(self.receipt_id.as_deref())?;
-            return Some(format!("receipt:{receipt}:{}", self.sha.trim()));
+            return Some(format!("receipt:{receipt}:{}{policy}", self.sha.trim()));
         }
         None
     }
@@ -616,6 +672,182 @@ pub(crate) const RECORDER_KEYS: &[&str] = &["recorded_by", "reviewer"];
 pub(crate) const RECORDED_AT_KEYS: &[&str] = &["recorded_at", "reviewed_at", "date"];
 pub(crate) const FINDINGS_KEYS: &[&str] = &["findings", "blocking_findings"];
 
+// trace:STORY-2698 | ai:codex
+pub(crate) fn finding_values(
+    findings: &[String],
+) -> (Vec<serde_json::Value>, Vec<serde_json::Value>) {
+    findings
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            let detail = serde_json::from_str::<serde_json::Value>(s).ok();
+            if let Some(detail) = detail.filter(|v| {
+                v.is_object()
+                    && v.get("text")
+                        .and_then(|t| t.as_str())
+                        .is_some_and(|s| !s.trim().is_empty())
+            }) {
+                (detail["text"].clone(), detail)
+            } else {
+                (s.into(), serde_json::Value::Null)
+            }
+        })
+        .unzip()
+}
+
+/// Reapply `effective` to the findings a record carries (the ones a record
+/// with no new `--finding` inherits), in place. A stored disposition was
+/// decided under the policy in force when it was written; the current policy
+/// decides again, so an invalid, unreadable or newly blocking list cannot be
+/// bypassed by recording over an earlier deferral. Only entries whose stored
+/// metadata is a structured finding object are re-decided; a malformed shape
+/// (non-array, length mismatch, non-string text, non-object metadata) is
+/// left as stored, where [`disposition_verdict`] already refuses approval.
+// trace:STORY-2913 | ai:claude
+pub(crate) fn reapply_policy_to_stored_findings(
+    obj: &mut JsonObj,
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+) {
+    let (Some(texts), Some(metadata)) = (
+        obj.get("findings").and_then(|v| v.as_array()).cloned(),
+        obj.get("finding_dispositions")
+            .and_then(|v| v.as_array())
+            .cloned(),
+    ) else {
+        return;
+    };
+    if texts.len() != metadata.len() {
+        return;
+    }
+    let decided: Vec<serde_json::Value> = texts
+        .iter()
+        .zip(metadata)
+        .map(|(text, meta)| {
+            let (Some(text), true) = (
+                text.as_str().filter(|s| !s.trim().is_empty()),
+                meta.is_object(),
+            ) else {
+                return meta;
+            };
+            // The policy decides on the stored finding text readers show; the
+            // metadata keeps its own shape (a `text` member only if it had one).
+            let had_text = meta.get("text").is_some();
+            let mut detail = meta.clone();
+            detail["text"] = text.into();
+            let Some(mut out) = crate::gate::kernel_deps::review_blocking::apply_policy(
+                effective,
+                &[detail.to_string()],
+                &[],
+            )
+            .first()
+            .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+            .filter(serde_json::Value::is_object) else {
+                return meta;
+            };
+            if let (false, Some(o)) = (had_text, out.as_object_mut()) {
+                o.remove("text");
+            }
+            out
+        })
+        .collect();
+    obj.insert("finding_dispositions".into(), decided.into());
+}
+
+// trace:STORY-2698 | ai:codex
+pub(crate) fn incoming_disposition(verdict: &str, findings: &[String]) -> VerdictKind {
+    let (texts, metadata) = finding_values(findings);
+    let obj = serde_json::json!({"verdict": verdict, "findings": texts, "finding_dispositions": metadata});
+    disposition_verdict(obj.as_object().unwrap())
+}
+
+// trace:STORY-2698 | ai:codex
+/// Disposition is independent of impact severity. Unknown and legacy evidence blocks.
+pub(crate) fn finding_is_deferred(value: &serde_json::Value) -> bool {
+    let nonempty = |key: &str| {
+        value
+            .get(key)
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.trim().is_empty())
+    };
+    nonempty("severity")
+        && nonempty("rationale")
+        && value
+            .get("rationale")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| !s.contains(['\n', '\r']))
+        && value.get("disposition").and_then(|v| v.as_str()) == Some("deferred")
+}
+
+// trace:STORY-2698 | ai:codex
+/// A durable delivery barrier, never an act of review refusal.
+pub(crate) fn delivery_pending(record: &serde_json::Value) -> bool {
+    record.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true)
+}
+
+// trace:STORY-2698 | ai:codex
+fn same_pending_delivery(pending: &JsonObj, approval: &JsonObj) -> bool {
+    if !delivery_pending(&serde_json::Value::Object(pending.clone()))
+        || !disposition_verdict(approval).approves()
+    {
+        return false;
+    }
+    // Preserve every origin/launch/attestation field in the comparison. Only
+    // the delivery barrier and its fail-closed verdict differ from the handoff.
+    let clean = |body: &JsonObj| {
+        let mut body = body.clone();
+        body.remove("sweep_pending");
+        body.remove("verdict");
+        body
+    };
+    clean(pending) == clean(approval)
+}
+
+// trace:STORY-2698 | ai:codex
+pub(crate) fn disposition_verdict(obj: &JsonObj) -> VerdictKind {
+    let kind = VerdictKind::parse(obj.get("verdict").and_then(|v| v.as_str()).unwrap_or(""));
+    if obj.get("sweep_pending").and_then(|v| v.as_bool()) == Some(true) {
+        return VerdictKind::RequestChanges;
+    }
+    if !matches!(kind, VerdictKind::Approved | VerdictKind::RequestChanges) {
+        return kind;
+    }
+    // trace:STORY-2698 | ai:codex — present aliases must be valid and agree;
+    // neither a malformed container nor dangling metadata is a clean review.
+    let mut items = None;
+    for value in FINDINGS_KEYS.iter().filter_map(|k| obj.get(*k)) {
+        let Some(array) = value.as_array() else {
+            return VerdictKind::RequestChanges;
+        };
+        if items.is_some_and(|previous| previous != array) {
+            return VerdictKind::RequestChanges;
+        }
+        items = Some(array);
+    }
+    let items = items.map(Vec::as_slice).unwrap_or_default();
+    let metadata = match obj.get("finding_dispositions") {
+        Some(value) => match value.as_array() {
+            Some(array) if array.len() == items.len() => Some(array),
+            _ => return VerdictKind::RequestChanges,
+        },
+        None => None,
+    };
+    if items.is_empty() {
+        return kind;
+    }
+    if items.iter().enumerate().all(|(i, item)| {
+        let text = item.as_str().is_some_and(|s| !s.trim().is_empty());
+        text && metadata
+            .and_then(|m| m.get(i))
+            .is_some_and(finding_is_deferred)
+    }) && metadata.is_some_and(|m| m.len() == items.len())
+    {
+        VerdictKind::Approved
+    } else {
+        VerdictKind::RequestChanges
+    }
+}
+
 /// Parse a verdict file body. `None` when it is not a JSON object or carries
 /// no `verdict` field (an incomplete artifact is not a verdict).
 ///
@@ -661,7 +893,7 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     Some(RecordedVerdict {
-        kind: VerdictKind::parse(&raw),
+        kind: disposition_verdict(obj),
         raw,
         reviewed_sha,
         reviewed_branch: str_field("reviewed_branch"),
@@ -730,12 +962,27 @@ fn round_findings(m: &JsonObj) -> Vec<String> {
 
 // Shared with watcher admission to count exactly the writer's retained rounds.
 // trace:TASK-1993 | ai:codex
-pub(crate) type RecordingKey = (Option<String>, String, String, Vec<String>);
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
+pub(crate) struct RecordingKey(
+    pub Option<String>,
+    pub String,
+    pub String,
+    pub Vec<String>,
+    #[serde(default = "carry_eligible_default")] pub bool,
+);
+
+// trace:STORY-2696 | ai:codex
+pub(crate) fn recording_carry_eligible(m: &JsonObj) -> bool {
+    m.get(ATTESTATION_KEY)
+        .and_then(|a| a.get("carry_eligible"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true)
+}
 
 /// Everything about a round that carries review signal. Two rounds with equal
-/// keys are the same recording, so retaining the second adds nothing; any
-/// difference — a different reviewer above all — is signal that overwriting
-/// would destroy.
+/// keys are semantically identical for immediate re-record idempotence.
+/// Historical acts still have distinct identities (including receipts and
+/// timestamps), even when their semantic keys match.
 pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
     let field = |k: &str| {
         m.get(k)
@@ -744,12 +991,30 @@ pub(crate) fn recording_key(m: &JsonObj) -> RecordingKey {
             .trim()
             .to_string()
     };
-    (
+    RecordingKey(
         round_sha(m),
         field("recorded_by"),
         // BUG-1505: a re-spelling of the same verdict is the same recording.
         canonical_verdict_word(&field("verdict")),
-        round_findings(m),
+        // trace:STORY-2698 | ai:codex — changing a disposition is review signal.
+        round_findings(m)
+            .into_iter()
+            .enumerate()
+            .map(|(i, text)| {
+                match m
+                    .get("finding_dispositions")
+                    .and_then(|v| v.as_array())
+                    .and_then(|v| v.get(i))
+                    .filter(|v| !v.is_null())
+                {
+                    Some(detail) => {
+                        serde_json::json!({"text":text,"disposition":detail}).to_string()
+                    }
+                    None => text,
+                }
+            })
+            .collect(),
+        recording_carry_eligible(m),
     )
 }
 
@@ -899,7 +1164,7 @@ pub(crate) fn effective_recordings_for_sha<'a>(
                 .map(str::trim)
                 .filter(|v| !v.is_empty())
                 .ok_or_else(|| "review recording has no verdict".to_string())?;
-            let kind = VerdictKind::parse(raw);
+            let kind = disposition_verdict(recording);
             if kind == VerdictKind::Unknown {
                 return Err(format!("review recording has unrecognised verdict `{raw}`"));
             }
@@ -1013,7 +1278,7 @@ pub fn reconcile_artifacts_for_sha<'a>(
     let mut waiting = false;
     let mut changes = false;
     for recording in effective {
-        let kind = VerdictKind::parse(recording["verdict"].as_str().unwrap());
+        let kind = disposition_verdict(&recording);
         let reviewer = recording
             .get("recorded_by")
             .and_then(|v| v.as_str())
@@ -1106,16 +1371,28 @@ fn surviving_against_previous_round(
 
 /// Read the recorded verdict for `spec`, if any.
 pub fn read_recorded_verdict(project_root: &Path, spec: &str) -> Option<RecordedVerdict> {
-    // trace:STORY-2492 | ai:codex
-    if let Some(remote) = super::review_publication::current(project_root, &[spec]) {
-        return parse_recorded_verdict(&remote.body);
+    // Read every source through the same effective-source annotation check.
+    // trace:BUG-2525 | ai:codex
+    parse_recorded_verdict(&current_verdict(project_root, spec)?.body)
+}
+
+/// [`read_recorded_verdict`] as it concerns change `pr` at `head`. A spec key
+/// is shared by every change that ships the spec; once `pr` has a verdict of
+/// its own on the ledger, the spec key answers with the verdicts recorded
+/// for `pr` and not with whichever change was reviewed last.
+// trace:BUG-2570 | ai:claude
+pub(crate) fn read_recorded_verdict_for_change(
+    project_root: &Path,
+    key: &str,
+    pr: u64,
+    head: Option<&str>,
+) -> Option<RecordedVerdict> {
+    use crate::gate::ledger::{project, ChangeKey};
+    if ChangeKey::parse(key).is_some() || !project::change_has_verdict(project_root, pr) {
+        return read_recorded_verdict(project_root, key);
     }
-    let path = verdict_path(project_root, spec);
-    let legacy = read_verdict_body(&path)
-        .ok()
-        .and_then(|body| parse_recorded_verdict(&body));
-    let ledger = crate::gate::ledger::project::newest_verdict_event(project_root, spec);
-    newer_of(&path, legacy, ledger.as_ref())
+    project::newest_verdict_event_for_change(project_root, key, pr, head)
+        .and_then(|event| event.verdict_record().and_then(parse_ledger_record))
 }
 
 /// A verdict record carried on the gate ledger, parsed like a file body.
@@ -1182,6 +1459,19 @@ pub(crate) fn ledger_supersedes(
             .is_some_and(|body| parse_recorded_verdict(&body).is_none());
         return !unparseable;
     };
+    // An annotation may retire only the exact legacy source it observed.
+    // Equal timestamps alone cannot retire a subsequently replaced record.
+    // trace:BUG-2525 | ai:codex
+    if let Some(source) = event
+        .verdict_record()
+        .and_then(|r| r.get("terminal_wait_source"))
+    {
+        return read_verdict_body(path)
+            .ok()
+            .and_then(|body| serde_json::from_str::<serde_json::Value>(&body).ok())
+            .as_ref()
+            == Some(source);
+    }
     if file.recorded_at.is_some() && file.recorded_at == led.recorded_at {
         return true;
     }
@@ -1284,6 +1574,100 @@ pub(crate) fn current_verdict(start: &Path, key: &str) -> Option<CurrentVerdict>
     choose_current(start, key, path, file_body)
 }
 
+/// A retained record with optional ledger spec and timestamp context.
+pub(crate) type HistoricalVerdict = (JsonObj, Option<String>, Option<String>);
+
+/// Observational history union: retained legacy artifacts and checked ledger
+/// acts. Consumers deduplicate by recording identity, retaining copied spec types.
+/// This does not select a verdict or grant gate authority.
+// trace:TASK-3813 | ai:codex
+pub(crate) fn verdict_history(
+    start: &Path,
+    key: &str,
+    events: &[super::ledger::GateEvent],
+) -> Result<Vec<HistoricalVerdict>, String> {
+    let path = verdict_path(start, key);
+    let mut history = archived_recordings(&path)?;
+    match read_verdict_body(&path) {
+        Ok(body) => history.push(
+            serde_json::from_str(&body).map_err(|e| format!("invalid verdict history: {e}"))?,
+        ),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.to_string()),
+    }
+    let mut records = Vec::new();
+    for value in history {
+        records.push((
+            value
+                .as_object()
+                .ok_or("invalid verdict history object")?
+                .clone(),
+            None,
+            None,
+        ));
+    }
+    for event in events.iter().filter(|e| !e.is_spec_only()) {
+        if let Some(record) = event.verdict_record() {
+            records.push((record.clone(), event.spec.clone(), Some(event.at.clone())));
+        }
+    }
+    Ok(records)
+}
+
+/// Strict read of the legacy verdict file at `path`: `Ok(None)` only when
+/// nothing (not even a dangling link) is there; an unreadable or
+/// unparseable file is an error, never absence.
+// trace:STORY-2691 | ai:codex
+fn checked_legacy_verdict_body(path: &Path) -> std::io::Result<Option<String>> {
+    match read_verdict_body(path) {
+        Ok(body) if parse_recorded_verdict(&body).is_none() => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("invalid verdict {}", path.display()),
+        )),
+        Ok(body) => Ok(Some(body)),
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound
+                && matches!(std::fs::symlink_metadata(path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
+        {
+            Ok(None)
+        }
+        Err(error) => Err(error),
+    }
+}
+
+/// The canonical legacy verdict file for `key` on its own, read strictly.
+/// For guards that must weigh the file even where the current projection
+/// lets another source outrank it (a protected head refuses if ANY source
+/// approves it); readers wanting the current verdict use
+/// [`checked_current_verdict`].
+// trace:BUG-2618 | ai:claude
+pub(crate) fn checked_legacy_verdict(
+    start: &Path,
+    key: &str,
+) -> std::io::Result<Option<RecordedVerdict>> {
+    Ok(checked_legacy_verdict_body(&verdict_path(start, key))?
+        .and_then(|body| parse_recorded_verdict(&body)))
+}
+
+/// Error-aware current projection for gates that must distinguish missing
+/// evidence from refused or malformed evidence. Never hide an unsafe legacy
+/// artifact behind a ledger verdict.
+// trace:STORY-2691 | ai:codex
+pub(crate) fn checked_current_verdict(
+    start: &Path,
+    key: &str,
+) -> std::io::Result<Option<RecordedVerdict>> {
+    let path = verdict_path(start, key);
+    let file_body = checked_legacy_verdict_body(&path)?;
+    choose_current(start, key, path, file_body)
+        .map(|current| {
+            parse_recorded_verdict(&current.body).ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::InvalidData, "invalid projected verdict")
+            })
+        })
+        .transpose()
+}
+
 /// [`current_verdict`] for the verdict file at `path`. Only the canonical
 /// layout `<root>/.aida/review-verdicts/<KEY>.json` has a ledger
 /// counterpart; any other path (a per-commit archive, a sibling checkout's
@@ -1345,8 +1729,29 @@ fn choose_current(
                 super::review_publication::report(report);
             }
         }
-        return Some(remote);
+        return Some(terminal_wait_overlay(start, key, remote));
     }
+    choose_local_current(start, key, path, file_body)
+        .map(|current| terminal_wait_overlay(start, key, current))
+}
+
+/// Raw local handoff/ledger evidence for reviewer shutdown only. Signed
+/// publications and lifecycle overlays omit the child grant or replace the
+/// recording, so they cannot establish this launch's completion. Acceptance
+/// continues to use the effective verdict readers.
+// trace:BUG-2546 | ai:codex
+pub(crate) fn local_completion_verdict(start: &Path, key: &str) -> Option<CurrentVerdict> {
+    let path = verdict_path(start, key);
+    let file_body = read_verdict_body(&path).ok();
+    choose_local_current(start, key, path, file_body)
+}
+
+fn choose_local_current(
+    start: &Path,
+    key: &str,
+    path: PathBuf,
+    file_body: Option<String>,
+) -> Option<CurrentVerdict> {
     // A current file that exists but the anchored reader refuses (unreadable,
     // or a linked file or directory) is not evidence, and the ledger must not
     // answer in its place: every gate fails closed on it (TASK-1801).
@@ -1364,7 +1769,9 @@ fn choose_current(
         return file_body.map(from_file);
     }
     let parsed = parsed.flatten();
-    let ledger = crate::gate::ledger::project::newest_verdict_event(start, key)
+    // Order the source round against the file before applying its exact closure.
+    // trace:BUG-2525 | ai:codex
+    let ledger = crate::gate::ledger::project::newest_review_event(start, key)
         .filter(|event| ledger_supersedes(&path, parsed.as_ref(), event))
         .and_then(|event| {
             let body = serde_json::to_string(event.verdict_record()?).ok()?;
@@ -1435,12 +1842,15 @@ fn archive_current_round(
     let mut snapshot = obj.clone();
     snapshot.remove("rounds");
     snapshot.remove("unarchived_rounds");
-    // Retain iff something would otherwise be LOST. A byte-identical
-    // re-recording carries nothing new; anything else does — including a
-    // second reviewer at the SAME commit, which is the collision this spec
+    // Retain iff something would otherwise be LOST. An immediately repeated
+    // unattested semantic recording carries nothing new; anything else does,
+    // including a second reviewer at the SAME commit, the collision this spec
     // exists for and the one case an is-it-the-same-head test cannot see.
     let key = recording_key(&snapshot);
-    if &key == incoming {
+    // trace:STORY-2696 | ai:codex — an attested repeat replaces the
+    // receipt/timestamp identity even when its review signal is unchanged.
+    // Retain the displaced act so stale aliases connect to later policy changes.
+    if &key == incoming && !snapshot.contains_key(ATTESTATION_KEY) {
         return;
     }
     if round_sha(obj).is_none() {
@@ -1463,11 +1873,10 @@ fn archive_current_round(
         .get("rounds")
         .and_then(|v| v.as_array().cloned())
         .unwrap_or_default();
-    if rounds
-        .iter()
-        .filter_map(|r| r.as_object())
-        .any(|r| recording_key(r) == key)
-    {
+    // trace:STORY-2696 | ai:codex — repeated policy toggles can revisit a
+    // semantic key while displacing a distinct act. Preserve that act so stale
+    // aliases remain connected to the later recording by append evidence.
+    if rounds.iter().any(|r| r.as_object() == Some(&snapshot)) {
         return;
     }
     rounds.push(serde_json::Value::Object(snapshot));
@@ -1680,6 +2089,76 @@ pub(crate) fn build_verdict_object(
     findings: &[String],
     recorded_by: &str,
 ) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    build_verdict_object_with_policy(
+        project_root,
+        path,
+        verdict,
+        reviewed_sha,
+        reviewed_branch,
+        summary,
+        findings,
+        recorded_by,
+        None,
+    )
+}
+
+// trace:BUG-2527 | ai:claude
+/// Refusal shown when an explicit `approved` would otherwise be recorded as a
+/// different verdict because blocking findings survive this round.
+pub(crate) const EXPLICIT_APPROVAL_REFUSAL: &str =
+    "cannot record approved: unresolved review findings require request-changes; \
+     to clear resolved carried findings, pass --finding \"\"; otherwise replace them \
+     with findings carrying explicit non-blocking dispositions";
+
+// trace:STORY-2696 | ai:codex
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_verdict_object_with_policy(
+    project_root: &Path,
+    path: &Path,
+    verdict: Option<&str>,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    recorded_by: &str,
+    carry_eligible: Option<bool>,
+) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    build_verdict_object_with_effective(
+        project_root,
+        path,
+        verdict,
+        reviewed_sha,
+        reviewed_branch,
+        summary,
+        findings,
+        recorded_by,
+        carry_eligible,
+        &crate::gate::kernel_deps::review_blocking::effective(project_root),
+    )
+}
+
+/// [`build_verdict_object_with_policy`] under a caller-held policy snapshot,
+/// so the recorder's kind/authority routing and the record it writes are
+/// decided by one read of the default-branch policy. The snapshot decides
+/// both the new findings and any the record inherits.
+// trace:STORY-2913 | ai:claude
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn build_verdict_object_with_effective(
+    project_root: &Path,
+    path: &Path,
+    verdict: Option<&str>,
+    reviewed_sha: Option<&str>,
+    reviewed_branch: Option<&str>,
+    summary: Option<&str>,
+    findings: &[String],
+    recorded_by: &str,
+    carry_eligible: Option<bool>,
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+) -> std::io::Result<serde_json::Map<String, serde_json::Value>> {
+    // trace:TASK-3814 | ai:codex
+    let policy_findings =
+        crate::gate::kernel_deps::review_blocking::apply_policy(effective, findings, &[]);
+    let findings = policy_findings.as_slice();
     // trace:BUG-2500 | ai:codex
     if verdict.is_some_and(|v| VerdictKind::parse(v) == VerdictKind::Waiting)
         && (summary.is_none_or(|s| s.trim().is_empty()) || !findings.is_empty())
@@ -1728,19 +2207,36 @@ pub(crate) fn build_verdict_object(
     // the comparison is possible at all. Append-only; the current round stays
     // at the top level so every existing reader is untouched.
     // trace:STORY-1391 | ai:claude
-    let incoming_key: RecordingKey = (
-        reviewed_sha
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            .map(str::to_string),
-        recorded_by.trim().to_string(),
-        canonical_verdict_word(verdict.unwrap_or_default()),
-        findings
-            .iter()
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect(),
-    );
+    // trace:STORY-2698 | ai:codex
+    let (incoming_texts, incoming_metadata) = finding_values(findings);
+    let mut incoming = serde_json::json!({
+        "reviewed_sha": reviewed_sha, "recorded_by": recorded_by.trim(),
+        "verdict": verdict.unwrap_or_default(), "findings": incoming_texts,
+        "finding_dispositions": incoming_metadata,
+    });
+    if findings.is_empty() {
+        for key in ["findings", "finding_dispositions"] {
+            if let Some(value) = obj.get(key) {
+                incoming[key] = value.clone();
+            }
+        }
+        // trace:STORY-2913 | ai:claude — inherited findings are decided by
+        // the current policy, never trusted at their stored disposition.
+        reapply_policy_to_stored_findings(incoming.as_object_mut().unwrap(), effective);
+    }
+    if let Some(word) = disposition_verdict(incoming.as_object().unwrap()).canonical() {
+        incoming["verdict"] = word.into();
+    }
+    // Compare incoming policy before archiving the previous attestation.
+    incoming[ATTESTATION_KEY] = serde_json::json!({"carry_eligible":
+    carry_eligible.unwrap_or_else(|| {
+        if verdict.map(str::trim).is_some_and(|word| !word.is_empty()) {
+            true
+        } else {
+            recording_carry_eligible(&obj)
+        }
+    })});
+    let incoming_key = recording_key(incoming.as_object().unwrap());
     archive_current_round(&mut obj, &incoming_key);
     // BUG-1918: a new verdict word is a new act of review; it must not
     // inherit the previous recorder's attestation. Only `aida review record`
@@ -1759,6 +2255,10 @@ pub(crate) fn build_verdict_object(
     obj.remove("release_grant");
     obj.remove("closed_by_merge");
     obj.remove("closed_at");
+    // A fresh review is not the lifecycle annotation it replaces.
+    // trace:BUG-2525 | ai:codex
+    obj.remove("terminal_wait_source");
+    obj.remove("terminal_wait_key");
     // BUG-1505: every writer persists the canonical spelling, produced by the
     // one shared function rather than by each writer agreeing to be careful.
     // When the caller supplies no verdict (the drain stamping provenance onto
@@ -1793,22 +2293,40 @@ pub(crate) fn build_verdict_object(
         "recorded_at",
         Some(chrono::Utc::now().to_rfc3339().as_str()),
     );
-    let findings: Vec<_> = findings
-        .iter()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(|s| serde_json::Value::String(s.to_string()))
-        .collect();
-    if verdict_word.as_deref() == Some("waiting") {
+    // trace:STORY-2698 | ai:codex
+    let clear_findings = !findings.is_empty() && findings.iter().all(|s| s.trim().is_empty());
+    let (findings, metadata) = finding_values(findings);
+    if clear_findings {
         for key in [
             "findings",
             "blocking_findings",
+            "finding_dispositions",
             "finding_classes",
             "inherited_findings",
         ] {
             obj.remove(key);
         }
+    }
+    // A fresh reviewer act retries a pending delivery rather than inheriting it.
+    if verdict.is_some() {
+        obj.remove("sweep_pending");
+    }
+    if !findings.is_empty() {
+        obj.insert("finding_dispositions".into(), metadata.into());
+    }
+    if verdict_word.as_deref() == Some("waiting") {
+        for key in [
+            "findings",
+            "blocking_findings",
+            "finding_classes",
+            "finding_dispositions",
+            "inherited_findings",
+        ] {
+            obj.remove(key);
+        }
     } else if !findings.is_empty() {
+        // trace:STORY-2698 | ai:codex — replaced aliases survive only in rounds.
+        obj.remove("blocking_findings");
         obj.insert("findings".to_string(), serde_json::Value::Array(findings));
         // STORY-1417: `finding_classes` is positional against `findings`, so
         // new findings invalidate the old classes. A caller that has classes
@@ -1823,6 +2341,27 @@ pub(crate) fn build_verdict_object(
             "inherited_findings".to_string(),
             serde_json::Value::Bool(true),
         );
+        // trace:STORY-2913 | ai:claude — the retained findings carry the
+        // dispositions the current policy gives them, as `incoming` did.
+        reapply_policy_to_stored_findings(&mut obj, effective);
+    }
+    let effective = disposition_verdict(&obj);
+    // trace:BUG-2527 | ai:codex
+    // An explicit approval must not silently become a refusal when findings
+    // (including legacy aliases) survive this round.
+    if verdict.is_some_and(|word| VerdictKind::parse(word) == VerdictKind::Approved)
+        && effective != VerdictKind::Approved
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            EXPLICIT_APPROVAL_REFUSAL,
+        ));
+    }
+    if matches!(
+        effective,
+        VerdictKind::Approved | VerdictKind::RequestChanges
+    ) {
+        obj.insert("verdict".into(), effective.canonical().unwrap().into());
     }
     Ok(obj)
 }
@@ -2039,7 +2578,7 @@ pub fn verdict_archive_dir(path: &Path) -> Option<PathBuf> {
 /// instead of replacing history it could not read. Unparseable content is
 /// treated as empty, as before.
 // trace:TASK-1801 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-fn read_current_verdict_object(path: &Path) -> std::io::Result<JsonObj> {
+pub(crate) fn read_current_verdict_object(path: &Path) -> std::io::Result<JsonObj> {
     if verdict_file_refused(path) {
         let e = read_verdict_body(path)
             .err()
@@ -2397,7 +2936,7 @@ const MAX_COLLECTED_VERDICT_BYTES: u64 = 1024 * 1024;
 /// .aida resolution retain their existing behavior; the verdict subtree cannot
 /// redirect a read through a link or a directory replacement.
 // trace:TASK-1801 | ai:codex
-fn open_verdict_directory(path: &Path) -> std::io::Result<std::fs::File> {
+pub(crate) fn open_verdict_directory(path: &Path) -> std::io::Result<std::fs::File> {
     use std::os::unix::fs::OpenOptionsExt;
     let root = path
         .ancestors()
@@ -2492,7 +3031,7 @@ fn set_errno_zero() {
 }
 
 // trace:TASK-1801 | ai:codex
-fn open_verdict_entry(
+pub(crate) fn open_verdict_entry(
     parent: &std::fs::File,
     name: &std::ffi::OsStr,
     flags: libc::c_int,
@@ -2675,6 +3214,234 @@ pub trait VerdictCollectionChecks {
 /// recording grant must be that launch's own child grant, valid now.
 // trace:BUG-2149 | ai:claude
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
+/// The normal recorder already wrote all pinned spec labels. Verify its own
+/// canonical result; do not import sidecar JSON over that validated record.
+/// Legacy import remains a separate path when no structured draft was written.
+/// trace:BUG-2564 | ai:codex
+pub(crate) fn verify_recorded_draft(
+    root: &Path,
+    canonical: &Path,
+    specs: &[String],
+    since: std::time::SystemTime,
+    checks: &dyn VerdictCollectionChecks,
+) -> Result<CollectedVerdict, String> {
+    let source = fresh_ledger_candidate(root, canonical, since)
+        .ok_or_else(|| "parent recorded no canonical draft result".to_string())?;
+    checks.check_record(&source)?;
+    let grants = source.recording_grant_ids();
+    if grants.is_empty() || delivery_pending(&serde_json::Value::Object(source.obj.clone())) {
+        return Err("parent draft recording lacks authority or remains pending".into());
+    }
+    for grant in grants {
+        checks.check_identity(&grant)?;
+    }
+    Ok(CollectedVerdict {
+        verdict: source.verdict,
+        spec_records: specs.to_vec(),
+        collected_from_worktree: true,
+    })
+}
+
+/// The facts of a reviewer's handoff draft that the legacy-conflict check
+/// compares. The gate owns this view so the decision does not reach outside
+/// `gate/` for the draft type (STORY-1888 floor ratchet).
+// trace:BUG-2564 | ai:claude
+pub(crate) struct DraftFacts<'a> {
+    pub(crate) pr: u64,
+    pub(crate) verdict: &'a str,
+    pub(crate) reviewed_sha: &'a str,
+    pub(crate) findings: &'a [String],
+}
+
+/// This launch's handoff identity: its draft launch stamp and the reviewer
+/// grant it records under.
+// trace:BUG-2564 | ai:claude
+pub(crate) struct OwnHandoff<'a> {
+    pub(crate) launch: &'a str,
+    pub(crate) grant: &'a str,
+}
+
+impl OwnHandoff<'_> {
+    /// A record is this launch's own only when its `reviewer_draft.launch`
+    /// stamp names this launch AND every grant it was recorded under is this
+    /// launch's reviewer grant. Seat or vendor alone never qualifies.
+    // trace:BUG-2564 | ai:claude
+    fn recorded(&self, c: &VerdictCandidate) -> bool {
+        let stamped = c
+            .obj
+            .get("reviewer_draft")
+            .and_then(|v| v.get("launch"))
+            .and_then(|v| v.as_str())
+            == Some(self.launch);
+        let grants = c.recording_grant_ids();
+        stamped && !grants.is_empty() && grants.iter().all(|g| g == self.grant)
+    }
+}
+
+/// Compare a draft with a recorded verdict in one normalized form: finding
+/// texts and dispositions as the builder stores them, and the verdict as the
+/// disposition it denotes. A delivery-pending barrier denotes the approval it
+/// is delivering (only approvals with findings are delivered in two phases).
+// trace:BUG-2564 | ai:claude
+fn draft_matches_record(draft: &DraftFacts<'_>, obj: &JsonObj) -> bool {
+    let (texts, metadata) = finding_values(draft.findings);
+    let recorded_kind = if delivery_pending(&serde_json::Value::Object(obj.clone())) {
+        VerdictKind::Approved
+    } else {
+        disposition_verdict(obj)
+    };
+    let recorded_meta = obj
+        .get("finding_dispositions")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_else(|| vec![serde_json::Value::Null; texts.len()]);
+    incoming_disposition(draft.verdict, draft.findings) == recorded_kind
+        && obj.get("reviewed_sha").and_then(|v| v.as_str()) == Some(draft.reviewed_sha)
+        && obj
+            .get("findings")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+            == texts
+        && recorded_meta == metadata
+}
+
+/// A same-launch replay of a delivery-pending barrier delivers the
+/// reviewer's verdict, never the barrier: the barrier is restored to the
+/// record it stands for (its `sweep_pending` removed, its verdict the
+/// draft's canonical approval), every other field kept, so the normal
+/// writer re-runs the two-phase delivery and completes the approval. The
+/// barrier must carry exactly the draft's head, finding texts and
+/// dispositions; anything else refuses. A record that is not a barrier is
+/// returned unchanged.
+// trace:BUG-2564 | ai:claude
+pub(crate) fn restore_pending_handoff(
+    record: &JsonObj,
+    draft: &DraftFacts<'_>,
+) -> Result<JsonObj, String> {
+    if !delivery_pending(&serde_json::Value::Object(record.clone())) {
+        return Ok(record.clone());
+    }
+    let intended = incoming_disposition(draft.verdict, draft.findings);
+    if !intended.approves() {
+        return Err("a delivery-pending record can only stand for an approval".into());
+    }
+    if !draft_matches_record(draft, record) {
+        return Err(
+            "the delivery-pending record does not match this launch's draft; refusing replay"
+                .into(),
+        );
+    }
+    let mut restored = record.clone();
+    restored.remove("sweep_pending");
+    restored.insert(
+        "verdict".into(),
+        intended.canonical().unwrap_or("approved").into(),
+    );
+    Ok(restored)
+}
+
+/// Re-decide a same-launch replay record under the recorder's held policy
+/// snapshot. A completed record was decided under the policy in force when it
+/// was first written; replaying it must not resurrect that decision. Its
+/// stored findings are re-decided, and the result must be the disposition the
+/// recorder already routed (`kind`) — otherwise the replay refuses, so the
+/// record, the handshake and the hold routing always describe one verdict.
+/// On success the verdict word is the routed kind's canonical spelling.
+// trace:STORY-2913 | ai:claude
+pub(crate) fn redecide_replay_record(
+    record: JsonObj,
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+    kind: VerdictKind,
+) -> Result<JsonObj, String> {
+    let mut record = record;
+    reapply_policy_to_stored_findings(&mut record, effective);
+    let redecided = disposition_verdict(&record);
+    if redecided != kind {
+        return Err(format!(
+            "refused: the recorded review this launch is replaying reads as {} under the \
+             current blocking policy, but this draft routes as {}; nothing was recorded",
+            redecided.label(),
+            kind.label()
+        ));
+    }
+    if let Some(word) = kind.canonical() {
+        record.insert("verdict".into(), word.into());
+    }
+    Ok(record)
+}
+
+/// A draft cannot override evidence left by the legacy record route. Validate
+/// all fresh sources before the record handler mutates the canonical ledger.
+/// trace:BUG-2564 | ai:codex
+pub(crate) fn check_draft_legacy_conflicts(
+    launcher: &Path,
+    worktree: &Path,
+    canonical: &Path,
+    specs: &[String],
+    since: std::time::SystemTime,
+    draft: &DraftFacts<'_>,
+    own: Option<&OwnHandoff<'_>>,
+    checks: &dyn VerdictCollectionChecks,
+) -> anyhow::Result<()> {
+    let mut paths = vec![canonical.to_path_buf()];
+    for root in [launcher, worktree] {
+        paths.push(verdict_path(root, &format!("PR-{}", draft.pr)));
+        paths.extend(specs.iter().map(|s| verdict_path(root, s)));
+    }
+    let dir = worktree.join(".aida/review-verdicts");
+    match std::fs::read_dir(&dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let path = entry?.path();
+                let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+                    continue;
+                };
+                if path.extension().is_some_and(|e| e == "json")
+                    && !stem.starts_with('.')
+                    && (!(stem.starts_with("PR-") || stem.starts_with("MR-"))
+                        || path.file_name() == canonical.file_name())
+                {
+                    paths.push(path);
+                }
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    paths.sort();
+    paths.dedup();
+    for path in paths {
+        let candidate = match read_verdict_file(&path) {
+            Ok((_, meta)) if meta.modified()? < since => None,
+            Ok(_) => Some(fresh_candidate(&path, since).ok_or_else(|| {
+                anyhow::anyhow!("malformed legacy verdict at {}", path.display())
+            })?),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e.into()),
+        }
+        .or_else(|| fresh_ledger_candidate(launcher, &path, since));
+        if let Some(c) = candidate {
+            // This launch's own earlier handoff (a retry after a failed
+            // delivery) is replay evidence, owned by the replay check, never
+            // a legacy source. Both its launch stamp and its recording grant
+            // must be this launch's. trace:BUG-2564 | ai:claude
+            if own.is_some_and(|own| own.recorded(&c)) {
+                continue;
+            }
+            checks.check_record(&c).map_err(anyhow::Error::msg)?;
+            for id in c.recording_grant_ids() {
+                checks.check_identity(&id).map_err(anyhow::Error::msg)?;
+            }
+            anyhow::ensure!(
+                draft_matches_record(draft, &c.obj),
+                "legacy verdict conflicts with this launch's draft"
+            );
+        }
+    }
+    Ok(())
+}
+
 pub fn collect_standalone_verdict(
     launcher_root: &Path,
     worktree: &Path,
@@ -2733,7 +3500,14 @@ pub fn collect_standalone_verdict(
     let canonical_in_place = fresh_candidate(canonical, since);
     candidates.extend(canonical_in_place.clone());
     for id in &spec_ids {
-        candidates.extend(fresh_candidate(&verdict_path(launcher_root, id), since));
+        let path = verdict_path(launcher_root, id);
+        // Interactive spec review anchors its native child's record by spec,
+        // so its original grant-bound evidence can be ledger-only too.
+        // trace:BUG-2522 | ai:codex
+        candidates.extend(
+            fresh_candidate(&path, since)
+                .or_else(|| fresh_ledger_candidate(launcher_root, &path, since)),
+        );
     }
     // An uncontained reviewer's `aida review record` writes the ledger, not a
     // file: its record for this change, appended after the reviewer started,
@@ -2765,6 +3539,7 @@ pub fn collect_standalone_verdict(
     let source = candidates
         .iter()
         .filter(|c| !c.recording_grant_ids().is_empty())
+        .filter(|c| !delivery_pending(&serde_json::Value::Object(c.obj.clone())))
         .max_by_key(|c| c.modified)
         .cloned()
         .ok_or_else(|| {
@@ -2777,7 +3552,10 @@ pub fn collect_standalone_verdict(
             (Some(a), Some(b)) => same_reviewed_sha(a, b),
             _ => false,
         };
-        if c.verdict.kind != source.verdict.kind || !same_sha {
+        if !same_sha
+            || (c.verdict.kind != source.verdict.kind
+                && !same_pending_delivery(&c.obj, &source.obj))
+        {
             return Err(format!(
                 "{} disagrees with {} on the verdict or the reviewed commit",
                 c.path.display(),
@@ -2871,6 +3649,17 @@ pub fn close_verdict_on_merge(
     spec: &str,
     merge_ref: &str,
 ) -> std::io::Result<bool> {
+    close_verdict_on_merge_for_change(project_root, spec, merge_ref, None)
+}
+
+// A historical batch closes on its own change, never the spec's newest batch.
+// trace:BUG-2525 | ai:codex
+fn close_verdict_on_merge_for_change(
+    project_root: &Path,
+    spec: &str,
+    merge_ref: &str,
+    change: Option<crate::gate::ledger::ChangeKey>,
+) -> std::io::Result<bool> {
     let merge_ref = merge_ref.trim();
     if merge_ref.is_empty() {
         return Ok(false);
@@ -2886,11 +3675,7 @@ pub fn close_verdict_on_merge(
     let Ok(serde_json::Value::Object(mut obj)) = serde_json::from_str(&current.body) else {
         return Ok(false);
     };
-    let Some(raw_verdict) = obj.get("verdict").and_then(|v| v.as_str()) else {
-        return Ok(false);
-    };
-    // trace:BUG-2500 | ai:codex — merge closure includes external waits.
-    if !VerdictKind::parse(raw_verdict).blocks_done() {
+    if !disposition_verdict(&obj).blocks_done() {
         return Ok(false);
     }
     let already_closed = obj
@@ -2910,8 +3695,108 @@ pub fn close_verdict_on_merge(
         serde_json::Value::String(chrono::Utc::now().to_rfc3339()),
     );
     refuse_unsafe_legacy_history(&path, round_sha(&obj).as_deref())?;
-    crate::gate::ledger::record_verdict_at(&path, &obj, None)?;
+    if let Some(change) = change.filter(|_| crate::gate::ledger::ChangeKey::parse(spec).is_none()) {
+        let binding = crate::gate::ledger::GateSpec::resolve(project_root, spec);
+        crate::gate::ledger::record_verdict_at(
+            &verdict_path(project_root, &change.as_key()),
+            &obj,
+            Some(&binding),
+        )?;
+    } else {
+        crate::gate::ledger::record_verdict_at(&path, &obj, None)?;
+    }
     Ok(true)
+}
+
+// A terminal annotation is scoped to one exact source, never a new review.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn close_terminal_wait(
+    root: &Path,
+    key: &str,
+    change: crate::gate::ledger::ChangeKey,
+    expected: &CurrentVerdict,
+) -> std::io::Result<bool> {
+    use crate::gate::ledger::{self, store};
+    if ledger::contained() {
+        return Err(std::io::Error::other(
+            "a contained seat cannot close gate reviews",
+        ));
+    }
+    let store_root = ledger::store_root(root)?;
+    store::with_exclusive(&store_root, || {
+        let Some(current) = current_verdict(root, key) else {
+            return Ok(false);
+        };
+        if current.body != expected.body
+            || current.source != expected.source
+            || current.written_at != expected.written_at
+            || !parse_recorded_verdict(&current.body)
+                .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+        {
+            return Ok(false);
+        }
+        let mut obj: JsonObj =
+            serde_json::from_str(&current.body).map_err(std::io::Error::other)?;
+        refuse_unsafe_legacy_history(&verdict_path(root, key), round_sha(&obj).as_deref())?;
+        let source = serde_json::Value::Object(obj.clone());
+        obj.insert("terminal_wait_key".into(), key.into());
+        obj.insert("terminal_wait_source".into(), source);
+        obj.insert("closed_by_merge".into(), change.as_key().into());
+        obj.insert("closed_at".into(), chrono::Utc::now().to_rfc3339().into());
+        let spec = ledger::ChangeKey::parse(key)
+            .is_none()
+            .then(|| ledger::GateSpec::resolve(root, key));
+        // This local lifecycle annotation must not be published as a new signed review.
+        store::append_one(
+            &store_root,
+            ledger::event::verdict_event(&store_root, change, &obj, spec.as_ref()),
+        )?;
+        Ok(true)
+    })
+}
+
+// Apply the local annotation to its exact effective source, even when the
+// raw ledger holds an independent round. Signed publications stay immutable;
+// a different effective round automatically invalidates the annotation.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn terminal_wait_overlay(
+    start: &Path,
+    key: &str,
+    mut current: CurrentVerdict,
+) -> CurrentVerdict {
+    if !parse_recorded_verdict(&current.body)
+        .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+    {
+        return current;
+    }
+    if let Some(record) = crate::gate::ledger::project::terminal_wait_annotation(start, key) {
+        if let Some(body) = terminal_wait_overlay_body(key, &current.body, &record) {
+            current.body = body;
+        }
+    }
+    current
+}
+
+// Also used by the bounded alias reader with its already-checked events.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn terminal_wait_overlay_body(
+    key: &str,
+    body: &str,
+    record: &JsonObj,
+) -> Option<String> {
+    if !parse_recorded_verdict(body)
+        .is_some_and(|v| v.kind == VerdictKind::Waiting && !v.is_closed())
+    {
+        return None;
+    }
+    let source = serde_json::from_str::<serde_json::Value>(body).ok();
+    if record.get("terminal_wait_key").and_then(|v| v.as_str()) == Some(key)
+        && record.get("terminal_wait_source") == source.as_ref()
+    {
+        serde_json::to_string(record).ok()
+    } else {
+        None
+    }
 }
 
 /// TASK-2135 on the gate ledger: an older binary closed the current file and
@@ -3348,8 +4233,8 @@ pub(crate) enum RecordOutcome {
 
 /// BUG-2136: compare the record as it stood before the write (`before`, `None`
 /// when there was no file) with the object about to be written (`after`).
-/// Uses the same [`recording_key`] that decides round retention, so the
-/// printed outcome can never disagree with what the record kept.
+/// Uses [`recording_key`] to report review signal changes. Retained attested
+/// displacement identities do not turn a semantic repeat into a new outcome.
 // trace:BUG-2136 trace:TASK-1766 | ai:claude
 pub(crate) fn record_outcome(before: Option<&JsonObj>, after: &JsonObj) -> RecordOutcome {
     let identical = before.is_some_and(|prev| {
@@ -3423,7 +4308,22 @@ pub(crate) fn recorded_round_count(project_root: &Path, key: &str) -> usize {
 /// ledger-only verdict is listed and a stale file does not hide a newer one.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 pub fn list_active_verdicts(project_root: &Path) -> Vec<(String, RecordedVerdict)> {
-    let mut out: Vec<(String, RecordedVerdict)> = verdict_keys(project_root)
+    active_verdicts_for(project_root, verdict_keys(project_root))
+}
+
+/// [`list_active_verdicts`] restricted to `keys`, sorted by key. Resolving a
+/// key spawns git subprocesses, so a caller that wants a few keys filters
+/// [`verdict_keys`] first instead of resolving every key and discarding most.
+// trace:BUG-2540 | ai:claude
+pub fn active_verdicts_for(
+    project_root: &Path,
+    keys: impl IntoIterator<Item = String>,
+) -> Vec<(String, RecordedVerdict)> {
+    // One gate-ledger discovery for the whole listing, re-validated before
+    // each reuse; every key's events are still read fresh.
+    // trace:BUG-2543 | ai:claude
+    let _discovery = super::ledger::checked::DiscoveryScope::enter();
+    let mut out: Vec<(String, RecordedVerdict)> = keys
         .into_iter()
         .filter_map(|key| {
             let verdict = parse_recorded_verdict(&current_verdict(project_root, &key)?.body)?;
@@ -3451,7 +4351,13 @@ pub(crate) fn verdict_keys(project_root: &Path) -> Vec<String> {
         .filter(|p| p.is_file() && p.extension().and_then(|e| e.to_str()) == Some("json"))
         .filter_map(|p| Some(p.file_stem()?.to_str()?.to_string()))
         .collect();
-    crate::gate::ledger::project::keys_with_ledger(project_root, file_keys)
+    let mut keys = crate::gate::ledger::project::keys_with_ledger(project_root, file_keys);
+    keys.extend(super::review_publication::recorded_change_keys(
+        project_root,
+    ));
+    keys.sort();
+    keys.dedup();
+    keys
 }
 
 // STORY-1889: moved from `queue_cmd.rs`.
@@ -3527,3 +4433,363 @@ mod review_verdict_tests;
 #[cfg(test)]
 #[path = "tests/bug_2403_same_origin_receipt_tests.rs"]
 mod bug_2403_same_origin_receipt_tests;
+
+// trace:STORY-2698 | ai:codex
+#[cfg(test)]
+mod story_2698_tests {
+    use super::*;
+
+    #[test]
+    fn story_2698_malformed_containers_and_dangling_metadata_fail_closed() {
+        for evidence in [
+            serde_json::json!({"findings":"unresolved bug"}),
+            serde_json::json!({"blocking_findings":"unresolved bug"}),
+            serde_json::json!({"findings":null}),
+            serde_json::json!({"blocking_findings":{}}),
+            serde_json::json!({"findings":[],"blocking_findings":false}),
+            serde_json::json!({"findings":[],"blocking_findings":["hidden bug"]}),
+            serde_json::json!({"findings":[],"finding_dispositions":[{"severity":"minor","disposition":"deferred","rationale":"later"}]}),
+            serde_json::json!({"finding_dispositions":[null]}),
+            serde_json::json!({"findings":[],"finding_dispositions":null}),
+            serde_json::json!({"findings":[],"finding_dispositions":{}}),
+            serde_json::json!({"findings":[null],"finding_dispositions":[null]}),
+        ] {
+            let mut obj = evidence.as_object().unwrap().clone();
+            obj.insert("verdict".into(), "approved".into());
+            assert_eq!(
+                parse_recorded_verdict(&serde_json::Value::Object(obj).to_string())
+                    .unwrap()
+                    .kind,
+                VerdictKind::RequestChanges,
+                "{evidence}"
+            );
+        }
+        for evidence in [
+            serde_json::json!({}),
+            serde_json::json!({"findings":[]}),
+            serde_json::json!({"blocking_findings":[]}),
+            serde_json::json!({"finding_dispositions":[]}),
+            serde_json::json!({"findings":[],"finding_dispositions":[]}),
+        ] {
+            for word in ["approved", "request-changes"] {
+                let mut obj = evidence.as_object().unwrap().clone();
+                obj.insert("verdict".into(), word.into());
+                assert_eq!(disposition_verdict(&obj), VerdictKind::parse(word));
+            }
+        }
+    }
+
+    fn record(metadata: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({"verdict":"approved", "findings":["a small real bug"],
+            "finding_dispositions":metadata})
+    }
+
+    #[test]
+    fn story_2698_disposition_is_independent_of_severity_and_fails_closed() {
+        for severity in ["cosmetic", "minor", "major"] {
+            let detail = serde_json::json!({"severity":severity, "disposition":"deferred", "rationale":"follow-up is acceptable"});
+            let obj = record(serde_json::json!([detail]));
+            assert!(parse_recorded_verdict(&obj.to_string())
+                .unwrap()
+                .kind
+                .approves());
+        }
+        for detail in [
+            serde_json::Value::Null,
+            serde_json::json!({"severity":"minor"}),
+            serde_json::json!({"severity":"minor", "disposition":"blocking"}),
+            serde_json::json!({"severity":"minor", "disposition":"deferred", "rationale":" "}),
+            serde_json::json!({"disposition":"deferred", "rationale":"later"}),
+            serde_json::json!({"severity":"minor", "disposition":"typo", "rationale":"later"}),
+        ] {
+            let obj = record(serde_json::json!([detail]));
+            assert_eq!(
+                parse_recorded_verdict(&obj.to_string()).unwrap().kind,
+                VerdictKind::RequestChanges
+            );
+        }
+        for metadata in [
+            serde_json::Value::Null,
+            serde_json::json!([]),
+            serde_json::json!([null, null]),
+        ] {
+            assert_eq!(
+                disposition_verdict(record(metadata).as_object().unwrap()),
+                VerdictKind::RequestChanges
+            );
+        }
+    }
+
+    #[test]
+    fn story_2698_pending_and_mixed_findings_never_approve() {
+        let mut obj = record(
+            serde_json::json!([{"severity":"minor","disposition":"deferred","rationale":"later"}]),
+        );
+        obj["sweep_pending"] = true.into();
+        assert_eq!(
+            disposition_verdict(obj.as_object().unwrap()),
+            VerdictKind::RequestChanges
+        );
+        obj.as_object_mut().unwrap().remove("sweep_pending");
+        obj["findings"]
+            .as_array_mut()
+            .unwrap()
+            .push("blocker".into());
+        assert_eq!(
+            disposition_verdict(obj.as_object().unwrap()),
+            VerdictKind::RequestChanges
+        );
+    }
+
+    #[test]
+    fn story_2698_structured_cli_preserves_text_and_normalizes_verdict() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("verdict.json");
+        let findings = vec![serde_json::json!({"text":"small bug", "severity":"minor", "disposition":"deferred", "rationale":"bounded follow-up"}).to_string()];
+        let obj = build_verdict_object(
+            tmp.path(),
+            &path,
+            Some("request-changes"),
+            None,
+            None,
+            None,
+            &findings,
+            "reviewer",
+        )
+        .unwrap();
+        assert_eq!(obj["verdict"], "approved");
+        assert_eq!(obj["findings"], serde_json::json!(["small bug"]));
+        assert_eq!(obj["finding_dispositions"][0]["severity"], "minor");
+        assert!(incoming_disposition("request-changes", &findings).approves());
+        assert_eq!(
+            incoming_disposition("approved", &["legacy cosmetic".into()]),
+            VerdictKind::RequestChanges
+        );
+    }
+    // trace:STORY-2698 | ai:codex
+    #[test]
+    fn pending_delivery_reconciliation_requires_same_origin() {
+        let approval = serde_json::json!({"verdict":"approved", "release_grant":{"id":"launch-a"}, "recorded_by":"reviewer", "recorded_at":"2026-11-10T00:00:00Z"});
+        let mut pending = approval.clone();
+        pending["verdict"] = "request-changes".into();
+        pending["sweep_pending"] = true.into();
+        assert!(same_pending_delivery(
+            pending.as_object().unwrap(),
+            approval.as_object().unwrap()
+        ));
+        pending["release_grant"]["id"] = "launch-b".into();
+        assert!(!same_pending_delivery(
+            pending.as_object().unwrap(),
+            approval.as_object().unwrap()
+        ));
+        pending.as_object_mut().unwrap().remove("sweep_pending");
+        assert!(!same_pending_delivery(
+            pending.as_object().unwrap(),
+            approval.as_object().unwrap()
+        ));
+    }
+
+    // trace:STORY-2698 | ai:codex
+    #[test]
+    fn legacy_alias_replacement_agrees_with_preflight() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("verdict.json");
+        std::fs::write(&path, r#"{"verdict":"request-changes","blocking_findings":["old bug"],"reviewed_sha":"1111111111111111111111111111111111111111","recorded_by":"reviewer"}"#).unwrap();
+        let findings = vec![serde_json::json!({"text":"follow-up", "severity":"minor", "disposition":"deferred", "rationale":"safe later"}).to_string()];
+        let obj = build_verdict_object(
+            tmp.path(),
+            &path,
+            Some("approved"),
+            None,
+            None,
+            None,
+            &findings,
+            "reviewer",
+        )
+        .unwrap();
+        assert!(!obj.contains_key("blocking_findings"));
+        assert_eq!(obj["rounds"][0]["blocking_findings"][0], "old bug");
+        assert_eq!(
+            parse_recorded_verdict(&serde_json::Value::Object(obj).to_string())
+                .unwrap()
+                .kind,
+            VerdictKind::Approved
+        );
+        assert_eq!(
+            incoming_disposition("approved", &findings),
+            VerdictKind::Approved
+        );
+    }
+
+    // trace:BUG-2527 | ai:codex
+    #[test]
+    fn explicit_approval_refuses_legacy_and_new_blocking_findings() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("verdict.json");
+        for key in ["findings", "blocking_findings"] {
+            let prior = serde_json::json!({
+                "verdict": "request-changes", key: ["unresolved bug"],
+                "recorded_by": "reviewer",
+            });
+            std::fs::write(&path, prior.to_string()).unwrap();
+            for findings in [vec![], vec!["new blocking bug".to_string()]] {
+                let err = build_verdict_object(
+                    tmp.path(),
+                    &path,
+                    Some("APPROVED"),
+                    None,
+                    None,
+                    None,
+                    &findings,
+                    "reviewer",
+                )
+                .unwrap_err();
+                assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+                assert!(err.to_string().contains("--finding \"\""));
+                let refusal = build_verdict_object(
+                    tmp.path(),
+                    &path,
+                    Some("request-changes"),
+                    None,
+                    None,
+                    None,
+                    &findings,
+                    "reviewer",
+                )
+                .unwrap();
+                assert_eq!(refusal["verdict"], "request-changes");
+            }
+        }
+    }
+
+    // trace:BUG-2527 | ai:codex
+    #[test]
+    fn explicit_approval_refuses_carried_findings_until_explicitly_cleared() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("verdict.json");
+        std::fs::write(&path, r#"{"verdict":"request-changes","findings":["fixed bug"],"reviewed_sha":"1111111111111111111111111111111111111111","recorded_by":"reviewer"}"#).unwrap();
+        let inherited = build_verdict_object(
+            tmp.path(),
+            &path,
+            Some("approved"),
+            None,
+            None,
+            None,
+            &[],
+            "reviewer",
+        )
+        .unwrap_err();
+        assert_eq!(inherited.kind(), std::io::ErrorKind::InvalidInput);
+        assert!(inherited.to_string().contains("unresolved review findings"));
+        assert!(inherited.to_string().contains("--finding \"\""));
+        let unchanged: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(unchanged["verdict"], "request-changes");
+        assert!(unchanged.get("rounds").is_none());
+        let cleared = build_verdict_object(
+            tmp.path(),
+            &path,
+            Some("approved"),
+            None,
+            None,
+            None,
+            &[String::new()],
+            "reviewer",
+        )
+        .unwrap();
+        assert_eq!(cleared["verdict"], "approved");
+        assert!(!cleared.contains_key("findings"));
+        assert_eq!(cleared["rounds"][0]["findings"][0], "fixed bug");
+    }
+}
+
+// trace:BUG-2564 | ai:claude
+#[cfg(test)]
+mod bug2564_own_handoff_tests {
+    use super::*;
+
+    fn candidate(obj: serde_json::Value) -> VerdictCandidate {
+        let body = obj.to_string();
+        VerdictCandidate {
+            path: PathBuf::from("PR-59.json"),
+            verdict: parse_recorded_verdict(&body).unwrap_or_default(),
+            obj: obj.as_object().unwrap().clone(),
+            body,
+            modified: std::time::SystemTime::now(),
+        }
+    }
+
+    #[test]
+    fn own_handoff_needs_both_launch_stamp_and_grant() {
+        let own = OwnHandoff {
+            launch: "draft-a",
+            grant: "g-1",
+        };
+        let rec = |launch: &str, grant: &str| {
+            candidate(serde_json::json!({"verdict":"approved",
+                "reviewer_draft":{"launch":launch},
+                "recorder_attestation":{"grant_id":grant},
+                "release_grant":{"id":grant}}))
+        };
+        assert!(own.recorded(&rec("draft-a", "g-1")));
+        assert!(
+            !own.recorded(&rec("draft-b", "g-1")),
+            "same grant, other launch"
+        );
+        assert!(
+            !own.recorded(&rec("draft-a", "g-2")),
+            "same launch stamp, other grant"
+        );
+        let unstamped = candidate(serde_json::json!({"verdict":"approved",
+            "recorder_attestation":{"grant_id":"g-1"}}));
+        assert!(
+            !own.recorded(&unstamped),
+            "seat or grant alone never qualifies"
+        );
+        let no_grant = candidate(serde_json::json!({"verdict":"approved",
+            "reviewer_draft":{"launch":"draft-a"}}));
+        assert!(!own.recorded(&no_grant));
+    }
+
+    #[test]
+    fn restore_refuses_a_barrier_that_does_not_match_the_draft() {
+        let head = "0123456789abcdef0123456789abcdef01234567";
+        let finding = serde_json::json!({"text":"P3","severity":"minor",
+            "disposition":"deferred","rationale":"later"})
+        .to_string();
+        let findings = vec![finding];
+        let draft = DraftFacts {
+            pr: 59,
+            verdict: "approved",
+            reviewed_sha: head,
+            findings: &findings,
+        };
+        let barrier = serde_json::json!({"verdict":"request-changes","sweep_pending":true,
+            "reviewed_sha":head,"findings":["P3"],
+            "finding_dispositions":[{"text":"P3","severity":"minor","disposition":"deferred","rationale":"later"}]});
+        let restored = restore_pending_handoff(barrier.as_object().unwrap(), &draft).unwrap();
+        assert_eq!(
+            restored.get("verdict"),
+            Some(&serde_json::json!("approved"))
+        );
+        assert!(restored.get("sweep_pending").is_none());
+        let mut moved = barrier.clone();
+        moved["reviewed_sha"] = "f".repeat(40).into();
+        assert!(restore_pending_handoff(moved.as_object().unwrap(), &draft).is_err());
+        let mut other = barrier.clone();
+        other["findings"] = serde_json::json!(["different"]);
+        assert!(restore_pending_handoff(other.as_object().unwrap(), &draft).is_err());
+        // Deferred-only findings make even "request-changes" an approval;
+        // a rejection never is.
+        let refusal = DraftFacts {
+            verdict: "rejected",
+            ..draft
+        };
+        assert!(restore_pending_handoff(barrier.as_object().unwrap(), &refusal).is_err());
+        let plain = serde_json::json!({"verdict":"approved","reviewed_sha":head});
+        assert_eq!(
+            restore_pending_handoff(plain.as_object().unwrap(), &draft).unwrap(),
+            plain.as_object().unwrap().clone()
+        );
+    }
+}

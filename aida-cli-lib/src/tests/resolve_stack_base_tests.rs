@@ -36,14 +36,15 @@ fn init_repo() -> tempfile::TempDir {
 #[test]
 fn resolve_stack_base_returns_none_without_flags() {
     let tmp = init_repo();
-    let out = resolve_stack_base(tmp.path(), tmp.path(), false, None, false).unwrap();
+    let out = resolve_stack_base(tmp.path(), tmp.path(), false, None, false, false).unwrap();
     assert_eq!(out, None);
 }
 
 #[test]
 fn resolve_stack_base_refuses_unknown_base() {
     let tmp = init_repo();
-    let err = resolve_stack_base(tmp.path(), tmp.path(), false, Some("nope"), false).unwrap_err();
+    let err =
+        resolve_stack_base(tmp.path(), tmp.path(), false, Some("nope"), false, false).unwrap_err();
     assert!(err.to_string().contains("nope"), "{err}");
     assert!(err.to_string().contains("does not exist"), "{err}");
 }
@@ -60,7 +61,8 @@ fn resolve_stack_base_accepts_existing_local_branch() {
         .success());
     // No `gh` in the sandbox → detect_merged_pr_for_branch returns
     // GhMissing, which falls through the merged check.
-    let out = resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), false).unwrap();
+    let out =
+        resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), false, false).unwrap();
     assert_eq!(out.as_deref(), Some("task-x"));
 }
 
@@ -76,7 +78,8 @@ fn resolve_stack_base_force_keeps_through_safety_check() {
         .status()
         .unwrap()
         .success());
-    let out = resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), true).unwrap();
+    let out =
+        resolve_stack_base(tmp.path(), tmp.path(), false, Some("task-x"), true, false).unwrap();
     assert_eq!(out.as_deref(), Some("task-x"));
 }
 
@@ -84,6 +87,6 @@ fn resolve_stack_base_force_keeps_through_safety_check() {
 fn resolve_stack_base_stack_with_no_leases_errors() {
     let tmp = init_repo();
     std::fs::create_dir_all(tmp.path().join(".aida").join("sessions")).unwrap();
-    let err = resolve_stack_base(tmp.path(), tmp.path(), true, None, false).unwrap_err();
+    let err = resolve_stack_base(tmp.path(), tmp.path(), true, None, false, false).unwrap_err();
     assert!(err.to_string().contains("no un-merged"), "{err}");
 }

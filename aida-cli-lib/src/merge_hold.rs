@@ -112,6 +112,38 @@ pub(crate) fn adopt_worktree_hold(
     Ok(true)
 }
 
+/// Preserve a recognized legacy hold and refuse removal if any marker remains.
+// trace:BUG-2176 BUG-2684 | ai:codex
+pub(crate) fn preserve_review_worktree_holds(
+    root: &Path,
+    path: &Path,
+    pr: u64,
+    since: std::time::SystemTime,
+) -> anyhow::Result<bool> {
+    let markers = path.join(".aida/merge-holds");
+    for dir in [path.join(".aida"), markers.clone()] {
+        match dir.symlink_metadata() {
+            Ok(metadata) => anyhow::ensure!(
+                metadata.is_dir(),
+                "review state directory is not a directory: {}",
+                dir.display()
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+            Err(e) => return Err(e.into()),
+        }
+    }
+    let marker = crate::gate::ledger::legacy::hold_marker_path(path, pr);
+    match marker.symlink_metadata() {
+        Ok(metadata) if metadata.is_file() => {
+            crate::merge_hold::adopt_worktree_hold(root, path, pr, since)?;
+        }
+        Ok(_) => return Ok(false),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e.into()),
+    }
+    Ok(std::fs::read_dir(markers)?.next().transpose()?.is_none())
+}
+
 /// BUG-2176: markers sitting in linked worktrees of `main_root`'s repository,
 /// as `(pr, path)` ascending — where no merge gate reads them and removing the
 /// worktree destroys them. `aida merge-hold list` warns on each.
@@ -348,7 +380,7 @@ pub(crate) const MERGE_HOLD_LABELS: [MergeHoldLabel; 3] = [
     MergeHoldLabel {
         name: HOLD_LABEL,
         color: "B60205",
-        description: "Supervised merge hold — merge-hold-gate fails while present",
+        description: "Supervised merge hold — merge-hold-gate stays pending while present",
     },
     MergeHoldLabel {
         name: HOLD_RECORDED_LABEL,
@@ -398,7 +430,7 @@ fn run_forge_cli_stdout_bounded(
     run_forge_cli_stdout_bounded_with(project_root, cli, args, LABEL_DEFINITIONS_TIMEOUT)
 }
 
-fn run_forge_cli_stdout_bounded_with(
+pub(crate) fn run_forge_cli_stdout_bounded_with(
     project_root: &Path,
     cli: &str,
     args: &[String],
@@ -783,6 +815,12 @@ pub(crate) struct PinnedChange {
     /// The forge carries `aida:merge-hold-cleared`.
     // trace:TASK-1951 | ai:claude
     pub cleared_label: bool,
+}
+
+impl PinnedChange {
+    pub(crate) fn is_open(&self) -> bool {
+        self.state == ChangeState::Open
+    }
 }
 
 /// BUG-1541: the forge's lifecycle state for a change. `Unknown` (a missing
@@ -1427,7 +1465,7 @@ pub(crate) fn sync_label_with_probe(
     Err(sync_error.unwrap_or(LabelSyncError::Other(legacy)))
 }
 
-fn run_forge_cli(
+pub(crate) fn run_forge_cli(
     project_root: &Path,
     cli: &str,
     args: &[String],
@@ -1454,11 +1492,11 @@ fn run_forge_cli_stdout(
 ) -> Result<(bool, String), String> {
     // trace:STORY-2401 | ai:codex
     crate::pr_train::before_train_forge_call("read hold labels").map_err(|e| format!("{e:#}"))?;
-    let out = std::process::Command::new(cli)
-        .current_dir(project_root)
-        .args(args)
-        .output_retrying_etxtbsy()
-        .map_err(|e| format!("could not run {cli}: {e}"))?;
+    let mut cmd = std::process::Command::new(cli);
+    cmd.current_dir(project_root).args(args);
+    let out =
+        crate::forge_lookup::deadline_output(cmd, std::process::Command::output_retrying_etxtbsy)
+            .map_err(|e| format!("could not run {cli}: {e}"))?;
     Ok((
         out.status.success(),
         String::from_utf8_lossy(&out.stdout).to_string(),

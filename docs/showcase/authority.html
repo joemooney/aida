@@ -61,7 +61,8 @@
 <pre><code>aida mandate start --ship-held --ttl 8h --reason &quot;overnight run&quot;</code></pre>
 <figure><img class="guide-graphic" src="assets/authority-mandate.svg" alt="A mandate: started by a person, scoped, time-boxed, checked on every action. A person at an interactive terminal starts a mandate with a scope such as ship-held, dispatch or drive, a duration of 8 hours by default and at most 24, and a reason. While it lasts, the advisor seat may act within that scope. Every ship re-checks the mandate and still needs an independent approval and green CI. Operator-only specs are never covered, and supervised specs only when the person opts in."></figure>
 <ul>
-<li><strong>Time-boxed.</strong> 8 hours by default, at most 24. <code>aida mandate renew</code> extends it in place, keeping its scope and reason; <code>aida mandate stop</code> ends it at once. Start, renew and stop need a person at an interactive terminal. <code>aida mandate status</code> is open to anyone.</li>
+<li><strong>Time-boxed.</strong> 8 hours by default, at most 24. <code>aida mandate renew</code> extends it in place, keeping its scope and reason unless the renewal&#x27;s own flags change them (each change is recorded with the renewal); <code>aida mandate stop</code> ends it at once. Start, renew and stop need a person at an interactive terminal. <code>aida mandate status</code> is open to anyone.</li>
+<li><strong>Operator identity.</strong> Mandates use <code>USER</code> (falling back to <code>USERNAME</code>), independently of a seat’s <code>AIDA_USER</code> queue identity. An advisor seat can see the operator’s mandate; dispatch still requires a valid advisor grant with a matching principal. An unknown operator refuses mandate selection.</li>
 <li><strong>Scoped.</strong> <code>--ship-held</code> lets the advisor seat ship held changes. It still needs all of these: an independent approval of the change&#x27;s current commit, from neither the implementer nor the shipping session; work the advisor did not author; and green CI. The option that lets a ship accept an approval of an older commit is never honoured under a mandate. <code>--scope dispatch</code> adds queueing dispatch work. <code>--drive</code> also covers signing off design sketches, dispatching fixers and restarting a crashed long-running agent run you started at a terminal, and turns on a check every 15 minutes that hands each stalled piece of work to the advisor.</li>
 <li><strong>Supervised specs.</strong> Sensitive specs (security, containment, authority, guided and keystone work) stay with a person unless you pass <code>--include-supervised</code>. A drive mandate covers them unless you pass <code>--exclude-supervised</code>.</li>
 <li><strong>Operator-only specs.</strong> A spec tagged operator-only, or in operator or decide mode, is never covered by any mandate. Once a spec has been in that class, it stays excluded even if the tag is removed.</li>
@@ -87,6 +88,20 @@
 <li><strong>Recorded.</strong> Each job keeps its script, sha256, submitter, times, exit code and full transcript for 30 days, and <code>audit.jsonl</code> records every step.</li>
 </ul>
 <p><a href="../advanced/deputies.md">Deputies: command vs script</a> explains when to use which, what each records, and what the script deputy&#x27;s checks do and do not protect against.</p>
+<h2 id="landing-who-merges-and-what-a-merge-waits-for">Landing: who merges, and what a merge waits for</h2>
+<p><code>[landing] mode</code> in the default branch&#x27;s <code>.aida/config.toml</code> sets what a merge waits for. See <a href="../advanced/landing.md#landing-modes">Landing approved work</a>.</p>
+<ul>
+<li><code>ci-gated</code>: <code>aida pr ship</code> waits for CI on the head.</li>
+<li><code>review-gated</code>: it merges once the change has an independent approval at its exact head and no hold, and CI runs on the default branch afterwards.</li>
+</ul>
+<p>In both modes:</p>
+<ul>
+<li>the approval must come from someone who did not author the change, including authors of merge resolutions;</li>
+<li>every hold binds;</li>
+<li>a mandate must still cover protected paths.</li>
+</ul>
+<p>In <code>review-gated</code> mode, the session merging must also have authored none of the change. In <code>ci-gated</code> mode an author may still ship its own approved change, as before.</p>
+<p><strong>Changing the mode.</strong> It is read only from the default branch, so it changes through a reviewed pull request.</p>
 <h2 id="what-always-needs-a-person-at-a-terminal">What always needs a person at a terminal</h2>
 <p><strong>Status: built.</strong> These steps happen only at an interactive terminal. Holding a grant or a mandate does not stand in for that.</p>
 <ul>

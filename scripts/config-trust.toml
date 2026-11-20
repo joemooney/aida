@@ -33,6 +33,12 @@
 channels = ["worktree"]
 sites = 1
 
+# Failure escalation threshold is policy; transport selection remains trusted.
+# trace:BUG-2640 | ai:codex
+[readers."aida-cli-lib/src/advisor_loop_service.rs"]
+channels = ["worktree"]
+sites = 1
+
 [readers."aida-cli-lib/src/agent_config.rs"]
 channels = ["home", "write", "worktree", "trusted"]
 sites = 1
@@ -68,13 +74,32 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
-# Reviewer concurrency is bounded policy from the worktree config.
+# Reviewer concurrency and round limits are policy from the worktree config.
 # trace:TASK-3472 | ai:codex
 [readers."aida-cli-lib/src/review_watch.rs"]
 channels = ["worktree"]
 sites = 1
 
 [readers."aida-cli-lib/src/review_watch_ready.rs"]
+channels = ["worktree"]
+sites = 1
+
+# Names the trusted source of review.blocking_tiers in output; the list is
+# read through trusted_config and written through mass_change::config_path.
+# trace:STORY-2913 | ai:claude
+[readers."aida-cli-lib/src/review_blocking.rs"]
+channels = ["prose"]
+sites = 1
+
+# `aida now` reads the open-change limit it shows beside the queue counts.
+# trace:STORY-2768 | ai:claude
+[readers."aida-cli-lib/src/now.rs"]
+channels = ["worktree"]
+sites = 1
+
+# `aida land run` reads how many reviewers and rework lanes it may run at
+# once and how long a reviewer may take. trace:STORY-2768 | ai:claude
+[readers."aida-cli-lib/src/land_run.rs"]
 channels = ["worktree"]
 sites = 1
 
@@ -86,7 +111,7 @@ sites = 1
 # names them in prose, and routes edits through the registered writers.
 [readers."aida-cli-lib/src/config_cmd.rs"]
 channels = ["worktree", "home", "write", "other-file", "prose"]
-sites = 35
+sites = 33
 
 # Settles a config edit by staging and committing exactly `.aida/config.toml`;
 # it reads no keys from the file. trace:BUG-1938 | ai:claude
@@ -113,9 +138,9 @@ sites = 1
 # TASK-1930: doctor_migrate_counter_scope probes existence of .aida/config.toml
 # before the preview, and doctor_migrate_counter_scope_in_store re-reads/writes
 # [id_format] counter_scope = "global" under store_write_lock -> blocks.lock.
-[readers."aida-cli-lib/src/doctor_cmd.rs"]
-channels = ["worktree", "write", "probe"]
-sites = 2
+[readers."aida-cli-lib/src/doctor/store_repair.rs"]
+channels = ["probe"]
+sites = 1
 
 [readers."aida-cli-lib/src/doctor_root.rs"]
 channels = ["worktree"]
@@ -133,16 +158,18 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
-# TASK-1335: checked_forge_kind adds a third worktree read of [forge] provider.
+# TASK-1335: checked_forge_kind reads the worktree [forge] provider.
+# STORY-2823: bounded train status adds a read-only classification of that policy.
 [readers."aida-cli-lib/src/forge.rs"]
 channels = ["worktree", "write"]
-sites = 3
+sites = 4
 
-[readers."aida-cli-lib/src/glyph_config.rs"]
+[readers."aida-term/src/glyph_config.rs"]
 channels = ["worktree", "home", "write"]
-sites = 2
+# Project and user scopes share config_path_for's single config.toml literal.
+sites = 1
 
-[readers."aida-cli-lib/src/glyphs.rs"]
+[readers."aida-term/src/glyphs.rs"]
 channels = ["worktree", "home"]
 sites = 6
 
@@ -199,9 +226,10 @@ sites = 1
 channels = ["worktree", "probe"]
 sites = 3
 
+# TASK-3781: include the counter-scope writer relocated from doctor_cmd.
 [readers."aida-cli-lib/src/db_block.rs"]
-channels = ["worktree"]
-sites = 1
+channels = ["worktree", "write"]
+sites = 2
 
 # Distributed-store detection: an existence probe for a project root, the
 # walk-up that reads mode, and the [id_format] reader (policy values only).
@@ -239,7 +267,7 @@ sites = 1
 
 # BUG-2394: codex_configured_mcp_servers reads only the [mcp_servers] table
 # NAMES from $CODEX_HOME/config.toml and the project's .codex/config.toml.
-[readers."aida-cli-lib/src/session.rs"]
+[readers."aida-cli-lib/src/session/interactive.rs"]
 channels = ["other-file"]
 sites = 2
 
@@ -280,20 +308,23 @@ sites = 2
 channels = ["worktree"]
 sites = 1
 
-[readers."aida-cli-lib/src/lib.rs"]
-channels = ["worktree", "home", "trusted", "write", "probe", "prose"]
-# load_review_story_inventory adds a worktree/probe site: validate TOML and
-# refuse legacy fallback when mode declares distributed storage or the existing
-# store_path parser finds a canonical-location candidate. It checks mode (policy)
-# and top-level / deployment.store_path (frozen location exceptions), including
-# the resolver's legacy line scan; this probe only tests candidate presence and
-# does not open a candidate or select an executable, command, or credential.
-# No new key class or authority exception is introduced.
-# trace:BUG-1807 | ai:codex
-# TASK-1472 adds a probe site: project_is_aida_initialized only tests whether
-# .aida/config.toml exists (bare `aida` picker shortcut); nothing is parsed.
+# argv_rewrite::project_is_aida_initialized probes .aida/config.toml existence
+# for the bare `aida` picker shortcut; it reads no keys.
+# Split from the former lib.rs entry: this site retains only its probe channel.
 # trace:TASK-1472 | ai:claude
-sites = 2
+# trace:TASK-3428 | ai:codex
+[readers."aida-cli-lib/src/argv_rewrite.rs"]
+channels = ["probe"]
+sites = 1
+
+# review_helpers::read_review_mode reads the project's [review].mode policy value.
+# Split from the former lib.rs entry: this site retains only its worktree
+# channel. The local-mode fallback does not turn this policy read into a probe.
+# Together these owners replace lib.rs's former two sites; neither adds a site.
+# trace:TASK-3428 | ai:codex
+[readers."aida-cli-lib/src/review_helpers.rs"]
+channels = ["worktree"]
+sites = 1
 
 [readers."aida-cli-lib/src/locking_gate.rs"]
 channels = ["worktree"]
@@ -324,6 +355,19 @@ sites = 3
 channels = ["worktree", "write"]
 sites = 1
 
+# land_mode::set writes [landing] mode/mode_set_by/mode_set_at into the
+# checkout's config (the landing policy itself is read from the default
+# branch by landing_policy). trace:STORY-2897 | ai:claude
+[readers."aida-cli-lib/src/land_mode.rs"]
+channels = ["write"]
+sites = 1
+
+# STORY-2905: the auto-train's checked landing-policy read, from the trusted
+# default branch only (git show <default sha>:.aida/config.toml).
+[readers."aida-cli-lib/src/landing_policy.rs"]
+channels = ["trusted"]
+sites = 2
+
 # Ordinary and staged MCP profile reads select only a closed policy tier.
 # trace:TASK-3223 | ai:codex
 [readers."aida-mcp/src/mcp.rs"]
@@ -334,7 +378,7 @@ sites = 2
 channels = ["other-file"]
 sites = 1
 
-[readers."aida-cli-lib/src/network_retry.rs"]
+[readers."aida-term/src/network_retry.rs"]
 channels = ["worktree"]
 sites = 1
 
@@ -362,11 +406,13 @@ sites = 1
 channels = ["worktree"]
 sites = 1
 
-# Resolves max_grant_hours cap from global (~/.aida) and worktree (.aida).
-# Worktree policy may only lower the cap. trace:TASK-1787 | ai:antigravity
+# Resolves the lifetime caps ([seat] max_grant_hours, [seat]
+# inline_grant_max_hours, [mandate] max_ttl_hours) through ONE loader, at one
+# site: the global copy (~/.aida) sets a cap, the worktree copy (.aida) may
+# only lower it. trace:TASK-1787 | ai:antigravity trace:STORY-2828 | ai:claude
 [readers."aida-cli-lib/src/gate/seat_authority.rs"]
 channels = ["home", "worktree"]
-sites = 2
+sites = 1
 
 [readers."aida-cli-lib/src/seats.rs"]
 channels = ["worktree", "home"]
@@ -394,7 +440,7 @@ sites = 1
 channels = ["trusted"]
 sites = 1
 
-[readers."aida-cli-lib/src/usage.rs"]
+[readers."aida-term/src/usage.rs"]
 channels = ["worktree"]
 sites = 1
 
@@ -562,6 +608,11 @@ route = "policy"
 comment = "policy"
 ask = "policy"
 
+# `aida land mode status` shows this checkout's declared [landing] mode next to
+# the default branch's effective one; display only. trace:STORY-2897 | ai:claude
+[keys.worktree.landing]
+mode = "policy"
+
 [keys.worktree.mailbox]
 unread_warn_after = "policy"
 allow_retract = "policy"
@@ -593,7 +644,11 @@ seq_width = "policy"
 node_seq_width = "policy"
 
 [keys.worktree.review]
+max_rounds = "policy" # Automatic review round limit. TASK-3808.
 mode = "policy"
+stale_base = "policy" # which stale heads a reviewer launch refuses (STORY-2821)
+watch_pause_default = "policy" # review-watch pause default duration (BUG-2650)
+watch_pause_max = "policy" # review-watch pause maximum duration (BUG-2650)
 mass_change_mode = "policy"
 mass_change_started_at = "policy"
 mass_change_started_by = "policy"
@@ -664,6 +719,16 @@ ctrl_d_palette = "policy"
 [keys.worktree.review_watch]
 required_checks = "policy"
 max_concurrent = "policy" # Bounds reviewer count; selects no executable. TASK-3472.
+failure_escalation_threshold = "policy" # Tunes alert timing only. BUG-2640.
+
+# A count the `aida now` screen compares open changes against; it selects
+# nothing and launches nothing. STORY-2768.
+[keys.worktree.land]
+wip_max = "policy"
+max_reviews = "policy" # Bounds reviewer count; selects no executable.
+max_lanes = "policy" # Bounds rework lane count; selects no executable.
+review_timeout_secs = "policy" # How long a reviewer may run; bounded in code.
+housekeeping_auto_release = "policy" # Boolean: may housekeeping release dead leases and reset orphans; selects no executable.
 
 [keys.worktree.drain]
 gh_verify_retries = "policy"
@@ -730,8 +795,15 @@ window_hours = "policy"
 [keys.worktree."performance.budgets"]
 "*" = "policy"
 
+# trace:BUG-2672 | ai:codex
+[keys.worktree."doctor.remote_drift"]
+store_lag_minutes = "policy"
+
 [keys.worktree."doctor.disk_headroom"]
 min_free_gib = "policy"
+# Legacy key retained for existing configurations. GC no longer reads it.
+# trace:BUG-2684 | ai:codex
+overlay_grace_minutes = "policy"
 # STORY-1916: the emergency auto-reclaim tier.
 emergency_used_pct = "policy"
 emergency_margin_pct = "policy"
@@ -811,8 +883,15 @@ profile = "policy" # fixed profile list
 theme = "policy"
 glyphs = "policy"
 
+# Lifetime caps. Raising one is global-only (~/.aida/config.toml): the
+# worktree value is read only to LOWER the cap, never to raise it.
+# trace:STORY-2828 | ai:claude
 [keys.worktree.seat]
 max_grant_hours = "policy"
+inline_grant_max_hours = "policy"
+
+[keys.worktree.mandate]
+max_ttl_hours = "policy"
 
 [keys.worktree.seats]
 to-groom = "policy"
@@ -908,6 +987,17 @@ smoke_check = "command" # accepted alternate section spelling
 confirm_bypass = "policy" # can only tighten; malformed means "on"
 
 [keys.trusted.review]
+# trace:TASK-3815 | ai:codex — shared trusted reader; optional prompt/report policy.
+implementer_self_review = "policy"
+# trace:STORY-2763 | ai:codex — shared trusted_config reader owns the path site.
+freshness = "policy"
+freshness_strict_paths = "policy"
+# trace:STORY-2913 | ai:claude — blocking classes and their audit stamp come
+# only from the default branch, so a branch cannot relax its own review.
+blocking_tiers = "policy"
+blocking_tiers_set_by = "policy"
+blocking_tiers_set_at = "policy"
+blocking_tiers_authority = "policy"
 admission_hub = "command" # Git transport endpoint: only the reviewed GitHub authority
 admission_ref = "policy"
 run_acceptance_commands = "policy" # presence probed for a display note
@@ -921,6 +1011,16 @@ solo_human_self_approval = "policy" # STORY-1655: presence probed for an "ignore
 # it on for itself). trace:BUG-B6B1278890774EF993D2EBC327862470-049 | ai:claude
 [keys.trusted.worktree_pool]
 trust_seat_worktrees = "policy"
+
+# STORY-2772: the whole table comes from the default-branch copy. It turns a
+# review requirement off and `checks` are shell commands, so a branch must not
+# set either for itself.
+# trace:STORY-2772 | ai:claude
+[keys.trusted.integration]
+review_after_merge = "policy"
+max_effort = "policy"
+excluded_tags = "policy"
+checks = "command"
 
 # STORY-2220: the docs sweep reads its whole table from the default-branch
 # copy (trusted_config, local refs), because `regenerate` runs shell commands.
@@ -1004,3 +1104,30 @@ sites = 2
 [readers."aida-cli-lib/src/vendors/host_diagnostics.rs"]
 channels = ["home"]
 sites = 2
+
+# trace:BUG-2512 | ai:codex
+[keys.trusted.validation]
+format = "command"
+test = "command"
+fast_check = "command"
+
+# trace:BUG-2618 | ai:codex
+[keys.worktree.pr-head]
+protect = "policy"
+
+# trace:STORY-2856 | ai:codex — shared trusted_config reader owns the path site.
+[keys.trusted.ci_startup]
+consecutive_runs = "policy"
+queued_timeout_secs = "policy"
+
+# TASK-3119: operator opt-in, never project enablement.
+[readers."aida-cli-lib/src/gate/relay_parent.rs"]
+channels = ["home"]
+sites = 1
+
+# trace:BUG-2631 | ai:codex
+[keys.worktree.seat_health]
+blocked_after_mins = "policy"
+
+[keys.trusted.seat_health]
+push_commands = "command"

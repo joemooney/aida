@@ -140,6 +140,13 @@ pub(crate) fn clear_marker(project_root: &Path, session_id: &str) -> std::io::Re
     }
 }
 
+// The caller has already verified this exact live session. Age alone cannot
+// invalidate its unanswered prompt.
+// trace:BUG-2631 | ai:codex
+pub(crate) fn for_live_session(root: &Path, session: &str) -> Option<PendingApprovalMarker> {
+    read_marker_file(&pending_approval_path(root, session)).filter(|m| m.session_id == session)
+}
+
 fn read_marker_file(path: &Path) -> Option<PendingApprovalMarker> {
     let body = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&body).ok()
@@ -169,6 +176,16 @@ pub(crate) fn list_active(project_root: &Path, now: DateTime<Utc>) -> Vec<Pendin
     let Ok(entries) = std::fs::read_dir(&dir) else {
         return Vec::new();
     };
+    // A live session's unanswered prompt must survive a multi-hour incident.
+    // Only orphaned markers retain the age-based cleanup backstop.
+    // trace:BUG-2631 | ai:codex
+    let home = crate::mailbox_store::mailbox_home(project_root);
+    let mut live = crate::agent_registry::load_live_identity_entries(home.root());
+    if home.root() != project_root {
+        live.extend(crate::agent_registry::load_live_identity_entries(
+            project_root,
+        ));
+    }
     let mut out = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
@@ -178,7 +195,14 @@ pub(crate) fn list_active(project_root: &Path, now: DateTime<Utc>) -> Vec<Pendin
         let Some(marker) = read_marker_file(&path) else {
             continue;
         };
-        if is_stale(&marker, now) {
+        let live_session = live.iter().any(|e| {
+            e.native_session_id
+                .as_deref()
+                .or(e.claude_session_id.as_deref())
+                == Some(marker.session_id.as_str())
+                && marker.since >= e.started_at
+        });
+        if is_stale(&marker, now) && !live_session {
             let _ = std::fs::remove_file(&path);
             continue;
         }

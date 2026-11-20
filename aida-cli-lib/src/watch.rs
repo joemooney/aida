@@ -321,6 +321,11 @@ fn run_tag(run_uuid: &str) -> String {
 // trace:TASK-990 | ai:claude
 fn describe(ek: &EventKind) -> (&'static str, String) {
     match ek {
+        EventKind::RelayParentGrantRenewal { receipt } => (
+            "relay-parent-grant-renewal",
+            format!("relay parent renewal: {}", receipt["outcome"]),
+        ),
+        EventKind::ActivityHeartbeat { summary, .. } => ("activity-heartbeat", summary.clone()),
         EventKind::RunStarted => ("run-started", "orchestration run started".to_string()),
         EventKind::PhaseEntered { idx, slug, .. } => {
             ("phase-entered", format!("phase {} ({})", idx, slug))
@@ -399,7 +404,16 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
                 if *placed { "placed" } else { "lifted" },
                 reason
                     .as_deref()
-                    .map(|r| format!(" — {r}"))
+                    .map(|r| {
+                        if !*placed {
+                            if let Some(detail) = r.strip_prefix("merge-hold clear: ") {
+                                return format!(
+                                    " — prior hold: {detail}; current-head verdict unverified"
+                                );
+                            }
+                        }
+                        format!(" — {r}")
+                    })
                     .unwrap_or_default(),
             ),
         ),
@@ -443,6 +457,24 @@ fn describe(ek: &EventKind) -> (&'static str, String) {
         } => (
             "mandate-drive-due",
             format!("drive routed {action} for {subject} to the advisor"),
+        ),
+        // trace:STORY-2897 | ai:claude
+        EventKind::LandModeChanged {
+            action,
+            to,
+            outcome,
+            forge_before,
+            forge_after,
+            ..
+        } => (
+            "land-mode-changed",
+            format!(
+                "land mode {action} to {to}: {outcome}; forge [{}] -> [{}]",
+                forge_before.join(", "),
+                forge_after
+                    .as_ref()
+                    .map_or_else(|| "unread".to_string(), |a| a.join(", "))
+            ),
         ),
         // trace:TASK-1945 | ai:claude
         EventKind::ReviewWatchReady {
@@ -1220,7 +1252,11 @@ pub(crate) struct WatchArgs {
 // code, and wakes only on actionable verbs. It touches no store/backend, so
 // dispatch early like `aida ps`. trace:TASK-990 | ai:claude
 fn run_watch(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::kernel::find_project_root;
+    use crate::notify;
+    use crate::output_format::output_format_is_json;
+    use crate::watch;
     let args = <WatchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let WatchArgs {
         emit_wakes: _,
@@ -1260,3 +1296,21 @@ pub(crate) static WATCH: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     },
     run: crate::cmdkit::Handler::Early(run_watch),
 };
+
+// trace:STORY-2893 | ai:codex
+#[cfg(test)]
+#[test]
+fn story_2893_historical_hold_clear_wake_identifies_prior_verdict() {
+    let (kind, notice) = describe(&EventKind::MergeHoldChanged {
+        pr: 3986,
+        placed: false,
+        reason: Some("merge-hold clear: CHANGES REQUESTED for BUG-2564 at 20bfe5376c58".into()),
+        principal: None,
+        human_attested: true,
+    });
+    assert_eq!(kind, "merge-hold-changed");
+    assert!(
+        notice.contains("lifted on PR #3986 — prior hold: CHANGES REQUESTED"),
+        "{notice}"
+    );
+}

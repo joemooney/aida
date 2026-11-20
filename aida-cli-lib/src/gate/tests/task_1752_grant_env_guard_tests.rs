@@ -27,9 +27,10 @@ const OWNER: &str = "aida-cli-lib/src/gate/seat_authority.rs";
 /// allowed to name the variable. Matched per line, so nothing else in the
 /// same file is exempt.
 // trace:STORY-2326 | ai:claude
+// trace:TASK-3791 | ai:codex — shared FAST harness source layout.
 const ALLOWED_LITERAL_LINES: &[(&str, &str, &str)] = &[
     (
-        "aida-core/src/launch_policy.rs",
+        "aida-core/src/launch_env_keys.rs",
         "\"AIDA_SESSION_GRANT_FILE\",",
         "the dropped-key inventory names a distinct file key, never reads the grant selector",
     ),
@@ -39,7 +40,7 @@ const ALLOWED_LITERAL_LINES: &[(&str, &str, &str)] = &[
         "clap help text for `aida role expiry`: users set the variable by name",
     ),
     (
-        "aida-core/src/launch_policy.rs",
+        "aida-core/src/launch_env_keys.rs",
         "pub const GRANT_ENV: &str = \"AIDA_SESSION_GRANT\";",
         "the pure launch policy names the key spawn_agent sets or strips on a child; \
          aida-core cannot reach seat_authority, and it never reads the variable",

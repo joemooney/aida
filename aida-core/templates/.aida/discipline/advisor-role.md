@@ -226,7 +226,7 @@ is the pause-safe default.
 
 Under an operator mandate (scope, merge authority, end time), the advisor can
 run **fire mode**: parallel fixers and independent reviewers, risk-tiered
-review, a two-round cap, and serial merge-on-green by the advisor. The mandate
+review, a configurable review-round cap (default 2, set to 4 here), and serial merge-on-green by the advisor. The mandate
 never waives security/sandbox/authority/architecture review, a green Build,
 intact tests, hooks (`--no-verify`), or operator-only merge-hold clears. See
 [`fire-mode.md`](fire-mode.md) for the authority model and `/aida-fire` for the

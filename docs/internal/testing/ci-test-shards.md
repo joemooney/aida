@@ -4,13 +4,58 @@
 <!-- trace:TASK-1979 | ai:claude -->
 <!-- trace:TASK-1988 | ai:claude -->
 
-The `build` matrix runs seven Ubuntu lanes on the `ci-dev-profile` Rust
+<!-- trace:STORY-2735 | ai:codex -->
+
+Ordinary PR events default to **FAST**: the source guards from
+`make check-ci-fast` plus `cargo check --profile dev --workspace --tests`, in
+parallel. The FAST source gates also execute the dependency-light
+`aida-ci-guards` tests; no application test shard or binary contract runs. The warm-cache wall-time
+target is six minutes; cold compilation can take longer. The compile job keeps
+40 minutes of headroom. Feature-disabled and TUI Cargo checks remain FULL gates.
+
+A PR with the `ci:full` label, or repository Actions variable
+`AIDA_PR_CI_TIER=full`, runs **FULL** instead. Unset, `fast`, or unrecognized
+variable values select FAST for ordinary PRs. Adding/removing the label triggers
+a fresh run at the same head and cancels the run it supersedes, as a push does.
+No other label does: an `aida:merge-hold*` change, for instance, starts a run in
+a concurrency group of its own that skips every job within seconds, under
+`label event (...)` check names, so the head's running CI, its `ci-tier:` marker
+and its `Build (ubuntu-latest)` result are left as they were. Main pushes, train PRs, merge groups,
+scheduled runs and manual dispatches always select FULL. The `tier` job selects
+once and emits a `ci-tier: fast` or `ci-tier: full` check name.
+
+<!-- trace:STORY-2809 | ai:claude -->
+The label selects FULL for the head it was applied to. A `synchronize` event (a
+push) selects FAST even while the label is present. `aida review record` with
+an approving verdict adds the label (or re-applies a stale one when no check is
+running on the head), which starts FULL on the approved head, and `aida pr train` admits a member only when its exact head has a green
+FULL run. See [Landing approved work](../../advanced/landing.md).
+
+Both tiers report `Build (ubuntu-latest)`. The aggregate requires successful
+selection and every selected job; failed, cancelled or unexpectedly skipped
+selected jobs fail Build. Only the unselected tier may be skipped. Merge-hold
+checks retain their existing policy.
+
+Direct `aida pr ship` refuses FAST CI: use `aida pr train`, or add `ci:full`
+and wait for a successful FULL Build. The guard matches the FULL marker to
+Build's workflow run, so an earlier FULL result cannot authorize a newer FAST
+Build, and an old FAST marker does not prevent a later FULL run. It rechecks
+under the merge lease. Untiered repositories and other forges retain their
+existing policy; train execution does not invoke this single-PR guard. Train
+admission has its own commit-keyed full-tier check, described above.
+
+The GitLab GDMA adapter always runs its full seven-lane inventory for retained
+`ci/<attempt>` relay jobs. It accepts only the exact reviewed GitHub tier gate
+and does not evaluate PR tier selection. The separate handwritten GitLab MR
+pipeline has no FAST tier yet; its verify/test/bwrap gates remain unchanged.
+
+The FULL `build` matrix runs seven Ubuntu lanes on the `ci-dev-profile` Rust
 dependency cache. Gates and contracts share the base cache, which gates saves.
 Each test-lane group (`lib`, `cli`, `rest`) saves and restores its own cache
 under a suffixed shared key (`ci-dev-profile-lib`, and so on), because the test lanes compile test binaries and dev-dependencies that
 gates never builds.
 `build-result` retains the required `Build (ubuntu-latest)` check and runs even
-when a lane fails or is cancelled. It succeeds only when the whole matrix does.
+when a lane fails or is cancelled. In FULL mode it succeeds only when the whole matrix does.
 The separate merge-hold workflow is unchanged.
 
 Optional dell1 routing for the four heavy shards is disabled by default. See
@@ -68,7 +113,7 @@ nextest cannot run. Before the swap, a non-gating shadow lane ran nextest
 beside cargo test; on main runs 39455014512, 39475194172 and 39476669725 each
 lane ran the same tests, by name, under both runners.
 
-Docs-only changes skip the test execution and expensive gates; the existing
+In FULL mode, docs-only changes skip the test execution and expensive gates; the existing
 unconditional documentation guards still execute in their respective gate lanes. Every test
 lane uploads its log, its nextest JUnit reports and its timing JSON, enforces
 the per-test budget in `scripts/test-time-budget.toml` (read from the JUnit
@@ -79,9 +124,9 @@ Both store-attach guards compare Git's discovered top-level directory with
 `$PWD/.aida-store` before resetting the store. A plain directory inside the
 checkout fails rather than inheriting the enclosing checkout's Git discovery.
 
-`make check-ci-fast` reads workflow step bodies, runs source gates before Cargo
-compilation, and runs `cargo check` with the seeded `agent` profile. A cold
-target therefore cannot hide source-ratchet failures behind compilation. Host
+`make check-ci-fast` reads workflow step bodies and runs source gates without
+Cargo compilation. Cargo checks stay in the FULL inventory and the separate
+FAST compile job. Host
 lane gates keep the ten-minute sandbox deadline; timeout, runner refusal and
 signal termination report `skipped(<reason>)` without spending a source repair.
 A native publication that cannot recover a clean committed seat returns an error.
@@ -104,3 +149,95 @@ Do not concatenate interleaved multi-job logs before parsing them.
 Baseline: main `6657ffff6d`, run `39476669725`, **11,799 passed + ignored**
 tests (lib-0 3,887, lib-1 5,404, cli-0 188, cli-1 143, rest 2,177). PR timing and coverage evidence belongs in the PR body; the
 12-minute target requires an actual completed PR run.
+
+<!-- trace:TASK-3791 | ai:codex -->
+
+<!-- trace:STORY-2833 | ai:codex -->
+`make check-ratchets` runs the checked application selection in
+`scripts/ratchet-set.json` plus the shared lightweight harness, store-writer
+inventory and dynamic manual checks. The manifest freezes test names in selected
+modules; additions require an explicit selection update. Rust ratchet/inventory,
+source-scan and golden module conventions are also checked by the discovery audit.
+The application selection includes the gate-path suite, command registry/help
+golden, JSON command audit, host-status source guard, launch/role inventories,
+linkage parser hash and portable-skill registration. TASK-1717's store lock
+suite remains FULL: it exercises real subprocesses and interprocess lock barriers,
+rather than a source inventory.
+
+Sandboxed headless seats must not run `make check-ci-fast` directly:
+containment evidence fixtures require sockets, ratchets invoke Cargo, and the
+aggregate exceeds a single 60-second seat tool call. Native host-published seats
+leave edits uncommitted and defer the gate to the host launcher after exit,
+reporting `check_ci_fast=deferred(host)` with these reasons, never a local pass.
+
+Contained self-publishing lanes must run
+`aida lane job run -- make check-ci-fast` before publication. Poll exit 75 with
+`aida lane job wait <id>` in bounded calls and require exit 0 on the final tree;
+rerun the gate after edits. Stop publication if the runner is unavailable,
+refused, timed out or failed. Targeted Cargo tests still run through
+`aida lane job run` / `wait`; unavailable or refused test runners are reported as
+`untested=true`. A fast-gate job does not count as an executed targeted Cargo
+test. This does not skip or reclassify any host or CI gate.
+<!-- trace:TASK-3123 | ai:codex -->
+
+`make check-ci-fast` runs source gates and this ratchet set, so the host lane's
+existing exact Make invocation also blocks publication on a ratchet failure.
+Hosted FAST runs `make check-ci-source` in fast-gates and runs the ratchet set
+after workspace checking in fast-compile, with native build dependencies available.
+The implementer preflight includes the same named CI step. A red ratchet set
+blocks review; FULL remains required for train admission.
+
+The runner prints elapsed time for every command, including compilation. The
+12-minute warm FAST target must be measured on hosted runs; local test execution
+times and queue waits do not establish that target. Do not trim selection to
+meet the target: report measurements and propose a split if it is exceeded.
+For the week following rollout, record daily approvals subsequently held for a
+FULL failure on their own change (baseline: six on 2026-11-14).
+
+FAST also runs `Rust structural ratchets` through the same Build step and
+`ci-gate-tiers.toml` classification as `make check-ci-fast`. Its two-minute
+step budget includes compilation of a small crate with regex, syn, TOML and
+YAML/JSON dependencies, without compiling the application or its native libraries.
+`aida-ci-guards/lib.rs` is the checked selection: it imports the original FULL
+shard test modules by path, including launch/env-key, raw Git/forge, vendor
+literal, entry-point, display-ID, config-trust, liveness, grant-env and CI-gate inventories. The
+launch key tables live in a shared data-only module re-exported by launch_policy.
+The existing store-writer inventory and its mutation fixtures remain FAST.
+
+The selection audit explicitly pins
+`task_1750_liveness_primitive_guard_tests::proc_identity_legacy_decisions_do_not_expand`
+in FAST, even though that test name lacks the discovery keywords. A lane
+negative control adding `process_provably_dead(0)` to production
+`ownership/reader.rs` failed this shared guard with `1 identity decisions`;
+the temporary addition was removed. The four liveness tests passed on the
+unchanged source. No legacy baseline allowance was added.
+<!-- trace:BUG-2574 | ai:codex -->
+
+`tests/test_ci_structural_guards.py` checks new ratchet/inventory test names
+and ratchet/inventory test-module conventions across workspace Rust sources.
+It masks Rust comments and string fixtures before discovery. Mixed runtime
+suites retain explicit per-test exclusions in
+`scripts/ci-structural-exclusions.json`; additions to those suites still need a
+new reviewed disposition. New structural guards should use `ratchet` or
+`inventory` in the test name (or a `*_ratchet_tests.rs` / `*_inventory_tests.rs`
+module). The audit rejects missing selection and stale exclusions.
+
+The #3926 regression is exercised by
+`story_2326_ambient_aida_inputs_have_a_disposition`: introducing
+a production literal `"AIDA_SWEEP_PARENT"` without adding it to the shared
+key inventory makes this FAST test fail with `unclassified production input
+AIDA_SWEEP_PARENT`. Restore the inventory before publishing. FAST remains a
+train-only publication proof; it does not authorize direct shipping.
+
+Lane validation for TASK-3791: all 50 shared tests passed in 6.18 seconds;
+seven core launch-policy tests passed, and the three selection-audit plus five
+CI-tier fixtures passed. Injecting an unclassified production
+`AIDA_SWEEP_PARENT` literal produced the expected FAST-test refusal; the temporary
+fixture was removed. These are lane measurements, not hosted-runner timings.
+
+The #3926 lib-0 failure is also covered by the shared
+`resolve_aida_exe_ratchet_tests::no_cli_source_outside_the_resolver_uses_raw_current_executable_lookup`
+guard. Its dedicated ratchet module runs in FAST and FULL; the selection audit
+explicitly verifies that removing that module from FAST fails coverage. Adding
+`std::env::current_exe()` outside the resolver makes the shared guard fail.
+<!-- trace:TASK-3791 | ai:codex -->

@@ -590,6 +590,7 @@ fn send_mail_notice(project_root: &Path, view: &AgentRegistryView, text: &str) -
         archived: false,
         from_source,
         from_role,
+        from_seat: None,
         relayed_from: None,
     };
     crate::mailbox_store::write_message(project_root, &msg)
@@ -850,7 +851,8 @@ fn run_terminal(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::agent_launch::handle_terminal_command;
     let args = <TerminalArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {

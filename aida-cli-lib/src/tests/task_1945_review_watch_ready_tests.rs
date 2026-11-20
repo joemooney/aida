@@ -24,6 +24,7 @@ fn change(behind: u64, overlap: bool) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(overlap),
+        conflict: None,
         behind: Some(behind),
         head_branch: None,
     }
@@ -33,6 +34,8 @@ fn check(name: &str, outcome: CheckOutcome) -> CommitCheck {
     CommitCheck {
         name: name.into(),
         outcome,
+        run_id: None,
+        workflow_id: Some("ci".to_string()),
     }
 }
 
@@ -56,6 +59,7 @@ fn approval() -> Approval {
 
 /// Evidence snapshots; every reader is a value or an error.
 struct Fake {
+    stale_policy: crate::pr_rebase::StaleBasePolicy,
     approval: std::result::Result<Approval, String>,
     review: Option<String>,
     hold: std::result::Result<Option<String>, String>,
@@ -67,6 +71,7 @@ impl Fake {
     fn ready() -> Self {
         let head = format!("{HEAD:040x}");
         Self {
+            stale_policy: Default::default(),
             approval: Ok(approval()),
             review: None,
             hold: Ok(None),
@@ -94,6 +99,14 @@ impl Evidence for Fake {
     }
     fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
         Ok((change.behind.unwrap(), change.overlap.unwrap()))
+    }
+    fn clean_stale_overlap(&self, change: &forge::Change) -> Result<bool> {
+        if self.stale_policy == crate::pr_rebase::StaleBasePolicy::RefuseOnOverlap {
+            return Ok(false);
+        }
+        Ok(!change
+            .conflict
+            .context("merge-tree conflict evidence unknown")?)
     }
     fn head(&self, _: &forge::Change) -> Result<String> {
         self.head.clone().map_err(|e| anyhow::anyhow!(e))
@@ -444,6 +457,52 @@ mod gate {
             ready::evaluate(&c, &evidence),
             (Readiness::Ready, Some(_))
         ));
+        // trace:STORY-2697 | ai:codex — carry-over never carries source CI.
+        for (checks, expected) in [
+            (
+                CommitChecks {
+                    sha: c.head.clone(),
+                    checks: vec![],
+                },
+                "no CI checks on the head".to_string(),
+            ),
+            (
+                CommitChecks {
+                    sha: c.head.clone(),
+                    checks: vec![check(CI_AGGREGATOR_CHECK, CheckOutcome::Pending)],
+                },
+                format!("CI pending: {CI_AGGREGATOR_CHECK}"),
+            ),
+            (
+                CommitChecks {
+                    sha: c.head.clone(),
+                    checks: vec![check(CI_AGGREGATOR_CHECK, CheckOutcome::Failed)],
+                },
+                format!("CI failed: {CI_AGGREGATOR_CHECK}"),
+            ),
+            (
+                green(&approved),
+                format!("CI evidence is for {}, not the head", &approved[..12]),
+            ),
+        ] {
+            let blocked = Fake {
+                ci: Ok(checks),
+                approval: evidence.approval.clone(),
+                head: Ok(c.head.clone()),
+                ..Fake::ready()
+            };
+            assert_eq!(not_ready(&blocked, &c), expected);
+            // The same carried approval and stable destination head become ready
+            // when only the destination CI evidence changes to green.
+            let green_destination = Fake {
+                ci: Ok(green(&c.head)),
+                ..blocked
+            };
+            assert!(matches!(
+                ready::evaluate(&c, &green_destination),
+                (Readiness::Ready, Some(_))
+            ));
+        }
         untouched(repo.path());
     }
 
@@ -1202,4 +1261,435 @@ fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
         select_with_coverage(&other, &c, None, 2, || None).unwrap(),
         Action::Dispatch(_)
     ));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_auto_train_requires_covered_head_green_ci_and_no_hold() {
+    let mut c = change(0, false);
+    c.head_branch = Some("feature/example".into());
+    assert!(train::eligible(&c, &Fake::ready()).is_ok());
+    let mut f = Fake::ready();
+    f.ci.as_mut()
+        .unwrap()
+        .checks
+        .push(check("informational", CheckOutcome::Failed));
+    assert!(train::eligible(&c, &f).is_ok());
+    f = Fake::ready();
+    f.ci.as_mut().unwrap().checks.clear();
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.approval.as_mut().unwrap().reviewed = "old-head".into();
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.approval.as_mut().unwrap().reviewed = "approved-before-base-merge".into();
+    f.approval.as_mut().unwrap().carried = Some("carried proof".into());
+    assert!(train::eligible(&c, &f).is_ok());
+    f = Fake::ready();
+    f.hold = Ok(Some("active hold".into()));
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.hold = Err("unreadable hold".into());
+    assert!(train::eligible(&c, &f).is_err());
+    for outcome in [
+        CheckOutcome::Pending,
+        CheckOutcome::Failed,
+        CheckOutcome::Skipped,
+    ] {
+        f = Fake::ready();
+        f.ci.as_mut().unwrap().checks[1].outcome = outcome;
+        assert!(train::eligible(&c, &f).is_err());
+    }
+    f = Fake::ready();
+    f.ci.as_mut().unwrap().sha = "other-head".into();
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.head = Ok("moved-head".into());
+    assert!(train::eligible(&c, &f).is_err());
+    f = Fake::ready();
+    f.approval = Err("CHANGES REQUESTED".into());
+    assert!(train::eligible(&c, &f).is_err());
+    c.head_branch = Some("train/existing".into());
+    assert!(train::eligible(&c, &Fake::ready()).is_err());
+    c.head_branch = None;
+    assert!(train::eligible(&c, &Fake::ready()).is_err());
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_train_settled_refusals_differ_from_evidence_failures() {
+    use crate::pr_train::MemberGateError::{Refused, Unavailable};
+    let mut c = change(0, false);
+    c.head_branch = Some("feature/example".into());
+    let mut f = Fake::ready();
+    f.hold = Ok(Some("hold added before landing".into()));
+    assert!(matches!(train::eligible(&c, &f), Err(Refused(_))));
+    f = Fake::ready();
+    f.approval = Err("approval withdrawn during recovery".into());
+    assert!(matches!(train::eligible(&c, &f), Err(Refused(_))));
+    f = Fake::ready();
+    f.ci.as_mut().unwrap().checks[1].outcome = CheckOutcome::Failed;
+    assert!(matches!(train::eligible(&c, &f), Err(Refused(_))));
+    f = Fake::ready();
+    f.hold = Err("hold read failed".into());
+    assert!(matches!(train::eligible(&c, &f), Err(Unavailable(_))));
+    f = Fake::ready();
+    f.ci = Err("CI read failed".into());
+    assert!(matches!(train::eligible(&c, &f), Err(Unavailable(_))));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_unreadable_approval_artifacts_are_unavailable() {
+    let (temp, _) = fixture();
+    assert!(ready::train_verdict_reads(temp.path(), 7, &[]).is_ok());
+    let dir = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("PR-7.json"), "invalid verdict").unwrap();
+    assert!(matches!(
+        ready::train_verdict_reads(temp.path(), 7, &[]),
+        Err(crate::pr_train::MemberGateError::Unavailable(_))
+    ));
+    record_verdict(temp.path(), "approved");
+    assert!(ready::train_verdict_reads(temp.path(), 7, &[]).is_ok());
+    let path = dir.join("PR-7.json");
+    let target = temp.path().join("approval.json");
+    std::fs::rename(&path, &target).unwrap();
+    std::os::unix::fs::symlink(&target, &path).unwrap();
+    assert!(matches!(
+        ready::train_verdict_reads(temp.path(), 7, &[]),
+        Err(crate::pr_train::MemberGateError::Unavailable(_))
+    ));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_repeated_train_evidence_failures_alert() {
+    for source in ["CI", "hold", "approval"] {
+        let (temp, _) = fixture();
+        let mut c = change(0, false);
+        c.head_branch = Some("feature/example".into());
+        for _ in 0..3 {
+            let mut f = Fake::ready();
+            let failure = match source {
+                "CI" => {
+                    f.ci = Err("CI unavailable".into());
+                    train::eligible(&c, &f).unwrap_err()
+                }
+                "hold" => {
+                    f.hold = Err("hold unavailable".into());
+                    train::eligible(&c, &f).unwrap_err()
+                }
+                _ => {
+                    let dir = temp.path().join(".aida/review-verdicts");
+                    std::fs::create_dir_all(&dir).unwrap();
+                    std::fs::write(dir.join("PR-7.json"), "invalid verdict").unwrap();
+                    ready::train_verdict_reads(temp.path(), 7, &[]).unwrap_err()
+                }
+            };
+            let crate::pr_train::MemberGateError::Unavailable(reason) = failure else {
+                panic!("evidence failure must not become ineligibility");
+            };
+            train_service::record_failure(temp.path(), Some(&reason)).unwrap();
+        }
+        let state: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(temp.path().join(".aida/auto-train/failures.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(state["count"], 3);
+        assert_eq!(state["alert"]["sent"], true);
+    }
+}
+
+// Approved A and landed B touch different lines of the same file. A clean
+// base merge must traverse watcher suppression and automatic train admission.
+// trace:STORY-2763 | ai:codex
+#[test]
+fn story2763_watcher_overlapping_clean_merge_fast_train_and_strict_review() {
+    use crate::gate::review_carryover::{self as carry, tests as fixture};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for strict in [false, true] {
+        let (repo, approved) = fixture::fixture();
+        let root = repo.path();
+        let git = |args: &[&str]| {
+            let output = crate::test_git::git_command()
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        };
+        git(&["checkout", "--quiet", "main"]);
+        let content = std::fs::read_to_string(root.join("a.txt")).unwrap();
+        fixture::write(
+            root,
+            "a.txt",
+            &content.replace("a line 25", "B landed line 25"),
+        );
+        if strict {
+            fixture::write(
+                root,
+                ".aida/config.toml",
+                "[review]\nfreshness = 'strict'\n",
+            );
+        }
+        fixture::commit(root, "B lands on overlapping path");
+        git(&["push", "--quiet", "origin", "main"]);
+        git(&["fetch", "--quiet", "origin"]);
+        git(&["checkout", "--quiet", "pr"]);
+        // Establish the AC6 trigger before merging: A and landed B really
+        // overlap by path, although their edits merge without a resolution.
+        let fork = fixture::git(root, &["merge-base", "HEAD", "origin/main"]);
+        let changed_paths = |tip: &str| {
+            fixture::git(root, &["diff", "--name-only", &fork, tip])
+                .lines()
+                .map(str::to_owned)
+                .collect::<BTreeSet<_>>()
+        };
+        assert!(changed_paths("HEAD").contains("a.txt"));
+        assert!(changed_paths("origin/main").contains("a.txt"));
+        git(&["merge", "--quiet", "--no-edit", "main"]);
+        let head = fixture::head(root);
+        assert_ne!(head, approved);
+        let mut c = change(0, false);
+        c.id = 42;
+        c.head = head.clone();
+        c.head_branch = Some("pr".into());
+        let coverage = || {
+            fixture::consumer_coverage(root, &approved, &head)
+                .ok()
+                .map(|proof| {
+                    crate::gate::merge_hold_core::carried_approval_report(&proof)["description"]
+                        .as_str()
+                        .unwrap()
+                        .to_string()
+                })
+        };
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        assert_eq!(
+            probe_unneeded_with_coverage(&store, &c, coverage)
+                .unwrap()
+                .is_some(),
+            !strict
+        );
+        let action = select_with_coverage(&store, &c, None, 2, coverage).unwrap();
+        let verdict = fixture::approval(&approved);
+        let policy = fixture::policy(&verdict);
+        let site = carry::CarryOverSite::read_only(root, Some("main"));
+        // Exercise the shipping consumer too: watcher suppression must agree
+        // with publication, rather than only with the train's evidence mock.
+        let ship = crate::gate::approval::pr_ship_approval_gate(
+            root,
+            42,
+            std::slice::from_ref(&verdict),
+            Some(&head),
+            &policy,
+            false,
+            true,
+            Some(&site),
+        );
+        if strict {
+            assert!(ship.is_err(), "strict cannot publish the old approval");
+        } else {
+            assert_eq!(ship.unwrap().as_deref(), Some(head.as_str()));
+        }
+        let approval = ready::approval_at(42, &[verdict], &head, &policy, &site);
+        let mut evidence = Fake::ready();
+        evidence.approval = approval;
+        evidence.head = Ok(head.clone());
+        evidence.ci = Ok(green(&head));
+        if strict {
+            let Action::Dispatch(attempt) = action else {
+                panic!("strict policy must reserve a full review: {action:?}");
+            };
+            let refusal = evidence.approval.as_ref().unwrap_err();
+            assert!(refusal.contains("strict"), "{refusal}");
+            assert!(train::eligible(&c, &evidence).is_err());
+            // Run the reservation rather than merely inspecting its enum.
+            // Strict assurance spends one launch, then accepts only a fresh
+            // attested approval at the merged destination head.
+            let launches = std::cell::Cell::new(0);
+            execute_reservation(
+                &store,
+                &c.key(),
+                &attempt.token,
+                |_| Ok(()),
+                |_| {
+                    launches.set(launches.get() + 1);
+                    let verdict = fixture::approval(&head);
+                    let policy = fixture::policy(&verdict);
+                    assert_eq!(
+                        crate::gate::approval::pr_ship_approval_gate(
+                            root,
+                            42,
+                            std::slice::from_ref(&verdict),
+                            Some(&head),
+                            &policy,
+                            false,
+                            true,
+                            Some(&site),
+                        )
+                        .unwrap()
+                        .as_deref(),
+                        Some(head.as_str()),
+                        "strict ships only after the merged head is reviewed"
+                    );
+                    evidence.approval = ready::approval_at(42, &[verdict], &head, &policy, &site);
+                    Ok(())
+                },
+            )
+            .unwrap();
+            assert_eq!(launches.get(), 1);
+            assert_eq!(evidence.approval.as_ref().unwrap().reviewed, head);
+            assert!(evidence.approval.as_ref().unwrap().carried.is_none());
+            train::eligible(&c, &evidence).unwrap();
+            assert!(matches!(
+                ready::evaluate(&c, &evidence),
+                (Readiness::Ready, Some(_))
+            ));
+        } else {
+            assert!(matches!(action, Action::Skip(_)), "{action:?}");
+            assert!(store
+                .load()
+                .unwrap()
+                .entries
+                .get(&c.key())
+                .is_none_or(|entry| entry.attempts.is_empty()));
+            let approval = evidence.approval.as_ref().unwrap();
+            assert_eq!(approval.reviewed, approved);
+            assert!(
+                approval.carried.is_some(),
+                "must exercise proved carry-over"
+            );
+            train::eligible(&c, &evidence).unwrap();
+            assert!(matches!(
+                ready::evaluate(&c, &evidence),
+                (Readiness::Ready, Some(_))
+            ));
+            // Carry-over supplies review coverage, never destination CI or
+            // permission to bypass an intervening merge hold.
+            for outcome in [CheckOutcome::Pending, CheckOutcome::Failed] {
+                let mut checks = green(&head);
+                checks.checks[1].outcome = outcome;
+                evidence.ci = Ok(checks);
+                assert!(train::eligible(&c, &evidence).is_err());
+            }
+            evidence.ci = Ok(green(&head));
+            evidence.hold = Ok(Some("hold after carry-over".into()));
+            assert!(train::eligible(&c, &evidence).is_err());
+            evidence.hold = Ok(None);
+            evidence.ci = Ok(green(&approved));
+            assert!(
+                train::eligible(&c, &evidence).is_err(),
+                "CI must cover destination head"
+            );
+            // A proved carry-over covers this destination only. Re-reading
+            // the forge head remains mandatory after approval and CI reads.
+            // trace:STORY-2763 | ai:codex
+            evidence.ci = Ok(green(&head));
+            evidence.head = Ok(approved.clone());
+            let refusal = train::eligible(&c, &evidence).unwrap_err();
+            assert!(
+                matches!(refusal, crate::pr_train::MemberGateError::Refused(ref reason)
+                    if reason.contains("head moved")),
+                "carry-over must refuse a changed destination: {refusal:?}"
+            );
+            evidence.head = Err("forge head unavailable".into());
+            let refusal = train::eligible(&c, &evidence).unwrap_err();
+            assert!(
+                matches!(refusal, crate::pr_train::MemberGateError::Unavailable(ref reason)
+                    if reason.contains("forge head unavailable")),
+                "missing destination evidence must stay unavailable: {refusal:?}"
+            );
+            evidence.head = Ok(head.clone());
+            train::eligible(&c, &evidence).unwrap();
+        }
+    }
+}
+
+// trace:TASK-3108 | ai:codex
+#[test]
+fn stale_overlap_readiness_requires_clean_merge_under_relaxed_policies() {
+    use crate::pr_rebase::StaleBasePolicy::{RefuseOnConflict, RefuseOnOverlap, Warn};
+    for policy in [RefuseOnOverlap, RefuseOnConflict, Warn] {
+        for conflict in [Some(false), Some(true), None] {
+            let mut c = change(3, true);
+            c.conflict = conflict;
+            let evidence = Fake {
+                stale_policy: policy,
+                ..Fake::ready()
+            };
+            let (readiness, approval) = ready::evaluate(&c, &evidence);
+            if policy != RefuseOnOverlap && conflict == Some(false) {
+                assert_eq!(readiness, Readiness::Ready, "{policy:?}");
+                assert!(approval.is_some());
+                let message = ready::wake_message("repo", &c, &readiness, &approval.unwrap());
+                assert!(!message.body.contains("0 commits behind"));
+            } else {
+                assert!(
+                    matches!(readiness, Readiness::NotReady(_)),
+                    "{policy:?}: {conflict:?}"
+                );
+                assert!(approval.is_none());
+            }
+        }
+    }
+}
+
+// Exercise the production config reader and cached merge-tree evidence without forge I/O.
+// trace:TASK-3108 | ai:codex
+#[test]
+fn stale_overlap_live_evidence_reads_project_policy() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    for args in [
+        vec!["init", "-q"],
+        vec![
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/owner/repo.git",
+        ],
+    ] {
+        assert!(std::process::Command::new("git")
+            .current_dir(root)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    std::fs::create_dir(root.join(".aida")).unwrap();
+    let repo = forge::Repository::load(root).unwrap();
+    let live = ready::Live { root, repo: &repo };
+    let mut c = change(3, true);
+    c.conflict = Some(false);
+    assert!(
+        !live.clean_stale_overlap(&c).unwrap(),
+        "unset policy retains overlap refusal"
+    );
+    for policy in ["refuse-on-overlap", "refuse-on-conflict", "warn"] {
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            format!("[review]\nstale_base = \"{policy}\"\n"),
+        )
+        .unwrap();
+        for conflict in [false, true] {
+            c.conflict = Some(conflict);
+            assert_eq!(
+                live.clean_stale_overlap(&c).unwrap(),
+                policy != "refuse-on-overlap" && !conflict
+            );
+        }
+    }
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[review]\nstale_base = \"typo\"\n",
+    )
+    .unwrap();
+    assert!(live.clean_stale_overlap(&c).is_err());
 }

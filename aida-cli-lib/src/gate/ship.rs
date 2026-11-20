@@ -478,6 +478,47 @@ pub fn is_draft_only_tagged(tags: &[String]) -> bool {
         .any(|t| t.trim().eq_ignore_ascii_case(DRAFT_ONLY_TAG))
 }
 
+/// BUG-2413: the execution mode the merge gates read for `req`. A spec with
+/// no mode of its own that was superseded into a carrier (a bundled spec
+/// shipped by the carrier's PR) gates on the carrier's mode, following the
+/// superseded-by chain, so an unset mode left on a bundled spec never forces
+/// supervision the carrier's own mode would not. A spec with its own mode, or
+/// with no resolvable superseded-by edge, gates on its own mode as before
+/// (unset stays supervised, fail safe).
+// trace:BUG-2413 | ai:claude
+pub(crate) fn gating_execution_mode(
+    requirements: &[aida_core::Requirement],
+    req: &aida_core::Requirement,
+) -> Option<aida_core::ExecutionMode> {
+    gating_execution_source(requirements, req).map(|(mode, _)| mode)
+}
+
+/// [`gating_execution_mode`] with the spec that sets it: `req` itself, or the
+/// carrier on its superseded-by chain (STORY-2884: `aida show` names it).
+// trace:BUG-2413 trace:STORY-2884 | ai:claude
+pub(crate) fn gating_execution_source<'a>(
+    requirements: &'a [aida_core::Requirement],
+    req: &'a aida_core::Requirement,
+) -> Option<(aida_core::ExecutionMode, &'a aida_core::Requirement)> {
+    let mut current = req;
+    // Bounded: a superseded-by cycle must not loop the gate.
+    for _ in 0..8 {
+        if let Some(mode) = current.execution_mode {
+            return Some((mode, current));
+        }
+        let carrier = current
+            .relationships
+            .iter()
+            .find(|r| r.rel_type == aida_core::RelationshipType::SupersededBy)
+            .and_then(|r| requirements.iter().find(|c| c.id == r.target_id));
+        match carrier {
+            Some(c) => current = c,
+            None => return None,
+        }
+    }
+    None
+}
+
 /// The supervised-merge gate's pure heart. The keystone "Gate + PR, do NOT
 /// merge — advisor reviews first" directive used to live only in spec PROSE,
 /// which the ship cadence never read — it auto-merged keystone work straight
@@ -522,6 +563,25 @@ pub fn supervised_merge_holds(
         .collect()
 }
 
+/// STORY-2884: [`supervised_merge_holds`] over effective modes — the
+/// `(spec-id, mode-label)` pairs whose effective mode holds the merge. The
+/// label names the effective mode and its source, e.g.
+/// `unset (supervised: not defaulted, the change touches ...)`.
+// trace:STORY-2884 | ai:claude
+pub(crate) fn effective_supervised_merge_holds(
+    specs: &[(String, Vec<String>, crate::gate::unset_mode::EffectiveMode)],
+    interactive_tty: bool,
+) -> Vec<(String, String)> {
+    if interactive_tty {
+        return Vec::new();
+    }
+    specs
+        .iter()
+        .filter(|(_, _, mode)| mode.requires_supervision())
+        .map(|(id, _, mode)| (id.clone(), mode.label()))
+        .collect()
+}
+
 /// Why a merge path refuses a PR whose newest recorded APPROVAL does not
 /// provably cover the PR's current head (PRIN-5: an approval that cannot be
 /// placed against the head is not evidence the head was reviewed).
@@ -532,6 +592,12 @@ pub fn supervised_merge_holds(
 // trace:TASK-1448 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum ApprovalHeadRefusal {
+    /// Reviewer permits only the exact reviewed head.
+    // trace:STORY-2696 | ai:codex
+    NoCarry {
+        reviewed_sha: String,
+        head_sha: String,
+    },
     /// The approval was recorded at a commit the head has since moved past.
     Moved {
         reviewed_sha: String,
@@ -599,6 +665,16 @@ pub(crate) fn approval_head_refusal(
         | PrReviewRow::ReworkReady { reviewed_sha, .. } => reviewed_sha.trim().to_string(),
     };
     Some(match row {
+        PrReviewRow::Stale { .. }
+            if newest_approval(&approvals)
+                .and_then(|v| v.attestation.as_ref())
+                .is_some_and(|a| !a.carry_eligible) =>
+        {
+            ApprovalHeadRefusal::NoCarry {
+                reviewed_sha,
+                head_sha,
+            }
+        }
         PrReviewRow::Stale { .. } => ApprovalHeadRefusal::Moved {
             reviewed_sha,
             head_sha,
@@ -932,7 +1008,11 @@ pub(crate) fn approval_authority_refusal_message(
 // trace:TASK-1458 | ai:claude
 pub(crate) fn approval_head_refusal_shas(refusal: &ApprovalHeadRefusal) -> (String, String) {
     match refusal {
-        ApprovalHeadRefusal::Moved {
+        ApprovalHeadRefusal::NoCarry {
+            reviewed_sha,
+            head_sha,
+        }
+        | ApprovalHeadRefusal::Moved {
             reviewed_sha,
             head_sha,
         }
@@ -979,6 +1059,10 @@ pub(crate) fn format_stale_approval_override_event(
 pub(crate) fn approval_head_refusal_message(pr: u64, refusal: &ApprovalHeadRefusal) -> String {
     let short = |s: &str| crate::gate::review_verdict::short_sha(s).to_string();
     let why = match refusal {
+        ApprovalHeadRefusal::NoCarry { reviewed_sha, head_sha } => format!(
+            "the reviewer marked the approval at {} as not carry-eligible; fresh review of head {} is required",
+            short(reviewed_sha), short(head_sha)
+        ),
         ApprovalHeadRefusal::Moved {
             reviewed_sha,
             head_sha,
@@ -1064,6 +1148,14 @@ pub(crate) fn merge_gate_verdict_candidates(
             keys.push(id);
         }
     }
+    // BUG-2570: a spec's file holds one verdict, the last one written, for
+    // whichever change that was. Once this change has a verdict of its own on
+    // the ledger, a spec key answers from the ledger alone, with this
+    // change's events (and another change's only at this head).
+    // trace:BUG-2570 | ai:claude
+    let own_verdict = roots
+        .iter()
+        .any(|root| crate::gate::ledger::project::change_has_verdict(root, pr));
     let mut seen: Vec<std::path::PathBuf> = Vec::new();
     let mut out = Vec::new();
     for root in roots {
@@ -1074,12 +1166,17 @@ pub(crate) fn merge_gate_verdict_candidates(
                 continue;
             }
             seen.push(canon);
+            let ledger_only = own_verdict && *key != change_key;
             // TASK-1801: a current artefact that exists but the anchored
             // reader refuses (linked file or directory) is not evidence, and
             // it must not let an archived round answer for the key either.
             // trace:TASK-1801 | ai:claude
-            let body = crate::gate::review_verdict::read_verdict_body(&path);
-            let file_exists = std::fs::symlink_metadata(&path).is_ok();
+            let body = if ledger_only {
+                Err(std::io::Error::from(std::io::ErrorKind::NotFound))
+            } else {
+                crate::gate::review_verdict::read_verdict_body(&path)
+            };
+            let file_exists = !ledger_only && std::fs::symlink_metadata(&path).is_ok();
             if body.is_err() && file_exists {
                 continue;
             }
@@ -1097,7 +1194,9 @@ pub(crate) fn merge_gate_verdict_candidates(
             let ledger_applies = file.is_some() || !file_exists;
             let ledger = ledger_applies.then_some(()).and_then(|()| {
                 let store = crate::gate::ledger::store_root(root).ok()?;
-                let event = crate::gate::ledger::project::newest_verdict_event(&store, key)?;
+                let event = crate::gate::ledger::project::newest_verdict_event_for_change(
+                    &store, key, pr, head,
+                )?;
                 Some((store.join(".aida").join("gate-ledger").join(key), event))
             });
             let current = match ledger {
@@ -1218,3 +1317,383 @@ mod tests;
 #[cfg(test)]
 #[path = "tests/bug_1918_approval_authority_tests.rs"]
 mod bug_1918_approval_authority_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2570_shared_spec_verdict_tests.rs"]
+mod bug_2570_shared_spec_verdict_tests;
+
+/// `Some(refusal)` when the project's merges are performed by the advisor
+/// (`[landing] merger = "advisor"`, read by the caller) and this caller is
+/// neither the advisor seat (resolved from a validated grant) nor holds the
+/// integrity-floor authority (the operator at a terminal). Authorship
+/// separation and every other gate apply whatever this returns.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn advisor_merge_refusal(
+    advisor_only: bool,
+    grant_seat: Option<&str>,
+    floor_authority: bool,
+    subject: &str,
+) -> Option<String> {
+    if !advisor_only || floor_authority || grant_seat == Some("advisor") {
+        return None;
+    }
+    Some(format!(
+        "{subject} is not merged here: this project's landing policy has the advisor perform \
+         its merges, and this session's seat is {}. Report it as ready to the advisor instead.",
+        grant_seat.map_or("not a granted seat".to_string(), |s| format!("`{s}`"))
+    ))
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_advisor_merge_tests {
+    use super::advisor_merge_refusal;
+
+    #[test]
+    fn only_the_advisor_or_the_operator_merges_when_the_advisor_is_the_merger() {
+        assert_eq!(
+            advisor_merge_refusal(false, Some("implementer"), false, "PR-7"),
+            None
+        );
+        assert_eq!(
+            advisor_merge_refusal(true, Some("advisor"), false, "PR-7"),
+            None
+        );
+        assert_eq!(
+            advisor_merge_refusal(true, None, true, "PR-7"),
+            None,
+            "operator at a terminal"
+        );
+        for seat in [Some("implementer"), Some("product"), Some("reviewer"), None] {
+            let refusal = advisor_merge_refusal(true, seat, false, "PR-7").expect("refused");
+            assert!(refusal.contains("PR-7 is not merged here"), "{refusal}");
+            assert!(refusal.contains("has the advisor perform"), "{refusal}");
+        }
+    }
+}
+
+/// `Some(refusal)` when this session may not perform the merge: the
+/// advisor-merger rule ([`advisor_merge_refusal`]), then, whenever the
+/// advisor merges and the operator's floor authority does not hold, the
+/// author rule C2 ([`shipper_author_refusal`]) over `authors` (resolved only
+/// when it is needed). One decision for the merge boundary and for `aida
+/// land run`'s choice to ship.
+///
+/// Order (promotion 23 review r4, a TOCTOU): `authors` is a slow read (the
+/// forge's change metadata and the authorship ledger), so the seat grant
+/// and the floor authority are read AGAIN after it, and that last read
+/// decides: a grant revoked or expired during the lookup refuses. The first
+/// read only fails fast.
+// trace:STORY-2903 | ai:claude
+pub(crate) fn merge_authority_refusal(
+    advisor_merges: bool,
+    grant_seat: &dyn Fn() -> Option<String>,
+    floor_authority: &dyn Fn() -> bool,
+    authors: impl FnOnce() -> Result<ShipApprovalPolicy, String>,
+    subject: &str,
+) -> Option<String> {
+    if !advisor_merges {
+        return None;
+    }
+    let floor_first = floor_authority();
+    if let Some(why) = advisor_merge_refusal(true, grant_seat().as_deref(), floor_first, subject) {
+        return Some(why);
+    }
+    if !floor_first {
+        // Authors that cannot be established refuse: never "no authors"
+        // (promotion 23 review F2). trace:STORY-2903 | ai:claude
+        let author_refusal = match authors() {
+            Ok(policy) => shipper_author_refusal(&policy, subject),
+            Err(why) => Some(format!(
+                "{subject} is not merged here: its authors cannot be established ({why})"
+            )),
+        };
+        if author_refusal.is_some() {
+            return author_refusal;
+        }
+    }
+    // LAST, after every slow read: the authority as it is now.
+    let floor_last = floor_authority();
+    if let Some(why) = floor_lapse_refusal(floor_first, floor_last, subject) {
+        return Some(why);
+    }
+    advisor_merge_refusal(true, grant_seat().as_deref(), floor_last, subject)
+}
+
+/// `Some(refusal)` when the integrity-floor authority (the operator at a
+/// terminal, or a deputy job its TTY policy authorized) held when a ship
+/// began has lapsed by the merge: a deputy marker can expire or be revoked
+/// while the ship waits on CI or a hold. The waits were passed on that
+/// authority (it skips the mandate and releases holds), so no other
+/// authority stands in for it and the merge is refused.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn floor_lapse_refusal(
+    floor_at_entry: bool,
+    floor_now: bool,
+    subject: &str,
+) -> Option<String> {
+    (floor_at_entry && !floor_now).then(|| {
+        format!(
+            "{subject} is not merged here: the operator authority this ship started under \
+             (a terminal, or a deputy job authorized a terminal) has lapsed while it waited; \
+             run the ship again from an authorized terminal"
+        )
+    })
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_floor_lapse_tests {
+    use super::floor_lapse_refusal;
+
+    #[test]
+    fn a_floor_authority_lapsed_before_the_merge_refuses_it() {
+        assert_eq!(floor_lapse_refusal(false, false, "PR-7"), None);
+        assert_eq!(floor_lapse_refusal(true, true, "PR-7"), None);
+        assert_eq!(floor_lapse_refusal(false, true, "PR-7"), None);
+        let why = floor_lapse_refusal(true, false, "PR-7").expect("lapsed");
+        assert!(
+            why.contains("PR-7 is not merged here") && why.contains("lapsed"),
+            "{why}"
+        );
+    }
+}
+
+/// `Some(refusal)` when the session running the merge authored the change
+/// (a session bound to authoring its specs, merge resolutions included, as
+/// the stale-override check resolves them): under either `[landing]
+/// merger` value a merge is performed by someone who authored none of the
+/// change (advisor condition C2). The operator at a terminal is the
+/// explicit exception the caller grants.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn shipper_author_refusal(policy: &ShipApprovalPolicy, subject: &str) -> Option<String> {
+    let author = policy
+        .author_sessions
+        .iter()
+        .find(|a| a.matches(&policy.shipper))?;
+    Some(format!(
+        "{subject} is not merged here: this session authored the change ({}), and a merge \
+         is performed by someone who authored none of it",
+        author.label
+    ))
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_shipper_author_tests {
+    use super::{shipper_author_refusal, AuthorSession, ShipApprovalPolicy};
+
+    #[test]
+    fn an_author_session_never_merges_its_own_change() {
+        let author = AuthorSession {
+            label: "implementer lease on bug-1".into(),
+            tokens: vec!["session:author".into()],
+        };
+        let resolver = AuthorSession {
+            label: "merge resolution commit".into(),
+            tokens: vec!["session:resolver".into()],
+        };
+        for (shipper, refused) in [
+            ("session:author", Some("implementer lease on bug-1")),
+            ("session:resolver", Some("merge resolution commit")),
+            ("session:advisor", None),
+        ] {
+            let policy = ShipApprovalPolicy {
+                author_sessions: vec![author.clone(), resolver.clone()],
+                shipper: vec![shipper.into()],
+                ..ShipApprovalPolicy::default()
+            };
+            let got = shipper_author_refusal(&policy, "PR-7");
+            match refused {
+                Some(label) => {
+                    let why = got.expect("refused");
+                    assert!(
+                        why.contains(label) && why.contains("PR-7 is not merged here"),
+                        "{why}"
+                    );
+                }
+                None => assert_eq!(got, None),
+            }
+        }
+    }
+}
+
+/// `Some(refusal)` when this caller may not change the landing mode or the
+/// forge's required checks (`aida land mode set|reconcile`). It changes
+/// branch protection, so it needs the integrity-floor authority (the operator
+/// at a terminal), or the advisor seat resolved from a validated grant whose
+/// principal is the one who minted the active mandate that includes
+/// protected paths (`mandate_principal`; `None` when there is no such
+/// mandate). An advisor grant of another roster principal does not borrow
+/// that mandate, as in the mandate's own hold release.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn landing_mode_change_refusal(
+    floor_authority: bool,
+    mandate_principal: Option<&str>,
+    grant: Option<(&str, &str)>,
+) -> Option<String> {
+    if floor_authority {
+        return None;
+    }
+    let lead = "changing the landing mode changes the forge's branch protection, so it needs \
+                the operator at a terminal, or the advisor seat under an active mandate that \
+                includes protected paths";
+    let Some(mandate_principal) = mandate_principal else {
+        return Some(format!("{lead}; this session has no such mandate"));
+    };
+    match grant {
+        Some((seat, principal)) if seat == crate::gate::mandate::MANDATE_SEAT => {
+            (principal.trim() != mandate_principal.trim()).then(|| {
+                format!(
+                    "{lead}; the active mandate was minted by `{mandate_principal}`, but this \
+                     session's advisor grant belongs to `{}`",
+                    principal.trim()
+                )
+            })
+        }
+        Some((seat, _)) => Some(format!("{lead}; this session has the `{seat}` seat")),
+        None => Some(format!("{lead}; this session has no granted seat")),
+    }
+}
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_landing_mode_authority_tests {
+    use super::landing_mode_change_refusal;
+
+    #[test]
+    fn only_the_operator_or_the_mandates_own_advisor_changes_the_landing_mode() {
+        assert_eq!(
+            landing_mode_change_refusal(true, None, None),
+            None,
+            "operator"
+        );
+        assert_eq!(
+            landing_mode_change_refusal(false, Some("joe"), Some(("advisor", "joe"))),
+            None
+        );
+        for (mandate, grant, needle) in [
+            (None, Some(("advisor", "joe")), "no such mandate"),
+            (
+                Some("joe"),
+                Some(("implementer", "joe")),
+                "the `implementer` seat",
+            ),
+            (Some("joe"), None, "no granted seat"),
+            (None, None, "no such mandate"),
+            // Another roster principal's advisor grant does not borrow the
+            // operator's mandate.
+            (
+                Some("joe"),
+                Some(("advisor", "pat")),
+                "minted by `joe`, but this session's advisor grant belongs to `pat`",
+            ),
+        ] {
+            let why = landing_mode_change_refusal(false, mandate, grant).expect("refused");
+            assert!(why.contains(needle), "{why}");
+        }
+    }
+}
+
+// trace:STORY-2903 | ai:claude
+#[cfg(test)]
+mod story2903_merge_authority_tests {
+    use super::{merge_authority_refusal, AuthorSession, ShipApprovalPolicy};
+
+    fn seat(name: &'static str) -> impl Fn() -> Option<String> {
+        move || Some(name.to_string())
+    }
+
+    /// Promotion 23 review r4 (TOCTOU): the seat grant is revoked while the
+    /// authors are being read (the slow forge/ledger lookup). The authority
+    /// is read again after it, so the merge is refused; with the grant held
+    /// throughout, it merges.
+    // trace:STORY-2903 | ai:claude
+    #[test]
+    fn a_grant_revoked_during_the_author_lookup_refuses_the_merge() {
+        for revoke in [true, false] {
+            let granted = std::cell::Cell::new(true);
+            let seat = || granted.get().then(|| "advisor".to_string());
+            let why = merge_authority_refusal(
+                true,
+                &seat,
+                &|| false,
+                || {
+                    if revoke {
+                        granted.set(false);
+                    }
+                    Ok(authored_by("session:advisor"))
+                },
+                "PR-7",
+            );
+            if revoke {
+                let why = why.expect("a grant revoked mid-lookup refuses");
+                assert!(why.contains("has the advisor perform"), "{why}");
+            } else {
+                assert_eq!(why, None, "a grant held throughout merges");
+            }
+        }
+    }
+
+    fn authored_by(shipper: &str) -> ShipApprovalPolicy {
+        ShipApprovalPolicy {
+            author_sessions: vec![AuthorSession {
+                label: "implementer lease on story-1".into(),
+                tokens: vec!["session:author".into()],
+            }],
+            shipper: vec![shipper.into()],
+            ..ShipApprovalPolicy::default()
+        }
+    }
+
+    #[test]
+    fn the_advisor_merges_only_a_change_it_authored_none_of() {
+        // Not the advisor: refused before authorship is even resolved.
+        let why = merge_authority_refusal(
+            true,
+            &seat("implementer"),
+            &|| false,
+            || panic!("authors are not resolved for a non-advisor"),
+            "PR-7",
+        )
+        .expect("refused");
+        assert!(why.contains("has the advisor perform"), "{why}");
+        // The advisor, as the change's author: refused (C2).
+        let why = merge_authority_refusal(
+            true,
+            &seat("advisor"),
+            &|| false,
+            || Ok(authored_by("session:author")),
+            "PR-7",
+        )
+        .expect("refused");
+        assert!(why.contains("this session authored the change"), "{why}");
+        // The advisor, authoring none of it: merges.
+        assert_eq!(
+            merge_authority_refusal(
+                true,
+                &seat("advisor"),
+                &|| false,
+                || Ok(authored_by("session:advisor")),
+                "PR-7"
+            ),
+            None
+        );
+        // The operator at a terminal, and a project where any non-author
+        // merges: no author resolution needed.
+        assert_eq!(
+            merge_authority_refusal(true, &|| None, &|| true, || panic!("floor"), "PR-7"),
+            None
+        );
+        assert_eq!(
+            merge_authority_refusal(
+                false,
+                &seat("implementer"),
+                &|| false,
+                || panic!("off"),
+                "PR-7"
+            ),
+            None
+        );
+    }
+}

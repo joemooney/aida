@@ -4,18 +4,18 @@
 # code becomes portable. trace:TASK-1205 BUG-1301 | ai:codex
 unattributed	aida-cli-lib/src/advisor.rs:plan_fork(&PathBuf::from("/tmp/spec-x"), &cfg).is_none(),
 unattributed	aida-cli-lib/src/advisor.rs:project_root: "/tmp/x".to_string(),
-unattributed	aida-cli-lib/src/agent_registry.rs:assert_eq!(tmux.tmux_socket.as_deref(), Some("/tmp/tmux.sock"));
-unattributed	aida-cli-lib/src/agent_registry.rs:e.worktree_path = PathBuf::from("/tmp/aida-story/subdir");
-unattributed	aida-cli-lib/src/agent_registry.rs:let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
-unattributed	aida-cli-lib/src/agent_registry.rs:let root = Path::new("/tmp/project");
-unattributed	aida-cli-lib/src/agent_registry.rs:line.ends_with(" /tmp/aida-story-431"),
-unattributed	aida-cli-lib/src/agent_registry.rs:PathBuf::from("/tmp/project/.aida/agents/codex-123.toml")
-unattributed	aida-cli-lib/src/agent_registry.rs:vec![("TMUX_PANE", "%3"), ("TMUX", "/tmp/tmux.sock,1,0")],
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-bug-1043"),
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-story"),
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-story-431"),
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path: PathBuf::from("/tmp/aida-story-528"),
-unattributed	aida-cli-lib/src/agent_registry.rs:worktree_path = "/tmp/aida-story"
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:assert_eq!(tmux.tmux_socket.as_deref(), Some("/tmp/tmux.sock"));
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:e.worktree_path = PathBuf::from("/tmp/aida-story/subdir");
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:let c = ctx(now, 30, vec![PathBuf::from("/tmp/aida-story")]);
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:let root = Path::new("/tmp/project");
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:line.ends_with(" /tmp/aida-story-431"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:PathBuf::from("/tmp/project/.aida/agents/codex-123.toml")
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:vec![("TMUX_PANE", "%3"), ("TMUX", "/tmp/tmux.sock,1,0")],
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path: PathBuf::from("/tmp/aida-bug-1043"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path: PathBuf::from("/tmp/aida-story"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path: PathBuf::from("/tmp/aida-story-431"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path: PathBuf::from("/tmp/aida-story-528"),
+unattributed	aida-cli-lib/src/tests/agent_registry_inline_tests.rs:worktree_path = "/tmp/aida-story"
 unattributed	aida-cli-lib/src/cli.rs:assert_eq!(project.as_deref(), Some("/tmp/aida"));
 unattributed	aida-cli-lib/src/cli.rs:"/tmp/aida",
 unattributed	aida-cli-lib/src/config_cmd.rs:assert_eq!(codex.writable_roots, vec!["/tmp/cache".to_string()]);
@@ -36,17 +36,21 @@ unattributed	aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-noscope")
 unattributed	aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-salvage"),
 unattributed	aida-cli-lib/src/dispatch_health_ps.rs:Path::new("/tmp/wt-stalled"),
 unattributed	aida-cli-lib/src/dispatch_health_ps.rs:salvageable.contains("git -C /tmp/wt-entered add -A"),
-unattributed	aida-cli-lib/src/doctor_cmd.rs:Path::new("/tmp/scratch"),
+unattributed	aida-cli-lib/src/tests/doctor_cmd_story_462_doctor_tests.rs:Path::new("/tmp/scratch"),
 unattributed	aida-cli-lib/src/headless_tee.rs:assert!(o.lines[0].contains("/tmp/work"));
 unattributed	aida-cli-lib/src/headless_tee.rs:let line = r#"{"type":"system","subtype":"init","model":"claude-opus","cwd":"/tmp/work","session_id":"abc"}"#;
 unattributed	aida-cli-lib/src/headless_tee.rs:r#"{{"type":"system","subtype":"init","model":"x","cwd":"/tmp"}}"#
 unattributed	aida-cli-lib/src/health_metrics.rs:const INIT: &str = r#"{"type":"system","subtype":"init","model":"x","cwd":"/tmp"}"#;
-unattributed	aida-cli-lib/src/init_cmd.rs:r#"{"mcpServers":{"aida":{"command":"/tmp/aida","args":["mcp-serve"]}}}"#,
-unattributed	aida-cli-lib/src/network_retry.rs:let mut c = Command::new("sh");
+unattributed	aida-cli-lib/src/tests/init_cmd_task_510_init_scaffold_task_tests_inline_tests.rs:r#"{"mcpServers":{"aida":{"command":"/tmp/aida","args":["mcp-serve"]}}}"#,
+unattributed	aida-term/src/network_retry.rs:let mut c = Command::new("sh");
 unattributed	aida-cli-lib/src/pr_rebase.rs:assert_eq!(p, PathBuf::from("/tmp/proj/.aida/worktrees/pr-rebase-308"));
 unattributed	aida-cli-lib/src/pr_rebase.rs:let p = temp_worktree_path(Path::new("/tmp/proj"), 308);
 unattributed	aida-cli-lib/src/remote_create.rs:default_repo_name(Path::new("/tmp/my-project")),
-unattributed	aida-cli-lib/src/session.rs:let fake = "/tmp/aida-fake-agent-task-1081";
+unattributed	aida-cli-lib/src/session/inline_tests.rs:let fake = "/tmp/aida-fake-agent-task-1081";
+# baseline-correction TASK-3787 moved-from: aida-cli-lib/src/session.rs
+unattributed	aida-cli-lib/src/session/inline_tests.rs:let missing = "/tmp/aida-bug-1607-missing-agent-binary-does-not-exist";
+# baseline-correction TASK-3787 moved-from: aida-cli-lib/src/session.rs
+unattributed	aida-cli-lib/src/session/inline_tests.rs:"/tmp/x.json".to_string(),
 unattributed	aida-cli-lib/src/status_cleanup.rs:path: "/tmp/foo".into(),
 unattributed	aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-376".into(),
 unattributed	aida-cli-lib/src/status_cleanup.rs:worktree_path: "/tmp/task-377".into(),

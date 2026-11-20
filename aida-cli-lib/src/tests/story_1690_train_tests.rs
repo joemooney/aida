@@ -8,6 +8,69 @@
 use super::*;
 use std::path::Path;
 
+// trace:TASK-3789 | ai:codex
+#[test]
+fn train_progress_prefixes_local_wall_clock_time() {
+    let line = train_progress(format_args!("train PR #{} is green", 901));
+    let pattern =
+        regex::Regex::new(r"^  ([0-1][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9] train PR #901 is green$")
+            .unwrap();
+    assert!(pattern.is_match(&line), "unexpected progress line: {line}");
+}
+
+// trace:BUG-2584 | ai:claude
+#[test]
+fn final_gate_phase_line_names_the_phase_its_duration_and_store_reads() {
+    let quiet = final_gate_phase_line(
+        "recheck: member #3924 gate",
+        std::time::Duration::from_millis(41_250),
+        0,
+        std::time::Duration::ZERO,
+    );
+    let pattern = regex::Regex::new(
+        r"^  \d\d:\d\d:\d\d final gate: recheck: member #3924 gate took 41\.[23]s$",
+    )
+    .unwrap();
+    assert!(pattern.is_match(&quiet), "unexpected phase line: {quiet}");
+
+    let one = final_gate_phase_line(
+        "fetch main",
+        std::time::Duration::from_secs(2),
+        1,
+        std::time::Duration::from_millis(800),
+    );
+    assert!(
+        one.ends_with("final gate: fetch main took 2.0s (1 store read, 0.8s)"),
+        "{one}"
+    );
+    let many = final_gate_phase_line(
+        "proof: member #7 evidence",
+        std::time::Duration::from_secs(9),
+        7,
+        std::time::Duration::from_millis(5_600),
+    );
+    assert!(
+        many.ends_with("proof: member #7 evidence took 9.0s (7 store reads, 5.6s)"),
+        "{many}"
+    );
+}
+
+// trace:BUG-2584 | ai:claude
+#[test]
+fn final_gate_phase_counts_the_store_reads_made_inside_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let before = crate::gate::dispatch_deps::store_load_totals();
+    let value = final_gate_phase("test phase", || {
+        // No store is reachable from an empty directory; the read still counts.
+        assert!(crate::load_store_for_lookup(dir.path()).is_none());
+        7
+    });
+    assert_eq!(value, 7);
+    let after = crate::gate::dispatch_deps::store_load_totals();
+    assert!(after.0 > before.0, "{before:?} -> {after:?}");
+    assert!(after.1 >= before.1);
+}
+
 fn git(repo: &Path, args: &[&str]) -> String {
     let out = crate::test_git::git_command()
         .arg("-C")
@@ -72,6 +135,8 @@ fn pr_branch(r: &Path, name: &str, edit: impl FnOnce(&Path)) -> String {
 
 fn member(pr: u64, head: &str, subject: &str) -> Member {
     Member {
+        gate_audit: None,
+        cover: None,
         pr,
         head: head.to_string(),
         subject: subject.to_string(),
@@ -83,6 +148,11 @@ fn member(pr: u64, head: &str, subject: &str) -> Member {
 /// BUG-2214: the cover a fake gate hands a held member.
 fn fake_cover() -> crate::gate::mandate_ship::MandateCover {
     crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
+        issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: "6f1c1d6e-0000-4000-8000-00000000fake".into(),
         principal: "joe".into(),
     }
@@ -259,6 +329,9 @@ fn car_message_appends_the_pr_number_once() {
 struct Script {
     bad: Vec<u64>,
     flaky_first: bool,
+    /// The next N tested trains end with no test result.
+    infra_runs: usize,
+    infra_reason: Option<String>,
     stale_once: bool,
     refuse_at_land: Vec<u64>,
     main: u64,
@@ -296,6 +369,14 @@ impl Rails for Script {
             .map(|t| {
                 let ids = prs(&t.members());
                 self.tested.push(ids.clone());
+                if self.infra_runs > 0 {
+                    self.infra_runs -= 1;
+                    return CiVerdict::InfraRed(
+                        self.infra_reason
+                            .clone()
+                            .unwrap_or_else(|| "cancelled".into()),
+                    );
+                }
                 if std::mem::take(&mut self.flaky_first) || ids.iter().any(|p| self.bad.contains(p))
                 {
                     CiVerdict::Red("run".into())
@@ -348,16 +429,116 @@ fn drive_lands_an_all_green_train_in_one_ci_run() {
     assert!(out.ejected.is_empty());
 }
 
+// trace:BUG-2577 | ai:claude
 #[test]
-fn drive_reruns_a_first_red_once_before_bisecting() {
+fn drive_bisects_a_first_red_without_rerunning_the_same_composition() {
+    // Even a red that would have passed on a second attempt is not rerun:
+    // the train goes straight to halves.
     let mut s = Script {
         flaky_first: true,
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[1, 2, 3])).unwrap();
-    assert_eq!(s.tested, vec![vec![1, 2, 3], vec![1, 2, 3]]);
-    assert_eq!(s.landed, vec![vec![1, 2, 3]]);
+    // [1,2,3] red → [1] and [2,3] together; [1] lands, which makes [2,3]
+    // stale, so it is rebuilt on the new main and tested again.
+    assert_eq!(
+        s.tested,
+        vec![vec![1, 2, 3], vec![1], vec![2, 3], vec![2, 3]]
+    );
+    assert_eq!(s.landed, vec![vec![1], vec![2, 3]]);
+    assert!(out.ejected.is_empty());
+    assert_eq!(out.ci_runs, 4);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_splits_a_red_two_member_train_into_exactly_two_sub_trains() {
+    let mut s = Script {
+        bad: vec![2],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    // One red run of [1,2], then exactly the two halves: no second [1,2].
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1], vec![2]]);
+    assert_eq!(s.landed, vec![vec![1]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 2);
+    assert_eq!(out.ci_runs, 3);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_reruns_an_infra_red_once_then_lands_the_same_composition() {
+    let mut s = Script {
+        infra_runs: 1,
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1, 2]]);
+    assert_eq!(s.landed, vec![vec![1, 2]]);
+    assert!(out.ejected.is_empty());
     assert_eq!(out.ci_runs, 2);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_bisects_after_one_infra_rerun_whatever_the_second_red_is() {
+    // Infra red, then a test red: one rerun, then the halves.
+    let mut s = Script {
+        infra_runs: 1,
+        bad: vec![2],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    assert_eq!(s.tested, vec![vec![1, 2], vec![1, 2], vec![1], vec![2]]);
+    assert_eq!(s.landed, vec![vec![1]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 2);
+
+    // Two infra reds in a row: still exactly one rerun before the halves.
+    let mut s = Script {
+        infra_runs: 2,
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[1, 2])).unwrap();
+    assert_eq!(s.tested[..4], [vec![1, 2], vec![1, 2], vec![1], vec![2]]);
+    assert!(out.ejected.is_empty());
+    assert_eq!(s.landed.concat(), vec![1, 2]);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_ejects_a_lone_member_after_one_infra_rerun() {
+    let mut s = Script {
+        infra_runs: 2,
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[7])).unwrap();
+    assert_eq!(s.tested, vec![vec![7], vec![7]]);
+    assert!(s.landed.is_empty());
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ejected[0].pr, 7);
+    assert!(
+        out.ejected[0]
+            .reason
+            .contains("no test result after one rerun"),
+        "{}",
+        out.ejected[0].reason
+    );
+    assert_eq!(out.ci_runs, 2);
+}
+
+// trace:BUG-2577 | ai:claude
+#[test]
+fn drive_ejects_a_lone_test_red_member_after_one_ci_run() {
+    let mut s = Script {
+        bad: vec![7],
+        ..Default::default()
+    };
+    let out = drive(&mut s, ms(&[7])).unwrap();
+    assert_eq!(s.tested, vec![vec![7]]);
+    assert_eq!(out.ejected.len(), 1);
+    assert_eq!(out.ci_runs, 1);
 }
 
 #[test]
@@ -367,11 +548,11 @@ fn drive_bisects_a_red_train_and_ejects_only_the_bad_member() {
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[1, 2, 3, 4])).unwrap();
-    // full, rerun, then halves [1,2] and [3,4] in parallel; [1,2] lands, so
-    // [3,4]'s verdict is red and it splits; [3] is ejected, [4] lands.
+    // full, then halves [1,2] and [3,4] in parallel (no rerun of the full
+    // train); [1,2] lands, [3,4] is red and splits; [3] is ejected, [4] lands.
     assert_eq!(s.tested[0], vec![1, 2, 3, 4]);
-    assert_eq!(s.tested[1], vec![1, 2, 3, 4]);
-    assert_eq!(s.tested[2..4], [vec![1, 2], vec![3, 4]]);
+    assert_eq!(s.tested[1..3], [vec![1, 2], vec![3, 4]]);
+    assert_eq!(s.tested[3..], [vec![3], vec![4]]);
     assert_eq!(s.landed, vec![vec![1, 2], vec![4]]);
     assert_eq!(out.ejected.len(), 1);
     assert_eq!(out.ejected[0].pr, 3);
@@ -419,17 +600,11 @@ fn drive_retests_a_green_sibling_after_the_other_half_lands() {
     let s = p.0;
     assert_eq!(
         s.tested,
-        vec![
-            vec![1, 2, 3, 4],
-            vec![1, 2, 3, 4],
-            vec![1, 2],
-            vec![3, 4],
-            vec![3, 4],
-        ]
+        vec![vec![1, 2, 3, 4], vec![1, 2], vec![3, 4], vec![3, 4],]
     );
     assert_eq!(s.landed, vec![vec![1, 2], vec![3, 4]]);
     assert!(out.ejected.is_empty());
-    assert_eq!(out.ci_runs, 5);
+    assert_eq!(out.ci_runs, 4);
 }
 
 #[test]
@@ -448,14 +623,17 @@ fn drive_rebuilds_a_stale_train_and_drops_members_refused_at_land() {
 }
 
 #[test]
-fn drive_ejects_a_red_one_member_train_after_its_rerun() {
+fn drive_ejects_a_red_one_member_train_after_one_ci_run() {
+    // trace:BUG-2577 | ai:claude
     let mut s = Script {
         bad: vec![9],
         ..Default::default()
     };
     let out = drive(&mut s, ms(&[9])).unwrap();
-    assert_eq!(s.tested.len(), 2);
+    assert_eq!(s.tested, vec![vec![9]]);
+    assert_eq!(out.ci_runs, 1);
     assert!(s.landed.is_empty());
+    assert_eq!(out.ejected.len(), 1);
     assert_eq!(out.ejected[0].pr, 9);
 }
 
@@ -622,7 +800,7 @@ fn regression_demo_two_green_prs_that_conflict_semantically_never_turn_main_red(
         rails.check_rev(&both.tip).unwrap(),
         CiVerdict::Red(_)
     ));
-    // The train: red, rerun, bisect — A lands, B is ejected before main moves
+    // The train: red, bisect — A lands, B is ejected before main moves
     // to a red state.
     let out = drive(
         &mut rails,
@@ -888,6 +1066,17 @@ struct FakeChecks {
     mandate_active: bool,
     /// The IDs the spec-policy gates were asked about.
     asked: Vec<String>,
+    /// STORY-2824: the gate runs as a read-only report.
+    read_only: bool,
+    /// STORY-2884: the files the member changes (`None`: unreadable).
+    paths: Option<Vec<String>>,
+    /// STORY-2809: full-tier CI at the head; `None` is an untiered repository.
+    full_tier: Option<crate::full_tier::FullTier>,
+    /// STORY-2809: the PRs a full-tier run was requested for.
+    full_requests: Vec<u64>,
+    workflow_error: Option<String>,
+    /// STORY-2809: false for a dry run or a re-check, which write nothing.
+    admitting: bool,
 }
 
 impl FakeChecks {
@@ -905,6 +1094,12 @@ impl FakeChecks {
             mandate: Err(None),
             mandate_active: false,
             asked: Vec::new(),
+            read_only: false,
+            paths: Some(Vec::new()),
+            full_tier: None,
+            full_requests: Vec::new(),
+            workflow_error: None,
+            admitting: true,
         }
     }
 
@@ -914,7 +1109,7 @@ impl FakeChecks {
         c.records = vec![(
             id.to_string(),
             tags.iter().map(|t| t.to_string()).collect(),
-            mode,
+            mode.into(),
         )];
         c
     }
@@ -985,6 +1180,14 @@ impl MemberChecks for FakeChecks {
         self.asked = ids.to_vec();
         self.records.clone()
     }
+    fn withdraw_unset_defaults(
+        &mut self,
+        records: &mut [crate::pr_cmd::ShipGateSpecRecord],
+        _head: &str,
+    ) {
+        let paths = self.paths.clone();
+        crate::pr_cmd::withdraw_unset_defaults(records, || paths);
+    }
     fn interactive_tty(&self) -> bool {
         self.tty
     }
@@ -1000,6 +1203,28 @@ impl MemberChecks for FakeChecks {
     }
     fn mandate_active(&self) -> bool {
         self.mandate_active
+    }
+    fn read_only(&self) -> bool {
+        self.read_only
+    }
+    fn full_tier(
+        &mut self,
+        _head: &str,
+    ) -> std::result::Result<crate::full_tier::FullTier, String> {
+        if let Some(error) = &self.workflow_error {
+            return Err(error.clone());
+        }
+        Ok(self
+            .full_tier
+            .clone()
+            .unwrap_or(crate::full_tier::FullTier::Untiered))
+    }
+    fn admitting(&self) -> bool {
+        self.admitting
+    }
+    fn request_full_tier(&mut self, pr: u64) -> Option<std::result::Result<bool, String>> {
+        self.full_requests.push(pr);
+        Some(Ok(true))
     }
 }
 
@@ -1018,7 +1243,7 @@ fn live_gate_passes_a_clean_member_with_ships_message() {
     assert_eq!(
         c.calls,
         vec![
-            "metadata", "drive", "hold", "labels", "fetch", "approval", "corpus", "message",
+            "metadata", "drive", "hold", "labels", "fetch", "approval", "message", "corpus",
             "specs"
         ]
     );
@@ -1080,6 +1305,52 @@ fn live_gate_refuses_a_supervised_spec_without_a_human_or_a_mandate() {
     }
 }
 
+// A headless supervised protected-path member whose hold a human cleared is
+// admitted by the mandate's policy cover alone (no hold left to release).
+// The final train refresh must still find that live cover — from the fresh
+// gate, and after journal recovery dropped every live cover — and bind the
+// audit to it, instead of refusing for want of a release cover.
+// trace:STORY-2733 | ai:claude
+#[test]
+fn live_gate_keeps_policy_cover_for_human_cleared_protected_path_member() {
+    use crate::gate::mandate_gates::{GateMatch, PathSource};
+    let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    c.hold = None; // a human cleared it: no marker remains
+    c.mandate_active = true;
+    let mut cover = fake_cover();
+    cover.gate_match = Some(GateMatch {
+        path: "aida-cli-lib/src/gate/mandate.rs".into(),
+        entry: "aida-cli-lib/src/gate/".into(),
+        source: PathSource::BuiltIn,
+    });
+    c.mandate = Ok(cover.clone());
+    let built = gate_member_with(&mut c, "main", 41).unwrap();
+    assert!(built.release.is_none(), "no hold left to release");
+    assert_eq!(built.cover.as_ref(), Some(&cover));
+    assert!(built.gate_audit.is_some());
+    assert_eq!(cover.gate_audit(), built.gate_audit);
+    // Journal recovery: live covers are never serialized.
+    let restored: Member = serde_json::from_value(serde_json::to_value(&built).unwrap()).unwrap();
+    assert!(restored.cover.is_none() && restored.release.is_none());
+    assert_eq!(restored.gate_audit, built.gate_audit);
+    // The final refresh re-gates the member; its fresh policy cover binds.
+    let mut again = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    again.mandate_active = true;
+    again.mandate = Ok(cover.clone());
+    let fresh = gate_member_with(&mut again, "main", 41).unwrap();
+    for car in [&built, &restored] {
+        let live = crate::pr_train::final_live_cover(&fresh, car).expect("live cover");
+        assert_eq!(live.gate_audit(), car.gate_audit);
+    }
+    // Without the fresh gate, the build-time cover still counts in-process.
+    assert_eq!(
+        crate::pr_train::final_live_cover(&restored, &built),
+        Some(&cover)
+    );
+    // No live cover anywhere fails closed.
+    assert!(crate::pr_train::final_live_cover(&restored, &restored).is_none());
+}
+
 #[test]
 fn live_gate_lands_a_drain_spec_unattended() {
     let mut c = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Drain));
@@ -1088,6 +1359,46 @@ fn live_gate_lands_a_drain_spec_unattended() {
         !c.calls.contains(&"mandate"),
         "no mandate read for a drain spec"
     );
+}
+
+/// STORY-2884: a member whose only spec takes the project's unset-mode drain
+/// default lands unattended, as a drain spec does — unless its diff touches
+/// a protected gate path or cannot be read; then it is supervised and the
+/// refusal names the effective mode and why.
+// trace:STORY-2884 | ai:claude
+#[test]
+fn live_gate_lands_a_project_default_drain_spec_only_off_protected_paths() {
+    use crate::gate::unset_mode::{EffectiveMode, ModeSource};
+    let defaulted = || EffectiveMode {
+        mode: Some(aida_core::ExecutionMode::Drain),
+        source: ModeSource::ProjectDefault {
+            req_type: "bug".into(),
+            protected: crate::gate::mandate_gates::ProtectedPaths::floor(),
+        },
+    };
+    let member = |paths: Option<Vec<String>>| {
+        let mut c = FakeChecks::shipping("BUG-9", &[], None);
+        c.records[0].2 = defaulted();
+        c.paths = paths;
+        c
+    };
+    let mut c = member(Some(vec!["aida-cli-lib/src/list.rs".into()]));
+    assert!(gate_member_with(&mut c, "main", 41).is_ok());
+    assert!(!c.calls.contains(&"mandate"), "{:?}", c.calls);
+    for (paths, needle) in [
+        (
+            Some(vec!["aida-cli-lib/src/gate/ship.rs".to_string()]),
+            "aida-cli-lib/src/gate/ship.rs",
+        ),
+        (None, "could not be read"),
+    ] {
+        let mut c = member(paths);
+        let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+        assert!(why.contains("BUG-9 is marked unset (supervised: "), "{why}");
+        assert!(why.contains(needle), "{why}");
+    }
+    // The label of a default that stands names its source.
+    assert_eq!(defaulted().label(), "drain (project default for unset bug)");
 }
 
 #[test]
@@ -1655,6 +1966,8 @@ fn a_car_keeps_the_head_commits_spec_id_when_ship_derives_no_subject() {
     let subject = member_squash_subject(returned, commit, "feat: X");
     assert_eq!(subject, "feat: X (STORY-1)");
     let car = car_message(&Member {
+        gate_audit: None,
+        cover: None,
         pr: 9,
         head: "a".repeat(40),
         subject,
@@ -1891,6 +2204,7 @@ fn bug_2214_train_ci_tolerates_only_a_covered_hold_gate_red() {
         workflow: "w".into(),
         bucket: bucket.into(),
         run_id: None,
+        job_id: None,
     };
     let pinned = |hold: bool, recorded: bool, cleared: bool| crate::merge_hold::PinnedChange {
         merged: false,
@@ -1960,6 +2274,54 @@ fn bug_2214_land_releases_covered_holds_then_merges() {
     assert_eq!(f.released, [7]);
     assert_eq!(f.gate_checked_covers, [fake_cover().id]);
     assert!(f.rearmed.is_empty(), "{:?}", f.rearmed);
+}
+
+// trace:STORY-2733 | ai:codex
+#[test]
+fn mandate_train_rebuilds_changed_audit_before_releasing_holds() {
+    use crate::gate::mandate_gates::{GateMatch, PathSource};
+    let mut old = covered_member(7);
+    old.release.as_mut().unwrap().gate_match = Some(GateMatch {
+        path: "aida-cli-lib/src/gate/mandate.rs".into(),
+        entry: "aida-cli-lib/src/gate/".into(),
+        source: PathSource::BuiltIn,
+    });
+    old.gate_audit = old.release.as_ref().unwrap().gate_audit();
+    for change in ["mandate", "entry", "source", "removed"] {
+        let mut fresh = old.clone();
+        let cover = fresh.release.as_mut().unwrap();
+        match change {
+            "mandate" => cover.id = "replacement-mandate".into(),
+            "entry" => cover.gate_match.as_mut().unwrap().entry = "aida-cli-lib/".into(),
+            "source" => cover.gate_match.as_mut().unwrap().source = PathSource::Operator,
+            "removed" => cover.gate_match = None,
+            _ => unreachable!(),
+        }
+        fresh.gate_audit = cover.gate_audit();
+        let mut f = FakeForge::mains(&["base"]);
+        f.gates.insert(7, Ok(fresh.clone()));
+        f.gate_green = true;
+        let mut rails = ForgeRails::new(&mut f, "mandate-audit".into());
+        let built = rails.build("base", &[old.clone()]).unwrap();
+        assert_eq!(rails.test(&[built.clone()]).unwrap(), [CiVerdict::Green]);
+        assert!(
+            matches!(rails.land(&built).unwrap(), Landing::Refused(ref ejected)
+                if ejected.len() == 1 && ejected[0].reason.contains("mandate audit changed")),
+            "{change}"
+        );
+        drop(rails);
+        assert!(f.released.is_empty(), "{change}");
+        assert!(f.merged.is_empty(), "{change}");
+        let mut rails = ForgeRails::new(&mut f, "mandate-audit-rebuilt".into());
+        let rebuilt = rails.build("base", &[fresh]).unwrap();
+        rails.test(&[rebuilt.clone()]).unwrap();
+        assert!(
+            matches!(rails.land(&rebuilt).unwrap(), Landing::Landed(_)),
+            "{change}"
+        );
+        drop(rails);
+        assert_eq!(f.released, [7], "{change}");
+    }
 }
 
 // trace:BUG-2214.ac2ec1b2 | ai:claude
@@ -2492,12 +2854,14 @@ fn required_train_rows() -> Vec<crate::ci_gate::CheckRow> {
             bucket: "pass".into(),
             workflow: "CI".into(),
             run_id: None,
+            job_id: None,
         })
         .chain(std::iter::once(crate::ci_gate::CheckRow {
             name: crate::ci_gate::HOLD_GATE_CHECK.into(),
             bucket: "pass".into(),
             workflow: "hold".into(),
             run_id: None,
+            job_id: None,
         }))
         .collect()
 }
@@ -2520,7 +2884,7 @@ fn train_required_aggregate_registration_and_precedence() {
         train_ci_readiness(&rows, &required, &cfg, false),
         TrainCiReadiness::Missing(_)
     ));
-    // Preserve genuine red-train rerun/bisection even before registration.
+    // Preserve genuine red-train bisection even before registration.
     rows[0].bucket = "fail".into();
     assert!(matches!(
         train_ci_readiness(&rows, &required, &CiGateConfig::default(), false),
@@ -2538,6 +2902,7 @@ fn train_required_aggregate_registration_and_precedence() {
         bucket: "pending".into(),
         workflow: "CI".into(),
         run_id: None,
+        job_id: None,
     });
     for bucket in ["pending", "unknown"] {
         rows.last_mut().unwrap().bucket = bucket.into();
@@ -2575,6 +2940,7 @@ fn train_required_aggregate_registration_and_precedence() {
         bucket: "pending".into(),
         workflow: "other".into(),
         run_id: None,
+        job_id: None,
     });
     assert_eq!(
         train_ci_readiness(&rows, &required, &cfg, false),
@@ -2616,6 +2982,9 @@ case "$*" in
     p=${2##*page=}
     if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
   'pr checks '*) cat rows.json ;;
+  'api repos/{owner}/{repo}/actions/jobs/17')
+    if [ -f job-denied ]; then echo 'HTTP 403' >&2; exit 1; fi
+    cat job.json ;;
   *) echo "unexpected forge call: $*" >&2; exit 1 ;;
 esac
 "#,
@@ -2688,6 +3057,39 @@ esac
             _ => matches!(state, TrainCiReadiness::Red(_)),
         });
     }
+    // trace:BUG-2671 | ai:codex
+    let mut rows: Vec<serde_json::Value> = serde_json::from_str(&rows_json(None)).unwrap();
+    rows.extend([
+        serde_json::json!({"name":"CI (rest)","bucket":"fail","workflow":"CI",
+            "link":"https://github.com/owner/repo/actions/runs/42/job/17"}),
+        serde_json::json!({"name":"Build (ubuntu-latest)","bucket":"fail","workflow":"CI",
+            "link":"https://github.com/owner/repo/actions/runs/42/job/18"}),
+    ]);
+    write(dir, "rows.json", &serde_json::to_string(&rows).unwrap());
+    write(
+        dir,
+        "job.json",
+        &serde_json::json!({
+            "id": 17, "run_id": 42, "name": "CI (rest)", "workflow_name": "CI",
+            "head_sha": tip, "status": "completed", "conclusion": "failure",
+            "steps": [
+                {"name":"Install Linux dependencies","status":"completed","conclusion":"failure"},
+                {"name":"Run tests","status":"completed","conclusion":"skipped"},
+                {"name":"Test time budget","status":"completed","conclusion":"success"}
+            ]
+        })
+        .to_string(),
+    );
+    assert!(matches!(
+        host.train_ci_snapshot(&change, &tip, &[]).unwrap(),
+        TrainCiReadiness::InfraRed(why) if why.contains("Install Linux dependencies")
+    ));
+    write(dir, "job-denied", "");
+    assert!(host
+        .train_ci_snapshot(&change, &tip, &[])
+        .unwrap_err()
+        .is::<TrainCiReadError>());
+    std::fs::remove_file(dir.join("job-denied")).unwrap();
     // Initial success does not authorize landing after a later row disappears.
     write(dir, "rows.json", &rows_json(Some("pass")));
     let train = Built {
@@ -2820,6 +3222,15 @@ esac
     assert!(host.merge(&change, &tip).is_err());
 }
 
+fn train_ci_readiness(
+    rows: &[crate::ci_gate::CheckRow],
+    required: &[String],
+    cfg: &crate::ci_gate::CiGateConfig,
+    tolerate_hold: bool,
+) -> TrainCiReadiness {
+    super::train_ci_readiness(rows, required, cfg, tolerate_hold, |_| Ok(None)).unwrap()
+}
+
 // trace:BUG-2401 | ai:claude
 fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
     crate::ci_gate::CheckRow {
@@ -2827,7 +3238,122 @@ fn bug2401_row(name: &str, bucket: &str) -> crate::ci_gate::CheckRow {
         bucket: bucket.into(),
         workflow: "CI".into(),
         run_id: None,
+        job_id: None,
     }
+}
+
+// trace:BUG-2671 | ai:codex
+#[test]
+fn bug2671_only_pinned_pre_test_infrastructure_failure_retries() {
+    let mut rows = crate::ci_gate::parse_check_rows(
+        r#"[
+            {"name":"CI (lib-0)","bucket":"fail","workflow":"CI",
+             "link":"https://github.com/owner/repo/actions/runs/42/job/17"},
+            {"name":"Build (ubuntu-latest)","bucket":"fail","workflow":"CI",
+             "link":"https://github.com/owner/repo/actions/runs/42/job/18"}
+        ]"#,
+    )
+    .unwrap();
+    let mut job = serde_json::json!({
+        "id": 17, "run_id": 42, "name": "CI (lib-0)", "workflow_name": "CI",
+        "head_sha": "expected", "status": "completed", "conclusion": "failure",
+        "steps": [
+            {"name":"Install Linux dependencies","status":"completed","conclusion":"cancelled"},
+            {"name":"Run tests","status":"completed","conclusion":"skipped"}
+        ]
+    });
+    let readiness = |rows: &[crate::ci_gate::CheckRow], job: &serde_json::Value| {
+        super::train_ci_readiness(rows, &[], &Default::default(), false, |row| {
+            Ok(train_infrastructure_failure(row, "expected", job))
+        })
+        .unwrap()
+    };
+    assert!(matches!(
+        readiness(&rows, &job),
+        TrainCiReadiness::InfraRed(why) if why.contains("Install Linux dependencies")
+    ));
+    job["steps"][0] = serde_json::json!({
+        "name": "Run actions/checkout@v5", "status": "completed", "conclusion": "failure"
+    });
+    let TrainCiReadiness::InfraRed(reason) = readiness(&rows, &job) else {
+        panic!("a pinned checkout failure with skipped tests should be infrastructure red");
+    };
+    assert!(reason.contains("Run actions/checkout@v5"));
+
+    let mut script = Script {
+        infra_runs: 2,
+        infra_reason: Some(reason),
+        ..Default::default()
+    };
+    let outcome = drive(&mut script, ms(&[7])).unwrap();
+    assert_eq!(script.tested, vec![vec![7], vec![7]]);
+    assert_eq!(outcome.ci_runs, 2);
+    assert!(script.landed.is_empty());
+    assert_eq!(outcome.ejected.len(), 1);
+    assert!(outcome.ejected[0]
+        .reason
+        .contains("Run actions/checkout@v5"));
+
+    rows.push(bug2401_row("CI (rest)", "pending"));
+    assert!(matches!(
+        readiness(&rows, &job),
+        TrainCiReadiness::Pending(_)
+    ));
+    rows.last_mut().unwrap().bucket = "fail".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    rows.pop();
+    rows[1].run_id = Some("43".into());
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    rows[1].run_id = Some("42".into());
+    job["head_sha"] = "different".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    job["head_sha"] = "expected".into();
+    job["id"] = 19.into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    job["id"] = 17.into();
+    job["steps"][1]["conclusion"] = "failure".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+    job["steps"][1]["conclusion"] = "skipped".into();
+    job["steps"][0]["name"] = "Build all packages".into();
+    assert!(matches!(readiness(&rows, &job), TrainCiReadiness::Red(_)));
+}
+
+/// A cancelled check is a red with no test result; a failed check is a test
+/// red, whatever else was cancelled beside it.
+#[test]
+// trace:BUG-2577 | ai:claude
+fn bug2577_cancel_bucket_is_infra_and_fail_bucket_is_a_test_failure() {
+    let cfg = crate::ci_gate::CiGateConfig::default();
+    let required = vec!["Build (ubuntu-latest)".to_string()];
+    let readiness =
+        |rows: &[crate::ci_gate::CheckRow]| train_ci_readiness(rows, &required, &cfg, false);
+    let mut rows = required_train_rows();
+    rows[2].name = "CI (lib-0)".into();
+    rows[2].run_id = Some("42".into());
+    rows[2].bucket = "cancel".into();
+    match readiness(&rows) {
+        TrainCiReadiness::InfraRed(why) => assert!(why.contains("CI (lib-0)"), "{why}"),
+        other => panic!("a cancelled lane is not a test failure: {other:?}"),
+    }
+    // The aggregate goes red whenever a lane is cancelled: still no test result.
+    rows.push(bug2401_row("Build (ubuntu-latest)", "fail"));
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Red(_)));
+    rows.last_mut().unwrap().run_id = Some("42".into());
+    assert!(matches!(readiness(&rows), TrainCiReadiness::InfraRed(_)));
+    // A lane still running may yet fail: no verdict until it settles.
+    rows[4].bucket = "pending".into();
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Pending(_)));
+    // A failed lane is a test failure, with or without a cancelled sibling.
+    rows[4].bucket = "fail".into();
+    match readiness(&rows) {
+        TrainCiReadiness::Red(why) => assert!(why.contains("Build lane 4"), "{why}"),
+        other => panic!("a failed lane is a test failure: {other:?}"),
+    }
+    rows[2].bucket = "pass".into();
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Red(_)));
+    // The aggregate failing with no cancelled check is an ordinary red.
+    rows[4].bucket = "pass".into();
+    assert!(matches!(readiness(&rows), TrainCiReadiness::Red(_)));
 }
 
 /// An aggregate that registers only after its lanes finish is pending while
@@ -2841,7 +3367,7 @@ fn bug2401_absent_aggregate_behind_running_lanes_is_pending() {
     rows[3].bucket = "pending".into();
     match train_ci_readiness(&rows, &required, &cfg, false) {
         TrainCiReadiness::Pending(names) => {
-            assert!(names[0].starts_with("Build (ubuntu-latest)"), "{names:?}")
+            assert_eq!(names[0], "Build summary appears after all shards finish")
         }
         other => panic!("absent aggregate behind a running lane: {other:?}"),
     }
@@ -3373,11 +3899,15 @@ fn bug_2413_a_superseded_unset_spec_gates_on_its_drain_carrier() {
     let mut bundled = bug_2413_spec(None);
     bug_2413_supersede(&mut bundled, &carrier);
     let store = vec![carrier.clone(), bundled.clone()];
-    let mode = crate::pr_cmd::gating_execution_mode(&store, &bundled);
+    let mode = crate::gate::ship::gating_execution_mode(&store, &bundled);
     assert_eq!(mode, Some(ExecutionMode::Drain));
     let records = vec![
-        ("TASK-2731".to_string(), Vec::new(), carrier.execution_mode),
-        ("TASK-2737".to_string(), Vec::new(), mode),
+        (
+            "TASK-2731".to_string(),
+            Vec::new(),
+            carrier.execution_mode.into(),
+        ),
+        ("TASK-2737".to_string(), Vec::new(), mode.into()),
     ];
     assert_eq!(
         member_spec_policy_refusal(records, false, || Err(None)),
@@ -3398,20 +3928,20 @@ fn bug_2413_inheritance_never_loosens_the_supervised_gate() {
     bug_2413_supersede(&mut bundled, &guided);
     let store = vec![guided.clone(), bundled.clone()];
     assert_eq!(
-        crate::pr_cmd::gating_execution_mode(&store, &bundled),
+        crate::gate::ship::gating_execution_mode(&store, &bundled),
         Some(ExecutionMode::Guided)
     );
     let drain = bug_2413_spec(Some(ExecutionMode::Drain));
     let mut own = bug_2413_spec(Some(ExecutionMode::Guided));
     bug_2413_supersede(&mut own, &drain);
     assert_eq!(
-        crate::pr_cmd::gating_execution_mode(&[drain, own.clone()], &own),
+        crate::gate::ship::gating_execution_mode(&[drain, own.clone()], &own),
         Some(ExecutionMode::Guided),
         "a spec's own mode is never overridden"
     );
     let lone = bug_2413_spec(None);
     assert_eq!(
-        crate::pr_cmd::gating_execution_mode(std::slice::from_ref(&lone), &lone),
+        crate::gate::ship::gating_execution_mode(std::slice::from_ref(&lone), &lone),
         None
     );
     let mut a = bug_2413_spec(None);
@@ -3419,7 +3949,7 @@ fn bug_2413_inheritance_never_loosens_the_supervised_gate() {
     bug_2413_supersede(&mut a, &b);
     bug_2413_supersede(&mut b, &a);
     assert_eq!(
-        crate::pr_cmd::gating_execution_mode(&[a.clone(), b], &a),
+        crate::gate::ship::gating_execution_mode(&[a.clone(), b], &a),
         None
     );
 }
@@ -3784,7 +4314,14 @@ fn story_2401_typed_member_gate_distinguishes_refusals_from_unavailable_reads() 
 fn crash_ready(marker: &std::path::Path, truth: &str) -> ! {
     // This file represents the forge receipt, outside the killed train's
     // journal. The parent SIGKILLs only after the fixture reaches the seam.
-    std::fs::write(marker, truth).unwrap();
+    // Publish the complete receipt before the parent can observe readiness.
+    // Creating `marker` directly lets SIGKILL interrupt the write after create,
+    // causing recovery to interpret an empty merge receipt as not landed.
+    // Keep the recovery oracle unchanged; only synchronize the crash seam.
+    // trace:TASK-3809 | ai:codex
+    let mut receipt = tempfile::NamedTempFile::new_in(marker.parent().unwrap()).unwrap();
+    std::io::Write::write_all(&mut receipt, truth.as_bytes()).unwrap();
+    receipt.persist(marker).unwrap();
     loop {
         std::thread::park();
     }
@@ -3812,14 +4349,18 @@ fn pr_train_journal_killed_merge_and_eject_resume_without_replay() {
         .to_string();
     for stage in ["merge", "retire"] {
         let dir = tempfile::tempdir().unwrap();
-        let mut child = std::process::Command::new(crate::aida_exe_path())
-            .args(["--exact", &name, "--nocapture"])
-            .env(CHILD, stage)
-            .env("AIDA_TRAIN_JOURNAL_TEST_DIR", dir.path())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .unwrap();
+        // The crash child is this test image, not the installed `aida`
+        // (which `aida_exe_path` prefers on a developer host).
+        // trace:STORY-2905 | ai:claude
+        let mut child =
+            std::process::Command::new(crate::aida_bin::current_executable_path().unwrap())
+                .args(["--exact", &name, "--nocapture"])
+                .env(CHILD, stage)
+                .env("AIDA_TRAIN_JOURNAL_TEST_DIR", dir.path())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while !dir.path().join("ready").exists() && std::time::Instant::now() < deadline {
             if let Some(status) = child.try_wait().unwrap() {
@@ -3909,6 +4450,11 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
     let mut forge = FakeForge::mains(&["main"]);
     let mut m = member(1, "head1", "s");
     m.release = Some(crate::gate::mandate_ship::MandateCover {
+        gate_match: None,
+        issued_supervised: false,
+        supervised_by_mode: false,
+        checked_hold: None,
+        checked_head: None,
         id: "not-authority".into(),
         principal: "operator".into(),
     });
@@ -3932,7 +4478,7 @@ fn pr_train_journal_completed_member_is_skipped_and_authority_is_not_restored() 
 // the killed writer could save its completion receipt.
 // trace:STORY-2401 | ai:codex
 #[test]
-fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
+fn bug2537_train_ownership_checked_cleanup_skips_closed_and_refuses_failed_or_moved() {
     let root = repo();
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "--bare", "--quiet"]);
@@ -3966,7 +4512,29 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
         dispatch_ctx: None,
         dispatch_abort: None,
     };
+    // trace:BUG-2537 | ai:codex
+    crate::ownership::dual::enable_for_test();
+    crate::ownership::dual::train_opened(root.path(), change.id, &[1]);
     host.retire_checked(&change, &train, "retire").unwrap();
+    assert!(
+        ownership_rider_refusal_with(root.path(), 1, false, |_| panic!(
+            "retirement must end ownership"
+        ))
+        .unwrap()
+        .is_none()
+    );
+    assert_eq!(
+        crate::ownership::reader::load(
+            root.path(),
+            &crate::ownership::WorkKey::Change {
+                change: crate::ownership::dual::change(1),
+            }
+        )
+        .unwrap()
+        .unwrap()
+        .phase,
+        crate::ownership::Phase::Leased
+    );
     assert!(git(
         root.path(),
         &["ls-remote", "origin", "refs/heads/codex/task"]
@@ -3994,6 +4562,7 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
         "a completed close must not be replayed"
     );
     forge.metadata_state = crate::forge::ChangeState::Open;
+    crate::ownership::dual::train_opened(root.path(), change.id, &[1]);
     let mut host = LiveTrainForge {
         project_root: root.path().into(),
         main_worktree: root.path().into(),
@@ -4006,6 +4575,21 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
     // RecordingForge accepts the close but still reports Open. A successful
     // command without confirmed closure cannot authorize branch deletion.
     assert!(host.retire_checked(&change, &train, "retire").is_err());
+    assert!(
+        matches!(
+            crate::ownership::reader::load(
+                root.path(),
+                &crate::ownership::WorkKey::Change {
+                    change: crate::ownership::dual::change(1),
+                }
+            )
+            .unwrap()
+            .unwrap()
+            .phase,
+            crate::ownership::Phase::Training { .. }
+        ),
+        "unconfirmed close retains the rider"
+    );
     assert!(git(
         root.path(),
         &["ls-remote", "origin", "refs/heads/codex/task"]
@@ -4056,34 +4640,50 @@ fn pr_train_journal_live_cleanup_skips_closed_and_refuses_failed_or_moved() {
 }
 
 // trace:STORY-2401 | ai:codex
+// trace:BUG-2556 | ai:claude
 #[test]
-fn pr_train_journal_recovery_has_no_terminal_consent_for_old_members() {
+fn pr_train_journal_recovery_consents_only_for_the_named_train() {
     let dir = tempfile::tempdir().unwrap();
     let recording = crate::forge::fake::RecordingForge::new();
-    // The current command names #50; the old train carries supervised #41.
-    let opts = TrainOptions {
-        prs: &[50],
-        all_ready: false,
+    let opts = |prs: &'static [u64], all_ready: bool| TrainOptions {
+        prs,
+        all_ready,
         dry_run: false,
         local_ci: None,
         max: 10,
         no_pull: true,
     };
-    let host = LiveTrainForge {
-        project_root: dir.path().into(),
-        main_worktree: dir.path().into(),
-        base: "main".into(),
-        forge: &recording,
-        named: prs_named_on_command_line(&opts),
-        dispatch_ctx: None,
-        dispatch_abort: None,
-    }
-    .for_recovery();
+    let recovery_host = |opts: &TrainOptions| {
+        LiveTrainForge {
+            project_root: dir.path().into(),
+            main_worktree: dir.path().into(),
+            base: "main".into(),
+            forge: &recording,
+            named: false,
+            dispatch_ctx: None,
+            dispatch_abort: None,
+        }
+        .for_recovery(opts)
+        .named
+    };
+    // BUG-2556: the human at the terminal named exactly the recovered train's
+    // members, so its supervised member #41 keeps their consent.
+    let named = recovery_host(&opts(&[41], false));
+    assert!(
+        named,
+        "a recovered train named on the command line keeps consent"
+    );
     let mut checks = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
-    checks.tty = tty_consents(true, host.named);
+    checks.tty = tty_consents(true, named);
+    gate_member_with(&mut checks, "main", 41).expect("named recovered member gates");
+    // An `--all-ready` sweep never consents for a supervised member.
+    let mut checks = FakeChecks::shipping("TASK-9", &[], Some(aida_core::ExecutionMode::Guided));
+    checks.tty = tty_consents(true, recovery_host(&opts(&[41], true)));
     let refusal = gate_member_with(&mut checks, "main", 41).unwrap_err();
     assert!(refusal.contains("TASK-9 is marked"), "{refusal}");
     assert!(checks.calls.contains(&"mandate"));
+    // Naming #50 never authorizes the old train carrying #41: recovery does
+    // not resume it at all (BUG-2547), so nothing gates or merges.
     let train = train_of("main", &fms(&[41]));
     let mut entry = journal::Entry::new(train, "train/old-all-ready-1".into());
     entry.change_id = Some(901);
@@ -4093,7 +4693,8 @@ fn pr_train_journal_recovery_has_no_terminal_consent_for_old_members() {
     let mut forge = FakeForge::mains(&["main"]);
     forge.gates.insert(41, Err(refusal));
     let mut rails = ForgeRails::new(&mut forge, "new".into()).with_journal(dir.path());
-    assert_eq!(rails.resume().unwrap().ejected[0].pr, 41);
+    let out = rails.resume_for(Some(&[50])).unwrap();
+    assert!(out.ejected.is_empty() && out.landed.is_empty());
     drop(rails);
     assert!(forge.merged.is_empty());
 }
@@ -4165,7 +4766,13 @@ fn pr_train_journal_live_recover_reopens_ambiguity_and_pin_mismatches() {
         return;
     }
     let environment = aida_core::exec_context::Environment::capture();
-    let root = repo();
+    // trace:BUG-2538 | ai:codex — reopening now budgets real source evidence.
+    let root = repo_with_specs(&["TASK-9001"]);
+    write(
+        root.path(),
+        ".git/info/exclude",
+        ".aida-store/\n.aida/\ngh\nrows.json\ngh-calls\n",
+    );
     let r = root.path();
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "--quiet", "--bare"]);
@@ -4189,9 +4796,12 @@ esac
         ("PATH", &path),
         ("AIDA_TEST_GH_BINARY", gh.to_str().unwrap()),
     ]);
-    let tip = git(r, &["rev-parse", "HEAD"]);
-    let mut train = train_of(&tip, &fms(&[1]));
-    train.tip = tip.clone();
+    let base = git(r, &["rev-parse", "HEAD"]);
+    let source = pr_branch(r, "source/task-9001", |r| write(r, "rider", "reviewed\n"));
+    let train = build(r, &base, &[member(1, &source, "fix: rider (TASK-9001)")]).unwrap();
+    write(r, ".aida/config.toml", "store_path = \".aida-store\"\n");
+    assert!(crate::load_store_for_lookup(r).is_some());
+    let tip = train.tip.clone();
     let entry = journal::Entry::new(train, "train/recover-1".into());
     let mut forge = crate::forge::fake::RecordingForge::new();
     forge.opens_as = Some(901);
@@ -4350,6 +4960,10 @@ fn pr_train_journal_nested_member_reads_refuse_when_checkpoint_fails() {
         forge: &forge,
         base: "main",
         named: false,
+        read_only: false,
+        actor_probe: None,
+        request_full: false,
+        released_member: None,
     };
     let dir = r.join("intent");
     std::fs::create_dir(&dir).unwrap();
@@ -4937,7 +5551,7 @@ fn pr_train_journal_lock_contention_is_typed_and_releases_on_exit() {
 
 // trace:STORY-2325 | ai:codex
 #[test]
-fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead() {
+fn bug2537_train_ownership_rider_refuses_missing_unknown_and_live_but_releases_closed_or_dead() {
     use crate::ownership::{
         dual,
         store::{Expect, OwnershipStore},
@@ -4946,7 +5560,9 @@ fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead(
     let dir = repo();
     let p = dir.path();
     let store = OwnershipStore::for_project(p).unwrap().unwrap();
-    assert!(ownership_rider_refusal(p, 9).unwrap().is_none());
+    assert!(ownership_rider_refusal_with(p, 9, false, |_| false)
+        .unwrap()
+        .is_none());
     let key = WorkKey::Change {
         change: dual::change(9),
     };
@@ -4967,7 +5583,9 @@ fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead(
         })
         .unwrap();
     assert!(
-        ownership_rider_refusal(p, 9).unwrap().is_some(),
+        ownership_rider_refusal_with(p, 9, false, |_| false)
+            .unwrap()
+            .is_some(),
         "missing train retains rider"
     );
     let key = WorkKey::Train { train };
@@ -5014,11 +5632,845 @@ fn prc_rider_refuses_missing_unknown_and_live_train_but_releases_closed_or_dead(
             })
             .unwrap();
         assert_eq!(
-            ownership_rider_refusal(p, 9).unwrap().is_some(),
+            ownership_rider_refusal_with(p, 9, false, |_| false)
+                .unwrap()
+                .is_some(),
             matches!(state, "unknown" | "alive"),
             "{state}"
         );
     }
     std::fs::write(store.path_for(&key), "malformed").unwrap();
-    assert!(ownership_rider_refusal(p, 9).is_err());
+    assert!(ownership_rider_refusal_with(p, 9, false, |_| false).is_err());
+}
+
+// trace:BUG-2492 | ai:codex
+#[test]
+fn bug2492_train_pending_inspection_waits_instead_of_rebuilding() {
+    let rows = [
+        bug2401_row("Build", "pass"),
+        bug2401_row("merge-hold-gate", "pending"),
+    ];
+    assert!(
+        matches!(train_ci_readiness(&rows, &[], &crate::ci_gate::CiGateConfig::default(), false),
+        TrainCiReadiness::Pending(names) if names == vec!["merge-hold-gate"])
+    );
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_automatic_empty_discovery_is_idle() {
+    ADVISOR_LOOP.with(|automatic| {
+        automatic.set(true);
+        // Both no open PRs and train-only discovery produce zero candidates.
+        assert!(automatic_idle(true, &[]));
+        assert!(!automatic_idle(true, &[7]));
+        assert!(!automatic_idle(false, &[]));
+        automatic.set(false);
+    });
+    assert!(!automatic_idle(true, &[]));
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_settled_gate_refusals_eject_before_land_and_on_recovery() {
+    for reason in ["merge hold present", "approval withdrawn"] {
+        for recovery in [false, true] {
+            let dir = tempfile::tempdir().unwrap();
+            let train = train_of("main", &fms(&[1]));
+            let mut forge = FakeForge::mains(&["main"]);
+            forge.gates.insert(1, Err(reason.into()));
+            if recovery {
+                let mut entry = journal::Entry::new(train.clone(), "train/old-1".into());
+                entry.change_id = Some(901);
+                entry.step = journal::Step::Merge;
+                journal::activate(dir.path(), entry).unwrap();
+                journal::clear();
+                let mut rails =
+                    ForgeRails::new(&mut forge, "recovery".into()).with_journal(dir.path());
+                let outcome = rails.resume().unwrap();
+                assert_eq!(outcome.ejected.len(), 1);
+                assert!(outcome.ejected[0].reason.contains(reason));
+                assert!(journal::entries(dir.path()).unwrap().is_empty());
+            } else {
+                let mut rails = ForgeRails::new(&mut forge, "preland".into());
+                opened(&mut rails, &train);
+                let Landing::Refused(ejected) = rails.land(&train).unwrap() else {
+                    panic!("settled refusal must eject");
+                };
+                assert_eq!(ejected.len(), 1);
+                assert!(ejected[0].reason.contains(reason));
+            }
+            assert!(forge.merged.is_empty());
+            assert_eq!(forge.retired.len(), 1);
+        }
+    }
+}
+
+// trace:STORY-2691 | ai:codex
+#[test]
+fn story2691_recovered_last_member_is_logged_with_empty_discovery() {
+    for landed in [true, false] {
+        let dir = tempfile::tempdir().unwrap();
+        let train = train_of("main", &fms(&[1]));
+        let mut entry = journal::Entry::new(train, "train/old-1".into());
+        entry.change_id = Some(901);
+        entry.step = journal::Step::Merge;
+        journal::activate(dir.path(), entry).unwrap();
+        journal::clear();
+        let mut forge = FakeForge::mains(&["main"]);
+        forge.confirmation = Some(if landed {
+            crate::forge_observed::Confirmed::Positive
+        } else {
+            forge.gates.insert(1, Err("approval withdrawn".into()));
+            crate::forge_observed::Confirmed::Negative
+        });
+        let mut rails = ForgeRails::new(&mut forge, "recovery".into()).with_journal(dir.path());
+        let recovered = rails.resume().unwrap();
+        let mut output = Vec::new();
+        ADVISOR_LOOP.with(|automatic| {
+            automatic.set(true);
+            let idle = report_automatic_idle(true, &[], &recovered, &mut output);
+            // Idle must propagate a log failure instead of silently losing the
+            // only recovered rider's terminal outcome.
+            let failed_log =
+                report_automatic_idle(true, &[], &recovered, std::io::Cursor::new(&mut [][..]));
+            automatic.set(false);
+            assert!(failed_log.is_err());
+            assert!(idle.unwrap());
+        });
+        let output = String::from_utf8(output).unwrap();
+        if landed {
+            assert_eq!(recovered.landed.len(), 1);
+            assert!(output.contains("landed #1 ("), "{output}");
+        } else {
+            assert_eq!(recovered.ejected.len(), 1);
+            assert!(
+                output.contains("ejected #1: approval withdrawn"),
+                "{output}"
+            );
+        }
+        assert!(journal::entries(dir.path()).unwrap().is_empty());
+    }
+}
+
+// Reduced check-row fixture for recorded run 42913999193: seven CI matrix
+// checks and the skipped Release job identified by the review evidence.
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_recorded_run() {
+    let rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    let text = train_ci_wait_details(&rows).join("; ");
+    assert!(text.contains("run 42913999193: 7/7 shards passed"));
+    assert!(text.contains("ancillary Release (${{ matrix.os }}): skipping"));
+    assert!(text.contains("Build summary appears after all shards finish"));
+    assert!(!text.contains("7/8"));
+}
+
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_buckets_runs_and_failure() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    rows[0].bucket = "pending".into();
+    rows[1].bucket = "fail".into();
+    rows.push(crate::ci_gate::CheckRow {
+        name: "CI (other)".into(),
+        workflow: "Other".into(),
+        bucket: "pass".into(),
+        run_id: Some("99".into()),
+        job_id: None,
+    });
+    let before = train_ci_readiness(
+        &rows,
+        &["Build (ubuntu-latest)".into()],
+        &crate::ci_gate::CiGateConfig::default(),
+        false,
+    );
+    let details = train_ci_wait_details(&rows);
+    assert_eq!(details.len(), 2);
+    assert!(details[0].contains("5/7 shards passed"));
+    assert!(details[0].contains("CI (lib-0): pending"));
+    assert!(details[0].contains("CI (lib-1): fail"));
+    assert_eq!(details[1], "run 99; ancillary CI (other): pass");
+    assert!(matches!(&before, TrainCiReadiness::Red(why) if why.contains("CI (lib-1)")));
+    assert_eq!(
+        before,
+        train_ci_readiness(
+            &rows,
+            &["Build (ubuntu-latest)".into()],
+            &crate::ci_gate::CiGateConfig::default(),
+            false
+        )
+    );
+    assert!(train_ci_wait_details(&[]).is_empty());
+    rows.push(crate::ci_gate::CheckRow {
+        name: "Build (ubuntu-latest)".into(),
+        workflow: "CI".into(),
+        bucket: "pass".into(),
+        run_id: Some("42913999193".into()),
+        job_id: None,
+    });
+    let text = train_ci_wait_details(&rows)[0].clone();
+    assert!(text.contains("Build summary: pass"));
+    assert!(!text.contains("appears after"));
+}
+
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_all_pending() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    for row in &mut rows {
+        row.bucket = "pending".into();
+    }
+    let details = train_ci_wait_details(&rows);
+    assert_eq!(details.len(), 1);
+    let text = &details[0];
+    assert!(text.contains("run 42913999193: 0/7 shards passed"));
+    for shard in [
+        "lib-0",
+        "lib-1",
+        "cli-0",
+        "cli-1",
+        "rest",
+        "gates",
+        "contracts",
+    ] {
+        assert!(text.contains(&format!("CI ({shard}): pending")), "{text}");
+    }
+    assert!(text.contains("ancillary Release (${{ matrix.os }}): pending"));
+    assert!(text.contains("Build summary appears after all shards finish"));
+    assert!(!text.contains("0/8"));
+}
+
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_passing_build_with_separate_hold_run() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    rows.push(crate::ci_gate::CheckRow {
+        name: "Build (ubuntu-latest)".into(),
+        workflow: "CI".into(),
+        bucket: "pass".into(),
+        run_id: Some("42913999193".into()),
+        job_id: None,
+    });
+    rows.push(crate::ci_gate::CheckRow {
+        name: "publish-merge-hold-status".into(),
+        workflow: "merge-hold-gate".into(),
+        bucket: "pending".into(),
+        run_id: Some("99".into()),
+        job_id: None,
+    });
+    let details = train_ci_wait_details(&rows);
+    assert_eq!(details.len(), 2);
+    assert!(details[0].contains("7/7 shards passed"));
+    assert!(details[0].contains("Build summary: pass"));
+    assert!(!details[0].contains("appears after"));
+    assert_eq!(
+        details[1],
+        "run 99; ancillary publish-merge-hold-status: pending"
+    );
+}
+
+// Same-run ancillary checks and similarly named checks from other workflows
+// remain visible without entering the CI shard count.
+// trace:TASK-3782 | ai:codex
+#[test]
+fn train_ci_row_progress_same_run_ancillary_identity() {
+    let mut rows =
+        crate::ci_gate::parse_check_rows(include_str!("task_3782_run_42913999193.json")).unwrap();
+    for (name, workflow) in [
+        ("CI (ancillary)", "Release"),
+        ("CI helper", "CI"),
+        ("Build (ubuntu-latest)", "CI"),
+    ] {
+        rows.push(crate::ci_gate::CheckRow {
+            name: name.into(),
+            workflow: workflow.into(),
+            bucket: "pending".into(),
+            run_id: Some("42913999193".into()),
+            job_id: None,
+        });
+    }
+    assert_eq!(rows.iter().filter(|row| train_ci_is_shard(row)).count(), 7);
+    let text = train_ci_wait_details(&rows).join("; ");
+    assert!(text.contains("run 42913999193: 7/7 shards passed"));
+    assert!(text.contains("ancillary Release (${{ matrix.os }}): skipping"));
+    assert!(text.contains("ancillary CI (ancillary): pending"));
+    assert!(text.contains("ancillary CI helper: pending"));
+    assert!(text.contains("Build summary: pending"));
+    assert!(!text.contains("appears after"));
+}
+
+// Two trains opened by one process: releasing A's merge lease must leave B,
+// still waiting for its own lease, Training with its rider refused.
+// trace:BUG-2537 | ai:claude
+#[test]
+fn bug2537_lease_release_keeps_sibling_open_train() {
+    use crate::ownership::{dual, store::OwnershipStore, Phase, WorkKey};
+    dual::enable_for_test();
+    let dir = repo();
+    let root = dir.path();
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    dual::train_opened(root, 70, &[21]);
+    dual::train_opened(root, 80, &[22]);
+    dual::train_lease_taken_with(root, 70, Vec::new());
+    let train = |n| WorkKey::Train {
+        train: dual::change(n),
+    };
+    let rider = |n| WorkKey::Change {
+        change: dual::change(n),
+    };
+    assert_eq!(
+        store
+            .load(&train(70))
+            .unwrap()
+            .unwrap()
+            .holder
+            .unwrap()
+            .session,
+        dual::merge_lease_session(std::process::id())
+    );
+    dual::train_lease_released(root);
+    assert!(matches!(
+        store.load(&train(70)).unwrap().unwrap().phase,
+        Phase::Closed { .. }
+    ));
+    assert_eq!(
+        store.load(&rider(21)).unwrap().unwrap().phase,
+        Phase::Leased
+    );
+    let b = store.load(&train(80)).unwrap().unwrap();
+    assert!(matches!(b.phase, Phase::Training { .. }));
+    assert_eq!(
+        b.holder.unwrap().session,
+        dual::train_open_session(std::process::id(), 80)
+    );
+    assert!(matches!(
+        store.load(&rider(22)).unwrap().unwrap().phase,
+        Phase::Training { .. }
+    ));
+    assert!(ownership_rider_refusal_with(root, 22, false, |_| false)
+        .unwrap()
+        .is_some());
+}
+
+// trace:BUG-2537 | ai:codex
+#[test]
+fn bug2537_train_ownership_open_retire_before_lease_and_readmit() {
+    use crate::ownership::{dual, store::OwnershipStore, Phase, WorkKey};
+    dual::enable_for_test();
+    let dir = repo();
+    let root = dir.path();
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    dual::train_opened(root, 50, &[11, 12]);
+    let key = WorkKey::Train {
+        train: dual::change(50),
+    };
+    let opened = store.load(&key).unwrap().unwrap();
+    assert_eq!(
+        opened.holder.unwrap().session,
+        dual::train_open_session(std::process::id(), 50)
+    );
+    assert!(matches!(opened.phase, Phase::Training { .. }));
+    assert!(store.journal().iter().any(|e| e.op == "open-train"));
+    assert!(ownership_rider_refusal_with(root, 11, false, |_| false)
+        .unwrap()
+        .is_some());
+    // A rider that moved to a different train must survive old-train cleanup.
+    dual::train_opened(root, 60, &[12]);
+    dual::train_retired(root, 50, &[11, 12], "retired before lease").unwrap();
+    assert!(matches!(
+        store.load(&key).unwrap().unwrap().phase,
+        Phase::Closed { .. }
+    ));
+    assert!(ownership_rider_refusal_with(root, 11, false, |_| panic!(
+        "ended train needs no forge read"
+    ))
+    .unwrap()
+    .is_none());
+    assert_eq!(
+        store
+            .load(&WorkKey::Change {
+                change: dual::change(11)
+            })
+            .unwrap()
+            .unwrap()
+            .phase,
+        Phase::Leased
+    );
+    assert_eq!(
+        store
+            .load(&WorkKey::Change {
+                change: dual::change(12)
+            })
+            .unwrap()
+            .unwrap()
+            .phase,
+        Phase::Training {
+            train: dual::change(60)
+        }
+    );
+    let journal = store.journal();
+    dual::train_retired(root, 50, &[11, 12], "retired before lease").unwrap();
+    assert_eq!(store.journal(), journal, "retirement is idempotent");
+    dual::train_opened(root, 70, &[11]);
+    assert_eq!(
+        store
+            .load(&WorkKey::Change {
+                change: dual::change(11)
+            })
+            .unwrap()
+            .unwrap()
+            .phase,
+        Phase::Training {
+            train: dual::change(70)
+        }
+    );
+}
+
+// trace:BUG-2537 | ai:codex
+#[test]
+fn bug2537_train_ownership_legacy_closed_self_heals_but_open_unknown_and_dry_run_retain() {
+    use crate::ownership::{
+        dual, ops,
+        store::{Expect, OwnershipStore},
+        Phase, WorkKey,
+    };
+    dual::enable_for_test();
+    let dir = repo();
+    let root = dir.path();
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    let key = WorkKey::Change {
+        change: dual::change(11),
+    };
+    store
+        .update(&key, "ride", Expect::Absent, |cur| {
+            ops::ride(cur, &key, &dual::change(50))
+        })
+        .unwrap();
+    assert!(store
+        .load(&WorkKey::Train {
+            train: dual::change(50)
+        })
+        .unwrap()
+        .is_none());
+    let journal = store.journal();
+    assert!(ownership_rider_refusal_with(root, 11, false, |_| false)
+        .unwrap()
+        .is_some());
+    assert!(ownership_rider_refusal_with(root, 11, true, |_| true)
+        .unwrap()
+        .is_none());
+    assert_eq!(store.journal(), journal, "dry run preserves the ride");
+    assert!(ownership_rider_refusal_with(root, 11, false, |n| {
+        assert_eq!(n, 50);
+        true
+    })
+    .unwrap()
+    .is_none());
+    assert_eq!(store.load(&key).unwrap().unwrap().phase, Phase::Leased);
+    assert!(store.journal().iter().any(|e| e.op == "leave-train"
+        && e.note
+            .as_deref()
+            .is_some_and(|n| n.contains("train #50 closed"))));
+}
+
+// Exercise the production confirmation boundary, including unreadable forge
+// evidence, rather than authorizing recovery from a list omission.
+// trace:BUG-2537 | ai:codex
+#[test]
+fn bug2537_train_ownership_forge_terminal_repair_and_unknown_refusal() {
+    use crate::forge::ChangeState;
+    use crate::ownership::{
+        dual, ops,
+        store::{Expect, OwnershipStore},
+        Phase, WorkKey,
+    };
+    dual::enable_for_test();
+    let dir = repo();
+    let root = dir.path();
+    let store = OwnershipStore::for_project(root).unwrap().unwrap();
+    let key = WorkKey::Change {
+        change: dual::change(11),
+    };
+    let mut forge = crate::forge::fake::RecordingForge::new();
+    for (state, unavailable, refused) in [
+        (ChangeState::Open, false, true),
+        (ChangeState::Closed, true, true),
+        (ChangeState::Closed, false, false),
+        (ChangeState::Merged, false, false),
+    ] {
+        store
+            .update(&key, "ride", Expect::Any, |cur| {
+                ops::ride(cur, &key, &dual::change(50))
+            })
+            .unwrap();
+        forge.metadata_state = state;
+        forge.metadata_error = unavailable.then(|| "unavailable".into());
+        assert_eq!(
+            ownership_rider_refusal(root, 11, false, &forge)
+                .unwrap()
+                .is_some(),
+            refused
+        );
+        let record = store.load(&key).unwrap().unwrap();
+        assert_eq!(matches!(record.phase, Phase::Training { .. }), refused);
+    }
+}
+
+// trace:BUG-2547 | ai:codex
+#[test]
+fn bug2547_recovery_only_matches_requested_member_set() {
+    let dir = tempfile::tempdir().unwrap();
+    let entry = journal::Entry::new(
+        train_of("main", &fms(&[3902, 3903])),
+        "train/stale-1".into(),
+    );
+    assert!(entry.matches(&[3903, 3902, 3902]));
+    assert!(!entry.matches(&[3902]));
+    assert!(!entry.matches(&[3887]));
+    assert!(!entry.matches(&[]));
+    journal::activate(dir.path(), entry).unwrap();
+    journal::clear();
+    let mut forge = FakeForge::mains(&["main"]);
+    let mut rails = ForgeRails::new(&mut forge, "fresh".into()).with_journal(dir.path());
+    let out = rails.resume_for(Some(&[3887])).unwrap();
+    assert!(out.landed.is_empty());
+    assert!(out.ejected.is_empty());
+    assert_eq!(journal::entries(dir.path()).unwrap().len(), 1);
+}
+
+// trace:BUG-2547 | ai:codex
+#[test]
+fn bug2547_abandon_is_locked_and_local_even_for_malformed_journals() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("stale-1.json");
+    std::fs::write(&path, "malformed").unwrap();
+    assert!(journal::abandon(dir.path(), "../stale-1.json").is_err());
+    let lock = journal::lock(dir.path()).unwrap();
+    assert!(journal::abandon(dir.path(), "stale-1.json").is_err());
+    assert!(path.exists());
+    drop(lock);
+    journal::abandon(dir.path(), "stale-1.json").unwrap();
+    assert!(!path.exists());
+    assert!(journal::abandon(dir.path(), "stale-1.json").is_err());
+}
+
+// trace:BUG-2547 | ai:codex
+#[test]
+fn bug2547_abandon_cli_is_exclusive() {
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "train", "--abandon", "stale-1.json"])
+        .is_ok());
+    for extra in ["3887", "--all-ready", "--dry-run", "--no-pull"] {
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "pr", "train", "--abandon", "stale-1.json", extra])
+            .is_err());
+    }
+}
+
+// trace:STORY-2733 trace:TASK-3785 | ai:codex
+// Train policy and journaling assertions belong with the command that owns them.
+#[test]
+fn mandate_include_gate_paths_audits_train_member() {
+    use crate::gate::mandate_gates::ProtectedPaths;
+    use crate::gate::mandate_ship::MandateCover;
+
+    let paths = vec!["aida-cli-lib/src/gate/mandate.rs".to_owned()];
+    let cover = MandateCover::from_checked_paths(
+        "mandate-test".into(),
+        "joe".into(),
+        &paths,
+        ProtectedPaths::floor_ref(),
+        false,
+    );
+    let audit = cover.gate_audit().unwrap();
+    let records = || {
+        vec![(
+            "TASK-1".into(),
+            Vec::new(),
+            Some(aida_core::ExecutionMode::Guided).into(),
+        )]
+    };
+    assert!(member_spec_policy_refusal(records(), false, || Ok(())).is_none());
+    assert!(
+        member_spec_policy_refusal(records(), false, || Err(Some("protected paths".into())))
+            .is_some()
+    );
+    let member = Member {
+        gate_audit: Some(audit.clone()),
+        cover: None,
+        pr: 7,
+        head: "a".repeat(40),
+        subject: "work".into(),
+        body: String::new(),
+        release: Some(cover),
+    };
+    let message = car_message(&member);
+    assert!(message.contains(&audit));
+    let restored: Member = serde_json::from_value(serde_json::to_value(&member).unwrap()).unwrap();
+    assert!(
+        restored.release.is_none(),
+        "live authority is never journaled"
+    );
+    assert_eq!(car_message(&restored), message);
+}
+
+// The `--check` report runs this file's scripted member gate.
+// trace:STORY-2824 | ai:claude
+#[path = "story_2824_train_check_tests.rs"]
+mod story_2824_train_check_tests;
+// ─────────────── full-tier CI on the approved head (STORY-2809) ───────────────
+
+// trace:STORY-2809 | ai:claude — AC2 (and AC1: the train asks for the missing run)
+#[test]
+fn live_gate_refuses_an_approved_head_with_no_full_tier_run_and_requests_one() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.acbd1c12 | ai:claude
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(
+        why.contains("no full-tier CI run exists at its head aaaaaaa"),
+        "{why}"
+    );
+    assert!(why.contains("requested just now"), "{why}");
+    assert!(why.contains("--skip-full-check"), "{why}");
+    assert_eq!(c.full_requests, vec![41]);
+    // The check follows the approval and precedes every later gate.
+    assert_eq!(c.calls.last(), Some(&"approval"));
+}
+
+// trace:STORY-2809 | ai:claude — AC2
+#[test]
+fn live_gate_preserves_running_full_ci_and_checks_red_runs_for_cancelled_retries() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    for (tier, expected) in [
+        (
+            crate::full_tier::FullTier::Pending {
+                run: "901".into(),
+                waiting: vec!["CI (lib-0)".into()],
+            },
+            "full-tier CI run 901 at its head aaaaaaa has not finished (waiting on CI (lib-0))",
+        ),
+        (
+            crate::full_tier::FullTier::Failed {
+                run: "902".into(),
+                failing: vec!["CI (cli-1)".into()],
+            },
+            "full-tier CI run 902 at its head aaaaaaa is red (failing: CI (cli-1))",
+        ),
+    ] {
+        let mut c = FakeChecks::new();
+        // trace:TASK-3105 | ai:codex
+        let red = matches!(tier, crate::full_tier::FullTier::Failed { .. });
+        c.full_tier = Some(tier);
+        let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+        assert!(why.contains(expected), "{why}");
+        assert_eq!(c.full_requests, if red { vec![41] } else { vec![] });
+    }
+}
+
+// trace:STORY-2809 | ai:claude — AC2
+#[test]
+fn live_gate_admits_a_green_full_tier_head_and_never_asks_an_unapproved_one() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Green { run: "900".into() });
+    gate_member_with(&mut c, "main", 41).unwrap();
+    assert!(c.full_requests.is_empty());
+
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    c.pin = None;
+    let why = gate_member_with(&mut c, "main", 41).unwrap_err();
+    assert!(why.contains("no approval is recorded"), "{why}");
+    assert!(c.full_requests.is_empty());
+}
+
+// trace:STORY-2809 | ai:claude — AC2: `--skip-full-check` overrides and is logged
+#[test]
+fn skip_full_check_admits_and_logs_the_override() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    let m = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    assert_eq!(m.pr, 41);
+    assert!(c.full_requests.is_empty());
+    let log = std::fs::read_to_string(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let event: serde_json::Value = serde_json::from_str(log.lines().next().unwrap()).unwrap();
+    assert_eq!(event["step"], "train-admit-skip-full-check");
+    assert_eq!(event["status"], "overridden");
+    assert_eq!(event["pr"], 41);
+    assert_eq!(event["head_sha"], "a".repeat(40));
+    // The override ends with the invocation that asked for it.
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    assert!(gate_member_with(&mut c, "main", 41).is_err());
+}
+
+// trace:STORY-2809 | ai:claude — AC2: a dry run and a pre-landing re-check
+// pass the override without logging it, so one admission logs one entry.
+#[test]
+fn skip_full_check_logs_nothing_when_the_gate_run_does_not_admit() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    c.admitting = false;
+    // A directory where the log file belongs would fail any write.
+    std::fs::create_dir_all(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let m = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    assert_eq!(m.pr, 41);
+    assert!(c.full_requests.is_empty());
+
+    // An admission, then two re-checks: one entry.
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    c.admitting = false;
+    for _ in 0..2 {
+        with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap();
+    }
+    let log = std::fs::read_to_string(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    assert_eq!(log.lines().count(), 1, "{log}");
+}
+
+// trace:STORY-2809 | ai:claude — AC2: an override that cannot be logged does
+// not admit.
+#[test]
+fn skip_full_check_refuses_when_the_override_cannot_be_logged() {
+    // trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:claude
+    let mut c = FakeChecks::new();
+    c.full_tier = Some(crate::full_tier::FullTier::Missing);
+    // A directory where the log file belongs makes the write fail.
+    std::fs::create_dir_all(c.root.path().join(".aida/advisor-activity.jsonl")).unwrap();
+    let why = with_skip_full_check(true, || gate_member_with(&mut c, "main", 41)).unwrap_err();
+    assert!(why.contains("could not record the override"), "{why}");
+    assert!(why.contains("no full-tier CI run exists"), "{why}");
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-732.accf1a65 | ai:codex
+#[test]
+fn full_tier_workflow_discovery_errors_are_unavailable_even_with_override() {
+    for stage in ["directory", "entry", "file"] {
+        let mut c = FakeChecks::new();
+        c.workflow_error = Some(format!("workflow {stage}: permission denied"));
+        for skip in [false, true] {
+            let result = with_skip_full_check(skip, || full_tier_gate(&mut c, 41, &"a".repeat(40)));
+            assert!(matches!(result, Err(MemberGateError::Unavailable(_))));
+        }
+        assert!(c.full_requests.is_empty());
+    }
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_narrowed_promotion_body_completes_only_claimed_specs() {
+    // Literal squash message of b4c4b98, whose historical trailers reopened
+    // the unrelated BUG-2531 round when promotion 15 landed.
+    let original = include_str!("fixtures/bug2635-promotion15.txt");
+    let (subject, body) = original.split_once("\n\n").unwrap();
+    let claims = crate::trailer_coverage::commit_completion_ids(subject);
+    assert_eq!(claims, vec!["TASK-3797"]);
+    let direct_claims = crate::pr_ship::derive_squash_trailer(
+        subject,
+        "promote/integration-15",
+        "",
+        false,
+        |_| true,
+        |_| None,
+    );
+    assert_eq!(direct_claims.ids, claims, "direct ship and train agree");
+    let mut m = member(4128, "abc", subject);
+    m.body = body.to_string();
+    let message = car_message(&m);
+    assert_eq!(
+        m.body, body,
+        "gate evidence retains every constituent trailer"
+    );
+    assert!(m.body.contains("(BUG-2531)"));
+    assert_eq!(
+        crate::trailer_coverage::commit_completion_ids(&message),
+        vec!["TASK-3797"]
+    );
+    let direct = crate::trailer_coverage::restrict_body_to_claims(body, &claims);
+    assert!(message.contains(direct.trim()));
+    m.body = crate::pr_cmd::non_completing_squash_body(body);
+    assert!(crate::trailer_coverage::commit_completion_ids(&car_message(&m)).is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_member_body_preserves_policy_evidence_and_no_complete() {
+    let tmp = repo();
+    let r = tmp.path();
+    git(r, &["checkout", "--quiet", "-b", "promotion"]);
+    write(r, "old.txt", "earlier round");
+    let head = commit(r, "fix: old round (BUG-2531)");
+    let raw = member_body(r, "main", &head, "").unwrap();
+    assert!(raw.contains("(BUG-2531)"));
+    let no_complete = member_body(r, "main", &head, "aida: no-complete").unwrap();
+    assert!(crate::trailer_coverage::commit_completion_ids(&format!(
+        "work (TASK-3797) (#4128)\n\n{no_complete}"
+    ))
+    .is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_promotion_annotation_and_inline_refs_are_bounded() {
+    for suffix in [" [promotion 15] (#4128)", " (#4128)", ""] {
+        let subject = format!("work (TASK-3797 Refs BUG-2531){suffix}");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&subject),
+            vec!["TASK-3797"]
+        );
+    }
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (TASK-3797) [promotion draft] (#4128)"
+    )
+    .is_empty());
+    assert!(crate::trailer_coverage::commit_completion_ids(
+        "work (Refs BUG-2531) [promotion 15] (#4128)"
+    )
+    .is_empty());
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
+    for group in [
+        "TASK-3797,BUG-2 Refs BUG-2531, BUG-3",
+        "TASK-3797, BUG-2, Refs: BUG-2531,BUG-3",
+        "TASK-3797 BUG-2 Refs:BUG-2531 BUG-3",
+        "TASK-3797, BUG-2 Refs BUG-2531, BUG-3",
+    ] {
+        let subject = format!("promotion ({group}) [promotion 15] (#4128)");
+        let claims = crate::trailer_coverage::commit_completion_ids(&subject);
+        assert_eq!(claims, vec!["TASK-3797", "BUG-2"], "{subject}");
+        let mut m = member(4128, "abc", &subject);
+        m.body = include_str!("fixtures/bug2635-promotion15.txt").to_string();
+        m.body.push_str("\nold round (BUG-3, BUG-4)\n");
+        let raw = m.body.clone();
+        let message = car_message(&m);
+        assert_eq!(m.body, raw, "policy sees the full car body");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            claims
+        );
+        assert_eq!(
+            crate::pr_ship::extract_trailing_spec_ids_from_subject(&subject),
+            claims
+        );
+    }
+    for group in ["Refs BUG-1, BUG-2", "Refs: BUG-1,BUG-2"] {
+        let message = format!("promotion (TASK-3797) (#4128)\n\nold ({group}) (BUG-1,BUG-2)");
+        assert_eq!(
+            crate::trailer_coverage::commit_completion_ids(&message),
+            vec!["TASK-3797"]
+        );
+    }
 }

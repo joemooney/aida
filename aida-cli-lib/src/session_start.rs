@@ -1,8 +1,28 @@
 //! `aida session start` and its preflight, pool and dirty-tree gates (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+#[cfg(test)]
+use crate::{distributed_mode_declared_from, validate_session_start_args, Requirement};
+// trace:TASK-3428 | ai:codex
+use crate::{
+    active_lease_for_cwd, agent_registry, aggregate_session_activity_into_roles,
+    apply_session_env_to_process, change_lookup_for_branch, claim, cli, coordination,
+    current_branch_at, detect_cargo_target_dir, detect_default_branch_ref,
+    detect_merged_pr_for_branch_via_forge, events, existing_lease_for_scope,
+    find_main_worktree_root, find_project_root, forge, git_arg_guard, hostname, humanize_relative,
+    isolate_cargo_target_dir, launch, lease_covers_cwd, lease_path, leases, leases_dir,
+    link_worktree_runtime_state, list_leases, live_spec_claim_by_other, main_worktree_root_from,
+    orchestrator, process_probe, queue_cmd, recent_files_for_branch,
+    remove_session_lease_record_only, review_source_branch_conflict_decision, role, session,
+    sh_single_quote, slugify, worktree, worktree_config_init_submodules,
+    worktree_pool_config_lease_ttl_secs, worktree_pool_config_max_trees,
+    worktree_pool_config_worktree_parent, worktree_pool_global_hooks, write_session_env_file, zen,
+    LeaseConflictDecision, PrLookup, RequirementStatus, SessionLease, Storage,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// STORY-61: forge-specific PR/MR scope. When `aida session start
 /// --owns PR-1` or `--owns MR-42` is invoked, we route through a
@@ -124,6 +144,52 @@ pub(crate) fn review_pickup_conflict_decision(
             review_anchor_matches_change(store, id, &title, source_branch).then_some(id)
         });
     decide(backing)
+}
+
+/// Read-only queue admission uses the same source-branch resolver and
+/// coexistence rules as setup. Do not use review_branch_conflicts here: it can
+/// release dead leases. Setup retains its full conflict and cleanup recheck.
+// trace:BUG-2548 | ai:codex
+pub(crate) fn preflight_review_source_leases(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    number: u64,
+    branch: &str,
+    review_coexistence: Option<(&str, &str)>,
+    store: Option<&aida_core::RequirementsStore>,
+) -> Result<()> {
+    let Some(source) = query_pr_source_branch(forge, number, root) else {
+        return Ok(());
+    };
+    for lease in list_leases(root)
+        .into_iter()
+        .filter(|l| l.branch == source || l.branch == branch)
+    {
+        let decision = review_pickup_conflict_decision(
+            // Admission cannot prompt or end ownership before refreshed gates.
+            // Setup still uses its ordinary terminal-aware conflict decision.
+            true,
+            crate::ownership::reader::lease_retained(root, &lease),
+            lease.role.as_deref(),
+            review_coexistence,
+            store,
+            &source,
+            || {
+                crate::forge::forge_for_kind(root, forge.forge_kind())
+                    .change_metadata(number, &mut crate::network_retry::NoopSink)
+                    .map(|meta| meta.title)
+            },
+        );
+        anyhow::ensure!(
+            decision != LeaseConflictDecision::Refuse,
+            "review is blocked by LIVE or unprovably-dead lease {} on `{}` ({}, worktree {}) before store pull; end that session or wait for it, then retry",
+            lease.id,
+            lease.branch,
+            lease.role.as_deref().unwrap_or("(unset)"),
+            lease.worktree_path.display()
+        );
+    }
+    Ok(())
 }
 
 /// STORY-71: PR/MR head + base metadata captured at session-start time.
@@ -406,14 +472,32 @@ pub(crate) fn pickup_pr_branch(
         return Ok(None);
     }
     let mut changes = forge.open_changes_for_spec(spec)?;
+    // trace:BUG-2656 | ai:codex
+    if changes.len() > 1 {
+        if let Some(branch) = explicit {
+            changes.retain(|change| change.branch == branch);
+            if changes.len() != 1 {
+                anyhow::bail!("--branch `{branch}` must select exactly one open change for {spec}");
+            }
+        }
+    }
     if changes.len() > 1 {
         anyhow::bail!(
-            "{spec} has multiple open changes: {}; resolve duplicates before pickup",
+            "{spec} has multiple open changes: {}; select a rework branch:\n{}",
             changes
                 .iter()
                 .map(|c| format!("#{} on `{}`", c.id, c.branch))
                 .collect::<Vec<_>>()
-                .join(", ")
+                .join(", "),
+            changes
+                .iter()
+                .map(|c| format!(
+                    "  #{}: aida queue work {spec} --role implementer --branch {} --force-claim",
+                    c.id,
+                    crate::cast_recording::shell_quote(&c.branch)
+                ))
+                .collect::<Vec<_>>()
+                .join("\n")
         );
     }
     let Some(change) = changes.pop() else {
@@ -622,7 +706,8 @@ pub(crate) fn align_reused_pr_branch_with_status(
 /// the freshest by `started_at`. Returns an error if nothing qualifies.
 ///
 /// With `--base BRANCH`: validates the branch exists locally or on
-/// origin via `branch_exists_anywhere`. Unless `force` is set, checks
+/// origin via `branch_exists_anywhere`, unless contained session setup will
+/// validate the branch. Unless `force` is set, checks
 /// `detect_merged_pr_for_branch` and refuses if the PR has merged
 /// (which means the branch is about to be / has been deleted on origin
 /// — branching from it now would create commits doomed to be stranded).
@@ -636,12 +721,13 @@ pub(crate) fn resolve_stack_base(
     stack: bool,
     base: Option<&str>,
     force: bool,
+    defer_explicit_lookup: bool,
 ) -> anyhow::Result<Option<String>> {
     if !stack && base.is_none() {
         return Ok(None);
     }
     if let Some(b) = base {
-        if !branch_exists_anywhere(project_root, b) {
+        if !defer_explicit_lookup && !branch_exists_anywhere(project_root, b) {
             anyhow::bail!(
                 "--base `{}` does not exist locally or on origin — \
                  verify the branch name (and that origin has it)",
@@ -1129,6 +1215,23 @@ pub(crate) fn preflight_spec_status_review_aware(
     preflight_spec_status(owns, status, force_claim)
 }
 
+/// Session-start status gate: [`preflight_spec_status_review_aware`], plus a
+/// Done-only allowance for an implementer continuing an open change that queue
+/// work verified. Completed, Rejected and every other refusal still stand.
+/// trace:STORY-2690 | ai:claude
+pub(crate) fn preflight_spec_status_for_session(
+    owns: &str,
+    status: Option<&RequirementStatus>,
+    force_claim: bool,
+    is_review: bool,
+    done_rework_change_verified: bool,
+) -> PreflightDecision {
+    if done_rework_change_verified && !is_review && status == Some(&RequirementStatus::Done) {
+        return PreflightDecision::Allow;
+    }
+    preflight_spec_status_review_aware(owns, status, force_claim, is_review)
+}
+
 // BUG-882: reviewer-scoped queue work can reach `session_start` with `owns`
 // still set to the backing spec id rather than `PR-N`. Role intent must still
 // classify the launch as review-shaped so Done-backed open PRs are reviewable.
@@ -1346,7 +1449,7 @@ pub(crate) fn acquire_session_pool_worktree(
     let co = std::process::Command::new("git")
         .arg("-C")
         .arg(&acquired)
-        .args(["checkout", "-b", branch_name])
+        .args(["checkout", "--no-track", "-b", branch_name])
         .output()?;
     use std::io::Write;
     let _ = std::io::stderr().write_all(&co.stdout);
@@ -1431,6 +1534,27 @@ impl SessionStartReceipt {
         }
         self.cleanup = None;
     }
+    /// Drop is conservative: verify the lease artifact before reporting success.
+    // trace:BUG-2548 | ai:codex
+    pub(crate) fn rollback(mut self) -> Result<()> {
+        let lease = self.cleanup.as_ref().and_then(|cleanup| {
+            cleanup
+                .lease_id
+                .as_deref()
+                .map(|id| lease_path(&cleanup.root, id))
+        });
+        drop(self.cleanup.take());
+        if let Some(path) = lease {
+            match std::fs::symlink_metadata(&path) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                result => anyhow::bail!(
+                    "pickup rollback retained lease {}; inspect `aida session leases --all` ({result:?})",
+                    path.display()
+                ),
+            }
+        }
+        Ok(())
+    }
     /// STORY-2254: make this receipt's rollback conditional on a durable
     /// ownership record. Its destructive Drop runs only while `still_owner`
     /// confirms this invocation still owns the setup, so a crash or early
@@ -1444,6 +1568,43 @@ impl SessionStartReceipt {
         }
     }
 }
+/// BUG-2697: the shared claim a session start acquired while no lease stands
+/// for it yet. Dropping it with a claim still set (the start failed before
+/// its lease was written) compare-and-deletes exactly that claim, so a
+/// refused start never leaves a `process_backed = false` claim behind to
+/// block the next admission. The launch rollback ([`SessionStartCleanup`])
+/// owns the claim instead when it is armed.
+// trace:BUG-2697 | ai:claude
+pub(crate) struct UnleasedClaimRelease {
+    store: std::path::PathBuf,
+    scope: String,
+    pub(crate) claim: Option<coordination::Claim>,
+}
+impl UnleasedClaimRelease {
+    pub(crate) fn new(root: &std::path::Path, scope: &str) -> Self {
+        Self {
+            store: root.join(".aida-store"),
+            scope: scope.into(),
+            claim: None,
+        }
+    }
+}
+impl Drop for UnleasedClaimRelease {
+    fn drop(&mut self) {
+        let Some(claim) = self.claim.take() else {
+            return;
+        };
+        match coordination::release_claim_receipt(&self.store, &claim) {
+            Ok(_) => {}
+            Err(error) => eprintln!(
+                "session start failed and could not release its shared claim for {}: {error:#}; \
+                 `aida doctor heal stale-leases` releases it once it expires",
+                self.scope
+            ),
+        }
+    }
+}
+
 // trace:BUG-2188 | ai:codex
 pub(crate) struct SessionStartCleanup {
     root: std::path::PathBuf,
@@ -1661,6 +1822,15 @@ impl Drop for SessionStartCleanup {
                     } {
                         return Err(error.into());
                     }
+                }
+                // trace:STORY-2710 | ai:codex
+                if let Some(successor) = &self.lease_id {
+                    crate::repair_journal::RepairGuard::lock(&self.root)?.transfer_adopted_lane(
+                        &orphan.worktree_path,
+                        &orphan.branch,
+                        successor,
+                        &orphan.id,
+                    )?;
                 }
                 crate::ownership::dual::lease_written(&self.root, orphan);
                 Ok(())
@@ -1932,7 +2102,7 @@ pub(crate) fn session_start(
     session_start_with_receipt(
         owns,
         branch,
-        base,
+        base.map(SessionBase::Explicit),
         reuse_branch,
         explicit_path,
         forge_override,
@@ -1952,8 +2122,20 @@ pub(crate) fn session_start(
         false,
         PathReentry::None,
         None,
+        false,
     )
     .map(|mut receipt| receipt.disarm())
+}
+
+// trace:BUG-2673 | ai:codex
+#[derive(Clone, Copy)]
+pub(crate) enum SessionBase<'a> {
+    /// An explicit --base, with no deferred queue validation.
+    Explicit(&'a str),
+    /// A contained queue pickup with an explicit --base.
+    QueueBranch(&'a str),
+    /// Auto-selected stack parents or launcher-supplied revisions.
+    Local(&'a str),
 }
 
 // trace:BUG-2188 | ai:codex
@@ -1962,7 +2144,7 @@ pub(crate) fn session_start(
 pub(crate) fn session_start_with_receipt(
     owns: &str,
     branch: Option<&str>,
-    base: Option<&str>,
+    session_base: Option<SessionBase<'_>>,
     reuse_branch: bool,
     explicit_path: Option<&str>,
     forge_override: Option<&str>,
@@ -1998,7 +2180,28 @@ pub(crate) fn session_start_with_receipt(
     path_reentry: PathReentry,
     // Some(None) is a confirmed negative from a single-spec queue pickup.
     resolved_pr: Option<Option<(u64, String)>>,
+    // Queue work proved this Done spec's open origin change and its rework
+    // policy; only that exact change may lift the Done refusal.
+    // trace:STORY-2690 | ai:claude
+    done_rework_admitted: bool,
 ) -> Result<SessionStartReceipt> {
+    let base = session_base.map(|base| match base {
+        SessionBase::Explicit(branch)
+        | SessionBase::QueueBranch(branch)
+        | SessionBase::Local(branch) => branch,
+    });
+    let explicit_origin_base = match session_base {
+        // Direct session starts also accept origin-qualified branch names.
+        Some(SessionBase::Explicit(branch)) => Some(
+            branch
+                .strip_prefix("refs/remotes/origin/")
+                .or_else(|| branch.strip_prefix("refs/heads/"))
+                .or_else(|| branch.strip_prefix("origin/"))
+                .unwrap_or(branch),
+        ),
+        Some(SessionBase::QueueBranch(branch)) => Some(branch),
+        _ => None,
+    };
     let adopt_orphan = path_reentry == PathReentry::AdoptOrphan;
     // BUG-75: derive paths from the MAIN worktree root, not from cwd's
     // git ancestor — when the user invokes `aida session start` from
@@ -2104,6 +2307,7 @@ pub(crate) fn session_start_with_receipt(
     // the scope slug. Confirmed merged residue also permits a dated name.
     // trace:STORY-65 | ai:claude
     // trace:BUG-2451 | ai:codex — agent-new and direct session starts share queue policy.
+    let verified_pickup_pr = resolved_pr.clone().flatten();
     let existing_pr = if review_target.is_none() && !is_review_session {
         if let Some(resolved) = resolved_pr {
             resolved
@@ -2225,7 +2429,9 @@ pub(crate) fn session_start_with_receipt(
                 reentry: reuse_existing_worktree_path,
                 path_not_seat_location: explicit_path.is_some()
                     && !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path),
-                has_origin: aida_core::git_ops::has_remote(&project_root, "origin"),
+                // Let the explicit-base fetch diagnose an unavailable origin.
+                has_origin: explicit_origin_base.is_some()
+                    || aida_core::git_ops::has_remote(&project_root, "origin"),
             },
         )? {
             (kind, Some(note)) => {
@@ -2370,6 +2576,58 @@ pub(crate) fn session_start_with_receipt(
         }
     }
 
+    // STORY-65 + TASK-67: role resolution by INTENT, not blind env
+    // inheritance. Order:
+    //   1. --role <name>             explicit override always wins
+    //   2. scope-derived default     PR-N/MR-N → reviewer; else → implementer
+    //   3. $AIDA_SESSION_ROLE        env fallback when no scope default fires
+    //                                (which currently never happens — every
+    //                                scope shape has a default — but kept as
+    //                                a safety net for future scope kinds)
+    //   4. None                      no role recorded
+    //
+    // The earlier (pre-TASK-67) behavior was step 3 only: a reviewer shell
+    // starting an EPIC session recorded reviewer, which then misrouted the
+    // queue/activity surfaces while real implementer work happened inside.
+    // When the env and scope-default disagree we warn (don't fail) — the
+    // user might genuinely want the env's role (e.g. an architect shell
+    // starting an EPIC; the implementer default would be wrong for them).
+    // Resolve once before publishing the shared claim; the lease below uses
+    // this same effective role. trace:STORY-2705 | ai:codex
+    // trace:TASK-67 | ai:claude
+    let env_role = std::env::var("AIDA_SESSION_ROLE")
+        .ok()
+        .filter(|s| !s.trim().is_empty());
+    let scope_default_role: Option<&'static str> = if review_target.is_some() {
+        Some("reviewer")
+    } else {
+        Some("implementer")
+    };
+    let (inherited_role, role_origin) = if let Some(r) = launch_role.as_ref() {
+        (Some(r.clone()), "--role flag")
+    } else if let Some(d) = scope_default_role {
+        // Warn when env-role disagrees with the scope default — the user
+        // probably wanted the scope default but might have meant otherwise.
+        if let Some(env) = env_role.as_ref() {
+            if !env.eq_ignore_ascii_case(d) {
+                eprintln!(
+                    "{} active role {} doesn't match this scope's default {}.\n  \
+                     Recording: {} (scope-derived). Pass --role {} to override.",
+                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                    format!("({})", env).cyan(),
+                    format!("({})", d).cyan(),
+                    d.cyan().bold(),
+                    env.cyan(),
+                );
+            }
+        }
+        (Some(d.to_string()), "scope-derived")
+    } else if let Some(env) = env_role.clone() {
+        (Some(env), "inherited")
+    } else {
+        (None, "")
+    };
+
     let mut rollback = rollback_failed_setup.then(|| SessionStartCleanup::new(&project_root, owns));
 
     // STORY-637: cross-clone lease claim on the shared store. The intra-clone
@@ -2380,29 +2638,40 @@ pub(crate) fn session_start_with_receipt(
     // session start never becomes brittle on the network. A corroborated
     // orchestrator subprocess (our own clone already driving this spec) and
     // `--force-claim` both force-acquire. trace:STORY-637 | ai:claude
+    // BUG-2586: the lease id is minted before the shared claim so the claim
+    // records the exact lease (generation) it holds the spec for; recovery may
+    // later replace it only on positive death of that exact lease.
+    // trace:BUG-2586 | ai:claude
+    let lease_id_long = uuid::Uuid::now_v7().to_string();
+    let bound_lease_id = lease_id_long.replace('-', "")[..12].to_string();
+    // BUG-2697: without the launch rollback, a start that fails before its
+    // lease is written still releases the shared claim it acquired here.
+    // trace:BUG-2697 | ai:claude
+    let mut unleased_claim = UnleasedClaimRelease::new(&project_root, owns);
     {
         let store_root = project_root.join(".aida-store");
         let orchestrated = orchestrator::detect(&project_root).is_orchestrated();
-        let claim_role = launch_role
-            .clone()
-            .or_else(|| std::env::var("AIDA_SESSION_ROLE").ok())
-            .unwrap_or_default();
-        match coordination::acquire_claim_receipted(
+        match coordination::acquire_claim_bound(
             &store_root,
             owns,
             &project_root,
-            &claim_role,
+            inherited_role.as_deref().unwrap_or_default(),
             /* review_verb */ is_review_session,
             force_claim || orchestrated,
+            Some(&bound_lease_id),
         ) {
             Ok((coordination::AcquireOutcome::Acquired, claim)) => {
                 if let Some(cleanup) = rollback.as_mut() {
                     cleanup.claim = claim;
+                } else {
+                    unleased_claim.claim = claim;
                 }
             }
             Ok((coordination::AcquireOutcome::Reclaimed(reason), claim)) => {
                 if let Some(cleanup) = rollback.as_mut() {
                     cleanup.claim = claim;
+                } else {
+                    unleased_claim.claim = claim;
                 }
                 eprintln!(
                     "  {} reclaiming a stale cross-clone lease on `{owns}` ({reason})",
@@ -2410,8 +2679,13 @@ pub(crate) fn session_start_with_receipt(
                 );
             }
             Ok((coordination::AcquireOutcome::Unavailable(reason), claim)) => {
+                // A push error still returns the exact receipt: the remote
+                // may have accepted it, so a later failure must release it.
+                // trace:BUG-2697 | ai:claude
                 if let Some(cleanup) = rollback.as_mut() {
                     cleanup.claim = claim;
+                } else {
+                    unleased_claim.claim = claim;
                 }
                 eprintln!(
                     "  {} cross-clone coordination unavailable: {reason}, proceeding",
@@ -2463,11 +2737,17 @@ pub(crate) fn session_start_with_receipt(
     // trace:BUG-2223 | ai:claude
     let adoption_lifts_status =
         adopted_orphan.is_some() && matches!(preflight_status, Some(RequirementStatus::InProgress));
-    match preflight_spec_status_review_aware(
+    // STORY-2690: a Done spec whose open change queue work verified stays
+    // pickable for rework on exactly that change's branch.
+    // trace:STORY-2690 | ai:claude
+    let done_rework_change_verified =
+        done_rework_admitted && verified_pickup_pr.is_some() && verified_pickup_pr == existing_pr;
+    match preflight_spec_status_for_session(
         owns,
         preflight_status.as_ref(),
         force_claim_effective || adoption_lifts_status,
         is_review_session,
+        done_rework_change_verified,
     ) {
         PreflightDecision::Refuse(msg) => anyhow::bail!("{}", msg),
         PreflightDecision::AllowWithWarning(msg) => {
@@ -2557,6 +2837,21 @@ pub(crate) fn session_start_with_receipt(
     let branch_preexists = branch_exists_anywhere(&project_root, &branch_name);
     let reuse_existing = should_reuse_branch(reuse_branch, branch.is_some(), branch_preexists);
 
+    // A fresh clone validates its explicit base through the fetch itself.
+    // Keep the queue's branch check for linked worktrees and reused branches.
+    // trace:BUG-2673 | ai:codex
+    let fetch_base = explicit_origin_base.filter(|_| {
+        tree_kind == crate::seat_clone::TreeKind::Clone && !clone_reentry && !reuse_existing
+    });
+    if let Some(SessionBase::QueueBranch(branch)) = session_base {
+        if fetch_base.is_none() && !branch_exists_anywhere(&project_root, branch) {
+            anyhow::bail!(
+                "--base `{branch}` does not exist locally or on origin — verify the branch name (and that origin has it)"
+            );
+        }
+    }
+    let mut cloned_base_sha = None;
+
     // BUG-2169: owns a just-made seat clone until the lease is written; any
     // error in between removes the clone and releases its pin.
     // trace:BUG-2169 | ai:claude
@@ -2607,11 +2902,15 @@ pub(crate) fn session_start_with_receipt(
                 worktree_path.display()
             );
         }
+        let base_ref = match fetch_base {
+            Some(branch) => crate::seat_clone::fetch_explicit_base(&project_root, branch)?,
+            None => base_ref,
+        };
         match crate::seat_clone::create(&project_root, &worktree_path, &branch_name, &base_ref) {
             Ok(created) => Some(created),
             Err(error) => {
                 let Some(note) = crate::seat_clone::origin_failure_fallback(
-                    crate::seat_clone::seat_tree_is_explicit(&project_root),
+                    fetch_base.is_some() || crate::seat_clone::seat_tree_is_explicit(&project_root),
                     &error,
                 ) else {
                     return Err(error);
@@ -2643,8 +2942,9 @@ pub(crate) fn session_start_with_receipt(
             crate::glyph(crate::glyphs::Glyph::Check).green(),
             created.path.display(),
             branch_name,
-            &created.base_sha[..created.base_sha.len().min(10)],
+            created.base_sha,
         );
+        cloned_base_sha = Some(created.base_sha.clone());
         clone_cleanup = Some(crate::seat_clone::CloneCleanupGuard::new(
             &project_root,
             &created,
@@ -3001,17 +3301,17 @@ pub(crate) fn session_start_with_receipt(
         // BUG-1270: keep the next round on the branch the PR actually tracks.
         align_reused_pr_branch(&project_root, &branch_name)?;
         // `git worktree add <path> <branch>` checks out an existing
-        // local branch, or DWIM-creates a local tracking branch from a
-        // unique `origin/<branch>` — no `-b`, no base.
+        // local branch, or creates a local branch from a unique remote match.
+        // Suppress the inferred upstream for the remote-only case.
+        // trace:BUG-2211 | ai:codex
+        let mut args = vec!["worktree", "add"];
+        if rollback_branch_absent(&project_root, &branch_name)? {
+            args.push("--no-track");
+        }
+        args.extend(["--", worktree_path.to_str().unwrap(), branch_name.as_str()]);
         let res = transactional_worktree_add(
             &project_root,
-            &[
-                "worktree",
-                "add",
-                "--",
-                worktree_path.to_str().unwrap(),
-                branch_name.as_str(),
-            ],
+            &args,
             &worktree_path,
             &branch_name,
             &mut rollback,
@@ -3137,6 +3437,9 @@ pub(crate) fn session_start_with_receipt(
             let mut args = vec![
                 "worktree",
                 "add",
+                // Avoid writing shared tracking config when the base is a remote ref.
+                // trace:BUG-2211 | ai:codex
+                "--no-track",
                 "-b",
                 branch_name.as_str(),
                 "--",
@@ -3203,10 +3506,17 @@ pub(crate) fn session_start_with_receipt(
     // trace:STORY-248 | ai:claude
     let stack_parent_branch: Option<String> = base
         .filter(|_| review_target.is_none() && !reuse_existing)
-        .map(|s| s.strip_prefix("origin/").unwrap_or(s).to_string());
+        .map(|s| {
+            fetch_base
+                .unwrap_or_else(|| s.strip_prefix("origin/").unwrap_or(s))
+                .to_string()
+        });
     let stack_parent_sha: Option<String> = base
         .filter(|_| review_target.is_none() && !reuse_existing)
         .and_then(|b| {
+            if let Some(sha) = cloned_base_sha {
+                return Some(sha);
+            }
             let out = std::process::Command::new("git")
                 .arg("-C")
                 .arg(&project_root)
@@ -3276,8 +3586,8 @@ pub(crate) fn session_start_with_receipt(
     }
 
     // Compose lease.
-    let id_long = uuid::Uuid::now_v7().to_string();
-    let id = id_long.replace('-', "")[..12].to_string();
+    // The id the shared claim was bound to above. trace:BUG-2586 | ai:claude
+    let id = bound_lease_id.clone();
     // BUG-2010: inside an `aida agent new` session (AIDA_AGENT_NAME set),
     // attribute the lease to that agent's live process rather than a short-lived
     // transient CLI / shell PID, but ONLY on self-claim paths. Leases minted
@@ -3299,56 +3609,6 @@ pub(crate) fn session_start_with_receipt(
             .or_else(|| std::env::var("USER").ok())
             .unwrap_or_else(|| "unknown".to_string())
     };
-    // STORY-65 + TASK-67: role resolution by INTENT, not blind env
-    // inheritance. Order:
-    //   1. --role <name>             explicit override always wins
-    //   2. scope-derived default     PR-N/MR-N → reviewer; else → implementer
-    //   3. $AIDA_SESSION_ROLE        env fallback when no scope default fires
-    //                                (which currently never happens — every
-    //                                scope shape has a default — but kept as
-    //                                a safety net for future scope kinds)
-    //   4. None                      no role recorded
-    //
-    // The earlier (pre-TASK-67) behavior was step 3 only: a reviewer shell
-    // starting an EPIC session recorded reviewer, which then misrouted the
-    // queue/activity surfaces while real implementer work happened inside.
-    // When the env and scope-default disagree we warn (don't fail) — the
-    // user might genuinely want the env's role (e.g. an architect shell
-    // starting an EPIC; the implementer default would be wrong for them).
-    // trace:TASK-67 | ai:claude
-    let env_role = std::env::var("AIDA_SESSION_ROLE")
-        .ok()
-        .filter(|s| !s.trim().is_empty());
-    let scope_default_role: Option<&'static str> = if review_target.is_some() {
-        Some("reviewer")
-    } else {
-        Some("implementer")
-    };
-    let (inherited_role, role_origin) = if let Some(r) = launch_role.as_ref() {
-        (Some(r.clone()), "--role flag")
-    } else if let Some(d) = scope_default_role {
-        // Warn when env-role disagrees with the scope default — the user
-        // probably wanted the scope default but might have meant otherwise.
-        if let Some(env) = env_role.as_ref() {
-            if !env.eq_ignore_ascii_case(d) {
-                eprintln!(
-                    "{} active role {} doesn't match this scope's default {}.\n  \
-                     Recording: {} (scope-derived). Pass --role {} to override.",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    format!("({})", env).cyan(),
-                    format!("({})", d).cyan(),
-                    d.cyan().bold(),
-                    env.cyan(),
-                );
-            }
-        }
-        (Some(d.to_string()), "scope-derived")
-    } else if let Some(env) = env_role.clone() {
-        (Some(env), "inherited")
-    } else {
-        (None, "")
-    };
-
     // STORY-73: capture the parent shell PID so `aida session end` (without
     // an arg) can resolve the right lease from the shell that ran `start`,
     // even when cwd doesn't help. Best effort — if PPID isn't set / process
@@ -3460,6 +3720,9 @@ pub(crate) fn session_start_with_receipt(
             || aida_core::write_atomic(&lease_file, &body).map_err(Into::into),
         )?;
     }
+    // The lease now stands; the claim protects it from here on.
+    // trace:BUG-2697 | ai:claude
+    unleased_claim.claim = None;
     // Dual-write: the lease stays authoritative. // trace:STORY-2325 | ai:claude
     crate::ownership::dual::lease_written(&project_root, &lease);
     if let Some(cleanup) = rollback.as_mut() {
@@ -3475,6 +3738,15 @@ pub(crate) fn session_start_with_receipt(
         if let Some(cleanup) = rollback.as_mut() {
             cleanup.adopted_orphan = Some(orphan.clone());
         }
+        // Transfer only at the verified adoption boundary, before removing the
+        // original lease. The shared journal remains independent of watcher state.
+        // trace:STORY-2710 | ai:codex
+        crate::repair_journal::RepairGuard::lock(&project_root)?.transfer_adopted_lane(
+            &lease.worktree_path,
+            &lease.branch,
+            &orphan.id,
+            &lease.id,
+        )?;
         aggregate_session_activity_into_roles(&project_root, &orphan.id);
         if !remove_session_lease_record_only(&project_root, &orphan.id) {
             // Not `aida session end`: that would tear down the adopted tree.

@@ -11,7 +11,10 @@
 use anyhow::Result;
 use colored::Colorize;
 
-use crate::*;
+use crate::{
+    canonical_role_name, current_user_id, find_project_root, list_roles, team, truncate,
+    TeamCommand, HUMAN_ROUTE,
+};
 
 /// `aida team` — the roster of every node/clone sharing this store, joined with
 /// the `coordination/` claims each currently holds.
@@ -374,7 +377,7 @@ fn run_team(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::TeamCommand;
     let args = <TeamArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

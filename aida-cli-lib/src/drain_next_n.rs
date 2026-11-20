@@ -1,7 +1,25 @@
 //! next-N drain driver: RealNextNDriver, next-keyword parsing, drain summary and cap stop, auto-complete run records and failure-bug drafting (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::current_branch_head_sha;
+use crate::process_retry::RetryEtxtbsy;
+use crate::read_pipelined_child_result_sidecar;
+use crate::{
+    aida_exe_path, auto_complete, auto_complete_head_candidates_with_blocked,
+    auto_complete_head_candidates_with_roles, auto_complete_head_drivable, auto_complete_telemetry,
+    build_sha_short, canonical_role_name, classify_pipelined_child_outcome, comment_cmd,
+    detect_distributed_store_from, detect_open_pr_for_spec_via_forge, drain_caps,
+    drain_failure_note, drain_state, drain_summary, drive_robustness, effective_auto_complete_role,
+    events, find_main_worktree_root, last_drain, load_dispenser, next_n_rework_idle_message,
+    notify, pick_auto_complete_head_for_role, pipelined_child_common_args, pipelined_child_env,
+    resolve_queue_rework_needed, rule_violation, run_auto_complete, session, usage,
+    AutoCompleteHeadPick, DrainTuning, PrLookup, RealPhaseDriver, ResumeEntry,
+    DEFAULT_MAX_FAILURES,
+};
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use anyhow::Result;
+use colored::Colorize;
 
 /// TASK-293 — a parsed `next` / `nextN` keyword positional for `aida queue
 /// work`. trace:TASK-293 | ai:claude
@@ -190,6 +208,9 @@ pub(crate) fn drivable_queued_count(
                     .map(|r| canonical_role_name(r) == effective_role)
                     .unwrap_or(true)
                     && auto_complete_head_drivable(&candidate.status)
+                    // trace:STORY-2749 | ai:claude
+                    && crate::queue_cmd::track_refusal(&candidate.tags, &candidate.status, true)
+                        .is_none()
             })
             .count(),
     )
@@ -552,6 +573,7 @@ pub(crate) struct RealNextNDriver<'a> {
     pub(crate) steal: bool,
     /// TASK-559: outer `--force-claim`, propagated to every member's phase 1.
     pub(crate) force_claim: bool,
+    pub(crate) over_wip: bool,
     /// STORY-281: outer `--allow-stale-base`, propagated to every member's
     /// phase 3 pre-flight stale-base check.
     pub(crate) allow_stale_base: bool,
@@ -646,6 +668,7 @@ impl auto_complete::BatchDriver for RealNextNDriver<'_> {
                 false,
                 self.steal,
                 self.force_claim,
+                self.over_wip,
                 self.allow_stale_base,
                 self.no_auto_rebase,
                 None,
@@ -686,6 +709,7 @@ impl RealNextNDriver<'_> {
             self.escalate_mode,
             self.steal,
             self.force_claim,
+            self.over_wip,
             self.allow_stale_base,
             self.no_auto_rebase,
         )
@@ -820,6 +844,7 @@ impl auto_complete::PipelinedBatchDriver for RealNextNDriver<'_> {
             false,
             self.steal,
             self.force_claim,
+            self.over_wip,
             self.allow_stale_base,
             self.no_auto_rebase,
             resume,
@@ -848,6 +873,7 @@ pub(crate) fn handle_auto_complete_next_n(
     steal: bool,
     // TASK-559: outer `--force-claim`, threaded to every drained member's phase 1.
     force_claim: bool,
+    over_wip: bool,
     // STORY-281: outer `--allow-stale-base`, threaded to every drained
     // member's phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
@@ -935,6 +961,7 @@ pub(crate) fn handle_auto_complete_next_n(
         escalate_mode,
         steal,
         force_claim,
+        over_wip,
         allow_stale_base,
         no_auto_rebase,
         token_meter,

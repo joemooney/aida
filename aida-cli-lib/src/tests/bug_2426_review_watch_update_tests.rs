@@ -19,6 +19,7 @@ fn change(head: u64, overlap: bool) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(overlap),
+        conflict: None,
         behind: Some(u64::from(overlap)),
         head_branch: Some("lane-branch".into()),
     }
@@ -558,7 +559,7 @@ fn bug2426_conflicting_update_routes_to_the_advisor_and_is_listed() {
 #[test]
 fn bug2426_parking_skips_are_recorded_and_cleared() {
     assert!(parks(
-        "two-round review cap reached; route further work to the advisor"
+        "2-round review cap reached; route further work to the advisor"
     ));
     assert!(parks("review of this head exited without completing (x)"));
     assert!(parks(update::STALE_NOTIFIED));
@@ -571,11 +572,11 @@ fn bug2426_parking_skips_are_recorded_and_cleared() {
     ));
     let (temp, store) = fixture();
     let c = change(3, false);
-    record_skip(&store, &c, Some("two-round review cap reached")).unwrap();
+    record_skip(&store, &c, Some("2-round review cap reached")).unwrap();
     let first = skipped_changes(temp.path());
     assert_eq!(first.len(), 1);
     // A steady skip keeps its first-seen time.
-    record_skip(&store, &c, Some("two-round review cap reached")).unwrap();
+    record_skip(&store, &c, Some("2-round review cap reached")).unwrap();
     assert_eq!(skipped_changes(temp.path())[0].3, first[0].3);
     // TASK-2813: a new reason on the same head keeps the parked-since time.
     record_skip(&store, &c, Some(update::STALE_NOTIFIED)).unwrap();

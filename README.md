@@ -64,6 +64,8 @@ Requires a stable Rust toolchain.
 git clone https://github.com/joemooney/aida.git
 cd aida
 cargo install --path aida-cli
+cargo install --path aida-porcelain
+ln -sfn aida-porcelain "${CARGO_INSTALL_ROOT:-${CARGO_HOME:-$HOME/.cargo}}/bin/aida-flow"
 ```
 
 No external `protoc` is needed: protobuf definitions are compiled with the

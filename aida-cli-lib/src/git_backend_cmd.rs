@@ -6,10 +6,22 @@
 
 #![allow(clippy::too_many_arguments)]
 
+use crate::get_default_author;
+use crate::resolve_current_session_id;
+use aida_core::DatabaseBackend;
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::*;
+use crate::{
+    command_triggers_per_write_auto_push, format_tags_inline, load_dispenser,
+    maybe_auto_push_store, maybe_team_identity_guard, not_found, report_cmd, status_display,
+    strip_ansi_color, toon_status_token, truncate, warn_if_periodic_auto_push, CacheCommand,
+    Command, StoreAutoPushMode,
+};
+use aida_core::{Requirement, RequirementType, RequirementsStore, Storage};
+use colored::Colorize;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 // trace:TASK-190 | ai:codex
 pub(crate) fn resolve_comment_body(
@@ -1343,6 +1355,11 @@ pub(crate) fn db_sync_local_window(
     // config — the orphan-store model wants linear history
     // anyway (replay local commits on top of remote), so
     // rebase is the right default.
+    let remote_head = if pull && aida_core::git_ops::has_remote(store_path, "origin") {
+        aida_core::git_ops::remote_branch_head_sha_checked(store_path, "origin", &branch)?
+    } else {
+        None
+    };
     let mut conflicts = None;
     if pull && !aida_core::git_ops::has_remote(store_path, "origin") {
         // BUG-432: local-only / fresh-init projects have no `origin`
@@ -1352,11 +1369,18 @@ pub(crate) fn db_sync_local_window(
         // is ever added. Mirrors `aida fetch --code-only`'s tolerance.
         // trace:BUG-432 | ai:claude
         println!("  No `origin` remote — skipping pull (local-only project).");
-    } else if pull && !aida_core::git_ops::probe_remote_branch(store_path, "origin", &branch)? {
+    } else if pull && remote_head.is_none() {
         // A configured remote can precede the store's first push. Only a
         // successful query establishes this state; failed queries refuse sync.
         // trace:BUG-2490 | ai:codex
         println!("  No origin/{branch} branch yet — skipping pull (push to create it).");
+    } else if pull && !has_changes && remote_head == aida_core::git_ops::head_sha(store_path).ok() {
+        // BUG-2565: a clean store exactly matches origin, so the pull, the two
+        // full strict store reads and the conflict scan would only confirm
+        // that. `Some(empty)` keeps the post-window steps running.
+        // trace:BUG-2565 | ai:claude
+        println!("  Already up to date with origin/{branch}.");
+        conflicts = Some(Vec::new());
     } else if pull {
         // Snapshot local state before pull for conflict detection.
         // trace:TASK-1717 | ai:claude — strict: an unreadable or unparsable
@@ -1388,7 +1412,7 @@ pub(crate) fn db_sync_local_window(
         // trace:BUG-2490 | ai:codex — expose scalar resolution decisions during sync.
         if let aida_core::git_ops::StorePullOutcome::AutoMerged { notes } = &outcome {
             for note in notes {
-                println!("  {} {}", "auto-merged".cyan().bold(), note);
+                println!("  {}", note);
             }
         }
         println!("  Pull complete.");
@@ -1402,11 +1426,13 @@ pub(crate) fn db_sync_local_window(
                 crate::spec_id_collision_recovery_message(&collisions, store_path)
             );
         }
-        // Detect conflicts with remote changes
-        conflicts = Some(aida_core::conflict::detect_store_conflicts(
-            &local_reqs,
-            &remote.requirements,
-        ));
+        // trace:BUG-2609 | ai:codex — incoming fast-forward edits are not conflicts.
+        conflicts = Some(match outcome {
+            aida_core::git_ops::StorePullOutcome::Clean => Vec::new(),
+            aida_core::git_ops::StorePullOutcome::AutoMerged { .. } => {
+                aida_core::conflict::detect_store_conflicts(&local_reqs, &remote.requirements)
+            }
+        });
     }
 
     Ok(DbSyncWindow {

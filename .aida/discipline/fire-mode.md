@@ -40,7 +40,7 @@ mandate.
 - Dispatching fixers and reviewers in parallel across the scope.
 - Recording an approval and merging a PR on green Build after its tiered
   review, including PRs the advisor did not write or launch.
-- Ruling at the two-round cap: merge with follow-ups (only with a
+- Ruling at the configured review-round cap: merge with follow-ups (only with a
   reviewer-process approval at head), or park.
 - Filing follow-up specs for non-blocking findings without asking.
 - Fixing main forward with a one-line FASTTRACK PR through the normal gate.
@@ -92,15 +92,17 @@ mandate.
 When in doubt, take the higher tier. Reviewers rely on GitHub CI and do not
 re-run the local suite.
 
-## The two-round cap
+## The review-round cap
 
-A PR gets at most **two** review rounds. After round two, the advisor rules:
-merge and file the remaining findings as follow-ups, or park the PR with its
-reason on the spec. Merging still needs an approval at head recorded by a
+Set `[review] max_rounds` in `.aida/config.toml` to a positive integer. The
+default is **2** and this repository sets **4**. Once the blocking rounds reach
+the cap, the watcher parks the next unreviewed head and wakes the advisor. The
+advisor can merge and file the remaining findings as follow-ups, or park the PR
+with its reason on the spec. Merging still needs an approval at head recorded by a
 reviewer process (or by the operator at a terminal). The advisor cannot record
-one, so a PR whose second round ends in RequestChanges is parked or handed to
+one, so a PR whose final round ends in RequestChanges is parked or handed to
 the operator. Non-blocking findings are **always** follow-up specs, never
-another round. A blocking finding that survives round two usually means
+another round. A blocking finding that survives the final round usually means
 the spec was under-specified: park it and clarify the spec.
 <!-- trace:TASK-1953 | ai:claude -->
 
@@ -136,6 +138,6 @@ skip an unresolved verdict.
 
 - [`advisor-role.md`](advisor-role.md): the advisor seat.
 - [`autonomous-burndown.md`](autonomous-burndown.md): the hands-off queue drain, for when no mandate is in force.
-- [`rework-brief-craft.md`](rework-brief-craft.md): writing the CHANGES brief for round two.
+- [`rework-brief-craft.md`](rework-brief-craft.md): writing the CHANGES brief for the next round.
 - [`integrator-role.md`](integrator-role.md): merge-cascade mechanics.
 - FAQ-57: the record → ready → ship recipe.

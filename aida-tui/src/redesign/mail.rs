@@ -269,6 +269,7 @@ mod tests {
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Legacy,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         }
     }

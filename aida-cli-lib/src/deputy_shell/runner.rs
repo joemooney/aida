@@ -74,6 +74,9 @@ pub(crate) struct RunnerConfig {
     /// tests that file accepted jobs directly.
     // trace:STORY-2343 | ai:claude
     pub serve_socket: bool,
+    /// How startup judges a legacy bash runner's death (tests inject one).
+    // trace:BUG-2625 | ai:claude
+    pub pid_observer: aida_core::pid_observer::PidObserver,
 }
 
 /// Holds the single-runner lock for one deputy name.
@@ -82,27 +85,43 @@ pub(crate) struct RunnerLock {
 }
 
 pub(crate) fn acquire_lock(q: &Queue) -> Result<RunnerLock> {
-    use fs2::FileExt;
-    use std::os::unix::fs::OpenOptionsExt;
-    let file = std::fs::OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .mode(0o600)
-        .open(q.runner_lock())
-        .context("open the script deputy's runner lock")?;
-    if file.try_lock_exclusive().is_err() {
+    try_runner_lock(q, true)?.with_context(|| {
         let pid = q
             .runner_info()
             .map(|r| r.pid.to_string())
             .unwrap_or_else(|| "unknown".into());
-        anyhow::bail!(
+        format!(
             "a script deputy named {:?} is already running (pid {pid}); give this one another --name",
             q.name
-        );
+        )
+    })
+}
+
+fn try_runner_lock(q: &Queue, create: bool) -> Result<Option<RunnerLock>> {
+    use fs2::FileExt;
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = match std::fs::OpenOptions::new()
+        .create(create)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(q.runner_lock())
+    {
+        Ok(file) => file,
+        Err(e) if !create && e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e).context("open the script deputy's runner lock"),
+    };
+    anyhow::ensure!(
+        file.metadata()?.is_file(),
+        "script deputy runner lock is not a regular file"
+    );
+    match file.try_lock_exclusive() {
+        Ok(()) => Ok(Some(RunnerLock { _file: file })),
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+        Err(e) => Err(e).context("lock the script deputy's runner lock"),
     }
-    Ok(RunnerLock { _file: file })
 }
 
 /// What a finished job came to.
@@ -118,12 +137,27 @@ pub(crate) struct Outcome {
 pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<usize> {
     q.ensure()?;
     let _lock = acquire_lock(q)?;
+    let now = (cfg.clock)();
+    // trace:BUG-2625 | ai:codex
+    for id in q.job_ids() {
+        if let Some(state) = recover_orphan(q, &id, now)? {
+            if let Some(job) = q.read_job(&id) {
+                notify(q, cfg, &job, &state);
+            }
+        }
+    }
+    // A legacy bash runner's jobs, when that runner is positively dead.
+    // trace:BUG-2625 | ai:claude
+    super::legacy::recover_with(q, now, Path::new("/proc"), cfg.pid_observer);
     // Under the lock: a stale socket belongs to a dead runner.
     // trace:STORY-2571 | ai:codex
     let service_host = crate::review_watch::service::HostAuthority::new(cfg);
     let _services = cfg
         .serve_socket
         .then(|| crate::review_watch::service::Supervisor::start(q.clone(), service_host.clone()));
+    let _train_services = cfg.serve_socket.then(|| {
+        crate::review_watch::train_service::Supervisor::start(q.clone(), service_host.clone())
+    });
     let server = if cfg.serve_socket {
         Some(super::socket::serve_service(
             q,
@@ -137,7 +171,6 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
     let me = std::process::id();
     let mut grant_id = cfg.grant_id.clone();
     let now = (cfg.clock)();
-    recover_orphans(q, cfg, now);
     write_runner_info(q, cfg, &grant_id, now)?;
     q.audit_event(now, "runner-start", None, &actor(&grant_id), |r| {
         r.detail = Some(serde_json::json!({
@@ -256,6 +289,8 @@ pub(crate) fn run(q: &Queue, cfg: &RunnerConfig, stop: &AtomicBool) -> Result<us
         r.reason = Some(stop_why.clone())
     });
     let _ = std::fs::remove_file(q.runner_json());
+    // trace:STORY-2775 | ai:codex
+    super::supervisor::record_exit(q, &format!("rc=0 reason={stop_why}"))?;
     say(cfg, &format!("[deputy shell] stopped: {stop_why}\r\n"));
     Ok(handled)
 }
@@ -359,39 +394,48 @@ fn write_fd(fd: RawFd, mut bytes: &[u8]) {
 
 /// Jobs left `running` by a runner that died are done, rc 130, `orphaned`.
 /// They are never re-run: a script may not be idempotent. Call under the lock.
-pub(crate) fn recover_orphans(q: &Queue, cfg: &RunnerConfig, now: DateTime<Utc>) -> usize {
-    let mut n = 0;
-    for id in q.job_ids() {
-        let Some(mut state) = q.read_state(&id) else {
-            continue;
-        };
-        if state.state != JobState::Running {
-            continue;
-        }
-        state.state = JobState::Done;
-        state.rc = Some(RC_CANCELLED);
-        state.reason = Some("orphaned".into());
-        state.finished_at = Some(now);
-        let _ = q.write_state(&id, &state);
-        let job = q.read_job(&id);
-        q.audit_event(
-            now,
-            "orphaned",
-            Some(&id),
-            &job.as_ref()
-                .map_or_else(|| "unknown".into(), |j| j.submitter.actor()),
-            |r| {
-                r.rc = Some(RC_CANCELLED);
-                r.reason =
-                    Some("orphaned: the runner died while this job ran; it was not re-run".into());
-            },
-        );
-        if let Some(job) = &job {
-            notify(q, cfg, job, &state);
-        }
-        n += 1;
+// trace:BUG-2625 | ai:codex
+fn recover_orphan(q: &Queue, id: &str, now: DateTime<Utc>) -> Result<Option<ShellState>> {
+    let Some(mut state) = q.read_state(id).filter(|s| s.state == JobState::Running) else {
+        return Ok(None);
+    };
+    crate::deputy::check_private_dir(&q.job_dir(id))?;
+    state.state = JobState::Done;
+    state.rc = Some(RC_CANCELLED);
+    state.reason = Some("orphaned".into());
+    state.finished_at = Some(now);
+    q.write_state(id, &state)?;
+    let _ = std::fs::remove_file(q.cancel_path(id));
+    let job = q.read_job(id);
+    q.audit_event(
+        now,
+        "orphaned",
+        Some(id),
+        &job.as_ref()
+            .map_or_else(|| "unknown".into(), |j| j.submitter.actor()),
+        |r| {
+            r.rc = Some(RC_CANCELLED);
+            r.reason =
+                Some("orphaned: the runner died while this job ran; it was not re-run".into());
+            r.detail = state
+                .runner
+                .as_ref()
+                .map(|runner| serde_json::json!({"pid": runner.pid}));
+        },
+    );
+    Ok(Some(state))
+}
+
+/// The native runner holds this lock for its lifetime. An existing lock
+/// also works across PID namespaces, where a PID observation cannot prove
+/// the runner exited. Re-read the job only after acquiring the lock.
+// trace:BUG-2625 | ai:codex
+pub(crate) fn recover_orphan_for_status(q: &Queue, id: &str) -> Result<()> {
+    q.check()?;
+    if let Some(_lock) = try_runner_lock(q, false)? {
+        recover_orphan(q, id, Utc::now())?;
     }
-    n
+    Ok(())
 }
 
 /// Cancel requests: a queued job becomes `cancelled` (claimed into `jobs/`

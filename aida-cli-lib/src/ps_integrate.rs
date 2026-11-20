@@ -1,7 +1,30 @@
 //! ps rows, seat activity probes, running-work gathering, and integrate (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::leases::LeaseStateGlyph;
+use crate::{
+    advance_backend, agent_output_mode, agent_registry, attributable_live_sessions, awaiting_you,
+    config_path_for_project, current_user_id, detect_distributed_store,
+    detect_distributed_store_from, detect_open_pr_for_spec_via_forge, detect_stranded_primary,
+    dispatch_health_ps, drain_lock, drain_state, driver_view, enforce_team_gate, find_project_root,
+    focus, humanize_duration_secs, inspector_pids, integrate, integrate_view,
+    is_agent_managed_worktree, list_leases, load_store_for_lookup, main_worktree_root_from,
+    output_format_is_json, pending_approval, permissions, presence, print_stranded_primary_banner,
+    probe_resume_facts, process_probe, queue_cmd, session, session_manifest, session_reap,
+    spec_scoped_lease, tail_cmd, toon_status_token, truncate, unique_prefix_len, worktree_lease,
+    worktree_lock, PrLookup, SessionLease,
+};
+use crate::{
+    dispatch, hostname, lease_path, leases, leases_dir, mail_wake, ownership, role, worker,
+    worktree, zen,
+};
+use aida_core::liveness::LeaseState;
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
+use uuid::Uuid;
 
 /// The shortest unambiguous prefix of a lease id, for the `aida session end
 /// <id>` hint. Reuses the same disambiguation helper the `aida session leases`
@@ -666,7 +689,7 @@ pub(crate) fn ps_live_fanout_leases<'a>(
                 // the observer testifying for itself — see the doc comment.
                 // trace:BUG-1740 | ai:claude
                 && !ps_lease_identity_is_caller(l, caller_pids)
-                && matches!(lease_state_for(l, &corroborating, now), LeaseState::Live)
+                && matches!(leases::lease_state_for(l, &corroborating, now), LeaseState::Live)
         })
         .collect()
 }
@@ -2222,21 +2245,31 @@ pub(crate) fn orphaned_in_progress_items(
 pub(crate) fn collect_blocked_seat_items(
     project_root: &std::path::Path,
 ) -> Vec<awaiting_you::BlockedSeatItem> {
+    // Rotation faults remain visible even when no approval prompt is pending.
+    // trace:BUG-2639 | ai:codex
+    let mut faults: Vec<_> = crate::relay_mail::rotation_faults(project_root)
+        .into_iter()
+        .map(|fault| awaiting_you::BlockedSeatItem {
+            session_id: fault.id,
+            spec: None,
+            tool: Some(fault.summary),
+            since_label: "rotation stopped".into(),
+        })
+        .collect();
     if pending_approval::list_active(project_root, chrono::Utc::now()).is_empty() {
-        return Vec::new();
+        return faults;
     }
     let (rows, _orphans) = gather_running_work(project_root);
-    rows.into_iter()
-        .filter_map(|row| match row.activity {
-            Some(SeatActivity::Blocked { tool, secs }) => Some(awaiting_you::BlockedSeatItem {
-                session_id: row.lease.id.clone(),
-                spec: row.spec.clone().or(Some(row.lease.scope.clone())),
-                tool,
-                since_label: humanize_duration_secs(secs.max(0) as u64),
-            }),
-            _ => None,
-        })
-        .collect()
+    faults.extend(rows.into_iter().filter_map(|row| match row.activity {
+        Some(SeatActivity::Blocked { tool, secs }) => Some(awaiting_you::BlockedSeatItem {
+            session_id: row.lease.id.clone(),
+            spec: row.spec.clone().or(Some(row.lease.scope.clone())),
+            tool,
+            since_label: humanize_duration_secs(secs.max(0) as u64),
+        }),
+        _ => None,
+    }));
+    faults
 }
 
 /// TASK-1072: the pure core of [`gather_running_work`] — given the resolved spec
@@ -2289,7 +2322,7 @@ pub(crate) fn build_running_work(
     let rows: Vec<PsRow> = leases
         .iter()
         .map(|l| {
-            let state = lease_state_for(l, live, now);
+            let state = leases::lease_state_for(l, live, now);
             // BUG-2197: a pid-less lease never borrows the inspector's pid.
             // trace:BUG-2197 | ai:claude
             let attributable = if state == LeaseState::Unknown {
@@ -2565,7 +2598,7 @@ pub(crate) fn build_running_work(
         }
         let id_refs: Vec<&str> = id_owned.iter().map(|s| s.as_str()).collect();
         let lease = spec_scoped_lease(leases, &id_refs);
-        let lease_state = lease.map(|l| lease_state_for(l, live, now));
+        let lease_state = lease.map(|l| leases::lease_state_for(l, live, now));
         // trace:BUG-778 | ai:claude
         let awaiting_agent = lease.is_some_and(|l| ps_row_awaiting_agent(&rows, &l.id));
         // BUG-1656: a non-live spec lease whose worktree is still being
@@ -2829,6 +2862,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
     let now = chrono::Utc::now();
     let thresholds = presence::read_presence_thresholds(&config_path_for_project(&project_root));
     let operator_last_seen = presence::latest_human_input();
+    // trace:STORY-2748 | ai:codex
+    let hook_activity = crate::hook_activity::read_for_ps(&rows, &hostname(), now);
 
     if json {
         let operator = match operator_last_seen {
@@ -2890,6 +2925,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                     // the only value sourced from ground truth (the
                     // Notification hook marker) rather than a heuristic.
                     "activity": row.activity.as_ref().map(SeatActivity::label),
+                    "hook_activity": hook_activity.get(&row.lease.id),
                     "activity_pending_tool": match &row.activity {
                         Some(SeatActivity::LongToolCall { tool, .. })
                         | Some(SeatActivity::Blocked { tool, .. }) => tool.clone(),
@@ -3091,6 +3127,13 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                         .map(SeatActivity::label)
                         .unwrap_or_default()
                         .to_string(),
+                    hook_activity
+                        .get(&r.lease.id)
+                        .map_or_else(String::new, |a| a.age_label()),
+                    hook_activity
+                        .get(&r.lease.id)
+                        .and_then(|a| a.summary.clone())
+                        .unwrap_or_default(),
                 ]
                 .into_iter()
                 // trace:STORY-1653 | ai:claude
@@ -3114,6 +3157,8 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                     "dispatch_hint",
                     "mail_identity",
                     "activity",
+                    "heartbeat_age",
+                    "last_activity",
                     "driver",
                     "driver_kind"
                 ],
@@ -3214,6 +3259,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         if !watch_ready.is_empty() {
             println!("{}", ps_review_watch_ready_toon(&watch_ready));
         }
+        println!("landing: aida land status");
         return Ok(());
     }
 
@@ -3287,7 +3333,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         // BUG-763: the started column is wide enough for a date-qualified
         // "Jun-26 11:55" — a non-today start always shows its date.
         let header = format!(
-            "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {}",
+            "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {:<15} {}",
             "session",
             "spec",
             "role",
@@ -3295,6 +3341,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             "started",
             "elapsed",
             "locked-by",
+            "heartbeat age",
             "live",
             specw = spec_w,
             rolew = role_w,
@@ -3351,7 +3398,7 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             let (spec_head, spec_rest) = ps_wrap_cell(&spec_col, spec_w);
             let (role_head, role_rest) = ps_wrap_cell(row.role.as_deref().unwrap_or("-"), role_w);
             println!(
-                "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {}",
+                "{:<10} {:<specw$} {:<rolew$} {:<8} {:<12} {:<11} {:<12} {:<15} {}",
                 (&l.id[..prefix_len]).yellow(),
                 spec_head,
                 role_head,
@@ -3359,6 +3406,9 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
                 started,
                 humanize_duration_secs(row.elapsed_secs),
                 truncate(&locked_col, 12),
+                hook_activity
+                    .get(&l.id)
+                    .map_or_else(|| "-".into(), |a| a.age_label()),
                 live_col,
                 specw = spec_w,
                 rolew = role_w,
@@ -3372,6 +3422,9 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
             // A second dimmed line carries the worktree so the wide path
             // doesn't blow out the table's column alignment.
             println!("{}{}", " ".repeat(11), l.worktree_path.display());
+            if let Some(summary) = hook_activity.get(&l.id).and_then(|a| a.summary.as_deref()) {
+                println!("           last activity: {}", summary.dimmed());
+            }
             // BUG-763: an adopted persistent lease — the backing pid started
             // later than the lease record — names both ages explicitly, so
             // lease-age vs process-age never mix silently in one row.
@@ -3690,8 +3743,17 @@ pub(crate) fn handle_ps(json: bool, all: bool) -> Result<()> {
         }
     }
 
+    println!();
+    println!("{}", format!("Open changes: {LANDING_POINTER}").dimmed());
+
     Ok(())
 }
+
+/// Where the state of every open change is shown. `aida ps` lists
+/// processes; what each change waits on is the landing view's to say.
+// trace:STORY-2768 | ai:claude
+pub(crate) const LANDING_POINTER: &str =
+    "`aida land status` lists each open change and what it waits on; `aida now` is the one-screen view";
 
 // trace:BUG-2010 | ai:antigravity
 #[cfg(test)]

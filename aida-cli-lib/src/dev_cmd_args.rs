@@ -65,9 +65,10 @@ pub enum DevCommand {
     /// smoke test of the new `aida` / `aida-server`, then an atomic promote
     /// into the live directory (default `~/.local/share/aida/live`, outside
     /// target/), keeping the previous pair in `live/prev/`. Promotes only from
-    /// the primary checkout on a clean `main` that matches `origin/main` (the
-    /// local remote-tracking ref; it does not fetch, so run `git fetch`
-    /// first); in a worktree it builds and smoke-tests only.
+    /// a clean `main` in the primary checkout that matches `origin/main`, or a
+    /// clean `integration` in any checkout that matches `origin/integration`
+    /// (local remote-tracking refs; it does not fetch, so run `git fetch`
+    /// first); in any other worktree it builds and smoke-tests only.
     // trace:STORY-1646 | ai:claude
     Build {
         /// Clear the incremental cache first. Bare `--clean` deletes only
@@ -86,8 +87,9 @@ pub enum DevCommand {
         #[clap(long)]
         no_promote: bool,
 
-        /// Promote even when the checkout is dirty, off `main`, or not at
-        /// `origin/main` (`aida dev status` then shows the dirty SHA).
+        /// Promote even when the checkout is dirty, off `main`/`integration`,
+        /// or not at its `origin/` branch (`aida dev status` then shows the
+        /// dirty SHA).
         #[clap(long)]
         allow_dirty: bool,
 
@@ -106,12 +108,15 @@ pub enum DevCommand {
         #[clap(long)]
         after_wave: bool,
 
-        /// For a schedule: promote only when origin/main has moved past the
-        /// live binary and every CI check on that commit passed. Fetches,
-        /// fast-forwards a clean primary `main`, and launches the build in
-        /// the background; skips quietly otherwise. Acts only from the
-        /// checkout the live binary was built from.
+        /// For a schedule: promote the newest commit on origin/main's
+        /// first-parent line (up to 20 back) that is newer than the live
+        /// binary and whose CI checks all passed, so a tip whose CI is still
+        /// running never blocks an older green commit. Fetches,
+        /// fast-forwards a clean primary `main` to that commit, and launches
+        /// the build in the background; skips quietly otherwise. Acts only
+        /// from the checkout the live binary was built from.
         // trace:STORY-1689 | ai:claude
+        // trace:BUG-2687 | ai:claude
         #[clap(
             long,
             conflicts_with_all = ["clean", "no_promote", "allow_dirty", "install_links", "after_wave"]
@@ -182,6 +187,32 @@ pub enum DevCommand {
     /// Show current dev-activation state: is AIDA_DEV_ACTIVE set, what
     /// binary is being used, when was it built, what's the AIDA repo path.
     Status,
+
+    /// Check whether this binary is too far behind `origin/main` to launch
+    /// lanes. Compares the binary's build commit with the checkout's local
+    /// `origin/main` ref (pass --fetch to refresh it first). Exits 0 when
+    /// fresh, 10 when stale (naming the rebuild command), 3 when freshness
+    /// cannot be judged.
+    // trace:TASK-3812 | ai:claude
+    CheckFresh {
+        /// Checkout to compare against (default: the primary checkout).
+        #[clap(long)]
+        repo: Option<String>,
+
+        /// Fetch `origin main` before comparing.
+        #[clap(long)]
+        fetch: bool,
+
+        /// Stale when more than this many merged changes on `origin/main`
+        /// are missing from the binary.
+        #[clap(long, default_value_t = 10)]
+        max_behind: u32,
+
+        /// Stale when the oldest missing change landed more than this many
+        /// hours ago.
+        #[clap(long, default_value_t = 6)]
+        max_hours: u32,
+    },
 
     /// Print the compact PS1 staleness marker for the active dev binary.
     Ps1,

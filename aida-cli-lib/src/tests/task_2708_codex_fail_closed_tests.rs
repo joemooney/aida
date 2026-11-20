@@ -48,29 +48,37 @@ const CODEX_SPAWN_PATHS: &[(&str, &str, Guard)] = &[
     // Phase-driver CI-fix child.
     ("phase_driver_trait.rs", "attempt_ci_fix", Guard::Finalizer),
     (
-        "session.rs",
+        "session/headless.rs",
         "spawn_vendor_headless_forking",
         Guard::ReceiptBoundaryAndFinalizer,
     ),
-    ("session.rs", "exec_codex_session", Guard::Finalizer),
-    ("session.rs", "finalize_codex_resume", Guard::Finalizer),
     (
-        "session.rs",
+        "session/interactive.rs",
+        "exec_codex_session",
+        Guard::Finalizer,
+    ),
+    (
+        "session/interactive.rs",
+        "finalize_codex_resume",
+        Guard::Finalizer,
+    ),
+    (
+        "session/interactive.rs",
         "spawn_reviewer_launch_plan_granted",
         Guard::Finalizer,
     ),
     (
-        "session.rs",
+        "session/headless.rs",
         "finalize_coordinator_launch",
         Guard::Finalizer,
     ),
     (
-        "session.rs",
+        "session/headless.rs",
         "run_vendor_headless_child",
         Guard::ReceiptBoundaryAndFinalizer,
     ),
     (
-        "session.rs",
+        "session/headless.rs",
         "spawn_vendor_headless_resume_granted",
         Guard::Finalizer,
     ),
@@ -86,7 +94,7 @@ const CODEX_SPAWN_PATHS: &[(&str, &str, Guard)] = &[
 /// agent new codex --bg` launch, guarded by `build_worker_exec`'s finalizer.
 const DISPATCH_CODEX_LANE: &str = "build_codex_lane_command";
 
-const FINALIZER_CALL: &str = "crate::launch::profile::finalize_codex(";
+const FINALIZER_CALL: &str = "crate::vendors::profile::finalize_codex(";
 const RECEIPT_CALL: &str = "crate::containment::launch::PreparedLaunch::prepare(";
 
 fn sources(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -165,7 +173,7 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
     // The coordinator adds a Claude-only receipt boundary. Codex still
     // finalizes first and must not gain access to that Claude arm.
     // trace:TASK-3219 | ai:codex
-    let session = std::fs::read_to_string(src.join("session.rs")).unwrap();
+    let session = std::fs::read_to_string(src.join("session/headless.rs")).unwrap();
     let coordinator = fn_body(&session, "coordinator_status_with_handle_guard");
     let finalize = coordinator
         .find("finalize_coordinator_launch(vendor, cmd, project_root)?")
@@ -176,7 +184,7 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
     let receipt = coordinator.find(RECEIPT_CALL).unwrap();
     assert!(finalize < claude && claude < receipt);
     assert!(coordinator[receipt..].contains("bind_contained_launch_worker(&grant, run.receipt())?"));
-    expected.get_mut("session.rs").unwrap().1 += 1;
+    expected.get_mut("session/headless.rs").unwrap().1 += 1;
     // S2 adds a separately named Claude interactive preparation seam. Codex
     // still finalizes before it could reach that arm; the selection is Claude-only.
     let agent = std::fs::read_to_string(src.join("agent_launch.rs")).unwrap();
@@ -202,6 +210,24 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
         generation[background..].contains("bind_contained_launch_worker(grant, run.receipt())?")
     );
     expected.get_mut("agent_launch.rs").unwrap().1 += 1;
+    // The Bash preflight is another Claude-only receipt owner, not a new
+    // Codex surface. Pin its fixed vendor and require receipt validation
+    // before release rather than exempting the file from discovery.
+    // trace:BUG-2652 | ai:codex
+    let probe_path = "vendors/headless_bash_probe.rs";
+    let probe = std::fs::read_to_string(src.join(probe_path)).unwrap();
+    let run = fn_body(&probe, "run");
+    assert!(!run.split("->").next().unwrap().contains("vendor:"));
+    let builder = run
+        .find("build_exec_vendor_headless_command_for(\n        host_main,\n        HeadlessVendor::Claude,")
+        .expect("Bash preflight must launch only Claude through the shared adapter");
+    let receipt = run.find(RECEIPT_CALL).unwrap();
+    let accepted = run
+        .find("containment_applied(HeadlessVendor::Claude, true, Some(run.receipt()))")
+        .expect("Bash preflight must validate the applied Claude receipt");
+    let release = run.find("run.release()?").unwrap();
+    assert!(builder < receipt && receipt < accepted && accepted < release);
+    expected.insert(probe_path.to_string(), (0, 1));
     assert_eq!(
         found, expected,
         "a Codex spawn path was added or removed: audit it for the AIDA posture \
@@ -246,7 +272,7 @@ fn task_2708_every_codex_spawn_path_is_inventoried_and_guarded() {
          finalize it through prepare_launch and record it in CODEX_SPAWN_PATHS"
     );
     // The refusal is the finalizer's first statement, before any rebuild.
-    let finalizer = fn_body(include_str!("../launch/profile.rs"), "prepare_launch");
+    let finalizer = fn_body(include_str!("../vendors/profile.rs"), "prepare_launch");
     assert!(finalizer
         .trim_start_matches(|c: char| c != '{')
         .trim_start_matches('{')
@@ -303,11 +329,15 @@ const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
         SpawnAgentGuard::FinalizedBy("phase_driver_trait.rs", "attempt_ci_fix"),
     ),
     (
-        "session.rs",
+        "session/interactive.rs",
         "build_codex_session_command",
-        SpawnAgentGuard::FinalizedBy("session.rs", "exec_codex_session"),
+        SpawnAgentGuard::FinalizedBy("session/interactive.rs", "exec_codex_session"),
     ),
-    ("session.rs", "exec_codex_session", SpawnAgentGuard::Itself),
+    (
+        "session/interactive.rs",
+        "exec_codex_session",
+        SpawnAgentGuard::Itself,
+    ),
     (
         "agent_launch.rs",
         "build_agent_new_bg_command",
@@ -319,29 +349,29 @@ const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
         SpawnAgentGuard::Itself,
     ),
     (
-        "session.rs",
+        "session/interactive.rs",
         "build_claude_exec_command",
         SpawnAgentGuard::ClaudeOnly,
     ),
     (
-        "session.rs",
+        "session/interactive.rs",
         "build_run_claude_session_command",
         SpawnAgentGuard::ClaudeOnly,
     ),
     (
-        "session.rs",
+        "session/headless.rs",
         "spawn_vendor_headless_forking",
         SpawnAgentGuard::Itself,
     ),
     // `aida questions clarify` advisor: run through
     // `coordinator_status_with_handle_guard`, which finalizes.
     (
-        "session.rs",
+        "session/interactive.rs",
         "build_advisor_interactive_command",
-        SpawnAgentGuard::FinalizedBy("session.rs", "finalize_coordinator_launch"),
+        SpawnAgentGuard::FinalizedBy("session/headless.rs", "finalize_coordinator_launch"),
     ),
     (
-        "session.rs",
+        "session/interactive.rs",
         "spawn_reviewer_launch_plan_granted",
         SpawnAgentGuard::Itself,
     ),
@@ -349,9 +379,9 @@ const SPAWN_AGENT_BUILDERS: &[(&str, &str, SpawnAgentGuard)] = &[
     // `finalize_coordinator_launch`; the drain's exec path through
     // `run_vendor_headless_child`'s receipt boundary.
     (
-        "session.rs",
+        "session/headless.rs",
         "build_coordinator_headless_command_inner",
-        SpawnAgentGuard::FinalizedBy("session.rs", "run_vendor_headless_child"),
+        SpawnAgentGuard::FinalizedBy("session/headless.rs", "run_vendor_headless_child"),
     ),
 ];
 
@@ -483,7 +513,7 @@ fn task_2708_trusted_aida_refuses_unwired_codex_whatever_the_stamp() {
                 }
                 cmd
             };
-            let error = crate::launch::profile::finalize_codex(&mut build(aida.path()))
+            let error = crate::vendors::profile::finalize_codex(&mut build(aida.path()))
                 .unwrap_err()
                 .to_string();
             assert!(

@@ -12,6 +12,13 @@
 //!   on the same PR is still refused.
 // trace:BUG-2017 | ai:codex — explicit positive global-ID fixture.
 use super::*;
+use crate::{
+    find_scope_lease_conflict, infer_queue_work_role, resolve_queue_work_plan,
+    review_source_branch_conflict_decision, reviewer_pickup_keeps_pr_scope,
+    run_standalone_reviewer, standalone_review_plan, LeaseConflictDecision, QueueWorkLaunch,
+    RequirementStatus, ReviewForge, Storage, NO_REVIEW_VERDICT_EXIT_CODE,
+};
+use aida_core::DatabaseBackend;
 // trace:BUG-2476 | ai:codex
 
 const HEAD: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -533,6 +540,10 @@ fn standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected()
     if crate::test_env::run_path_isolated_test() {
         return;
     }
+    // Cleanup runs on this thread and requires fresh writer admission even
+    // for an empty mailbox. Keep the evidence scoped to the isolated child.
+    // trace:TASK-3420 | ai:codex
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let tmp = tempfile::tempdir().unwrap();
     let worktree = tmp.path().join("reviewer-worktree");
     let (result, project) =
@@ -541,9 +552,10 @@ fn standalone_reviewer_reaps_its_finished_review_once_the_verdict_is_collected()
         });
     result.expect("a verified review verdict must succeed");
 
+    let leases = crate::list_leases(&project);
     assert!(
-        crate::list_leases(&project).is_empty(),
-        "review lease retained: dirty={}, removal check={:?}",
+        leases.is_empty(),
+        "review lease retained: leases={leases:?}, dirty={}, removal check={:?}",
         crate::session_reap::worktree_status_dirty(&worktree),
         aida_core::worktree_holders::check_worktree_removal(&worktree)
     );
@@ -965,12 +977,13 @@ fn unrecorded_claude_draft(exit: i32) -> String {
 
 /// BUG-2187 AC2: the reviewer exits cleanly without recording. The launch
 /// still fails with the no-verdict code, and even under `--quiet` its error
-/// carries the reviewer's final draft, the retained log and a ready `aida
-/// review record` command filled with the PR's spec, number and head.
+/// names the exclusive structured draft location. Log prose and attempted
+/// record commands cannot recover an approval through this route.
+// trace:BUG-2564 | ai:codex
 // trace:BUG-2187.aca06f8e | ai:claude
 #[cfg(unix)]
 #[test]
-fn bug2187_unrecorded_headless_review_surfaces_draft_and_record_command() {
+fn bug2564_unrecorded_headless_review_names_structured_draft_without_log_recovery() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -984,22 +997,19 @@ fn bug2187_unrecorded_headless_review_surfaces_draft_and_record_command() {
     );
     let msg = format!("{err:#}");
     assert!(
-        msg.contains("Verdict draft: request-changes, the leak is unfixed."),
+        !msg.contains("Verdict draft: request-changes, the leak is unfixed."),
         "{msg}"
     );
-    assert!(
-        msg.contains(&format!(
-            "aida review record STORY-77 --pr 59 --sha {HEAD} --verdict"
-        )),
-        "{msg}"
-    );
-    assert!(msg.contains(".aida/headless-logs/"), "{msg}");
+    assert!(msg.contains("draft.json"), "{msg}");
+    assert!(!msg.contains("aida review record STORY-77"), "{msg}");
+    assert!(msg.contains("No log text or commands were used"), "{msg}");
     assert!(!project.join(".aida/review-verdicts/PR-59.json").exists());
 }
 
 /// BUG-2187 AC2: a reviewer that exits non-zero without recording keeps its
-/// own exit code, and the recovery text is returned rather than lost to a
-/// bare `process::exit`.
+/// own exit code, and the structured draft location is returned. Conversational
+/// prose is not treated as a draft.
+// trace:BUG-2564 | ai:codex
 // trace:BUG-2187.aca06f8e | ai:claude
 #[cfg(unix)]
 #[test]
@@ -1013,10 +1023,14 @@ fn bug2187_failed_headless_reviewer_keeps_exit_code_and_draft() {
     assert_eq!(crate::exit_code_for_error(&err), 3);
     let msg = format!("{err:#}");
     assert!(
-        msg.contains("Verdict draft: request-changes, the leak is unfixed."),
+        !msg.contains("Verdict draft: request-changes, the leak is unfixed."),
         "{msg}"
     );
-    assert!(msg.contains("aida review record STORY-77 --pr 59"), "{msg}");
+    assert!(msg.contains("draft.json"), "{msg}");
+    assert!(
+        !msg.contains("aida review record STORY-77 --pr 59"),
+        "{msg}"
+    );
 }
 
 /// BUG-2187 AC1, interactive arm: the launch-plan reviewer is identified by
@@ -1082,6 +1096,7 @@ fn bug2187_granted_reviewer_resume_sets_identity() {
         None,
         false,
         Some("grant-id"),
+        None,
     )
     .unwrap();
     assert!(status.success(), "the resumed reviewer saw no identity");
@@ -1328,4 +1343,84 @@ fn task1805_pickup_refuses_an_unknown_or_ambiguous_backing_id() {
         LeaseConflictDecision::Coexist,
         "the explicit role is the pickup's, not the backing spec's"
     );
+}
+
+/// Exercise the actual fresh headless launch boundary, including prompt
+/// transport, data-only vendor output, parent recording and collection.
+// trace:BUG-2564 | ai:codex
+#[test]
+fn standalone_review_verdict_structured_child_reaches_parent_canonical_record() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) = crate::with_review_pr_subject(
+        crate::ReviewPrSubject {
+            head_ref: "feature".into(),
+            commit_subjects: vec!["change (STORY-77)".into()],
+        },
+        || {
+            run_mock_reviewer_in(
+                tmp.path(),
+                true,
+                |project, _| {
+                    crate::test_git::commit_fixture(project);
+                    let out = crate::test_git::git_command()
+                        .arg("-C")
+                        .arg(project)
+                        .args([
+                            "remote",
+                            "add",
+                            "origin",
+                            "https://github.com/aida-test/reviewer-fixture.git",
+                        ])
+                        .output()
+                        .unwrap();
+                    assert!(out.status.success(), "{out:?}");
+                },
+                |l, env| {
+                    let head = crate::resolve_commit_sha(l.project, "HEAD").unwrap();
+                    env.set_key("AIDA_TEST_PR_HEAD_SHA", &head);
+                    env.set_key("AIDA_OS_WRAP", "0");
+                    env.unset_key("AIDA_STANDALONE_IMPLEMENTER");
+                    env.unset_key("AIDA_AGENT_TYPE");
+                    env.unset_key("AIDA_AGENT_NAME");
+                    env.unset_key("AIDA_SESSION_ID");
+                    env.unset_key("AIDA_REVIEW_VERDICT_FILE");
+                    env.set_key("AIDA_PROJECT_ROOT", l.project.to_str().unwrap());
+                    env.set_key("AIDA_DRIVE_ROOT", l.project.to_str().unwrap());
+                    let metadata = serde_json::json!({"url":"https://github.com/aida-test/reviewer-fixture/pull/59","number":59,"title":"change (STORY-77)","body":"",
+                "headRefOid":head,"headRefName":"feature","baseRefName":"main","state":"OPEN",
+                "isDraft":false,"labels":[]});
+                    crate::test_exec::write_executable(
+                        &tmp.path().join("bin/gh"),
+                        format!("#!/bin/sh\nprintf '%s' '{metadata}'\n"),
+                    );
+                    let data = serde_json::json!({"version":1,"pr":59,"reviewed_sha":head,
+                "verdict":"approved","summary":"data-only child complete rationale","findings":[]});
+                    format!(
+                        r#"#!/bin/sh
+unset AIDA_SESSION_GRANT AIDA_SESSION_ID AIDA_AGENT_TYPE AIDA_AGENT_NAME
+python3 - "$@" <<'PY'
+import json, pathlib, re, sys
+matches = [re.search(r'absolute path `([^`]+/draft.json)`', arg) for arg in sys.argv[1:]]
+path = next(match.group(1) for match in matches if match)
+assert pathlib.Path(path).is_absolute()
+pathlib.Path(path).write_text(json.dumps(json.loads(r'''{data}''')))
+PY
+"#
+                    )
+                },
+            )
+        },
+    );
+    result.expect("the actual headless parent records its child's structured draft");
+    let v = crate::gate::review_verdict::read_recorded_verdict(&project, "PR-59").unwrap();
+    assert_eq!(
+        v.summary.as_deref(),
+        Some("data-only child complete rationale")
+    );
+    let att = v.attestation.unwrap();
+    assert_eq!(att.seat.as_deref(), Some("reviewer"));
+    assert!(att.grant_id.is_some());
 }

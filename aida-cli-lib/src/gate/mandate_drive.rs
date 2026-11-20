@@ -949,7 +949,7 @@ pub(crate) struct TickInputs<'a> {
     /// Where the lock, the state file and the ledger live.
     pub project_root: &'a Path,
     mandate_dir: &'a Path,
-    /// The principal this tick resolves (`current_user_id`).
+    /// The operator principal this tick resolves (independent of the seat label).
     principal: &'a str,
     /// The tick's clock, read afresh before every action.
     clock: &'a dyn Fn() -> DateTime<Utc>,
@@ -1031,7 +1031,7 @@ pub(crate) fn with_live_tick_inputs<R>(
     if active_drive_records(&dir, now).is_empty() {
         return Ok(None);
     }
-    let principal = crate::gate::kernel_deps::current_user_id(None);
+    let principal = crate::gate::mandate::operator_principal();
     let store = crate::gate::dispatch_deps::load_store_for_lookup(main_root);
     let store_readable = store.is_some();
     let reqs: Vec<aida_core::Requirement> = store.map(|s| s.requirements).unwrap_or_default();

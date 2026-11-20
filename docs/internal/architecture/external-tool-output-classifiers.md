@@ -34,11 +34,15 @@ numbers are emitted by the generator only as non-authoritative navigation aids.
 | `git_ops::push_exact` |
 | `git_ops::restore_stranded_autostash` |
 | `gitlab_project_create::is_push_to_create_refusal` |
+| `lane_fast_gate::disk_exhausted` |
 | `network_retry::classify_transient` |
 | `overlay::ci_style` |
 | `pr_cmd::pr_fetch_failure_message` |
 | `pr_ship::classify_gh_pr_checks_registration` |
 | `project_capabilities::gh_auth_status` |
+| `promotion_failures::doctests` |
+| `promotion_failures::invocations` |
+| `promotion_failures::nextest_failed` |
 | `remote_create::gitlab_release_body_exists` |
 | `review_watch::update::update_refused_for_conflict` |
 | `seat_clone::retry_readonly_mount_race` |

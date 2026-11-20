@@ -18,6 +18,22 @@ pub(super) enum Step {
     Done,
 }
 
+impl Step {
+    /// The step's name as `aida pr train --status` shows it.
+    // trace:STORY-2823 | ai:claude
+    pub(super) fn label(&self) -> &'static str {
+        match self {
+            Step::Open => "Open",
+            Step::Ci => "Ci",
+            Step::Gate => "Gate",
+            Step::Merge => "Merge",
+            Step::Retire { .. } => "Retire",
+            Step::Members => "Members",
+            Step::Done => "Done",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct Entry {
@@ -26,9 +42,9 @@ pub(crate) struct Entry {
     pub(super) train: Built,
     pub(super) change_id: Option<u64>,
     pub(super) step: Step,
-    completed_members: Vec<u64>,
+    pub(super) completed_members: Vec<u64>,
     pub(super) rejected: Vec<Ejected>,
-    call: String,
+    pub(super) call: String,
 }
 impl Entry {
     pub(super) fn new(train: Built, branch: String) -> Self {
@@ -43,7 +59,14 @@ impl Entry {
             call: String::new(),
         }
     }
-    fn path(&self, dir: &Path) -> PathBuf {
+    // trace:BUG-2547 | ai:codex
+    pub(super) fn matches(&self, requested: &[u64]) -> bool {
+        let members: std::collections::BTreeSet<_> =
+            self.train.cars.iter().map(|c| c.member.pr).collect();
+        !members.is_empty() && members == requested.iter().copied().collect()
+    }
+
+    pub(super) fn path(&self, dir: &Path) -> PathBuf {
         // Generated branches have one slash. Refuse path traversal on reads.
         dir.join(format!(
             "{}.json",
@@ -84,6 +107,7 @@ fn save(dir: &Path, entry: &Entry) -> Result<()> {
         file.sync_all()?;
         std::fs::rename(&temporary, &path)?;
         File::open(dir)?.sync_all()?;
+        note_step(&path, entry);
         // Persist Done before pruning: a crash in between leaves a harmless
         // terminal entry which the next startup also prunes.
         if entry.step == Step::Done {
@@ -94,6 +118,114 @@ fn save(dir: &Path, entry: &Entry) -> Result<()> {
     })();
     let _ = std::fs::remove_file(temporary);
     result.context("could not persist train intent; forge call refused")
+}
+
+/// When a journal entered its current step, kept beside it as
+/// `<journal>.step` for `aida pr train --status`. The journal itself is
+/// `deny_unknown_fields`, so an older binary could not read a new field
+/// there. Advisory only: a failed write never fails the train.
+// trace:STORY-2823 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(super) struct StepClock {
+    pub(super) step: String,
+    pub(super) since: String,
+}
+
+fn step_clock_path(journal: &Path) -> PathBuf {
+    journal.with_extension("step")
+}
+
+pub(super) fn step_clock(journal: &Path) -> Option<StepClock> {
+    let body = aida_core::seat_clone_detect::read_regular_file(&step_clock_path(journal))?;
+    serde_json::from_str(&body).ok()
+}
+
+// trace:STORY-2823 | ai:claude
+fn note_step(journal: &Path, entry: &Entry) {
+    let clock = step_clock_path(journal);
+    if entry.step == Step::Done {
+        let _ = std::fs::remove_file(clock);
+        return;
+    }
+    let step = entry.step.label();
+    if step_clock(journal).is_some_and(|c| c.step == step) {
+        return;
+    }
+    if let Ok(body) = serde_json::to_vec(&StepClock {
+        step: step.into(),
+        since: chrono::Utc::now().to_rfc3339(),
+    }) {
+        // trace:STORY-2823 | ai:codex
+        let temporary = journal.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
+        let _ = std::fs::write(&temporary, body).and_then(|()| std::fs::rename(&temporary, &clock));
+        let _ = std::fs::remove_file(temporary);
+    }
+}
+
+/// The process holding the run lock, written into the lock file so
+/// `aida pr train --status` can name the driver. Advisory only: the lock,
+/// not this record, serializes trains.
+// trace:STORY-2823 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(super) struct DriverRecord {
+    pub(super) holder: aida_core::proc_identity::HolderRecord,
+    pub(super) since: String,
+    // Status evidence only; controllers may be subreapers, which cannot be holders.
+    // trace:BUG-2622 | ai:codex
+    #[serde(default)]
+    pub(super) controller: Option<aida_core::proc_identity::ProcIdentity>,
+}
+
+/// This process as a driver record. Identities are read before the lock
+/// file is opened: the lock handle is inherited by any
+/// child forked while it is open, so nothing slow may run in that window.
+fn driver_record_for_self() -> Option<Vec<u8>> {
+    static HOLDER: std::sync::OnceLock<aida_core::proc_identity::HolderRecord> =
+        std::sync::OnceLock::new();
+    serde_json::to_vec(&DriverRecord {
+        holder: HOLDER
+            .get_or_init(|| aida_core::proc_identity::HolderRecord::capture(std::process::id()))
+            .clone(),
+        since: chrono::Utc::now().to_rfc3339(),
+        controller: super::ADVISOR_LOOP
+            .with(std::cell::Cell::get)
+            .then(|| aida_core::proc_identity::ProcIdentity::capture(std::process::id()).ok())
+            .flatten(),
+    })
+    .ok()
+}
+
+fn record_driver(mut lock: &File, record: Option<Vec<u8>>) {
+    if let Some(body) = record {
+        let _ = lock.set_len(0).and_then(|()| lock.write_all(&body));
+    }
+}
+
+pub(super) fn driver_record(dir: &Path) -> Option<DriverRecord> {
+    let body = aida_core::seat_clone_detect::read_regular_file(&dir.join("run.lock"))?;
+    serde_json::from_str(&body).ok()
+}
+
+/// Whether some process holds the run lock right now, without creating the
+/// lock file. The probe takes a shared lock for an instant when nobody
+/// holds it. Driver records are advisory and never replace this probe.
+// trace:STORY-2823 | ai:claude
+pub(super) fn lock_held(dir: &Path) -> Result<bool> {
+    use fs2::FileExt;
+    let lock = match File::open(dir.join("run.lock")) {
+        Ok(lock) => lock,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(e) => return Err(e).context("could not open the train run lock"),
+    };
+    // The std inherent method of the same name has another error type.
+    match FileExt::try_lock_shared(&lock) {
+        Ok(()) => {
+            let _ = FileExt::unlock(&lock);
+            Ok(false)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(true),
+        Err(e) => Err(e).context("could not probe the train run lock"),
+    }
 }
 
 pub(super) fn activate(dir: &Path, entry: Entry) -> Result<()> {
@@ -141,6 +273,21 @@ pub(super) fn rejected(members: &[Ejected]) -> Result<()> {
     update(|entry| entry.rejected = members.to_vec())
 }
 
+// Read-only probe: entries() can retire terminal receipts and requires the lock.
+// trace:STORY-2857 | ai:codex
+pub(super) fn recovery_needed(dir: &Path) -> Result<bool> {
+    let listing = match std::fs::read_dir(dir) {
+        Ok(listing) => listing,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    let mut needed = false;
+    for entry in listing {
+        needed |= entry?.path().extension().is_some_and(|ext| ext == "json");
+    }
+    Ok(needed)
+}
+
 pub(super) fn entries(dir: &Path) -> Result<Vec<Entry>> {
     let mut entries = Vec::new();
     for item in std::fs::read_dir(dir)? {
@@ -162,6 +309,7 @@ pub(super) fn entries(dir: &Path) -> Result<Vec<Entry>> {
                 // Also collect terminal receipts left by older binaries or a
                 // crash after the final durable write but before removal.
                 std::fs::remove_file(&path)?;
+                let _ = std::fs::remove_file(step_clock_path(&path));
                 File::open(dir)?.sync_all()?;
             } else {
                 entries.push(entry);
@@ -182,10 +330,22 @@ impl std::fmt::Display for TrainJournalBusy {
 }
 impl std::error::Error for TrainJournalBusy {}
 
+// trace:BUG-2622 | ai:codex
+#[derive(Debug)]
+pub(super) struct RunLock(File);
+impl Drop for RunLock {
+    fn drop(&mut self) {
+        // flock belongs to the open file description. Closing our descriptor
+        // alone leaves it held when a forked child retains that description.
+        let _ = fs2::FileExt::unlock(&self.0);
+    }
+}
+
 /// Permanent sidecar: serializes entire train runs across linked worktrees.
-pub(super) fn lock(dir: &Path) -> Result<File> {
+pub(super) fn lock(dir: &Path) -> Result<RunLock> {
     use fs2::FileExt;
     std::fs::create_dir_all(dir)?;
+    let record = driver_record_for_self();
     let lock = OpenOptions::new()
         .read(true)
         .write(true)
@@ -198,7 +358,8 @@ pub(super) fn lock(dir: &Path) -> Result<File> {
         }
         return Err(err).context("could not lock train journal");
     }
-    Ok(lock)
+    record_driver(&lock, record);
+    Ok(RunLock(lock))
 }
 
 impl ForgeRails<'_> {
@@ -229,16 +390,26 @@ impl ForgeRails<'_> {
         activate(dir, entry)
     }
 
-    /// Reconcile every unfinished train before admitting any new riders. A
+    /// Reconcile matching unfinished trains before admitting new riders. A
     /// failed read retains the entry and stops admission. Completed mutations
     /// are detected from forge truth, including the call/receipt crash window.
+    #[cfg(test)]
     pub(super) fn resume(&mut self) -> Result<Outcome> {
+        self.resume_for(None)
+    }
+
+    // trace:BUG-2547 | ai:codex
+    pub(super) fn resume_for(&mut self, requested: Option<&[u64]>) -> Result<Outcome> {
         let Some(dir) = self.journal_dir.clone() else {
             return Ok(Outcome::default());
         };
         let mut out = Outcome::default();
         for entry in entries(&dir)? {
             if entry.step == Step::Done {
+                continue;
+            }
+            if requested.is_some_and(|prs| !entry.matches(prs)) {
+                eprintln!("Skipping retained train journal {}: member PR set differs from requested PRs; starting fresh. Use `aida pr train --abandon {}` to discard it.", entry.path(&dir).display(), entry.path(&dir).file_name().unwrap().to_string_lossy());
                 continue;
             }
             activate(&dir, entry.clone())?;
@@ -349,5 +520,169 @@ pub(super) struct Scope;
 impl Drop for Scope {
     fn drop(&mut self) {
         clear();
+    }
+}
+
+/// Report reservations without the recovery reader's terminal-file cleanup.
+// trace:STORY-2688 | ai:codex
+pub(super) fn pr_state_members(dir: &Path) -> Result<Vec<u64>> {
+    let mut members = Vec::new();
+    for (_, entry) in peek(dir)? {
+        members.extend(entry.train.cars.iter().map(|c| c.member.pr).filter(|pr| {
+            !entry.completed_members.contains(pr) && !entry.rejected.iter().any(|r| r.pr == *pr)
+        }));
+    }
+    Ok(members)
+}
+
+/// Unfinished journals with their paths, in branch order. Read-only: unlike
+/// [`entries`] it removes nothing and takes no lock.
+// trace:STORY-2688 | ai:codex
+// trace:STORY-2823 | ai:claude
+pub(super) fn peek(dir: &Path) -> Result<Vec<(PathBuf, Entry)>> {
+    peek_snapshot(dir, &|| {})
+}
+
+// Running journals include accumulated CI evidence. Allow 16 MiB, matching the
+// train evidence ceiling, rather than the 64 KiB seat-marker limit.
+// trace:BUG-2595 | ai:codex
+pub(super) const MAX_JOURNAL_BYTES: u64 = 16 * 1024 * 1024;
+
+// One finite listing; concurrent retirement does not trigger rediscovery.
+// trace:STORY-2823 | ai:codex
+pub(super) fn peek_snapshot(dir: &Path, after_listing: &dyn Fn()) -> Result<Vec<(PathBuf, Entry)>> {
+    const MAX_LISTING: usize = 4096;
+    let listing = match std::fs::read_dir(dir) {
+        Ok(listing) => listing,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut paths = Vec::new();
+    for item in listing.take(MAX_LISTING + 1) {
+        paths.push(item?.path());
+        anyhow::ensure!(
+            paths.len() <= MAX_LISTING,
+            "train journal listing exceeds status snapshot budget"
+        );
+    }
+    after_listing();
+    let mut found = Vec::new();
+    for path in paths {
+        if path.extension().is_none_or(|ext| ext != "json") {
+            continue;
+        }
+        let body = match aida_core::seat_clone_detect::read_regular_file_result_with_limit(
+            &path,
+            MAX_JOURNAL_BYTES,
+        ) {
+            Ok(body) => body,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Err(e).with_context(|| {
+                    format!(
+                        "unsafe or unreadable train receipt {} (cap: {} bytes)",
+                        path.display(),
+                        MAX_JOURNAL_BYTES
+                    )
+                })
+            }
+        };
+        let entry: Entry = serde_json::from_str(&body)?;
+        entry.validate()?;
+        anyhow::ensure!(entry.path(dir) == path, "train receipt filename mismatch");
+        if entry.step != Step::Done {
+            found.push((path, entry));
+        }
+    }
+    found.sort_by(|a, b| a.1.branch.cmp(&b.1.branch));
+    Ok(found)
+}
+
+// trace:BUG-2547 | ai:codex
+pub(super) fn abandon(dir: &Path, name: &str) -> Result<()> {
+    anyhow::ensure!(
+        Path::new(name).components().count() == 1
+            && name.ends_with(".json")
+            && !name.starts_with('.'),
+        "name a train journal filename, such as <uuid>-1.json"
+    );
+    let _lock = lock(dir)?;
+    let path = dir.join(name);
+    let metadata = std::fs::symlink_metadata(&path)?;
+    anyhow::ensure!(
+        metadata.file_type().is_file(),
+        "train journal must be a regular file"
+    );
+    std::fs::remove_file(&path)?;
+    let _ = std::fs::remove_file(step_clock_path(&path));
+    File::open(dir)?.sync_all()?;
+    println!(
+        "Abandoned local train journal {}; forge PRs and branches are unchanged.",
+        path.display()
+    );
+    Ok(())
+}
+
+// trace:BUG-2622 | ai:codex
+#[cfg(test)]
+mod run_lock_tests {
+    use super::*;
+
+    // trace:TASK-3128 | ai:codex
+    #[test]
+    fn task3128_retained_description_does_not_delay_or_release_successor_lock() {
+        use fs2::FileExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let first = lock(dir.path()).unwrap();
+        // dup shares the open file description just as fork does, without
+        // timing-dependent concurrent spawns in the threaded test runner.
+        let retained = first.0.try_clone().unwrap();
+        drop(first);
+        let successor = lock(dir.path()).unwrap();
+        assert!(lock_held(dir.path()).unwrap());
+        drop(retained);
+        assert!(lock_held(dir.path()).unwrap());
+        let error = lock(dir.path()).unwrap_err();
+        assert!(error.downcast_ref::<TrainJournalBusy>().is_some());
+        drop(successor);
+
+        // Positive control: closing a bare File really does retain flock
+        // ownership through its duplicate. The guard's explicit unlock is
+        // what makes immediate reacquisition above safe.
+        let bare = File::open(dir.path().join("run.lock")).unwrap();
+        bare.try_lock_exclusive().unwrap();
+        let retained = bare.try_clone().unwrap();
+        drop(bare);
+        assert!(lock_held(dir.path()).unwrap());
+        // Release explicitly here too: another test thread may fork while
+        // the control is open, retaining an additional description.
+        FileExt::unlock(&retained).unwrap();
+        drop(retained);
+        assert!(lock(dir.path()).is_ok());
+    }
+
+    #[test]
+    fn bug2622_pass_releases_lock_even_with_an_inherited_description() {
+        let dir = tempfile::tempdir().unwrap();
+        for fail in [false, true] {
+            let mut retained = None;
+            let result = (|| -> Result<()> {
+                let pass = lock(dir.path())?;
+                retained = Some(pass.0.try_clone()?);
+                assert!(lock(dir.path()).is_err());
+                if fail {
+                    anyhow::bail!("gate refused");
+                }
+                Ok(())
+            })();
+            assert_eq!(result.is_err(), fail);
+            assert!(!lock_held(dir.path()).unwrap());
+            let path = dir.path().join("closed-1.json");
+            std::fs::write(&path, "closed journal").unwrap();
+            abandon(dir.path(), "closed-1.json").unwrap();
+            assert!(!path.exists());
+            drop(retained);
+        }
     }
 }

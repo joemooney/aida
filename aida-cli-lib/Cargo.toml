@@ -11,6 +11,9 @@ keywords = ["requirements", "ai", "traceability", "cli", "mcp"]
 categories = ["development-tools", "command-line-utilities"]
 
 [dependencies]
+aida-term = { version = "0.16", path = "../aida-term" }
+# trace:TASK-3783 | ai:codex
+aida-cmdkit = { version = "0.16", path = "../aida-cmdkit" }
 aida-core = { version = "0.16", path = "../aida-core", features = ["postgres", "gitlab", "github", "jira"] }
 # `aida schema` derives the Requirement field/enum detail from the same
 # ts-rs type reflection that backs aida-generate-types — the TS::decl()
@@ -22,7 +25,7 @@ ts-rs = { version = "12.0.1", features = ["uuid-impl", "chrono-impl", "no-serde-
 reqwest = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-clap = { workspace = true }
+clap = { workspace = true, features = ["string"] }
 inquire = { workspace = true }
 nucleo-matcher = "0.3.1"
 colored = { workspace = true }
@@ -88,8 +91,10 @@ remote = ["tonic", "prost", "tonic-build", "protox"]
 tui = ["aida-tui"]
 
 [dev-dependencies]
-# Raw platform probe used only by the hermetic HOME fence. trace:TASK-3325 | ai:codex
-etcetera = { workspace = true }
+# trace:TASK-3784 | ai:codex
+aida-testkit = { path = "../aida-testkit" }
+# trace:TASK-3420 | ai:codex
+aida-core = { path = "../aida-core", features = ["mailbox-test-support"] }
 # STORY-2324: property tests for the canonical gate state.
 proptest = { version = "1", default-features = false, features = ["std"] }
 

@@ -162,9 +162,23 @@ fn read_messages_in(dir: &Path) -> Result<Vec<Message>> {
 /// [`aida_core::mailbox::timestamp_is_stamped`]).
 // trace:TASK-1717 trace:BUG-B6B1278890774EF993D2EBC327862470-032 | ai:claude
 fn read_canonical_messages_strict(store_root: &Path) -> Result<Vec<(Message, bool)>> {
-    let dir = canonical_dir(store_root);
-    aida_core::mailbox::mailbox_dir_guard(&dir)?; // trace:STORY-1843 | ai:claude
-    let entries = match std::fs::read_dir(&dir) {
+    Ok(read_message_files_strict(&canonical_dir(store_root))?
+        .into_iter()
+        .map(|(msg, bytes)| {
+            let stamped = serde_json::from_slice::<serde_json::Value>(&bytes)
+                .is_ok_and(|v| timestamp_is_stamped(written_timestamp(&v)));
+            (msg, stamped)
+        })
+        .collect())
+}
+
+/// Every message under `dir` with its raw bytes; an unreadable directory or
+/// file, or a `.json` file that does not parse as a message, is an error.
+/// Empty when the dir is absent.
+// trace:TASK-1717 trace:TASK-3804 | ai:claude
+fn read_message_files_strict(dir: &Path) -> Result<Vec<(Message, Vec<u8>)>> {
+    aida_core::mailbox::mailbox_dir_guard(dir)?; // trace:STORY-1843 | ai:claude
+    let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(e) => return Err(e).with_context(|| format!("reading {}", dir.display())),
@@ -177,14 +191,31 @@ fn read_canonical_messages_strict(store_root: &Path) -> Result<Vec<(Message, boo
         if path.extension().and_then(|e| e.to_str()) != Some("json") {
             continue;
         }
-        let bytes = std::fs::read(&path)
-            .with_context(|| format!("reading canonical message {}", path.display()))?;
+        let bytes =
+            std::fs::read(&path).with_context(|| format!("reading message {}", path.display()))?;
         let msg = aida_core::mailbox::parse_message_file(&path, &bytes)
-            .with_context(|| format!("canonical message {} is not valid", path.display()))?;
-        let stamped = serde_json::from_slice::<serde_json::Value>(&bytes)
-            .is_ok_and(|v| timestamp_is_stamped(written_timestamp(&v)));
-        out.push((msg, stamped));
+            .with_context(|| format!("message {} is not valid", path.display()))?;
+        out.push((msg, bytes));
     }
+    Ok(out)
+}
+
+/// Every message in the LOCAL and CANONICAL layers, for a decision that must
+/// not mistake an unreadable or malformed message for an absent one (the
+/// once-per-head repair refusal). Any read or parse failure is an error;
+/// inbox views keep using the tolerant readers.
+// trace:TASK-3804 | ai:claude
+pub(crate) fn read_all_messages_strict(project_root: &Path) -> Result<Vec<Message>> {
+    let home = mailbox_home(project_root);
+    let mut out: Vec<Message> = read_message_files_strict(&mailbox_dir(home.root()))?
+        .into_iter()
+        .map(|(msg, _)| msg)
+        .collect();
+    out.extend(
+        read_message_files_strict(&canonical_dir(&project_root.join(".aida-store")))?
+            .into_iter()
+            .map(|(msg, _)| msg),
+    );
     Ok(out)
 }
 
@@ -621,6 +652,7 @@ mod tests {
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         }
     }

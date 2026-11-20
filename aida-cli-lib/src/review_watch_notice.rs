@@ -1,6 +1,6 @@
 //! Review notices, each delivered once: the change author's findings mail
 //! for a blocking verdict on the current head, and the advisor's wake when a
-//! change reaches the two-round cap with an unreviewed head. Report only:
+//! change reaches the configured round cap with an unreviewed head. Report only:
 //! nothing here starts a review, merges, pushes or updates a branch.
 // trace:TASK-1945 | ai:claude
 use super::*;
@@ -35,7 +35,8 @@ pub(super) fn send(
 ) -> Result<()> {
     let key = change.key();
     let blocking = findings_due(change, history);
-    let cap = history.blocking() >= 2
+    let max_rounds = store.max_rounds;
+    let cap = history.blocking() >= max_rounds
         && !history.contains(&change.head)
         && evidence.approval_only(change).is_err();
     if blocking.is_empty() && !cap {
@@ -62,6 +63,7 @@ pub(super) fn send(
                         change,
                         history,
                         verdict,
+                        max_rounds,
                         author.as_deref().unwrap_or("advisor"),
                     ),
                     sent: false,
@@ -71,8 +73,14 @@ pub(super) fn send(
             }
         }
         if cap {
+            // A wake for the old cap must not suppress one at the new cap.
+            // trace:TASK-3808 | ai:codex
+            if entry.cap_max_rounds.unwrap_or(DEFAULT_MAX_ROUNDS) != max_rounds {
+                entry.cap = None;
+                entry.cap_max_rounds = (max_rounds != DEFAULT_MAX_ROUNDS).then_some(max_rounds);
+            }
             let notice = entry.cap.get_or_insert_with(|| Notice {
-                message: cap_message(&repository, change, history),
+                message: cap_message(&repository, change, history, max_rounds),
                 sent: false,
             });
             if !notice.sent {
@@ -81,6 +89,28 @@ pub(super) fn send(
         }
         Ok(pending)
     })?;
+    // trace:BUG-2548 | ai:codex
+    // Record even an already-delivered cap notice (upgrade/recovery). A failed
+    // append leaves delivery pending; the ledger deduplicates by request ID.
+    if cap {
+        let notice = store
+            .transaction(&key, |state| {
+                Ok(state.entries.get(&key).and_then(|entry| entry.cap.clone()))
+            })?
+            .context("review cap receipt disappeared")?;
+        let change_key =
+            crate::gate::ledger::ChangeKey::parse(&key).context("invalid review change key")?;
+        let mut event = crate::gate::ledger::GateEvent::new(
+            change_key,
+            crate::gate::ledger::EventBody::ManualReviewRequested {
+                request_id: notice.message.id.clone(),
+                recipient: "advisor".into(),
+            },
+        );
+        event.head = Some(change.head.clone());
+        let ledger_root = crate::gate::ledger::store_root(root)?;
+        crate::gate::ledger::store::append(&ledger_root, change_key, vec![event])?;
+    }
     for notice in pending {
         deliver(root, &notice)?;
         store.transaction(&key, |state| {
@@ -137,7 +167,12 @@ fn findings_due<'a>(
         .collect()
 }
 
-fn message(id: String, to: &str, subject: String, body: String) -> aida_core::mailbox::Message {
+pub(super) fn message(
+    id: String,
+    to: &str,
+    subject: String,
+    body: String,
+) -> aida_core::mailbox::Message {
     use aida_core::mailbox::{Intent, Message, Recipient, SenderSource};
     Message {
         id: id.clone(),
@@ -155,6 +190,7 @@ fn message(id: String, to: &str, subject: String, body: String) -> aida_core::ma
         archived: false,
         from_source: SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     }
 }
@@ -166,6 +202,7 @@ fn findings_message(
     change: &forge::Change,
     history: &History,
     verdict: &crate::gate::review_verdict::RecordingKey,
+    max_rounds: usize,
     to: &str,
 ) -> aida_core::mailbox::Message {
     let key = change.key();
@@ -179,15 +216,16 @@ fn findings_message(
     );
     // The current verdict file always holds the latest round; an archived
     // round file is named when this verdict was also read from one.
-    // Synced-only reviews have no local verdict file to point the author at.
+    // Synced and ledger-only reviews have no local verdict file to point at.
+    // trace:BUG-2534 | ai:codex
     // trace:STORY-2492 | ai:codex
-    let synced = history
+    let external = history
         .files
         .get(verdict)
         .into_iter()
         .flatten()
-        .any(|f| f.starts_with(".aida-store/"));
-    let mut files = if synced {
+        .any(|f| f.starts_with(".aida-store/") || f.starts_with(".aida/gate-ledger/"));
+    let mut files = if external {
         Vec::new()
     } else {
         vec![format!(
@@ -196,7 +234,7 @@ fn findings_message(
         )]
     };
     for file in history.files.get(verdict).into_iter().flatten() {
-        let path = if file.starts_with(".aida-store/") {
+        let path = if file.starts_with(".aida-store/") || file.starts_with(".aida/gate-ledger/") {
             file.clone()
         } else {
             format!(".aida/review-verdicts/{file}")
@@ -210,18 +248,19 @@ fn findings_message(
         .map(|f| format!("`{f}`"))
         .collect::<Vec<_>>()
         .join(" and ");
-    let round = history.blocking().clamp(1, RETAINED_ROUNDS);
-    let next = if round >= RETAINED_ROUNDS {
-        "This was the last review round under the two-round cap: a new head is not reviewed \
-         automatically, and the advisor decides the next step."
-            .to_string()
+    let round = history.blocking().clamp(1, max_rounds);
+    let next = if round >= max_rounds {
+        format!(
+            "This was the last review round under the {max_rounds}-round cap: a new head is not reviewed \
+             automatically, and the advisor decides the next step."
+        )
     } else {
         "Address them and push a new head; the watcher starts its review when it sees the head."
             .to_string()
     };
     let body = format!(
         "{key} at {head}: the review by {by} recorded `{word}` with {count} finding(s), \
-         round {round} of {RETAINED_ROUNDS}. The findings are in {files}. {next}",
+         round {round} of {max_rounds}. The findings are in {files}. {next}",
         head = change.head,
         by = if verdict.1.is_empty() {
             "the reviewer"
@@ -234,24 +273,30 @@ fn findings_message(
     message(
         id,
         to,
-        format!("{key}: review requested changes (round {round} of {RETAINED_ROUNDS})"),
+        format!("{key}: review requested changes (round {round} of {max_rounds})"),
         body,
     )
 }
 
-/// The advisor's round-cap wake. Its ID binds the change and the blocking
-/// rounds that reached the cap, so the change wakes the advisor once.
+/// The advisor's wake binds the change, cap and blocking rounds. The
+/// default keeps the historical ID input so old receipts still deduplicate.
 fn cap_message(
     repository: &str,
     change: &forge::Change,
     history: &History,
+    max_rounds: usize,
 ) -> aida_core::mailbox::Message {
     let key = change.key();
     let rounds: Vec<_> = history.blocking_keys().collect();
+    let cap_id = if max_rounds == DEFAULT_MAX_ROUNDS {
+        "cap".to_owned()
+    } else {
+        format!("cap-{max_rounds}")
+    };
     let id = format!(
         "review-watch-{:x}",
         Sha256::digest(format!(
-            "{repository}\0{key}\0cap\0{}",
+            "{repository}\0{key}\0{cap_id}\0{}",
             serde_json::to_string(&rounds).unwrap_or_default()
         ))
     );
@@ -261,8 +306,8 @@ fn cap_message(
         .collect::<Vec<_>>()
         .join(", ");
     let body = format!(
-        "{key} reached the two-round review cap: the reviews of {shas} each blocked done. \
-         Its head {head} has no review, and the watcher will not start another. Decide the next \
+        "{key} reached the {max_rounds}-round review cap: the reviews of {shas} each blocked done. \
+         Its head {head} has no review, and the watcher will not start another. Manual review requested. Decide the next \
          step: review the head by hand, or re-scope or close the change. Its findings are in \
          `.aida/review-verdicts/{file}`.",
         head = change.head,
@@ -271,7 +316,7 @@ fn cap_message(
     message(
         id,
         "advisor",
-        format!("{key}: two-round review cap reached"),
+        format!("{key}: {max_rounds}-round review cap reached"),
         body,
     )
 }

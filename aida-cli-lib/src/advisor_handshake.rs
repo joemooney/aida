@@ -219,69 +219,30 @@ pub(crate) fn ack_id(hello_id: &str) -> String {
         .to_string()
 }
 
-/// What this process can tell about the advisor seat. The agent registry is
-/// one witness, not the only one: a live advisor whose registry row is
-/// missing still holds its seat grant, so "no registered advisor" is never
-/// reported as "no live advisor".
-// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
+/// Handshake liveness requires a registered agent session with the advisor role.
+// trace:BUG-2638 | ai:codex
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum AdvisorPresence {
-    /// A live registry row carries the advisor role.
     Registered,
-    /// No registry row, but other evidence shows a live advisor; the string
-    /// names it (a seat grant held by a live process, a recent advisor turn).
-    Unregistered(String),
-    /// No registered advisor and no other evidence of one.
     Unknown,
 }
 
-/// The advisor's presence as `live` (the live registry rows) and the
-/// advisor seat grants show it. Grants are read only when no row is found.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
-pub(crate) fn advisor_presence(
-    project_root: &Path,
-    live: &[AgentRegistryEntry],
-    now: DateTime<Utc>,
-) -> AdvisorPresence {
-    if !live_advisors(live).is_empty() {
-        return AdvisorPresence::Registered;
+fn advisor_presence(root: &Path, live: &[AgentRegistryEntry]) -> AdvisorPresence {
+    if live_advisors(live).any(|entry| {
+        crate::agent_registry::observed_liveness_from(
+            root,
+            entry,
+            crate::agent_registry::PidObserver::current(),
+        ) == Some(true)
+    }) {
+        AdvisorPresence::Registered
+    } else {
+        AdvisorPresence::Unknown
     }
-    let grants = crate::gate::seat_authority::held_grants(ADVISOR_ROLE, now);
-    let recent_turn = crate::mandate_drive::advisor_live(project_root, now);
-    presence_from(live, &grants, recent_turn)
-}
-
-/// PURE core of [`advisor_presence`]: `recent_turn` is whether an advisor
-/// grant's per-turn notice ran recently.
-// trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
-pub(crate) fn presence_from(
-    live: &[AgentRegistryEntry],
-    grants: &[crate::gate::seat_authority::HeldGrant],
-    recent_turn: bool,
-) -> AdvisorPresence {
-    if !live_advisors(live).is_empty() {
-        return AdvisorPresence::Registered;
-    }
-    if let Some((grant, pid)) = grants
-        .iter()
-        .find_map(|g| g.live_holder().map(|pid| (g, pid)))
-    {
-        let prefix: String = grant.id.chars().take(8).collect();
-        return AdvisorPresence::Unregistered(format!(
-            "pid {pid} holds advisor seat grant {prefix} until {}",
-            grant.expires_at.format("%Y-%m-%dT%H:%MZ")
-        ));
-    }
-    if recent_turn {
-        return AdvisorPresence::Unregistered(
-            "an advisor seat grant ran a turn within the last 30 minutes".to_string(),
-        );
-    }
-    AdvisorPresence::Unknown
 }
 
 /// The hello's state at `now`. `presence` is asked only when the hello is
-/// past its window unacked, so a quiet per-turn hook reads no grants.
+/// past its window unacked, keeping the ordinary per-turn path cheap.
 pub(crate) fn state(
     rec: &HelloRecord,
     presence: impl FnOnce() -> AdvisorPresence,
@@ -314,14 +275,7 @@ pub(crate) fn unreachable_reason(
     match presence {
         AdvisorPresence::Unknown => {
             return format!(
-                "no registered advisor (no advisor row for a running process in the agent registry); the hello is queued in {}",
-                rec.mailbox
-            )
-        }
-        AdvisorPresence::Unregistered(evidence) => {
-            return format!(
-                "an advisor is live but unregistered ({evidence}); it has not acked within {}m and the hello is queued in {}",
-                policy.window.num_minutes(),
+                "no registered advisor session is confirmed running; the hello is queued in {}",
                 rec.mailbox
             )
         }
@@ -393,14 +347,21 @@ pub(crate) fn find_record(roots: &[PathBuf], handle: &str) -> Option<(PathBuf, H
         .max_by_key(|(_, rec)| rec.sent_at)
 }
 
-fn is_live_advisor(e: &AgentRegistryEntry) -> bool {
-    e.role
-        .as_deref()
-        .is_some_and(|r| crate::canonical_role_name(r) == ADVISOR_ROLE)
+pub(crate) fn is_advisor_session(e: &AgentRegistryEntry) -> bool {
+    (e.source == "agent-launcher"
+        || (matches!(e.source.as_str(), "session-start-hook" | "mcp")
+            && (e.native_session_id.is_some() || e.claude_session_id.is_some())))
+        && crate::vendors::recognizes_agent_type(&e.agent_type)
+        && e.role
+            .as_deref()
+            .is_some_and(|r| crate::canonical_role_name(r) == ADVISOR_ROLE)
 }
 
-fn live_advisors(live: &[AgentRegistryEntry]) -> Vec<&AgentRegistryEntry> {
-    live.iter().filter(|e| is_live_advisor(e)).collect()
+fn live_advisors(live: &[AgentRegistryEntry]) -> impl Iterator<Item = &AgentRegistryEntry> {
+    live.iter().filter(|e| {
+        is_advisor_session(e)
+            && (e.source == "agent-launcher" || crate::agent_registry::is_vendor_process(e))
+    })
 }
 
 /// Who and where the hello comes from.
@@ -505,6 +466,7 @@ pub(crate) fn hello_message(
         archived: false,
         from_source: ctx.from_source,
         from_role: Some(ctx.role.clone()),
+        from_seat: None,
         relayed_from: None,
     }
 }
@@ -625,6 +587,7 @@ fn ack_message(
         archived: false,
         from_source,
         from_role: Some(ADVISOR_ROLE.to_string()),
+        from_seat: None,
         relayed_from: None,
     }
 }
@@ -753,7 +716,6 @@ fn send_line(outcome: &SendOutcome, live: &[AgentRegistryEntry]) -> Option<Strin
     match outcome {
         SendOutcome::Sent(rec) => {
             let names: Vec<String> = live_advisors(live)
-                .iter()
                 .map(|e| crate::mail_backlog::handle(e))
                 .collect();
             let to = if names.is_empty() {
@@ -874,7 +836,7 @@ pub(crate) fn run(
             rec.acked_by = Some(ack.from);
         }
     }
-    let st = state(&rec, || advisor_presence(&main, &live, now), &policy, now);
+    let st = state(&rec, || advisor_presence(&main, &live), &policy, now);
     if let Some(line) = agent_line(&rec, &st) {
         lines.push(line);
     } else if !hook && st == State::Waiting {
@@ -892,6 +854,9 @@ pub(crate) fn run(
     if stored.as_ref() != Some(&rec) {
         let _ = save_record(&root, &rec);
     }
+    // Peer notices carry actionable operator escalation rather than another ping.
+    // trace:BUG-2631 | ai:codex
+    lines.extend(crate::seat_health::notes(&main));
     Ok(lines)
 }
 
@@ -930,7 +895,7 @@ impl Census {
     // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
     pub(crate) fn presence(&self) -> AdvisorPresence {
         self.presence
-            .get_or_init(|| advisor_presence(&self.main, &self.live, self.now))
+            .get_or_init(|| advisor_presence(&self.main, &self.live))
             .clone()
     }
 
@@ -998,18 +963,148 @@ pub(crate) fn doctor_scan(project_root: &Path) -> Vec<DoctorFinding> {
         .collect()
 }
 
+// trace:BUG-2638 | ai:codex
+pub(crate) struct AdvisorOutage {
+    pub(crate) detail: String,
+    pub(crate) rotation_exit: Option<(String, DateTime<Utc>)>,
+}
+
+pub(crate) fn advisor_outage(
+    root: &Path,
+    live: &[AgentRegistryEntry],
+    now: DateTime<Utc>,
+    runs: &anyhow::Result<Vec<crate::relay_mail::RelayRun>>,
+) -> AdvisorOutage {
+    use crate::agent_registry::{observed_liveness_from, PidObserver};
+    use crate::relay_mail::ControllerLiveness;
+
+    let observer = PidObserver::current();
+    let history = crate::agent_registry::load_entries(root);
+    let advisors: Vec<_> = history
+        .iter()
+        .map(|(_, e)| e)
+        .filter(|e| is_advisor_session(e))
+        .collect();
+    let last = advisors
+        .iter()
+        .copied()
+        .filter(|e| observed_liveness_from(root, e, observer) == Some(false))
+        .max_by_key(|e| (e.ended_at.unwrap_or(e.last_active_at), &e.id));
+
+    let mut relay = if runs.is_ok() {
+        ControllerLiveness::Dead
+    } else {
+        ControllerLiveness::Unknown
+    };
+    let mut has_relay_fault = false;
+    if let Ok(runs) = runs {
+        for run in runs {
+            let matches = advisors
+                .iter()
+                .any(|e| e.name.as_deref() == Some(run.label.as_str()));
+            // Older rotation runs share their handle with the child registry row.
+            let advisor_relay = run.rotation_role.as_deref().map_or(matches, |role| {
+                crate::canonical_role_name(role) == ADVISOR_ROLE
+            });
+            if !advisor_relay {
+                continue;
+            }
+            if run.terminal.is_none() {
+                match crate::relay_mail::controller_liveness(&run.controller) {
+                    ControllerLiveness::Live => relay = ControllerLiveness::Live,
+                    ControllerLiveness::Unknown if relay == ControllerLiveness::Dead => {
+                        relay = ControllerLiveness::Unknown;
+                    }
+                    _ => {}
+                }
+            }
+            has_relay_fault |= last.is_some_and(|e| {
+                e.name.as_deref() == Some(run.label.as_str())
+                    && run.terminal.as_ref().is_some_and(|t| t.at >= e.started_at)
+                    && crate::relay_mail::unresolved_fault(run).is_some()
+            });
+        }
+    }
+    let relay_status = match relay {
+        ControllerLiveness::Live => "advisor rotate relay running",
+        ControllerLiveness::Dead => "no advisor rotate relay running",
+        ControllerLiveness::Unknown => "advisor rotate relay status unknown",
+    };
+    let Some(last) = last else {
+        return AdvisorOutage {
+            detail: format!("Last advisor seat and exit time unknown; {relay_status}."),
+            rotation_exit: None,
+        };
+    };
+    let handle = crate::mail_backlog::handle(last);
+    let seat = last.seat.as_deref().unwrap_or(ADVISOR_ROLE);
+    let when = match last.ended_at {
+        Some(exit) => format!("exited at {}", exit.to_rfc3339()),
+        None => format!(
+            "exit time unknown, last active at {}",
+            last.last_active_at.to_rfc3339()
+        ),
+    };
+    let detail = format!(
+        "Last advisor seat {seat} ({handle}, {}) {when}; {relay_status}.",
+        last.id
+    );
+    let rotation_handoff = (|| {
+        if relay != ControllerLiveness::Dead
+            || has_relay_fault
+            || live.iter().any(|e| {
+                is_advisor_session(e) && observed_liveness_from(root, e, observer).is_none()
+            })
+        {
+            return None;
+        }
+        let seat = crate::seat_rotation::sanitize_seat(seat).ok()?;
+        let records = crate::agent_rotation::read_handoff_log(root, &seat);
+        let handoff = crate::agent_rotation::fresh_handoff(
+            &records,
+            &crate::agent_rotation::GenerationRun {
+                seat: &seat,
+                handle: &handle,
+                native_session_id: last
+                    .native_session_id
+                    .as_deref()
+                    .or(last.claude_session_id.as_deref()),
+                spawned_at: last.started_at,
+            },
+        )?;
+        // Registry GC can use the last heartbeat as an end timestamp.
+        let after_exit = last.ended_at.is_some_and(|exit| {
+            handoff.ts > exit
+                && (exit != last.last_active_at || handoff.native_session_id.is_none())
+        });
+        (!handoff.final_ && handoff.ts >= last.started_at && handoff.ts <= now && !after_exit)
+            .then_some(handoff.ts)
+    })();
+    AdvisorOutage {
+        detail,
+        rotation_exit: rotation_handoff.map(|handoff| {
+            (
+                format!(
+                    "rotation:advisor-{}-{}",
+                    last.id,
+                    handoff.timestamp_micros()
+                ),
+                last.ended_at.unwrap_or(handoff),
+            )
+        }),
+    }
+}
+
 /// `aida doctor check advisor-handshake`: the problem findings of
 /// [`doctor_scan`] plus what they were judged from, so the check never
 /// comes back empty while an agent's notice says the advisor is missing:
-/// the registered advisors, the advisor seat grants (live but unregistered
-/// evidence), and each recent hello's state.
+/// the advisor session, relay status, grant holders, and recent hello states.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-151 | ai:claude
 pub(crate) fn doctor_report(project_root: &Path) -> Vec<DoctorFinding> {
     let census = Census::load(project_root);
     let grants = crate::gate::seat_authority::held_grants(ADVISOR_ROLE, census.now);
-    let recent_turn = crate::mandate_drive::advisor_live(project_root, census.now);
     let foreign = crate::gate::seat_authority::probes_from_foreign_namespace();
-    let mut out = report_findings(&census, &grants, recent_turn, foreign);
+    let mut out = report_findings(&census, &grants, foreign);
     out.sort_by(|a, b| a.id.cmp(&b.id));
     out
 }
@@ -1019,7 +1114,6 @@ pub(crate) fn doctor_report(project_root: &Path) -> Vec<DoctorFinding> {
 pub(crate) fn report_findings(
     census: &Census,
     grants: &[crate::gate::seat_authority::HeldGrant],
-    recent_turn: bool,
     foreign_namespace: bool,
 ) -> Vec<DoctorFinding> {
     let row = |id: &str, summary: String, action: String| DoctorFinding {
@@ -1030,16 +1124,16 @@ pub(crate) fn report_findings(
         safe_heal: false,
     };
     let mut out = Vec::new();
-    let presence = presence_from(&census.live, grants, recent_turn);
+    let presence = census.presence();
     let registered: Vec<String> = live_advisors(&census.live)
-        .iter()
         .map(|e| format!("{} ({})", crate::mail_backlog::handle(e), e.id))
         .collect();
     out.push(if registered.is_empty() {
         row(
             "registered-advisors",
-            "registered advisors: none (no advisor row for a running process in .aida/agents)".into(),
-            "A live advisor registers itself on its next prompt. If one is running, have it submit a prompt, then re-run this check.".into(),
+            "registered advisors: none (no advisor row for a running process in .aida/agents)"
+                .into(),
+            "If an advisor is running, have it submit a prompt to refresh registration.".into(),
         )
     } else {
         row(
@@ -1072,23 +1166,27 @@ pub(crate) fn report_findings(
                     "advisor seat grant {prefix} (expires {}): {holders}",
                     g.expires_at.format("%Y-%m-%dT%H:%MZ")
                 ),
-                "A live holder is an advisor with no registry row; its next prompt registers it."
-                    .into(),
+                "Grant holders can include supporting shells.".into(),
             ));
         }
-        if let AdvisorPresence::Unregistered(evidence) = &presence {
-            out.push(row(
-                "unregistered-advisor",
-                format!("an advisor is live but unregistered: {evidence}"),
-                "Have the advisor submit a prompt (its per-prompt hook registers it), then re-run this check.".into(),
-            ));
-        } else if foreign_namespace && !grants.is_empty() {
-            out.push(row(
-                "unregistered-advisor",
-                "grant holders cannot be probed from this sandbox; run this check from a host terminal to see whether one is live".into(),
-                "Run `aida doctor check advisor-handshake` outside the sandbox.".into(),
-            ));
-        }
+    }
+    if presence == AdvisorPresence::Unknown {
+        let outage = advisor_outage(
+            &census.main,
+            &census.live,
+            census.now,
+            &crate::relay_mail::list_runs(&census.main),
+        );
+        let status = if foreign_namespace || !registered.is_empty() {
+            "no advisor running in the observable process namespace"
+        } else {
+            "no advisor running"
+        };
+        out.push(row(
+            "advisor-status",
+            format!("{status}. {}", outage.detail),
+            "Check the advisor seat and its rotation relay from the host.".into(),
+        ));
     }
     let problems: Vec<DoctorFinding> = census
         .live

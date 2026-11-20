@@ -24,7 +24,7 @@ work, fans out **fixers** (one per spec, each in its own worktree) and
 PR by risk, and ships green PRs itself. It runs on an **operator mandate**,
 which is a time-boxed grant of merge authority. It never replaces review.
 
-The authority model, risk tiers, two-round cap and hold-clear conditions are
+The authority model, risk tiers, review-round cap and hold-clear conditions are
 in `.aida/discipline/fire-mode.md`. Read that first. This skill is the
 procedure.
 
@@ -145,6 +145,31 @@ Rules:
 - Commit format: `[AI:<tool>] type(scope): summary (<SPEC-ID>)` + co-author
   trailer. Never use --no-verify.
 - Template masters only; never edit generated mirrors.
+**Sandboxed headless lane override** (`AIDA_HEADLESS=1` in a native or
+AIDA-contained lane): do not run `make check-ci-fast` directly inside the seat.
+Its containment fixtures need sockets, its ratchets invoke Cargo, and the
+aggregate can exceed the 60-second tool-call limit. Route the gate by who
+publishes:
+
+- **Native, host-published seat:** leave edits uncommitted and report
+  `check_ci_fast=deferred(host)` with the reason above. This is not a passing
+  gate. The host launcher runs the gate after exit and before publication.
+- **Contained, self-publishing lane:** before publication, run
+  `aida lane job run -- make check-ci-fast` through the host-side runner.
+  On exit 75, poll `aida lane job wait <id>` in bounded calls until it finishes.
+  Require exit 0 for the final tree before pushing or opening the PR; rerun
+  after further edits. If the runner is unavailable, refuses, times out, or
+  fails, stop publication and report the blocker. Deferral is not permission
+  to publish, and a later post-exit gate is not a pre-publication pass.
+
+Run targeted Cargo tests through `aida lane job run -- cargo test --profile
+agent -p <crate> --lib -- <filter>` and poll `aida lane job wait <id>` on exit
+75. If the runner refuses or is unavailable, report `untested=true`. A fast-gate
+job does not count as an executed targeted Cargo test. This override applies to
+the FASTTRACK/LIGHT/STRICT instructions below as well as CLI golden tests
+(route their Cargo invocation through the lane runner).
+<!-- trace:TASK-3123 | ai:codex -->
+
 - Testing tier for YOUR work (the full workspace suite runs only in CI; never
   run `cargo test --workspace` locally). <Pick one:>
   FASTTRACK (docs, one line; nothing compiled or embedded into a binary): `make check-ci-fast` only, no cargo.
@@ -240,11 +265,12 @@ tool.
 finding, its file:line, the failure scenario, and what "fixed" looks like. If
 the PR belongs to another seat, mail the owning seat instead.
 
-**Two-round cap.** After the second review round, rule. Either merge and file
+**Review-round cap.** Use `[review] max_rounds` in `.aida/config.toml`
+(default 2, set to 4 here). After the final round, rule. Either merge and file
 the remaining findings as follow-ups, or park the PR with a reason on the spec.
-There is no round three. Merging still needs an approval at head recorded by
+Merging still needs an approval at head recorded by
 a reviewer process (or by the operator at a terminal); the advisor cannot
-record one, so a PR whose second round ends in RequestChanges is parked or
+record one, so a PR whose final round ends in RequestChanges is parked or
 handed to the operator. Non-blocking findings are **always** filed as
 follow-up specs (`aida add ... --status draft`), never as another round.
 
@@ -276,8 +302,9 @@ reason, and stacks one squash commit per PR on main. Each commit must carry
 exactly its PR's approved diff (patch-id), so no re-approval is needed. The
 stack is opened as a `train/*` PR and CI runs on exactly what main will
 receive. Green: it is rebase-merged pinned to its head and each member PR is
-closed with a pointer to its commit. Red: it is rerun once, then bisected in
-halves, and each PR that breaks it is left open with a comment saying why.
+closed with a pointer to its commit. Red: a test failure is not rerun, it is
+bisected in halves, and each PR that breaks it is left open with a comment
+saying why. Only CI cancelled before a test result is rerun, once.
 The train never releases a merge hold. A held PR waits for the operator's
 `aida merge-hold clear N`, then rides the next train.
 
@@ -288,13 +315,18 @@ to back on greens computed against an older main; train them.
 ### 6. Wait without polling
 
 For each PR in flight, start **one background watcher** that exits on a
-terminal state, then act on its notification. Do not loop `gh pr checks` in
+terminal state or a 540-second timeout, then act on its notification. Do not loop `gh pr checks` in
 the foreground:
 
 ```bash
 # run_in_background: true
-gh pr checks N --watch --fail-fast >/dev/null 2>&1; gh pr view N --json number,mergeStateStatus,statusCheckRollup --jq '{n:.number,state:.mergeStateStatus}'
+timeout 540 gh pr checks N --watch --fail-fast >/dev/null 2>&1; gh pr view N --json number,mergeStateStatus,statusCheckRollup --jq '{n:.number,state:.mergeStateStatus}'
 ```
+
+<!-- trace:BUG-2492 | ai:codex -->
+A timeout (exit 124) is a bounded snapshot, not CI failure. Inspect hold labels
+and the current checks; report a pending merge hold and stop for clearance.
+If ordinary CI is still running, start another bounded watcher.
 
 After every merge wave, also watch **main**:
 

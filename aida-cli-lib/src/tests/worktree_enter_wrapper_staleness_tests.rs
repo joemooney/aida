@@ -6,7 +6,7 @@
 //! TASK-1160 adds the symmetric `worktree exit` verb behind its own
 //! `worktree-exit` capability token: a wrapper that evals `enter` but was
 //! installed before the exit verb existed must NOT be assumed to eval `exit`.
-use super::{wrapper_marker_has_cap, wrapper_marker_has_worktree_cap};
+use crate::{wrapper_marker_has_cap, wrapper_marker_has_worktree_cap};
 
 #[test]
 fn current_wrapper_marker_advertises_worktree() {

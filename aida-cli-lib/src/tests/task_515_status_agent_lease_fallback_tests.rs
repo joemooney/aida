@@ -93,6 +93,7 @@ fn status_agents_registry_entry_wins_over_matching_lease() {
         started_at: lease.started_at,
         last_active_at: lease.started_at,
         role: Some("implementer".to_string()),
+        seat: None,
         current_spec: Some("TASK-515".to_string()),
         worktree_path: worktree.path().to_path_buf(),
         source: "agent-launcher".to_string(),

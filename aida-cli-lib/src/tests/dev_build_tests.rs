@@ -47,7 +47,7 @@ const HEAD: &str = "abc1234567890def1234567890abc1234567890d";
 fn clean_main() -> CheckoutState {
     CheckoutState {
         branch: Some("main".into()),
-        has_origin_main: true,
+        has_upstream: true,
         head: Some(HEAD.into()),
         ..Default::default()
     }
@@ -75,6 +75,14 @@ struct FakeSteps {
     staged_sha: Option<String>,
     /// What `rerecord_retention` reports (the fresh scan's outcome).
     rerecord: RetentionRerecord,
+    /// Answers to successive green-main CI checks (missing = allowed).
+    // trace:STORY-2897 | ai:claude
+    green: Vec<Option<String>>,
+    /// The promotion policy the fake reports.
+    promote: crate::landing_policy::PromoteFrom,
+    /// Answers to successive no-new-failures decisions (missing = allowed).
+    // trace:STORY-2912 | ai:claude
+    nnf: Vec<crate::promotion_failures::Decision>,
     calls: Vec<String>,
 }
 
@@ -94,6 +102,9 @@ impl FakeSteps {
             on_smoke: None,
             staged_sha: Some("abc1234567+dirty".into()),
             rerecord: RetentionRerecord::NothingRecorded,
+            green: Vec::new(),
+            promote: crate::landing_policy::PromoteFrom::CleanMain,
+            nnf: Vec::new(),
             calls: Vec::new(),
         }
     }
@@ -106,6 +117,29 @@ impl FakeSteps {
 }
 
 impl BuildSteps for FakeSteps {
+    fn promote_from(&mut self, _repo: &Path) -> crate::landing_policy::PromoteFrom {
+        self.promote
+    }
+    fn green_main_refusal(&mut self, _repo: &Path, sha: Option<&str>) -> Option<String> {
+        self.calls.push(format!("green:{}", sha.unwrap_or("-")));
+        if self.green.is_empty() {
+            None
+        } else {
+            self.green.remove(0)
+        }
+    }
+    fn no_new_failures(
+        &mut self,
+        _layout: &DevLayout,
+        candidate: Option<&str>,
+    ) -> crate::promotion_failures::Decision {
+        self.calls.push(format!("nnf:{}", candidate.unwrap_or("-")));
+        if self.nnf.is_empty() {
+            nnf_decision(true, &[])
+        } else {
+            self.nnf.remove(0)
+        }
+    }
     fn probe(&mut self, _repo: &Path) -> Result<CheckoutState> {
         self.calls.push("probe".into());
         let s = if self.states.len() > 1 {
@@ -275,7 +309,7 @@ fn every_refusal_case_refuses_and_allow_dirty_overrides_it() {
         ),
         (
             CheckoutState {
-                has_origin_main: false,
+                has_upstream: false,
                 ..clean_main()
             },
             "no `origin/main`",
@@ -457,6 +491,85 @@ fn probe_linked_worktree_is_build_only() {
     );
 }
 
+// STORY-2737 slice (a): `integration` is a landing branch. A clean
+// integration checkout, even a linked worktree, promotes when it matches
+// `origin/integration`; its refusals name `origin/integration`; any other
+// worktree branch stays build-only.
+// trace:STORY-2737 | ai:claude
+fn clean_integration_worktree() -> CheckoutState {
+    CheckoutState {
+        is_linked_worktree: true,
+        branch: Some("integration".into()),
+        ..clean_main()
+    }
+}
+
+#[test]
+fn story_2737_clean_integration_worktree_promotes() {
+    assert_eq!(
+        plan_promotion(&clean_integration_worktree(), false, false),
+        PromotionPlan::Promote { warnings: vec![] }
+    );
+    assert_eq!(
+        plan_promotion(&clean_integration_worktree(), true, false),
+        PromotionPlan::BuildOnly(BuildOnlyReason::NoPromote)
+    );
+}
+
+#[test]
+fn story_2737_integration_refusals_name_origin_integration() {
+    let behind = CheckoutState {
+        behind: 3,
+        ..clean_integration_worktree()
+    };
+    let reasons = refusal(&behind);
+    assert!(
+        reasons
+            .iter()
+            .any(|r| r.contains("3 commit(s) behind origin/integration")),
+        "{reasons:?}"
+    );
+    let missing = CheckoutState {
+        has_upstream: false,
+        ..clean_integration_worktree()
+    };
+    assert!(refusal(&missing)
+        .iter()
+        .any(|r| r.contains("no `origin/integration`")));
+    let dirty = CheckoutState {
+        tracked_changes: vec!["x.rs".into()],
+        ..clean_integration_worktree()
+    };
+    assert!(matches!(
+        plan_promotion(&dirty, false, true),
+        PromotionPlan::Promote { warnings } if warnings.iter().any(|w| w.contains("--allow-dirty"))
+    ));
+}
+
+#[test]
+fn story_2737_probe_integration_worktree_compares_with_origin_integration() {
+    let (tmp, _o, clone) = git_fixture();
+    git(&clone, &["branch", "integration"]);
+    git(&clone, &["push", "-q", "origin", "integration"]);
+    let wt = tmp.path().join("integ");
+    git(
+        &clone,
+        &["worktree", "add", "-q", wt.to_str().unwrap(), "integration"],
+    );
+    assert_eq!(probe_plan(&wt), PromotionPlan::Promote { warnings: vec![] });
+    // An unpushed integration commit is ahead of origin/integration, while
+    // origin/main is irrelevant to the integration checkout.
+    write(&wt.join("i.txt"), "integ");
+    git(&wt, &["add", "i.txt"]);
+    git(&wt, &["commit", "-q", "-m", "integ"]);
+    assert!(
+        matches!(probe_plan(&wt), PromotionPlan::Refuse { reasons } if reasons.iter().any(|r| r.contains("ahead of origin/integration")))
+    );
+    git(&wt, &["push", "-q", "origin", "integration"]);
+    git(&clone, &["fetch", "-q", "origin"]);
+    assert_eq!(probe_plan(&wt), PromotionPlan::Promote { warnings: vec![] });
+}
+
 // --- pipeline -------------------------------------------------------------------
 
 #[test]
@@ -521,7 +634,102 @@ fn successful_build_promotes_keeps_prev_and_restarts_mcp() {
         .collect();
     names.sort();
     // `.lock` is the persistent live-dir lock file.
-    assert_eq!(names, [".lock", ".promoted", "aida", "aida-server", "prev"]);
+    assert_eq!(
+        names,
+        [
+            ".inventory.json",
+            ".lock",
+            ".promoted",
+            "aida",
+            "aida-flow",
+            "aida-porcelain",
+            "aida-server",
+            "prev"
+        ]
+    );
+}
+
+/// STORY-2897: CI that turns red during the build stops the promotion at
+/// the swap; the live binaries are untouched and staging is cleaned.
+// trace:STORY-2897 | ai:claude
+#[test]
+fn story2897_ci_red_at_the_swap_leaves_live_untouched() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.green = vec![
+        None,
+        Some("CI on abc1234567 failed: Build (ubuntu-latest)".into()),
+    ];
+    let (r, _) = run(&f, &DevBuildOptions::default(), &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(
+        err.contains("not green") && err.contains("failed: Build"),
+        "{err}"
+    );
+    let checks: Vec<&String> = steps
+        .calls
+        .iter()
+        .filter(|c| c.starts_with("green:"))
+        .collect();
+    assert_eq!(
+        checks.len(),
+        2,
+        "checked before the build and at the swap: {checks:?}"
+    );
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"));
+    }
+    assert!(!f.layout.prev_dir().exists());
+    let staged: Vec<_> = fs::read_dir(&f.layout.live_dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains("incoming"))
+        .collect();
+    assert!(staged.is_empty(), "staging cleaned: {staged:?}");
+}
+
+/// STORY-2897: `--allow-dirty` never promotes a dirty or mismatched build
+/// under green-main. trace:STORY-2897 | ai:claude
+#[test]
+fn story2897_allow_dirty_does_not_override_green_main() {
+    for staged in ["abc1234567+dirty", "fff0000000"] {
+        let f = fixture();
+        put_live(&f.layout, "OLD");
+        let mut steps = FakeSteps::new(clean_main());
+        steps.promote = crate::landing_policy::PromoteFrom::GreenMain;
+        steps.staged_sha = Some(staged.into());
+        let opts = DevBuildOptions {
+            allow_dirty: true,
+            ..DevBuildOptions::default()
+        };
+        let (r, _) = run(&f, &opts, &mut steps);
+        let err = format!("{:#}", r.unwrap_err());
+        assert!(err.contains("does not override"), "{staged}: {err}");
+        for n in LIVE_BINARIES {
+            assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"), "{staged}");
+        }
+    }
+}
+
+/// STORY-2897: green-main governs an integration promotion too, refusing
+/// before any build.
+// trace:STORY-2897 | ai:claude
+#[test]
+fn story2897_green_main_refuses_an_integration_promotion_up_front() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut state = clean_main();
+    state.branch = Some("integration".into());
+    let mut steps = FakeSteps::new(state);
+    steps.green = vec![Some("there are no CI checks on abc1234567".into())];
+    let (r, _) = run(&f, &DevBuildOptions::default(), &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(err.contains("no CI checks"), "{err}");
+    assert!(!steps.called("build"), "refused before building");
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"));
+    }
 }
 
 /// BUG-2411 ruling C: a promote whose fresh scan finds every mail writer on
@@ -648,6 +856,34 @@ fn checkout_change_during_build_blocks_promotion() {
         "{err}"
     );
     assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+}
+
+// A linked integration worktree that leaves `integration` while building plans
+// `BuildOnly`, not `Refuse`, at the promote-time re-check; it must still not
+// promote, even with --allow-dirty.
+// trace:STORY-2737 | ai:claude
+#[test]
+fn story_2737_integration_worktree_leaving_branch_during_build_blocks_promotion() {
+    for allow_dirty in [false, true] {
+        let f = fixture();
+        put_live(&f.layout, "OLD");
+        let mut steps = FakeSteps::new(clean_integration_worktree());
+        steps.states.push(CheckoutState {
+            branch: Some("feature".into()),
+            ..clean_integration_worktree()
+        });
+        let opts = DevBuildOptions {
+            allow_dirty,
+            ..Default::default()
+        };
+        let (r, _) = run(&f, &opts, &mut steps);
+        let err = format!("{:#}", r.unwrap_err());
+        assert!(
+            err.contains("changed during the build") && err.contains("no longer on `integration`"),
+            "{err}"
+        );
+        assert_eq!(read(&f.layout.live("aida")), "OLD-aida");
+    }
 }
 
 #[test]
@@ -929,8 +1165,12 @@ fn install_links_creates_missing_links() {
     for n in LIVE_BINARIES {
         assert_eq!(fs::read_link(f.layout.link(n)).unwrap(), f.layout.live(n));
     }
-    assert!(!steps.called("confirm"));
+    assert_eq!(
+        fs::read_link(f.layout.link("aida-flow")).unwrap(),
+        PathBuf::from("aida-porcelain")
+    );
     // Idempotent.
+    assert!(!steps.called("confirm"));
     install_links(&f.layout, false, &mut steps, &mut Vec::new()).unwrap();
     assert!(!steps.called("confirm"));
 }
@@ -1052,7 +1292,7 @@ fn live_status_notes_flag_differences_and_dirty_builds() {
 
 #[test]
 fn cli_parses_build_flags_and_rebuild_is_gone() {
-    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args);
+    let parse = |args: &[&str]| crate::TEST_CLI.try_parse_from(args);
     let clean_of = |args: &[&str]| match parse(args)
         .unwrap()
         .command
@@ -1331,7 +1571,7 @@ fn refusal_says_the_gate_does_not_fetch() {
 
 #[test]
 fn cli_parses_rollback_flags() {
-    let parse = |args: &[&str]| crate::command_registry::try_parse_from(args);
+    let parse = |args: &[&str]| crate::TEST_CLI.try_parse_from(args);
     match parse(&["aida", "dev", "rollback", "--force"])
         .unwrap()
         .command
@@ -1531,6 +1771,7 @@ fn meta(sha: &str, allow_dirty: bool) -> PromotionMeta {
         allow_dirty,
         promoted_at: "2026-10-12T00:00:00Z".into(),
         repo: None,
+        ci_comparison: None,
     }
 }
 
@@ -2318,4 +2559,207 @@ fn rustc_wrapper_for_prefers_the_child_override() {
     assert_eq!(rustc_wrapper_for(&cmd).as_deref(), Some("sccache"));
     cmd.env_remove("RUSTC_WRAPPER");
     assert_eq!(rustc_wrapper_for(&cmd), None);
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn rollback_first_porcelain_adoption_restores_generation_membership() {
+    let f = fixture();
+    put_live(&f.layout, "LIVE");
+    for name in ["aida", "aida-server"] {
+        write(&f.layout.prev(name), &format!("PREV-{name}"));
+    }
+    std::os::unix::fs::symlink("aida-porcelain", f.layout.live("aida-flow")).unwrap();
+    rollback(&f.layout).unwrap();
+    assert_eq!(read(&f.layout.live("aida")), "PREV-aida");
+    assert!(f.layout.live("aida-flow").symlink_metadata().is_err());
+    assert!(!f.layout.live("aida-porcelain").exists());
+    assert_eq!(
+        read(&f.layout.prev("aida-porcelain")),
+        "LIVE-aida-porcelain"
+    );
+    rollback(&f.layout).unwrap();
+    assert_eq!(read(&f.layout.live("aida")), "LIVE-aida");
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn rollback_generation_inventory_recovers_ready_snapshot() {
+    let f = fixture();
+    put_live(&f.layout, "LIVE");
+    for name in ["aida", "aida-server"] {
+        write(&f.layout.prev(name), &format!("PREV-{name}"));
+    }
+    std::os::unix::fs::symlink("aida-porcelain", f.layout.live("aida-flow")).unwrap();
+    assert!(rollback_with_steps(&f.layout, &mut |step| {
+        if step == "generation-ready" {
+            anyhow::bail!("simulated interruption");
+        }
+        Ok(())
+    })
+    .is_err());
+    recover_live_dir(&f.layout).unwrap();
+    recover_live_dir(&f.layout).unwrap();
+    assert_eq!(read(&f.layout.live("aida")), "PREV-aida");
+    assert!(f.layout.live("aida-flow").symlink_metadata().is_err());
+    rollback(&f.layout).unwrap();
+    assert_eq!(
+        read(&f.layout.live("aida-porcelain")),
+        "LIVE-aida-porcelain"
+    );
+    assert_eq!(
+        std::fs::read_link(f.layout.live("aida-flow")).unwrap(),
+        PathBuf::from("aida-porcelain")
+    );
+}
+
+// --- STORY-2912: no-new-failures through the pipeline ------------------------
+// trace:STORY-2912 | ai:claude
+
+fn nnf_decision(allowed: bool, new: &[&str]) -> crate::promotion_failures::Decision {
+    let mut d: crate::promotion_failures::Decision = serde_json::from_value(serde_json::json!({
+        "candidate": HEAD,
+        "promoted": LIVE_SHA_2912,
+        "candidate_failing": ["aida-cli-lib old::flaky"],
+        "promoted_failing": ["aida-cli-lib old::flaky"],
+        "promoted_source": "ci",
+        "verdict": if allowed { "allowed" } else { "refused" },
+        "reason": if allowed { "all 1 failure(s) also fail" } else { "1 failure(s) do not fail at the promoted commit: aida-cli-lib new::broken" },
+        "decided_at": "2026-11-18T00:00:00Z",
+    }))
+    .unwrap();
+    d.new_failures = new.iter().map(|s| s.to_string()).collect();
+    d
+}
+
+const LIVE_SHA_2912: &str = "0000000000000000000000000000000000000001";
+
+/// An allowed no-new-failures decision promotes, keeps the decision in the
+/// promotion record and as the last decision, and `aida dev status` shows it.
+// trace:STORY-2912.ac77195c | ai:claude
+#[test]
+fn story2912_allowed_comparison_is_recorded_with_the_promotion() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.promote = crate::landing_policy::PromoteFrom::NoNewFailures;
+    steps.staged_sha = Some("abc1234567".into());
+    let (r, out) = run(&f, &DevBuildOptions::default(), &mut steps);
+    assert_eq!(r.unwrap(), BuildOutcome::Promoted, "{out}");
+    let checks: Vec<_> = steps
+        .calls
+        .iter()
+        .filter(|c| c.starts_with("nnf:"))
+        .collect();
+    assert_eq!(
+        checks.len(),
+        2,
+        "before the build and at the swap: {checks:?}"
+    );
+    assert!(
+        !steps.called(&format!("green:{HEAD}")),
+        "green-main is not consulted"
+    );
+    let meta = read_promotion_meta(&f.layout.live_dir).expect("record");
+    let d = meta
+        .ci_comparison
+        .clone()
+        .expect("comparison kept with the promotion");
+    assert!(d.allowed());
+    assert_eq!(d.candidate, HEAD);
+    assert_eq!(d.promoted.as_deref(), Some(LIVE_SHA_2912));
+    let last = crate::promotion_failures::read_last(&f.layout.live_dir).expect("last decision");
+    assert_eq!(last, d);
+    let lines = ci_decision_lines(Some(&meta), Some(&last));
+    assert_eq!(
+        lines.len(),
+        3,
+        "the last decision is the live one: {lines:?}"
+    );
+    assert!(lines[0].contains("no-new-failures allowed"), "{lines:?}");
+    assert!(lines[0].contains("abc123456789"), "{lines:?}");
+    // Both failing sets are shown by name, not only counted (finding 7).
+    assert!(
+        lines[1].contains("failing at the candidate")
+            && lines[1].contains("aida-cli-lib old::flaky"),
+        "{lines:?}"
+    );
+    assert!(
+        lines[2].contains("failing at the promoted")
+            && lines[2].contains("aida-cli-lib old::flaky"),
+        "{lines:?}"
+    );
+    assert!(out.contains("CI gate: no-new-failures allowed"), "{out}");
+    assert!(out.contains("CI gate:   failing at the promoted"), "{out}");
+}
+
+/// A refused decision refuses before the build, names the new failure,
+/// leaves the live pair alone, and stays visible as the last decision.
+// trace:STORY-2912.ac77195c | ai:claude
+#[test]
+fn story2912_new_failure_refuses_and_is_shown_by_status() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.promote = crate::landing_policy::PromoteFrom::NoNewFailures;
+    steps.staged_sha = Some("abc1234567".into());
+    steps.nnf = vec![nnf_decision(false, &["aida-cli-lib new::broken"])];
+    let (r, _) = run(&f, &DevBuildOptions::default(), &mut steps);
+    let err = r.unwrap_err();
+    assert!(err.downcast_ref::<PromotionRefused>().is_some(), "{err:#}");
+    let err = format!("{err:#}");
+    assert!(err.contains("aida-cli-lib new::broken"), "{err}");
+    assert!(err.contains("no-new-failures"), "{err}");
+    assert!(!steps.called("build"), "refused before building");
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"));
+    }
+    let last = crate::promotion_failures::read_last(&f.layout.live_dir).expect("recorded");
+    assert!(!last.allowed());
+    let lines = ci_decision_lines(None, Some(&last));
+    assert!(
+        lines.iter().any(|l| l.contains("no-new-failures refused")),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .iter()
+            .any(|l| l.contains("new: aida-cli-lib new::broken")),
+        "{lines:?}"
+    );
+}
+
+/// A comparison that turns red between the pre-check and the swap refuses
+/// at the swap; a dirty staged build refuses as under green-main.
+#[test]
+fn story2912_swap_recheck_and_staged_build_fail_closed() {
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.promote = crate::landing_policy::PromoteFrom::NoNewFailures;
+    steps.staged_sha = Some("abc1234567".into());
+    steps.nnf = vec![
+        nnf_decision(true, &[]),
+        nnf_decision(false, &["aida-cli-lib new::broken"]),
+    ];
+    let (r, _) = run(&f, &DevBuildOptions::default(), &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(err.contains("the promoted commit does not have"), "{err}");
+    for n in LIVE_BINARIES {
+        assert_eq!(read(&f.layout.live(n)), format!("OLD-{n}"));
+    }
+
+    let f = fixture();
+    put_live(&f.layout, "OLD");
+    let mut steps = FakeSteps::new(clean_main());
+    steps.promote = crate::landing_policy::PromoteFrom::NoNewFailures;
+    steps.staged_sha = Some("abc1234567+dirty".into());
+    let opts = DevBuildOptions {
+        allow_dirty: true,
+        ..DevBuildOptions::default()
+    };
+    let (r, _) = run(&f, &opts, &mut steps);
+    let err = format!("{:#}", r.unwrap_err());
+    assert!(err.contains("does not override"), "{err}");
+    assert!(err.contains("no-new-failures"), "{err}");
 }

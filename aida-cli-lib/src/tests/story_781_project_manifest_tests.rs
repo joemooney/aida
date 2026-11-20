@@ -429,7 +429,7 @@ fn equivalent_remote_url_forms_are_not_reported_as_drift() {
         ),
     ] {
         assert!(
-            crate::doctor_cmd::same_remote(a, b),
+            crate::remote_create::same_remote(a, b),
             "{a} and {b} name the same repository"
         );
     }
@@ -437,11 +437,11 @@ fn equivalent_remote_url_forms_are_not_reported_as_drift() {
 
 #[test]
 fn genuinely_different_remotes_are_drift() {
-    assert!(!crate::doctor_cmd::same_remote(
+    assert!(!crate::remote_create::same_remote(
         "https://github.com/joemooney/aida.git",
         "https://gitlab.com/joemooney/aida.git"
     ));
-    assert!(!crate::doctor_cmd::same_remote(
+    assert!(!crate::remote_create::same_remote(
         "https://github.com/joemooney/aida.git",
         "https://github.com/someone/aida.git"
     ));

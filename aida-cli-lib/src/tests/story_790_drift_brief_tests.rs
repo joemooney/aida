@@ -23,6 +23,7 @@ fn ended_entry(
         started_at: Utc::now() - Duration::hours(2),
         last_active_at: Utc::now() - ended_ago,
         role: Some("implementer".into()),
+        seat: None,
         current_spec: Some("STORY-790".into()),
         worktree_path: tmp.to_path_buf(),
         source: "agent-launcher".into(),
@@ -63,6 +64,7 @@ fn mail_since_exit_counts_addressed_and_broadcast_not_others_or_older() {
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     let fresh = Utc::now().timestamp_millis();

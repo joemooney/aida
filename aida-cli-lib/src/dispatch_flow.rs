@@ -190,6 +190,8 @@ fn update_pr_branch_non_force(
     base_ref: &str,
     head_ref: &str,
 ) -> Result<()> {
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(main_worktree, head_ref)?;
     let gh = crate::resolve_gh_binary()
         .ok_or_else(|| anyhow::anyhow!("cannot locate `gh` executable on PATH"))?;
     let pr_str = pr.to_string();

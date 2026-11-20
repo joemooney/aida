@@ -361,6 +361,7 @@ fn mail(
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     }
 }
@@ -2393,6 +2394,16 @@ fn contribution_fixtures() -> Vec<ContributionFixture> {
                 output: "spool/out/x.out".into(),
                 kind: crate::deputy::DeputyKind::Command,
             })
+        }),
+        ("dead_deputies", |r| {
+            let now = chrono::Utc::now();
+            r.dead_deputies.push(crate::deputy_shell::DeadDeputy {
+                deputy: "test".into(),
+                last_runner_pid: 42,
+                runner_recorded_at: now,
+                dead_as_of: now,
+                stranded_jobs: vec![],
+            });
         }),
     ]
 }

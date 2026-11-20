@@ -2,7 +2,53 @@
 //! requirement add/list/show/edit/delete handlers, status/priority/type parsing and `aida grep` (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    active_lease_for_cwd, active_role_scope, add_blocked_by_edge, add_queue_route_role,
+    agent_list_default_cap, agent_output_mode, agent_registry, alias, all_queued_requirement_ids,
+    apply_carve_out, approval_forbidden_for_type, auto_complete, backlog, brief,
+    carve_out_description, cleanup_escalated_leases_for_spec, cli, collect_ancestor_store,
+    completion, complexity_calibration, context_prompt, current_user_id, derive_parent_epic_label,
+    detect_distributed_store, docs, doctor_cmd, edit_buffer, edit_completion_render,
+    effort_calibration, empty_list_hint_line, enforce_protected_spec_gate, enforce_session_lease,
+    ensure_block_capacity, ensure_parent_edge_from_tag, extract_plan_followups, find_project_root,
+    findings, first_run, focus_scope_guard, format_queue_membership, format_review_story_display,
+    format_tag_chip, get_default_author, glyph, grep_requirements, handle_list_human,
+    handle_review_list, help, history, human, in_flight_lease_scopes, is_into_completed_transition,
+    is_standing_artifact_type, is_terminal_status, list_count_denom_label, list_default_open_lens,
+    list_hidden_hint_lines, list_human_count_footer, list_leases, load_node_id, looks_like_spec_id,
+    main_worktree_root_from, manual_epic_status_edit_forbidden, maybe_hint_advisor_seat,
+    maybe_hint_after_queue_drain, maybe_print_whats_left_tip, maybe_sync_pull,
+    normalize_batch_name, not_found, output_format_is_json, parse_pr_arg, parse_requirement_id,
+    permissions, pr_list_handler, print_comment, print_deferred_triggers,
+    print_empty_human_list_truncation_footer, print_git_linkage, pull_store_before_id_allocation,
+    punt, push_store_after_id_allocation, queue_at_filing_refusal, queue_cmd,
+    queue_memberships_for, read_id_format_policy, read_list_show_hidden_hints, record_edit_changes,
+    record_role_activity, rel_type_label, relationship_phrase, remove_blocked_by_edge,
+    render_completion_crescendo, render_list_fields_table, render_search_fields, render_spec_card,
+    render_tree, resolve_human_only, resolve_list_user_filter, resolve_pr_to_spec, role,
+    roleless_recovery_sentence, run, short_sha, status_advance_requires_advisor_authority,
+    status_display, status_requires_advisor_authority, suspicious_title_signal,
+    team_role_refusal_clause, toon_list_cell, toon_list_fields, tree_group_header,
+    update_manifest_for_status, validate_priority_input, validate_status_input,
+    validate_status_input_for_type, verify_cmd, warn_pending_briefs_for_running_agent, worktree,
+    CardDensity, CardRel, EditCompletionRender, HashSet, QueueAtFilingRefusal,
+};
+
+#[cfg(test)]
+use crate::mcp;
+
+use crate::doctor_root::collect_doctor_findings;
+use crate::output_format::{toon_local_id_cell, with_local_id_column};
+use crate::rel_cards::hostname;
+use crate::upgrade_release::confirm;
+use aida_core::{
+    forbidden_attention_transition, DatabaseBackend, FieldChange, RelationshipType, Requirement,
+    RequirementPriority, RequirementStatus, RequirementType, RequirementsStore, Storage,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use serde::Serialize;
+use uuid::Uuid;
 
 /// True for a scaffold artifact that must be executable: a git or Claude
 /// Code hook, or a shell script.
@@ -1424,21 +1470,7 @@ pub(crate) fn dropped_structural_tags(
     old_tags: &HashSet<String>,
     new_tags: &HashSet<String>,
 ) -> Vec<String> {
-    const PREFIXES: &[&str] = &[
-        "parent:",
-        "batch:",
-        "lane:",
-        "severity:",
-        "lifecycle:",
-        "aida:",
-    ];
-    let mut dropped: Vec<String> = old_tags
-        .difference(new_tags)
-        .filter(|tag| PREFIXES.iter().any(|prefix| tag.starts_with(prefix)))
-        .cloned()
-        .collect();
-    dropped.sort();
-    dropped
+    aida_core::db::canonical_mutation::dropped_structural_tags(old_tags, new_tags)
 }
 
 pub fn enforce_structural_tag_replacement(
@@ -2702,7 +2734,6 @@ fn run_add(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = self::add_args_for_dispatch(matches)?;
     // trace:STORY-1468 | ai:codex — refuse unsupported storage before any mutation.
     let origin_prompt = if let Some(path) = &args.origin_prompt_file {
@@ -4424,7 +4455,6 @@ fn run_list(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <ListArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
@@ -6380,7 +6410,6 @@ fn run_show(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <ShowArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -7072,6 +7101,14 @@ fn run_show(
                                         "execution_mode",
                                         &m.to_string(),
                                     ));
+                                } else if let Some(label) = store_path.parent().and_then(|root| {
+                                    crate::gate::unset_mode::show_label(root, &req, || {
+                                        backend.load().ok().map(|s| s.requirements)
+                                    })
+                                }) {
+                                    // STORY-2884: the project default an unset
+                                    // mode takes. trace:STORY-2884 | ai:claude
+                                    lines.push(crate::toon::scalar("effective_mode", &label));
                                 }
                                 // STORY-634: the multi-repo origin dimension, emitted
                                 // only when set. trace:STORY-634 | ai:claude
@@ -7738,6 +7775,14 @@ fn run_show(
                                     m.to_string().cyan(),
                                     crate::do_dispatch::human_contract(m).dimmed()
                                 );
+                            } else if let Some(label) = store_path.parent().and_then(|root| {
+                                crate::gate::unset_mode::show_label(root, &req, || {
+                                    backend.load().ok().map(|s| s.requirements)
+                                })
+                            }) {
+                                // STORY-2884: the project default an unset mode
+                                // takes at merge. trace:STORY-2884 | ai:claude
+                                println!("\n{} {}", "Effective mode:".bold(), label.cyan());
                             }
                             // Human output at an interactive terminal renders the
                             // markdown in the description (the knowledge body for
@@ -8232,7 +8277,6 @@ fn run_edit(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <EditArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -9651,7 +9695,6 @@ fn run_del(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <DelArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -9777,7 +9820,6 @@ fn run_grep(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <GrepArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -9941,7 +9983,6 @@ fn run_search(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <SearchArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -10348,7 +10389,7 @@ mod origin_prompt_tests {
         ] {
             let mut args = vec!["aida", "add", "--title", "Feature"];
             args.extend(extra);
-            assert!(crate::command_registry::try_parse_from(args).is_ok());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_ok());
         }
         for extra in [
             vec!["--origin-prompt-file", "reviewed.txt", "--no-origin-prompt"],
@@ -10357,15 +10398,11 @@ mod origin_prompt_tests {
         ] {
             let mut args = vec!["aida", "add", "--title", "Feature"];
             args.extend(extra);
-            assert!(crate::command_registry::try_parse_from(args).is_err());
+            assert!(crate::TEST_CLI.try_parse_from(args).is_err());
         }
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "show",
-            "TASK-1",
-            "--origin-prompt"
-        ])
-        .is_ok());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "show", "TASK-1", "--origin-prompt"])
+            .is_ok());
         let mut json_args = [
             "aida",
             "show",
@@ -10378,7 +10415,7 @@ mod origin_prompt_tests {
         .to_vec();
         crate::json_capability_gate(&mut json_args).unwrap();
         assert!(json_args.iter().any(|arg| arg == "--json"));
-        assert!(crate::command_registry::try_parse_from(json_args).is_ok());
+        assert!(crate::TEST_CLI.try_parse_from(json_args).is_ok());
         for mode in [
             "--card",
             "--tree",
@@ -10391,14 +10428,89 @@ mod origin_prompt_tests {
             "--brief",
             "--full",
         ] {
-            assert!(crate::command_registry::try_parse_from([
-                "aida",
-                "show",
-                "TASK-1",
-                "--origin-prompt",
-                mode
-            ])
-            .is_err());
+            assert!(crate::TEST_CLI
+                .try_parse_from(["aida", "show", "TASK-1", "--origin-prompt", mode])
+                .is_err());
         }
     }
+}
+
+// trace:TASK-3783 | ai:codex
+use crate::stakeholder_role::{
+    active_stakeholder_role, add_csv_tag, parse_requester_add_type, requester_add_type_allowed,
+    stakeholder_refusal,
+};
+use crate::{Command, REQUESTER_INTAKE_FORBIDDEN_FIELDS};
+
+/// The decoded `aida add` args, when `command` is `aida add`. A decode
+/// failure is returned, not dropped, so the requester check can refuse it.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn requester_add_args(
+    command: &Command,
+) -> Option<Result<crate::requirements_cli::AddArgs, clap::Error>> {
+    let Command::Registered(invocation) = command;
+    (invocation.reg.name == "add")
+        .then(|| clap::FromArgMatches::from_arg_matches(&invocation.matches))
+}
+
+/// The requester's `aida add` refusals. Args that do not decode are refused:
+/// an add whose fields cannot be checked must not pass as plain intake.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn requester_intake_check(
+    add: Result<crate::requirements_cli::AddArgs, clap::Error>,
+) -> Result<()> {
+    let Ok(add) = add else {
+        return Err(stakeholder_refusal(
+            "requester",
+            "an add whose arguments could not be checked",
+        ));
+    };
+    if add.interactive {
+        return Err(stakeholder_refusal("requester", "interactive add"));
+    }
+    if add.queue || add.batch.is_some() || add.r#for.is_some() {
+        return Err(stakeholder_refusal("requester", "queueing intake"));
+    }
+    let forbidden_fields = [
+        ("parent", add.parent.is_some()),
+        ("feature", add.feature.is_some()),
+        ("owner", add.owner.is_some()),
+    ];
+    if REQUESTER_INTAKE_FORBIDDEN_FIELDS.iter().any(|field| {
+        forbidden_fields
+            .iter()
+            .any(|(candidate, is_set)| candidate == field && *is_set)
+    }) {
+        return Err(stakeholder_refusal(
+            "requester",
+            "setting parent, feature, or owner during intake",
+        ));
+    }
+    let req_type = parse_requester_add_type(add.r#type.as_deref())?;
+    if !requester_add_type_allowed(&req_type) {
+        return Err(stakeholder_refusal(
+            "requester",
+            "adding anything except change-request, bug, or user specs",
+        ));
+    }
+    Ok(())
+}
+
+/// Requester intake lands as a Draft change-request (unless typed) tagged
+/// for advisor grooming. Applied by the add handler when the active
+/// stakeholder role is `requester`; the refusals ran before dispatch.
+// trace:STORY-1728 | ai:claude
+pub(crate) fn apply_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
+    if active_stakeholder_role().as_deref() != Some("requester") {
+        return;
+    }
+    coerce_requester_intake(add);
+}
+
+pub(crate) fn coerce_requester_intake(add: &mut crate::requirements_cli::AddArgs) {
+    add.status = Some("draft".to_string());
+    if add.r#type.is_none() {
+        add.r#type = Some("change-request".to_string());
+    }
+    add_csv_tag(&mut add.tags, "intake:requester");
 }

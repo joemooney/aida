@@ -182,6 +182,19 @@ class ExecutionTests(unittest.TestCase):
                 "CI_COMMIT_BEFORE_SHA": before, "CI_PIPELINE_SOURCE": "push"})
         return code, root
 
+    # trace:BUG-2668 | ai:codex
+    def test_github_apt_cache_setup_is_skipped_on_gitlab(self):
+        workflow = yaml.safe_load((ROOT / ".github/workflows/ci.yml").read_text())
+        job = workflow["jobs"]["build"]
+        names = {"Prepare Linux dependency cache", "Restore Linux dependency archives",
+                 "Install Linux dependencies", "Save Linux dependency archives"}
+        steps = [step for step in job["steps"] if step.get("name") in names]
+        self.assertEqual({step["name"] for step in steps}, names)
+        with patch.object(adapter.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
+            code, _ = self.run_workflow(steps, job_settings={"env": job["env"]})
+        self.assertEqual(code, 0)
+        spawn.assert_not_called()
+
     def test_failed_command_skips_ordinary_steps_but_runs_cleanup_and_collects_junit(self):
         code, root = self.run_workflow([
             {"run": 'test "$GLOBAL_VALUE/$JOB_VALUE/$STEP_VALUE" = global/gates/step; exit 1',
@@ -195,7 +208,7 @@ class ExecutionTests(unittest.TestCase):
 
     def test_shell_context_and_summary_are_available(self):
         code, root = self.run_workflow([{"run":
-            'test "$GDMA_LANE/$GDMA_EVENT_NAME" = gates/push; '
+            'test "$GDMA_LANE/$GDMA_EVENT_NAME/$GITHUB_EVENT_NAME" = gates/push/push; '
             'test -d "$RUNNER_TEMP"; test -w "$RUNNER_TEMP"; '
             'echo temp > "$RUNNER_TEMP/probe"; '
             'printf "%s" "$RUNNER_TEMP" > runner-temp-path; '
@@ -217,6 +230,22 @@ class ExecutionTests(unittest.TestCase):
             second = spawn.call_args.kwargs['env']
             self.assertNotEqual(first['RUNNER_TEMP'], second['RUNNER_TEMP'])
             self.assertTrue(Path(second['RUNNER_TEMP']).is_dir())
+
+    def test_merge_request_supplies_pr_event_to_shell_guards(self):
+        # trace:TASK-3785 | ai:codex
+        code, root = self.run_workflow([{
+            "run": 'test "$GITHUB_EVENT_NAME" = push'}])
+        self.assertEqual(code, 0)
+        with patch.object(adapter, "ROOT", root), \
+                patch.object(adapter, "full_ci", return_value=True), \
+                patch.object(adapter.subprocess, "Popen", wraps=subprocess.Popen) as spawn:
+            # A stale inherited GitHub value must not bypass a GitLab MR guard.
+            code = adapter.main(["--lane", "gates"], environ={
+                "CI_PIPELINE_SOURCE": "merge_request_event",
+                "GITHUB_EVENT_NAME": "push"})
+        self.assertEqual(spawn.call_args.kwargs['env']['GITHUB_EVENT_NAME'],
+                         'pull_request')
+        self.assertEqual(code, 1)  # The push-only assertion must now refuse.
 
     def test_new_branch_without_baseline_runs_full_ci(self):
         code, root = self.run_workflow([

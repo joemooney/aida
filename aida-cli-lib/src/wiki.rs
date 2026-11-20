@@ -696,7 +696,6 @@ pub(crate) struct WikiArgs {
 
 // trace:EPIC-72 trace:TASK-1439 | ai:antigravity
 fn run_wiki(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
     let args = <WikiArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let command = &args.inner;
     return self::handle_wiki_command(command);

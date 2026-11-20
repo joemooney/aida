@@ -284,6 +284,7 @@ fn message_to_agent_type_reaches_inbox() {
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     let watermarks = std::collections::HashMap::new();
@@ -416,6 +417,7 @@ fn mailbox_mutation_allowed_for_sender_or_operator_only() {
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     };
     assert!(mailbox_mutation_allowed(&msg, "codex", "joe"));
@@ -1241,6 +1243,7 @@ fn urgent_broadcast(id: &str, from: &str, ts: i64) -> aida_core::mailbox::Messag
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     }
 }
@@ -1398,6 +1401,38 @@ fn comment_mention_of_a_roster_person_is_delivered_under_stored_spelling() {
         "alice",
         &recipients[0],
         "You were mentioned on TASK-1 by alice: @joe please look".into(),
+    );
+    let local = crate::mailbox_store::read_local_messages(proj.path()).unwrap();
+    assert_eq!(
+        aida_core::mailbox::unread_inbox("Joe", &local, None).len(),
+        1
+    );
+}
+
+// Registered people and aliases remain deliverable without role enrollment or
+// a live work-node lease. Preserve the roster's spelling on case-folded lookup.
+// trace:BUG-2615 | ai:codex
+#[test]
+fn comment_mention_of_registered_person_without_team_or_lease() {
+    let (proj, store) = store_with_person_joe();
+    std::fs::remove_file(store.join("registry/team.toml")).unwrap();
+    std::fs::write(
+        store.join("metadata.yaml"),
+        "users:\n- id: 00000000-0000-0000-0000-000000000001\n  name: Joe\n  email: joe@example.invalid\n  handle: Joe\n  created_at: 2026-01-01T00:00:00Z\n",
+    )
+    .unwrap();
+    let (recipients, warnings) = crate::punt_done::resolve_comment_mentions(
+        &store,
+        "alice",
+        "@JOE please look; also @JMOONEY",
+    );
+    assert!(warnings.is_empty(), "{warnings:?}");
+    assert_eq!(recipients, vec!["Joe".to_string(), "jmooney".to_string()]);
+    crate::punt_done::send_notification(
+        &store,
+        "alice",
+        &recipients[0],
+        "You were mentioned by alice".into(),
     );
     let local = crate::mailbox_store::read_local_messages(proj.path()).unwrap();
     assert_eq!(

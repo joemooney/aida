@@ -1271,7 +1271,7 @@ pub(crate) fn sweep(
         None => None,
     };
 
-    let mut root = crate::command_registry::built_command();
+    let mut root = crate::CLI_SUPPORT.built_command();
     root.build();
     let glossary_source = GLOSSARY_CANDIDATES
         .iter()
@@ -1445,6 +1445,7 @@ fn send_report(project_root: &Path, recipient: &str, count: usize, body: &str) -
         archived: false,
         from_source,
         from_role: crate::resolve_mail_sender_role(),
+        from_seat: None,
         relayed_from: None,
     };
     crate::mailbox_store::write_message(project_root, &msg)
@@ -1810,6 +1811,9 @@ pub(crate) fn open_or_extend_pr(
                 .join("\n")
         );
         git(&dir, &["commit", "--quiet", "-m", &message])?;
+        // trace:BUG-2618 | ai:codex — check even when the earlier PR lookup
+        // found none: the sweep branch can acquire an open PR before pushing.
+        crate::pr_head_guard::check_branch(project_root, SWEEP_BRANCH)?;
         let url = match &existing {
             Some(pr) => {
                 git_origin(&dir, &["push", "--quiet", "origin", SWEEP_BRANCH])?;

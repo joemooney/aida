@@ -181,6 +181,7 @@ fn pre_spawn_error_returns_without_starting_a_child() {
         launch_cwd: project.clone(),
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "claude-advisor-07".into(),
         lease_id: None,

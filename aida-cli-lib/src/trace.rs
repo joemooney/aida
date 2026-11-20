@@ -2,7 +2,20 @@
 //! git linkage, trailer gate, trace check, diff coverage, and doc suggest (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    awaiting_you, change_lookup_for_branch, command_output_with_timeout,
+    command_output_with_timeout_detail, criterion_trace_suffix, detect_distributed_store_from,
+    drain_state, extract_referenced_spec_ids_from_commit, extract_spec_ids_from_commit,
+    extract_trace_line_spec_ids, find_project_root, git_arg_guard, is_plan_commit_subject,
+    list_leases, load_store_for_lookup, parse_squash_pr_number, resolve_default_branch_ref,
+    resolve_default_branch_ref_until, warn_multi_repo_scan_limited, with_forge_lookup_timeout,
+    workspace_repo_slug, BoundedCommandOutput, DefaultBranchResolveTimedOut,
+    FORGE_CLI_CALL_TIMEOUT, FORGE_LOOKUP_TIMED_OUT,
+};
+use aida_core::{RelationshipType, RequirementStatus, RequirementType, Storage};
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
 
 /// Parse the spec id out of a `git grep -o` hit on the trace regex. The line is
 /// the matched text (`trace:SPEC-ID`), possibly carrying a `ref:file:` prefix
@@ -2403,6 +2416,23 @@ pub(crate) fn handle_trace_check(path: Option<&str>, json: bool, block: bool) ->
 /// itself fails (bad range, no git). Shared by the trace gate and the
 /// client-side ship/done guard. trace:STORY-498 trace:STORY-469 | ai:claude
 pub(crate) fn read_commits_in_range(
+    project_root: &std::path::Path,
+    range: &str,
+) -> Result<Vec<(String, String)>> {
+    // trace:BUG-2632 | ai:codex
+    let adjusted = range
+        .split_once("..")
+        .filter(|(_, head)| !head.starts_with('.'))
+        .map(|(base, head)| crate::review_git_evidence::completion_range(project_root, base, head))
+        .transpose()?;
+    let range = adjusted.as_deref().unwrap_or(range);
+    read_commits_in_range_unadjusted(project_root, range)
+}
+
+/// Read the exact range supplied by seat publication. Its imported commits are
+/// already bounded by the host base; do not inspect a private clone for squashes.
+// trace:BUG-2632 | ai:codex
+pub(crate) fn read_commits_in_range_unadjusted(
     project_root: &std::path::Path,
     range: &str,
 ) -> Result<Vec<(String, String)>> {

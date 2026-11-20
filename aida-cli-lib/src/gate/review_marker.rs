@@ -94,6 +94,8 @@ pub(crate) struct Marker {
     // trace:TASK-1750 | ai:claude
     pub pid_start: Option<String>,
     pub started_at: u64,
+    /// Subsecond ordering; absent on legacy markers, which remain conservative.
+    pub started_at_nanos: Option<u32>,
     pub ttl_secs: u64,
 }
 
@@ -105,6 +107,9 @@ impl Marker {
         spec: Option<&str>,
         by: &str,
     ) -> Self {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
         Marker {
             pr,
             head_sha: head_sha.unwrap_or("").trim().to_string(),
@@ -113,7 +118,8 @@ impl Marker {
             host: crate::coordination::hostname(),
             pid: std::process::id(),
             pid_start: aida_core::liveness::process_start_identity(std::process::id()),
-            started_at: now_secs(),
+            started_at: now.as_secs(),
+            started_at_nanos: Some(now.subsec_nanos()),
             ttl_secs: PID_BACKED_TTL_SECS,
         }
     }
@@ -143,7 +149,7 @@ impl Marker {
 
 fn serialize(m: &Marker) -> String {
     format!(
-        "pr={}\nhead_sha={}\nspec={}\nby={}\nhost={}\npid={}\npid_start={}\nstarted_at={}\nttl_secs={}\n",
+        "pr={}\nhead_sha={}\nspec={}\nby={}\nhost={}\npid={}\npid_start={}\nstarted_at={}\nstarted_at_nanos={}\nttl_secs={}\n",
         m.pr,
         m.head_sha,
         m.spec.as_deref().unwrap_or(""),
@@ -152,6 +158,7 @@ fn serialize(m: &Marker) -> String {
         m.pid,
         m.pid_start.as_deref().unwrap_or_default(),
         m.started_at,
+        m.started_at_nanos.map(|n| n.to_string()).unwrap_or_default(),
         m.ttl_secs,
     )
 }
@@ -168,6 +175,7 @@ fn parse(pr: u64, body: &str) -> Marker {
         pid: 0,
         pid_start: None,
         started_at: 0,
+        started_at_nanos: None,
         ttl_secs: CLAIM_TTL_SECS,
     };
     for line in body.lines() {
@@ -181,12 +189,182 @@ fn parse(pr: u64, body: &str) -> Marker {
                 "pid" => m.pid = v.parse().unwrap_or(0),
                 "pid_start" if !v.is_empty() => m.pid_start = Some(v.to_string()),
                 "started_at" => m.started_at = v.parse().unwrap_or(0),
+                "started_at_nanos" => {
+                    m.started_at_nanos = v.parse::<u32>().ok().filter(|n| *n < 1_000_000_000)
+                }
                 "ttl_secs" => m.ttl_secs = v.parse().unwrap_or(CLAIM_TTL_SECS),
                 _ => {}
             }
         }
     }
     m
+}
+
+/// Refuse duplicate review admission only for a conclusive verdict at the
+/// exact head. Waiting remains eligible for the fresh review it requires.
+// trace:BUG-2530 | ai:codex
+pub(crate) fn refuse_conclusive_head(
+    root: &Path,
+    pr: u64,
+    head: Option<&str>,
+) -> anyhow::Result<()> {
+    if let Some(v) = conclusive_head(root, pr, head) {
+        // trace:BUG-2557 | ai:claude
+        anyhow::bail!(
+            "PR-{pr} already has a {} verdict at this exact head; a duplicate review is unnecessary. \
+             If the review contract changed after that verdict, an advisor can admit one fresh \
+             review at this head with `--rereview <reason>`",
+            v.kind.label()
+        );
+    }
+    Ok(())
+}
+
+/// BUG-2557: an advisor admits one fresh review at a head that already
+/// carries a conclusive verdict — for when the review contract (the review
+/// story's coverage, say) changed after that verdict — instead of pushing an
+/// empty commit and paying a full CI run. Recorded on the change's gate
+/// ledger with the reason; [`refuse_conclusive_head`] admits a review while
+/// the superseded verdict is still the head's newest, so the next recorded
+/// verdict ends the admission. `Ok(None)` when the head has no conclusive
+/// verdict (nothing to admit; nothing recorded).
+// trace:BUG-2557 | ai:claude
+pub(crate) fn admit_rereview(
+    root: &Path,
+    pr: u64,
+    head: Option<&str>,
+    reason: &str,
+    by: &str,
+) -> anyhow::Result<Option<&'static str>> {
+    let reason = reason.trim();
+    anyhow::ensure!(
+        !reason.is_empty(),
+        "`--rereview` needs a reason (what changed in the review contract after the verdict)"
+    );
+    let head = head
+        .map(str::trim)
+        .filter(|h| !h.is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "cannot admit a re-review of PR-{pr}: its current head could not be resolved"
+            )
+        })?;
+    let Some(v) = conclusive_head(root, pr, Some(head)) else {
+        return Ok(None);
+    };
+    let recorded_at = v
+        .recorded_at
+        .clone()
+        .filter(|at| !at.trim().is_empty())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+            "cannot admit a re-review of PR-{pr}: its {} verdict carries no recording time, so a \
+             later verdict could not be told apart from it; push a new commit instead",
+            v.kind.label()
+        )
+        })?;
+    let mut event = crate::gate::ledger::GateEvent::new(
+        crate::gate::ledger::ChangeKey::pr(pr),
+        crate::gate::ledger::EventBody::RereviewAdmitted {
+            reason: reason.to_string(),
+            by: by.to_string(),
+            superseded_verdict: v.kind.label().to_string(),
+            superseded_recorded_at: recorded_at,
+        },
+    );
+    event.head = Some(head.to_string());
+    crate::gate::ledger::record_event(root, event).map_err(|e| {
+        anyhow::anyhow!(
+            "could not record the re-review admission for PR-{pr} on the gate ledger: {e}"
+        )
+    })?;
+    Ok(Some(v.kind.label()))
+}
+
+/// Has an advisor admitted a fresh review at `head` that supersedes `v`?
+// trace:BUG-2557 | ai:claude
+fn rereview_admitted(
+    root: &Path,
+    pr: u64,
+    head: &str,
+    v: &super::review_verdict::RecordedVerdict,
+) -> bool {
+    let Some(recorded_at) = v.recorded_at.as_deref().filter(|at| !at.trim().is_empty()) else {
+        return false;
+    };
+    let Ok(store) = crate::gate::ledger::store_root(root) else {
+        return false;
+    };
+    crate::gate::ledger::project::events(&store, crate::gate::ledger::ChangeKey::pr(pr))
+        .iter()
+        .any(|e| match &e.body {
+            crate::gate::ledger::EventBody::RereviewAdmitted {
+                superseded_verdict,
+                superseded_recorded_at,
+                ..
+            } => {
+                e.head
+                    .as_deref()
+                    .is_some_and(|h| super::review_verdict::same_reviewed_sha(h, head))
+                    && superseded_verdict == v.kind.label()
+                    && superseded_recorded_at == recorded_at
+            }
+            _ => false,
+        })
+}
+
+// trace:BUG-2530 | ai:codex
+fn conclusive_head(
+    root: &Path,
+    pr: u64,
+    head: Option<&str>,
+) -> Option<super::review_verdict::RecordedVerdict> {
+    let head = head.filter(|h| !h.trim().is_empty())?;
+    let key = format!("PR-{pr}");
+    // Synced evidence has the same precedence as in the merge gates. In
+    // particular, a remote refusal must not fall back to a local approval.
+    let v = match super::review_publication::current_at_head(root, &[&key], head) {
+        Some(remote) => super::review_verdict::parse_recorded_verdict(&remote.body)?,
+        None => super::review_verdict::read_verdict_for_sha(root, &key, head)?,
+    };
+    let conclusive = v.kind.requires_changes()
+        || super::review_approval::independent_approval_authorized(
+            root,
+            &[key],
+            v.reviewed_branch.as_deref(),
+            &v,
+        );
+    (v.reviewed_sha.as_deref() == Some(head)
+        && conclusive
+        && !rereview_admitted(root, pr, head, &v))
+    .then_some(v)
+}
+
+/// An already-approved head cannot acquire a new blocking review merely
+/// because an older launcher wrote a redundant claim. Leave the marker intact;
+/// the ordinary approval/hold gates still validate all merge authority.
+// trace:BUG-2530 | ai:codex
+fn redundant_claim(root: &Path, m: &Marker, head: Option<&str>) -> bool {
+    let Some(v) = conclusive_head(root, m.pr, head) else {
+        return false;
+    };
+    m.head_sha == head.unwrap_or_default()
+        && v.kind.approves()
+        && v.attestation
+            .as_ref()
+            .is_some_and(|a| a.authorizes(v.reviewed_sha.as_deref()))
+        // A legacy second identifies an interval, not an instant. Only a
+        // verdict strictly before that interval proves a redundant claim.
+        && v.recorded_at
+            .as_deref()
+            .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+            .is_some_and(|at| {
+                at.timestamp() >= 0 && match m.started_at_nanos {
+                    Some(nanos) => (at.timestamp() as u64, at.timestamp_subsec_nanos())
+                        < (m.started_at, nanos),
+                    None => (at.timestamp() as u64) < m.started_at,
+                }
+            })
 }
 
 /// Write (or replace) the marker for `m.pr`.
@@ -309,14 +487,39 @@ pub(crate) fn merge_gate(
     pr: u64,
     current_head: impl FnOnce() -> Option<String>,
 ) -> MergeGate {
+    merge_gate_with(root, pr, current_head, true)
+}
+
+/// [`merge_gate`] for a read-only report: the same answer, but an expired
+/// marker is left on disk (`ExpiredCleared` then means "would be cleared").
+// trace:STORY-2824 | ai:claude
+pub(crate) fn merge_gate_peek(
+    root: &Path,
+    pr: u64,
+    current_head: impl FnOnce() -> Option<String>,
+) -> MergeGate {
+    merge_gate_with(root, pr, current_head, false)
+}
+
+fn merge_gate_with(
+    root: &Path,
+    pr: u64,
+    current_head: impl FnOnce() -> Option<String>,
+    clear_expired: bool,
+) -> MergeGate {
     let Some(m) = read(root, pr) else {
         return MergeGate::Clear;
     };
     if let Some(reason) = ownership_ended(root, &m) {
-        clear(root, pr);
+        if clear_expired {
+            clear(root, pr);
+        }
         return MergeGate::ExpiredCleared(m, reason);
     }
     let head = current_head();
+    if redundant_claim(root, &m, head.as_deref()) {
+        return MergeGate::Clear;
+    }
     if covers_head(&m.head_sha, head.as_deref()) {
         MergeGate::UnderReview(m)
     } else {
@@ -328,7 +531,31 @@ pub(crate) fn merge_gate(
 /// `pr` covering `current_head`, else `None`. Never removes anything.
 pub(crate) fn live_description(root: &Path, pr: u64, current_head: Option<&str>) -> Option<String> {
     let m = read(root, pr)?;
-    (is_live_at(root, &m) && covers_head(&m.head_sha, current_head)).then(|| m.describe())
+    (is_live_at(root, &m)
+        && covers_head(&m.head_sha, current_head)
+        && !redundant_claim(root, &m, current_head))
+    .then(|| m.describe())
+}
+
+/// [`live_description`] that tells a missing marker (`Ok(None)`) from one
+/// that is there and could not be read (`Err`): a reader that must not act
+/// on a guess waits on the second.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn live_description_checked(
+    root: &Path,
+    pr: u64,
+    current_head: Option<&str>,
+) -> std::io::Result<Option<String>> {
+    let body = match std::fs::read_to_string(marker_path(root, pr)) {
+        Ok(body) => body,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let m = parse(pr, &body);
+    Ok((is_live_at(root, &m)
+        && covers_head(&m.head_sha, current_head)
+        && !redundant_claim(root, &m, current_head))
+    .then(|| m.describe()))
 }
 
 /// The refusal a merge surface prints for [`MergeGate::UnderReview`].

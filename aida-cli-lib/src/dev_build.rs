@@ -23,7 +23,7 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 /// The binaries that make up one live build, promoted and rolled back as a pair.
-pub(crate) const LIVE_BINARIES: [&str; 2] = ["aida", "aida-server"];
+pub(crate) const LIVE_BINARIES: [&str; 3] = ["aida", "aida-server", "aida-porcelain"];
 
 /// Cargo profile `aida dev build` compiles (same as `make build-fast`).
 const PROFILE: &str = "agent";
@@ -165,11 +165,11 @@ pub(crate) struct CheckoutState {
     pub tracked_changes: Vec<String>,
     /// Count of untracked (non-ignored) files.
     pub untracked: usize,
-    /// Whether `refs/remotes/origin/main` exists.
-    pub has_origin_main: bool,
-    /// Commits in HEAD that origin/main lacks.
+    /// Whether the landing ref (see [`landing_ref`]) exists.
+    pub has_upstream: bool,
+    /// Commits in HEAD that the landing ref lacks.
     pub ahead: usize,
-    /// Commits in origin/main that HEAD lacks.
+    /// Commits in the landing ref that HEAD lacks.
     pub behind: usize,
     /// `git rev-parse HEAD`, when readable.
     // trace:STORY-1646 | ai:claude
@@ -181,7 +181,8 @@ pub(crate) struct CheckoutState {
 pub(crate) enum BuildOnlyReason {
     /// `--no-promote` was passed.
     NoPromote,
-    /// Built in a linked worktree; worktree builds never promote.
+    /// Built in a linked worktree that is not on `integration`; such builds
+    /// never promote.
     Worktree,
 }
 
@@ -193,26 +194,220 @@ pub(crate) enum PromotionPlan {
     Refuse { reasons: Vec<String> },
 }
 
-/// Pure promotion gate: primary checkout, on `main`, no tracked
-/// modifications, HEAD == origin/main. Untracked files only warn.
-/// `--allow-dirty` turns refusals into warnings; it never makes a worktree
-/// build promote.
+/// The integration branch: fast local landing, with `main` as the batched
+/// verification checkpoint (STORY-2737). Slice (c) moves this to config.
+// trace:STORY-2737 | ai:claude
+pub(crate) const INTEGRATION_BRANCH: &str = "integration";
+
+/// The remote-tracking ref a checkout on `branch` is compared with: its own
+/// `origin/integration` on the integration branch, otherwise `origin/main`.
+// trace:STORY-2737 | ai:claude
+pub(crate) fn landing_ref(branch: Option<&str>) -> &'static str {
+    match branch {
+        Some(INTEGRATION_BRANCH) => "origin/integration",
+        _ => "origin/main",
+    }
+}
+
+/// `[landing] promote_live_binary_from = "green-main"`: the live binary is
+/// promoted from `main` only when every check of the CI-gated set is green
+/// on the exact HEAD commit. `merge-hold-gate` runs on pull requests only,
+/// so it is not required of a `main` commit. The refusal names the newest
+/// green first-parent commit, when one is near. `clean-main` (the default)
+/// never refuses here. `no-new-failures` is decided by
+/// [`BuildSteps::no_new_failures`], which compares against the promoted
+/// commit; called here, without that commit, it fails closed, never
+/// weakening to `clean-main`.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn green_main_refusal(repo: &Path, sha: Option<&str>) -> Option<String> {
+    let policy = crate::landing_policy::load(repo);
+    match policy.promote_from {
+        crate::landing_policy::PromoteFrom::CleanMain => return None,
+        crate::landing_policy::PromoteFrom::NoNewFailures => return Some(no_new_failures_refusal()),
+        crate::landing_policy::PromoteFrom::GreenMain => {}
+    }
+    let lead = "the live binary is promoted only from a commit whose CI is green \
+                (`[landing] promote_live_binary_from = \"green-main\"`)";
+    // Fail closed: no commit to check is never "green".
+    let Some(sha) = sha.map(str::trim).filter(|s| !s.is_empty()) else {
+        return Some(format!(
+            "{lead}, and the commit being promoted could not be read, so its CI is unknown; \
+             the live binary stays where it is."
+        ));
+    };
+    let required: Vec<&str> = policy
+        .ci_gated_checks
+        .iter()
+        .map(String::as_str)
+        .filter(|name| *name != crate::landing_policy::MERGE_HOLD_GATE)
+        .collect();
+    let forge = crate::forge::forge_for(repo);
+    let ci = |sha: &str| {
+        forge
+            .commit_checks(sha)
+            .map(|checks| crate::forge::judge_commit_checks(&checks, &required))
+    };
+    let state = green_main_state(sha, ci(sha))?;
+    let parents: Vec<String> = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args([
+            "rev-list",
+            "--first-parent",
+            &format!("--max-count={LAST_GREEN_SEARCH}"),
+            &format!("{sha}~1"),
+        ])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut unreadable = 0usize;
+    let mut last_green = None;
+    for parent in &parents {
+        match ci(parent) {
+            Ok(crate::forge::CommitCi::Green) => {
+                last_green = Some(parent.clone());
+                break;
+            }
+            Ok(_) => {}
+            Err(_) => unreadable += 1,
+        }
+    }
+    Some(format!(
+        "{lead}, and {state}. {}",
+        last_green_note(last_green.as_deref(), parents.len(), unreadable)
+    ))
+}
+
+/// PURE: the refusal under `promote_live_binary_from = "no-new-failures"`
+/// when the check is asked without the promoted commit to compare against.
+// trace:STORY-2897 | ai:claude
+// trace:STORY-2912 | ai:claude
+pub(crate) fn no_new_failures_refusal() -> String {
+    "`[landing] promote_live_binary_from = \"no-new-failures\"` is set, but this check has no \
+     promoted commit to compare the commit's failures with, so nothing is promoted under it; \
+     the live binary stays where it is."
+        .to_string()
+}
+
+/// PURE: why a staged build may not be promoted under green-main: it must
+/// report exactly the commit being promoted, built clean.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn green_main_staged_refusal(staged: Option<&str>, head: &str) -> Option<String> {
+    if let Err(why) = check_staged_sha(staged, head) {
+        return Some(format!(
+            "the staged build is not the commit being promoted: {why}"
+        ));
+    }
+    staged.filter(|s| s.ends_with("+dirty")).map(|s| {
+        format!(
+            "the staged build ({s}) was built from uncommitted changes, so no CI result covers it"
+        )
+    })
+}
+
+/// How far back the refusal looks for the newest green commit.
+const LAST_GREEN_SEARCH: usize = 50;
+
+/// PURE: what the refusal says about the newest green commit before the
+/// refused one, keeping "none found" apart from "CI could not be read".
+// trace:STORY-2897 | ai:claude
+pub(crate) fn last_green_note(
+    last_green: Option<&str>,
+    searched: usize,
+    unreadable: usize,
+) -> String {
+    match last_green {
+        Some(sha) => format!(
+            "The newest green commit before it is {}; the live binary stays where it is.",
+            &sha[..sha.len().min(12)]
+        ),
+        None if searched == 0 => {
+            "Its history could not be read, so the newest green commit is unknown; the live \
+             binary stays where it is."
+                .to_string()
+        }
+        None if unreadable > 0 => format!(
+            "No green commit was found among the {searched} before it, and CI could not be read \
+             for {unreadable} of them; the live binary stays where it is."
+        ),
+        None => format!(
+            "None of the {searched} commits before it has green CI; the live binary stays where \
+             it is."
+        ),
+    }
+}
+
+/// PURE: why `sha`'s CI does not allow promotion (`None` when green).
+// trace:STORY-2897 | ai:claude
+pub(crate) fn green_main_state(sha: &str, ci: Result<crate::forge::CommitCi>) -> Option<String> {
+    use crate::forge::CommitCi;
+    let short = &sha[..sha.len().min(12)];
+    match ci {
+        Ok(CommitCi::Green) => None,
+        Ok(CommitCi::Pending(names)) => Some(format!(
+            "CI on {short} is still running: {}",
+            names.join(", ")
+        )),
+        Ok(CommitCi::Failed(names)) => Some(format!("CI on {short} failed: {}", names.join(", "))),
+        Ok(CommitCi::NoChecks) => Some(format!("there are no CI checks on {short}")),
+        Ok(CommitCi::MissingRequired(name)) => {
+            Some(format!("required check `{name}` did not pass on {short}"))
+        }
+        Err(e) => Some(format!("CI on {short} could not be read: {e:#}")),
+    }
+}
+
+/// Pure promotion gate: on a landing branch (`main` in the primary checkout,
+/// or `integration` in any checkout), no tracked modifications, HEAD equal to
+/// that branch's `origin/` ref. Untracked files only warn. `--allow-dirty`
+/// turns refusals into warnings; it never makes a worktree build promote
+/// unless that worktree is on `integration`.
+// trace:STORY-2737 | ai:claude
 pub(crate) fn plan_promotion(
     state: &CheckoutState,
     no_promote: bool,
     allow_dirty: bool,
 ) -> PromotionPlan {
+    plan_promotion_at(state, no_promote, allow_dirty, None)
+}
+
+/// [`plan_promotion`], where `green_commit` names a commit the caller has
+/// verified green on `main`'s first-parent line (the scheduled promote and
+/// the operator cron). On `main`, HEAD may then sit behind `origin/main` when
+/// HEAD is exactly that commit and has nothing `origin/main` lacks, i.e. it
+/// is an ancestor of `origin/main`. Every other rule is unchanged.
+// trace:BUG-2687 | ai:claude
+pub(crate) fn plan_promotion_at(
+    state: &CheckoutState,
+    no_promote: bool,
+    allow_dirty: bool,
+    green_commit: Option<&str>,
+) -> PromotionPlan {
     if no_promote {
         return PromotionPlan::BuildOnly(BuildOnlyReason::NoPromote);
     }
-    if state.is_linked_worktree {
+    let on_integration = state.branch.as_deref() == Some(INTEGRATION_BRANCH);
+    if state.is_linked_worktree && !on_integration {
         return PromotionPlan::BuildOnly(BuildOnlyReason::Worktree);
     }
+    let upstream = landing_ref(state.branch.as_deref());
     let mut reasons = Vec::new();
+    let mut warnings = Vec::new();
     match state.branch.as_deref() {
-        Some("main") => {}
-        Some(other) => reasons.push(format!("on branch `{other}`, not `main`")),
-        None => reasons.push("HEAD is detached, not on `main`".to_string()),
+        Some("main") | Some(INTEGRATION_BRANCH) => {}
+        Some(other) => reasons.push(format!(
+            "on branch `{other}`, not `main` or `{INTEGRATION_BRANCH}`"
+        )),
+        None => reasons.push(format!(
+            "HEAD is detached, not on `main` or `{INTEGRATION_BRANCH}`"
+        )),
     }
     if !state.tracked_changes.is_empty() {
         let shown: Vec<&str> = state
@@ -233,30 +428,44 @@ pub(crate) fn plan_promotion(
             shown.join(", ")
         ));
     }
-    if !state.has_origin_main {
-        reasons.push("there is no `origin/main` to compare HEAD against".to_string());
+    if !state.has_upstream {
+        reasons.push(format!("there is no `{upstream}` to compare HEAD against"));
     } else if state.ahead > 0 && state.behind > 0 {
         reasons.push(format!(
-            "HEAD has diverged from origin/main ({} ahead, {} behind)",
+            "HEAD has diverged from {upstream} ({} ahead, {} behind)",
             state.ahead, state.behind
         ));
     } else if state.behind > 0 {
-        reasons.push(format!(
-            "HEAD is {} commit(s) behind origin/main",
-            state.behind
-        ));
+        if let Some(green) = green_behind_ok(state, green_commit) {
+            warnings.push(format!(
+                "HEAD is {} commit(s) behind {upstream}; promoting the newest green commit {}",
+                state.behind,
+                &green[..green.len().min(12)]
+            ));
+        } else {
+            reasons.push(format!(
+                "HEAD is {} commit(s) behind {upstream}",
+                state.behind
+            ));
+        }
     } else if state.ahead > 0 {
         reasons.push(format!(
-            "HEAD is {} commit(s) ahead of origin/main (unpushed work)",
+            "HEAD is {} commit(s) ahead of {upstream} (unpushed work)",
             state.ahead
         ));
     }
-    let mut warnings = Vec::new();
     if state.untracked > 0 {
         warnings.push(format!(
             "{} untracked file(s) in the checkout (not blocking)",
             state.untracked
         ));
+    }
+    // A selected green commit is the only commit that may go live, whatever
+    // HEAD's distance from origin/main; `--allow-dirty` does not override it.
+    // trace:BUG-2687 | ai:claude
+    if let Some(why) = green_head_mismatch(state, green_commit) {
+        reasons.push(why);
+        return PromotionPlan::Refuse { reasons };
     }
     if reasons.is_empty() {
         return PromotionPlan::Promote { warnings };
@@ -272,18 +481,95 @@ pub(crate) fn plan_promotion(
     PromotionPlan::Refuse { reasons }
 }
 
+/// PURE: the green commit HEAD may promote from while behind `origin/main`:
+/// only on `main` (never `integration`), only when HEAD is exactly
+/// `green_commit` (full SHA, case-insensitive) and nothing in HEAD is missing
+/// from `origin/main`.
+// trace:BUG-2687 | ai:claude
+fn green_behind_ok<'a>(state: &CheckoutState, green_commit: Option<&'a str>) -> Option<&'a str> {
+    let green = green_commit.map(str::trim).filter(|g| !g.is_empty())?;
+    let head = state.head.as_deref()?.trim();
+    (state.branch.as_deref() == Some("main")
+        && state.has_upstream
+        && state.ahead == 0
+        && crate::git_arg_guard::is_hex_sha(green)
+        && green.len() == head.len()
+        && head.eq_ignore_ascii_case(green))
+    .then_some(green)
+}
+
+/// PURE: why HEAD may not be promoted as the selected green commit:
+/// `None` when no commit was selected or HEAD is exactly it (full SHA,
+/// case-insensitive).
+// trace:BUG-2687 | ai:claude
+pub(crate) fn green_head_mismatch(
+    state: &CheckoutState,
+    green_commit: Option<&str>,
+) -> Option<String> {
+    let green = green_commit?.trim();
+    let head = state.head.as_deref().map(str::trim).unwrap_or_default();
+    let matches = crate::git_arg_guard::is_hex_sha(green)
+        && green.len() >= 40
+        && green.len() == head.len()
+        && head.eq_ignore_ascii_case(green);
+    (!matches).then(|| {
+        let head = if head.is_empty() { "unreadable" } else { head };
+        format!(
+            "HEAD is {head}, not the selected green commit {}; only that commit may be promoted",
+            if green.is_empty() { "(empty)" } else { green }
+        )
+    })
+}
+
+/// The CI gate of a live promotion under `[landing] promote_live_binary_from`:
+/// `Ok(Ok(decision))` allows (the decision is `Some` under
+/// `no-new-failures`, kept in the promotion record), `Ok(Err(why))` refuses.
+/// A `no-new-failures` decision, allowed or refused, is also recorded as the
+/// live dir's last decision for `aida dev status`.
+// trace:STORY-2912 | ai:claude
+type CiGate = std::result::Result<Option<crate::promotion_failures::Decision>, String>;
+
+fn ci_gate(
+    layout: &DevLayout,
+    steps: &mut dyn BuildSteps,
+    sha: Option<&str>,
+    out: &mut dyn Write,
+) -> Result<CiGate> {
+    if steps.promote_from(&layout.repo) != crate::landing_policy::PromoteFrom::NoNewFailures {
+        return Ok(match steps.green_main_refusal(&layout.repo, sha) {
+            Some(why) => Err(why),
+            None => Ok(None),
+        });
+    }
+    let decision = steps.no_new_failures(layout, sha);
+    if let Err(e) = crate::promotion_failures::record_last(&layout.live_dir, &decision) {
+        writeln!(
+            out,
+            "warning: could not record the promotion decision: {e:#}"
+        )?;
+    }
+    for line in decision.status_lines() {
+        writeln!(out, "CI gate: {line}")?;
+    }
+    Ok(match decision.refusal() {
+        Some(why) => Err(why),
+        None => Ok(Some(decision)),
+    })
+}
+
 fn refusal_message(reasons: &[String]) -> String {
     let mut msg = String::from(
-        "refusing to promote: the live binary is only built from a clean `main` that matches `origin/main`.\n",
+        "refusing to promote: the live binary is only built from a clean `main` or `integration` \
+         that matches its `origin/` branch.\n",
     );
     for r in reasons {
         msg.push_str(&format!("  - {r}\n"));
     }
     msg.push_str(
         "Nothing was built and the live binaries are untouched.\n\
-         HEAD is compared with your local `origin/main` ref; this command does not fetch, \
+         HEAD is compared with your local `origin/` ref; this command does not fetch, \
          so run `git fetch` first if that ref may be stale.\n\
-         Options: commit/push or sync with `origin/main` and retry; `aida dev build --no-promote` \
+         Options: commit/push or sync with the `origin/` branch and retry; `aida dev build --no-promote` \
          to build and smoke-test only; or `aida dev build --allow-dirty` to promote anyway.",
     );
     msg
@@ -336,20 +622,18 @@ pub(crate) fn probe_checkout(repo: &Path) -> Result<CheckoutState> {
             tracked_changes.push(line[3..].to_string());
         }
     }
-    let has_origin_main = git_out(
-        repo,
-        &["rev-parse", "--verify", "-q", "refs/remotes/origin/main"],
-    )
-    .is_some();
+    // trace:STORY-2737 | ai:claude
+    let upstream = format!("refs/remotes/{}", landing_ref(branch.as_deref()));
+    let has_upstream = git_out(repo, &["rev-parse", "--verify", "-q", &upstream]).is_some();
     let (mut ahead, mut behind) = (0, 0);
-    if has_origin_main {
+    if has_upstream {
         if let Some(counts) = git_out(
             repo,
             &[
                 "rev-list",
                 "--left-right",
                 "--count",
-                "HEAD...refs/remotes/origin/main",
+                &format!("HEAD...{upstream}"),
             ],
         ) {
             let mut it = counts.split_whitespace().map(|n| n.parse().unwrap_or(0));
@@ -362,7 +646,7 @@ pub(crate) fn probe_checkout(repo: &Path) -> Result<CheckoutState> {
         branch,
         tracked_changes,
         untracked,
-        has_origin_main,
+        has_upstream,
         ahead,
         behind,
         head: git_out(repo, &["rev-parse", "HEAD"]).filter(|h| !h.is_empty()),
@@ -393,6 +677,33 @@ impl std::error::Error for PromotionRefused {}
 /// touches the host's live binaries or MCP servers.
 pub(crate) trait BuildSteps {
     fn probe(&mut self, repo: &Path) -> Result<CheckoutState>;
+    /// Why the live binary must not be promoted from `repo`'s HEAD on `main`
+    /// under `[landing] promote_live_binary_from` (`None` = allowed).
+    // trace:STORY-2897 | ai:claude
+    fn green_main_refusal(&mut self, repo: &Path, sha: Option<&str>) -> Option<String> {
+        green_main_refusal(repo, sha)
+    }
+    /// `[landing] promote_live_binary_from` for `repo`.
+    // trace:STORY-2897 | ai:claude
+    fn promote_from(&mut self, repo: &Path) -> crate::landing_policy::PromoteFrom {
+        crate::landing_policy::load(repo).promote_from
+    }
+    /// Under `no-new-failures`: may `candidate` replace the live pair, whose
+    /// `.promoted` record names the commit compared against?
+    // trace:STORY-2912 | ai:claude
+    fn no_new_failures(
+        &mut self,
+        layout: &DevLayout,
+        candidate: Option<&str>,
+    ) -> crate::promotion_failures::Decision {
+        let promoted = read_promotion_meta(&layout.live_dir).map(|m| m.sha);
+        crate::promotion_failures::decide_live(
+            &layout.repo,
+            &layout.target_dir.join("promotion-evidence"),
+            candidate,
+            promoted.as_deref(),
+        )
+    }
     /// Live-wave guard: refuse (or wait, with `after_wave`) when a live drain
     /// wave is pinned to `binary`, which this run would replace.
     fn guard(&mut self, repo: &Path, binary: &Path, after_wave: bool) -> Result<()>;
@@ -405,6 +716,9 @@ pub(crate) trait BuildSteps {
     /// Run `aida` / `server` (in `repo`); `Err` names what failed. When
     /// promoting these are the staged copies that will be renamed live.
     fn smoke(&mut self, repo: &Path, aida: &Path, server: &Path) -> Result<()>;
+    fn smoke_porcelain(&mut self, _binary: &Path) -> Result<()> {
+        Ok(())
+    }
     /// The `sha ...` token of `aida --version` (may end in `+dirty`).
     // trace:STORY-1646 | ai:claude
     fn version_sha(&mut self, aida: &Path) -> Option<String>;
@@ -430,6 +744,11 @@ pub(crate) struct DevBuildOptions {
     pub install_links: bool,
     pub yes: bool,
     pub after_wave: bool,
+    pub autopromote_target: Option<String>,
+    /// A commit the caller verified green on `main`'s first-parent line:
+    /// HEAD may promote from it while behind `origin/main` (see
+    /// [`plan_promotion_at`]). trace:BUG-2687 | ai:claude
+    pub green_commit: Option<String>,
 }
 
 /// What re-recording the mail-retention activation after a promote did.
@@ -452,6 +771,7 @@ pub(crate) const RETENTION_RECORD_COMMAND: &str = "aida mailbox retention activa
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum BuildOutcome {
     Promoted,
+    AlreadyPromoted,
     BuiltOnly(BuildOnlyReason),
 }
 
@@ -465,7 +785,9 @@ pub(crate) fn run_dev_build(
     out: &mut dyn Write,
 ) -> Result<BuildOutcome> {
     let state = steps.probe(&layout.repo)?;
-    let plan = plan_promotion(&state, opts.no_promote, opts.allow_dirty);
+    // trace:BUG-2687 | ai:claude
+    let green = opts.green_commit.as_deref();
+    let plan = plan_promotion_at(&state, opts.no_promote, opts.allow_dirty, green);
     match &plan {
         // trace:STORY-1689 | ai:claude
         PromotionPlan::Refuse { reasons } => {
@@ -474,6 +796,15 @@ pub(crate) fn run_dev_build(
         PromotionPlan::Promote { warnings } => {
             for w in warnings {
                 writeln!(out, "warning: {w}")?;
+            }
+            // Every live promotion (main or integration) answers to
+            // `[landing] promote_live_binary_from`; checked now to fail fast,
+            // and again for the staged SHA before the swap. trace:STORY-2897 | ai:claude
+            for w in crate::landing_policy::load(&layout.repo).warnings {
+                writeln!(out, "warning: {w}")?;
+            }
+            if let Err(why) = ci_gate(layout, steps, state.head.as_deref(), out)? {
+                return Err(PromotionRefused(why).into());
             }
         }
         PromotionPlan::BuildOnly(_) => {}
@@ -536,6 +867,22 @@ pub(crate) fn run_dev_build(
         None => {}
     }
 
+    // The build stamps whatever HEAD is when cargo starts: re-check, right
+    // before it, that HEAD is still the selected green commit.
+    // trace:BUG-2687 | ai:claude
+    if promoting {
+        let moved = match green {
+            Some(_) => green_head_mismatch(&steps.probe(&layout.repo)?, green),
+            None => None,
+        };
+        if let Some(why) = moved {
+            return Err(PromotionRefused(format!(
+                "the checkout moved before the build started, so nothing was built or \
+                 promoted: {why}"
+            ))
+            .into());
+        }
+    }
     steps.build(layout).map_err(|e| {
         anyhow!("build failed: {e:#}\nThe live binaries were not touched.\nHint: {CLEAN_HINT}")
     })?;
@@ -563,11 +910,15 @@ pub(crate) fn run_dev_build(
                     &layout.built("aida-server"),
                 )
                 .map_err(smoke_failed)?;
+            steps
+                .smoke_porcelain(&layout.built("aida-porcelain"))
+                .map_err(smoke_failed)?;
             writeln!(out, "Smoke test passed: {}", layout.built("aida").display())?;
             match reason {
                 BuildOnlyReason::Worktree => writeln!(
                     out,
-                    "Not promoted: this is a worktree, and worktree builds never replace the live binary.\n\
+                    "Not promoted: this worktree is not on `integration`, and only `integration` \
+                     worktree builds replace the live binary.\n\
                      Try this build in your shell: cd {} && aida dev activate auto\n\
                      Or run it directly: {}",
                     layout.repo.display(),
@@ -586,16 +937,41 @@ pub(crate) fn run_dev_build(
             // live-dir lock, and the smoke test runs against the staged
             // copies, so the pair that goes live is exactly the pair that
             // was tested even if another build rewrites target/ meanwhile.
-            let lock = lock_live_dir(layout)?;
+            // trace:BUG-2628 | ai:codex
+            let wait = if opts.autopromote_target.is_some() {
+                Duration::from_secs(30)
+            } else {
+                LIVE_LOCK_WAIT
+            };
+            let (lock, contended) = acquire_live_lock(layout, wait)?;
+            let Some(lock) = lock else {
+                let why = live_lock_busy(layout);
+                if opts.autopromote_target.is_some() {
+                    return Err(PromotionRefused(why).into());
+                }
+                bail!("{why}");
+            };
             for note in recover_live_dir(layout)? {
                 writeln!(out, "note: {note}")?;
             }
+            if let Some(target) = opts.autopromote_target.as_deref().filter(|_| contended) {
+                if read_promotion_meta(&layout.live_dir).is_some_and(|meta| meta.sha == target) {
+                    writeln!(out, "{target} already promoted by a concurrent build")?;
+                    return Ok(BuildOutcome::AlreadyPromoted);
+                }
+                return Err(PromotionRefused(format!(
+                    "live update finished without promoting {target}; the next tick will retry"
+                ))
+                .into());
+            }
             let incoming = stage_incoming(layout)?;
-            let smoked = steps.smoke(
-                &layout.repo,
-                &incoming.join("aida"),
-                &incoming.join("aida-server"),
-            );
+            let smoked = steps
+                .smoke(
+                    &layout.repo,
+                    &incoming.join("aida"),
+                    &incoming.join("aida-server"),
+                )
+                .and_then(|_| steps.smoke_porcelain(&incoming.join("aida-porcelain")));
             if let Err(e) = smoked {
                 let _ = std::fs::remove_dir_all(&incoming);
                 return Err(smoke_failed(e));
@@ -608,9 +984,18 @@ pub(crate) fn run_dev_build(
             // The build and smoke test can take minutes; re-check that the
             // checkout still qualifies before replacing the live pair.
             let state = steps.probe(&layout.repo)?;
-            if let PromotionPlan::Refuse { reasons } =
-                plan_promotion(&state, false, opts.allow_dirty)
-            {
+            // Anything but `Promote` refuses: a linked worktree that left
+            // `integration` during the build plans `BuildOnly`, not `Refuse`.
+            // trace:STORY-2737 | ai:claude
+            let recheck = match plan_promotion_at(&state, false, opts.allow_dirty, green) {
+                PromotionPlan::Promote { .. } => None,
+                PromotionPlan::Refuse { reasons } => Some(reasons),
+                PromotionPlan::BuildOnly(_) => Some(vec![format!(
+                    "this linked worktree is no longer on `{INTEGRATION_BRANCH}`; \
+                     worktree builds promote only from `{INTEGRATION_BRANCH}`"
+                )]),
+            };
+            if let Some(reasons) = recheck {
                 let _ = std::fs::remove_dir_all(&incoming);
                 // trace:STORY-1689 | ai:claude
                 return Err(PromotionRefused(format!(
@@ -621,9 +1006,12 @@ pub(crate) fn run_dev_build(
             }
             // trace:STORY-1646 | ai:claude
             let head = state.head.clone().unwrap_or_default();
+            // The staged build must be the selected green commit itself, not
+            // merely whatever HEAD became. trace:BUG-2687 | ai:claude
+            let expected = green.map_or_else(|| head.clone(), |g| g.trim().to_ascii_lowercase());
             if !opts.allow_dirty {
                 let staged = steps.version_sha(&incoming.join("aida"));
-                if let Err(why) = check_staged_sha(staged.as_deref(), &head) {
+                if let Err(why) = check_staged_sha(staged.as_deref(), &expected) {
                     let _ = std::fs::remove_dir_all(&incoming);
                     bail!(
                         "the staged build does not match HEAD, so it was not promoted: {why}.\n\
@@ -632,16 +1020,58 @@ pub(crate) fn run_dev_build(
                     );
                 }
             }
+            // Under a CI-checked policy the staged binary itself must be
+            // the clean build of the commit whose CI is checked,
+            // `--allow-dirty` or not. trace:STORY-2897 | ai:claude
+            // trace:STORY-2912 | ai:claude
+            let policy = steps.promote_from(&layout.repo);
+            if policy != crate::landing_policy::PromoteFrom::CleanMain {
+                let staged = steps.version_sha(&incoming.join("aida"));
+                if let Some(why) = green_main_staged_refusal(staged.as_deref(), &expected) {
+                    let _ = std::fs::remove_dir_all(&incoming);
+                    return Err(PromotionRefused(format!(
+                        "{why}; the live binaries were not touched (`--allow-dirty` does not \
+                         override `[landing] promote_live_binary_from = {}`)",
+                        aida_core::toml_quote::toml_string(policy.as_str())
+                    ))
+                    .into());
+                }
+            }
+            // The CI decision is pinned to the exact commit being promoted
+            // and re-read at the swap: main can move, or its CI change,
+            // while the build runs. trace:STORY-2897 | ai:claude
+            let ci_comparison = match ci_gate(layout, steps, Some(&head), out) {
+                Ok(Ok(decision)) => decision,
+                Ok(Err(why)) => {
+                    let _ = std::fs::remove_dir_all(&incoming);
+                    let state = if policy == crate::landing_policy::PromoteFrom::NoNewFailures {
+                        "has failures the promoted commit does not have"
+                    } else {
+                        "is not green"
+                    };
+                    return Err(PromotionRefused(format!(
+                        "CI on the commit being promoted {state}, so the new build was not \
+                         promoted; the live binaries were not touched.\n{why}"
+                    ))
+                    .into());
+                }
+                Err(e) => {
+                    let _ = std::fs::remove_dir_all(&incoming);
+                    return Err(e);
+                }
+            };
             let meta = PromotionMeta {
                 sha: head,
                 allow_dirty: opts.allow_dirty
                     && matches!(
-                        plan_promotion(&state, false, false),
+                        plan_promotion_at(&state, false, false, green),
                         PromotionPlan::Refuse { .. }
                     ),
                 promoted_at: chrono::Utc::now().to_rfc3339(),
                 // trace:STORY-1689 | ai:claude
                 repo: Some(canonical_or_self(&layout.repo).display().to_string()),
+                // trace:STORY-2912 | ai:claude
+                ci_comparison,
             };
             commit_staged(layout, &meta)?;
             drop(lock);
@@ -651,6 +1081,10 @@ pub(crate) fn run_dev_build(
                 layout.live_dir.display(),
                 layout.prev_dir().display()
             )?;
+            // trace:BUG-2654 | ai:codex
+            for warning in crate::stale_binary::warnings(&layout.live("aida")) {
+                writeln!(out, "warning: {warning}")?;
+            }
             if let Err(e) = steps.restart_mcp(layout) {
                 writeln!(
                     out,
@@ -1012,6 +1446,22 @@ fn fresh_dir(dir: &Path) -> Result<()> {
 /// prev rotation and the final renames (and across a rollback). A second
 /// promote or rollback refuses instead of interleaving with this one.
 pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
+    acquire_live_lock(layout, LIVE_LOCK_WAIT)?
+        .0
+        .with_context(|| live_lock_busy(layout))
+}
+
+const LIVE_LOCK_WAIT: Duration = Duration::from_millis(500);
+
+fn live_lock_busy(layout: &DevLayout) -> String {
+    format!(
+        "another `aida dev build` or `aida dev rollback` is updating {} right now; \
+         retry when it finishes. Nothing was changed.",
+        layout.live_dir.display()
+    )
+}
+
+fn acquire_live_lock(layout: &DevLayout, wait: Duration) -> Result<(Option<std::fs::File>, bool)> {
     use fs2::FileExt;
     let live = &layout.live_dir;
     std::fs::create_dir_all(live).with_context(|| format!("creating {}", live.display()))?;
@@ -1026,19 +1476,22 @@ pub(crate) fn lock_live_dir(layout: &DevLayout) -> Result<std::fs::File> {
     // Retry briefly: a child forked by this process (any thread) shares the
     // lock's file description until it execs, which reads as "held" for a
     // few microseconds even though no other promote is running.
-    let deadline = Instant::now() + Duration::from_millis(500);
-    while file.try_lock_exclusive().is_err() {
-        if Instant::now() < deadline {
-            std::thread::sleep(Duration::from_millis(20));
-            continue;
+    let deadline = Instant::now() + wait;
+    let mut contended = false;
+    loop {
+        match FileExt::try_lock_exclusive(&file) {
+            Ok(()) => return Ok((Some(file), contended)),
+            Err(e) if e.kind() == fs2::lock_contended_error().kind() => {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    return Ok((None, true));
+                }
+                contended = true;
+                std::thread::sleep(remaining.min(Duration::from_millis(20)));
+            }
+            Err(e) => return Err(e).with_context(|| format!("locking {}", path.display())),
         }
-        bail!(
-            "another `aida dev build` or `aida dev rollback` is updating {} right now; \
-             retry when it finishes. Nothing was changed.",
-            live.display()
-        );
     }
-    Ok(file)
 }
 
 /// Finish or undo whatever an interrupted promote or rollback left behind.
@@ -1071,6 +1524,7 @@ pub(crate) fn recover_live_dir_with_steps(
 ) -> Result<Vec<String>> {
     let live = &layout.live_dir;
     let mut notes = Vec::new();
+    finish_generation_swap(layout)?;
     let prev_old = live.join(".prev-old");
     if prev_old.exists() {
         if layout.prev_dir().exists() {
@@ -1118,9 +1572,7 @@ pub(crate) fn recover_live_dir_with_steps(
         // them (forward when swapped, back otherwise) only ever moves files
         // out of `.rollback/` and is a no-op once done.
         let marked = swap.join(ROLLBACK_MARKER).exists();
-        let swapped = LIVE_BINARIES
-            .iter()
-            .any(|n| !layout.prev(n).exists() || (marked && !swap.join(n).is_file()));
+        let swapped = !layout.prev("aida").exists() || (marked && !swap.join("aida").is_file());
         settle_records(layout, &swap, swapped, &mut |_| Ok(()))?;
         for name in LIVE_BINARIES {
             let parked = swap.join(name);
@@ -1165,7 +1617,106 @@ pub(crate) fn stage_incoming(layout: &DevLayout) -> Result<PathBuf> {
             )
         })?;
     }
+    std::os::unix::fs::symlink("aida-porcelain", incoming.join("aida-flow"))?;
+    std::fs::write(
+        incoming.join(INVENTORY),
+        serde_json::to_vec(GENERATION_NAMES)?,
+    )?;
     Ok(incoming)
+}
+
+// trace:STORY-2704 | ai:codex
+const INVENTORY: &str = ".inventory.json";
+const GENERATION_NAMES: &[&str] = &["aida", "aida-server", "aida-porcelain", "aida-flow"];
+
+fn generation_inventory(dir: &Path) -> Result<Vec<String>> {
+    let path = dir.join(INVENTORY);
+    if path.exists() {
+        let names: Vec<String> = serde_json::from_slice(&std::fs::read(path)?)?;
+        anyhow::ensure!(
+            names.iter().all(|n| GENERATION_NAMES.contains(&n.as_str())),
+            "invalid generation inventory"
+        );
+        anyhow::ensure!(
+            names.iter().all(|n| dir.join(n).symlink_metadata().is_ok()),
+            "generation inventory member missing"
+        );
+        return Ok(names);
+    }
+    // Legacy generations predate the inventory. Capture their actual members,
+    // including lexical aliases, rather than borrowing the current binary set.
+    Ok(GENERATION_NAMES
+        .iter()
+        .filter(|n| dir.join(n).symlink_metadata().is_ok())
+        .map(|n| (*n).to_string())
+        .collect())
+}
+
+fn copy_member(from: &Path, to: &Path) -> Result<()> {
+    if let Ok(target) = std::fs::read_link(from) {
+        std::os::unix::fs::symlink(target, to)?;
+    } else {
+        link_or_copy(from, to)?;
+    }
+    Ok(())
+}
+
+/// A durable pair of complete generation snapshots makes recovery replayable,
+/// including removals and aliases. Sources remain until every destination settles.
+fn finish_generation_swap(layout: &DevLayout) -> Result<()> {
+    let swap = layout.live_dir.join(".generation-swap");
+    if !swap.exists() {
+        return Ok(());
+    }
+    if swap.join("ready").exists() {
+        for (source, destination) in [
+            (swap.join("prev"), layout.live_dir.clone()),
+            (swap.join("live"), layout.prev_dir()),
+        ] {
+            std::fs::create_dir_all(&destination)?;
+            let names = generation_inventory(&source)?;
+            for name in GENERATION_NAMES
+                .iter()
+                .copied()
+                .chain([PROMOTED_FILE, INVENTORY])
+            {
+                let to = destination.join(name);
+                if source.join(name).symlink_metadata().is_ok() {
+                    let tmp = destination.join(format!(".restore-{name}"));
+                    let _ = std::fs::remove_file(&tmp);
+                    copy_member(&source.join(name), &tmp)?;
+                    std::fs::rename(tmp, to)?;
+                } else if to.symlink_metadata().is_ok() {
+                    std::fs::remove_file(to)?;
+                }
+            }
+            anyhow::ensure!(
+                names
+                    .iter()
+                    .all(|n| destination.join(n).symlink_metadata().is_ok()),
+                "incomplete generation restore"
+            );
+        }
+    }
+    // Remove the replay marker before deleting either immutable snapshot.
+    let ready = swap.join("ready");
+    if ready.exists() {
+        std::fs::remove_file(ready)?;
+    }
+    std::fs::remove_dir_all(swap)?;
+    Ok(())
+}
+
+fn snapshot_generation(source: &Path, destination: &Path) -> Result<()> {
+    std::fs::create_dir_all(destination)?;
+    let names = generation_inventory(source)?;
+    for name in names.iter().map(String::as_str).chain([PROMOTED_FILE]) {
+        if source.join(name).symlink_metadata().is_ok() {
+            copy_member(&source.join(name), &destination.join(name))?;
+        }
+    }
+    std::fs::write(destination.join(INVENTORY), serde_json::to_vec(&names)?)?;
+    Ok(())
 }
 
 /// Marker `rollback` writes into `.rollback/` once the live pair and both
@@ -1202,6 +1753,11 @@ pub(crate) struct PromotionMeta {
     // trace:STORY-1689 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo: Option<String>,
+    /// The `no-new-failures` comparison that allowed this promotion (absent
+    /// under other policies and in older records).
+    // trace:STORY-2912 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ci_comparison: Option<crate::promotion_failures::Decision>,
 }
 
 /// Read a `.promoted` record from `dir` (the live dir or `prev/`).
@@ -1246,16 +1802,7 @@ pub(crate) fn commit_staged(layout: &DevLayout, meta: &PromotionMeta) -> Result<
     if LIVE_BINARIES.iter().any(|n| layout.live(n).is_file()) {
         let prev_new = live.join(".prev-new");
         fresh_dir(&prev_new)?;
-        for name in LIVE_BINARIES {
-            if layout.live(name).is_file() {
-                link_or_copy(&layout.live(name), &prev_new.join(name))?;
-            }
-        }
-        // The outgoing pair's record goes with it, so rollback can swap it back.
-        let live_meta = live.join(PROMOTED_FILE);
-        if live_meta.is_file() {
-            link_or_copy(&live_meta, &prev_new.join(PROMOTED_FILE))?;
-        }
+        snapshot_generation(live, &prev_new)?;
         let prev_old = live.join(".prev-old");
         if prev_old.exists() {
             std::fs::remove_dir_all(&prev_old)?;
@@ -1270,6 +1817,8 @@ pub(crate) fn commit_staged(layout: &DevLayout, meta: &PromotionMeta) -> Result<
         std::fs::rename(incoming.join(name), layout.live(name))
             .with_context(|| format!("promoting {}", layout.live(name).display()))?;
     }
+    std::fs::rename(incoming.join("aida-flow"), live.join("aida-flow"))?;
+    std::fs::rename(incoming.join(INVENTORY), live.join(INVENTORY))?;
     std::fs::rename(incoming.join(PROMOTED_FILE), live.join(PROMOTED_FILE))
         .with_context(|| format!("writing {}", live.join(PROMOTED_FILE).display()))?;
     let _ = std::fs::remove_dir(&incoming);
@@ -1329,59 +1878,68 @@ pub(crate) fn rollback_with_steps(
 ) -> Result<Vec<String>> {
     let _lock = lock_live_dir(layout)?;
     let notes = recover_live_dir(layout)?;
-    for name in LIVE_BINARIES {
-        if !layout.prev(name).is_file() {
-            bail!(
-                "no previous build to roll back to ({} does not exist); nothing was changed",
-                layout.prev(name).display()
-            );
-        }
-        if !layout.live(name).is_file() {
-            bail!(
-                "no live build to roll back from ({} does not exist); nothing was changed",
-                layout.live(name).display()
-            );
-        }
+    let live_names = generation_inventory(&layout.live_dir)?;
+    let prev_names = generation_inventory(&layout.prev_dir())?;
+    for required in ["aida", "aida-server"] {
+        anyhow::ensure!(
+            live_names.iter().any(|n| n == required) && prev_names.iter().any(|n| n == required),
+            "no previous build or complete live build; nothing was changed"
+        );
     }
-    // trace:TASK-2272 | ai:claude
     let rolled_away = read_promotion_meta(&layout.live_dir).map(|m| m.sha);
-    // Park the live pair and both records, mark parking done, then per
-    // binary prev -> live and the parked copy -> prev, then settle the
-    // records. [`recover_live_dir`] finishes or undoes a crash at any step.
-    let swap = layout.live_dir.join(".rollback");
-    fresh_dir(&swap)?;
-    step("fresh")?;
-    for name in LIVE_BINARIES {
-        link_or_copy(&layout.live(name), &swap.join(name))?;
-        step("parked-binary")?;
+    // Retain the existing interruption fixtures for identical legacy pairs.
+    // Membership changes and all inventoried generations use complete snapshots.
+    if live_names != prev_names
+        || live_names.iter().any(|n| n == "aida-flow")
+        || layout.live_dir.join(INVENTORY).exists()
+        || layout.prev_dir().join(INVENTORY).exists()
+    {
+        let swap = layout.live_dir.join(".generation-swap");
+        snapshot_generation(&layout.live_dir, &swap.join("live"))?;
+        snapshot_generation(&layout.prev_dir(), &swap.join("prev"))?;
+        std::fs::write(swap.join("ready"), b"")?;
+        step("generation-ready")?;
+        finish_generation_swap(layout)?;
+    } else {
+        let rollback_names: Vec<_> = live_names.iter().map(String::as_str).collect();
+        // Park the live pair and both records, mark parking done, then per
+        // binary prev -> live and the parked copy -> prev, then settle the
+        // records. [`recover_live_dir`] finishes or undoes a crash at any step.
+        let swap = layout.live_dir.join(".rollback");
+        fresh_dir(&swap)?;
+        step("fresh")?;
+        for &name in &rollback_names {
+            link_or_copy(&layout.live(name), &swap.join(name))?;
+            step("parked-binary")?;
+        }
+        // trace:STORY-1646 | ai:claude
+        // trace:BUG-1959 | ai:claude
+        move_record(
+            &layout.live_dir.join(PROMOTED_FILE),
+            &swap.join(PARKED_LIVE_RECORD),
+        )?;
+        step("parked-live-record")?;
+        move_record(
+            &layout.prev_dir().join(PROMOTED_FILE),
+            &swap.join(PARKED_PREV_RECORD),
+        )?;
+        step("parked-prev-record")?;
+        // Parking is complete; from here a parked binary missing from `.rollback/`
+        // means it was swapped into `prev/` (see [`recover_live_dir`]).
+        std::fs::write(swap.join(ROLLBACK_MARKER), b"")?;
+        step("marked")?;
+        for &name in &rollback_names {
+            std::fs::rename(layout.prev(name), layout.live(name))
+                .with_context(|| format!("restoring {}", layout.live(name).display()))?;
+            step("restored-binary")?;
+            std::fs::rename(swap.join(name), layout.prev(name))?;
+            step("swapped-binary")?;
+        }
+        settle_records(layout, &swap, true, step)?;
+        std::fs::remove_file(swap.join(ROLLBACK_MARKER))?;
+        step("unmarked")?;
+        let _ = std::fs::remove_dir(&swap);
     }
-    // trace:STORY-1646 | ai:claude
-    // trace:BUG-1959 | ai:claude
-    move_record(
-        &layout.live_dir.join(PROMOTED_FILE),
-        &swap.join(PARKED_LIVE_RECORD),
-    )?;
-    step("parked-live-record")?;
-    move_record(
-        &layout.prev_dir().join(PROMOTED_FILE),
-        &swap.join(PARKED_PREV_RECORD),
-    )?;
-    step("parked-prev-record")?;
-    // Parking is complete; from here a parked binary missing from `.rollback/`
-    // means it was swapped into `prev/` (see [`recover_live_dir`]).
-    std::fs::write(swap.join(ROLLBACK_MARKER), b"")?;
-    step("marked")?;
-    for name in LIVE_BINARIES {
-        std::fs::rename(layout.prev(name), layout.live(name))
-            .with_context(|| format!("restoring {}", layout.live(name).display()))?;
-        step("restored-binary")?;
-        std::fs::rename(swap.join(name), layout.prev(name))?;
-        step("swapped-binary")?;
-    }
-    settle_records(layout, &swap, true, step)?;
-    std::fs::remove_file(swap.join(ROLLBACK_MARKER))?;
-    step("unmarked")?;
-    let _ = std::fs::remove_dir(&swap);
     let mut notes = notes;
     // The scheduled autopromote must not rebuild what was just rolled away.
     // trace:TASK-2272 | ai:claude
@@ -1495,7 +2053,21 @@ pub(crate) fn install_links(
     }
     let plans: Vec<(&str, LinkAction)> = LIVE_BINARIES
         .iter()
-        .map(|n| (*n, plan_link(&layout.link(n), &layout.live(n))))
+        .copied()
+        .chain(std::iter::once("aida-flow"))
+        .map(|n| {
+            (
+                n,
+                plan_link(
+                    &layout.link(n),
+                    &if n == "aida-flow" {
+                        PathBuf::from("aida-porcelain")
+                    } else {
+                        layout.live(n)
+                    },
+                ),
+            )
+        })
         .collect();
     for (name, action) in &plans {
         if let LinkAction::Blocked { why } = action {
@@ -1527,7 +2099,11 @@ pub(crate) fn install_links(
         .with_context(|| format!("creating {}", layout.link_dir.display()))?;
     for (name, action) in &plans {
         let link = layout.link(name);
-        let target = layout.live(name);
+        let target = if *name == "aida-flow" {
+            PathBuf::from("aida-porcelain")
+        } else {
+            layout.live(name)
+        };
         match action {
             LinkAction::AlreadyCorrect => {
                 writeln!(
@@ -1725,6 +2301,30 @@ pub(crate) fn smoke_command(bin: &Path) -> Command {
 pub(crate) struct RealSteps;
 
 impl BuildSteps for RealSteps {
+    fn smoke_porcelain(&mut self, binary: &Path) -> Result<()> {
+        smoke_check(
+            "aida-porcelain --version",
+            smoke_command(binary).arg("--version"),
+            Duration::from_secs(15),
+            |o| o.starts_with("aida-porcelain "),
+        )?;
+        smoke_check(
+            "aida-porcelain flow --help",
+            smoke_command(binary).args(["flow", "--help"]),
+            Duration::from_secs(15),
+            |o| o.contains("report"),
+        )?;
+        let mut alias = smoke_command(binary);
+        use std::os::unix::process::CommandExt;
+        alias.arg0("aida-flow").args(["report", "--help"]);
+        smoke_check(
+            "aida-flow report --help",
+            &mut alias,
+            Duration::from_secs(15),
+            |o| o.contains("--since"),
+        )
+    }
+
     fn probe(&mut self, repo: &Path) -> Result<CheckoutState> {
         probe_checkout(repo)
     }
@@ -1852,12 +2452,110 @@ pub(crate) fn resolve_build_repo_from(cwd: &Path) -> Result<PathBuf> {
     )
 }
 
+// Shared with scripts/aida-autobuild.sh. Lock the existing Git directory so
+// a build in a native clone can acquire it with read-only Git metadata.
+// trace:TASK-3812 | ai:codex
+fn checkout_build_lock_path(repo: &Path) -> PathBuf {
+    repo.join(".git")
+}
+
+pub(crate) fn try_checkout_build_lock(repo: &Path) -> Result<Option<std::fs::File>> {
+    use fs2::FileExt;
+
+    let path = checkout_build_lock_path(repo);
+    let file = std::fs::File::open(&path).with_context(|| format!("opening {}", path.display()))?;
+    anyhow::ensure!(
+        file.metadata()?.is_dir(),
+        "{} is not a directory",
+        path.display()
+    );
+    match FileExt::try_lock_exclusive(&file) {
+        Ok(()) => Ok(Some(file)),
+        Err(e) if e.kind() == fs2::lock_contended_error().kind() => Ok(None),
+        Err(e) => Err(e).with_context(|| format!("locking {}", path.display())),
+    }
+}
+
+/// Cron already holds the checkout lock through fast-forward and verification.
+/// Check the inherited open file description instead of opening a competing one.
+fn verify_cron_build_lock(repo: &Path, fd: std::os::fd::RawFd) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+
+    let expected = std::fs::metadata(checkout_build_lock_path(repo))?;
+    let inherited = std::fs::metadata(format!("/proc/self/fd/{fd}"))?;
+    anyhow::ensure!(
+        expected.is_dir() && (expected.dev(), expected.ino()) == (inherited.dev(), inherited.ino()),
+        "cron build lock descriptor does not name this checkout's lock"
+    );
+    // SAFETY: flock and fcntl take an integer fd and report invalid fds as errors.
+    if unsafe { libc::flock(fd, libc::LOCK_EX | libc::LOCK_NB) } == -1 {
+        return Err(std::io::Error::last_os_error()).context("locking inherited cron build fd");
+    }
+    // Do not leave the descriptor open in cargo or restarted services.
+    if unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } == -1 {
+        return Err(std::io::Error::last_os_error())
+            .context("setting close-on-exec on cron build fd");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn checkout_build_lock_cron_descriptor_must_match_and_hold_the_lock() {
+    use std::os::fd::AsRawFd;
+
+    let repo = tempfile::tempdir().unwrap();
+    std::fs::create_dir(repo.path().join(".git")).unwrap();
+    let held = try_checkout_build_lock(repo.path()).unwrap().unwrap();
+    let same_path = std::fs::File::open(checkout_build_lock_path(repo.path())).unwrap();
+    let unrelated = tempfile::tempfile().unwrap();
+
+    assert!(verify_cron_build_lock(repo.path(), unrelated.as_raw_fd()).is_err());
+    assert!(verify_cron_build_lock(repo.path(), same_path.as_raw_fd()).is_err());
+    verify_cron_build_lock(repo.path(), held.as_raw_fd()).unwrap();
+    assert!(try_checkout_build_lock(repo.path()).unwrap().is_none());
+    drop(held);
+    assert!(try_checkout_build_lock(repo.path()).unwrap().is_some());
+}
+
 pub(crate) fn handle_dev_build(opts: &DevBuildOptions) -> Result<()> {
     let repo = resolve_build_repo()?;
     let layout = DevLayout::for_repo(&repo)?;
+    let env = aida_core::exec_context::Environment::capture();
+    let mut opts = opts.clone();
+    let _build_lock = if env.get("AIDA_AUTOBUILD_LOCK_FD") == Some(std::ffi::OsStr::new("9")) {
+        verify_cron_build_lock(&repo, 9).context("verifying inherited checkout build lock")?;
+        // The operator cron names the newest green commit it fast-forwarded
+        // to; honoured only with its verified lock. trace:BUG-2687 | ai:claude
+        opts.green_commit = cron_green_commit(env.get(AUTOBUILD_TARGET_ENV))?;
+        None
+    } else if repo.join(".git").is_dir() {
+        let lock = try_checkout_build_lock(&repo)?;
+        Some(lock.context("build in progress in this checkout")?)
+    } else {
+        // Cron and dev-autopromote only update the primary checkout.
+        None
+    };
     let mut stdout = std::io::stdout();
-    run_dev_build(&layout, opts, &mut RealSteps, &mut stdout)?;
+    run_dev_build(&layout, &opts, &mut RealSteps, &mut stdout)?;
     Ok(())
+}
+
+/// The operator cron's (`scripts/aida-autobuild.sh`) newest green commit.
+// trace:BUG-2687 | ai:claude
+pub(crate) const AUTOBUILD_TARGET_ENV: &str = "AIDA_AUTOBUILD_TARGET";
+
+/// PURE: the cron's green commit, when set: a full commit SHA or an error.
+// trace:BUG-2687 | ai:claude
+pub(crate) fn cron_green_commit(raw: Option<&std::ffi::OsStr>) -> Result<Option<String>> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let sha = raw.to_str().unwrap_or_default().trim();
+    if sha.len() != 40 || !crate::git_arg_guard::is_hex_sha(sha) {
+        bail!("{AUTOBUILD_TARGET_ENV} must be a full 40-character commit SHA");
+    }
+    Ok(Some(sha.to_ascii_lowercase()))
 }
 
 /// `aida dev rollback` with the live-wave guard: refuses (or waits, with
@@ -1924,7 +2622,7 @@ pub(crate) fn banner_sha_token(banner: &str) -> Option<String> {
     (!tok.is_empty()).then_some(tok)
 }
 
-fn binary_sha_label(bin: &Path) -> Option<String> {
+pub(crate) fn binary_sha_label(bin: &Path) -> Option<String> {
     if !bin.is_file() {
         return None;
     }
@@ -2008,7 +2706,67 @@ pub(crate) fn promoted_line(meta: &PromotionMeta) -> String {
     )
 }
 
+/// The no-new-failures lines of `aida dev status`: the comparison that
+/// allowed the live promotion, and the last decision when it is a different
+/// one (a refusal, or a later candidate).
+// trace:STORY-2912 | ai:claude
+pub(crate) fn ci_decision_lines(
+    live_meta: Option<&PromotionMeta>,
+    last: Option<&crate::promotion_failures::Decision>,
+) -> Vec<String> {
+    let live = live_meta.and_then(|m| m.ci_comparison.as_ref());
+    let mut lines = Vec::new();
+    if let Some(d) = live {
+        let mut status = d.status_lines().into_iter();
+        if let Some(first) = status.next() {
+            lines.push(format!("CI gate:      {first}"));
+        }
+        lines.extend(status.map(|l| format!("              {l}")));
+    }
+    if let Some(d) = last.filter(|d| live != Some(*d)) {
+        let mut status = d.status_lines().into_iter();
+        if let Some(first) = status.next() {
+            lines.push(format!("Last check:   {first} at {}", d.decided_at));
+        }
+        lines.extend(status.map(|l| format!("              {l}")));
+        if !d.allowed() {
+            lines.push(format!("  ! last promotion refused: {}", d.reason));
+        }
+    }
+    lines
+}
+
 /// The live-binary block of `aida dev status`.
+/// PURE: `live is N commits behind main; newest green = X`, from the local
+/// `origin/main` and the last scheduled scan. `None` when the distance is
+/// unknown. trace:BUG-2687 | ai:claude
+pub(crate) fn behind_main_line(
+    behind: Option<usize>,
+    scan: Option<&crate::dev_autopromote::GreenScan>,
+) -> Option<String> {
+    let n = behind?;
+    if n == 0 {
+        return Some("Behind main:  live is at main (origin/main)".to_string());
+    }
+    let short = |s: &str| s[..s.len().min(12)].to_string();
+    let green = match scan {
+        None => "unknown (no scheduled check recorded)".to_string(),
+        Some(scan) => format!(
+            "{} (checked {} at origin/main {})",
+            scan.newest_green
+                .as_deref()
+                .map(short)
+                .unwrap_or_else(|| "none newer than live".to_string()),
+            scan.at,
+            short(&scan.tip)
+        ),
+    };
+    Some(format!(
+        "Behind main:  live is {n} commit{} behind main; newest green = {green}",
+        if n == 1 { "" } else { "s" }
+    ))
+}
+
 pub(crate) fn print_live_status() {
     let Ok(live_dir) = default_live_dir() else {
         return;
@@ -2035,6 +2793,34 @@ pub(crate) fn print_live_status() {
     let live_meta = read_promotion_meta(&live_dir);
     if let Some(meta) = &live_meta {
         println!("{}", promoted_line(meta));
+    }
+    // trace:STORY-2912 | ai:claude
+    for line in ci_decision_lines(
+        live_meta.as_ref(),
+        crate::promotion_failures::read_last(&live_dir).as_ref(),
+    ) {
+        println!("{line}");
+    }
+    // trace:BUG-2687 | ai:claude
+    if let (Some(l), Some(meta)) = (&layout, &live_meta) {
+        let behind = crate::git_arg_guard::is_hex_sha(&meta.sha)
+            .then(|| {
+                git_out(
+                    &l.repo,
+                    &[
+                        "rev-list",
+                        "--count",
+                        &format!("{}..refs/remotes/origin/main", meta.sha),
+                        "--",
+                    ],
+                )
+            })
+            .flatten()
+            .and_then(|n| n.trim().parse().ok());
+        let scan = crate::dev_autopromote::read_scan(&live_dir);
+        if let Some(line) = behind_main_line(behind, scan.as_ref()) {
+            println!("{line}");
+        }
     }
     println!("Previous:     {}", show(&prev));
     if let Some(l) = &layout {
@@ -2082,3 +2868,100 @@ fn restart_mail_wake_report(steps: &mut dyn BuildSteps, out: &mut dyn Write) -> 
 #[cfg(test)]
 #[path = "tests/dev_build_tests.rs"]
 mod dev_build_tests;
+
+// trace:STORY-2897 | ai:claude
+#[cfg(test)]
+mod story2897_green_main_tests {
+    use super::green_main_state;
+    use crate::forge::CommitCi;
+
+    #[test]
+    fn only_a_green_commit_allows_promotion() {
+        let sha = "0123456789abcdef0123456789abcdef01234567";
+        assert_eq!(green_main_state(sha, Ok(CommitCi::Green)), None);
+        for (ci, needle) in [
+            (
+                Ok(CommitCi::Failed(vec!["Build (ubuntu-latest)".into()])),
+                "failed: Build",
+            ),
+            (
+                Ok(CommitCi::Pending(vec!["CI (lib-0)".into()])),
+                "still running",
+            ),
+            (Ok(CommitCi::NoChecks), "no CI checks"),
+            (
+                Ok(CommitCi::MissingRequired("Build (ubuntu-latest)".into())),
+                "did not pass",
+            ),
+            (Err(anyhow::anyhow!("gh offline")), "could not be read"),
+        ] {
+            let why = green_main_state(sha, ci).expect("refused");
+            assert!(
+                why.contains(needle) && why.contains("0123456789ab"),
+                "{why}"
+            );
+        }
+    }
+
+    #[test]
+    fn green_main_promotes_only_the_clean_build_of_the_checked_commit() {
+        use super::green_main_staged_refusal;
+        let head = "0123456789abcdef0123456789abcdef01234567";
+        assert_eq!(green_main_staged_refusal(Some("0123456789ab"), head), None);
+        assert!(green_main_staged_refusal(Some("0123456789ab+dirty"), head)
+            .unwrap()
+            .contains("uncommitted changes"));
+        assert!(green_main_staged_refusal(Some("fedcba987654"), head)
+            .unwrap()
+            .contains("not the commit being promoted"));
+        assert!(green_main_staged_refusal(None, head).is_some());
+    }
+
+    #[test]
+    fn the_last_green_note_keeps_none_apart_from_unreadable() {
+        use super::last_green_note;
+        assert!(last_green_note(Some("0123456789abcdef"), 3, 0).contains("is 0123456789ab"));
+        assert!(last_green_note(None, 0, 0).contains("could not be read"));
+        assert!(last_green_note(None, 50, 2).contains("CI could not be read for 2"));
+        assert!(last_green_note(None, 50, 0).contains("None of the 50"));
+    }
+
+    #[test]
+    fn the_default_clean_main_policy_never_refuses() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(super::green_main_refusal(dir.path(), None), None);
+    }
+
+    /// `no-new-failures` is a known value whose comparison is not built
+    /// yet: it refuses the promotion (even of a named commit) instead of
+    /// resolving to `clean-main`, which would promote with no CI guard.
+    #[test]
+    fn no_new_failures_refuses_rather_than_weakening_to_clean_main() {
+        let dir = tempfile::tempdir().unwrap();
+        let git = |args: &[&str]| {
+            let out = crate::test_git::git_command()
+                .current_dir(dir.path())
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(out.status.success(), "git {args:?}: {out:?}");
+            String::from_utf8_lossy(&out.stdout).trim().to_string()
+        };
+        git(&["init", "-q", "-b", "main"]);
+        git(&["config", "user.email", "t@example.com"]);
+        git(&["config", "user.name", "T"]);
+        std::fs::create_dir_all(dir.path().join(".aida")).unwrap();
+        std::fs::write(
+            dir.path().join(".aida/config.toml"),
+            "[landing]\npromote_live_binary_from = \"no-new-failures\"\n",
+        )
+        .unwrap();
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "policy"]);
+        let head = git(&["rev-parse", "HEAD"]);
+        let why = super::green_main_refusal(dir.path(), Some(&head))
+            .expect("no-new-failures must refuse, not promote as clean-main");
+        assert!(why.contains("no promoted commit"), "{why}");
+        assert!(why.contains("stays where it is"), "{why}");
+    }
+}

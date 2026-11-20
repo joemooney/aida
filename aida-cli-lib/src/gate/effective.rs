@@ -44,6 +44,8 @@ pub(crate) struct LedgerView {
 pub(crate) struct GatePolicy {
     /// An interactive human at a TTY is the explicit supervised merge.
     pub interactive_tty: bool,
+    // trace:STORY-2763 | ai:codex
+    pub strict_freshness: bool,
 }
 
 /// One member's (or the change's own) current verdict.
@@ -231,6 +233,7 @@ fn sequence_verdict(
     // Some(n) identifies a member sequence: the first n events are unbound.
     // The rest are from the single change ledger, where seq is comparable.
     unbound_count: Option<usize>,
+    strict_freshness: bool,
 ) -> Verdict {
     // trace:STORY-2324 | ai:codex — only a member's proved old-head
     // refusal can be answered across buckets by a later change approval.
@@ -307,7 +310,7 @@ fn sequence_verdict(
                     findings: r.findings.clone(),
                 };
             }
-            approval_at_head(newest.seq, &v, head, change_events)
+            approval_at_head(newest.seq, &v, head, change_events, strict_freshness)
         }
     }
 }
@@ -363,6 +366,7 @@ fn approval_at_head(
     v: &rv::RecordedVerdict,
     head: &str,
     change_events: &[GateEvent],
+    strict_freshness: bool,
 ) -> Verdict {
     let Some(reviewed) = v.reviewed_sha.as_deref().map(str::trim) else {
         return Verdict::Stale {
@@ -379,10 +383,33 @@ fn approval_at_head(
             carried_over: false,
         };
     }
+    // trace:STORY-2763 | ai:codex
+    if strict_freshness {
+        return Verdict::Stale {
+            seq,
+            reviewed: Some(reviewed.into()),
+            head: head.into(),
+            reason: "strict policy: re-review required".into(),
+        };
+    }
+    // trace:STORY-2696 | ai:codex — a cached proof cannot override reviewer policy.
+    if v.attestation.as_ref().is_some_and(|a| !a.carry_eligible) {
+        return Verdict::Stale {
+            seq,
+            reviewed: Some(reviewed.to_string()),
+            head: head.to_string(),
+            reason: "reviewer requires fresh review: approval is not carry-eligible".into(),
+        };
+    }
     let answer = change_events.iter().rev().find_map(|e| match &e.body {
-        EventBody::CarryOverProof { proof, .. }
-            if rv::same_reviewed_sha(&proof.approved_sha, reviewed)
-                && rv::same_reviewed_sha(&proof.new_head, head) =>
+        EventBody::CarryOverProof {
+            proof,
+            proof_version,
+            carry_eligible,
+        } if *carry_eligible
+            && *proof_version == super::review_carryover::PROOF_VERSION
+            && rv::same_reviewed_sha(&proof.approved_sha, reviewed)
+            && rv::same_reviewed_sha(&proof.new_head, head) =>
         {
             Some(Ok(()))
         }
@@ -390,8 +417,12 @@ fn approval_at_head(
             approved_sha,
             new_head,
             reason,
+            proof_version,
+            carry_eligible,
             ..
-        } if rv::same_reviewed_sha(approved_sha, reviewed)
+        } if *carry_eligible
+            && *proof_version == super::review_carryover::PROOF_VERSION
+            && rv::same_reviewed_sha(approved_sha, reviewed)
             && rv::same_reviewed_sha(new_head, head) =>
         {
             Some(Err(reason.clone()))
@@ -462,7 +493,9 @@ pub(crate) fn effective_gate_state(
     let verdict_events: Vec<&GateEvent> = view
         .change_events
         .iter()
-        .filter(|e| e.verdict_record().is_some())
+        // trace:BUG-2517 | ai:codex — callers can supply a view directly;
+        // spec-only evidence has no authority even if an older writer copied it.
+        .filter(|e| e.verdict_record().is_some() && !e.is_spec_only())
         .collect();
     // Persisted identities must not share a sequence through a reused label.
     // Unstamped events retain their normalized label partition.
@@ -515,7 +548,15 @@ pub(crate) fn effective_gate_state(
     // trace:STORY-2324 | ai:claude
     let foreign_answers: Vec<Verdict> = foreign
         .into_values()
-        .map(|events| sequence_verdict(events, head, &view.change_events, None))
+        .map(|events| {
+            sequence_verdict(
+                events,
+                head,
+                &view.change_events,
+                None,
+                policy.strict_freshness,
+            )
+        })
         .filter(|v| {
             matches!(
                 v,
@@ -539,7 +580,7 @@ pub(crate) fn effective_gate_state(
             .flatten()
             // A label can rebind. Its former owner's unbound events are
             // unrelated to this member and were never recorded on this change.
-            .filter(|u| u.spec_key.is_none_or(|key| key == m.key))
+            .filter(|u| !u.is_spec_only() && u.spec_key.is_none_or(|key| key == m.key))
             .filter(|u| {
                 !verdict_events
                     .iter()
@@ -554,10 +595,22 @@ pub(crate) fn effective_gate_state(
         members.push((
             m,
             mode,
-            sequence_verdict(events, head, &view.change_events, Some(unbound_count)),
+            sequence_verdict(
+                events,
+                head,
+                &view.change_events,
+                Some(unbound_count),
+                policy.strict_freshness,
+            ),
         ));
     }
-    let change_verdict = sequence_verdict(change_own, head, &view.change_events, None);
+    let change_verdict = sequence_verdict(
+        change_own,
+        head,
+        &view.change_events,
+        None,
+        policy.strict_freshness,
+    );
     let verdict = aggregate(
         std::iter::once(&change_verdict)
             .chain(std::iter::once(&foreign_verdict))
@@ -666,8 +719,30 @@ pub(crate) fn load_view(
     change: ChangeKey,
     set: &CanonicalSet,
 ) -> Result<LedgerView, Unsafe> {
-    let mut budget = Budget::default();
-    let change_events = checked::read_change_events(root, change, &mut budget)?;
+    load_view_with_budget(root, change, set, Budget::default())
+}
+
+// trace:BUG-2517 | ai:codex
+fn load_view_with_budget(
+    root: &Path,
+    change: ChangeKey,
+    set: &CanonicalSet,
+    mut budget: Budget,
+) -> Result<LedgerView, Unsafe> {
+    // trace:BUG-2531 | ai:codex — discovery spends its own work budget; the
+    // caller's budget bounds only the evidence this view selects.
+    let mut discovery = checked::discover(root)?;
+    fn read_change(
+        discovery: &mut Option<checked::Discovery>,
+        key: ChangeKey,
+        budget: &mut Budget,
+    ) -> Result<Vec<GateEvent>, Unsafe> {
+        match discovery.as_mut() {
+            Some(d) => d.change_events(key, budget),
+            None => Ok(Vec::new()),
+        }
+    }
+    let change_events = read_change(&mut discovery, change, &mut budget)?;
     let mut unbound = BTreeMap::new();
     let mut others: std::collections::HashMap<ChangeKey, Vec<GateEvent>> = Default::default();
     for m in &set.members {
@@ -677,7 +752,11 @@ pub(crate) fn load_view(
             if crate::gate::ledger::project::spec_key(label).is_none() {
                 continue;
             }
-            let (u, c) = checked::read_spec_entries(root, label, &mut budget)?;
+            // trace:BUG-2531 | ai:claude — bindings plus index hints.
+            let (u, c) = match discovery.as_mut() {
+                Some(d) => d.spec_entries(label, &mut budget)?,
+                None => (Vec::new(), Vec::new()),
+            };
             events.extend(u);
             indexed.extend(c);
         }
@@ -686,7 +765,7 @@ pub(crate) fn load_view(
         let mut bound_elsewhere: Vec<JsonObj> = Vec::new();
         for other in indexed.into_iter().filter(|c| *c != change) {
             if !others.contains_key(&other) {
-                let read = checked::read_change_events(root, other, &mut budget)?;
+                let read = read_change(&mut discovery, other, &mut budget)?;
                 others.insert(other, read);
             }
             bound_elsewhere.extend(
@@ -697,8 +776,9 @@ pub(crate) fn load_view(
             );
         }
         events.retain(|e| {
-            e.verdict_record()
-                .is_some_and(|r| !bound_elsewhere.contains(r))
+            !e.is_spec_only()
+                && e.verdict_record()
+                    .is_some_and(|r| !bound_elsewhere.contains(r))
         });
         // Unbound entries live in one file per label; the primary writer's
         // append time orders them across files, seq within one.

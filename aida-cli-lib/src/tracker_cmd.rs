@@ -3,9 +3,17 @@
 //! extraction). Shared forge/remote helpers (e.g. `truncate_str`) remain in
 //! `main.rs` and are reached via `crate::`.
 
-use crate::*;
+use crate::{
+    bulk_import_via_writer, not_found, parse_requirement_type, truncate_str, GitHubCommand,
+    GitLabCommand, JiraCommand,
+};
+use aida_core::{
+    GitLabClient, GitLabConfig, IssueFilter, IssueState, Requirement, RequirementPriority,
+    RequirementStatus, RequirementType, Storage,
+};
 use anyhow::Result;
 use colored::Colorize;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "tracker_cmd_args.rs"]
@@ -1888,7 +1896,6 @@ fn run_gitlab(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <GitlabArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -1961,7 +1968,6 @@ fn run_github(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <GithubArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -2029,7 +2035,6 @@ fn run_jira(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <JiraArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

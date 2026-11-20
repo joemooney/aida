@@ -558,7 +558,8 @@ impl Query {
 /// One shared budget for a whole snapshot: the inventory, every source and
 /// every receipt lookup draw from the same deadline; `max_entries` counts
 /// directory entries across all sources together, and `max_total_bytes`
-/// counts inventory output, message files and receipts together.
+/// bounds materialized history. Snapshot discovery uses `max_discovery_bytes`
+/// for inventory output, message files and receipts together.
 /// [`MailboxContext::resolve`] runs before the budget starts; it is a fixed
 /// number of small-file reads (no listing, no git process).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -567,7 +568,10 @@ pub struct ReadLimits {
     pub max_roots: usize,
     pub max_entries: usize,
     pub max_message_bytes: u64,
+    /// Materialized history, independent of unread discovery.
     pub max_total_bytes: u64,
+    /// Aggregate discovery input cap; exhaustion still refuses ACK.
+    pub max_discovery_bytes: u64,
 }
 
 impl ReadLimits {
@@ -584,6 +588,7 @@ impl ReadLimits {
             max_entries: 16_384,
             max_message_bytes: 1024 * 1024,
             max_total_bytes: 32 * 1024 * 1024,
+            max_discovery_bytes: 128 * 1024 * 1024,
         }
     }
 }
@@ -859,13 +864,19 @@ pub struct LogicalSnapshot {
     /// eligibility still follow the source errors.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
     pub inspection_unknown_ids: Vec<String>,
+    /// History was omitted after complete discovery; unread bodies are retained.
+    pub history_truncated: bool,
+    // Positive evidence minted only after replica, binding and receipt discovery.
+    // trace:BUG-2641 | ai:codex
+    ack_complete_ids: HashSet<String>,
 }
 
 impl LogicalSnapshot {
-    /// Every inventoried source, the canonical layer (when configured) and
-    /// every receipt lookup was fully observed.
+    /// Every inventoried source and receipt was observed, and all selected
+    /// history was materialized.
     pub fn complete(&self) -> bool {
-        self.inventory_error.is_none()
+        !self.history_truncated
+            && self.inventory_error.is_none()
             && self.anchor_error.is_none()
             && !matches!(self.canonical, CanonicalCoverage::Refused(_))
             && self
@@ -928,9 +939,9 @@ impl LogicalSnapshot {
     /// Whether an explicit ACK may be planned from this snapshot: every
     /// source and the receipt anchor were fully observed and no replicas
     /// disagree. A local-only (non-Git) project, whose one source is all
-    /// there is, also qualifies. A partial view never advances an
-    /// acknowledgement (signoff 48 B): an unread sibling may hold a newer
-    /// state of a displayed message.
+    /// there is, also qualifies. Incomplete discovery never advances an
+    /// acknowledgement: an unread sibling may hold a newer state of a
+    /// displayed message. History projection alone does not veto ACK.
     // trace:STORY-1843 | ai:claude
     pub fn ack_eligible(&self) -> bool {
         let local_only = self.inventory_error == Some(SourceErrorCode::NotAGitCheckout);
@@ -946,6 +957,15 @@ impl LogicalSnapshot {
                 .iter()
                 .all(|s| !matches!(s.status, SourceStatus::Error(_)))
             && self.conflicts.is_empty()
+    }
+
+    /// A displayed record must be one of the records certified by discovery,
+    /// with unchanged evidence. History omission alone does not invalidate it.
+    // trace:BUG-2641 | ai:codex
+    pub(crate) fn record_ack_complete(&self, record: &SnapshotRecord) -> bool {
+        self.ack_eligible()
+            && self.ack_complete_ids.contains(&record.message.id)
+            && self.records.iter().any(|observed| observed == record)
     }
 
     /// Whether every live source was read: the inventory was complete (a
@@ -991,7 +1011,15 @@ fn snapshot_for_policy(
     let observed_at_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as i64);
-    let mut budget = Budget::new(limits);
+    // Discovery validates every possible replica, including history, under its
+    // own bounded input allowance. Materialization below spends a separate
+    // history budget only after read/ownership evidence has been determined.
+    // trace:BUG-2641 | ai:codex
+    let discovery_limits = ReadLimits {
+        max_total_bytes: limits.max_discovery_bytes,
+        ..*limits
+    };
+    let mut budget = Budget::new(&discovery_limits);
     let (roots, inventory_error) = inventory(ctx, &mut budget);
     let mut sources = Vec::new();
     let mut observed: Vec<Option<ObservedSource>> = Vec::new();
@@ -1156,6 +1184,8 @@ fn snapshot_for_policy(
 
     let mut snapshot = LogicalSnapshot {
         records: out_records,
+        history_truncated: false,
+        ack_complete_ids: HashSet::new(),
         conflicts,
         sources,
         observed_at_ms,
@@ -1170,6 +1200,48 @@ fn snapshot_for_policy(
             .filter(|_| matches!(query, Query::Inbox | Query::Addressable))
             .collect(),
     };
+    // Certify before projecting history: no absent payload, unknown receipt,
+    // conflicting replica or missing source can acquire this evidence.
+    if snapshot.ack_eligible() {
+        snapshot.ack_complete_ids = snapshot
+            .records
+            .iter()
+            .filter(|r| !snapshot.inspection_unknown_ids.contains(&r.message.id))
+            .map(|r| r.message.id.clone())
+            .collect();
+    }
+    if matches!(query, Query::Inbox | Query::Addressable) {
+        let mut history_left = limits.max_total_bytes;
+        // Keep the recent read tail ahead of archived history, independently
+        // of filesystem/listing order. Unread and legacy-unacknowledged mail
+        // never spend this history allowance.
+        let mut history: Vec<_> = snapshot
+            .records
+            .iter()
+            .filter(|r| r.message.archived || matches!(r.read, ReadEvidence::Acknowledged { .. }))
+            .collect();
+        history.sort_by_key(|r| {
+            (
+                r.message.archived,
+                std::cmp::Reverse(r.message.timestamp),
+                &r.message.id,
+            )
+        });
+        let mut kept = HashSet::new();
+        for record in history {
+            let bytes = serde_json::to_vec(&record.message).map_or(u64::MAX, |b| b.len() as u64);
+            if let Some(left) = history_left.checked_sub(bytes) {
+                history_left = left;
+                kept.insert(record.message.id.clone());
+            } else {
+                snapshot.history_truncated = true;
+            }
+        }
+        snapshot.records.retain(|r| {
+            (!r.message.archived && !matches!(r.read, ReadEvidence::Acknowledged { .. }))
+                || kept.contains(&r.message.id)
+        });
+    }
     if let Query::ExactId(id) = query {
         let found = snapshot.records.iter().any(|r| &r.message.id == id)
             || snapshot.conflicts.iter().any(|c| c == id);
@@ -1784,6 +1856,43 @@ impl PinnedDir {
         File::from(dup)
             .metadata()
             .map_err(|_| SourceErrorCode::Unreadable)
+    }
+
+    /// Make the exact canonical bytes used for retirement durable. Atomic
+    /// publication alone does not fsync either the file or its directory.
+    // trace:TASK-3420 | ai:codex
+    fn sync_verified_message(
+        &self,
+        name: &OsStr,
+        expected: &str,
+        budget: &mut Budget,
+    ) -> Result<(), SourceErrorCode> {
+        let fd = openat(Some(&self.fd), name, libc::O_RDONLY).map_err(|e| errno_code(&e))?;
+        let mut file = File::from(fd);
+        let meta = file.metadata().map_err(|_| SourceErrorCode::Unreadable)?;
+        if !meta.is_file() || meta.nlink() != 1 || !owned_ok(&meta) {
+            return Err(SourceErrorCode::UnsafeEntry);
+        }
+        if budget.expired() || meta.len() > budget.max_message_bytes {
+            return Err(SourceErrorCode::OverBudget);
+        }
+        let mut bytes = Vec::new();
+        (&mut file)
+            .take(budget.max_message_bytes + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| SourceErrorCode::Unreadable)?;
+        budget.take(bytes.len())?;
+        if fingerprint(&bytes) != expected {
+            return Err(SourceErrorCode::SourceChanged);
+        }
+        file.sync_all().map_err(|_| SourceErrorCode::Unreadable)?;
+        File::from(
+            self.fd
+                .try_clone()
+                .map_err(|_| SourceErrorCode::Unreadable)?,
+        )
+        .sync_all()
+        .map_err(|_| SourceErrorCode::Unreadable)
     }
 
     /// Read regular file `name` (owned, single link, at most `limit` bytes).
@@ -2408,6 +2517,99 @@ fn read_binding(
 
 // ── Reconciliation ───────────────────────────────────────────────────────────
 
+/// Retirement requires readable canonical messages and durable UUID ACKs for
+/// every local original or handover delivery. Canonical digest copies carry
+/// messages only, so retiring unacked sidecars would lose delivery ownership.
+/// Use the same bounded, no-follow readers as an inbox snapshot. This runs
+/// after fencing and outside Lifecycle/Store; the final admission scan runs
+/// under Lifecycle afterwards.
+// trace:TASK-3420 | ai:codex
+pub(crate) fn retirement_message_state(common: &Path, mailbox: &Path) -> Result<(), String> {
+    let check = || -> Result<(), SourceErrorCode> {
+        let mut budget = Budget::new(&ReadLimits::explicit_read());
+        let Some(local) = read_source(mailbox, &[], &mut budget)? else {
+            return Ok(());
+        };
+        let ctx = MailboxContext {
+            requested_checkout: CheckoutRoot(mailbox.to_path_buf()),
+            repository: Some(VerifiedCommonGit(common.to_path_buf())),
+            canonical: CanonicalCoverage::NotConfigured,
+        };
+        // Any unacked local delivery keeps the source alive, including private
+        // relay handles that cannot recover ownership from retained sidecars.
+        // Queued deliveries must first have a durable recipient binding.
+        // trace:TASK-3420 | ai:codex
+        for delivery in local
+            .deliveries
+            .iter()
+            .flat_map(|sidecar| &sidecar.deliveries)
+            .chain(&local.handovers)
+        {
+            if budget.expired() {
+                return Err(SourceErrorCode::OverBudget);
+            }
+            let recipient = match &delivery.recipient_uuid {
+                Some(recipient) => recipient.clone(),
+                None if delivery.queued_for_role => {
+                    read_binding(&ctx, &delivery.delivery_id, &mut budget)?
+                        .ok_or(SourceErrorCode::SourceChanged)?
+                }
+                None => return Err(SourceErrorCode::CorruptReceipt),
+            };
+            let (ledger, size) = read_ledger_sized(common, &recipient.receipt_key())?
+                .ok_or(SourceErrorCode::SourceChanged)?;
+            budget.take(size)?;
+            if !ledger.receipts.contains_key(&delivery.message_id) {
+                return Err(SourceErrorCode::SourceChanged);
+            }
+        }
+        if local.messages.is_empty() {
+            return Ok(());
+        }
+        let worktrees = parse_worktree_porcelain_z(&list_worktrees(common, &mut budget)?)?;
+        let stores: Vec<_> = worktrees
+            .iter()
+            .filter(|w| w.branch.as_deref() == Some(STORE_BRANCH) && !w.bare)
+            .collect();
+        if stores.len() != 1 || common_git_of(&stores[0].path)? != common {
+            return Err(SourceErrorCode::WorktreeMissing);
+        }
+        let canonical = read_source(&stores[0].path, &["mailbox"], &mut budget)?
+            .ok_or(SourceErrorCode::WorktreeMissing)?;
+        let mut canonical_by_id = HashMap::new();
+        for observed in &canonical.messages {
+            if canonical_by_id
+                .insert(&observed.message.id, observed)
+                .is_some()
+            {
+                return Err(SourceErrorCode::CorruptMessage);
+            }
+        }
+        for observed in &local.messages {
+            // Exact equality protects audience, payload and state markers, not
+            // just the ID. No ACK is inferred by preserving the message.
+            let preserved = canonical_by_id
+                .get(&observed.message.id)
+                .filter(|c| c.message == observed.message)
+                .ok_or(SourceErrorCode::CorruptMessage)?;
+            canonical.mailbox.sync_verified_message(
+                OsStr::new(&format!("{}.json", observed.message.id)),
+                &preserved.fingerprint,
+                &mut budget,
+            )?;
+        }
+        // Persist creation of the canonical mailbox directory as well.
+        let store = PinnedDir::open_root(&stores[0].path)?;
+        File::from(store.fd)
+            .sync_all()
+            .map_err(|_| SourceErrorCode::Unreadable)?;
+        Ok(())
+    };
+    check().map_err(|code| {
+        format!("queued/undelivered mail, delivery acknowledgement or canonical preservation not verified ({code:?}); deliver queued mail, acknowledge all local deliveries and digest messages to the canonical store before retrying")
+    })
+}
+
 /// Fields that never change across state markers; replicas must agree.
 fn audience_tuple(m: &Message) -> (&str, &str, &Recipient, i64, Option<&str>) {
     (
@@ -2435,13 +2637,15 @@ fn payload(m: &Message) -> Payload<'_> {
 }
 
 /// The optional, writer-enriched metadata keys, in [`Recorded`] order.
-const METADATA_KEYS: [&str; 6] = [
+const METADATA_KEYS: [&str; 7] = [
     "subject",
     "urgent",
     "intent",
     "from_source",
     "from_role",
     "relayed_from",
+    // trace:STORY-2745 | ai:claude
+    "from_seat",
 ];
 
 /// Which [`METADATA_KEYS`] a replica's file actually carried (non-null).
@@ -2486,7 +2690,8 @@ fn merge_metadata(
     other: &Message,
     other_recorded: Recorded,
 ) -> bool {
-    let [subject, urgent, intent, from_source, from_role, relayed_from] = &mut into_recorded.0;
+    let [subject, urgent, intent, from_source, from_role, relayed_from, from_seat] =
+        &mut into_recorded.0;
     let o = other_recorded.0;
     fill(&mut into.subject, subject, &other.subject, o[0])
         & fill(&mut into.urgent, urgent, &other.urgent, o[1])
@@ -2499,6 +2704,7 @@ fn merge_metadata(
             &other.relayed_from,
             o[5],
         )
+        & fill(&mut into.from_seat, from_seat, &other.from_seat, o[6])
 }
 
 /// Give every replica of a message whose file carried no time one shared

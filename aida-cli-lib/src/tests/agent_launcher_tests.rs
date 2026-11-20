@@ -40,28 +40,29 @@ fn agent_role_infos_cover_canonical_set_without_fabrications() {
 
 #[test]
 fn parses_agent_new_claude_flags() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "new",
-        "claude",
-        "--role",
-        "reviewer",
-        "--spec",
-        "STORY-432",
-        "--cwd",
-        "/tmp/project",
-        "--permission-mode",
-        "acceptEdits",
-        "--model",
-        "opus-local",
-        "--prompt",
-        "review STORY-432",
-        "--no-default-flags",
-        "--extra-flag",
-        "--verbose",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "claude",
+            "--role",
+            "reviewer",
+            "--spec",
+            "STORY-432",
+            "--cwd",
+            "/tmp/project",
+            "--permission-mode",
+            "acceptEdits",
+            "--model",
+            "opus-local",
+            "--prompt",
+            "review STORY-432",
+            "--no-default-flags",
+            "--extra-flag",
+            "--verbose",
+        ])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::New {
@@ -239,26 +240,27 @@ fn derisk_real_launch_plan_leaves_target_spec_and_leases_untouched() {
 
 #[test]
 fn parses_agent_new_codex_flags() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "new",
-        "codex",
-        "--role",
-        "implementer",
-        "--spec",
-        "STORY-433",
-        "--cwd",
-        "/tmp/project",
-        "--bypass-sandbox",
-        "--model",
-        "gpt-prod",
-        "--print-command",
-        "--no-prompt",
-        "--extra-flag",
-        "--ask-for-approval=never",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "codex",
+            "--role",
+            "implementer",
+            "--spec",
+            "STORY-433",
+            "--cwd",
+            "/tmp/project",
+            "--bypass-sandbox",
+            "--model",
+            "gpt-prod",
+            "--print-command",
+            "--no-prompt",
+            "--extra-flag",
+            "--ask-for-approval=never",
+        ])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::New {
@@ -297,9 +299,9 @@ fn parses_agent_new_codex_flags() {
 // trace:TASK-1232 | ai:codex
 #[test]
 fn parses_agent_new_noexec_aliases() {
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "agent", "new", "claude", "--noexec"])
-            .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "agent", "new", "claude", "--noexec"])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::New {
@@ -312,14 +314,9 @@ fn parses_agent_new_noexec_aliases() {
     };
     assert!(noexec);
 
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "new",
-        "antigravity",
-        "--print-command",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "agent", "new", "antigravity", "--print-command"])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::New {
@@ -367,6 +364,7 @@ fn noexec_preview_renders_command_and_codex_permission_posture() {
         launch_cwd: project,
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("TASK-1232".into()),
         name: "codex-preview".to_string(),
         lease_id: None,
@@ -418,7 +416,8 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
     // `--no-exec` is the canonical spelling; `--noexec` and `--print-command`
     // remain accepted aliases (TASK-1232 back-compat).
     for flag in ["--no-exec", "--noexec", "--print-command"] {
-        let cli = crate::command_registry::try_parse_from(["aida", "agent", "new", "claude", flag])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "agent", "new", "claude", flag])
             .unwrap();
         let crate::agent_launch::AgentArgs {
             inner:
@@ -433,9 +432,9 @@ fn parses_agent_new_no_exec_and_show_prompt_flags() {
         assert!(noexec, "{flag} should set noexec");
     }
 
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "agent", "new", "codex", "--show-prompt"])
-            .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "agent", "new", "codex", "--show-prompt"])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::New {
@@ -469,6 +468,7 @@ fn noexec_preview_includes_prompt_source_context_path_env_and_guidance_files() {
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("TASK-1467".into()),
         name: "claude-preview".to_string(),
         lease_id: None,
@@ -539,6 +539,7 @@ fn noexec_preview_notes_context_disabled_when_no_context_is_set() {
         launch_cwd: project,
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "codex-preview".to_string(),
         lease_id: None,
@@ -575,9 +576,9 @@ fn noexec_preview_notes_context_disabled_when_no_context_is_set() {
 #[test]
 fn parses_agent_new_verbose_flag_for_every_vendor() {
     for vendor in ["claude", "codex", "antigravity"] {
-        let cli =
-            crate::command_registry::try_parse_from(["aida", "agent", "new", vendor, "--verbose"])
-                .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "agent", "new", vendor, "--verbose"])
+            .unwrap();
         let crate::agent_launch::AgentArgs {
             inner: AgentCommand::New { command, .. },
         } = cli.command.registered::<crate::agent_launch::AgentArgs>()
@@ -630,6 +631,7 @@ fn verbose_diagnostics_reuse_noexec_body_with_a_distinct_launching_banner() {
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("TASK-1498".into()),
         name: "claude-verbose".to_string(),
         lease_id: None,
@@ -744,6 +746,7 @@ fn verbose_diagnostics_never_print_the_full_prompt_text() {
         launch_cwd: project,
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "claude-verbose".to_string(),
         lease_id: None,
@@ -804,6 +807,7 @@ fn verbose_diagnostics_redact_secret_looking_argv_values() {
         launch_cwd: project,
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "claude-verbose".to_string(),
         lease_id: None,
@@ -935,24 +939,25 @@ fn child_role_picker_prefers_the_active_role_when_one_is_set() {
 
 #[test]
 fn parses_agent_new_antigravity_flags() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "new",
-        "antigravity",
-        "--role",
-        "implementer",
-        "--spec",
-        "STORY-434",
-        "--cwd",
-        "/tmp/project",
-        "--bypass-sandbox",
-        "--extra-flag",
-        "--model",
-        "--extra-flag",
-        "fast",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "antigravity",
+            "--role",
+            "implementer",
+            "--spec",
+            "STORY-434",
+            "--cwd",
+            "/tmp/project",
+            "--bypass-sandbox",
+            "--extra-flag",
+            "--model",
+            "--extra-flag",
+            "fast",
+        ])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::New {
@@ -1832,6 +1837,7 @@ fn agent_initial_prompt_args_map_by_agent_and_respect_opt_out() {
         launch_cwd: tmp.path().to_path_buf(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("TASK-556".into()),
         name: "agent-test".to_string(),
         lease_id: None,
@@ -2079,6 +2085,7 @@ fn show_prompt_prints_the_exact_injected_role_prompt() {
             launch_cwd: tmp.path().to_path_buf(),
             role: Some("product".into()),
             role_instance: RoleInstanceKind::Driver,
+            seat: None,
             current_spec: spec,
             name: "agy-test".to_string(),
             lease_id: None,
@@ -2128,7 +2135,9 @@ fn agent_resume_adapter_args_are_vendor_specific() {
 // trace:STORY-790 | ai:codex
 #[test]
 fn parses_agent_ls_ended_flag() {
-    let cli = crate::command_registry::try_parse_from(["aida", "agent", "ls", "--ended"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "agent", "ls", "--ended"])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::List {
@@ -2144,17 +2153,18 @@ fn parses_agent_ls_ended_flag() {
 
 #[test]
 fn parses_agent_new_context_flags() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "new",
-        "codex",
-        "--role",
-        "advisor",
-        "--no-context",
-        "--show-context",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "codex",
+            "--role",
+            "advisor",
+            "--no-context",
+            "--show-context",
+        ])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::New {
@@ -2177,20 +2187,21 @@ fn parses_agent_new_context_flags() {
 // trace:STORY-991 | ai:codex
 #[test]
 fn parses_agent_new_resume_and_duplicate_flags() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "new",
-        "codex",
-        "--role",
-        "advisor",
-        "--resume",
-        "latest",
-        "--no-resume",
-        "--allow-duplicate",
-        "--no-duplicate-check",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "codex",
+            "--role",
+            "advisor",
+            "--resume",
+            "latest",
+            "--no-resume",
+            "--allow-duplicate",
+            "--no-duplicate-check",
+        ])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::New {
@@ -2235,6 +2246,7 @@ fn launcher_view(
         started_at: now,
         last_active_at: now,
         role: role.map(str::to_string),
+        seat: None,
         current_spec: spec.map(str::to_string),
         worktree_path: std::path::PathBuf::from(format!("/tmp/{id}")),
         source: "registry".to_string(),
@@ -2463,7 +2475,9 @@ fn agent_resume_prompt_config_defaults_to_enabled() {
 // trace:TASK-587 | ai:antigravity
 #[test]
 fn parses_agent_list_roles_flags() {
-    let cli = crate::command_registry::try_parse_from(["aida", "agent", "list-roles"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "agent", "list-roles"])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner: AgentCommand::ListRoles { json },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
@@ -2472,8 +2486,9 @@ fn parses_agent_list_roles_flags() {
     };
     assert!(!json);
 
-    let cli_json =
-        crate::command_registry::try_parse_from(["aida", "agent", "list-roles", "--json"]).unwrap();
+    let cli_json = crate::TEST_CLI
+        .try_parse_from(["aida", "agent", "list-roles", "--json"])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner: AgentCommand::ListRoles { json: json_opt },
     } = cli_json
@@ -2490,7 +2505,9 @@ fn parses_agent_list_roles_flags() {
 // clap help, so the interactive picker can take over at a TTY.
 #[test]
 fn parses_bare_agent_new_as_optional_subcommand() {
-    let cli = crate::command_registry::try_parse_from(["aida", "agent", "new"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "agent", "new"])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner: AgentCommand::New { command, .. },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
@@ -2598,7 +2615,9 @@ fn explicit_agent_new_disabled_hint_uses_winning_agents_toml() {
 // so the two entry points share one launch path.
 #[test]
 fn picked_type_matches_explicit_subcommand_defaults() {
-    let cli = crate::command_registry::try_parse_from(["aida", "agent", "new", "claude"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "agent", "new", "claude"])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner: AgentCommand::New {
             command: Some(explicit),
@@ -2616,23 +2635,24 @@ fn picked_type_matches_explicit_subcommand_defaults() {
 // trace:TASK-543 | ai:codex
 #[test]
 fn parses_agent_register_flags() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "register",
-        "12345",
-        "--type",
-        "codex",
-        "--role",
-        "implementer",
-        "--spec",
-        "TASK-543",
-        "--name",
-        "codex-1",
-        "--description",
-        "implementation lane",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "register",
+            "12345",
+            "--type",
+            "codex",
+            "--role",
+            "implementer",
+            "--spec",
+            "TASK-543",
+            "--name",
+            "codex-1",
+            "--description",
+            "implementation lane",
+        ])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::Register {
@@ -2658,14 +2678,15 @@ fn parses_agent_register_flags() {
 // trace:STORY-791 | ai:codex
 #[test]
 fn parses_agent_describe_command() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "describe",
-        "codex-advisor-1",
-        "repo master advisor",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "describe",
+            "codex-advisor-1",
+            "repo master advisor",
+        ])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner: AgentCommand::Describe { agent, description },
     } = cli.command.registered::<crate::agent_launch::AgentArgs>()
@@ -2814,6 +2835,11 @@ fn register_existing_agent_entry_is_status_visible_and_pid_keyed() {
 #[cfg(unix)]
 #[test]
 fn tracked_fake_agent_receives_env_and_registry_is_removed() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -2862,6 +2888,7 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("STORY-433".into()),
         name: "codex-test".to_string(),
         lease_id: None,
@@ -2937,6 +2964,11 @@ fn tracked_fake_agent_receives_env_and_registry_is_removed() {
 #[cfg(unix)]
 #[test]
 fn task_2712_foreground_lane_commits_pending_work_after_exit() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     use std::sync::{Arc, Mutex};
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
@@ -2997,6 +3029,7 @@ fn task_2712_foreground_lane_commits_pending_work_after_exit() {
             launch_cwd: tree.clone(),
             role: Some(role.into()),
             role_instance: RoleInstanceKind::Driver,
+            seat: None,
             current_spec: Some("STORY-433".into()),
             name: format!("codex-{name}"),
             lease_id: None,
@@ -3094,6 +3127,11 @@ fn task_2712_foreground_lane_commits_pending_work_after_exit() {
 #[cfg(unix)]
 #[test]
 fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -3142,6 +3180,7 @@ fn tracked_fake_antigravity_receives_env_args_and_registry_is_removed() {
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("STORY-434".into()),
         name: "agy-test".to_string(),
         lease_id: None,
@@ -3239,6 +3278,7 @@ fn renders_agent_launch_context_with_role_guidance_and_briefs() {
         launch_cwd: project,
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: Some("STORY-436".into()),
         name: "codex-test".to_string(),
         lease_id: None,
@@ -3333,6 +3373,7 @@ fn cold_advisor_launch_context_names_gate_prohibition_and_next_command() {
         launch_cwd: project,
         role: Some("advisor".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "cold-advisor".to_string(),
         lease_id: None,
@@ -3418,6 +3459,7 @@ fn agent_launch_context_always_includes_mailbox_guidance_when_caught_up() {
         launch_cwd: project,
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "antigravity-test".to_string(),
         lease_id: None,
@@ -3512,6 +3554,7 @@ fn agent_launch_context_without_spec_preserves_open_ended_hint() {
         launch_cwd: project,
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "codex-test".to_string(),
         lease_id: None,
@@ -3533,6 +3576,11 @@ fn agent_launch_context_without_spec_preserves_open_ended_hint() {
 #[cfg(unix)]
 #[test]
 fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida/agents/context")).unwrap();
@@ -3582,6 +3630,7 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
         launch_cwd: project.clone(),
         role: Some("advisor".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "codex-test".to_string(),
         lease_id: None,
@@ -3636,15 +3685,16 @@ fn tracked_fake_agent_receives_context_file_env_and_cleans_file() {
 // trace:BUG-1696 | ai:claude
 #[test]
 fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "agent",
-        "new",
-        "codex",
-        "--prompt-file",
-        "brief.txt",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "agent",
+            "new",
+            "codex",
+            "--prompt-file",
+            "brief.txt",
+        ])
+        .unwrap();
     let crate::agent_launch::AgentArgs {
         inner:
             AgentCommand::New {
@@ -3663,42 +3713,38 @@ fn agent_new_parses_prompt_file_and_rejects_conflicting_prompt_sources() {
     // Every dispatch vendor gets the flag, not just codex.
     for vendor in ["claude", "codex", "antigravity"] {
         assert!(
-            crate::command_registry::try_parse_from([
-                "aida",
-                "agent",
-                "new",
-                vendor,
-                "--prompt-file",
-                "b.txt"
-            ])
-            .is_ok(),
+            crate::TEST_CLI
+                .try_parse_from(["aida", "agent", "new", vendor, "--prompt-file", "b.txt"])
+                .is_ok(),
             "{vendor} should accept --prompt-file"
         );
         assert!(
-            crate::command_registry::try_parse_from([
-                "aida",
-                "agent",
-                "new",
-                vendor,
-                "--prompt",
-                "inline",
-                "--prompt-file",
-                "b.txt",
-            ])
-            .is_err(),
+            crate::TEST_CLI
+                .try_parse_from([
+                    "aida",
+                    "agent",
+                    "new",
+                    vendor,
+                    "--prompt",
+                    "inline",
+                    "--prompt-file",
+                    "b.txt",
+                ])
+                .is_err(),
             "{vendor} must reject --prompt with --prompt-file"
         );
         assert!(
-            crate::command_registry::try_parse_from([
-                "aida",
-                "agent",
-                "new",
-                vendor,
-                "--no-prompt",
-                "--prompt-file",
-                "b.txt",
-            ])
-            .is_err(),
+            crate::TEST_CLI
+                .try_parse_from([
+                    "aida",
+                    "agent",
+                    "new",
+                    vendor,
+                    "--no-prompt",
+                    "--prompt-file",
+                    "b.txt",
+                ])
+                .is_err(),
             "{vendor} must reject --no-prompt with --prompt-file"
         );
     }
@@ -3796,6 +3842,7 @@ fn no_duplicate_check_is_the_escape_hatch_for_the_role_singleton() {
         launch_cwd: project.clone(),
         role: Some("reviewer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "reviewer-pr2242".to_string(),
         lease_id: None,
@@ -4083,6 +4130,11 @@ fn launch_reviewer(
 // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
 #[test]
 fn scope_conflict_is_refused_before_the_bypass_consent_gate() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -4132,6 +4184,11 @@ fn scope_conflict_is_refused_before_the_bypass_consent_gate() {
 // trace:TASK-b6b1278890774ef993d2ebc327862470-121 | ai:claude
 #[test]
 fn direct_resume_skips_the_early_scope_preflight() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -4165,7 +4222,8 @@ fn direct_resume_skips_the_early_scope_preflight() {
 #[test]
 fn allow_duplicate_keeps_the_duplicate_check_on_unlike_no_duplicate_check() {
     let parse = |extra: &str| {
-        let cli = crate::command_registry::try_parse_from(["aida", "agent", "new", "codex", extra])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "agent", "new", "codex", extra])
             .expect("parse failure");
         let crate::agent_launch::AgentArgs {
             inner:
@@ -4459,6 +4517,7 @@ fn is_contained_launch_detection() {
         launch_cwd: std::env::temp_dir(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "test-agent".into(),
         lease_id: None,
@@ -4477,6 +4536,11 @@ fn is_contained_launch_detection() {
 // trace:BUG-2124 | ai:antigravity
 #[test]
 fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -4503,6 +4567,7 @@ fn run_tracked_agent_contained_exports_aida_contained_and_uncontained_strips_it(
         launch_cwd: project.clone(),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "test-agent".to_string(),
         lease_id: None,
@@ -4600,6 +4665,7 @@ fn agent_launch_env_inputs_contained_and_uncontained() {
         launch_cwd: std::path::PathBuf::from("/repo"),
         role: Some("implementer".into()),
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "test-agent".to_string(),
         lease_id: None,
@@ -4640,6 +4706,11 @@ fn agent_launch_env_inputs_contained_and_uncontained() {
 // trace:BUG-2124 | ai:antigravity
 #[test]
 fn apply_agent_default_flags_sets_contained_flag_for_claude() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let tmp = TempDir::new().unwrap();
     let project = tmp.path().join("project");
     std::fs::create_dir_all(project.join(".aida")).unwrap();
@@ -4721,6 +4792,7 @@ fn build_agent_new_bg_command_exports_when_contained_and_strips_when_uncontained
         launch_cwd: project.clone(),
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: "test-bg-agent".to_string(),
         lease_id: None,
@@ -5087,7 +5159,7 @@ fn task_117_agent_list_and_aliases_keep_their_flags_and_avoid_launch_rewrite() {
                 .collect();
             let rewritten = crate::rewrite_agent_default_new(&args);
             assert_eq!(rewritten, args, "listing must never turn into agent new");
-            let cli = crate::command_registry::try_parse_from(rewritten).unwrap();
+            let cli = crate::TEST_CLI.try_parse_from(rewritten).unwrap();
             let parsed = &cli
                 .command
                 .registered::<crate::agent_launch::AgentArgs>()
@@ -5111,15 +5183,16 @@ fn task_117_agent_list_and_aliases_keep_their_flags_and_avoid_launch_rewrite() {
         .into_iter()
         .map(str::to_owned)
         .collect();
-    let cli =
-        crate::command_registry::try_parse_from(crate::rewrite_agent_default_new(&args)).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(crate::rewrite_agent_default_new(&args))
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::agent_launch::AgentArgs>()
             .inner,
         AgentCommand::ListRoles { json: true }
     ));
-    let mut command = crate::command_registry::built_command();
+    let mut command = crate::TEST_CLI.built_command();
     command.build();
     let agent = command.find_subcommand("agent").unwrap();
     assert!(agent.get_subcommands().any(|sub| sub.get_name() == "list"));
@@ -5184,7 +5257,7 @@ fn codex_derisk_agent_argv_expands_workflow_after_context_preamble() {
 // trace:STORY-2256 | ai:claude
 #[test]
 fn story_2256_every_agent_subcommand_passes_the_default_new_rewrite() {
-    let mut command = crate::command_registry::built_command();
+    let mut command = crate::TEST_CLI.built_command();
     command.build();
     let agent = command.find_subcommand("agent").unwrap();
     for sub in agent.get_subcommands() {
@@ -5206,12 +5279,366 @@ fn story_2256_every_agent_subcommand_passes_the_default_new_rewrite() {
         .into_iter()
         .map(str::to_owned)
         .collect();
-    let cli =
-        crate::command_registry::try_parse_from(crate::rewrite_agent_default_new(&args)).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(crate::rewrite_agent_default_new(&args))
+        .unwrap();
     assert!(matches!(
         &cli.command
             .registered::<crate::agent_launch::AgentArgs>()
             .inner,
         AgentCommand::Wake { .. }
     ));
+}
+
+// trace:STORY-2765 | ai:codex
+#[test]
+fn story_2765_direct_track_admission_precedes_setup() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "main")]);
+    let tmp = TempDir::new().unwrap();
+    let storage = crate::test_env::home_fixture_storage(tmp.path().join(".aida-store"));
+    let mut req = Requirement::new("track admission".into(), String::new());
+    req.spec_id = Some("STORY-2765".into());
+    req.status = RequirementStatus::Approved;
+    req.tags.insert("track:integration".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    for background in [false, true] {
+        let error = crate::agent_launch::preflight_agent_new_track(
+            tmp.path(),
+            Some("implementer"),
+            Some("STORY-2765"),
+            false,
+            background,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("set AIDA_TRACK=integration"));
+    }
+    for (role, resume) in [("reviewer", false), ("implementer", true)] {
+        crate::agent_launch::preflight_agent_new_track(
+            tmp.path(),
+            Some(role),
+            Some("STORY-2765"),
+            resume,
+            false,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        storage.load().unwrap().requirements[0].status,
+        RequirementStatus::Approved
+    );
+    drop(_env);
+    let _matching = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "integration")]);
+    crate::agent_launch::preflight_agent_new_track(
+        tmp.path(),
+        None,
+        Some("STORY-2765"),
+        false,
+        true,
+    )
+    .unwrap();
+    store.requirements[0].tags.insert("track:main".into());
+    storage.save(&store).unwrap();
+    let error = crate::agent_launch::preflight_agent_new_track(
+        tmp.path(),
+        None,
+        Some("STORY-2765"),
+        false,
+        false,
+    )
+    .unwrap_err();
+    assert!(error
+        .to_string()
+        .contains("tagged for several tracks (integration, main)"));
+}
+
+/// A scope that is not a stored spec (PR-N, ad-hoc) has no track tags, so the
+/// preflight admits the implementer launch instead of refusing it as unknown.
+// trace:STORY-2765 | ai:claude
+#[test]
+fn story_2765_track_preflight_skips_scopes_that_are_not_stored_specs() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "main")]);
+    let tmp = TempDir::new().unwrap();
+    let storage = crate::test_env::home_fixture_storage(tmp.path().join(".aida-store"));
+    let mut req = Requirement::new("track admission".into(), String::new());
+    req.spec_id = Some("STORY-2765".into());
+    req.status = RequirementStatus::Approved;
+    req.tags.insert("track:integration".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+    for scope in ["PR-4005", "ad-hoc-cleanup"] {
+        for background in [false, true] {
+            crate::agent_launch::preflight_agent_new_track(
+                tmp.path(),
+                Some("implementer"),
+                Some(scope),
+                false,
+                background,
+            )
+            .unwrap();
+        }
+    }
+    // The stored foreign-track spec is still refused from the same store.
+    crate::agent_launch::preflight_agent_new_track(
+        tmp.path(),
+        Some("implementer"),
+        Some("STORY-2765"),
+        false,
+        false,
+    )
+    .unwrap_err();
+}
+
+/// With no store on disk the preflight is read-only: it admits the launch
+/// (no track constraint) and creates nothing under the project root.
+// trace:STORY-2765 | ai:claude
+#[test]
+fn story_2765_track_preflight_never_creates_a_missing_store() {
+    let _env = crate::test_env::EnvVarsGuard::set(&[("AIDA_TRACK", "main")]);
+    let tmp = TempDir::new().unwrap();
+    for background in [false, true] {
+        crate::agent_launch::preflight_agent_new_track(
+            tmp.path(),
+            Some("implementer"),
+            Some("STORY-2765"),
+            false,
+            background,
+        )
+        .unwrap();
+    }
+    assert!(!tmp.path().join(".aida-store").exists());
+    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 0);
+}
+
+/// Every path under `root` except git internals and the store itself: a
+/// refused launch must leave no handle, lease, session or worktree behind.
+// trace:STORY-2765 | ai:claude
+fn story_2765_launch_footprint(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+    fn walk(dir: &std::path::Path, root: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let rel = path.strip_prefix(root).unwrap().to_path_buf();
+            if rel.ends_with(".git") || rel.ends_with(".aida-store") {
+                continue;
+            }
+            out.push(rel);
+            if path.is_dir() {
+                walk(&path, root, out);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, root, &mut out);
+    out.sort();
+    out
+}
+
+/// Drive the real foreground and `--bg` entry points. The invalid build
+/// profile makes the pre-consent binary check fail, so a track admission that
+/// moved after consent (or was deleted) surfaces as a different error.
+// trace:STORY-2765 | ai:claude
+#[test]
+fn story_2765_entry_points_refuse_foreign_track_before_consent_and_setup() {
+    // Keep process-bound grants and ambient launch state out of sibling tests.
+    // trace:BUG-2588 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = TempDir::new().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".aida")).unwrap();
+    // A minted advisor grant, so the delegation preflight that precedes track
+    // admission passes whatever grant the test runner's own env carries.
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &project,
+        "advisor",
+        &["implementer", "reviewer"],
+        &[
+            ("AIDA_TRACK", Some("main")),
+            ("AIDA_BUILD_PROFILE", Some("invalid-for-test")),
+        ],
+    );
+    assert!(crate::aida_bin::process().is_err());
+    assert!(crate::test_git::git_command()
+        .args(["init", "-q", "-b", "main"])
+        .arg(&project)
+        .status()
+        .unwrap()
+        .success());
+    std::fs::write(
+        project.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let storage = crate::test_env::home_fixture_storage(project.join(".aida-store"));
+    let mut req = Requirement::new("track admission".into(), String::new());
+    req.spec_id = Some("STORY-2765".into());
+    req.status = RequirementStatus::Approved;
+    req.tags.insert("track:integration".into());
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(req);
+    storage.save(&store).unwrap();
+
+    let launch = |background: bool, role: &str, resume: AgentResumeOptions| {
+        let launch = if background {
+            agent_new_bg_dispatch
+        } else {
+            agent_new_with_config
+        };
+        launch(
+            AgentLaunchConfig {
+                delegate_seats: Vec::new(),
+                agent_type: "claude",
+                binary: "/usr/bin/true",
+                default_args: vec!["--permission-mode".into(), "bypassPermissions".into()],
+                prompt_style: AgentPromptStyle::Positional,
+                contained: false,
+            },
+            Some(role.into()),
+            Some("STORY-2765".into()),
+            false,
+            Some(&project),
+            AgentContextOptions::new(false, false),
+            false,
+            false,
+            false,
+            false,
+            AgentPromptOptions::new(Some("fresh work".into()), false),
+            resume,
+            AgentDefaultFlagOptions::new(false, Vec::new(), None),
+            Some("story-2765-launch".into()),
+            None,
+            false,
+        )
+        .unwrap_err()
+        .to_string()
+    };
+
+    for background in [false, true] {
+        let before = story_2765_launch_footprint(tmp.path());
+        // A fresh implementer launch is refused on track, ahead of the
+        // pre-consent binary check and of every resource setup step.
+        let error = launch(
+            background,
+            "implementer",
+            AgentResumeOptions::new(true, None, false, true),
+        );
+        assert!(error.contains("set AIDA_TRACK=integration"), "{error}");
+        assert_eq!(story_2765_launch_footprint(tmp.path()), before);
+        assert_eq!(
+            storage.load().unwrap().requirements[0].status,
+            RequirementStatus::Approved
+        );
+        // Review and explicit-resume launches keep their existing admission:
+        // they pass the track check and stop at the later binary check.
+        for (role, resume) in [
+            ("reviewer", AgentResumeOptions::new(true, None, false, true)),
+            (
+                "implementer",
+                AgentResumeOptions::new(false, Some("latest".into()), false, false),
+            ),
+        ] {
+            let error = launch(background, role, resume);
+            assert!(!error.contains("AIDA_TRACK"), "{role}: {error}");
+        }
+    }
+}
+
+// STORY-2745 review F2: both background launch shapes carry `--seat` into
+// the worker's environment (`AIDA_ROTATION_SEAT`), and a seatless launch
+// never passes a seat through.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_background_workers_carry_the_named_seat() {
+    let tmp = tempfile::tempdir().unwrap();
+    let project = tmp.path().to_path_buf();
+    std::fs::create_dir_all(project.join(".aida-store")).unwrap();
+    let plan = |seat: Option<&str>| AgentLaunchPlan {
+        project_root: project.clone(),
+        launch_cwd: project.clone(),
+        role: None,
+        role_instance: RoleInstanceKind::Driver,
+        seat: seat.map(str::to_string),
+        current_spec: None,
+        name: "integ-7".to_string(),
+        lease_id: None,
+        native_session_id: None,
+        resumed_from: None,
+    };
+    let seat_of = |envs: Vec<(String, Option<String>)>| {
+        envs.into_iter()
+            .find(|(k, _)| k == crate::agent_rotation::SEAT_ENV)
+            .and_then(|(_, v)| v)
+    };
+    let binary = std::path::Path::new("/bin/echo");
+
+    // `claude --bg`.
+    let claude = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
+        agent_type: "claude",
+        binary: "claude",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let claude_env = |seat| {
+        build_agent_new_bg_command(binary, &claude, &plan(seat), &[], None)
+            .unwrap()
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().into_owned(),
+                    v.map(|v| v.to_string_lossy().into_owned()),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        seat_of(claude_env(Some("integration"))).as_deref(),
+        Some("integration")
+    );
+    assert_eq!(seat_of(claude_env(None)), None);
+
+    // The detached Codex worker (`aida agent new codex --bg`).
+    let codex = AgentLaunchConfig {
+        delegate_seats: Vec::new(),
+        agent_type: "codex",
+        binary: "codex",
+        default_args: Vec::new(),
+        prompt_style: AgentPromptStyle::Positional,
+        contained: false,
+    };
+    let codex_env = |seat| {
+        crate::agent_launch::agent_codex_background::test_worker_env(binary, &codex, &plan(seat))
+            .unwrap()
+            .into_iter()
+            .map(|(k, v)| (k, Some(v)))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        seat_of(codex_env(Some("integration"))).as_deref(),
+        Some("integration")
+    );
+    assert_eq!(seat_of(codex_env(None)), None);
+}
+
+// The detached Codex supervisor's init carries the seat to the worker's
+// registry row.
+// trace:STORY-2745 | ai:claude
+#[test]
+fn story2745_codex_supervisor_init_carries_the_seat() {
+    let src = include_str!("../agent_codex_background.rs");
+    let register = src
+        .split("agent_registry::register_detached_worker(")
+        .nth(1)
+        .unwrap();
+    let register = &register[..register.find("})").unwrap()];
+    assert!(register.contains("seat: init.seat.clone()"), "{register}");
+    let init = src.split("let init = SupervisorInit {").nth(1).unwrap();
+    assert!(init[..init.find("};").unwrap()].contains("seat: plan.seat.clone()"));
 }

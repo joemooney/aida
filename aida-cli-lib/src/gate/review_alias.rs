@@ -513,7 +513,33 @@ fn candidate(
         })?),
         None => None,
     };
-    let newest: Option<GateEvent> = ledger::project::newest_of(events);
+    // Keep exact-source annotations from the checked snapshot even when raw
+    // projection retains an independent review instead of the annotation.
+    // trace:BUG-2525 | ai:codex
+    let annotation = events
+        .iter()
+        .rev()
+        .filter_map(|e| e.verdict_record())
+        .find(|r| {
+            r.get("terminal_wait_key").and_then(|v| v.as_str()) == Some(label)
+                && r.contains_key("terminal_wait_source")
+        })
+        .cloned();
+    let overlay = |mut selected: Selected| {
+        if let Some(body) = annotation
+            .as_ref()
+            .and_then(|r| rv::terminal_wait_overlay_body(label, &selected.body, r))
+        {
+            if let Some(verdict) = rv::parse_recorded_verdict(&body) {
+                selected.verdict = verdict;
+                selected.body = body;
+            }
+        }
+        selected
+    };
+    // Lifecycle annotations cannot displace the source round in file ordering.
+    // trace:BUG-2525 | ai:codex
+    let newest: Option<GateEvent> = ledger::project::newest_review_of(events);
     if let Some(event) = newest.filter(|e| rv::ledger_supersedes(&path, parsed.as_ref(), e)) {
         let record = event
             .verdict_record()
@@ -526,7 +552,7 @@ fn candidate(
             ))
         })?;
         return Ok(Some(Candidate {
-            selected: Selected {
+            selected: overlay(Selected {
                 verdict,
                 body,
                 label: label.to_string(),
@@ -535,12 +561,12 @@ fn candidate(
                     file: ledger::project::event_file(store_root, &event),
                     seq: event.seq,
                 },
-            },
+            }),
         }));
     }
     Ok(match (parsed, file) {
         (Some(verdict), Some((body, mtime))) => Some(Candidate {
-            selected: Selected {
+            selected: overlay(Selected {
                 order_time: verdict
                     .recorded_at
                     .as_deref()
@@ -550,7 +576,7 @@ fn candidate(
                 body,
                 label: label.to_string(),
                 source: VerdictSource::File(path),
-            },
+            }),
         }),
         _ => None,
     })
@@ -586,8 +612,10 @@ pub(crate) fn select_verdict(project_root: &Path, ids: &[&str]) -> AliasSelectio
 
 /// Selections for many requirements in one operation (a list view): the
 /// gate ledger is discovered once, on the first multi-label selection, and
-/// every later selection reuses that discovery and the same aggregate
-/// budget, so no ledger file is read twice per operation.
+/// every later selection reuses that inventory. Selected ledger payloads share
+/// one aggregate budget and are cached; unrelated payloads are discarded during
+/// inventory discovery under independent per-file limits.
+// trace:BUG-2531 | ai:codex
 // trace:BUG-2403 | ai:claude
 pub(crate) struct Selector<'a> {
     project_root: &'a Path,
@@ -611,7 +639,12 @@ impl<'a> Selector<'a> {
     /// [`select_verdict`] for one requirement's labels.
     pub(crate) fn select(&mut self, ids: &[&str]) -> AliasSelection {
         // trace:STORY-2492 | ai:codex — remote refusals cannot lose to alias cache order.
-        if let Some(remote) = super::review_publication::current(self.project_root, ids) {
+        if let Some(mut remote) = super::review_publication::current(self.project_root, ids) {
+            // Terminal annotations retire only this exact signed round.
+            // trace:BUG-2525 | ai:codex
+            for label in spec_labels(ids) {
+                remote = rv::terminal_wait_overlay(self.project_root, &label, remote);
+            }
             let verdict = rv::parse_recorded_verdict(&remote.body)
                 .expect("publication projection is a verdict");
             return AliasSelection::Selected(Box::new(Selected {
@@ -636,7 +669,7 @@ impl<'a> Selector<'a> {
         let discovery = self.discovery.get_or_insert_with(|| {
             let root = ledger::store_root(project_root)
                 .map_err(|e| Unsafe(format!("the gate ledger cannot be resolved: {e}")))?;
-            let found = checked::discover(&root, budget)?;
+            let found = checked::discover(&root)?;
             Ok((root, found))
         });
         let (store_root, found) = match discovery {

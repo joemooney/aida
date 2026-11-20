@@ -19,6 +19,10 @@
 //! the guard holds the shared `ENV_LOCK` for its whole lifetime and is not
 //! reentrant, so every key (`AIDA_AGENT_CMD` included) must be set together.
 use super::*;
+use crate::{
+    review_spec_launch_reviewer, review_spec_resolve_vendor, run_standalone_reviewer,
+    NoReviewVerdict, QueueWorkLaunch,
+};
 
 /// Write a trivial "vendor" mock at `dir/mock-agent.sh` that appends each of
 /// its argv[1..] to `capture`, NUL-delimited so multiline prompts stay one argument.
@@ -166,13 +170,169 @@ fn run_standalone_reviewer_with_codex_only_project_launches_codex_after_worktree
         "child metadata overrides must precede vendor args"
     );
     let argv = argv[prefix..].to_vec();
-    assert_eq!(
-        argv,
-        crate::session::codex_session_args(prompt, false, None),
-        "run_standalone_reviewer must spawn codex with codex_session_args' argv, not claude"
+    let expected = crate::session::codex_session_args(prompt, false, None);
+    assert_eq!(argv.len(), expected.len());
+    assert_eq!(&argv[..argv.len() - 1], &expected[..expected.len() - 1]);
+    let delivered = argv.last().unwrap();
+    assert!(delivered.contains(".aida/review-verdicts/"), "{delivered}");
+    assert!(
+        delivered.contains("Reviewer policy: do not run Cargo"),
+        "{delivered}"
     );
 
     crate::session::set_headless_vendor_override(None);
+}
+
+// Exercise the real interactive Resume arms, including policy composition.
+// trace:BUG-2546 | ai:codex
+#[cfg(unix)]
+#[test]
+fn bug2546_interactive_codex_resume_receives_current_reviewer_policy() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert_interactive_resume_policy(crate::session::HeadlessVendor::Codex);
+}
+
+// trace:BUG-2546 | ai:codex
+#[cfg(unix)]
+#[test]
+fn bug2546_interactive_claude_resume_receives_current_reviewer_policy() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    assert_interactive_resume_policy(crate::session::HeadlessVendor::Claude);
+}
+
+#[cfg(unix)]
+fn assert_interactive_resume_policy(vendor: crate::session::HeadlessVendor) {
+    // This helper changes the process cwd. Keep its isolation requirement
+    // explicit as well as guarding each caller, so the hygiene scanner and
+    // future callers cannot accidentally run it in the shared test process.
+    // trace:BUG-2546 | ai:codex
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (home, project) = codex_only_project(tmp.path());
+    std::fs::write(
+        project.join(".aida/config.toml"),
+        format!("[agents]\nenabled = [\"{}\"]\n", vendor.as_str()),
+    )
+    .unwrap();
+    let capture = tmp.path().join("captured-argv.txt");
+    let mock = write_argv_capture_mock(tmp.path(), &capture);
+    let id = "019e0000-0000-7000-8000-0000000000bb";
+    if vendor == crate::session::HeadlessVendor::Codex {
+        let logs = project.join(".aida/headless-logs");
+        std::fs::create_dir_all(&logs).unwrap();
+        std::fs::write(
+            logs.join(format!("pr-59-{id}.jsonl")),
+            format!("{{\"type\":\"thread.started\",\"thread_id\":\"{id}\"}}\n"),
+        )
+        .unwrap();
+    } else {
+        let transcripts = home.join(".claude/projects/fixture");
+        std::fs::create_dir_all(&transcripts).unwrap();
+        std::fs::write(transcripts.join(format!("{id}.jsonl")), "{}\n").unwrap();
+    }
+    let mut env = crate::test_env::EnvVarsGuard::apply(&[
+        ("AIDA_HEADLESS_VENDOR", None),
+        ("AIDA_HOME", home.to_str()),
+        ("HOME", home.to_str()),
+        ("AIDA_AGENT_CMD", mock.to_str()),
+        ("AIDA_CONTAINED", None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
+    ]);
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        &project,
+        &crate::current_user_id(None),
+        "advisor",
+        &["reviewer"],
+    );
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant);
+    std::env::set_current_dir(&project).unwrap();
+    let tree = tmp.path().join("reviewer-worktree");
+    // The real Codex seat probe runs in the reviewer worktree. Give that
+    // fixture the same store/roster as its launcher, as a real pickup does.
+    // trace:BUG-2546 | ai:codex
+    std::fs::create_dir_all(tree.join(".aida")).unwrap();
+    std::fs::write(
+        tree.join(".aida/config.toml"),
+        format!(
+            "store_path = {}\n",
+            toml::Value::String(project.join(".aida-store").to_string_lossy().into_owned())
+        ),
+    )
+    .unwrap();
+    let verdict_path = project.join(".aida/review-verdicts/PR-59.json");
+    let result = run_standalone_reviewer(
+        &project,
+        59,
+        QueueWorkLaunch::Resume(id.into()),
+        "/aida-review --pr 59\n\nOperator scope: prior findings plus delta.",
+        None,
+        "PR-59",
+        "pr-59",
+        "reviewer",
+        &tree,
+        false,
+        true,
+        &verdict_path,
+        false,
+        vendor,
+        crate::seat_clone::launcher_main().as_deref(),
+    );
+    let error = result.expect_err("the argv mock records no verdict");
+    assert!(
+        error.downcast_ref::<NoReviewVerdict>().is_some(),
+        "{error:#}"
+    );
+    let argv = read_captured_argv(&capture);
+    let selector = if vendor == crate::session::HeadlessVendor::Codex {
+        "resume"
+    } else {
+        "--resume"
+    };
+    assert!(
+        argv.windows(2).any(|pair| pair == [selector, id]),
+        "{argv:?}"
+    );
+    let prompt = argv.last().expect("resume must receive a prompt");
+    // Policy and the current operator scope must arrive together as one new
+    // message, even when the resumed thread predates the policy change.
+    // trace:BUG-2546 | ai:codex
+    assert!(
+        prompt.contains("Operator scope: prior findings plus delta."),
+        "{argv:?}"
+    );
+    assert_eq!(
+        argv.iter()
+            .filter(|arg| arg.contains("Reviewer policy:"))
+            .count(),
+        1,
+        "policy must be delivered exactly once: {argv:?}"
+    );
+    if vendor == crate::session::HeadlessVendor::Codex {
+        assert!(!prompt.starts_with('/'), "{argv:?}");
+        assert!(prompt.contains(".aida/review-verdicts/"), "{argv:?}");
+    } else {
+        assert!(prompt.starts_with("/aida-review --pr 59"), "{argv:?}");
+    }
+    assert!(prompt.contains("do not run Cargo or local test/build commands unless explicitly requested by the operator"), "{argv:?}");
+    assert!(prompt.contains("exit immediately"), "{argv:?}");
+    assert!(
+        prompt.contains("Use source and existing CI evidence"),
+        "{argv:?}"
+    );
+    assert!(
+        prompt.contains("After successfully recording your verdict"),
+        "{argv:?}"
+    );
+    assert!(
+        !prompt.contains("If recording the verdict fails"),
+        "{argv:?}"
+    );
 }
 
 /// BUG-1607: the vendor half of the `aida review` launch kernel on its own.
@@ -269,7 +429,7 @@ fn review_spec_resolve_and_launch_uses_codex_for_codex_only_project() {
     let prompt = "/aida-review --pr 52";
     let launch = review_spec_launch_reviewer(vendor, "review-story-52", prompt, "session-52");
     crate::test_ambient::replace(outer);
-    let status = launch.expect("launch with a reachable mock must succeed");
+    let (status, _grant) = launch.expect("launch with a reachable mock must succeed");
     assert!(status.success());
 
     let argv = read_captured_argv(&capture);

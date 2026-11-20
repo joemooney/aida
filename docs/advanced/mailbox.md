@@ -66,6 +66,22 @@ aida mailbox sync
 
 **Identity.** Your "agent id" for sending/receiving is the shell's agent/user identity (the same `AIDA_USER` / role / user resolution the queue uses). `aida mailbox inbox` with no argument reads *your* inbox; pass an agent id to read another's. Agent ids are the agent names — `claude`, `codex`, `antigravity`, etc. Only the original sender or the operator account may retract/delete a message.
 
+Registered human inboxes remain addressable without a live node lease or
+`registry/team.toml` enrollment. Recipient discovery preserves identities from
+the team roster, people represented by the node roster, metadata user handles,
+and registered person aliases and their canonical identities. Human mentions
+match case-insensitively and are delivered under the stored spelling.
+
+Work-node peers are addressable through `registry/team.toml` enrollment or a
+current node lease in this store's `coordination/leases/` directory. Object
+authorship alone does not enroll a recipient. For an unknown peer, use
+`aida team add` or establish a live node lease.
+
+`aida db sync --push` publishes the local mailbox snapshot through the same
+publication path as `aida push`. Both honor the mailbox autosync opt-out and
+warn if best-effort mailbox publication fails.
+<!-- trace:BUG-2615 | ai:codex -->
+
 **Policy.** Projects configure mailbox behaviour in `.aida/config.toml`. The mutation knobs default to `true`; the act-on-mail knob defaults to the safe `surface-and-recommend`:
 
 ```toml
@@ -305,6 +321,21 @@ publish them, so reader UUIDs never go into the shared store. A clone that
 sees only the canonical copy of a role message therefore treats it as
 ordinary role mail: every reader of the role there sees it and the role
 inbox acknowledges it.
+
+Mailbox source retirement checks message state. Delivered mail, including
+unacknowledged mail, must have a matching readable copy in the canonical store
+before its source can retire; use `aida mailbox sync` to preserve it. A private
+retained copy alone does not meet that condition. Queued mail keeps its source
+until delivery is bound, even when a canonical copy exists. Retirement preserves
+the delivery sidecars and does not acknowledge messages. A source holding relay
+handovers stays live until each new recipient has an anchored acknowledgement
+for its message, including sources containing only handovers. Missing or
+unreadable acknowledgement evidence retains the source; retained handover chains
+are not read by the logical inbox. After fencing and
+quiescing writers, a fresh writer-admission scan under the lifecycle lock must
+succeed before retirement commits. An activation record's build identity no
+longer decides whether a source can retire.
+<!-- trace:TASK-3420 | ai:codex -->
 
 ## Cross-vendor: MCP equivalents
 

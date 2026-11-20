@@ -339,12 +339,15 @@ fn same_check(reason: &GrantRejection) -> String {
     match reason {
         GrantRejection::BadHandle => "BadHandle".into(),
         GrantRejection::Unreadable => "Unreadable".into(),
+        GrantRejection::MandateRefused => "MandateRefused".into(),
         GrantRejection::Malformed => "Malformed".into(),
         GrantRejection::Revoked { .. } => "Revoked".into(),
         GrantRejection::Expired { .. } => "Expired".into(),
         GrantRejection::SubjectMismatch { grant_subject, .. } => {
             format!("SubjectMismatch({grant_subject})")
         }
+        // trace:BUG-2520 | ai:codex
+        GrantRejection::PrincipalMismatch { .. } => "PrincipalMismatch".into(),
         GrantRejection::RosterDenied { seat, .. } => format!("RosterDenied({seat})"),
         GrantRejection::Parent(inner) => format!("Parent({})", same_check(inner)),
         GrantRejection::ParentPrincipalMismatch => "ParentPrincipalMismatch".into(),
@@ -476,9 +479,9 @@ fn spec_status(store: &Path) -> aida_core::models::RequirementStatus {
 // trace:BUG-1983 | ai:claude
 fn edit_gate_refusal(store: &Path) -> String {
     use clap::Parser;
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "edit", SPEC, "--status", "approved"])
-            .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "edit", SPEC, "--status", "approved"])
+        .unwrap();
     let err = crate::git_backend_cmd::handle_git_backend_command(store, &cli.command)
         .expect_err("the Draft->Approved gate must refuse");
     assert_eq!(
@@ -693,10 +696,9 @@ fn one_rejection_table_drives_the_edit_gate_and_review_record() {
                 "{case}: healthy advisor must stay Valid"
             );
             use clap::Parser;
-            let cli = crate::command_registry::try_parse_from([
-                "aida", "edit", SPEC, "--status", "approved",
-            ])
-            .unwrap();
+            let cli = crate::TEST_CLI
+                .try_parse_from(["aida", "edit", SPEC, "--status", "approved"])
+                .unwrap();
             crate::git_backend_cmd::handle_git_backend_command(&store, &cli.command)
                 .unwrap_or_else(|e| panic!("{case}: Draft->Approved must succeed: {e:#}"));
             assert_eq!(

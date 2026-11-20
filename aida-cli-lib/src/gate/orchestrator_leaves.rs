@@ -15,6 +15,95 @@
 // trace:TASK-b6b1278890774ef993d2ebc327862470-024 | ai:claude
 #[cfg(test)]
 pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
+    // trace:STORY-2903 trace:STORY-2905 | ai:claude
+    (
+        "landing_merge.rs",
+        "the one merge boundary: drives the forge merge, fetches the base and default branch, and reads the landing policy, authors and claim around its landing decisions",
+        &[
+            "crate::forge::ChangeRef",
+            "crate::forge::Forge",
+            "crate::forge::MergeOptions",
+            "crate::forge::MergeResult",
+            "crate::forge::default_branch_of",
+            "crate::landing_policy::LandingMode::ReviewGated",
+            "crate::landing_policy::LandingPolicy",
+            "crate::landing_policy::load",
+            "crate::landing_policy::load_checked",
+            "crate::landing_policy::policy_change_refusal",
+            "crate::network_retry::RetrySink",
+            "crate::trusted_config::local_default_branch_name",
+            "crate::trusted_config::rev_parse_commit",
+        ],
+    ),
+    // trace:STORY-2905 | ai:claude
+    (
+        "merge_claim.rs",
+        "one merge hand per PR: host-local claim files under the coordination lock, judging a holder's liveness",
+        &[
+            "aida_core::proc_identity::HolderRecord",
+            "aida_core::proc_identity::HolderRecord::capture",
+            "aida_core::proc_identity::ProcIdentity",
+            "aida_core::proc_identity::Verdict",
+            "aida_core::proc_identity::Verdict::Alive",
+            "aida_core::proc_identity::Verdict::Dead",
+            "crate::worktree_gc::main_worktree_root_from",
+        ],
+    ),
+    // trace:STORY-2856 | ai:codex
+    (
+        "ci_startup.rs",
+        "startup alert blocked-PR counts observe review decisions through the bounded forge read transport; no merge or completion authority",
+        &[
+            "crate::forge::github_startup_output",
+            "crate::forge_observed::Observed",
+            "crate::forge_observed::Observed::from_result",
+        ],
+    ),
+    // trace:TASK-3119 | ai:codex
+    (
+        "relay_parent.rs",
+        "mandate-backed relay parent issuance: resolves the operator project and mirrors durable local authority receipts to the event feed",
+        &[
+            "aida_core::team::canonical_role",
+            "crate::events::Event::new",
+            "crate::events::EventKind::RelayParentGrantRenewal",
+            "crate::events::emit",
+            "crate::statusline_project_root",
+        ],
+    ),
+    // trace:TASK-3784 | ai:codex
+    (
+        "test_support.rs",
+        "test-only ambient authority fixtures coordinate environment pins and thread-local ambient state around seat grants",
+        &[
+            "aida_core::team::HERMETIC_TEST_USER",
+            "crate::test_env_base::EnvVarsGuard::apply",
+            "crate::test_ambient::Ambient",
+            "crate::test_ambient::replace",
+            "crate::test_ambient::project_root",
+            "crate::test_ambient::stdin_is_terminal",
+            "crate::test_ambient::stdout_is_terminal",
+            "crate::test_env_base::AgentSessionIsolation",
+            "crate::test_env_base::EnvLockGuard",
+            "crate::test_env_base::EnvVarGuard",
+            "crate::test_env_base::EnvVarsGuard",
+            "crate::test_env_base::REQUIRE_BWRAP_LIVE_ENV",
+            "crate::test_env_base::enroll_synthetic_home",
+            "crate::test_env_base::env_lock",
+            "crate::test_env_base::holds_env_lock",
+            "crate::test_env_base::home_fixture_backend",
+            "crate::test_env_base::home_fixture_cached_backend",
+            "crate::test_env_base::home_fixture_storage",
+            "crate::test_env_base::is_path_isolated_process",
+            "crate::test_env_base::pin_queue_user",
+            "crate::test_env_base::require_path_mutation_scope",
+            "crate::test_env_base::run_path_isolated_test",
+            "crate::test_env_base::run_path_isolated_test_output",
+            "crate::test_env_base::scan_raw_env_writes_in_dir",
+            "crate::test_env_base::scan_unisolated_set_current_dir_in_dir",
+            "crate::test_env_base::write_project_config_fixture",
+        ],
+    ),
     (
         "approval.rs",
         "ship and merge approval: drives the forge client, the pr_cmd ship activity log, review carry-over and the drain phase report",
@@ -66,6 +155,10 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         "mandate_ship.rs",
         "mandate ship cover: forge lookup, pinned-change fetch, store history and the merge-hold audit event",
         &[
+            "aida_core::ExecutionMode",
+            "aida_core::ExecutionMode::Decide",
+            "aida_core::ExecutionMode::Operator",
+            "aida_core::RelationshipType::SupersededBy",
             "aida_core::Requirement",
             "aida_core::RequirementStatus::Completed",
             "aida_core::RequirementsStore",
@@ -159,6 +252,16 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::pr_train::before_train_forge_call",
         ],
     ),
+    // trace:STORY-2763 | ai:claude
+    (
+        "review_freshness.rs",
+        "review freshness policy: reads the trusted default-branch config and runs host git for the changed paths",
+        &[
+            "aida_core::git_ops::host_git_command",
+            "crate::trusted_config::local_trusted_default_branch_sha",
+            "crate::trusted_config::read_trusted_config_toml_local",
+        ],
+    ),
     (
         "rework_hold_release.rs",
         "rework hold release: forge client, pinned change, label sync, audit events and the review-story lookup",
@@ -216,6 +319,8 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
         &[
             "aida_core::ExecutionMode",
             "aida_core::ExecutionMode::Drain",
+            "aida_core::RelationshipType::SupersededBy",
+            "aida_core::Requirement",
             "crate::awaiting_you::PrReviewRow",
             "crate::awaiting_you::PrReviewRow::Blocked",
             "crate::awaiting_you::PrReviewRow::ReworkReady",
@@ -256,6 +361,23 @@ pub(crate) const ORCHESTRATOR_OUTSIDE_PATHS: &[(&str, &str, &[&str])] = &[
             "crate::trailer_coverage::rewrite_body_trailers",
             "crate::trailer_coverage::short_title",
             "crate::trailer_coverage::uncovered_phrase",
+        ],
+    ),
+    // trace:STORY-2884 | ai:claude
+    (
+        "unset_mode.rs",
+        "unset execution mode default: reads the trusted default-branch config and the change's files through git; the effective mode it resolves is pure",
+        &[
+            "aida_core::ExecutionMode",
+            "aida_core::ExecutionMode::Drain",
+            "aida_core::RelationshipType::SupersededBy",
+            "aida_core::Requirement",
+            "aida_core::RequirementType",
+            "aida_core::RequirementType::ALL",
+            "aida_core::git_ops::host_git_command",
+            "aida_core::node_alias::display_spec_id",
+            "crate::forge_lookup::deadline_output",
+            "crate::trusted_config::read_trusted_config_toml_local",
         ],
     ),
 ];

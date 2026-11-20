@@ -497,6 +497,7 @@ fn parser_version_ratchet() {
         (pr_lookup, "extract_referenced_spec_ids_from_commit"),
         (pr_lookup, "extract_trace_line_spec_ids"),
         (pr_lookup, "push_paren_spec_ids_from_line"),
+        (pr_lookup, "claim_group_tokens"),
         (pr_lookup, "body_line_is_code_like"),
         (pr_lookup, "looks_like_spec_id"),
     ] {
@@ -506,11 +507,10 @@ fn parser_version_ratchet() {
     let hash = format!("{:x}", Sha256::digest(joined.as_bytes()));
     assert_eq!(
         (PARSER_VERSION, hash.as_str()),
-        // 2: #2956 raised looks_like_spec_id's cap from 40 to 64 so
-        // node-local IDs parse.
+        // 4: BUG-2635 shares claim-group tokenization with reference parsing.
         (
-            2,
-            "fd6c41677ce361a62a61879a63251d325acaa6a613f6ed554716b9aa8acf44bb"
+            4,
+            "81da29d8802967c71a984ba5a94ec609a82ca3f857031d4c2ac8a6ef60445bdc"
         ),
         "the linkage resolver changed: bump PARSER_VERSION and re-pin this hash"
     );

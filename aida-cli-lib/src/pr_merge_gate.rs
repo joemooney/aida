@@ -1,8 +1,17 @@
 //! Drain merge-approval gate, PR review-verdict stamping and spec-done-after-PR (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
+use crate::{
+    auto_complete, detect_distributed_store_from, ensure_pr_open_spec_attribution, fetch_branch,
+    git_rev_parse_quiet, load_dispenser, pr_open_done_flip, status_write_race_seam,
+    RealPhaseDriver,
+};
+
 use crate::gate::approval::*;
-use crate::*;
+use crate::phase_driver::AutonomyMode;
+use aida_core::DatabaseBackend;
+use anyhow::Result;
+use colored::Colorize;
 
 /// Accept a reconciliation-time CI result only when it is terminal green and
 /// belongs to the exact head the PR/MR metadata reports. The error deliberately
@@ -325,8 +334,9 @@ mod task_168_pr_verdict_metadata_tests {
                 .body,
         )
         .unwrap();
-        // BUG-1505: the drain stamp canonicalizes the reviewer's spelling.
-        assert_eq!(value["verdict"], "approved");
+        // trace:STORY-2698 | ai:codex — stamping preserves findings, so legacy
+        // findings without an explicit disposition must fail closed.
+        assert_eq!(value["verdict"], "request-changes");
         assert_eq!(value["summary"], "clean");
         assert_eq!(value["findings"][0], "note");
         assert_eq!(value["mode"], "deep");
@@ -383,6 +393,32 @@ pub(crate) fn reviewer_wrote_message(pr: u32, pre: &str, post: &str) -> Option<S
         short(&pre),
         short(&post),
     ))
+}
+
+/// BUG-2696 F9: the subject of `branch`'s tip in `repo`, through the
+/// hardened host git command. Any failure is an error, never an empty
+/// subject: callers deciding completion must fail closed on it.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn branch_tip_subject(repo: &std::path::Path, branch: &str) -> anyhow::Result<String> {
+    use anyhow::Context as _;
+    let out = aida_core::git_ops::host_git_command(repo)
+        .args([
+            "log",
+            "-1",
+            "--format=%s",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            branch,
+        ])
+        .output()
+        .context("could not run `git log` for the branch tip")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "could not read the tip of `{branch}`: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    let subject = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    anyhow::ensure!(!subject.is_empty(), "the tip of `{branch}` has no subject");
+    Ok(subject)
 }
 
 /// BUG-1186 / ADR-40: substrate-as-bouncer for the Done transition. The
@@ -445,13 +481,40 @@ pub(crate) fn ensure_spec_done_after_pr(
         let Some(req) = backend.get_requirement_unambiguous(spec)? else {
             return Ok(false);
         };
+        // BUG-2696: Done means "complete for its scope", and a Refs landing
+        // completes a Done spec, so this write needs POSITIVE evidence: a
+        // successful read of the branch tip whose subject completes the spec
+        // with a bare `(SPEC)` trailer, and no outstanding child slice. A
+        // failed tip read, a Refs or trailer-less tip and an unreadable store
+        // all keep the status (A2: fail closed). Attribution above checks the
+        // branch's commits, not this tip, so it does not stand in for it.
+        // trace:BUG-2696 | ai:claude
+        let tip_subject = branch_tip_subject(repo, branch)?;
+        let store = aida_core::db::DatabaseBackend::load(&backend)?;
+        if !crate::publication_completion::subject_completes(Some(&store), &tip_subject, &req)
+            || crate::publication_completion::slice_plan_outstanding(&store, &req)
+        {
+            return Ok(false);
+        }
+        let evidence = crate::publication_completion::slice_evidence(&store, &req);
         // BUG-1638: the race-test seam between the read and the write.
         // trace:BUG-1638 | ai:claude
         status_write_race_seam(&store_path);
         // BUG-1637: the status check runs on the copy read under the store
         // lock; a refused flip writes nothing. trace:BUG-1637 | ai:claude
+        // BUG-2696 F4: so does the slice-graph check, on the whole store
+        // re-read under that lock: a child added, reopened, unarchived or
+        // deleted after the snapshot above refuses the flip.
+        // trace:BUG-2696 | ai:claude
         let mut flipped = false;
-        backend.update_spec_atomically(&req, |r| flipped = pr_open_done_flip(r))?;
+        aida_core::db::DatabaseBackend::update_atomically(&backend, |locked| {
+            flipped = crate::publication_completion::done_write_under_lock(
+                locked,
+                req.id,
+                &evidence,
+                pr_open_done_flip,
+            );
+        })?;
         Ok(flipped)
     })();
     match flipped {

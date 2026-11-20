@@ -302,6 +302,47 @@ pub(crate) fn protected_gate_message(label: &str, gate: &anyhow::Error) -> Strin
     )
 }
 
+/// Record the ordinary edit fields against the copy actually being replaced.
+// trace:BUG-2610 | ai:codex
+fn record_field_edits(before: &Requirement, after: &mut Requirement) {
+    let mut changes = Vec::new();
+    for (name, old, new) in [
+        ("title", before.title.clone(), after.title.clone()),
+        (
+            "description",
+            before.description.clone(),
+            after.description.clone(),
+        ),
+        (
+            "priority",
+            format!("{:?}", before.priority),
+            format!("{:?}", after.priority),
+        ),
+        (
+            "type",
+            format!("{:?}", before.req_type),
+            format!("{:?}", after.req_type),
+        ),
+        ("owner", before.owner.clone(), after.owner.clone()),
+        ("feature", before.feature.clone(), after.feature.clone()),
+        ("tags", sorted_tags(before), sorted_tags(after)),
+    ] {
+        if old != new {
+            changes.push(Requirement::field_change(name, old, new));
+        }
+    }
+    if !changes.is_empty() {
+        after.record_change(crate::get_default_author(), changes);
+    }
+}
+
+// trace:BUG-2610 | ai:codex
+fn sorted_tags(req: &Requirement) -> String {
+    let mut tags: Vec<_> = req.tags.iter().cloned().collect();
+    tags.sort();
+    tags.join(", ")
+}
+
 /// Write an `aida edit` through the per-spec compare-and-swap: under the
 /// store write lock, re-read the spec, re-run the protected-spec gate on it
 /// (`gate`, STORY-647), re-check the NeedsAttention exit (`leave`: the
@@ -347,7 +388,13 @@ pub(crate) fn write_edit_atomically(
             }
         }
         match rebase_edit(read, planned, cur, opts) {
-            Ok(Ok(merged)) => *cur = merged,
+            Ok(Ok(mut merged)) => {
+                // Record after rebasing so concurrent tag additions appear in
+                // both values and concurrent scalar edits get no false credit.
+                // trace:BUG-2610 | ai:codex
+                record_field_edits(cur, &mut merged);
+                *cur = merged;
+            }
             Ok(Err(fields)) => refusal = Some(anyhow::anyhow!(conflict_message(label, &fields))),
             Err(e) => refusal = Some(e),
         }
@@ -573,6 +620,80 @@ mod tests {
             assert!(r.tags.contains("theirs"));
             assert_eq!(r.comments.len(), 1);
         }
+    }
+
+    // trace:BUG-2610 | ai:codex
+    #[test]
+    fn bug_2610_edit_history_persists_scalar_and_tag_values() {
+        let f = fixture();
+        let read = f.backend.add_requirement(spec()).unwrap();
+        let mut planned = read.clone();
+        planned.title = "new title".into();
+        planned.description = "new body".into();
+        planned.priority = Priority::High;
+        planned.req_type = aida_core::RequirementType::Bug;
+        planned.owner = "new owner".into();
+        planned.feature = "new feature".into();
+        planned.tags = ["zeta".into(), "alpha".into()].into_iter().collect();
+        write_edit_atomically(
+            &f.backend,
+            "TASK-1",
+            &read,
+            &planned,
+            None,
+            EditMerge {
+                tags_replaced: true,
+                ..Default::default()
+            },
+            &no_gate,
+            None,
+        )
+        .unwrap();
+        let disk = on_disk(&f, "TASK-1");
+        let changes: Vec<_> = disk
+            .history
+            .iter()
+            .skip(read.history.len())
+            .flat_map(|e| &e.changes)
+            .collect();
+        for (name, old, new) in [
+            ("title", read.title.as_str(), "new title"),
+            ("description", read.description.as_str(), "new body"),
+            ("priority", "Medium", "High"),
+            ("type", "Functional", "Bug"),
+            ("owner", read.owner.as_str(), "new owner"),
+            ("feature", read.feature.as_str(), "new feature"),
+            ("tags", "keep", "alpha, zeta"),
+        ] {
+            let change = changes.iter().find(|c| c.field_name == name).unwrap();
+            assert_eq!(change.old_value, old, "{name}");
+            assert_eq!(change.new_value, new, "{name}");
+        }
+        assert_eq!(changes.len(), 7);
+    }
+
+    // trace:BUG-2610 | ai:codex
+    #[test]
+    fn bug_2610_history_tracks_merged_tags_and_ignores_noops() {
+        let read = spec();
+        let mut planned = read.clone();
+        planned.tags.remove("keep");
+        planned.tags.insert("mine".into());
+        let mut current = read.clone();
+        current.tags.insert("theirs".into());
+        current.owner = "concurrent owner".into();
+        let mut merged = rebase_edit(&read, &planned, &current, EditMerge::default())
+            .unwrap()
+            .unwrap();
+        record_field_edits(&current, &mut merged);
+        let changes = &merged.history.last().unwrap().changes;
+        assert_eq!(changes.len(), 1);
+        assert_eq!(changes[0].field_name, "tags");
+        assert_eq!(changes[0].old_value, "keep, theirs");
+        assert_eq!(changes[0].new_value, "mine, theirs");
+        let before = merged.clone();
+        record_field_edits(&before, &mut merged);
+        assert_eq!(merged.history.len(), before.history.len());
     }
 
     // The same field changed by both is detected and nothing is written.

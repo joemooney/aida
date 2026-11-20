@@ -1,0 +1,1546 @@
+//! The acting half of the landing reconciler: `aida land run` runs the same
+//! pass as `aida land status` and then carries out each row's one action.
+//!
+//! Reviewers, rework lanes and the train are child processes of this one, so
+//! a reviewer's verdict binds through its process ancestry and liveness is a
+//! fact about a process this one started. The only things written between
+//! passes are those processes' identities and two small counters keyed by a
+//! change's head; every one is checked against what is alive, and against
+//! the open changes, each time it is read.
+// trace:STORY-2768 | ai:claude
+
+use super::{one_line, specs_of, Action, Pr, Row, State, Track, INTEGRATION_BRANCH};
+use aida_core::proc_identity::{self, ProcIdentity};
+use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+
+/// The record of the children a run started.
+const BOOK: &str = ".aida/cache/land-children.json";
+/// Held by the one `aida land run` a clone may have.
+const RUN_LOCK: &str = ".aida/cache/land-run.lock";
+const LOG_DIR: &str = ".aida/land/logs";
+const TRAIN_DIR: &str = ".aida/train";
+/// How often a running `aida land run` does its housekeeping step. One pass
+/// (`--once`, `--dry-run`) always does it.
+const HOUSEKEEPING_SECS: u64 = 600;
+/// The most changes one train takes.
+const TRAIN_MAX: usize = 10;
+/// A train older than this is reported. It is never stopped: stopping it
+/// could interrupt a merge or cancel its CI.
+const TRAIN_WARN_SECS: i64 = 90 * 60;
+/// Reviewers of one head that may be stopped for running too long before
+/// the change goes to the advisor: the first is relaunched once.
+pub(super) const MAX_REVIEW_TIMEOUTS: u32 = 2;
+/// A lane's refusal that a relaunch cannot fix: its seat holds commits
+/// that exist nowhere else.
+const SEAT_REFUSAL: &str = "that no remote has";
+
+const DEFAULT_MAX_REVIEWS: usize = 2;
+const DEFAULT_MAX_LANES: usize = 2;
+const DEFAULT_REVIEW_TIMEOUT_SECS: i64 = 45 * 60;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum Kind {
+    Review,
+    Lane,
+    Train,
+}
+
+/// One child process a run started.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Child {
+    pub kind: Kind,
+    /// The change a reviewer or lane works; every member of a train.
+    pub prs: Vec<u64>,
+    /// The head a reviewer was launched against, or a lane was launched to
+    /// rework. Empty for a train.
+    pub head: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spec: Option<String>,
+    /// The tree of the clean merge into the base that the reviewer's launch
+    /// on a possibly stale base relied on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_tree: Option<String>,
+    pub identity: ProcIdentity,
+    pub started_at: String,
+    pub log: String,
+}
+
+impl Child {
+    /// How the child reads in the table.
+    pub(super) fn describe(&self) -> String {
+        let what = match self.kind {
+            Kind::Review => "reviewer",
+            Kind::Lane => "rework lane",
+            Kind::Train => "train",
+        };
+        format!(
+            "land run's {what} (pid {}), started {}",
+            self.identity.pid, self.started_at
+        )
+    }
+
+    fn started(&self) -> Option<DateTime<Utc>> {
+        DateTime::parse_from_rfc3339(&self.started_at)
+            .ok()
+            .map(|at| at.with_timezone(&Utc))
+    }
+
+    fn age_secs(&self, now: DateTime<Utc>) -> i64 {
+        self.started().map_or(0, |at| (now - at).num_seconds())
+    }
+}
+
+/// Something a run recorded about one head of one change.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Mark {
+    pub pr: u64,
+    pub head: String,
+    pub count: u32,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Book {
+    #[serde(default)]
+    pub children: Vec<Child>,
+    /// Reviewers stopped for running too long, counted per head.
+    #[serde(default)]
+    pub timeouts: Vec<Mark>,
+    /// Heads whose rework lane refused in a way a relaunch cannot fix.
+    #[serde(default)]
+    pub stops: Vec<Mark>,
+}
+
+impl Book {
+    /// The record on disk; none is an empty record. One that cannot be
+    /// parsed is an error: reading it as empty would launch a second
+    /// reviewer beside a live one.
+    pub(crate) fn read(root: &Path) -> Result<Self> {
+        let path = root.join(BOOK);
+        match std::fs::read_to_string(&path) {
+            Ok(text) => serde_json::from_str(&text).with_context(|| {
+                format!(
+                    "{} is not a valid record of land run's children",
+                    path.display()
+                )
+            }),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(error) => Err(error).with_context(|| format!("reading {}", path.display())),
+        }
+    }
+
+    fn write(&self, root: &Path) -> Result<()> {
+        let path = root.join(BOOK);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let scratch = path.with_extension(format!("json.{}", std::process::id()));
+        std::fs::write(&scratch, serde_json::to_vec_pretty(self)?)
+            .with_context(|| format!("writing {}", scratch.display()))?;
+        std::fs::rename(&scratch, &path).with_context(|| format!("replacing {}", path.display()))
+    }
+
+    /// Bring the record in line with the facts: children that are no longer
+    /// alive leave it, a lane that died refusing over unpushed seat work
+    /// leaves a stop for its head, and anything recorded about a head that
+    /// is no longer an open change's head is dropped.
+    pub(super) fn settle(
+        &mut self,
+        changes: &[Pr],
+        alive: &dyn Fn(&Child) -> bool,
+        log_tail: &dyn Fn(&Child) -> String,
+    ) -> Vec<String> {
+        let mut notes = Vec::new();
+        let mut live = Vec::new();
+        for child in std::mem::take(&mut self.children) {
+            if alive(&child) {
+                live.push(child);
+                continue;
+            }
+            if child.kind != Kind::Lane {
+                continue;
+            }
+            let tail = log_tail(&child);
+            let Some(refusal) = tail.lines().rev().find(|line| line.contains(SEAT_REFUSAL)) else {
+                continue;
+            };
+            for pr in &child.prs {
+                let reason = format!("{} (log: {})", one_line(refusal, 240), child.log);
+                notes.push(format!("#{pr}: the rework lane refused: {reason}"));
+                self.stops.retain(|stop| stop.pr != *pr);
+                self.stops.push(Mark {
+                    pr: *pr,
+                    head: child.head.clone(),
+                    count: 1,
+                    reason,
+                });
+            }
+        }
+        self.children = live;
+        let current = |mark: &Mark| {
+            changes
+                .iter()
+                .any(|pr| pr.id == mark.pr && pr.head == mark.head)
+        };
+        self.timeouts.retain(current);
+        self.stops.retain(current);
+        notes
+    }
+
+    pub(super) fn reviewer(&self, pr: &Pr) -> Option<&Child> {
+        self.children.iter().find(|child| {
+            child.kind == Kind::Review && child.prs.contains(&pr.id) && child.head == pr.head
+        })
+    }
+
+    /// A lane moves the head, so it is found by its change alone.
+    pub(super) fn lane(&self, pr: &Pr) -> Option<&Child> {
+        self.children
+            .iter()
+            .find(|child| child.kind == Kind::Lane && child.prs.contains(&pr.id))
+    }
+
+    fn train(&self) -> Option<&Child> {
+        self.children.iter().find(|child| child.kind == Kind::Train)
+    }
+
+    pub(super) fn timeouts(&self, pr: &Pr) -> u32 {
+        self.timeouts
+            .iter()
+            .find(|mark| mark.pr == pr.id && mark.head == pr.head)
+            .map_or(0, |mark| mark.count)
+    }
+
+    pub(super) fn stop(&self, pr: &Pr) -> Option<String> {
+        self.stops
+            .iter()
+            .find(|mark| mark.pr == pr.id && mark.head == pr.head)
+            .map(|mark| mark.reason.clone())
+    }
+
+    fn count_timeout(&mut self, pr: u64, head: &str) {
+        match self
+            .timeouts
+            .iter_mut()
+            .find(|mark| mark.pr == pr && mark.head == head)
+        {
+            Some(mark) => mark.count += 1,
+            None => self.timeouts.push(Mark {
+                pr,
+                head: head.to_string(),
+                count: 1,
+                reason: "reviewer stopped for running too long".into(),
+            }),
+        }
+    }
+}
+
+/// Whether a recorded child is still running. An identity that cannot be
+/// judged counts as running: a second reviewer is never launched on a guess.
+pub(crate) fn alive(child: &Child) -> bool {
+    !matches!(
+        proc_identity::observe(&child.identity, true),
+        proc_identity::Verdict::Dead(_)
+    )
+}
+
+/// The end of a child's log.
+pub(super) fn log_tail(child: &Child) -> String {
+    let text = std::fs::read(&child.log).unwrap_or_default();
+    let from = text.len().saturating_sub(16 * 1024);
+    String::from_utf8_lossy(&text[from..]).into_owned()
+}
+
+/// Give `command` this process's standard input when the operator's floor
+/// authority holds here (`floor`): that authority is a person at this
+/// terminal, which a child with no terminal cannot show. Without it the
+/// child keeps the null input every other child gets.
+// trace:STORY-2903 | ai:claude
+pub(crate) fn operator_terminal(command: &mut std::process::Command, floor: bool) {
+    if floor {
+        command.stdin(std::process::Stdio::inherit());
+    }
+}
+
+/// How long one review-gated ship may take: it waits on no CI, only on
+/// the gates and the merge. trace:STORY-2903 | ai:claude
+const SHIP_TIMEOUT_SECS: u64 = 900;
+
+pub(crate) struct Limits {
+    pub max_reviews: usize,
+    pub max_lanes: usize,
+    pub review_timeout_secs: i64,
+    /// The landing mode is review-gated: there is no train, and a ready
+    /// change is shipped by a caller who may merge it.
+    // trace:STORY-2903 | ai:claude
+    pub review_gated: bool,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            max_reviews: DEFAULT_MAX_REVIEWS,
+            max_lanes: DEFAULT_MAX_LANES,
+            review_timeout_secs: DEFAULT_REVIEW_TIMEOUT_SECS,
+            review_gated: false,
+        }
+    }
+}
+
+/// One `[land]` limit: its key, the inclusive range it may take, and the
+/// value used when it is unset or out of range. `aida config` declares its
+/// knobs from this table, so the two cannot disagree.
+// trace:BUG-2571 | ai:claude
+pub(crate) struct LimitKnob {
+    pub key: &'static str,
+    pub min: i64,
+    pub max: i64,
+    pub default: i64,
+}
+
+pub(crate) const MAX_REVIEWS: LimitKnob = LimitKnob {
+    key: "max_reviews",
+    min: 1,
+    max: 8,
+    default: DEFAULT_MAX_REVIEWS as i64,
+};
+pub(crate) const MAX_LANES: LimitKnob = LimitKnob {
+    key: "max_lanes",
+    min: 1,
+    max: 8,
+    default: DEFAULT_MAX_LANES as i64,
+};
+pub(crate) const REVIEW_TIMEOUT_SECS: LimitKnob = LimitKnob {
+    key: "review_timeout_secs",
+    min: 300,
+    max: 4 * 3600,
+    default: DEFAULT_REVIEW_TIMEOUT_SECS,
+};
+
+/// How many open changes the project carries before a new spec may not be
+/// started. `aida queue work` enforces it; `aida now` shows it.
+// trace:STORY-2768 | ai:claude
+pub(crate) const WIP_MAX: LimitKnob = LimitKnob {
+    key: "wip_max",
+    min: 1,
+    max: 1000,
+    default: 10,
+};
+
+/// `[land] wip_max` from a parsed config: a whole number in the knob's
+/// range, else its default.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn wip_max_from(config: Option<&toml::Value>) -> i64 {
+    config
+        .and_then(|config| config.get("land")?.get(WIP_MAX.key)?.as_integer())
+        .filter(|max| (WIP_MAX.min..=WIP_MAX.max).contains(max))
+        .unwrap_or(WIP_MAX.default)
+}
+
+impl Limits {
+    /// `[land] max_reviews`, `max_lanes` and `review_timeout_secs`. They
+    /// bound counts and a wait; none selects what runs. A value that is not
+    /// a whole number in its range is not used, and the second value says so.
+    // trace:BUG-2571 | ai:claude
+    pub(crate) fn load(root: &Path) -> (Self, Vec<String>) {
+        Self::from_config(project_config(root).as_ref())
+    }
+
+    pub(crate) fn from_config(config: Option<&toml::Value>) -> (Self, Vec<String>) {
+        let mut warnings = Vec::new();
+        let mut number = |knob: &LimitKnob| {
+            let Some(value) = config.and_then(|config| config.get("land")?.get(knob.key)) else {
+                return knob.default;
+            };
+            match value.as_integer() {
+                Some(n) if (knob.min..=knob.max).contains(&n) => n,
+                _ => {
+                    warnings.push(format!(
+                        "[land] {} = {value} is not a whole number from {} to {}; using {}",
+                        knob.key, knob.min, knob.max, knob.default
+                    ));
+                    knob.default
+                }
+            }
+        };
+        let limits = Self {
+            max_reviews: number(&MAX_REVIEWS) as usize,
+            max_lanes: number(&MAX_LANES) as usize,
+            review_timeout_secs: number(&REVIEW_TIMEOUT_SECS),
+            review_gated: false,
+        };
+        (limits, warnings)
+    }
+}
+
+/// The project's `.aida/config.toml`, when it is there and parses. Only
+/// `[land]` policy is read from it: counts, a wait, and whether housekeeping
+/// may release and reset.
+// trace:BUG-2571 trace:TASK-3796 | ai:claude
+pub(crate) fn project_config(root: &Path) -> Option<toml::Value> {
+    std::fs::read_to_string(root.join(".aida").join("config.toml"))
+        .ok()
+        .and_then(|text| toml::from_str::<toml::Value>(&text).ok())
+}
+
+/// Every side effect a pass can have, behind one seam.
+pub(crate) trait Acts {
+    /// Start a reviewer of `pr`'s head. `merge_tree` is the clean merge of
+    /// the head into its base that this pass computed.
+    fn launch_review(&mut self, pr: &Pr, merge_tree: Option<&str>) -> Result<Child>;
+    /// Start a lane to rework `pr` under `spec`.
+    fn dispatch_rework(&mut self, pr: &Pr, spec: &str) -> Result<Child>;
+    fn update_ci_base(&mut self, pr: &Pr) -> Result<String>;
+    /// Release `pr`'s hold. The release decides for itself whether it may.
+    fn release_hold(&mut self, pr: &Pr) -> Result<String>;
+    fn train(&mut self, prs: &[u64]) -> Result<Child>;
+    /// Whether this caller may merge `pr` (`Err`: why not).
+    // trace:STORY-2903 | ai:claude
+    fn may_merge(&mut self, pr: &Pr) -> std::result::Result<(), String>;
+    /// Run the ordinary gated `aida pr ship` of `pr` once, to its end.
+    // trace:STORY-2903 | ai:claude
+    fn ship(&mut self, pr: &Pr) -> Result<String>;
+    /// Why no train may start now.
+    fn train_blocker(&mut self) -> Option<String>;
+    /// When each verdict recorded for `pr` at `head` was recorded.
+    fn verdict_times(
+        &mut self,
+        pr: u64,
+        head: &str,
+    ) -> std::result::Result<Vec<DateTime<Utc>>, String>;
+    /// Stop a child and everything it started.
+    fn stop(&mut self, child: &Child);
+    /// Whether `child` was started by the run that is live now. A reviewer
+    /// left by a run that has exited lost the ancestry its verdict binds
+    /// through.
+    // trace:BUG-2571 | ai:claude
+    fn owns(&self, child: &Child) -> bool;
+}
+
+/// Look after the children already running: a reviewer whose head moved or
+/// whose change closed is stopped, one left by an earlier run is stopped,
+/// and one past the time limit is stopped unless its verdict cannot be read.
+/// A stop past the limit counts against the head only when that reviewer
+/// recorded no verdict there: a verdict older than the reviewer is not its
+/// work. Stopping an earlier run's reviewer never counts: the head did
+/// nothing to cause it.
+pub(crate) fn supervise(
+    changes: &[Pr],
+    book: &mut Book,
+    limits: &Limits,
+    now: DateTime<Utc>,
+    acts: &mut dyn Acts,
+    dry_run: bool,
+) -> Vec<String> {
+    let mut notes = Vec::new();
+    let mut kept = Vec::new();
+    for child in std::mem::take(&mut book.children) {
+        let age = child.age_secs(now);
+        let pr = child.prs.first().copied().unwrap_or_default();
+        let stop = |why: String, notes: &mut Vec<String>, acts: &mut dyn Acts| {
+            if dry_run {
+                notes.push(format!("#{pr}: would stop the reviewer: {why}"));
+                false
+            } else {
+                acts.stop(&child);
+                notes.push(format!("#{pr}: stopped the reviewer: {why}"));
+                true
+            }
+        };
+        let stopped = match child.kind {
+            Kind::Review => {
+                let current = changes
+                    .iter()
+                    .any(|change| change.id == pr && change.head == child.head);
+                if !current {
+                    stop(
+                        "the head moved or the change closed".into(),
+                        &mut notes,
+                        acts,
+                    )
+                } else if !acts.owns(&child) {
+                    // trace:BUG-2571 | ai:claude
+                    stop(
+                        "an earlier run started it, so its verdict could not be recorded".into(),
+                        &mut notes,
+                        acts,
+                    )
+                } else if age > limits.review_timeout_secs {
+                    // A reviewer that recorded its verdict and is only slow
+                    // to exit has done its work.
+                    // Only a verdict recorded since this reviewer started is
+                    // its own. An older one at the same head (a re-review)
+                    // must not excuse it, or the head would be relaunched
+                    // without ever counting a timeout.
+                    let own = acts.verdict_times(pr, &child.head).map(|times| {
+                        child
+                            .started()
+                            .is_some_and(|started| times.iter().any(|at| *at >= started))
+                    });
+                    match own {
+                        Ok(true) => stop(
+                            "its verdict is recorded and it had not exited".into(),
+                            &mut notes,
+                            acts,
+                        ),
+                        Ok(false) => {
+                            let stopped = stop(
+                                format!("no verdict after {} min", age / 60),
+                                &mut notes,
+                                acts,
+                            );
+                            if stopped {
+                                book.count_timeout(pr, &child.head);
+                            }
+                            stopped
+                        }
+                        Err(why) => {
+                            notes.push(format!(
+                                "#{pr}: the reviewer is past its time limit and stays: whether it recorded a verdict could not be read ({why})"
+                            ));
+                            false
+                        }
+                    }
+                } else {
+                    false
+                }
+            }
+            Kind::Train => {
+                if age > TRAIN_WARN_SECS {
+                    notes.push(format!(
+                        "the train of {} has run {} min; it is left running (log: {})",
+                        numbers(&child.prs),
+                        age / 60,
+                        child.log
+                    ));
+                }
+                false
+            }
+            Kind::Lane => false,
+        };
+        if !stopped {
+            kept.push(child);
+        }
+    }
+    book.children = kept;
+    notes
+}
+
+fn numbers(prs: &[u64]) -> String {
+    prs.iter()
+        .map(|pr| format!("#{pr}"))
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Carry out each row's one action. A failed action is reported and left
+/// for the next pass, which derives the row again from the facts.
+pub(crate) fn act(
+    changes: &[Pr],
+    rows: &[Row],
+    merge_trees: &BTreeMap<u64, String>,
+    book: &mut Book,
+    limits: &Limits,
+    acts: &mut dyn Acts,
+    dry_run: bool,
+) -> Vec<String> {
+    let mut notes = Vec::new();
+    // Every review in progress counts against the cap, whoever started it:
+    // a change the pass derived as in review, and a reviewer of ours that is
+    // alive whatever its change's row says. Each change counts once.
+    let mut reviews = rows
+        .iter()
+        .filter(|row| row.state == State::Reviewing)
+        .map(|row| row.pr)
+        .chain(
+            book.children
+                .iter()
+                .filter(|child| child.kind == Kind::Review)
+                .flat_map(|child| child.prs.iter().copied()),
+        )
+        .collect::<std::collections::BTreeSet<u64>>()
+        .len();
+    let mut lanes = book
+        .children
+        .iter()
+        .filter(|child| child.kind == Kind::Lane)
+        .count();
+    let mut ready: Vec<u64> = Vec::new();
+    for row in rows {
+        let Some(pr) = changes.iter().find(|pr| pr.id == row.pr) else {
+            continue;
+        };
+        let id = pr.id;
+        match row.action {
+            Action::Wait | Action::ReportToIntegration | Action::AdvisorRuling => {}
+            Action::UpdateBranch if row.state == State::StaleCiBase => {
+                if dry_run {
+                    notes.push(format!(
+                        "#{id}: would request update-branch at {}",
+                        super::short(&pr.head)
+                    ));
+                } else {
+                    match acts.update_ci_base(pr) {
+                        Ok(note) => notes.push(note),
+                        Err(error) => notes.push(format!(
+                            "#{id}: update-branch refused: {}",
+                            one_line(&format!("{error:#}"), 300)
+                        )),
+                    }
+                }
+            }
+            Action::UpdateBranch => {}
+            Action::LaunchReview => {
+                if reviews >= limits.max_reviews {
+                    notes.push(format!(
+                        "#{id}: review waits: {reviews} of {} reviews are running",
+                        limits.max_reviews
+                    ));
+                } else if dry_run {
+                    reviews += 1;
+                    notes.push(format!("#{id}: would launch a reviewer"));
+                } else {
+                    match acts.launch_review(pr, merge_trees.get(&id).map(String::as_str)) {
+                        Ok(child) => {
+                            reviews += 1;
+                            notes.push(format!("#{id}: launched a reviewer (log: {})", child.log));
+                            book.children.push(child);
+                        }
+                        Err(error) => notes.push(format!(
+                            "#{id}: the reviewer did not launch, retried next pass: {}",
+                            one_line(&format!("{error:#}"), 300)
+                        )),
+                    }
+                }
+            }
+            Action::DispatchRework => {
+                let Some(spec) = specs_of(pr).into_iter().next() else {
+                    notes.push(format!(
+                        "#{id}: no rework lane: the change's title names no spec"
+                    ));
+                    continue;
+                };
+                if lanes >= limits.max_lanes {
+                    notes.push(format!(
+                        "#{id}: rework waits: {lanes} of {} lanes are running",
+                        limits.max_lanes
+                    ));
+                } else if dry_run {
+                    lanes += 1;
+                    notes.push(format!("#{id}: would launch a rework lane for {spec}"));
+                } else {
+                    match acts.dispatch_rework(pr, &spec) {
+                        Ok(child) => {
+                            lanes += 1;
+                            notes.push(format!(
+                                "#{id}: launched a rework lane for {spec} (log: {})",
+                                child.log
+                            ));
+                            book.children.push(child);
+                        }
+                        Err(error) => notes.push(format!(
+                            "#{id}: the rework lane did not launch, retried next pass: {}",
+                            one_line(&format!("{error:#}"), 300)
+                        )),
+                    }
+                }
+            }
+            // The release is its own decision. Nothing else happens to the
+            // change in this pass: the next one derives it from the facts.
+            Action::ClearHoldAndLand => {
+                if dry_run {
+                    notes.push(format!("#{id}: would ask the hold's release to decide"));
+                } else {
+                    match acts.release_hold(pr) {
+                        Ok(line) => notes.push(line),
+                        Err(error) => notes.push(format!(
+                            "#{id}: the hold stays: {}",
+                            one_line(&format!("{error:#}"), 300)
+                        )),
+                    }
+                }
+            }
+            Action::Train => {
+                if row.state != State::Ready || row.track != Track::Main {
+                    continue;
+                }
+                // Review-gated: no train. A caller who may merge ships the
+                // change once through the ordinary gated `aida pr ship` (the
+                // merge boundary checks again); any other caller reports it.
+                // trace:STORY-2903 | ai:claude
+                if limits.review_gated {
+                    if let Err(why) = acts.may_merge(pr) {
+                        notes.push(format!(
+                            "#{id}: ready to merge; not merged by this run: {}",
+                            one_line(&why, 300)
+                        ));
+                    } else if dry_run {
+                        notes.push(format!("#{id}: would ship"));
+                    } else {
+                        match acts.ship(pr) {
+                            Ok(line) => notes.push(line),
+                            Err(error) => notes.push(format!(
+                                "#{id}: the ship did not merge, retried next pass: {}",
+                                one_line(&format!("{error:#}"), 300)
+                            )),
+                        }
+                    }
+                    continue;
+                }
+                // The train's CI is the gate on the merged result; a member
+                // still needs its own checks green at this head to board.
+                if row.ci.as_deref() == Some("green") {
+                    ready.push(id);
+                } else {
+                    notes.push(format!(
+                        "#{id}: ready, not boarded: CI on its head is {} (a cancelled run counts as pending; rerun it)",
+                        row.ci.as_deref().unwrap_or("unread")
+                    ));
+                }
+            }
+        }
+    }
+    if ready.is_empty() {
+        return notes;
+    }
+    ready.truncate(TRAIN_MAX);
+    if let Some(train) = book.train() {
+        notes.push(format!(
+            "{} wait: the train of {} is running",
+            numbers(&ready),
+            numbers(&train.prs)
+        ));
+    } else if let Some(blocker) = acts.train_blocker() {
+        notes.push(format!("{} wait: {blocker}", numbers(&ready)));
+    } else if dry_run {
+        notes.push(format!("would start one train of {}", numbers(&ready)));
+    } else {
+        match acts.train(&ready) {
+            Ok(child) => {
+                notes.push(format!(
+                    "started one train of {} (log: {})",
+                    numbers(&ready),
+                    child.log
+                ));
+                book.children.push(child);
+            }
+            Err(error) => notes.push(format!(
+                "the train of {} did not start, retried next pass: {}",
+                numbers(&ready),
+                one_line(&format!("{error:#}"), 300)
+            )),
+        }
+    }
+    notes
+}
+
+// ---- live acts -------------------------------------------------------------
+
+struct Live {
+    root: PathBuf,
+    repo: crate::review_watch::forge::Repository,
+    program: PathBuf,
+    vendor: Option<String>,
+    gitlab: bool,
+    /// The children of this process, kept so each is reaped when it exits.
+    handles: Vec<std::process::Child>,
+    /// Another `aida land run` holds the run lock: the recorded children
+    /// are its own, and a dry run beside it must not call them abandoned.
+    other_run: bool,
+    /// The session-hygiene pass this run started in the background, with
+    /// its log. One at a time: the pass probes every dead session and can
+    /// take minutes, so the landing pass never waits for it.
+    // trace:STORY-2768 | ai:claude
+    hygiene: Option<(std::process::Child, PathBuf)>,
+    /// The leases of lanes with no spec whose work this run saved to a
+    /// patch, and every note this run recorded: a lane whose lease is kept
+    /// is saved and recorded once, not every pass.
+    // trace:TASK-3796 | ai:claude
+    salvaged: std::collections::BTreeSet<String>,
+    ci_updates: BTreeMap<u64, String>,
+    noted: Vec<String>,
+}
+
+impl Live {
+    /// An `aida` command in this repository, without the review and gate
+    /// context this process may have inherited, so the child takes its
+    /// ordinary attested path.
+    fn command(&self, args: &[String]) -> std::process::Command {
+        // The watcher's builder: it drops that context and pins the forge.
+        let mut command = crate::review_watch::watch_command(&self.repo, &self.root, &self.program);
+        command.args(args);
+        command
+    }
+
+    /// Run a short `aida` command to its end.
+    fn finish(&self, args: &[String], timeout_secs: u64) -> Result<()> {
+        let shown = args.join(" ");
+        let out = crate::command_output_with_timeout(
+            self.command(args),
+            std::time::Duration::from_secs(timeout_secs),
+        )
+        .with_context(|| format!("`aida {shown}` did not finish in {timeout_secs}s"))?;
+        anyhow::ensure!(
+            out.status.success(),
+            "`aida {shown}` failed: {}",
+            one_line(&String::from_utf8_lossy(&out.stderr), 300)
+        );
+        Ok(())
+    }
+
+    /// Start a long-running child of this process in its own process group
+    /// (so all of it can be stopped at once), logging to a file. It stays a
+    /// descendant of this process: that is what lets a reviewer's verdict
+    /// bind.
+    fn start(
+        &mut self,
+        kind: Kind,
+        name: &str,
+        prs: &[u64],
+        head: &str,
+        launched: &[(&str, &str)],
+        args: &[String],
+    ) -> Result<Child> {
+        use std::os::unix::process::CommandExt as _;
+        let now = Utc::now();
+        let dir = self.root.join(LOG_DIR);
+        std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+        let log = dir.join(format!("{name}-{}.log", now.format("%Y%m%dT%H%M%SZ")));
+        let mut out =
+            std::fs::File::create(&log).with_context(|| format!("creating {}", log.display()))?;
+        // What the child was launched against goes first, before it can
+        // write anything, so its work can be checked against that later.
+        {
+            use std::io::Write as _;
+            out.write_all(log_header(now, prs, launched, args).as_bytes())
+                .with_context(|| format!("writing {}", log.display()))?;
+        }
+        let err = out.try_clone()?;
+        let mut command = self.command(args);
+        command.stdout(out).stderr(err).process_group(0);
+        let mut child = command
+            .spawn()
+            .with_context(|| format!("starting `aida {}`", args.join(" ")))?;
+        let identity = match ProcIdentity::capture_child(&child) {
+            Ok(identity) => identity,
+            Err(why) => {
+                // A child that cannot be identified cannot be looked after.
+                crate::bounded_process::kill_process_group(child.id());
+                let _ = child.wait();
+                anyhow::bail!("the child's process identity could not be read: {why}");
+            }
+        };
+        self.handles.push(child);
+        Ok(Child {
+            kind,
+            prs: prs.to_vec(),
+            head: head.to_string(),
+            spec: None,
+            merge_tree: None,
+            identity,
+            started_at: now.to_rfc3339(),
+            log: log.display().to_string(),
+        })
+    }
+
+    /// Collect the children that have exited, so a finished one reads as
+    /// gone and not as a process still there.
+    fn reap(&mut self) {
+        self.handles
+            .retain_mut(|child| matches!(child.try_wait(), Ok(None)));
+    }
+}
+
+// trace:STORY-2768 | ai:claude
+impl super::housekeeping::Keeper for Live {
+    fn salvage(&mut self, lane: &super::housekeeping::DeadLane) -> Result<Option<PathBuf>> {
+        // The lease is released on the strength of this patch, so a
+        // capture that is not whole is an error, not a shorter patch.
+        let patch = crate::worktree_gc::salvage_worktree_patch_complete(
+            &self.root,
+            lane.spec.as_deref().unwrap_or(&lane.branch),
+            lane.agent.as_deref(),
+            &lane.worktree,
+        )?;
+        // A lane with no spec has nowhere to record its patch: it is saved
+        // once per run and reported. trace:TASK-3796 | ai:claude
+        if patch.is_some() && lane.spec.is_none() {
+            self.salvaged.insert(lane.lease.clone());
+        }
+        Ok(patch)
+    }
+
+    fn note(&mut self, spec: &str, text: &str) -> Result<()> {
+        self.finish(&strings(&["comment", "add", spec, text]), 60)?;
+        self.noted.push(text.to_string());
+        Ok(())
+    }
+
+    // trace:TASK-3796 | ai:claude
+    fn already_saved(&mut self, lane: &super::housekeeping::DeadLane, marker: &str) -> bool {
+        if self.salvaged.contains(&lane.lease)
+            || self.noted.iter().any(|text| text.starts_with(marker))
+        {
+            return true;
+        }
+        let Some(spec) = lane.spec.as_deref() else {
+            return false;
+        };
+        // An unreadable store is "not known to be saved": saving again only
+        // writes one more patch, while skipping could leave the work unsaved.
+        let Ok(store) = crate::integration_cmd::load_store(&self.root) else {
+            return false;
+        };
+        crate::integration_cmd::resolve_trailer(&store, spec)
+            .and_then(|uuid| store.requirements.iter().find(|r| r.id == uuid))
+            .is_some_and(|spec| super::housekeeping::recorded(&spec.comments, marker))
+    }
+
+    fn release(&mut self, lane: &super::housekeeping::DeadLane) -> Result<()> {
+        release_lease(&self.root, &lane.lease)
+    }
+
+    fn reset(&mut self, spec: &str) -> Result<()> {
+        self.finish(
+            &strings(&["queue", "rework", spec, "--for", "implementer"]),
+            60,
+        )
+    }
+}
+
+/// Release a dead lease, and say so only when its file is gone. The shared
+/// release removes what it can and reports nothing; a lease file that is
+/// still there would be salvaged and commented on again every pass.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn release_lease(root: &Path, lease: &str) -> Result<()> {
+    crate::session_reap::release_lease_files(root, lease);
+    let path = crate::lease_path(root, lease);
+    anyhow::ensure!(
+        !path.exists(),
+        "the lease file {} could not be removed",
+        path.display()
+    );
+    Ok(())
+}
+
+/// What to do about the background hygiene pass at a housekeeping step.
+// trace:STORY-2768 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum HygieneStep {
+    /// The one started earlier has not finished: start nothing.
+    StillRunning,
+    /// Start one; `last` is the exit code of the one that finished since
+    /// the previous step (`None` in it when a signal ended it).
+    Start { last: Option<Option<i32>> },
+}
+
+/// PURE: `previous` is the earlier pass's state: `None` when none was
+/// started, `Some(None)` while it runs, `Some(Some(code))` once it exited.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn hygiene_step(previous: Option<Option<Option<i32>>>) -> HygieneStep {
+    match previous {
+        Some(None) => HygieneStep::StillRunning,
+        Some(Some(code)) => HygieneStep::Start { last: Some(code) },
+        None => HygieneStep::Start { last: None },
+    }
+}
+
+impl Live {
+    /// Start `aida session hygiene` (reap, agent gc, reclaim) in the
+    /// background, unless the one this run started earlier is still going.
+    // trace:STORY-2768 | ai:claude
+    fn start_hygiene(&mut self, dry_run: bool) -> Vec<String> {
+        use std::os::unix::process::CommandExt as _;
+        if dry_run {
+            return vec![
+                "housekeeping: would start `aida session hygiene` in the background (dry run)"
+                    .to_string(),
+            ];
+        }
+        let previous = self
+            .hygiene
+            .as_mut()
+            .map(|(child, _)| match child.try_wait() {
+                Ok(Some(status)) => Some(status.code()),
+                // Unreadable counts as running: never two at once.
+                Ok(None) | Err(_) => None,
+            });
+        let mut notes = Vec::new();
+        match hygiene_step(previous) {
+            HygieneStep::StillRunning => {
+                return vec![
+                    "housekeeping: the session hygiene pass started earlier is still running; not starting another"
+                        .to_string(),
+                ];
+            }
+            HygieneStep::Start { last: Some(code) } if code != Some(0) => {
+                if let Some((_, log)) = &self.hygiene {
+                    notes.push(format!(
+                        "housekeeping: the last session hygiene pass ended {}; see {}",
+                        code.map(|c| format!("with code {c}"))
+                            .unwrap_or_else(|| "on a signal".to_string()),
+                        log.display()
+                    ));
+                }
+            }
+            HygieneStep::Start { .. } => {}
+        }
+        self.hygiene = None;
+        let started = (|| -> Result<PathBuf> {
+            let dir = self.root.join(LOG_DIR);
+            std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+            let log = dir.join(format!(
+                "hygiene-{}.log",
+                Utc::now().format("%Y%m%dT%H%M%SZ")
+            ));
+            let out = std::fs::File::create(&log)
+                .with_context(|| format!("creating {}", log.display()))?;
+            let err = out.try_clone()?;
+            let mut command = self.command(&strings(&["session", "hygiene"]));
+            command
+                .stdin(std::process::Stdio::null())
+                .stdout(out)
+                .stderr(err)
+                .process_group(0);
+            let child = command.spawn().context("starting `aida session hygiene`")?;
+            self.hygiene = Some((child, log.clone()));
+            Ok(log)
+        })();
+        notes.push(match started {
+            Ok(log) => format!(
+                "housekeeping: session hygiene started in the background (log {})",
+                log.display()
+            ),
+            Err(error) => format!("housekeeping: session hygiene was not started: {error:#}"),
+        });
+        notes
+    }
+}
+
+/// The housekeeping step: the hygiene pass (reap, agent gc, reclaim) is
+/// started in the background, then dead lanes' work is saved and orphaned
+/// specs go back to the queue.
+// trace:STORY-2768 | ai:claude
+fn housekeep(pass: &super::Pass, live: &mut Live, dry_run: bool) -> Vec<String> {
+    use super::housekeeping;
+    let mut notes = live.start_hygiene(dry_run);
+    match housekeeping::survey(&pass.root, &pass.foreign_lanes) {
+        Ok((lanes, orphans)) => {
+            let steps = housekeeping::plan(lanes, orphans, &pass.changes);
+            // Release and reset only when the project turned them on.
+            // trace:TASK-3796 | ai:claude
+            let unattended = housekeeping::Unattended::load(&pass.root);
+            notes.extend(housekeeping::keep(&steps, live, dry_run, unattended));
+        }
+        Err(error) => notes.push(format!(
+            "housekeeping: dead lanes and orphaned specs could not be read; nothing was salvaged or reset: {error:#}"
+        )),
+    }
+    notes
+}
+
+/// The first lines of a child's log: when it was launched, for which
+/// changes, against what, and with which command.
+fn log_header(
+    now: DateTime<Utc>,
+    prs: &[u64],
+    launched: &[(&str, &str)],
+    args: &[String],
+) -> String {
+    let mut header = format!(
+        "# aida land run launched this at {}\n# changes: {}\n",
+        now.to_rfc3339(),
+        numbers(prs)
+    );
+    for (name, value) in launched {
+        header.push_str(&format!("# {name}: {value}\n"));
+    }
+    header.push_str(&format!("# command: aida {}\n", args.join(" ")));
+    header
+}
+
+fn strings(args: &[&str]) -> Vec<String> {
+    args.iter().map(|arg| arg.to_string()).collect()
+}
+
+impl Acts for Live {
+    // trace:BUG-2690 | ai:codex
+    fn update_ci_base(&mut self, pr: &Pr) -> Result<String> {
+        anyhow::ensure!(!self.gitlab, "update-branch requires GitHub");
+        anyhow::ensure!(
+            crate::review_watch::forge::Repository::load(&self.root)?.identity
+                == self.repo.identity,
+            "origin changed during the landing pass"
+        );
+        if self.ci_updates.get(&pr.id) == Some(&pr.head) {
+            return Ok(format!(
+                "#{}: update-branch already requested for this head. Waiting for fresh CI",
+                pr.id
+            ));
+        }
+        let branch = pr.branch.as_deref().context("change branch is unknown")?;
+        let leases = crate::status_prs::live_owned_leases_strict(&self.root)
+            .map_err(|why| anyhow::anyhow!("{why}"))?;
+        anyhow::ensure!(
+            !leases.iter().any(|lease| lease.branch == branch),
+            "a live lease owns {branch}"
+        );
+        anyhow::ensure!(
+            super::hold_of(&self.root, pr)
+                .map_err(|why| anyhow::anyhow!("{why}"))?
+                .is_none(),
+            "the change is held"
+        );
+        crate::forge::landing_update_branch(
+            &self.root, &self.repo, pr.id, &pr.head, branch, &pr.base,
+        )?;
+        self.ci_updates.insert(pr.id, pr.head.clone());
+        Ok(format!(
+            "#{}: requested update-branch. Waiting for fresh CI",
+            pr.id
+        ))
+    }
+
+    fn launch_review(&mut self, pr: &Pr, merge_tree: Option<&str>) -> Result<Child> {
+        // A change into the integration branch gets its review story first.
+        if pr.base == INTEGRATION_BRANCH {
+            if let Some(branch) = pr.branch.as_deref() {
+                if let Err(error) = self.finish(
+                    &strings(&["pr", "auto-queue-review", "--branch", branch]),
+                    120,
+                ) {
+                    eprintln!("#{}: {error:#}", pr.id);
+                }
+            }
+        }
+        let key = format!("{}-{}", if self.gitlab { "MR" } else { "PR" }, pr.id);
+        let mut args = strings(&[
+            "queue",
+            "work",
+            &key,
+            "--role",
+            "reviewer",
+            "--no-human",
+            "--fresh",
+        ]);
+        // This pass merged the head into its base cleanly, so a base that
+        // moved does not stop the review. The approval still has to carry
+        // over to the head that lands.
+        if merge_tree.is_some() {
+            args.push("--allow-stale-base".into());
+        }
+        if let Some(vendor) = &self.vendor {
+            args.extend(["--vendor".into(), vendor.clone()]);
+        }
+        let mut child = self.start(
+            Kind::Review,
+            &format!("review-{}", pr.id),
+            &[pr.id],
+            &pr.head,
+            &[
+                ("head", &pr.head),
+                ("base", &pr.base),
+                (
+                    "merge tree",
+                    merge_tree.unwrap_or("none (the head did not merge cleanly into its base)"),
+                ),
+            ],
+            &args,
+        )?;
+        child.merge_tree = merge_tree.map(str::to_string);
+        Ok(child)
+    }
+
+    fn dispatch_rework(&mut self, pr: &Pr, spec: &str) -> Result<Child> {
+        // Routing the spec back to an implementer is best effort: the lane
+        // below claims it either way.
+        if let Err(error) = self.finish(
+            &strings(&["queue", "rework", spec, "--for", "implementer"]),
+            60,
+        ) {
+            eprintln!("#{}: {error:#}", pr.id);
+        }
+        // No vendor is named: the lane keeps the one its change already has.
+        let mut child = self.start(
+            Kind::Lane,
+            &format!("rework-{}", pr.id),
+            &[pr.id],
+            &pr.head,
+            &[("head", &pr.head), ("base", &pr.base), ("spec", spec)],
+            &strings(&[
+                "queue",
+                "work",
+                spec,
+                "--user",
+                "role:implementer",
+                "--role",
+                "implementer",
+                "--no-human",
+                "--fresh",
+                "--force-claim",
+            ]),
+        )?;
+        child.spec = Some(spec.to_string());
+        Ok(child)
+    }
+
+    fn release_hold(&mut self, pr: &Pr) -> Result<String> {
+        crate::gate::rework_hold_release::auto_release(&self.root, pr.id)
+            .map(|outcome| outcome.line(pr.id))
+    }
+
+    fn may_merge(&mut self, pr: &Pr) -> std::result::Result<(), String> {
+        let change = crate::forge::ChangeRef {
+            id: pr.id,
+            url: String::new(),
+            branch: pr.branch.clone().unwrap_or_default(),
+            base: pr.base.clone(),
+            title: Some(pr.title.clone()),
+        };
+        crate::gate::landing_merge::caller_may_merge(
+            &self.root,
+            &change,
+            &specs_of(pr),
+            &crate::landing_policy::load(&self.root),
+            &crate::gate::role_authority::has_integrity_floor_authority,
+        )
+    }
+
+    fn ship(&mut self, pr: &Pr) -> Result<String> {
+        let args = strings(&["pr", "ship", &pr.id.to_string()]);
+        let mut command = self.command(&args);
+        // The operator at a terminal authorized this ship (may_merge read
+        // its floor authority): the child keeps that terminal, so it is
+        // judged with the same authority. Nothing is granted that the
+        // parent does not hold. trace:STORY-2903 | ai:claude
+        operator_terminal(
+            &mut command,
+            crate::gate::role_authority::has_integrity_floor_authority(),
+        );
+        let shown = args.join(" ");
+        let out = crate::command_output_with_timeout(
+            command,
+            std::time::Duration::from_secs(SHIP_TIMEOUT_SECS),
+        )
+        .with_context(|| format!("`aida {shown}` did not finish in {SHIP_TIMEOUT_SECS}s"))?;
+        anyhow::ensure!(
+            out.status.success(),
+            "`aida {shown}` failed: {}",
+            one_line(&String::from_utf8_lossy(&out.stderr), 300)
+        );
+        Ok(format!("#{}: shipped", pr.id))
+    }
+
+    fn train(&mut self, prs: &[u64]) -> Result<Child> {
+        let mut args = strings(&["pr", "train"]);
+        args.extend(prs.iter().map(u64::to_string));
+        self.start(Kind::Train, "train", prs, "", &[], &args)
+    }
+
+    fn train_blocker(&mut self) -> Option<String> {
+        use fs2::FileExt as _;
+        let dir = self.root.join(TRAIN_DIR);
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return None,
+            Err(error) => return Some(format!("{} could not be read: {error}", dir.display())),
+        };
+        // A journal left behind is a train that did not finish; a new one
+        // must not start beside it.
+        let mut journals: Vec<String> = entries
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| name.ends_with(".json"))
+            .collect();
+        journals.sort();
+        if let Some(journal) = journals.first() {
+            return Some(format!(
+                "the train journal {journal} remains; finish or abandon that train first"
+            ));
+        }
+        let lock = std::fs::File::open(dir.join("run.lock")).ok()?;
+        match lock.try_lock_exclusive() {
+            Ok(()) => None,
+            Err(_) => Some("another train is running in this repository".into()),
+        }
+    }
+
+    fn verdict_times(
+        &mut self,
+        pr: u64,
+        head: &str,
+    ) -> std::result::Result<Vec<DateTime<Utc>>, String> {
+        let change = crate::gate::ledger::ChangeKey {
+            forge: if self.gitlab {
+                crate::gate::ledger::ChangeForge::Mr
+            } else {
+                crate::gate::ledger::ChangeForge::Pr
+            },
+            number: pr,
+        };
+        crate::gate::ledger::project::change_verdicts_checked(&self.root, change)?
+            .iter()
+            .filter(|(_, record)| {
+                crate::gate::review_verdict::recording_key(record)
+                    .0
+                    .as_deref()
+                    == Some(head)
+            })
+            .map(|(at, _)| {
+                DateTime::parse_from_rfc3339(at)
+                    .map(|at| at.with_timezone(&Utc))
+                    .map_err(|error| format!("a verdict's recorded time `{at}`: {error}"))
+            })
+            .collect()
+    }
+
+    fn stop(&mut self, child: &Child) {
+        // Only a process proven to be the one recorded is signalled.
+        if matches!(
+            proc_identity::observe(&child.identity, true),
+            proc_identity::Verdict::Alive
+        ) {
+            crate::bounded_process::kill_process_group(child.identity.pid);
+        }
+        self.reap();
+    }
+
+    fn owns(&self, child: &Child) -> bool {
+        self.other_run
+            || self
+                .handles
+                .iter()
+                .any(|handle| handle.id() == child.identity.pid)
+    }
+}
+
+/// Resolve the effective trusted landing mode for this pass into `limits`
+/// (F4). `Err` when it cannot be established; `limits` is then unchanged
+/// and the caller lands nothing this pass.
+// trace:STORY-2903 | ai:claude
+fn refresh_landing_mode(root: &Path, limits: &mut Limits) -> Result<(), String> {
+    limits.review_gated = crate::gate::landing_merge::effective_review_gated(root)
+        .map_err(|why| format!("the landing mode cannot be established ({why})"))?;
+    Ok(())
+}
+
+/// `aida land run`.
+pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> {
+    use fs2::FileExt as _;
+    let root = crate::review_watch::forge::main_root(start)?;
+    // trace:STORY-2857 | ai:codex
+    let _admission = if args.dry_run {
+        None
+    } else {
+        Some(crate::admission_owner::acquire(&root, "land run", false)?)
+    };
+    let mut other_run = false;
+    let _lock = if args.dry_run {
+        // Only whether a run is live is read; the lock is not kept.
+        if let Ok(lock) = std::fs::File::open(root.join(RUN_LOCK)) {
+            match lock.try_lock_exclusive() {
+                Ok(()) => drop(lock),
+                Err(_) => other_run = true,
+            }
+        }
+        None
+    } else {
+        // Reviewers are this process's children; without a grant that
+        // delegates the reviewer seat none of their verdicts could bind.
+        crate::gate::seat_authority::validate_child_delegation(&root, "reviewer").context(
+            "`aida land run` launches reviewers, so it needs a seat grant that delegates reviewer",
+        )?;
+        let path = root.join(RUN_LOCK);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .with_context(|| format!("opening {}", path.display()))?;
+        lock.try_lock_exclusive()
+            .context("another `aida land run` is already running in this repository")?;
+        eprintln!(
+            "aida land run: autoland and the review watcher should be stopped while this runs; it launches reviewers, rework lanes and trains itself."
+        );
+        Some(lock)
+    };
+    let (mut limits, warnings) = Limits::load(&root);
+    for warning in warnings {
+        eprintln!("aida land run: {warning}");
+    }
+    let mut acts = Live {
+        other_run,
+        repo: crate::review_watch::forge::Repository::load(&root)?,
+        program: crate::resolve_aida_exe(),
+        vendor: args.vendor.clone(),
+        gitlab: false,
+        handles: Vec::new(),
+        hygiene: None,
+        salvaged: std::collections::BTreeSet::new(),
+        ci_updates: BTreeMap::new(),
+        noted: Vec::new(),
+        root: root.clone(),
+    };
+    let mut last: Vec<Pr> = Vec::new();
+    // A record of children that could not be written. The children are
+    // running, so the run goes on, and nothing more is launched until the
+    // record is on disk: a pass reading the older one would start a second
+    // reviewer beside a live one.
+    let mut unsaved: Option<Book> = None;
+    let mut housekept: Option<std::time::Instant> = None;
+    loop {
+        acts.reap();
+        if let Some(book) = unsaved.take() {
+            if let Err(error) = book.write(&root) {
+                eprintln!(
+                    "aida land run: the record of running children is still not written, so this pass launches nothing: {error:#}"
+                );
+                unsaved = Some(book);
+                std::thread::sleep(std::time::Duration::from_secs(args.interval));
+                continue;
+            }
+        }
+        // The landing mode is resolved afresh every pass (STORY-2903 AC2;
+        // promotion 23 review F4): a ci-gated <-> review-gated change takes
+        // effect without a restart. A mode that cannot be established lands
+        // nothing this pass. trace:STORY-2903 | ai:claude
+        if let Err(why) = refresh_landing_mode(&root, &mut limits) {
+            eprintln!("aida land run: {why}; this pass lands nothing");
+            std::thread::sleep(std::time::Duration::from_secs(args.interval));
+            continue;
+        }
+        let started = std::time::Instant::now();
+        match super::live_pass(&root) {
+            Ok(mut pass) => {
+                acts.gitlab = pass.gitlab;
+                let mut notes = std::mem::take(&mut pass.notes);
+                // After the changes are read, before children are counted.
+                if housekept.is_none_or(|at| at.elapsed().as_secs() >= HOUSEKEEPING_SECS) {
+                    notes.extend(housekeep(&pass, &mut acts, args.dry_run));
+                    housekept = Some(std::time::Instant::now());
+                }
+                notes.extend(supervise(
+                    &pass.changes,
+                    &mut pass.book,
+                    &limits,
+                    Utc::now(),
+                    &mut acts,
+                    args.dry_run,
+                ));
+                notes.extend(act(
+                    &pass.changes,
+                    &pass.rows,
+                    &pass.merge_trees,
+                    &mut pass.book,
+                    &limits,
+                    &mut acts,
+                    args.dry_run,
+                ));
+                if !args.dry_run {
+                    if let Err(error) = pass.book.write(&root) {
+                        eprintln!(
+                            "aida land run: the record of running children was not written; it is retried before the next pass: {error:#}"
+                        );
+                        unsaved = Some(pass.book.clone());
+                    }
+                }
+                let snapshot = crate::now::build(&pass, started.elapsed());
+                if let Err(error) = crate::now::write(&pass.root, &snapshot) {
+                    eprintln!("the `aida now` snapshot was not written: {error:#}");
+                }
+                print!("{}", super::render(&pass.rows));
+                for note in &notes {
+                    println!("  {note}");
+                }
+                last = pass.changes;
+            }
+            // A pass that could not run loses nothing: the next derives
+            // everything again.
+            Err(error) if !args.once && !args.dry_run => {
+                eprintln!("aida land run: this pass did not run: {error:#}");
+            }
+            Err(error) => return Err(error),
+        }
+        if args.once || args.dry_run {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(args.interval));
+    }
+    // A child whose launcher has exited loses the ancestry its verdict binds
+    // through, so one pass waits for what it started. The changes are read
+    // again while it waits: a reviewer whose head moves is stopped then, not
+    // after it has reviewed a head nobody will merge.
+    // trace:BUG-2571 | ai:claude
+    let refresh = std::time::Duration::from_secs(args.interval.max(30));
+    let mut read_at = std::time::Instant::now();
+    while !args.dry_run {
+        acts.reap();
+        if acts.handles.is_empty() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_secs(15));
+        acts.reap();
+        // An error here is reported and the wait goes on: leaving now
+        // would abandon the children this run started.
+        let read = match unsaved.take() {
+            Some(book) => Ok(book),
+            None => Book::read(&root),
+        };
+        let mut book = match read {
+            Ok(book) => book,
+            Err(error) => {
+                eprintln!("aida land run: still waiting for its children: {error:#}");
+                continue;
+            }
+        };
+        if read_at.elapsed() >= refresh {
+            read_at = std::time::Instant::now();
+            match super::live_pass(&root) {
+                Ok(pass) => last = pass.changes,
+                Err(error) => eprintln!(
+                    "aida land run: the open changes could not be read while waiting; the last list is used: {error:#}"
+                ),
+            }
+        }
+        let mut notes = book.settle(&last, &alive, &log_tail);
+        notes.extend(supervise(
+            &last,
+            &mut book,
+            &limits,
+            Utc::now(),
+            &mut acts,
+            false,
+        ));
+        for note in notes {
+            println!("  {note}");
+        }
+        if let Err(error) = book.write(&root) {
+            eprintln!("aida land run: the record of running children was not written: {error:#}");
+            unsaved = Some(book);
+        }
+    }
+    if let Some(book) = unsaved {
+        if let Err(error) = book.write(&root) {
+            eprintln!(
+                "aida land run: the record of its children was not written at exit; the next run settles it against what is alive: {error:#}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "tests/story_2768_land_run_tests.rs"]
+mod tests;
+
+// trace:BUG-2690 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2690_land_update_branch_tests.rs"]
+mod bug_2690_update_branch_tests;

@@ -54,6 +54,14 @@ pub(crate) fn commit_completion_ids(message: &str) -> Vec<String> {
     out
 }
 
+/// Keep constituent commit trailers descriptive unless the squash claims them.
+// trace:BUG-2635 | ai:codex
+pub(crate) fn restrict_body_to_claims(body: &str, claims: &[String]) -> String {
+    rewrite_body_trailers(body, |id| {
+        (!claims.iter().any(|claim| claim.eq_ignore_ascii_case(id))).then_some(())
+    })
+}
+
 /// One trailing paren group of a body line, as the pull-side scan walks it.
 enum TrailerGroup {
     /// `(#N)`, kept verbatim.
@@ -96,7 +104,23 @@ fn rewrite_trailer_line(
 ) -> Option<String> {
     let mut tail = line.trim_end();
     let mut groups: Vec<TrailerGroup> = Vec::new();
-    while tail.ends_with(')') {
+    loop {
+        // Match the promotion suffix recognized by the completion scanner,
+        // including nested promotion subjects in a constituent body.
+        // trace:BUG-2635 | ai:codex
+        if let Some((prefix, number)) = tail.rsplit_once(" [promotion ") {
+            if number
+                .strip_suffix(']')
+                .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+            {
+                groups.push(TrailerGroup::Pr(format!("[promotion {number}")));
+                tail = prefix.trim_end();
+                continue;
+            }
+        }
+        if !tail.ends_with(')') {
+            break;
+        }
         let Some(open) = tail.rfind('(') else {
             break;
         };

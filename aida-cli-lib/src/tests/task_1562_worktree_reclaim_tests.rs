@@ -505,7 +505,8 @@ fn task_1562_reclaim_is_dry_run_by_default() {
     use crate::cli::{Cli, Command, WorktreeCommand};
     use clap::Parser;
 
-    let cli = crate::command_registry::try_parse_from(["aida", "worktree", "reclaim"])
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "worktree", "reclaim"])
         .expect("`aida worktree reclaim` should parse");
     match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
         crate::worktree_gc::WorktreeArgs {
@@ -541,23 +542,24 @@ fn task_1562_reclaim_parses_every_rail_override() {
     use crate::cli::{Cli, Command, WorktreeCommand};
     use clap::Parser;
 
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "worktree",
-        "reclaim",
-        "--apply",
-        "--min-age-mins",
-        "180",
-        "--target-pct",
-        "80",
-        "--include-live",
-        "--include-open-prs",
-        "--json",
-        "--scratch-age-days",
-        "5",
-        "--no-scratch",
-    ])
-    .expect("every reclaim flag should parse");
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "worktree",
+            "reclaim",
+            "--apply",
+            "--min-age-mins",
+            "180",
+            "--target-pct",
+            "80",
+            "--include-live",
+            "--include-open-prs",
+            "--json",
+            "--scratch-age-days",
+            "5",
+            "--no-scratch",
+        ])
+        .expect("every reclaim flag should parse");
     match cli.command.registered::<crate::worktree_gc::WorktreeArgs>() {
         crate::worktree_gc::WorktreeArgs {
             inner:
@@ -596,9 +598,9 @@ fn task_1562_disk_headroom_remediation_names_the_command_that_reclaims() {
     let src = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("src")
-            .join("doctor_cmd.rs"),
+            .join("doctor/disk.rs"),
     )
-    .expect("doctor_cmd.rs is readable");
+    .expect("doctor/disk.rs is readable");
     let start = src
         .find("category: \"disk-headroom\"")
         .expect("the disk-headroom finding exists");

@@ -1,7 +1,17 @@
 //! Done-to-completed auto-bump, closure holds, stale-review flips and `aida db reconcile-status` (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    brief, classify_commit_source, closure_criteria_label, commit_count, completion, criteria,
+    emit_nonblocking_findings_on_completion, events, extract_plan_followups,
+    extract_pr_number_from_commit_subject, extract_referenced_spec_ids_from_commit,
+    extract_spec_ids_from_commit, extract_status_changes_from_commits, forge, git_arg_guard, glyph,
+    is_plan_commit_subject, list_leases, network_retry, parse_review_story_pr_number, plural, punt,
+    reconcile_evidence, record_role_activity, req_type_from_orphan_path, reviewer_summary,
+    spec_id_from_orphan_path, warn_multi_repo_scan_limited, workspace_repo_slug, Requirement,
+    RequirementStatus, RequirementType, Result, StatusTransition, Storage,
+};
+use colored::Colorize;
 
 /// TASK-78: project-wide opt-out for the post-pull merge-gate. Defaults to
 /// on; set `AIDA_AUTO_MERGE_GATE=false` (or `0`, `no`, `off`) to disable.
@@ -481,24 +491,9 @@ pub(crate) struct AutoBumpFlip {
     pub(crate) prior_status: RequirementStatus,
 }
 
-/// BUG-1454: return the candidate specs that still have an open GitHub PR.
-///
-/// A completion trailer proves that *some* work landed, but an open PR naming
-/// the same spec is stronger evidence that the spec has another deliverable in
-/// flight. Keep those specs at Done until the final PR closes. One search is
-/// made per candidate because GitHub's PR search covers title, body, and
-/// comments without downloading every open PR in a large repository.
-///
-/// `None` means the GitHub lookup was unavailable or failed. Callers
-/// default-to-preserve in that ambiguous case; hiding unfinished work is more
-/// damaging than leaving shipped work visible for another pass.
-///
-/// Compatibility wrapper over the checked lookup in [`reconcile_evidence`],
-/// which owns the forge query and response validation (a non-array or
-/// malformed response is unavailable, never empty). The pure-git positive
-/// and GitLab-is-unknown rules are documented there.
-// trace:BUG-1454 | ai:codex
-// trace:TASK-1335 | ai:claude
+/// Return candidate specs with an open forge change. Unknown evidence preserves
+/// the current status; default-branch trailers supply completion evidence.
+// trace:BUG-1454 TASK-1335 BUG-2516 | ai:codex
 pub(crate) fn specs_with_open_prs(
     project_root: &std::path::Path,
     spec_ids: impl IntoIterator<Item = String>,
@@ -1323,6 +1318,34 @@ pub(crate) fn parse_pr_number_from_url(url: &str) -> Option<u64> {
         .ok()
 }
 
+/// The landing completion write for one flip, run on a store read under the
+/// writer lock (both write paths). A slice plan with an outstanding child,
+/// judged on that locked store, refuses the flip (A2: a child it cannot find
+/// counts as outstanding). Returns whether the spec flipped.
+// trace:BUG-2696 | ai:claude
+fn complete_flip_under_lock(
+    locked: &mut aida_core::RequirementsStore,
+    flip: &AutoBumpFlip,
+    now: chrono::DateTime<chrono::Utc>,
+    project_root: &std::path::Path,
+) -> bool {
+    // TASK-1-113: resolve the way the eligibility scan did (agreed_id and
+    // node-alias aware), so a spec whose commit subject carries the agreed_id
+    // (e.g. `(BUG-42)` for canonical `BUG-1-099`) re-finds the same row here
+    // instead of the flip being silently dropped. trace:BUG-405 | ai:claude
+    let Some(parent) = locked.get_requirement_by_spec_id(&flip.spec_id) else {
+        return false;
+    };
+    if crate::publication_completion::slice_plan_outstanding(locked, parent) {
+        return false;
+    }
+    let id = parent.id;
+    match locked.requirements.iter_mut().find(|r| r.id == id) {
+        Some(parent) => apply_auto_bump_flip(parent, flip, now, project_root),
+        None => false,
+    }
+}
+
 // Shared per-requirement mutation for the Done→Completed auto-bump. One
 // body used by BOTH write paths: the targeted per-spec path (git-canonical
 // stores — one `update SPEC-ID` commit per bumped spec, no bulk chore
@@ -1349,6 +1372,20 @@ pub(crate) fn apply_auto_bump_flip(
     // BUG-477: record the merge-driven bump in the per-spec history the same
     // way the manual `aida edit --status` path does.
     // trace:STORY-1418 | ai:claude
+    // Surface suspicious round completion while preserving ordinary merge-driven
+    // In Progress completion. Open PRs are separately withheld before this seam.
+    // trace:BUG-2635 | ai:codex
+    if r.status == RequirementStatus::InProgress {
+        let warning = format!(
+            "Auto-completion warning: {} was In Progress when merge {} completed it; verify that no active round remains.",
+            flip.spec_id, flip.sha
+        );
+        eprintln!("  {warning}");
+        r.add_comment(aida_core::Comment::new(
+            "aida-auto-bump".to_string(),
+            warning,
+        ));
+    }
     let prior_status = completion::mark_completed(r);
     // BUG-1637: through the one shared history helper. trace:BUG-1637 | ai:claude
     aida_core::conflict::record_status_transition(
@@ -2081,6 +2118,111 @@ fn numbered_slice_position(subject: &str) -> Option<(u32, u32)> {
     Some((k.parse().ok()?, n.parse().ok()?))
 }
 
+/// Marker on the AC3 note a Refs landing leaves on a spec it did not
+/// complete; the merge sha follows it, so each landing notes a spec once.
+// trace:BUG-2696 | ai:claude
+pub(crate) const REFS_LANDING_MARKER: &str = "[aida:refs-landing]";
+
+/// AC3 (BUG-2696): the note for a `(Refs SPEC)` landing on a spec that is not
+/// Done, or `None` when that landing was already noted.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn refs_landing_note(r: &Requirement, sha: &str) -> Option<String> {
+    let short = sha.get(..12).unwrap_or(sha);
+    let tag = format!("{REFS_LANDING_MARKER} {short}");
+    if r.comments.iter().any(|c| c.content.contains(&tag)) {
+        return None;
+    }
+    Some(format!(
+        "{tag}\nA reference merge (commit {short}, `(Refs {id})`) landed while this spec was \
+         {status}, so it stays open: a reference completes only a spec the implementer marked \
+         Done. If the merged work finished it, mark it Done or Completed; otherwise the \
+         remaining slices keep it open.",
+        id = r.display_id(), // canonical-id: audit note names the spec
+        status = r.status,
+    ))
+}
+
+/// Returns whether every owed note was written. A failed write (writer-lock
+/// contention, an I/O error) is `false`: the scan is incomplete, so no caller
+/// checkpoints it or clears its pending scan base, and the next scan retries
+/// the landing (round-7 finding 2). Independent notes are still written.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn note_refs_landings_on_open_specs(
+    project_root: &std::path::Path,
+    storage: &Storage,
+    store: &aida_core::RequirementsStore,
+    refs_landed: &std::collections::BTreeMap<String, String>,
+) -> bool {
+    note_refs_landings_with(project_root, store, refs_landed, |req, mutate| {
+        #[cfg(test)]
+        if REFUSE_REFS_NOTE_WRITE.with(std::cell::Cell::get) {
+            anyhow::bail!("writer lock contended (test refusal)");
+        }
+        storage.update_spec_atomically(req, mutate).map(|_| ())
+    })
+}
+
+#[cfg(test)]
+thread_local! {
+    /// Test seam: refuse every Refs-landing note write on this thread.
+    pub(crate) static REFUSE_REFS_NOTE_WRITE: std::cell::Cell<bool> =
+        const { std::cell::Cell::new(false) };
+}
+
+/// [`note_refs_landings_on_open_specs`] with the per-spec write injected, so
+/// a test can refuse it.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn note_refs_landings_with(
+    project_root: &std::path::Path,
+    store: &aida_core::RequirementsStore,
+    refs_landed: &std::collections::BTreeMap<String, String>,
+    mut write: impl FnMut(&Requirement, &mut dyn FnMut(&mut Requirement)) -> Result<()>,
+) -> bool {
+    let mut complete = true;
+    for (spec_id, sha) in refs_landed {
+        let Ok(Some(req)) = store.get_requirement_unambiguous(spec_id) else {
+            continue;
+        };
+        let eligible = |r: &Requirement| {
+            is_auto_bump_work_type(&r.req_type)
+                && !r.archived
+                && r.status != RequirementStatus::Done
+                && !aida_core::conflict::is_terminal_status(&r.status)
+                && !auto_bump_evidence_is_stale(project_root, r, sha)
+        };
+        if !eligible(req) || refs_landing_note(req, sha).is_none() {
+            continue;
+        }
+        let written = write(req, &mut |r: &mut Requirement| {
+            if !eligible(r) {
+                return;
+            }
+            if let Some(note) = refs_landing_note(r, sha) {
+                r.add_comment(aida_core::Comment::new(
+                    aida_core::conflict::AUTO_BUMP_AUTHOR.to_string(),
+                    note,
+                ));
+            }
+        });
+        match written {
+            Ok(_) => eprintln!(
+                "  {} {spec_id} stays {} — reference merge {} landed (noted for triage)",
+                "↷".yellow(),
+                req.status,
+                sha.get(..7).unwrap_or(sha)
+            ),
+            Err(e) => {
+                complete = false;
+                eprintln!(
+                    "  warning: could not note reference merge on {spec_id} (retried on the \
+                     next scan): {e:#}"
+                );
+            }
+        }
+    }
+    complete
+}
+
 pub(crate) fn auto_bump_done_to_completed(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
@@ -2096,9 +2238,48 @@ pub(crate) fn auto_bump_done_to_completed(
 /// not pull, so it defers followup filing instead of acting on stale data.
 /// Returns `(flips, scanned)`: `scanned` is false when no commit range was
 /// walked (HEAD off the default branch, no default branch, `git log`
-/// failed), so a persisted scan start must be kept for a later pull.
+/// failed), or Refs recovery remains unknown, so a persisted scan start must
+/// be kept for a later pull.
 // trace:STORY-86 trace:BUG-1633 | ai:claude
 pub(crate) fn auto_bump_done_to_completed_with(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    pre_sha: Option<&str>,
+    storage: &Storage,
+    extract_followups: bool,
+) -> Result<(Vec<AutoBumpFlip>, bool)> {
+    // D5 (BUG-2696): landing-time status writes reach the shared store in the
+    // same pass, so lane hosts see a completion before their next admission
+    // check instead of after someone's `db sync --push`.
+    // trace:BUG-2696 | ai:claude
+    let store_dir = storage.path();
+    let result = auto_bump_scan(
+        project_root,
+        store_path,
+        pre_sha,
+        storage,
+        extract_followups,
+    );
+    // F6: the push must be CONFIRMED. `propagate_store_writes` pushes
+    // whenever the store is ahead of its shared remote, so it retries an
+    // earlier unconfirmed write (this host's, another writer's or a crashed
+    // process's) even when this scan wrote nothing. Unconfirmed, the scan
+    // reports `scanned = false`, so no caller checkpoints the reconcile or
+    // clears its pending scan base; the next scan retries.
+    match crate::publication_completion::propagate_store_writes(store_dir, "landing completion") {
+        Ok(()) => result,
+        Err(e) => {
+            eprintln!(
+                "  {} landing completion not shared yet: {e:#}",
+                "Warning:".yellow().bold()
+            );
+            result.map(|(flips, _)| (flips, false))
+        }
+    }
+}
+
+// trace:STORY-86 trace:BUG-1633 | ai:claude
+fn auto_bump_scan(
     project_root: &std::path::Path,
     store_path: &std::path::Path,
     pre_sha: Option<&str>,
@@ -2139,6 +2320,31 @@ pub(crate) fn auto_bump_done_to_completed_with(
         return Ok((Vec::new(), false));
     }
 
+    // A Refs-only merge never enters the completion flips below. Close its
+    // waiting review even when there are no specs eligible for completion.
+    // trace:BUG-2525 | ai:codex
+    // trace:BUG-2593 | ai:codex
+    if !crate::store_pull_coalesce::waiting_reconcile_is_current(project_root, store_path) {
+        #[cfg(test)]
+        crate::store_pull_coalesce::note_waiting_reconcile_run();
+        let waiting_phase =
+            crate::store_push_pull::PullPhase::start("completion waiting-verdict reconciliation");
+        let waiting_inputs =
+            crate::store_pull_coalesce::waiting_reconcile_key(project_root, store_path);
+        crate::review_waiting::reconcile_waiting_verdicts(project_root, None);
+        drop(waiting_phase);
+        crate::store_pull_coalesce::record_waiting_reconcile(
+            project_root,
+            store_path,
+            waiting_inputs,
+        );
+    } else {
+        crate::store_push_pull::PullPhase::count(
+            "completion waiting-verdict reconciliations skipped",
+            1,
+        );
+    }
+
     // BUG-568: this scan only walks the LOCAL repo's default branch. If the
     // store is shared across multiple repos, a spec landed in a sibling repo
     // won't auto-complete here — warn loudly so the miss is visible.
@@ -2175,11 +2381,14 @@ pub(crate) fn auto_bump_done_to_completed_with(
     }
 
     // ── Step 3: walk `git log` for (sha, subject) pairs ──
+    // trace:BUG-2593 | ai:codex
+    let log_phase = crate::store_push_pull::PullPhase::start("completion git-log execution");
     let log_out = ProcessCommand::new("git")
         .arg("-C")
         .arg(project_root)
         .args(&log_args)
         .output();
+    drop(log_phase);
     let log = match log_out {
         Ok(o) if o.status.success() => o.stdout,
         _ => return Ok((Vec::new(), false)),
@@ -2205,6 +2414,15 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // trace:TASK-1951 trace:TASK-2114 | ai:claude
     let mut pr_subject_refs: std::collections::BTreeMap<u64, RefsCompletionFilter> =
         std::collections::BTreeMap::new();
+    // Count every visited Refs trailer, including repeated specs and failed retries.
+    // trace:BUG-2593 | ai:codex
+    let mut refs_visited = 0usize;
+    let mut references = std::collections::BTreeMap::new();
+    // D4 (BUG-2696): Refs landings that may complete a spec the implementer
+    // already marked Done. A non-completing slice marker still withholds.
+    // trace:BUG-2696 | ai:claude
+    let mut refs_landed: std::collections::BTreeMap<String, String> =
+        std::collections::BTreeMap::new();
     for record in log_str.split('\0') {
         let mut parts = record.splitn(2, '\x1f');
         let sha = parts.next().unwrap_or("").trim();
@@ -2218,6 +2436,20 @@ pub(crate) fn auto_bump_done_to_completed_with(
             .trim();
         if sha.is_empty() || subject.is_empty() {
             continue;
+        }
+        // trace:BUG-2549 | ai:codex — a Refs merge closes a slice, not its
+        // unfinished spec. Open PRs and leases retain the claim.
+        for spec in crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(subject) {
+            refs_visited += 1;
+            references
+                .entry(spec.clone())
+                .or_insert_with(|| sha.to_string());
+            if !is_plan_commit_subject(subject)
+                && !commit_declares_non_completing(message)
+                && !slice_subject_withholds_completion(subject)
+            {
+                refs_landed.entry(spec).or_insert_with(|| sha.to_string());
+            }
         }
         // BUG-426: a plan commit (`docs(plans): …`) names the specs it PLANS
         // for in its trailing `(SPEC-ID …)` group, but a plan is a
@@ -2290,6 +2522,8 @@ pub(crate) fn auto_bump_done_to_completed_with(
         }
     }
 
+    crate::store_push_pull::PullPhase::count("completion Refs trailers visited", refs_visited);
+
     // TASK-1296: a Review-PR spec whose own PR closed WITHOUT merging never
     // produces a `(#N)` merge commit, so it can never show up in `pr_to_sha`
     // — the git-log scan above has no evidence to find. It also can't be
@@ -2299,7 +2533,38 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // ask the forge directly for the handful of Review-PR specs still
     // Approved/InProgress that the local scan didn't already resolve.
     // trace:TASK-1296 | ai:claude
+    // trace:BUG-2589 | ai:codex
+    let load_phase =
+        crate::store_push_pull::PullPhase::start("completion store load/cache refresh");
     let store = storage.load()?;
+    drop(load_phase);
+    // Refs uncertainty retains those specs without blocking independent
+    // completion evidence. Do not checkpoint this scan: recovery must retry.
+    // trace:BUG-2593 | ai:codex
+    let recovery_complete = match crate::lane_recovery::reconcile_references_in(
+        project_root,
+        storage,
+        &store,
+        &references,
+    ) {
+        Ok(_) => true,
+        Err(error) => {
+            eprintln!("warning: reference-merge recovery needs retry: {error:#}");
+            false
+        }
+    };
+    // D4 / AC3 (BUG-2696): a Refs landing on a spec that is not Done leaves
+    // it open, with a visible note product can triage. F5: notification is
+    // independent of completion eligibility, so it covers EVERY reference
+    // landing (`references`), numbered slices, plan commits and explicit
+    // non-completing markers included, not just `refs_landed`.
+    // trace:BUG-2696 | ai:claude
+    // Round 7 (finding 2): an unwritten note keeps the scan incomplete.
+    let notes_complete =
+        note_refs_landings_on_open_specs(project_root, storage, &store, &references);
+    let recovery_complete = recovery_complete && notes_complete;
+    let eligibility_phase =
+        crate::store_push_pull::PullPhase::start("completion eligibility/forge");
     let (stranded_review_pr, stranded_review_pr_failures) =
         collect_stranded_review_pr_resolutions(&store, &pr_to_sha, project_root);
     report_stranded_review_pr_lookup_failures(&stranded_review_pr_failures);
@@ -2351,13 +2616,14 @@ pub(crate) fn auto_bump_done_to_completed_with(
     let held_completions = load_held_completions(project_root);
 
     if candidates.is_empty()
+        && refs_landed.is_empty()
         && pr_to_sha.is_empty()
         && stranded_review_pr.is_empty()
         && released_holds.is_empty()
         && held_completions.is_empty()
         && !orphaned_finding_pending
     {
-        return Ok((Vec::new(), true));
+        return Ok((Vec::new(), recovery_complete));
     }
 
     // ── Step 4: figure out which candidates are eligible to ship ──
@@ -2367,6 +2633,30 @@ pub(crate) fn auto_bump_done_to_completed_with(
             continue;
         };
         if !auto_bump_eligible_status(&req.status) {
+            continue;
+        }
+        flips.push(AutoBumpFlip::new(
+            spec_id.clone(),
+            sha.clone(),
+            req.status.clone(),
+        ));
+    }
+    // D4 (BUG-2696): a Done spec whose commit lands completes whatever the
+    // trailer. Done is the implementer's declared "complete for its scope";
+    // a partial slice never set it. The open-PR, freshness and closure-hold
+    // guards below still apply.
+    // trace:BUG-2696 | ai:claude
+    for (spec_id, sha) in &refs_landed {
+        let Some(req) = trailer_spec_or_skip(&store, spec_id, sha) else {
+            continue;
+        };
+        if req.status != RequirementStatus::Done
+            || flips.iter().any(|f| {
+                store
+                    .get_requirement_by_spec_id(&f.spec_id)
+                    .is_some_and(|r| r.id == req.id)
+            })
+        {
             continue;
         }
         flips.push(AutoBumpFlip::new(
@@ -2508,6 +2798,27 @@ pub(crate) fn auto_bump_done_to_completed_with(
             ));
         }
     }
+    // Round 7 (BUG-2696 finding 1, AC6 / A2): a landing never completes a
+    // spec whose slice plan still has an outstanding child, whatever evidence
+    // proposed it: a bare subject trailer, a completion trailer retained in a
+    // squash body, a covers chain or a Done set before the graph changed. The
+    // host vetoed such a publication as partial; the landing honours it.
+    // trace:BUG-2696 | ai:claude
+    flips.retain(|flip| {
+        let outstanding = store
+            .get_requirement_by_spec_id(&flip.spec_id)
+            .is_some_and(|r| crate::publication_completion::slice_plan_outstanding(&store, r));
+        if outstanding {
+            eprintln!(
+                "  {} {} stays {} — merge {} landed, but child slices are still outstanding",
+                "↷".yellow(),
+                flip.spec_id,
+                flip.prior_status,
+                flip.sha.get(..7).unwrap_or(&flip.sha)
+            );
+        }
+        !outstanding
+    });
     retain_fresh_auto_bump_flips(project_root, &store, &mut flips);
     let candidate_ids = flips.iter().map(|flip| flip.spec_id.clone());
     let mut still_held: Vec<HeldCompletion> = Vec::new();
@@ -2567,7 +2878,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         && closure_holds.is_empty());
 
     if !has_flip_work && !orphaned_finding_pending {
-        return Ok((Vec::new(), true));
+        return Ok((Vec::new(), recovery_complete));
     }
 
     // ── Step 5: write the flips ──
@@ -2579,6 +2890,8 @@ pub(crate) fn auto_bump_done_to_completed_with(
     // store whether or not its closure changes a single spec, so an ungated
     // Step 5 would turn "reject one finding" into a full-store write, plus a
     // `GitBackend` open on the canonical path. trace:BUG-1768 | ai:claude
+    drop(eligibility_phase);
+    let write_phase = crate::store_push_pull::PullPhase::start("spec completion writes");
     let now = chrono::Utc::now();
     if has_flip_work && store_path.is_dir() {
         // Git-canonical store: targeted per-spec writes — read the ONE spec,
@@ -2593,16 +2906,19 @@ pub(crate) fn auto_bump_done_to_completed_with(
         // trace:TASK-1161 | ai:claude
         use aida_core::db::DatabaseBackend;
         let backend = aida_core::db::GitBackend::new(store_path)?;
+        // BUG-1638: the race-test seam between the scan and the writes.
+        // trace:BUG-1638 | ai:claude
+        crate::status_write_race_seam(store_path);
         for flip in &flips {
-            // Plain lookup: a checked one on a bare GitBackend reloads the whole
-            // store per spec. Trailer ids were vetted by trailer_spec_or_skip.
-            // trace:TASK-1468 | ai:claude
-            let Some(mut r) = backend.get_requirement_by_spec_id(&flip.spec_id)? else {
-                continue;
-            };
-            if apply_auto_bump_flip(&mut r, flip, now, project_root) {
-                backend.update_requirement(&r)?;
-            }
+            // BUG-2696 round 8 (A2): the parent and every child are read in
+            // the same store-locked transaction that persists the completion,
+            // so a child reopened or a slice added after the scan keeps the
+            // parent open. The closure changes at most this one spec, so the
+            // write stays a targeted `update SPEC-ID` commit.
+            // trace:BUG-2696 | ai:claude
+            backend.update_atomically(|locked| {
+                complete_flip_under_lock(locked, flip, now, project_root);
+            })?;
         }
         // BUG-1551: closure holds — same targeted write, one commit each.
         for hold in &closure_holds {
@@ -2665,19 +2981,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
                 }
             }
             for flip in &flips_for_write {
-                // TASK-1-113: match agreed_id as well as spec_id — the
-                // eligibility scan above resolves via the agreed-aware
-                // `get_requirement_by_spec_id`, so a node-aware spec whose
-                // commit subject carries the agreed_id (e.g. `(BUG-42)` for
-                // canonical `BUG-1-099`) must re-find by the same key here or
-                // the flip is silently dropped. Mirrors the reconcile-status
-                // fix. trace:BUG-405 | ai:claude
-                if let Some(r) = s.requirements.iter_mut().find(|r| {
-                    r.spec_id.as_deref() == Some(flip.spec_id.as_str())
-                        || r.agreed_id.as_deref() == Some(flip.spec_id.as_str())
-                }) {
-                    apply_auto_bump_flip(r, flip, now, project_root);
-                }
+                complete_flip_under_lock(s, flip, now, project_root);
             }
             // TASK-246 / BUG-219: review stories whose PR merged before the
             // review lifecycle finished. The helper re-checks the status
@@ -2705,6 +3009,9 @@ pub(crate) fn auto_bump_done_to_completed_with(
         })?;
     }
 
+    drop(write_phase);
+    let _followup_phase =
+        crate::store_push_pull::PullPhase::start("completion verification/gate-ledger followups");
     // Filter the report to only specs we actually still flipped after
     // the inside-the-atomic-window re-check. Cheapest correct answer:
     // re-load and intersect. In the common case the lists are equal.
@@ -2975,7 +3282,7 @@ pub(crate) fn auto_bump_done_to_completed_with(
         }
     }
 
-    Ok((confirmed, true))
+    Ok((confirmed, recovery_complete))
 }
 
 /// TASK-226: manual replay of the Done → Completed scan over a wider

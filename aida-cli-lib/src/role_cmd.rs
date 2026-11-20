@@ -10,7 +10,16 @@
 //! `format_role_picker_option`, `RolePickerRow`), and `sh_single_quote` /
 //! `eval_subcommand_hint` — stay in main.rs and are reached via `crate::`.
 
-use crate::*;
+use crate::{
+    build_display_id_lookup, canonical_role_name, current_user_id, eval_subcommand_hint,
+    global_role_file, human_audit, humanize_relative, list_roles, load_role,
+    load_role_with_warnings, non_interactive_confirm, parse_role_lenient, pick_role_with_header,
+    project_role_file, resolve_role_name, role_save_path, save_role_at, scaffold_starter_roles,
+    session, sh_single_quote, statusline_project_root, truncate, RoleCommand, RolePromptCommand,
+    RoleScopeCommand, RoleState, StakeholderAction, STARTER_ROLES,
+};
+use aida_core::Storage;
+use anyhow::Context;
 use anyhow::Result;
 use colored::Colorize;
 use std::io::IsTerminal;
@@ -73,10 +82,11 @@ pub(crate) fn handle_role_command(cmd: &RoleCommand) -> Result<()> {
                 handle_role_current(*check)
             }
         }
+        RoleCommand::RenewParent(args) => crate::role_renew_parent::handle(&project_root, args),
         RoleCommand::Expiry {
             warn_within,
             refuse_within,
-        } => handle_role_expiry(warn_within, refuse_within.as_deref()),
+        } => handle_role_expiry(&project_root, warn_within, refuse_within.as_deref()),
         RoleCommand::Status { json } => handle_role_status(&project_root, *json),
         RoleCommand::AdoptKey { id } => handle_role_adopt_key(id),
         RoleCommand::ExpiryNotice { .. } => unreachable!("notice dispatches before role setup"),
@@ -1098,7 +1108,11 @@ fn handle_role_current(check: bool) -> Result<()> {
 // the session's seat grant is near expiry. Local file reads only, so the
 // SessionStart hook and a relay launcher can call it cheaply.
 // trace:TASK-1736 | ai:claude
-fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<()> {
+fn handle_role_expiry(
+    project_root: &std::path::Path,
+    warn_within: &str,
+    refuse_within: Option<&str>,
+) -> Result<()> {
     let span = |raw: &str| -> Result<chrono::Duration> {
         let std = crate::drain_caps::parse_duration(raw).ok_or_else(|| {
             anyhow::anyhow!("invalid duration `{raw}`: use a form like 90m, 2h or 1h30m")
@@ -1107,6 +1121,17 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     };
     let warn_within = span(warn_within)?;
     let refuse_within = refuse_within.map(span).transpose()?;
+    // A supervised (`--rotate`) seat also shows the grant its relay
+    // relaunches under, whatever its own seat: the relay cannot rotate once
+    // that grant expires. Shown beside the mandate line at session start.
+    // trace:BUG-2585 | ai:claude
+    if refuse_within.is_none() {
+        let now = chrono::Utc::now();
+        let env = aida_core::exec_context::Environment::capture();
+        if let Some(life) = crate::relay_grant::seat_life(project_root, &env, now) {
+            println!("{}", life.line(now));
+        }
+    }
     // In refuse mode a grant handle that resolves to nothing fails closed: a
     // relay would otherwise launch a session that meets refusals mid-run. No
     // handle at all stays silent; every valid exported grant supplies expiry.
@@ -1130,6 +1155,7 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
                 "{}",
                 crate::gate::seat_authority::unresolved_launch_refusal(&reason, label.as_deref())
             );
+            eprintln!("{}", crate::role_renew_parent::expiry_hint());
             std::process::exit(3);
         }
         _ => return Ok(()),
@@ -1138,6 +1164,7 @@ fn handle_role_expiry(warn_within: &str, refuse_within: Option<&str>) -> Result<
     if let Some(within) = refuse_within {
         if let Some(refusal) = crate::gate::seat_authority::launch_refusal(&expiry, now, within) {
             eprintln!("{refusal}");
+            eprintln!("{}", crate::role_renew_parent::expiry_hint());
             std::process::exit(3);
         }
         return Ok(());
@@ -1215,17 +1242,19 @@ fn handle_role_status(project_root: &std::path::Path, json: bool) -> Result<()> 
             }
         }
     }
-    // TASK-2159: only the harness is offered for --bind-pid, never the
-    // transient shell this command runs in. trace:TASK-2159 | ai:claude
-    match status.harness_pid {
-        Some(pid) => println!(
-            "this session: harness pid {pid} (for `aida role enter <seat> --bind-pid {pid}`)"
-        ),
-        None => println!(
-            "this session: no stable harness pid (no agent harness above this command, or it runs in a sandbox); start the agent from a role shell instead of using --bind-pid"
-        ),
-    }
+    println!("{}", role_status_session_guidance(status.harness_pid));
     Ok(())
+}
+
+// A PID binding does not change the issuing subject or replace a managed
+// child's grant. Offer the supported recovery instead of an unusable renewal.
+// trace:BUG-2503 | ai:codex
+fn role_status_session_guidance(harness_pid: Option<u32>) -> String {
+    let session = match harness_pid {
+        Some(pid) => format!("this session: harness pid {pid} (informational only)"),
+        None => "this session: no stable harness pid (no agent harness above this command, or it runs in a sandbox)".to_string(),
+    };
+    format!("{session}\nmanaged agent renewal: save a handoff; at the operator's terminal, re-enter the parent role with the required --delegate-seat options, then relaunch the agent through its launcher. In-place grant renewal is not supported for managed agents.")
 }
 
 fn handle_role_end() -> Result<()> {
@@ -1593,6 +1622,25 @@ fn handle_role_scaffold() -> Result<()> {
 
 #[cfg(test)]
 mod tests {
+    // trace:BUG-2503 | ai:codex
+    #[test]
+    fn role_status_guides_managed_renewal_with_or_without_visible_harness() {
+        for pid in [Some(2907980), None] {
+            let text = super::role_status_session_guidance(pid);
+            assert!(!text.contains("--bind-pid"));
+            assert!(text.contains("save a handoff"));
+            assert!(text.contains("operator's terminal"));
+            assert!(text.contains("--delegate-seat"));
+            assert!(text.contains("relaunch the agent through its launcher"));
+            assert!(text.contains("In-place grant renewal is not supported"));
+            if pid.is_some() {
+                assert!(text.contains("harness pid 2907980 (informational only)"));
+            } else {
+                assert!(text.contains("no stable harness pid"));
+            }
+        }
+    }
+
     // trace:BUG-2386 | ai:claude
     #[test]
     fn role_resume_line_names_the_recording_vendor() {
@@ -1667,14 +1715,9 @@ mod tests {
     // trace:STORY-994 | ai:codex
     #[test]
     fn parses_role_enter_no_title_flag() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "role",
-            "enter",
-            "advisor",
-            "--no-title",
-        ])
-        .expect("parse role enter");
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "role", "enter", "advisor", "--no-title"])
+            .expect("parse role enter");
         let crate::role_cmd::RoleArgs {
             inner:
                 RoleCommand::Enter {
@@ -1696,17 +1739,18 @@ mod tests {
     // trace:TASK-1592 | ai:antigravity
     #[test]
     fn parses_role_enter_delegate_seat() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "role",
-            "enter",
-            "advisor",
-            "--delegate-seat",
-            "implementer",
-            "--delegate-seat",
-            "reviewer",
-        ])
-        .expect("parse role enter");
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "role",
+                "enter",
+                "advisor",
+                "--delegate-seat",
+                "implementer",
+                "--delegate-seat",
+                "reviewer",
+            ])
+            .expect("parse role enter");
         let crate::role_cmd::RoleArgs {
             inner:
                 RoleCommand::Enter {
@@ -1729,10 +1773,9 @@ mod tests {
     // trace:TASK-1787 | ai:antigravity
     #[test]
     fn parses_role_enter_ttl() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida", "role", "enter", "advisor", "--ttl", "72h",
-        ])
-        .expect("parse role enter --ttl");
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "role", "enter", "advisor", "--ttl", "72h"])
+            .expect("parse role enter --ttl");
         let crate::role_cmd::RoleArgs {
             inner: RoleCommand::Enter { name, ttl, .. },
         } = cli.command.registered::<crate::role_cmd::RoleArgs>()

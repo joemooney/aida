@@ -1,7 +1,25 @@
 //! rework verdicts and auto-queued PR review gates (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+#[cfg(test)]
+use crate::review_story_round_is_open;
+use crate::{
+    aida_exe_path, aida_subcmd_add_review_story, auto_complete, canonical_review_story,
+    change_lookup_for_branch, command_output_with_timeout_detail, drain_state,
+    extract_referenced_spec_ids_from_commit, extract_spec_ids_from_commit, format_review_label,
+    git_arg_guard, git_log_messages, load_review_story_inventory, parse_review_story_pr_number,
+    pr_base_head, pr_cmd, resolve_default_branch_ref, run, workflow_hints, BoundedCommandOutput,
+    OpenPrInfo, ReviewForge, SessionLease,
+};
+use crate::{
+    commit_subjects, forge, gate, pr_head_remote_ref_for, review_envelope_targets_pr,
+    reviewer_wrote_message,
+};
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// TASK-54: return Some((behind, sample)) when `branch` lags `main`
 /// (or origin/main) by 1+ commits. `sample` is a list of one-line
@@ -1021,6 +1039,58 @@ pub(crate) fn review_coverage_from_commits(messages: &[String]) -> ReviewCoverag
     cov
 }
 
+// A promotion title can declare completion, while bounded constituent
+// evidence still supplies Refs-only coverage.
+// trace:BUG-2660 | ai:codex
+pub(crate) fn auto_queue_coverage(
+    repo: &std::path::Path,
+    branch: &str,
+    title: &str,
+    base: &str,
+    head: &str,
+) -> Result<ReviewCoverage> {
+    if !branch.starts_with("promote/") {
+        return git_log_messages(repo, base, head)
+            .map(|messages| review_coverage_from_commits(&messages));
+    }
+
+    let subjects = crate::review_git_evidence::promotion_merge_subjects(repo, base, branch, head)?;
+    let mut coverage = review_coverage_from_commits(&subjects);
+    let mut delivered: Vec<_> = crate::pr_ship::extract_trailing_spec_ids_from_subject(title)
+        .iter()
+        .map(|id| crate::spec_arg::canonical(id))
+        .collect();
+    if !delivered.is_empty() {
+        let mut seen = std::collections::HashSet::new();
+        delivered.retain(|id| seen.insert(id.to_ascii_uppercase()));
+        coverage.delivered = delivered;
+        coverage.referenced.clear();
+    }
+    for id in crate::pr_ship::refs_spec_ids_in_text(title) {
+        let id = crate::spec_arg::canonical(&id);
+        if !coverage
+            .slice_refs
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(&id))
+        {
+            coverage.slice_refs.push(id);
+        }
+    }
+    coverage.slice_refs.retain(|id| {
+        !coverage
+            .delivered
+            .iter()
+            .any(|d| d.eq_ignore_ascii_case(id))
+    });
+    coverage.referenced.retain(|id| {
+        !coverage
+            .slice_refs
+            .iter()
+            .any(|r| r.eq_ignore_ascii_case(id))
+    });
+    Ok(coverage)
+}
+
 #[cfg(test)]
 #[path = "tests/bug_2208_refs_only_review_tests.rs"]
 mod bug_2208_refs_only_review_tests;
@@ -1028,6 +1098,16 @@ mod bug_2208_refs_only_review_tests;
 #[cfg(test)]
 #[path = "tests/bug_2404_add_output_identity_tests.rs"]
 mod bug_2404_add_output_identity_tests;
+
+pub(crate) fn review_story_links<'a>(
+    spec_ids: &'a [String],
+    slice_refs: &'a [String],
+) -> impl Iterator<Item = (&'a String, &'static str)> {
+    spec_ids
+        .iter()
+        .map(|id| (id, "implements"))
+        .chain(slice_refs.iter().map(|id| (id, "covers")))
+}
 
 /// The links an already-filed review story is missing: `(spec, "implements")`
 /// for each delivered spec and `(spec, "covers")` for each Refs-only slice
@@ -1056,11 +1136,7 @@ pub(crate) fn missing_review_story_links(
                     })
         })
     };
-    let wanted = spec_ids
-        .iter()
-        .map(|id| (id, "implements"))
-        .chain(slice_refs.iter().map(|id| (id, "covers")));
-    wanted
+    review_story_links(spec_ids, slice_refs)
         .filter(|(id, rel_type)| !linked(rel_type, id))
         .map(|(id, rel_type)| (id.clone(), rel_type))
         .collect()
@@ -1238,13 +1314,39 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     // same way the review-prompt path does (config `[forge]`, else origin).
     // trace:BUG-1223 trace:TASK-1254 | ai:claude
     let review_forge = review_forge_for_kind(kind);
-    let (base, head) = pr_base_head(project_root, review_forge, pr.number)
-        .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
+    // Promotions must never fall back to an unrelated local review branch.
+    // Use the same forge snapshot for the title and exact head of the history walk.
+    // trace:BUG-2660 | ai:codex
+    let (title, base, head, evidence_head) = if branch.starts_with("promote/") {
+        use crate::{forge::ChangeState, forge_observed::Observed};
+
+        let forge = crate::forge::forge_for_kind(project_root, kind);
+        match forge.observe_change_metadata(pr.number, &mut crate::network_retry::NoopSink) {
+            Observed::Known(Ok(meta))
+                if meta.state == ChangeState::Open
+                    && meta.head_ref == branch
+                    && !meta.base_ref.is_empty()
+                    && crate::forge::is_full_commit_sha(&meta.head_sha) =>
+            {
+                (meta.title, meta.base_ref, meta.head_ref, meta.head_sha)
+            }
+            observed => {
+                return AutoQueueOutcome::skipped_needs_attention(format!(
+                    "auto-queue: cannot verify the open promotion {noun}-{} on `{branch}` ({observed:?})",
+                    pr.number
+                ));
+            }
+        }
+    } else {
+        let (base, head) = pr_base_head(project_root, review_forge, pr.number)
+            .unwrap_or_else(|_| ("main".to_string(), branch.to_string()));
+        (pr.title, base, head.clone(), head)
+    };
     // BUG-035: an unreadable range is not "no trailers" — say which range
     // failed so the operator fixes the ref instead of re-trailering commits.
     // trace:BUG-B6B1278890774EF993D2EBC327862470-035 | ai:claude
-    let messages = match git_log_messages(project_root, &base, &head) {
-        Ok(messages) => messages,
+    let coverage = match auto_queue_coverage(project_root, branch, &title, &base, &evidence_head) {
+        Ok(coverage) => coverage,
         Err(err) => {
             return AutoQueueOutcome::skipped_needs_attention(format!(
                 "auto-queue: cannot read commits {base}..{head} for {noun}-{} — no reviewer story filed: {err:#}",
@@ -1256,7 +1358,7 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
         delivered: spec_ids,
         slice_refs,
         referenced: referenced_ids,
-    } = review_coverage_from_commits(&messages);
+    } = coverage;
 
     // BUG-776: a story that covers no specs is unlinked noise in the reviewer
     // queue — the reviewer has nothing to check acceptance against, and the
@@ -1422,7 +1524,7 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     let title = format!(
         "Review {}: {}",
         format_review_label(review_forge, pr.number),
-        pr.title
+        title
     );
     let new_id = match aida_subcmd_add_review_story(project_root, &title, &desc) {
         Ok(id) => id,
@@ -1445,14 +1547,13 @@ pub(crate) fn try_auto_queue_pr_review_unbumped(
     // BUG-2404: a failed link is not a handoff. The filed story stays
     // unqueued; the next retry finds it by title, repairs the missing links
     // and queues it — never a second `aida add`. trace:BUG-2404 | ai:claude
-    let linked = spec_ids
-        .iter()
-        .try_for_each(|id| aida_subcmd_rel_add_implements(project_root, &new_id, id))
-        .and_then(|()| {
-            slice_refs
-                .iter()
-                .try_for_each(|id| aida_subcmd_rel_add(project_root, &new_id, id, "covers"))
-        });
+    let linked = review_story_links(&spec_ids, &slice_refs).try_for_each(|(id, rel_type)| {
+        if rel_type == "implements" {
+            aida_subcmd_rel_add_implements(project_root, &new_id, id)
+        } else {
+            aida_subcmd_rel_add(project_root, &new_id, id, rel_type)
+        }
+    });
     if let Err(err) = linked {
         return AutoQueueOutcome::skipped_needs_attention(format!(
             "auto-queue: filed {new_id} for {noun}-{} but linking it failed: {err}; the unqueued story remains a durable retry signal",

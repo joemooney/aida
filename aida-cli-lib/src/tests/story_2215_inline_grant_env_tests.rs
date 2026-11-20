@@ -108,6 +108,8 @@ fn a_grant_that_does_not_delegate_keeps_the_bug_052_refusal() {
         binding: Vec::new(),
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
+        launch_cap_recorded: false,
     };
     let text = agent_new_delegation_refusal(
         std::path::Path::new("/repo"),

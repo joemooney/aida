@@ -121,6 +121,9 @@ pub(super) fn forge_update(
     repo: &forge::Repository,
     change: &forge::Change,
 ) -> std::result::Result<(), UpdateFailure> {
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check(root, &change.key(), change.id, &change.head)
+        .map_err(|e| UpdateFailure::refused(format!("{e:#}")))?;
     let Some(slug) = repo.github_slug() else {
         return Err(UpdateFailure::refused(
             "the watcher cannot update a GitLab merge request branch",
@@ -418,7 +421,7 @@ fn route_message(
         deleted: false,
         archived: false,
         from_source: SenderSource::Explicit,
-        from_role: None,
+        from_role: None, from_seat: None,
         relayed_from: None,
     }
 }

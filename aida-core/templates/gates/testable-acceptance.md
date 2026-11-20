@@ -1,7 +1,7 @@
 ---
 name: testable-acceptance
 version: 1
-summary: Can each acceptance criterion be checked by a test or a command, not by opinion?
+summary: Does each acceptance criterion name concrete evidence appropriate to its type?
 binds_to: groom
 deterministic: ears-lint:low-testability,missing-behavior,empty-body
 ---
@@ -12,8 +12,16 @@ testability categories. Its findings are reproducible.
 
 Tier 2 (heuristic, rung 4). For each acceptance criterion:
 
-1. Name the check: a unit test, an integration test, or a shell command whose
-   exit code or output decides it. "Reviewer agrees" is not a check.
+1. Name the evidence type and check. Behavioral criteria require automated
+   tests. Configuration validation names the configuration and validation
+   command/result or routing analysis. Documentation inspection names the
+   document and claims to check. Manual inspection names a repeatable procedure,
+   expected observation and limitations. Use `[evidence: behavioral-test]`,
+   `[evidence: configuration-validation]`, `[evidence: documentation-inspection]`
+   or `[evidence: manual-inspection]` after the criterion label. Missing or
+   unknown annotations retain the behavioral test requirement. "Reviewer agrees"
+   and the annotation itself are not evidence. Do not relabel behavioral
+   requirements to waive tests. <!-- trace:STORY-2702 | ai:codex -->
 2. Measurable words only: replace "fast", "clean", "intuitive", "robust" with
    a number, a threshold, or an observable.
 3. Negative case: does at least one criterion say what must NOT happen (the

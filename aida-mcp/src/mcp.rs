@@ -942,12 +942,17 @@ fn spec_id(r: &Requirement) -> &str {
 /// spec-ID arguments accept `TYPE-<LABEL>-NNN` and rows show it.
 // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
 fn install_node_aliases(storage: &Storage, project_root: &std::path::Path) {
-    let store_root = if storage.path().is_dir() {
+    aida_core::node_alias::install_from_store(&served_store_root(storage, project_root));
+}
+
+/// The store directory this server serves (its registry, catalogs and labels).
+// trace:BUG-2614 | ai:claude
+fn served_store_root(storage: &Storage, project_root: &std::path::Path) -> PathBuf {
+    if storage.path().is_dir() {
         storage.path().to_path_buf()
     } else {
         project_root.join(".aida-store")
-    };
-    aida_core::node_alias::install_from_store(&store_root);
+    }
 }
 
 /// A spec id as MCP rows show it: the canonical id stays first (agents act on
@@ -1183,6 +1188,12 @@ impl<'a> McpServer<'a> {
         // map is one small file, re-read per call.
         // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
         install_node_aliases(self.storage, &self.project_root);
+        // Default authors resolve against the served store's people catalog,
+        // not the server process's cwd. trace:BUG-2614 | ai:claude
+        let _author_store = aida_core::provenance::author_store_scope(&served_store_root(
+            self.storage,
+            &self.project_root,
+        ));
         let tool_name = params.get("name").and_then(|v| v.as_str()).unwrap_or("");
         let mut arguments = params.get("arguments").cloned().unwrap_or(json!({}));
         // The response-scoped ACK plan a `read_inbox` call may prepare.
@@ -3099,6 +3110,7 @@ impl<'a> McpServer<'a> {
             archived: false,
             from_source,
             from_role,
+            from_seat: None,
             relayed_from,
         };
         // A role send records its send-time cohort, as on the CLI.
@@ -7548,14 +7560,20 @@ fn mediated_mcp_response(
                 } else {
                     // trace:TASK-3223 | ai:codex
                     tool["description"] = json!(
-                        "Update an owned requirement's title, description, priority or weight through the mediated store service. At least one edit field is required."
+                        "Update an owned requirement's title, description, priority, weight or nonstructural tags through the mediated store service. At least one edit field is required."
                     );
-                    &["id", "title", "description", "priority", "weight"]
+                    &["id", "title", "description", "priority", "weight", "tags"]
                 };
                 tool["inputSchema"]["properties"]
                     .as_object_mut()
                     .unwrap()
                     .retain(|key, _| fields.contains(&key.as_str()));
+                if tool["name"] == "update_requirement" {
+                    tool["inputSchema"]["properties"]["tags"]["description"] = json!(
+                        "Replace nonstructural tags; structural tags must be retained. Empty array clears nonstructural tags. At most 256 strings, 512 UTF-8 bytes each; values are trimmed, empty values discarded, no internal whitespace or control characters. Force overrides are unsupported."
+                    );
+                    tool["inputSchema"]["properties"]["tags"]["maxItems"] = json!(256);
+                }
                 tool["inputSchema"]["additionalProperties"] = json!(false);
             }
             JsonRpcResponse::success(id, json!({"tools":tools}))

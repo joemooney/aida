@@ -12,6 +12,8 @@ pub(crate) mod branch_policy;
 // trace:STORY-2324 | ai:claude — canonical spec identity and the pure effective gate state.
 pub(crate) mod canon;
 pub(crate) mod ci_freshness;
+// trace:STORY-2856 | ai:codex
+pub(crate) mod ci_startup;
 pub(crate) mod dispatch_auth;
 pub(crate) mod dispatch_authority;
 pub(crate) mod dispatch_deps;
@@ -24,12 +26,16 @@ pub(crate) mod effective;
 pub(crate) mod fleet_lanes;
 pub(crate) mod hold_collect;
 pub(crate) mod kernel_deps;
+// The one merge boundary and its per-PR merge claim: landing decisions sit
+// on the gate floor (promotion 23 review F3). trace:STORY-2903 STORY-2905 | ai:claude
+pub(crate) mod landing_merge;
 pub(crate) mod ledger;
 pub(crate) mod mandate;
 pub(crate) mod mandate_drive;
 pub(crate) mod mandate_gates;
 pub(crate) mod mandate_ship;
 pub(crate) mod mandate_traces;
+pub(crate) mod merge_claim;
 pub(crate) mod merge_hold_core;
 pub(crate) mod operator_hold;
 pub(crate) mod orchestrator_leaves;
@@ -43,6 +49,7 @@ pub(crate) mod review_authority;
 pub(crate) mod review_approval;
 // trace:TASK-1960 trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude — attested-approval carry-over across clean base merges.
 pub(crate) mod review_carryover;
+pub(crate) mod review_freshness;
 pub(crate) mod review_marker;
 pub(crate) mod review_verdict;
 pub(crate) mod rework_hold_release;
@@ -52,6 +59,8 @@ pub(crate) mod ship;
 pub(crate) mod solo_review;
 // BUG-HOME-048: completion trailers complete only the specs a PR covers.
 pub(crate) mod trailer_coverage;
+// STORY-2884: the project default for an unset execution mode.
+pub(crate) mod unset_mode;
 
 // TASK-2707: the shared cache is never consulted for authority.
 // trace:TASK-2707 | ai:claude
@@ -61,3 +70,10 @@ mod task_2707_cache_authority_tests;
 
 // trace:STORY-2492 | ai:codex
 pub(crate) mod review_publication;
+
+// trace:TASK-3784 | ai:codex
+#[cfg(test)]
+pub(crate) mod test_support;
+
+// trace:TASK-3119 | ai:codex
+pub(crate) mod relay_parent;

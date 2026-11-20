@@ -8,6 +8,15 @@ use std::path::PathBuf;
 // trace:STORY-684
 #[derive(Subcommand, Debug)]
 pub enum InternalCommand {
+    /// Record a local session heartbeat from a vendor hook.
+    // trace:STORY-2748 | ai:codex
+    #[clap(hide = true)]
+    ActivityHeartbeat {
+        /// Vendor that emitted the hook
+        #[clap(value_parser = crate::vendors::heartbeat_vendor_name)]
+        vendor: String,
+    },
+
     /// AIDA-owned shared-wrapper Claude background supervisor.
     // trace:TASK-3219 | ai:codex
     #[clap(hide = true)]

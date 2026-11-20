@@ -198,10 +198,8 @@ fn bug_2505_review_closeout_tag_add_outcomes_by_argv_shape() {
         assert_eq!(stored_tag_yaml_items(&fixture, &id).len(), expected.len());
     }
 
-    // These two alternative argv shapes reproduce a refusal, not a failure
-    // caused by the date-like tag. Keep the diagnostics visible and prove
-    // neither refusal writes an object. The original filing's argv is unknown,
-    // so this characterizes possible causes without claiming to fix the report.
+    // Refused argv shapes must diagnose on stderr, so stdout filters for
+    // created spec IDs cannot hide the reason nothing was created.
     for (tag_args, exit_code, diagnostic) in [
         (
             vec![
@@ -242,21 +240,53 @@ fn bug_2505_review_closeout_tag_add_outcomes_by_argv_shape() {
             Some(exit_code),
             "unexpected exit for {args:?}: stdout={stdout}\nstderr={stderr}"
         );
-        // Application errors use the non-TTY structured stdout renderer;
-        // Clap rejects repeated flags earlier and writes its error to stderr.
-        // A caller filtering stdout can therefore hide the whitespace refusal.
-        if exit_code == 1 {
-            assert!(stdout.contains(diagnostic), "stdout={stdout}");
-            assert!(stderr.is_empty(), "stderr={stderr}");
-        } else {
-            assert!(stderr.contains(diagnostic), "stderr={stderr}");
-            assert!(stdout.is_empty(), "stdout={stdout}");
-        }
+        assert!(stderr.contains(diagnostic), "stderr={stderr}");
+        assert!(stdout.is_empty(), "stdout={stdout}");
         assert_eq!(
             storage.load().unwrap().requirements.len(),
             before,
             "refused argv must not create a spec: {args:?}"
         );
+    }
+
+    // Exercise other pre-creation refusals and explicit output modes with
+    // global flags before the command. This must be command-wide rather than
+    // a special case for tag validation.
+    for (args, diagnostic) in [
+        (vec!["add"], "title is required"),
+        (vec!["add", "--title", "   "], "title cannot be empty"),
+        (
+            vec![
+                "--format", "human", "add", "--title", "refused", "--tags", "a b",
+            ],
+            "contains whitespace",
+        ),
+        (
+            vec![
+                "--format",
+                "toon",
+                "add",
+                "--title",
+                "refused",
+                "--type",
+                "invalid-type",
+            ],
+            "Unknown requirement type",
+        ),
+    ] {
+        let storage = Storage::new(fixture.repo.join(".aida-store"));
+        let before = storage.load().unwrap().requirements.len();
+        let result = aida(&fixture, &args);
+        let stdout = String::from_utf8_lossy(&result.stdout);
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert_eq!(
+            result.status.code(),
+            Some(1),
+            "{args:?}: stdout={stdout}\nstderr={stderr}"
+        );
+        assert!(stderr.contains(diagnostic), "{args:?}: stderr={stderr}");
+        assert!(stdout.is_empty(), "{args:?}: stdout={stdout}");
+        assert_eq!(storage.load().unwrap().requirements.len(), before);
     }
 }
 

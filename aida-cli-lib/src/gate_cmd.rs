@@ -240,15 +240,16 @@ mod tests {
     #[test]
     fn add_parses_gates_flag() {
         use clap::Parser;
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "add",
-            "--title",
-            "x",
-            "--gates",
-            "well-formed,testable-acceptance",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "add",
+                "--title",
+                "x",
+                "--gates",
+                "well-formed,testable-acceptance",
+            ])
+            .unwrap();
         match cli.command.registered::<crate::requirements_cli::AddArgs>() {
             crate::requirements_cli::AddArgs { gates, .. } => {
                 assert_eq!(gates, vec!["well-formed", "testable-acceptance"])

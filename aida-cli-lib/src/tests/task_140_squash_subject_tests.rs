@@ -72,6 +72,14 @@ fn bug_1957_pr_ship_squash_subject_returns_completion_trailer() {
     git(root, &["commit", "-q", "-m", "wip"]);
     git(root, &["checkout", "-q", "-b", "task-1538-x"]);
 
+    // trace:BUG-2515 | ai:codex — this fixture supplies GitHub metadata via gh.
+    std::fs::create_dir(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+
     let bin = tempfile::tempdir().unwrap();
     crate::test_exec::write_executable(
         &bin.path().join("gh"),

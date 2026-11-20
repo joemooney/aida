@@ -12,6 +12,23 @@ allowed-tools:
 
 # AIDA Pickup Skill
 
+## Implementer self-review (project opt-in)
+
+<!-- trace:TASK-3815 | ai:codex -->
+When the launch brief enables `[review] implementer_self_review = true`,
+before pushing run the reviewer rubric embedded in the brief against
+`git diff origin/main...HEAD`. The single source is steps 3 and 4 of
+`skills/aida-review.md` in the template pack (installed as
+`.claude/skills/aida-review/SKILL.md`); read those sections if no brief was
+provided and the project setting is enabled. Fix actionable defects and
+repeat affected checks. Record a spec comment beginning `## Implementer self-review`,
+with the reviewed HEAD, acceptance evidence, probe findings, fixes and residual
+risks. Use `aida comment add <SPEC> "<result>"`. In a native lane also inspect
+`git diff HEAD` and untracked additions, and review the final edits before the
+host publication declaration. Adapt worksheet instructions to this spec comment;
+do not record an independent reviewer verdict or claim reviewer authority.
+Missing comments are reported in lane results and do not block publication.
+
 ## Seat status contract
 
 Report one explicit state: **actively working**, **actively watching**,
@@ -29,13 +46,16 @@ supersedes the commit/push/PR/queue-done exit gates below: implement and run
 targeted tests, leave the edits uncommitted, then end with a handoff naming
 changed files, validation results and blockers. Do not run `aida queue done`
 from the seat. After the child process exits, the host launcher commits and
-publishes; the host must finish queue completion after publication. An existing
-Refs PR keeps non-completing commit trailers. Every native lane must declare
-its descriptive publication subject before exiting: use
-`aida ship -m '[AI:codex] type(scope): subject (ID)'` for completed work, or
-`aida ship -m '[AI:codex] type(scope): subject (Refs ID)'` for an approved
-partial slice. In a native seat this only records a lease-bound declaration;
-the host commits and publishes after exit. For required commit-body trailers,
+publishes; the host must finish queue completion after publication. Every
+native lane must declare its descriptive publication subject before exiting:
+`aida ship -m '[AI:codex] type(scope): subject (ID)'`. Always write `(ID)`;
+for an approved partial slice add `--partial-slice`. The commit and PR trailer
+is derived from that declaration (`(ID)` completes, `(Refs ID)` otherwise, and
+outstanding child slices always make it partial; only child specs count as a
+slice plan, never a plan written in prose). A completing push marks the
+spec Done, on every rework round too. In a native seat this only records a
+lease-bound declaration; the host commits and publishes after exit.
+<!-- trace:BUG-2696 | ai:claude --> For required commit-body trailers,
 write a UTF-8 body file outside the checkout (for example under `/tmp`) and add
 `--commit-body-file <file>` to the declaration
 (for example, a file containing `Help-Golden: unchanged`). The host also accepts
@@ -408,11 +428,13 @@ from the title or general description, and do not post a placeholder comment.
 
 The comment must have these three sections:
 
-1. **Acceptance criteria as tests** — restate every acceptance criterion as
-   the test that will prove it and name the test layer (`unit`,
+1. **Acceptance criteria and evidence** — honor each criterion's declared evidence type.
+   For behavioral criteria, name the automated test and test layer (`unit`,
    `command-level`, `fixture`, or `drain-level`). If a criterion cannot be
    tested, flag that explicitly in this same section rather than silently
-   omitting it.
+   omitting it. For configuration, documentation or manual inspection, name
+   the artifact, validation procedure and expected result instead. An evidence
+   declaration alone does not prove satisfaction. <!-- trace:STORY-2702 | ai:codex -->
 2. **Expected files** — name the files or narrow file groups expected to be
    touched. Treat an unexpected production file later as a reason to stop and
    reassess scope.
@@ -423,7 +445,7 @@ The comment must have these three sections:
 For example:
 
 ```bash
-aida comment add <spec_id> $'## Implementer approach\n\n### Acceptance criteria as tests\n- **Command-level:** `<test>` proves `<criterion>`.\n- **No automated test:** `<criterion>` — `<reason and verification plan>`.\n\n### Expected files\n- `path/to/code.rs`\n- `path/to/test.rs`\n\n### Ambiguities / conflicts as questions\n- `<question, or None>`'
+aida comment add <spec_id> $'## Implementer approach\n\n### Acceptance criteria and evidence\n- **Command-level:** `<test>` proves `<criterion>`.\n- **No automated test:** `<criterion>` — `<reason and verification plan>`.\n\n### Expected files\n- `path/to/code.rs`\n- `path/to/test.rs`\n\n### Ambiguities / conflicts as questions\n- `<question, or None>`'
 ```
 
 The comment must exist before any edit made for the implementation. Reading
@@ -501,6 +523,31 @@ Drive the actual implementation. Read the requirement (`aida show <spec_id>`),
 follow related links, write the code, add trace comments
 (`// trace:<spec_id> | ai:claude`), commit.
 
+**Sandboxed headless lane override** (`AIDA_HEADLESS=1` in a native or
+AIDA-contained lane): do not run `make check-ci-fast` directly inside the seat.
+Its containment fixtures need sockets, its ratchets invoke Cargo, and the
+aggregate can exceed the 60-second tool-call limit. Route the gate by who
+publishes:
+
+- **Native, host-published seat:** leave edits uncommitted and report
+  `check_ci_fast=deferred(host)` with the reason above. This is not a passing
+  gate. The host launcher runs the gate after exit and before publication.
+- **Contained, self-publishing lane:** before publication, run
+  `aida lane job run -- make check-ci-fast` through the host-side runner.
+  On exit 75, poll `aida lane job wait <id>` in bounded calls until it finishes.
+  Require exit 0 for the final tree before pushing or opening the PR; rerun
+  after further edits. If the runner is unavailable, refuses, times out, or
+  fails, stop publication and report the blocker. Deferral is not permission
+  to publish, and a later post-exit gate is not a pre-publication pass.
+
+Run targeted Cargo tests through `aida lane job run -- cargo test --profile
+agent -p <crate> --lib -- <filter>` and poll `aida lane job wait <id>` on exit
+75. If the runner refuses or is unavailable, report `untested=true`. A fast-gate
+job does not count as an executed targeted Cargo test. This override applies to
+the FASTTRACK/LIGHT/STRICT instructions below as well as CLI golden tests
+(route their Cargo invocation through the lane runner).
+<!-- trace:TASK-3123 | ai:codex -->
+
 Test locally by the spec's tier; the full workspace suite runs only in CI
 (never `cargo test --workspace` locally):
 
@@ -528,7 +575,8 @@ golden with `AIDA_UPDATE_SNAPSHOTS=1 cargo test --profile agent -p aida-cli-lib 
 fails when an `*_args.rs` or `command_registry.rs` edit ships without it.
 trace:TASK-B6B1278890774EF993D2EBC327862470-125 | ai:claude
 
-`make check-ci-fast` runs before every push. trace:TASK-1780 | ai:claude
+Outside the sandboxed headless lane override above, `make check-ci-fast` runs
+before every push. trace:TASK-1780 | ai:claude
 
 ### Step 5: Mark done atomically
 

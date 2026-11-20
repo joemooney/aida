@@ -271,6 +271,143 @@ fn ended_agent(root: &std::path::Path, agent_type: &str, name: &str) {
     crate::agent_registry::mark_agent_ended(root, agent_type, dead_pid).unwrap();
 }
 
+// trace:BUG-2619 | ai:codex
+#[test]
+fn bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (root, home) = project(tmp.path(), false);
+    std::fs::create_dir_all(root.join(".aida-store/objects")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "store_path = \".aida-store\"\n",
+    )
+    .unwrap();
+    let worktree = tmp.path().join("integration-seat");
+    for args in [
+        vec!["init", "-q"],
+        vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "initial",
+            "--allow-empty",
+        ],
+        vec![
+            "worktree",
+            "add",
+            "-q",
+            "--detach",
+            worktree.to_str().unwrap(),
+        ],
+    ] {
+        let output = crate::test_git::git_command()
+            .current_dir(&root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+
+    let bin = tmp.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("claude"),
+        r#"#!/bin/sh
+if [ "$1" = --version ]; then echo fixture; exit 0; fi
+printf '%s\n' "$PWD" "$1" "$2" > "${0%/*}/../launch"
+"#,
+    );
+    let receipt = tmp.path().join("launch");
+    let environment = aida_core::exec_context::Environment::capture();
+    let path = std::env::join_paths(
+        std::iter::once(bin).chain(std::env::split_paths(environment.get("PATH").unwrap())),
+    )
+    .unwrap();
+    let mut env = EnvVarsGuard::apply(&[
+        ("PATH", path.to_str()),
+        ("HOME", Some(&home)),
+        ("AIDA_TEST_HOME", Some(&home)),
+        ("AIDA_HOME", Some(&home)),
+        ("AIDA_CONTAINED", None),
+        (crate::gate::seat_authority::GRANT_ENV, None),
+        ("AIDA_OS_WRAP", Some("0")),
+    ]);
+    ended_agent(&root, "claude", "integration");
+    let worktree = worktree.canonicalize().unwrap();
+    let transcript_dir = std::path::Path::new(&home)
+        .join(".claude/projects")
+        .join(worktree.to_str().unwrap().replace('/', "-"));
+    std::fs::create_dir_all(&transcript_dir).unwrap();
+    std::fs::write(transcript_dir.join("018f-session.jsonl"), "{}\n").unwrap();
+
+    let resume = crate::AgentResumeOptions::new(false, Some("latest".into()), false, false);
+    let launch = || {
+        crate::agent_launch::maybe_handle_agent_resume_or_duplicate(
+            &root,
+            "claude",
+            Some("implementer"),
+            None,
+            &resume,
+        )
+    };
+    let unrelated = transcript_dir.with_file_name("-unrelated");
+    std::fs::create_dir(&unrelated).unwrap();
+    std::fs::write(unrelated.join("018f-session.jsonl"), "{}\n").unwrap();
+    let err = launch().unwrap_err().to_string();
+    for dir in [&transcript_dir, &unrelated] {
+        assert!(err.contains(&dir.display().to_string()), "{err}");
+    }
+    assert!(
+        !receipt.exists(),
+        "ambiguous transcripts must refuse before launch"
+    );
+
+    std::fs::remove_file(transcript_dir.join("018f-session.jsonl")).unwrap();
+    let err = launch().unwrap_err().to_string();
+    assert!(err.contains(&unrelated.display().to_string()), "{err}");
+    assert!(
+        !receipt.exists(),
+        "an unrelated project must refuse before launch"
+    );
+
+    std::fs::remove_file(unrelated.join("018f-session.jsonl")).unwrap();
+    let err = launch().unwrap_err().to_string();
+    assert!(err.contains("transcript not found"), "{err}");
+    assert!(!receipt.exists());
+
+    std::fs::write(transcript_dir.join("018f-session.jsonl"), "{}\n").unwrap();
+    let err = launch().unwrap_err().to_string();
+    assert!(err.contains("no valid parent seat grant"), "{err}");
+    assert!(
+        !receipt.exists(),
+        "worktree recovery cannot bypass grant checks"
+    );
+
+    let subject = crate::current_user_id(None);
+    let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+        &root,
+        &subject,
+        "advisor",
+        &["implementer"],
+    );
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &grant);
+    assert!(launch().unwrap());
+    assert_eq!(
+        std::fs::read_to_string(&receipt).unwrap(),
+        format!("{}\n--resume\n018f-session\n", worktree.display())
+    );
+}
+
 #[test]
 fn resume_config_under_a_contained_parent_contains_claude() {
     let _env = EnvVarsGuard::apply(&[("AIDA_CONTAINED", Some("1"))]);

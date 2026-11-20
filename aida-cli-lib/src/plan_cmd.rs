@@ -12,7 +12,19 @@
 //! the `aida ultraplan` prompt assembler).
 
 use crate::process_retry::RetryEtxtbsy;
-use crate::*;
+use crate::{
+    build_reusable_helpers_section, compute_plan_report, detect_distributed_store_from,
+    extract_spec_ids_from_commit, find_main_worktree_root, find_project_root, get_default_author,
+    load_dispenser, load_store_for_lookup, plan_repo_root, resolve_current_session_id,
+    resolve_gh_binary, scan_trace_graph, slugify_str, PlanCommand, PlanFinding, PlanFindingLevel,
+    PlanReport, StakeholderAction, PLAN_SECTIONS,
+};
+use aida_core::Comment;
+use aida_core::DatabaseBackend;
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::collections::HashSet;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "plan_cmd_args.rs"]
@@ -1482,7 +1494,7 @@ fn plan_scan(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::*;
+    use crate::PLAN_SECTIONS;
 
     /// TASK-0418: the pre-plan scan's stale-assumption detector flags code
     /// paths the spec names that no longer resolve — a missing file and a

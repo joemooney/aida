@@ -26,7 +26,7 @@ fn fixture() -> Fixture {
         live_dir: root.join("share").join("live"),
         link_dir: root.join("bin"),
     };
-    fs::create_dir_all(&layout.repo).unwrap();
+    fs::create_dir_all(layout.repo.join(".git")).unwrap();
     fs::create_dir_all(&layout.live_dir).unwrap();
     let paths = Paths {
         log: root.join("home").join("dev-autopromote.log"),
@@ -47,6 +47,7 @@ fn set_live(f: &Fixture, sha: &str, repo: Option<String>) {
         allow_dirty: false,
         promoted_at: "2026-10-22T00:00:00Z".into(),
         repo,
+        ci_comparison: None,
     };
     fs::write(
         f.layout.live_dir.join(PROMOTED_FILE),
@@ -58,7 +59,7 @@ fn set_live(f: &Fixture, sha: &str, repo: Option<String>) {
 fn clean_main() -> CheckoutState {
     CheckoutState {
         branch: Some("main".into()),
-        has_origin_main: true,
+        has_upstream: true,
         head: Some(LIVE_SHA.into()),
         ..Default::default()
     }
@@ -71,6 +72,17 @@ struct Fake {
     target: String,
     ancestor: Result<bool, String>,
     ci: Result<CommitCi, String>,
+    /// Per-commit CI, overriding `ci` (BUG-2687).
+    ci_by: std::collections::HashMap<String, Result<CommitCi, String>>,
+    /// origin/main's first-parent line, newest first (BUG-2687).
+    line: Vec<String>,
+    /// HEAD (BUG-2687).
+    head: String,
+    /// The commit expected at the fast-forward and the launch.
+    expect: String,
+    /// `(ancestor, descendant)` pairs that are NOT ancestry, overriding
+    /// `ancestor` (BUG-2687).
+    not_ancestor: Vec<(String, String)>,
     wave: Result<(), String>,
     ff: Result<(), String>,
     spawn: Result<(Option<u32>, String), String>,
@@ -86,6 +98,11 @@ impl Fake {
             target: TARGET.into(),
             ancestor: Ok(true),
             ci: Ok(CommitCi::Green),
+            ci_by: Default::default(),
+            line: vec![TARGET.into(), LIVE_SHA.into()],
+            head: LIVE_SHA.into(),
+            expect: TARGET.into(),
+            not_ancestor: Vec::new(),
             wave: Ok(()),
             ff: Ok(()),
             spawn: Ok((Some(4242), "detached pid 4242".into())),
@@ -123,26 +140,35 @@ impl AutopromoteSteps for Fake {
     fn rev_parse(&mut self, _repo: &Path, rev: &str) -> Result<String> {
         self.calls.push(format!("rev-parse {rev}"));
         Ok(if rev == "HEAD" {
-            LIVE_SHA.into()
+            self.head.clone()
         } else {
             self.target.clone()
         })
     }
-    fn is_ancestor(&mut self, _repo: &Path, _a: &str, _d: &str) -> Result<bool> {
+    fn first_parent(&mut self, _repo: &Path, tip: &str, max: usize) -> Result<Vec<String>> {
+        assert_eq!(tip, self.target, "the walk starts at origin/main");
+        assert_eq!(max, GREEN_SEARCH);
+        self.calls.push("first-parent".into());
+        Ok(self.line.iter().take(max).cloned().collect())
+    }
+    fn is_ancestor(&mut self, _repo: &Path, a: &str, d: &str) -> Result<bool> {
         self.calls.push("is-ancestor".into());
+        if self.not_ancestor.iter().any(|(x, y)| x == a && y == d) {
+            return Ok(false);
+        }
         err(&self.ancestor)
     }
     fn commit_ci(&mut self, _repo: &Path, sha: &str) -> Result<CommitCi> {
-        assert_eq!(sha, self.target, "CI is read on origin/main's exact SHA");
         self.calls.push("ci".into());
-        err(&self.ci)
+        self.calls.push(format!("ci {sha}"));
+        err(self.ci_by.get(sha).unwrap_or(&self.ci))
     }
     fn wave_guard(&mut self, _repo: &Path, _binary: &Path) -> Result<()> {
         self.calls.push("wave".into());
         err(&self.wave)
     }
     fn ff_only(&mut self, _repo: &Path, sha: &str) -> Result<()> {
-        assert_eq!(sha, self.target);
+        assert_eq!(sha, self.expect);
         self.calls.push("ff".into());
         err(&self.ff)
     }
@@ -152,7 +178,7 @@ impl AutopromoteSteps for Fake {
         sha: &str,
         _log: &Path,
     ) -> Result<(Option<u32>, String)> {
-        assert_eq!(sha, self.target);
+        assert_eq!(sha, self.expect);
         self.calls.push("spawn".into());
         err(&self.spawn)
     }
@@ -164,6 +190,20 @@ impl AutopromoteSteps for Fake {
 
 fn tick(f: &Fixture, fake: &mut Fake) -> TickOutcome {
     run_tick(&f.layout, &f.paths, fake, Instant::now() + TICK_BUDGET).unwrap()
+}
+
+#[test]
+fn checkout_build_lock_skips_tick_before_fetch() {
+    let f = fixture();
+    let _lock = crate::dev_build::try_checkout_build_lock(&f.layout.repo)
+        .unwrap()
+        .unwrap();
+    let mut fake = Fake::green();
+    assert!(matches!(
+        tick(&f, &mut fake),
+        TickOutcome::Skipped(Skip::InFlight(why)) if why.contains("build in progress")
+    ));
+    assert!(fake.calls.is_empty(), "{:?}", fake.calls);
 }
 
 fn skip_reason(outcome: &TickOutcome) -> &'static str {
@@ -207,7 +247,8 @@ fn green_main_fast_forwards_then_launches_and_records_running() {
         outcome,
         TickOutcome::Launched {
             sha: TARGET.into(),
-            how: "detached pid 4242".into()
+            how: "detached pid 4242".into(),
+            passed_over: Vec::new(),
         }
     );
     let ff = fake.calls.iter().position(|c| c == "ff").unwrap();
@@ -558,6 +599,7 @@ fn a_repeated_skip_is_logged_once_and_a_new_reason_again() {
         &TickOutcome::Launched {
             sha: TARGET.into(),
             how: "unit u".into(),
+            passed_over: Vec::new(),
         },
     )
     .unwrap();
@@ -600,6 +642,9 @@ struct FakeBuild {
     /// The checkout gains a tracked change once the build has run.
     dirtied_by_build: bool,
     built: bool,
+    /// Commits origin/main has that HEAD lacks, before / after the build
+    /// (BUG-2687: origin/main moves while the build runs).
+    behind: (usize, usize),
 }
 
 impl FakeBuild {
@@ -609,6 +654,7 @@ impl FakeBuild {
             fail_build,
             dirtied_by_build: false,
             built: false,
+            behind: (0, 0),
         }
     }
 }
@@ -622,6 +668,11 @@ impl BuildSteps for FakeBuild {
         if self.built && self.dirtied_by_build {
             state.tracked_changes = vec!["Cargo.lock".into()];
         }
+        state.behind = if self.built {
+            self.behind.1
+        } else {
+            self.behind.0
+        };
         Ok(state)
     }
     fn guard(&mut self, _repo: &Path, _binary: &Path, _after_wave: bool) -> Result<()> {
@@ -688,6 +739,32 @@ fn the_child_records_promoted_through_the_unchanged_pipeline() {
 }
 
 #[test]
+fn checkout_build_lock_makes_busy_child_retryable() {
+    let f = fixture();
+    put_state(
+        &f,
+        Phase::Running,
+        None,
+        false,
+        &chrono::Utc::now().to_rfc3339(),
+    );
+    let _lock = crate::dev_build::try_checkout_build_lock(&f.layout.repo)
+        .unwrap()
+        .unwrap();
+    let mut build = FakeBuild::at(TARGET, false);
+    let error = run_child(&f.layout, TARGET, 99, &mut build, &mut Vec::new()).unwrap_err();
+    assert!(is_refusal(&error));
+    assert_eq!(
+        read_state(&f.layout.live_dir).unwrap().phase,
+        Phase::Refused
+    );
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+        LIVE_SHA
+    );
+}
+
+#[test]
 fn the_child_records_a_failed_build_for_a_single_report() {
     let f = fixture();
     put_state(
@@ -743,7 +820,7 @@ fn the_child_argv_is_the_hidden_flag_and_parses() {
         .chain(child_argv(TARGET))
         .collect();
     let args: Vec<&str> = argv.iter().map(String::as_str).collect();
-    let parsed = crate::command_registry::try_parse_from(&args).unwrap();
+    let parsed = crate::TEST_CLI.try_parse_from(&args).unwrap();
     match parsed.command.registered::<crate::dev_cmd::DevArgs>().inner {
         crate::cli::DevCommand::Build {
             autopromote_child, ..
@@ -761,19 +838,12 @@ fn if_main_green_refuses_the_manual_build_flags() {
         "--clean",
         "--after-wave",
     ] {
-        let r = crate::command_registry::try_parse_from(&[
-            "aida",
-            "dev",
-            "build",
-            "--if-main-green",
-            flag,
-        ]);
+        let r = crate::TEST_CLI.try_parse_from(&["aida", "dev", "build", "--if-main-green", flag]);
         assert!(r.is_err(), "{flag} must conflict with --if-main-green");
     }
-    assert!(
-        crate::command_registry::try_parse_from(&["aida", "dev", "build", "--if-main-green"])
-            .is_ok()
-    );
+    assert!(crate::TEST_CLI
+        .try_parse_from(&["aida", "dev", "build", "--if-main-green"])
+        .is_ok());
 }
 
 // --- review round 1 -------------------------------------------------------
@@ -821,6 +891,8 @@ fn lane_only() -> Result<crate::forge::CommitChecks> {
         checks: vec![crate::forge::CommitCheck {
             name: "CI (lib-0)".into(),
             outcome: crate::forge::CheckOutcome::Passed,
+            run_id: None,
+            workflow_id: Some("ci".to_string()),
         }],
     })
 }
@@ -916,6 +988,61 @@ fn a_checkout_moved_during_the_build_is_a_refusal_not_a_failure() {
         "{:?}",
         fake.calls
     );
+}
+
+// trace:BUG-2628 | ai:codex
+#[test]
+fn concurrent_live_promotion_settles_the_child_or_retries_the_same_sha() {
+    for concurrent_sha in [TARGET, LIVE_SHA] {
+        let f = fixture();
+        put_state(
+            &f,
+            Phase::Running,
+            None,
+            false,
+            &chrono::Utc::now().to_rfc3339(),
+        );
+        let held = crate::dev_build::lock_live_dir(&f.layout).unwrap();
+        let mut build = FakeBuild::at(TARGET, false);
+        let mut output = Vec::new();
+        let result = std::thread::scope(|scope| {
+            let concurrent = scope.spawn(|| {
+                std::thread::sleep(Duration::from_secs(1));
+                set_live(&f, concurrent_sha, Some(canonical(&f.layout.repo)));
+                drop(held);
+            });
+            let result = run_child(&f.layout, TARGET, 99, &mut build, &mut output);
+            concurrent.join().unwrap();
+            result
+        });
+
+        assert!(build.built);
+        assert_eq!(
+            read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+            concurrent_sha
+        );
+        let phase = read_state(&f.layout.live_dir).unwrap().phase;
+        let mut tick_steps = Fake::green();
+        if concurrent_sha == TARGET {
+            assert_eq!(result.unwrap(), BuildOutcome::AlreadyPromoted);
+            assert!(String::from_utf8(output)
+                .unwrap()
+                .contains("already promoted by a concurrent build"));
+            assert_eq!(phase, Phase::Promoted);
+            assert!(matches!(
+                tick(&f, &mut tick_steps),
+                TickOutcome::Skipped(Skip::Unchanged)
+            ));
+        } else {
+            assert!(is_refusal(result.as_ref().unwrap_err()));
+            child_exit(result.map(|_| ())).unwrap();
+            assert_eq!(phase, Phase::Refused);
+            assert!(matches!(
+                tick(&f, &mut tick_steps),
+                TickOutcome::Launched { sha, .. } if sha == TARGET
+            ));
+        }
+    }
 }
 
 // trace:STORY-1689 | ai:claude
@@ -1102,4 +1229,617 @@ fn the_rollback_pin_keeps_an_unreported_failure_and_respects_the_lock() {
         .expect("busy");
     assert!(why.contains("holds its lock"), "{why}");
     assert!(read_state(&f.layout.live_dir).is_none());
+}
+
+// --- BUG-2687: promote the newest green commit, not only a green tip --------
+
+const MID: &str = "3333333333333333333333333333333333333333";
+const OLDER: &str = "4444444444444444444444444444444444444444";
+const OLDEST: &str = "5555555555555555555555555555555555555555";
+
+fn pending() -> Result<CommitCi, String> {
+    Ok(CommitCi::Pending(vec!["CI".into()]))
+}
+
+fn red() -> Result<CommitCi, String> {
+    Ok(CommitCi::Failed(vec!["CI".into()]))
+}
+
+fn walk_fake(line: &[&str], ci: &[(&str, Result<CommitCi, String>)]) -> Fake {
+    let mut fake = Fake::green();
+    fake.line = line.iter().map(|s| s.to_string()).collect();
+    fake.ci_by = ci.iter().map(|(s, c)| (s.to_string(), c.clone())).collect();
+    fake
+}
+
+fn ci_reads(fake: &Fake) -> Vec<String> {
+    fake.calls
+        .iter()
+        .filter_map(|c| c.strip_prefix("ci ").map(str::to_string))
+        .collect()
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn an_in_progress_tip_promotes_the_older_green_commit() {
+    let f = fixture();
+    let mut fake = walk_fake(&[TARGET, OLDER, LIVE_SHA], &[(TARGET, pending())]);
+    fake.expect = OLDER.into();
+    let TickOutcome::Launched {
+        sha, passed_over, ..
+    } = tick(&f, &mut fake)
+    else {
+        panic!("expected a launch: {:?}", fake.calls);
+    };
+    assert_eq!(sha, OLDER);
+    assert_eq!(passed_over.len(), 1, "{passed_over:?}");
+    assert!(
+        passed_over[0].contains(&TARGET[..12]) && passed_over[0].contains("ci-pending"),
+        "{passed_over:?}"
+    );
+    assert!(
+        fake.called("ff") && fake.called("spawn"),
+        "{:?}",
+        fake.calls
+    );
+    assert_eq!(read_state(&f.layout.live_dir).unwrap().sha, OLDER);
+    let scan = read_scan(&f.layout.live_dir).unwrap();
+    assert_eq!(
+        (scan.tip.as_str(), scan.newest_green.as_deref()),
+        (TARGET, Some(OLDER))
+    );
+    // The report names the chosen SHA and the skipped newer one with why.
+    let line = launch_line(&sha, "unit u", &passed_over);
+    assert!(line.starts_with(&format!("launch {OLDER}")), "{line}");
+    assert!(
+        line.contains(&TARGET[..12]) && line.contains("still running"),
+        "{line}"
+    );
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn a_red_tip_promotes_the_newest_green_commit_before_it() {
+    let f = fixture();
+    let mut fake = walk_fake(
+        &[TARGET, MID, OLDER, OLDEST, LIVE_SHA],
+        &[(TARGET, red()), (MID, pending())],
+    );
+    fake.expect = OLDER.into();
+    let outcome = tick(&f, &mut fake);
+    assert!(
+        matches!(&outcome, TickOutcome::Launched { sha, passed_over, .. }
+            if sha == OLDER && passed_over.len() == 2
+                && passed_over[0].contains("ci-red")
+                && passed_over[1].contains("ci-pending")),
+        "{outcome:?}"
+    );
+    // The newest green wins: nothing older is read.
+    assert_eq!(ci_reads(&fake), vec![TARGET, MID, OLDER]);
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn no_green_commit_newer_than_live_skips() {
+    let f = fixture();
+    let mut fake = walk_fake(
+        &[TARGET, MID, OLDER, LIVE_SHA, OLDEST],
+        &[
+            (TARGET, pending()),
+            (MID, red()),
+            // A commit whose CI run is missing is not green.
+            (OLDER, Ok(CommitCi::NoChecks)),
+        ],
+    );
+    let outcome = tick(&f, &mut fake);
+    let TickOutcome::Skipped(skip) = &outcome else {
+        panic!("expected a skip: {outcome:?}");
+    };
+    // The tip's verdict is the reason token; the detail names every commit.
+    assert_eq!(skip.reason(), "ci-pending");
+    let detail = skip.detail();
+    for (sha, why) in [
+        (TARGET, "still running"),
+        (MID, "failed"),
+        (OLDER, "no CI checks"),
+    ] {
+        assert!(
+            detail.contains(&sha[..12]) && detail.contains(why),
+            "{detail}"
+        );
+    }
+    // The walk ends at the live commit: neither it nor anything older is read.
+    assert_eq!(ci_reads(&fake), vec![TARGET, MID, OLDER]);
+    assert_untouched(&fake);
+    assert_eq!(read_scan(&f.layout.live_dir).unwrap().newest_green, None);
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn red_and_unreadable_commits_are_never_promoted() {
+    for ci in [
+        red(),
+        Err("gh api failed: HTTP 502".to_string()),
+        Ok(CommitCi::MissingRequired("CI".into())),
+    ] {
+        let f = fixture();
+        let mut fake = walk_fake(&[TARGET, LIVE_SHA], &[(TARGET, ci)]);
+        assert!(matches!(tick(&f, &mut fake), TickOutcome::Skipped(_)));
+        assert_untouched(&fake);
+    }
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn the_walk_stops_after_head_since_nothing_older_can_be_fast_forwarded_to() {
+    let f = fixture();
+    let mut fake = walk_fake(
+        &[TARGET, MID, OLDER, LIVE_SHA],
+        &[(TARGET, pending()), (MID, pending())],
+    );
+    fake.head = MID.into();
+    assert_eq!(skip_reason(&tick(&f, &mut fake)), "ci-pending");
+    assert_eq!(ci_reads(&fake), vec![TARGET, MID]);
+    assert_untouched(&fake);
+
+    // HEAD itself green: promoted with a no-op fast-forward.
+    let f = fixture();
+    let mut fake = walk_fake(&[TARGET, MID, LIVE_SHA], &[(TARGET, pending())]);
+    fake.head = MID.into();
+    fake.expect = MID.into();
+    assert!(matches!(tick(&f, &mut fake), TickOutcome::Launched { sha, .. } if sha == MID));
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn the_walk_stops_at_a_failed_or_rolled_back_commit() {
+    let f = fixture();
+    write_state(
+        &f.layout.live_dir,
+        &State {
+            sha: MID.into(),
+            phase: Phase::Failed,
+            pid: None,
+            log: String::new(),
+            reported: true,
+            at: "2026-11-19T00:00:00Z".into(),
+            error: Some(ROLLED_BACK_ERROR.into()),
+        },
+    )
+    .unwrap();
+    let mut fake = walk_fake(&[TARGET, MID, OLDER, LIVE_SHA], &[(TARGET, pending())]);
+    let outcome = tick(&f, &mut fake);
+    let TickOutcome::Skipped(skip) = &outcome else {
+        panic!("expected a skip: {outcome:?}");
+    };
+    assert!(
+        skip.detail().contains(ROLLED_BACK_ERROR),
+        "{}",
+        skip.detail()
+    );
+    assert_eq!(ci_reads(&fake), vec![TARGET]);
+    assert_untouched(&fake);
+
+    // A newer green commit past the failed one is promoted.
+    let f = fixture();
+    put_state(&f, Phase::Failed, None, true, "2026-11-19T00:00:00Z");
+    let mut fake = walk_fake(&[MID, TARGET, LIVE_SHA], &[]);
+    fake.target = MID.into();
+    fake.expect = MID.into();
+    assert!(matches!(tick(&f, &mut fake), TickOutcome::Launched { sha, .. } if sha == MID));
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn the_walk_is_bounded_to_twenty_commits() {
+    let f = fixture();
+    let line: Vec<String> = (0..30).map(|i| format!("{:040x}", 0xa000 + i)).collect();
+    let mut fake = Fake::green();
+    fake.target = line[0].clone();
+    fake.line = line.clone();
+    fake.ci = pending();
+    let outcome = tick(&f, &mut fake);
+    let TickOutcome::Skipped(skip) = &outcome else {
+        panic!("expected a skip: {outcome:?}");
+    };
+    assert_eq!(ci_reads(&fake).len(), GREEN_SEARCH);
+    assert!(
+        skip.detail()
+            .contains(&format!("none of the {GREEN_SEARCH}")),
+        "{}",
+        skip.detail()
+    );
+    assert_untouched(&fake);
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn a_green_commit_that_does_not_contain_live_is_never_a_downgrade() {
+    let f = fixture();
+    let mut fake = walk_fake(&[TARGET, OLDER], &[(TARGET, pending())]);
+    fake.not_ancestor = vec![(LIVE_SHA.into(), OLDER.into())];
+    assert_eq!(skip_reason(&tick(&f, &mut fake)), "not-newer");
+    assert_untouched(&fake);
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn origin_main_moving_mid_check_still_promotes_the_chosen_green_commit() {
+    // The tick picked OLDER and fast-forwarded to it; origin/main is 2
+    // commits ahead at the start of the build and 5 by the swap.
+    let f = fixture();
+    put_state(
+        &f,
+        Phase::Running,
+        None,
+        false,
+        &chrono::Utc::now().to_rfc3339(),
+    );
+    let mut state = read_state(&f.layout.live_dir).unwrap();
+    state.sha = OLDER.into();
+    write_state(&f.layout.live_dir, &state).unwrap();
+    let mut build = FakeBuild::at(OLDER, false);
+    build.behind = (2, 5);
+    let outcome = run_child(&f.layout, OLDER, 99, &mut build, &mut Vec::new()).unwrap();
+    assert_eq!(outcome, BuildOutcome::Promoted);
+    assert_eq!(read_promotion_meta(&f.layout.live_dir).unwrap().sha, OLDER);
+    assert_eq!(
+        read_state(&f.layout.live_dir).unwrap().phase,
+        Phase::Promoted
+    );
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn the_behind_guard_admits_only_the_chosen_green_commit_on_main() {
+    use crate::dev_build::{plan_promotion, plan_promotion_at, PromotionPlan};
+    let behind = CheckoutState {
+        head: Some(OLDER.into()),
+        behind: 3,
+        ..clean_main()
+    };
+    assert!(matches!(
+        plan_promotion_at(&behind, false, false, Some(OLDER)),
+        PromotionPlan::Promote { warnings } if warnings.iter().any(|w| w.contains("newest green"))
+    ));
+    assert!(matches!(
+        plan_promotion_at(&behind, false, false, Some(&OLDER.to_uppercase())),
+        PromotionPlan::Promote { .. }
+    ));
+    // Without a verified green commit, behind still refuses.
+    assert!(matches!(
+        plan_promotion(&behind, false, false),
+        PromotionPlan::Refuse { .. }
+    ));
+    let refused = [
+        // HEAD is not the chosen commit.
+        (behind.clone(), Some(MID)),
+        // An abbreviated SHA is not the chosen commit.
+        (behind.clone(), Some(&OLDER[..12])),
+        (behind.clone(), Some("")),
+        // HEAD has commits origin/main lacks: not an ancestor of it.
+        (
+            CheckoutState {
+                ahead: 1,
+                ..behind.clone()
+            },
+            Some(OLDER),
+        ),
+        // Never on `integration`, only `main`.
+        (
+            CheckoutState {
+                branch: Some(crate::dev_build::INTEGRATION_BRANCH.into()),
+                ..behind.clone()
+            },
+            Some(OLDER),
+        ),
+        // No origin/main to be an ancestor of.
+        (
+            CheckoutState {
+                has_upstream: false,
+                ..behind.clone()
+            },
+            Some(OLDER),
+        ),
+        // Dirty stays refused.
+        (
+            CheckoutState {
+                tracked_changes: vec!["src/lib.rs".into()],
+                ..behind.clone()
+            },
+            Some(OLDER),
+        ),
+    ];
+    for (state, green) in refused {
+        assert!(
+            matches!(
+                plan_promotion_at(&state, false, false, green),
+                PromotionPlan::Refuse { .. }
+            ),
+            "{state:?} {green:?}"
+        );
+    }
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn the_child_refuses_when_head_is_behind_but_not_the_chosen_commit() {
+    let f = fixture();
+    put_state(
+        &f,
+        Phase::Running,
+        None,
+        false,
+        &chrono::Utc::now().to_rfc3339(),
+    );
+    // HEAD (TARGET) matches the launched SHA, but moved to MID during the
+    // build while behind origin/main.
+    let mut build = FakeBuild::at(TARGET, false);
+    build.behind = (2, 2);
+    struct Moving(FakeBuild);
+    impl BuildSteps for Moving {
+        fn probe(&mut self, repo: &Path) -> Result<CheckoutState> {
+            let mut s = self.0.probe(repo)?;
+            if self.0.built {
+                s.head = Some(MID.into());
+            }
+            Ok(s)
+        }
+        fn guard(&mut self, r: &Path, b: &Path, w: bool) -> Result<()> {
+            self.0.guard(r, b, w)
+        }
+        fn path_aida(&mut self) -> Option<PathBuf> {
+            None
+        }
+        fn clean_full(&mut self, l: &DevLayout) -> Result<()> {
+            self.0.clean_full(l)
+        }
+        fn build(&mut self, l: &DevLayout) -> Result<()> {
+            self.0.build(l)
+        }
+        fn smoke(&mut self, r: &Path, a: &Path, s: &Path) -> Result<()> {
+            self.0.smoke(r, a, s)
+        }
+        fn version_sha(&mut self, a: &Path) -> Option<String> {
+            self.0.version_sha(a)
+        }
+        fn restart_mcp(&mut self, l: &DevLayout) -> Result<()> {
+            self.0.restart_mcp(l)
+        }
+        fn restart_mail_wake(&mut self, o: &mut dyn std::io::Write) -> Result<()> {
+            self.0.restart_mail_wake(o)
+        }
+        fn rerecord_retention(&mut self, l: &DevLayout) -> RetentionRerecord {
+            self.0.rerecord_retention(l)
+        }
+        fn confirm(&mut self, p: &str) -> bool {
+            self.0.confirm(p)
+        }
+    }
+    let mut moving = Moving(build);
+    let e = run_child(&f.layout, TARGET, 99, &mut moving, &mut Vec::new()).unwrap_err();
+    assert!(is_refusal(&e), "{e:#}");
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+        LIVE_SHA
+    );
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn dev_status_reports_the_distance_and_the_newest_green_commit() {
+    use crate::dev_build::behind_main_line;
+    assert_eq!(behind_main_line(None, None), None);
+    assert!(behind_main_line(Some(0), None)
+        .unwrap()
+        .contains("live is at main"));
+    let line = behind_main_line(Some(3), None).unwrap();
+    assert!(
+        line.contains("live is 3 commits behind main; newest green = unknown"),
+        "{line}"
+    );
+    let scan = GreenScan {
+        at: "2026-11-19T18:00:00Z".into(),
+        tip: TARGET.into(),
+        newest_green: Some(OLDER.into()),
+        passed_over: vec![],
+    };
+    let line = behind_main_line(Some(1), Some(&scan)).unwrap();
+    assert!(
+        line.contains(&format!(
+            "live is 1 commit behind main; newest green = {}",
+            &OLDER[..12]
+        )),
+        "{line}"
+    );
+    assert!(line.contains(&TARGET[..12]), "{line}");
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn the_cron_green_commit_must_be_a_full_sha() {
+    use crate::dev_build::cron_green_commit;
+    use std::ffi::OsStr;
+    assert_eq!(cron_green_commit(None).unwrap(), None);
+    assert_eq!(
+        cron_green_commit(Some(OsStr::new(&OLDER.to_uppercase()))).unwrap(),
+        Some(OLDER.to_string())
+    );
+    for bad in [
+        "",
+        &OLDER[..12],
+        "HEAD",
+        "origin/main",
+        "zz44444444444444444444444444444444444444",
+    ] {
+        assert!(cron_green_commit(Some(OsStr::new(bad))).is_err(), "{bad}");
+    }
+}
+
+/// Fake build steps whose HEAD moves to `to` (still level with origin/main)
+/// after `stay_for` probes, or once the build has run; the staged build
+/// reports whatever HEAD was when cargo ran (BUG-2687).
+struct MovesTo {
+    inner: FakeBuild,
+    to: &'static str,
+    stay_for: Option<usize>,
+    probes: usize,
+    built_at: Option<String>,
+}
+
+impl MovesTo {
+    fn head(&self) -> String {
+        let moved = match self.stay_for {
+            Some(n) => self.probes > n,
+            None => self.inner.built,
+        };
+        if moved {
+            self.to.into()
+        } else {
+            self.inner.head.clone()
+        }
+    }
+}
+
+impl BuildSteps for MovesTo {
+    fn probe(&mut self, repo: &Path) -> Result<CheckoutState> {
+        self.probes += 1;
+        let mut s = self.inner.probe(repo)?;
+        s.head = Some(self.head());
+        Ok(s)
+    }
+    fn guard(&mut self, r: &Path, b: &Path, w: bool) -> Result<()> {
+        self.inner.guard(r, b, w)
+    }
+    fn path_aida(&mut self) -> Option<PathBuf> {
+        None
+    }
+    fn clean_full(&mut self, l: &DevLayout) -> Result<()> {
+        self.inner.clean_full(l)
+    }
+    fn build(&mut self, l: &DevLayout) -> Result<()> {
+        if self.built_at.is_none() {
+            self.built_at = Some(self.head());
+        }
+        self.inner.build(l)
+    }
+    fn smoke(&mut self, r: &Path, a: &Path, s: &Path) -> Result<()> {
+        self.inner.smoke(r, a, s)
+    }
+    fn version_sha(&mut self, _a: &Path) -> Option<String> {
+        self.built_at.as_deref().map(|h| h[..12].to_string())
+    }
+    fn restart_mcp(&mut self, l: &DevLayout) -> Result<()> {
+        self.inner.restart_mcp(l)
+    }
+    fn restart_mail_wake(&mut self, o: &mut dyn std::io::Write) -> Result<()> {
+        self.inner.restart_mail_wake(o)
+    }
+    fn rerecord_retention(&mut self, l: &DevLayout) -> RetentionRerecord {
+        self.inner.rerecord_retention(l)
+    }
+    fn confirm(&mut self, p: &str) -> bool {
+        self.inner.confirm(p)
+    }
+}
+
+fn launched_older(f: &Fixture) {
+    put_state(
+        f,
+        Phase::Running,
+        None,
+        false,
+        &chrono::Utc::now().to_rfc3339(),
+    );
+    let mut state = read_state(&f.layout.live_dir).unwrap();
+    state.sha = OLDER.into();
+    write_state(&f.layout.live_dir, &state).unwrap();
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn a_clean_head_level_with_origin_main_must_still_be_the_chosen_green_commit() {
+    use crate::dev_build::{plan_promotion_at, PromotionPlan};
+    // HEAD is TARGET == origin/main (0 ahead, 0 behind), but OLDER was chosen.
+    let level = CheckoutState {
+        head: Some(TARGET.into()),
+        ..clean_main()
+    };
+    for allow_dirty in [false, true] {
+        let PromotionPlan::Refuse { reasons } =
+            plan_promotion_at(&level, false, allow_dirty, Some(OLDER))
+        else {
+            panic!("HEAD {TARGET} promoted for chosen {OLDER} (allow_dirty={allow_dirty})");
+        };
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r.contains(TARGET) && r.contains(OLDER)),
+            "{reasons:?}"
+        );
+    }
+    // HEAD exactly the chosen commit, level with origin/main, promotes.
+    let chosen = CheckoutState {
+        head: Some(OLDER.into()),
+        ..clean_main()
+    };
+    assert!(matches!(
+        plan_promotion_at(&chosen, false, false, Some(OLDER)),
+        PromotionPlan::Promote { .. }
+    ));
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn head_fast_forwarded_before_the_build_refuses_without_building() {
+    let f = fixture();
+    launched_older(&f);
+    // The child's own check and the build's first probe see OLDER; the
+    // checkout is fast-forwarded to TARGET (== origin/main) before cargo runs.
+    let mut steps = MovesTo {
+        inner: FakeBuild::at(OLDER, false),
+        to: TARGET,
+        stay_for: Some(2),
+        probes: 0,
+        built_at: None,
+    };
+    let e = run_child(&f.layout, OLDER, 99, &mut steps, &mut Vec::new()).unwrap_err();
+    assert!(is_refusal(&e), "{e:#}");
+    let msg = format!("{e:#}");
+    assert!(msg.contains(OLDER) && msg.contains(TARGET), "{msg}");
+    assert!(
+        steps.built_at.is_none(),
+        "the build ran at {:?}",
+        steps.built_at
+    );
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+        LIVE_SHA
+    );
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn head_fast_forwarded_during_the_build_refuses_a_matching_staged_tip() {
+    let f = fixture();
+    launched_older(&f);
+    // Cargo stamps TARGET, and the final probe agrees on TARGET (level with
+    // origin/main): the swap still refuses because TARGET was not chosen.
+    let mut steps = MovesTo {
+        inner: FakeBuild::at(OLDER, false),
+        to: TARGET,
+        stay_for: None,
+        probes: 0,
+        // Cargo started just after the move, so the staged build is TARGET.
+        built_at: Some(TARGET.into()),
+    };
+    let e = run_child(&f.layout, OLDER, 99, &mut steps, &mut Vec::new()).unwrap_err();
+    assert!(is_refusal(&e), "{e:#}");
+    let msg = format!("{e:#}");
+    assert!(msg.contains(OLDER) && msg.contains(TARGET), "{msg}");
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+        LIVE_SHA
+    );
+    assert!(!f.layout.live_dir.join(".incoming").exists());
 }

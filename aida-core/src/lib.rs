@@ -256,6 +256,9 @@ pub(crate) static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(()
 // trace:TASK-1532 | ai:agy
 #[cfg(test)]
 pub(crate) mod test_env;
+// trace:BUG-2573 | ai:codex
+#[cfg(test)]
+mod test_umask;
 // trace:BUG-2191 | ai:claude — fixture git without detached auto-maintenance.
 #[cfg(test)]
 pub(crate) mod test_git;
@@ -286,7 +289,9 @@ pub use db::{BackendType, DatabaseBackend, DatabaseConfig, UpdateResult, Version
 pub use dispenser::{Dispenser, DispenserState, IdMode, MemoryDispenser};
 #[cfg(feature = "native")]
 pub use dispenser::{FileDispenser, SqliteDispenser};
-pub use fs_atomic::{read_atomic, write_atomic, write_config_atomic};
+pub use fs_atomic::{
+    read_atomic, write_atomic, write_atomic_mode, write_config_atomic, OWNER_WRITABLE_MODE,
+};
 pub use import::{
     create_backup, execute_import, validate_import_content, validate_import_file, ImportConfig,
     ImportIssue, ImportIssueType, ImportMergeMode, ImportSummary, ImportValidation,
@@ -446,3 +451,12 @@ pub use templates::{
 };
 #[cfg(feature = "native")]
 pub use user_prefs::UserPreferences;
+
+/// Observational gate-ledger API; never creates files, locks or caches.
+pub mod gate_ledger_read;
+
+// trace:STORY-2704 | ai:codex
+pub mod output_format;
+
+// trace:BUG-2597 | ai:codex
+pub mod terminal_timestamps;

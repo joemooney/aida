@@ -12,6 +12,9 @@ categories = ["development-tools"]
 
 [features]
 default = ["native"]
+# Scoped writer-scan fixtures for downstream mailbox lifecycle tests.
+# trace:TASK-3420 | ai:codex
+mailbox-test-support = []
 # Native platform features - file system, SQLite, etc.
 # `sysinfo` backs the /proc process-liveness probe in `liveness` (BUG-677).
 native = ["rusqlite", "fs2", "dirs", "sysinfo"]

@@ -9,7 +9,7 @@
         web-build web-build-release web-serve web-serve-force web-clean web-deps \
         sync-templates check-templates sync-agent-skills check-agent-skills \
         install-agent-skill-hooks ensure-agent-skill-hooks \
-        check-ci check-ci-fast check-ci-compile check-ci-audit check-ci-list test-touched test-lane task-1800-replay task-1800-fixture-check \
+        check-ci check-ci-fast check-ci-source check-ratchets check-ci-compile check-ci-audit check-ci-list test-touched test-lane task-1800-replay task-1800-fixture-check \
         docker-build docker-up docker-up-d docker-down docker-shell \
         dev dev-server dev-web dev-pg dev-stop \
         release-patch release-minor release-major release-version
@@ -146,18 +146,40 @@ cli-remote: ## Build CLI with remote server support
 server: ## Build gRPC/REST server (aida-server binary)
 	cargo build -p aida-server
 
-# AIDA developer install — overlays your in-repo dev build to ~/.cargo/bin/.
+# Resolve once and pass --root explicitly so Cargo configuration cannot send
+# binaries somewhere different from the companion link. trace:STORY-2704 | ai:codex
+AIDA_INSTALL_ROOT = $(if $(CARGO_INSTALL_ROOT),$(CARGO_INSTALL_ROOT),$(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo))
+
+# Refuse foreign aliases before Cargo replaces any installed member.
+# trace:STORY-2704 | ai:codex
+define AIDA_PREFLIGHT_FLOW_ALIAS
+@if [ -e "$(AIDA_INSTALL_ROOT)/bin/aida-flow" ] || [ -L "$(AIDA_INSTALL_ROOT)/bin/aida-flow" ]; then \
+    if [ ! -L "$(AIDA_INSTALL_ROOT)/bin/aida-flow" ] || [ "$$(readlink "$(AIDA_INSTALL_ROOT)/bin/aida-flow")" != aida-porcelain ]; then \
+        echo "refusing to replace unrelated $(AIDA_INSTALL_ROOT)/bin/aida-flow" >&2; exit 1; \
+    fi; \
+fi
+endef
+
+# AIDA developer install — overlays your in-repo dev build to Cargo's root.
 # Whether `aida` from your shell hits this or a released binary depends on
 # PATH ordering (run `aida status` to see which install is active).
 install: build-release ## Install in-repo dev build to ~/.cargo/bin (developer)
-	cargo install --path aida-cli --force
-	cargo install --path aida-server --force
+	$(AIDA_PREFLIGHT_FLOW_ALIAS)
+	cargo install --path aida-cli --force --root "$(AIDA_INSTALL_ROOT)"
+	cargo install --path aida-server --force --root "$(AIDA_INSTALL_ROOT)"
+	# trace:STORY-2704 | ai:codex
+	cargo install --path aida-porcelain --force --root "$(AIDA_INSTALL_ROOT)"
+	ln -sfnT aida-porcelain "$(AIDA_INSTALL_ROOT)/bin/aida-flow"
 
-install-cli: ## Install CLI only (developer, in-repo build)
-	cargo install --path aida-cli --force
+install-cli: ## Install CLI and porcelain commands (developer, in-repo build)
+	$(AIDA_PREFLIGHT_FLOW_ALIAS)
+	cargo install --path aida-cli --force --root "$(AIDA_INSTALL_ROOT)"
+	# trace:STORY-2704 | ai:codex
+	cargo install --path aida-porcelain --force --root "$(AIDA_INSTALL_ROOT)"
+	ln -sfnT aida-porcelain "$(AIDA_INSTALL_ROOT)/bin/aida-flow"
 
 install-server: ## Install server only (developer, in-repo build)
-	cargo install --path aida-server --force
+	cargo install --path aida-server --force --root "$(AIDA_INSTALL_ROOT)"
 
 # End-user install — fetches the latest released binary, no Rust needed.
 install-released: ## Install latest released binary to ~/.local/bin (end user)
@@ -537,11 +559,18 @@ ensure-agent-skill-hooks:
 # in CI's order, stopping at the first failure. No gate command is duplicated
 # here or in the runner; see scripts/ci-gate-tiers.toml for why.
 # trace:TASK-1555 | ai:claude
-check-ci-fast: ## Pre-push gate: every CI gate that needs no cargo build (~90s)
+# trace:TASK-3791 | ai:codex
+# trace:STORY-2833 | ai:codex
+check-ci-fast: check-ci-source check-ratchets ## Pre-push source gates and the checked ratchet set
+
+check-ci-source: ## Source-only FAST gates (hosted ratchets run after workspace compilation)
 	@python3 scripts/check-ci-gates.py --tier fast
 
-# check-ci-fast builds nothing, so it cannot see a test that no longer
-# compiles against main (E0063 from a struct field added on main). This compiles
+check-ratchets: ## Run the checked ratchet set, including application audit/golden/manual tests
+	@python3 scripts/check-ratchets.py
+
+# check-ci-fast compiles the selected ratchet targets, but other test targets
+# can still stop compiling against main (for example after a struct field addition). This compiles
 # every test target, runs none: CI's `Run tests` body, reshaped by the runner to
 # `--no-run --profile agent`. Run it after every merge of main into a branch.
 # trace:TASK-1763 | ai:claude

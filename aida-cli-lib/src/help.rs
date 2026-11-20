@@ -1,7 +1,9 @@
 //! Tiered help, `aida help-all`, help topics and the user-guide opener (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{aida_exe_path, find_main_worktree_root, find_project_root, help_catalog};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// The curated "Getting started" set — the core spec loop a newcomer needs to
 /// be productive on day one. Kept deliberately short so the default help reads
@@ -526,7 +528,7 @@ fn run_user_guide(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{open_user_guide, UserGuideArgs};
     let args = <UserGuideArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

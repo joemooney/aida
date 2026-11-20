@@ -33,7 +33,7 @@ Use this skill when:
 
 ## Core Philosophy
 
-**A PR merges only when every covered spec passes its acceptance criteria.** A verdict isn't a vibe-check — each spec gets a structured pass/partial/fail with evidence (diff hunks, test names, CI output). Partial code findings require implementer rework. Missing external CI or host evidence alone requires `waiting`, with the dependency, responsible actor and resume condition, and no substantive findings. Stop and resume through a fresh recorded review at the current head.
+**A PR merges only when every covered spec passes its acceptance criteria.** A verdict isn't a vibe-check — each spec gets a structured pass/partial/fail with evidence (diff hunks, test names, CI output). Partial code findings require implementer rework. Pending CI alone permits approval; missing independent host evidence or a specific named test result needed for judgment requires `waiting`, with the dependency, responsible actor and resume condition, and no substantive findings. Stop and resume through a fresh recorded review at the current head.
 
 ## Autonomy mode — `$AIDA_ZEN` (STORY-287)
 
@@ -172,7 +172,8 @@ would exceed the phase's remaining budget, write the verdict file with the
 current wait state and exit instead of parking the session on a future
 notification.
 
-Reviewer CI contract: you may gate on the PR CI required for the review, but
+Reviewer CI contract: approve defect-free heads while CI is pending; wait only
+for a specific named test result needed for judgment. For merge readiness,
 do not gate on the manual-only cross-platform workflow: AIDA is Linux-only,
 and a Windows/macOS-only failure is not a review blocker.
 
@@ -185,9 +186,8 @@ doc-only allowance. Two risks shape the policy:
 1. **CI desync.** A commit pushed after phase-2 CI has finished means the
    merged HEAD differs from what CI validated. For a logic change this is
    unsafe; for a doc/comment change it is harmless (a doc edit cannot change
-   build/test behavior). The reviewer must still re-verify
-   `mergeStateStatus: CLEAN` on the fix-forward commit before Approving — see
-   the procedure below.
+   build/test behavior). The reviewer must review the fix-forward head; landing still requires
+   CI on what lands. Pending CI does not delay approval — see the procedure below.
 2. **Self-grading.** The reviewer writes the fix-forward commit and then
    approves it. The implementer/reviewer separation that the workflow rests
    on is bent. A `kind:reviewer-fix-forward` finding (STORY-285) restores an
@@ -261,22 +261,18 @@ implementer iterates); a wrongly-fix-forwarded logic change is not.
    in the project's commit format — typically `[AI:claude] docs(scope):
    <description> (PR-<N>)` or `[AI:claude] style: cargo fmt --all`. One
    commit per logical fix; do not bundle.
-2. **Push and wait for CI CLEAN.** GitHub re-runs the workflow on the new
-   HEAD. Do **not** proceed to the Approved verdict until:
-
-   ```bash
-   gh pr view <N> --json mergeStateStatus --jq .mergeStateStatus
-   ```
-
-   returns `CLEAN`. If checks are still pending, wait (`gh run watch
-   <run-id>`). If checks went red, the fix-forward made things worse —
-   revert it (`git revert <sha> && git push`) and switch to RequestChanges.
+2. **Push and review the new HEAD.** GitHub re-runs the workflow there.
+   Record APPROVED when the head has no actionable defects even while CI is
+   pending; state "CI pending at review time". Inspect failures for actionable
+   defects and request changes when found. Before landing the fix-forward
+   commit, re-verify `mergeStateStatus: CLEAN` and required CI on that head;
+   this landing check does not delay recording APPROVED.
 3. **Record the fix-forward in the consolidated review comment** (step 7) as
    a dedicated section under the verdict table, naming the commit SHA + a
    one-line summary per fix-forward commit:
 
    ```markdown
-   **Fix-forwards** (reviewer-applied, doc-only — `mergeStateStatus: CLEAN` confirmed):
+   **Fix-forwards** (reviewer-applied, doc-only — new head reviewed):
    - `<short-sha>` — Fix typo `recieve` → `receive` in `aida-cli/src/main.rs:1234` comment
    ```
 
@@ -296,8 +292,8 @@ implementer iterates); a wrongly-fix-forwarded logic change is not.
    Files:  <file:line[, file:line, ...]>
    Change: <what changed and why — typo, output drift, prose clarity, fmt drift>
 
-   Verdict: Approved (mergeStateStatus CLEAN confirmed on the fix-forward
-   commit before approval).
+   Verdict: Approved (fix-forward head reviewed; report observed CI state
+   separately, including "CI pending at review time" when applicable).
    PR: <PR URL>
    EOF
    ```
@@ -450,7 +446,7 @@ This is only needed here for entry points that don't already hold the marker the
 aida review prompt --pr <N> --write .aida/review-prompt-pr-<N>.md
 ```
 
-`aida review prompt` walks the PR's commit range, extracts every `(REQ-ID)` trailer, loads each spec's acceptance criteria + a diff hint, and emits a structured checklist. Read the generated file; that's the worksheet.
+`aida review prompt` reads completion and Refs trailers from the PR title and commit range, then emits a structured checklist for the linked specs. Read the generated file; that's the worksheet.
 
 **Dim already-Completed specs — but only when they weren't subject of a commit in this PR.** Before walking the checklist, check each spec's current status AND whether it's the subject of a commit in `<base>..HEAD`:
 
@@ -472,7 +468,7 @@ A spec gets the **informational** treatment ("STORY-54 [Completed, shipped earli
 If the spec IS the subject of a commit in this PR — even if pre-marked Completed by /aida-implement's eager status update — a real PASS / PARTIAL / FAIL verdict is still required. The two-signal check prevents the failure mode where every spec gets marked Completed pre-PR (because /aida-implement does that today; the proper deferral lives behind STORY-86) and the whole checklist degenerates into informational rows. (TASK-72 polish — items 4 & 6)
 
 <!-- kind:design-fork -->
-If `aida review prompt` returns "no specs found" — the PR has commits without `(REQ-ID)` trailers. STOP and ask the user how to attribute the diff before continuing. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`; attribution is a real judgement call, not a mechanical confirmation.
+If `aida review prompt` returns "no specs found" — the PR has neither completing nor Refs trailers. STOP and ask the user how to attribute the diff before continuing. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`; attribution is a real judgement call, not a mechanical confirmation.
 
 ### 2b. The correct diff instrument — trace:BUG-1518 | ai:claude
 
@@ -519,15 +515,24 @@ tree comparison with a moving base.
 
 ### 3. Walk each spec — verdict per item, recorded inline
 
+<!-- trace:STORY-2702 | ai:codex -->
+Declare evidence immediately after the criterion label: `AC1: [evidence: behavioral-test] ...`, `[evidence: configuration-validation]`, `[evidence: documentation-inspection]`, or `[evidence: manual-inspection]`. Omitted or unknown annotations retain the behavioral test requirement. Behavioral criteria require automated tests. For configuration validation, cite the configuration and validation command/result or routing analysis; for documentation inspection, cite the document and check its claims; for manual inspection, record the procedure, observed result and limitations. An annotation is not evidence of satisfaction. Reviewers must report missing evidence and behavioral requirements mislabeled as inspection, without demanding automated tests solely for documentation, configuration or manual criteria.
+
 For each non-informational spec in the checklist, in order:
 
 1. **Read the diff against acceptance criteria** — the merge-base diff from
    step 2b above, never a raw tree diff against `main`'s tip — does each
-   `- [ ]` line in the spec have matching code?
-2. **Gate on CI, not local cargo** — by default the reviewer runs no cargo: the evidence is a green CI run at the exact PR head, so cite it. Run one targeted `cargo test --profile agent -p <crate> <test_name>` only to reproduce a specific suspected defect. Never run `cargo test --workspace`, `make check-ci` or an unfiltered `aida-cli-lib --lib` locally: CI's run at the PR head is the full-suite evidence, so cite it. Never set `AIDA_CARGO_NO_SLOT`. trace:TASK-2209 | ai:claude
+   applicable criterion have the evidence required by its declared type?
+   For a completing spec, review the whole acceptance list. For a declared Refs-only
+   slice, verify the covered criteria and retain the worksheet's pre-marked
+   deferrals as N/A. For an undeclared slice, verify the diff's claims and list
+   uncovered criteria as informational. In both slice cases, inspect the entire
+   diff for defects and keep uncovered or deferred criteria out of the actionable
+   findings unless the diff claims to satisfy them.
+2. **Gate on CI, not local cargo** — by default the reviewer runs no cargo: cite available CI evidence at the exact PR head, and record approval without waiting for pending CI when there are no actionable defects. Run one targeted `cargo test --profile agent -p <crate> <test_name>` only to reproduce a specific suspected defect. Never run `cargo test --workspace`, `make check-ci` or an unfiltered `aida-cli-lib --lib` locally: CI's run at the PR head is the full-suite evidence, so cite it. Never set `AIDA_CARGO_NO_SLOT`. trace:TASK-2209 | ai:claude
 3. **Record the verdict inline in `.aida/review-prompt-pr-<N>.md`** — the file `aida review prompt --write` generated is your worksheet. Edit it in place, appending a verdict block under each spec's section:
-   - ✅ **PASS** — every acceptance bullet covered, tests green, no obvious regression
-   - ⚠️ **PARTIAL** — some bullets covered, others missing; name the gap precisely (file + line + which bullet)
+   - ✅ **PASS** — every applicable acceptance bullet verified, no actionable defect; pending CI is reported separately
+   - ⚠️ **PARTIAL** — some applicable bullets verified, others missing; name the gap precisely (file + line + which bullet)
    - ❌ **FAIL** — acceptance not met, tests red, or design diverges from the spec
 
 Evidence required for every verdict: a file:line reference for PASS, the missing bullet for PARTIAL, the failing test name + line of the divergent code for FAIL. "Looks good" without a reference is not a verdict.
@@ -610,7 +615,7 @@ output-example that drifted, `cargo fmt` whitespace), execute the
 **Procedure** in the policy section in order:
 
 1. Commit small, atomic, single-purpose
-2. Push and wait for `gh pr view <N> --json mergeStateStatus --jq .mergeStateStatus` to return `CLEAN` — never approve on pending or red CI
+2. Push and review the new head; record the review verdict independently of pending CI. Never merge on pending or red CI.
 3. Record each fix-forward commit (SHA + one-line summary) in the
    consolidated review comment (step 7) under a dedicated **Fix-forwards**
    bullet list
@@ -634,15 +639,15 @@ encounter one, RequestChanges:
 - `[AI:claude] fix: add trailing period to error message` — string-literal
   change; tests asserting on the message break.
 
-### 6. Verify CI is green
+### 6. Inspect CI separately from review approval
 
 ```bash
 gh run list --branch <pr-branch> --limit 1 --json status,conclusion,url
-# or, to wait:
+# Only when preparing to merge, to wait:
 gh run watch <run-id>
 ```
 
-Separate review approval from merge readiness: apply the merge-hold exception in the review decision fixtures below before deriving the verdict. Block merge until required CI and hold gates pass. If CI is red for another reason:
+Separate review approval from merge readiness: approve a defect-free head while CI is pending or running, stating "CI pending at review time". Use WAITING only for independent external evidence or a specific named test result needed for judgment. Apply the review decision fixtures below. Block merge until required CI and hold gates pass. If CI is red for another reason:
 - <!-- kind:design-fork --> Walk the failure log: is it caused by this PR (block) or by an unrelated infra/flake (proceed with explicit user confirmation)? Accepting a red CI is risk acceptance — a `kind:design-fork`, surfaced even under `$AIDA_ZEN`.
 - If caused by this PR, surface to the user and pause — likely a fix-forward (step 5) is the right move.
 
@@ -687,7 +692,7 @@ aida orchestrator status               # `orchestrated` → also STOP before mer
 - every spec ✅ PASS → `Approved`
 - any ⚠️ PARTIAL (acceptance not fully met, but fixable) → `RequestChanges`
 - any ❌ FAIL (a spec is fundamentally unmet / broken) → `Rejected`
-- genuinely independent external CI or host evidence alone, with no substantive findings → `waiting` (apply the merge-hold exception below first);
+- genuinely independent host evidence or a specific named test result needed for judgment alone, with no substantive findings → `waiting` (apply the merge-hold exception below first);
   name the dependency, responsible actor and resume condition in the summary.
   Stop before merge or rework routing; resume only with a fresh review at the head.
 
@@ -698,6 +703,19 @@ unverifiable stale value misfired both ways before BUG-233; only
 
 - `aida orchestrator status` = `orchestrated` → `"mode": "orchestrator-phase-3"`
 - anything else → `"mode": "standalone"`
+
+**Standalone headless launch with a draft contract:** the launch prompt's
+absolute `draft.json` path and closed version-1 JSON contract supersede the
+recording and metadata-enrichment instructions below. Write the complete
+summary and all findings there, including an empty findings array when there
+are none, then exit. Do not run `aida review record` or add identity, grants,
+attestations, receipts, commands, covered specs, or ledger destinations. If a
+legacy record attempt was refused, still write the draft. The parent validates
+and records the draft; never claim recording succeeded inside the sandbox.
+Fresh and resumed launches each supply their own absolute draft path.
+Interactive and orchestrated reviews without this contract retain the canonical
+record route below.
+<!-- trace:BUG-2564 | ai:codex -->
 
 Record the verdict through the canonical writer. It stamps `recorded_by`,
 `recorded_at`, the reviewed SHA, and any displaced round at write time. Raw
@@ -1124,9 +1142,9 @@ gh pr merge <N> --squash --delete-branch=false
 
 Keep the branch around so a follow-up `aida session end` on the implementer side still resolves naming cleanly. (Branch deletion is the user's call, not the reviewer's.)
 
-### 10. Mark every covered spec Completed (when not already)
+### 10. Mark passing completing specs Completed
 
-For each `REQ-ID` from the checklist whose verdict was ✅ PASS, mark Completed only if it isn't already (eager-marking by /aida-implement is the norm today, so most will be no-ops — that's fine):
+For each completing `REQ-ID` whose verdict was ✅ PASS, mark Completed if needed. A passing Refs-only slice leaves the linked spec open:
 
 ```bash
 # Idempotent — `aida edit` with the same status is a no-op
@@ -1340,14 +1358,17 @@ merge has already landed; the hand-off is the courier-replacement, not a gate.
 ## Common Failure Modes
 
 - **No active session lease and no `--pr`**: refuse — never guess the PR number from cwd alone.
-- **`aida review prompt` returns empty**: PR has no `(REQ-ID)` trailers. STOP and ask the user how to attribute the diff.
+- **`aida review prompt` returns empty**: PR has neither completing nor Refs trailers. STOP and ask the user how to attribute the diff.
 - **CI red for an unrelated reason**: don't auto-bypass. Surface to the user; they decide whether to override.
 - **Spec's acceptance criteria are vague**: <!-- kind:design-fork --> ⚠️ PARTIAL by default and ask the user to either tighten the spec or accept the gap explicitly. Don't let vagueness leak through as PASS. This is a `kind:design-fork` — surface it even under `$AIDA_ZEN`.
 - **Implementer pushes new commits mid-review**: re-run step 2 (`aida review prompt --pr N` again) so the checklist matches the latest range. Verdicts on stale code are worse than none.
 - **PR already merged but new commits arrive on the branch (BUG-88)**: don't treat them as extending the original PR. The commits live on `origin/<branch>` but won't reach `main` without a fresh PR. Verify with `gh pr list --head <branch> --state open` before continuing; if empty + `--state merged` returns a hit, ask the implementer to open a follow-up PR (or cherry-pick onto a new branch off `origin/main`) before reviewing further.
 
 <!-- trace:BUG-2500 | ai:codex -->
-A review blocked solely on external CI or host evidence records `waiting`
+<!-- trace:STORY-2697 | ai:codex -->
+When there are no actionable defects, record APPROVED even if CI is pending or running; state "CI pending at review time" in the rationale. A later CI failure keeps the approval unusable through readiness; a fix creates a new head requiring fresh review (or eligible clean-merge carry-over), with destination-head CI still required. Existing ship CI opt-outs are unchanged. Existing CI-only WAITING records are not migrated and still require fresh review. CI alone is not a reason for WAITING: readiness still requires exact-head CI, and landing still requires ship CI or stacked-tip CI. WAITING is reserved for independent external evidence (such as an operator-only canary), or a specific named test result on which the reviewer's judgment depends. Name the dependency, responsible actor and resume condition, with no substantive findings.
+
+A review blocked on that independent evidence records `waiting`
 (displayed `WAITING`), with a summary naming the dependency, responsible actor
 and resume condition, and no substantive findings. Code defects still require
 `request-changes`. Waiting blocks completion and merge without implementer
@@ -1356,7 +1377,7 @@ Only a fresh recorded review at the current head ends the wait; green CI or
 a changed head alone does not. There is no automatic resume service.
 
 <!-- trace:BUG-2508 | ai:codex -->
-A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when required CI is otherwise green and there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR.
+A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR.
 
 Review decision fixtures (same current head, no actionable defects):
 
@@ -1364,3 +1385,71 @@ Review decision fixtures (same current head, no actionable defects):
 | --- | --- | --- | --- |
 | Green except merge-hold-gate | This review’s fresh APPROVED verdict, then authorized clearance | None | APPROVED |
 | Green except merge-hold-gate | This review’s fresh APPROVED verdict, then authorized clearance | Operator-only canary result | WAITING |
+| Pending or running | Fresh APPROVED verdict may release Rework hold | None | APPROVED |
+| Pending or running | Any | Specific named test result needed for judgment | WAITING |
+
+<!-- trace:STORY-2698 | ai:codex -->
+### Finding disposition and approval-time sweep
+
+<!-- trace:TASK-3814 | ai:codex -->
+<!-- trace:STORY-2913 | ai:claude -->
+`[review] blocking_tiers` names the finding classes that block. The project
+policy section of `aida review prompt` quotes the active list. Apply that
+quoted list; never read the list from the branch under review. When the
+prompt says every finding blocks because the list is unset, keep the existing
+review behaviour. When it says the list cannot be honoured (invalid or
+unreadable), every finding blocks, including one you mark deferred: record
+request-changes while any finding remains. Otherwise, findings whose `blocking_tier` or `class` is listed
+block, and the rest approve with follow-ups.
+Record every finding, including mixed reviews, using structured `--finding`
+JSON with a registry `blocking_tier` (`p1`, `p2`, `p3`, `data-loss`,
+`security-authority-bypass`, `unmet-claimed-ac`, `test-gap`, `style`), plus a
+`class` when a second class applies. Use `security-authority-bypass` for
+security and authority-bypass findings at any priority; it always blocks.
+Gate/sandbox test gaps must use the blocking tier `mutation-kill` or
+`untested-path` regardless of priority (ADR-76), or carry a `test-gap` class
+(JSON or `--finding-class`) with a `file` member naming the gate, sandbox,
+authority, seat or containment code. Elsewhere `test-gap` follows the list.
+Classify an unmet acceptance criterion the change claims only as
+`unmet-claimed-ac`. Unknown classification blocks. The writer
+sets dispositions and files each deferred finding as a separate Draft task linked
+to the reviewed spec, with retry deduplication and a delivery barrier before
+approval. Name the source spec when recording. Do not drop any finding.
+Nonblocking observations do not downgrade passing acceptance rows; record them
+as follow-ups and derive the overall verdict from the remaining blockers.
+This rule overrides blanket normal-severity or PARTIAL-based refusal rules and
+the general severity/disposition guidance below only when a list is in force; when every finding blocks, retain the existing review behavior and
+add no policy guidance to the review response. Delegated aggregate severity counts
+cannot establish these classifications: obtain individual findings or use a
+local review before applying this policy.
+
+Every finding records impact severity separately from the reviewer's explicit
+`blocking` or `deferred` disposition. A minor finding can be a real blocking bug;
+severity alone never justifies deferral. A deferred finding requires a one-line
+rationale explaining why follow-up is acceptable.
+
+Record structured findings with repeated `--finding` JSON arguments, for example:
+
+```bash
+aida review record <SPEC> --verdict request-changes \
+  --finding '{"text":"Document the fallback","severity":"cosmetic","disposition":"deferred","rationale":"The implemented behavior is correct and tested"}'
+```
+
+The record retains `findings` as a text array and adds a positional
+`finding_dispositions` array containing the structured evidence. Direct verdict
+JSON must supply both arrays. Missing, malformed or legacy disposition evidence
+blocks, including an ostensibly approved verdict. Once prior findings are fixed,
+explicitly clear them with `--finding ''`; omitting the flag preserves their
+blocking evidence. The prior round stays in history. An all-deferred verdict becomes
+APPROVED. Mixed findings remain CHANGES REQUESTED; rejected and waiting retain
+their existing semantics.
+
+Before publishing approval, the host persists the complete record with
+`sweep_pending: true`, files its deferred findings into the open sweep under the
+store writer lock, then records approval. Contained reviewers hand this work to
+the collecting launcher. Failed delivery leaves a blocking pending record and
+returns an error. After repairing the reported store problem, repeat the review
+record command (or retry launcher collection with the original handoff); delivery
+is deduplicated by source and finding hash. Completion-time carry-forward remains
+a retry fallback. This slice changes no risk tier, review depth, hold-clearance
+or train eligibility policy.

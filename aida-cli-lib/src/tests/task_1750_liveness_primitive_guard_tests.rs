@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 const CRATES: &[&str] = &[
     "aida-mcp",
     "aida-core",
+    "aida-testkit",
     "aida-cli-lib",
     "aida-cli",
     "aida-server",
@@ -33,7 +34,7 @@ const ALLOWED: &[(&str, &str)] = &[
     ),
     // trace:TASK-2886 | ai:codex
     (
-        "aida-cli-lib/src/test_home.rs",
+        "aida-testkit/src/test_home.rs",
         "test-home cleanup requires namespace-local ESRCH; ancestor-mounted procfs \
          cannot establish local PID death. Retain zombies and unknown errors, \
          and only probe homes with matching boot and PID-namespace identity",
@@ -113,6 +114,13 @@ const IDENTITY_PATTERN: &str = r"\b(?:pid_is_alive|process_identity_is_alive|pro
 #[test]
 fn proc_identity_legacy_decisions_do_not_expand() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    // session/lease_lock.rs baseline (JSON cannot carry comments):
+    // stamp_lease_holder_at: pre-existing; previously missed by the early-stop scanner (TASK-3787)
+    // stamp_lease_detached_worker_with_holder_at: pre-existing; previously missed by the early-stop scanner (TASK-3787)
+    // trace:TASK-3787 | ai:codex
+    // dev_build.rs baseline: its `.probe(` calls are `BuildSteps::probe`, a
+    // git checkout read, not a process decision; the third re-checks HEAD
+    // before the build. trace:BUG-2687 | ai:claude
     let baseline: std::collections::BTreeMap<String, usize> =
         serde_json::from_str(include_str!("fixtures/proc_identity_legacy_baseline.json")).unwrap();
     let pattern = regex::Regex::new(IDENTITY_PATTERN).unwrap();

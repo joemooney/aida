@@ -1,7 +1,36 @@
 //! drain phase-1 scope prep, phase-3 verdicts, tuning, and watchdog (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::classify_branch_swap_attribution;
+use crate::ensure_spec_done_after_pr;
+use crate::headless_log_permission_stall;
+use crate::process_retry::RetryEtxtbsy;
+use crate::resolve_gate_range;
+use crate::EmptyLaunchLog;
+use crate::{
+    agent_gate_matches_req, branch_commits_ahead_main, build_auto_punt_args,
+    build_integrate_rebase_args, build_phase3_auto_rebase_args, decide_shelve_attribution,
+    dispatched_branch_head_sha, docs, ensure_implementer_branch_pushed, gate, head_commit_message,
+    headless_launch_log_evidence, lease_path, list_leases, missing_implementer_worktree_push_gate,
+    orchestrated_lease_receipt_path, orchestrator_phase_child_env, orchestrator_pr_title_and_body,
+    parse_agent_gates_from_config, phase_driver, prepare_orchestrated_lease_receipt,
+    publish_orchestrated_lease_receipt_from_env, pushed_branch_commits_ahead_default,
+    read_commits_in_range, resolve_shelve_gate_range, try_open_orchestrator_pr_for_no_pr_worktree,
+    verified_phase2_branch, watchdog_failure_with_committed_work, worktree, AgentGateOnFail,
+    PrCreditMatch, RealPhaseDriver, SessionLease, ShelveAttribution,
+    ORCHESTRATED_LEASE_RECEIPT_ENV,
+};
+use crate::{
+    aida_exe_path, auto_complete, auto_complete_queue_add_args, ci_gate, complexity_calibration,
+    drain_state, effort_calibration, find_orchestrated_lease, first_run_id_from_gh_json,
+    git_capture, headless_log_path_for_session, parse_boolish, phase1_status_bump, presence,
+    read_drain_config, read_headless_log_for_session, resolve_gh_binary, reviewer_summary, session,
+    spec_matches, vendor_activity,
+};
+use aida_core::{Requirement, RequirementStatus, RequirementType, RequirementsStore, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 /// Resolve a spec's scope epic: walk its `parent:<ID>` tag chain (bounded) to
 /// the nearest ancestor of type Epic. Returns its display id, or `None` when no
@@ -51,14 +80,34 @@ pub(crate) fn scope_has_in_flight_work(
     })
 }
 
+// Proof that this member passed admission before queue mutation. Consumed at
+// registration so the same member does not repeat forge probes or audit events.
+// trace:BUG-2600 | ai:codex
+#[derive(Debug)]
+pub(crate) struct Phase1Admission {
+    project_root: std::path::PathBuf,
+    spec: String,
+}
+
 /// Queue `spec` for the implementer role if it isn't already queued for the
 /// current user — the preflight that lets `--auto-complete` accept a
 /// freshly-added spec. trace:STORY-246 | ai:claude
 pub(crate) fn ensure_queued_for_implementer(
     storage: &Storage,
+    project_root: &std::path::Path,
     user_id: &str,
     spec: &str,
-) -> Result<()> {
+    resumed: bool,
+    over_wip: bool,
+) -> Result<Phase1Admission> {
+    // trace:TASK-3799 | ai:codex — refuse before even an implicit queue row.
+    if !resumed {
+        crate::wip_limit::admit_phase1(project_root, storage, spec, over_wip)?;
+    }
+    let admission = Phase1Admission {
+        project_root: project_root.to_path_buf(),
+        spec: spec.to_string(),
+    };
     let store = storage.load()?;
     let req = store
         .requirements
@@ -70,7 +119,7 @@ pub(crate) fn ensure_queued_for_implementer(
         .iter()
         .any(|e| e.requirement_id == req.id);
     if already {
-        return Ok(());
+        return Ok(admission);
     }
     eprintln!(
         "  {} {} is not queued — queueing it for the implementer",
@@ -85,7 +134,7 @@ pub(crate) fn ensure_queued_for_implementer(
     if !status.success() {
         anyhow::bail!("`aida queue add {spec} --for implementer --no-scope` failed");
     }
-    Ok(())
+    Ok(admission)
 }
 
 pub(crate) fn auto_complete_phase1_target_status(
@@ -109,7 +158,20 @@ pub(crate) fn prepare_registered_auto_complete_phase1(
     run_token: &str,
     zen: bool,
     owns_drain_state: bool,
+    resumed: bool,
+    over_wip: bool,
+    admission: Option<Phase1Admission>,
 ) -> Result<Option<(String, RequirementStatus)>> {
+    // trace:TASK-3799 | ai:codex — direct phase entry must not bypass admission.
+    // trace:BUG-2600 | ai:codex — reuse the pre-queue admission for this member.
+    if let Some(admission) = admission {
+        anyhow::ensure!(
+            admission.project_root == project_root && admission.spec == spec,
+            "phase-1 admission does not match the registered member"
+        );
+    } else if !resumed {
+        crate::wip_limit::admit_phase1(project_root, storage, spec, over_wip)?;
+    }
     drain_state::register_run(project_root, spec, run_token, zen, owns_drain_state)?;
     let result = prepare_auto_complete_phase1_status(storage, spec);
     if result.is_err() {

@@ -655,8 +655,11 @@ fn ship_and_train_tty_decisions_go_through_the_shared_helper() {
         // The body ends at the next column-0 closing brace.
         &rest[..rest.find("\n}\n").unwrap_or(rest.len())]
     }
-    let pr_cmd = include_str!("../pr_cmd.rs");
-    let helper = body_after(pr_cmd, "pub(crate) fn ship_interactive_tty() -> bool {");
+    let pr_cmd = include_str!("../pr_cmd/mod.rs");
+    let helper = body_after(
+        include_str!("../pr_service.rs"),
+        "pub(crate) fn ship_interactive_tty() -> bool {",
+    );
     assert!(
         helper.contains("crate::gate::role_authority::has_integrity_floor_authority()"),
         "ship_interactive_tty delegates to the merge-hold clear decision"

@@ -4,6 +4,61 @@ use std::cell::Cell;
 use std::os::unix::fs::PermissionsExt;
 use std::sync::{Arc, Barrier};
 
+// trace:TASK-3809 | ai:codex
+#[test]
+fn task3809_retained_description_does_not_extend_transaction_ownership() {
+    let (_temp, store) = fixture();
+    let lock = store.dir.lock("admission.lock").unwrap();
+    // dup and fork share the open file description. Keeping a duplicate alive
+    // deterministically exercises the child-before-exec case without forking
+    // the multithreaded test harness.
+    let retained = lock.0.try_clone().unwrap();
+    let contender = store.dir.file("admission.lock", true).unwrap();
+    assert_eq!(
+        contender.try_lock_exclusive().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    drop(lock);
+    contender.try_lock_exclusive().unwrap();
+    // An old child's eventual close must not release the new owner's lock.
+    drop(retained);
+    let third = store.dir.file("admission.lock", true).unwrap();
+    assert_eq!(
+        third.try_lock_exclusive().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+    FileExt::unlock(&contender).unwrap();
+    third.try_lock_exclusive().unwrap();
+}
+
+// trace:TASK-3809 | ai:codex
+#[test]
+fn task3809_failed_transaction_releases_retained_lock() {
+    let (_temp, store) = fixture();
+    let retained = std::cell::RefCell::new(None);
+    let result: Result<()> = store.transaction("PR-1", |_| anyhow::bail!("transaction refused"));
+    assert!(result.is_err());
+    let result: Result<()> = (|| {
+        let lock = store.dir.lock("admission.lock")?;
+        *retained.borrow_mut() = Some(lock.0.try_clone()?);
+        anyhow::bail!("operation refused")
+    })();
+    assert!(result.is_err());
+    let _recovered = store.dir.lock("admission.lock").unwrap();
+    assert!(retained.borrow().is_some());
+}
+
+// trace:TASK-3809 | ai:codex
+#[test]
+fn task3809_runtime_lock_is_close_on_exec() {
+    use std::os::fd::AsRawFd;
+    let (_temp, store) = fixture();
+    let lock = store.dir.lock("admission.lock").unwrap();
+    let flags = unsafe { libc::fcntl(lock.0.as_raw_fd(), libc::F_GETFD) };
+    assert!(flags >= 0);
+    assert_ne!(flags & libc::FD_CLOEXEC, 0);
+}
+
 fn fixture() -> (tempfile::TempDir, Store) {
     let temp = tempfile::tempdir().unwrap();
     let store = Store::open(temp.path(), "github:github.com/owner/repo").unwrap();
@@ -17,6 +72,7 @@ fn change(id: u64, head: u64, overlap: bool) -> forge::Change {
         author: "writer".into(),
         gitlab: false,
         overlap: Some(overlap),
+        conflict: None,
         behind: Some(u64::from(overlap)),
         head_branch: None,
     }
@@ -247,7 +303,7 @@ fn task1993_new_head_waits_without_signalling_then_obeys_two_round_cap() {
     let Action::Skip(reason) = select(&store, &change(1, 3, false), None, 2).unwrap() else {
         panic!("third round dispatched")
     };
-    assert!(reason.contains("two-round"));
+    assert!(reason.contains("2-round"));
 }
 
 // trace:TASK-1993.ac55aab8 | ai:claude
@@ -730,7 +786,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             "advisor",
             &["reviewer"],
         );
-        env.set_key(crate::gate::seat_authority::GRANT_ENV, parent); // trace:TASK-1993 | ai:claude
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent); // trace:TASK-1993 | ai:claude
         let repo = forge::Repository::load(&root).unwrap();
         let mut changes = repo.discover(&root).unwrap();
         assert_eq!(changes.len(), 1);
@@ -758,9 +814,16 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
                 Some(true),
                 "probe ignored the change's base branch"
             );
+            // The release branch rewrote the file the head also rewrote: the
+            // probe reports that the base no longer merges cleanly, the
+            // evidence `[review] stale_base = "refuse-on-conflict"` refuses
+            // on. It is judged only for an overlapping head.
+            // trace:STORY-2821 | ai:claude
+            assert_eq!(changes[0].conflict, Some(true));
             changes[0].base = "main".into();
             repo.probe(&root, &mut changes[0]).unwrap();
             assert_eq!(changes[0].overlap, Some(false));
+            assert_eq!(changes[0].conflict, None);
         }
         // A credentialed origin never reaches git argv (BUG-2181): the probe
         // fetches by remote name through the credential gate.
@@ -808,7 +871,123 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             );
             env.unset_key(WATCH_HEAD);
         }
+        // Pause after selection, before the production reservation child runs.
+        // trace:BUG-2650 | ai:codex
+        let store = Store::open(&root, &repo.identity).unwrap();
+        let key = changes[0].key();
+        let selected = dispatch(select(&store, &changes[0], None, 2).unwrap());
+        use clap::Parser;
+        #[derive(Parser)]
+        struct WatchCli {
+            #[command(flatten)]
+            args: ReviewWatchArgs,
+        }
+        let control = |argv: &[&str]| {
+            let args =
+                WatchCli::try_parse_from(std::iter::once("watch").chain(argv.iter().copied()))?;
+            super::run_with_program(&args.args, &root, None)
+        };
+        assert!(control(&["pause", "--reason", "too long", "--for", "86401"]).is_err());
+        assert!(control(&["pause", "--reason", "   "]).is_err());
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, "invalid-grant");
+        let error = control(&["pause", "--reason", "cutover fixture"]).unwrap_err();
+        assert!(error.to_string().contains("requires an advisor grant"));
+        assert!(store.dir.read("pause.json").unwrap().is_none());
+        // A VALID grant for a non-advisor seat is refused through the real
+        // control path, for pause and for resume, and writes nothing. The
+        // grant is asserted Valid first, so the refusal can only come from the
+        // `grant.seat == "advisor"` guard in review_watch_pause::actor: delete
+        // that guard and these pause/resume calls succeed, failing this test.
+        // trace:BUG-2650 | ai:claude
+        let seat_grants: Vec<(&str, String)> = ["implementer", "reviewer"]
+            .into_iter()
+            .map(|seat| {
+                let grant = crate::gate::seat_authority::test_support::mint_grant_for(
+                    &root,
+                    crate::test_env::HERMETIC_TEST_USER,
+                    seat,
+                    &[],
+                );
+                (seat, grant)
+            })
+            .collect();
+        let refuse_as =
+            |env: &mut crate::test_env::AmbientGuard, seat: &str, grant: &str, argv: &[&str]| {
+                env.set_key(crate::gate::seat_authority::GRANT_ENV, grant);
+                assert!(
+                    matches!(
+                        crate::gate::seat_authority::grant_check(&root),
+                        crate::gate::seat_authority::GrantCheck::Valid(ref g) if g.seat == seat
+                    ),
+                    "fixture {seat} grant must validate so only the seat guard can refuse"
+                );
+                let error = format!("{:#}", control(argv).unwrap_err());
+                assert!(
+                    error.contains("requires an advisor grant"),
+                    "{seat} {argv:?}: {error}"
+                );
+            };
+        for (seat, grant) in &seat_grants {
+            refuse_as(
+                &mut env,
+                seat,
+                grant,
+                &["pause", "--reason", "seat fixture"],
+            );
+            assert!(
+                store.dir.read("pause.json").unwrap().is_none(),
+                "{seat} pause wrote a record"
+            );
+        }
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+        control(&["pause", "--reason", "cutover fixture"]).unwrap();
+        let paused_journal = store.dir.read("pause.json").unwrap().unwrap();
+        for (seat, grant) in &seat_grants {
+            refuse_as(&mut env, seat, grant, &["resume"]);
+            assert_eq!(
+                store.dir.read("pause.json").unwrap().unwrap(),
+                paused_journal,
+                "{seat} resume changed the pause record"
+            );
+        }
+        assert!(
+            pause::check_launch(&store).is_err(),
+            "pause must still hold"
+        );
+        env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+        control(&["status"]).unwrap();
+        let marker = root.join("unexpected-queue-spawn");
+        let forbidden = bin.join("forbidden-queue");
+        crate::test_exec::write_executable(
+            &forbidden,
+            "#!/bin/sh\ntouch unexpected-queue-spawn\nexit 5\n",
+        );
+        child_with_program(
+            &root,
+            &repo,
+            &format!("{key}:{}", selected.token),
+            &forbidden,
+        )
+        .unwrap();
+        assert!(!marker.exists());
+        let state = store.load().unwrap();
+        let attempt = &state.entries[&key].attempts[0];
+        assert_eq!(attempt.phase, Phase::Failed);
+        assert!(!attempt.spawning);
+        control(&["resume"]).unwrap();
+
         process_dispatch_barrier(&root, &repo, &changes[0], || {
+            // Pause while a real queue child is running. The barrier must
+            // still release it normally and retain its completion receipt.
+            control(&[
+                "pause",
+                "--reason",
+                "already running fixture",
+                "--for",
+                "60",
+            ])
+            .unwrap();
+
             env.set_key(WATCH_HEAD, &head);
             let prompt = reviewer_launch_prompt(&root, 1, "/aida-review --pr 1")
                 .unwrap()
@@ -818,6 +997,7 @@ fn task1993_live_discovery_probes_both_forges_and_refuses_moving_or_unknown_head
             assert!(prompt.contains("Never merge or update the branch"));
             env.unset_key(WATCH_HEAD);
         });
+        control(&["resume"]).unwrap();
         std::fs::write(temp.path().join("bad-count"), "").unwrap();
         assert!(
             repo.probe(&root, &mut changes[0]).is_err(),
@@ -903,6 +1083,7 @@ exit 3
         );
         env.unset_key(WATCH_HEAD);
         let args = ReviewWatchArgs {
+            control: None,
             once: true,
             interval: 1,
             max_concurrent: Some(2),
@@ -1030,7 +1211,7 @@ fn task1993_existing_and_mixed_review_rounds_share_the_cap() {
     let Action::Skip(reason) = select(&store, &change(1, 4, false), None, 2).unwrap() else {
         panic!("third review dispatched");
     };
-    assert!(reason.contains("two-round"));
+    assert!(reason.contains("2-round"));
     // A fresh watcher also sees both historical rounds.
     let reopened = Store::open(temp.path(), &store.repository).unwrap();
     assert!(matches!(
@@ -1148,7 +1329,7 @@ fn task1993_canonical_history_permissions_and_reset_preserve_consumed_rounds() {
     let Action::Skip(reason) = select(&reopened, &change(1, 3, false), None, 2).unwrap() else {
         panic!("third head bypassed the historical two-round cap after verdict reset")
     };
-    assert!(reason.contains("two-round"));
+    assert!(reason.contains("2-round"));
     // Canonical history accepts ordinary writer modes; runtime state stays private.
     std::fs::set_permissions(
         store.dir.path().join(STATE),
@@ -1485,6 +1666,8 @@ fn task1993_state_stays_bounded_far_past_one_thousand_changes() {
                             setup_retry: false,
                             retryable_fetch: false,
                             fetch_failures: 0,
+                            no_verdict_attempts: 0,
+                            no_verdict_retry_at: None,
                             reviewer: None,
                             pgid: None,
                             supersede: None,
@@ -1570,7 +1753,7 @@ fn task1993_approved_head_merged_with_main_is_rereviewed_at_round_one() {
     let Action::Skip(reason) = select(&store, &change(1, 6, false), None, 2).unwrap() else {
         panic!("third blocking round dispatched");
     };
-    assert!(reason.contains("two-round"));
+    assert!(reason.contains("2-round"));
 }
 
 // trace:TASK-1993.ac4fdc2a | ai:claude
@@ -1678,7 +1861,8 @@ fn task1993_watcher_never_signals_merges_or_runs_cargo() {
 // (validate_child_delegation runs before the reservation branch), the store
 // unusable (Store::open), or the claim timing out under lock contention. Any
 // watcher, including one restarted after the spawning parent is gone, sees
-// the recorded dispatcher is gone and frees the slot terminally.
+// the recorded dispatcher is gone and frees the slot for local preclaim retry.
+// trace:BUG-2518 | ai:codex
 // trace:TASK-1993.ac55aab8 | ai:claude
 #[test]
 fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
@@ -1690,6 +1874,9 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
         let (temp, store) = fixture();
         let c = change(1, 1, false);
         let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+        // This recovery is local and proves no claim or descendant ever started.
+        assert!(attempt.admission_hub.is_none());
+        assert!(attempt.unclaimed_before_spawn());
         // A real dispatcher process, identified while alive, then gone.
         let mut dispatcher = Command::new("/bin/sleep").arg("30").spawn().unwrap();
         let identity = Identity::of(dispatcher.id()).unwrap();
@@ -1718,25 +1905,81 @@ fn task1993_dispatcher_lost_before_claim_frees_its_reservation() {
         let restarted = Store::open(temp.path(), &store.repository).unwrap();
         dispatch(select(&restarted, &change(2, 2, false), None, 1).unwrap());
         let recorded = &restarted.load().unwrap().entries["PR-1"].attempts[0];
-        assert_eq!(recorded.phase, Phase::Exited);
+        assert_eq!(recorded.phase, Phase::Failed);
+        assert!(!active(recorded));
         assert!(
             recorded.diagnostic.as_deref().unwrap().contains(trigger),
             "{recorded:?}"
         );
+        let diagnostic = recorded.diagnostic.clone();
         let Action::Skip(reason) = select(&restarted, &c, None, 1).unwrap() else {
-            panic!("the lost head relaunched");
+            panic!("the other PR should hold the only slot");
         };
-        assert!(reason.contains("exited"));
+        assert!(reason.contains("global reviewer capacity"), "{reason}");
+        assert_eq!(
+            restarted.load().unwrap().entries["PR-1"].attempts[0].diagnostic,
+            diagnostic
+        );
+        restarted.release("PR-2").unwrap();
+        let retry = dispatch(select(&restarted, &c, None, 1).unwrap());
+        assert_ne!(retry.token, attempt.token);
+        assert_eq!(retry.head, attempt.head);
+        let state = restarted.load().unwrap();
+        let attempts = &state.entries["PR-1"].attempts;
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].token, retry.token);
+        assert!(active(&attempts[0]));
+        let Action::Skip(reason) = select(&restarted, &change(2, 2, false), None, 1).unwrap()
+        else {
+            panic!("the readmitted head should hold the only slot");
+        };
+        assert!(reason.contains("global reviewer capacity"), "{reason}");
+        assert!(log_tail(&restarted, &format!("PR-1-{}.log", attempt.token))
+            .unwrap()
+            .contains(trigger));
     }
     // The parent's own reaping records an observed early exit directly.
     let (_temp, store) = fixture();
-    let attempt = dispatch(select(&store, &change(1, 1, false), None, 1).unwrap());
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    assert!(attempt.admission_hub.is_none());
+    assert!(attempt.unclaimed_before_spawn());
+    let logs = Directory::open(&store.dir.path().join("logs")).unwrap();
+    let log_name = format!("PR-1-{}.log", attempt.token);
+    let mut log = logs.file(&log_name, true).unwrap();
+    writeln!(log, "grant refused before claim").unwrap();
     mark_unclaimed_exit(&store, "PR-1", &attempt.token, "exit status: 1").unwrap();
-    assert_eq!(
-        store.load().unwrap().entries["PR-1"].attempts[0].phase,
-        Phase::Exited
-    );
+    let state = store.load().unwrap();
+    let recorded = &state.entries["PR-1"].attempts[0];
+    assert_eq!(recorded.phase, Phase::Failed);
+    assert!(!active(recorded));
+    let diagnostic = recorded.diagnostic.clone();
+    assert!(diagnostic.as_deref().unwrap().contains("exit status: 1"));
+    assert!(diagnostic
+        .as_deref()
+        .unwrap()
+        .contains("grant refused before claim"));
     dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].diagnostic,
+        diagnostic
+    );
+    store.release("PR-2").unwrap();
+    let retry = dispatch(select(&store, &c, None, 1).unwrap());
+    assert_ne!(retry.token, attempt.token);
+    assert_eq!(retry.head, attempt.head);
+    let state = store.load().unwrap();
+    let attempts = &state.entries["PR-1"].attempts;
+    assert_eq!(attempts.len(), 1);
+    assert_eq!(attempts[0].token, retry.token);
+    assert!(active(&attempts[0]));
+    let Action::Skip(reason) = select(&store, &change(2, 2, false), None, 1).unwrap() else {
+        panic!("the readmitted head should hold the only slot");
+    };
+    assert!(reason.contains("global reviewer capacity"), "{reason}");
+    assert!(log_tail(&store, &log_name)
+        .unwrap()
+        .contains("grant refused before claim"));
 }
 
 // The triggers above really do leave the reservation unclaimed.
@@ -1810,7 +2053,7 @@ fn task1993_pruning_keeps_consumed_rounds() {
     let Action::Skip(reason) = select(&store, &change(1, 3, false), None, 2).unwrap() else {
         panic!("a pruned change dispatched a third blocking round");
     };
-    assert!(reason.contains("two-round"), "{reason}");
+    assert!(reason.contains("2-round"), "{reason}");
 }
 
 // The watch revalidation runs before the destructive verdict reset.
@@ -2186,22 +2429,22 @@ fn notices_are_kept_for_the_current_head_only() {
     assert_eq!(heads, vec![change(1, 2, true).head]);
 }
 
-/// PR-2789 note (b): retained rounds are capped at the two the round cap
-/// needs, so the next read's <=16 check can never fail.
+/// PR-2789 note (b): strict history retains up to the configured round cap.
 // trace:TASK-1955 | ai:claude (TASK-2064)
 #[test]
 fn retained_rounds_are_capped_on_write() {
     let (_temp, store) = fixture();
     let keys = (1..=20u64).map(|n| {
-        (
+        crate::gate::review_verdict::RecordingKey(
             Some(format!("{n:040x}")),
             "reviewer seat".to_string(),
             "request-changes".to_string(),
             Vec::new(),
+            true,
         )
     });
-    store.retain("PR-1", keys).unwrap();
-    assert_eq!(store.retained("PR-1").unwrap().len(), RETAINED_ROUNDS);
+    store.retain("PR-1", keys, false).unwrap();
+    assert_eq!(store.retained("PR-1").unwrap().len(), DEFAULT_MAX_ROUNDS);
 }
 
 /// TASK-2064: dispatcher logs no recorded attempt names are pruned.
@@ -2977,4 +3220,1306 @@ fn review_watch_four_reviews_share_persisted_capacity() {
         select(&store, &change(5, 5, false), None, 4).unwrap(),
         Action::Skip(reason) if reason.contains("global reviewer capacity (4)")
     ));
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_no_verdict_backoff_cap_and_new_head() {
+    for phase in [Phase::Exited, Phase::Completed] {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        for count in 1..=3 {
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                    a.phase = phase.clone();
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    a.diagnostic = Some("reviewer ended without recording".into());
+                    Ok(())
+                })
+                .unwrap();
+            let Action::Skip(reason) = select(&store, &c, None, 2).unwrap() else {
+                panic!("retry must be delayed or capped");
+            };
+            if count == 3 {
+                assert!(reason.contains("three review attempts"), "{reason}");
+                let blockers = service::retry_blockers(&store.root, &store.dir).unwrap();
+                assert_eq!(blockers.len(), 1);
+                assert!(blockers[0].contains("PR-1:") && blockers[0].contains("reviewer ended"));
+                assert!(
+                    no_verdict_blocker(&store.load().unwrap().entries["PR-1"].attempts[0])
+                        .is_some()
+                );
+                break;
+            }
+            assert!(reason.contains("retry after"), "{reason}");
+            assert!(probe_unneeded_with_coverage(&store, &c, || None)
+                .unwrap()
+                .is_none());
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .no_verdict_retry_at =
+                        Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    Ok(())
+                })
+                .unwrap();
+            let reopened = Store::open(&store.root, &store.load().unwrap().repository).unwrap();
+            attempt = dispatch(select(&reopened, &c, None, 2).unwrap());
+            assert_eq!(attempt.no_verdict_attempts, count + 1);
+        }
+        let fresh = dispatch(select(&store, &change(1, 2, false), None, 2).unwrap());
+        assert_eq!(fresh.no_verdict_attempts, 0);
+    }
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_retry_preserves_capacity_and_verdict_gates() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    store
+        .transaction("PR-1", |state| {
+            let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+            a.phase = Phase::Exited;
+            a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+            a.reviewer_spawning = true;
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+        if reason.contains("unfinished review processes"))
+    );
+    store
+        .transaction("PR-1", |state| {
+            attempt_mut(state, "PR-1", &attempt.token)
+                .unwrap()
+                .reviewer_spawning = false;
+            Ok(())
+        })
+        .unwrap();
+    let other = change(2, 2, false);
+    let held = dispatch(select(&store, &other, None, 1).unwrap());
+    for _ in 0..3 {
+        assert!(
+            matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+            if reason.contains("global reviewer capacity"))
+        );
+        assert_eq!(
+            store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+            1
+        );
+    }
+    store
+        .transaction("PR-2", |state| {
+            attempt_mut(state, "PR-2", &held.token).unwrap().phase = Phase::Failed;
+            Ok(())
+        })
+        .unwrap();
+    let retried = dispatch(select(&store, &c, None, 1).unwrap());
+    assert_eq!(retried.no_verdict_attempts, 2);
+    let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+    write_verdict(
+        &verdicts.path().join("PR-1.json"),
+        &verdict_json(&c.head, "approved"),
+    );
+    store
+        .transaction("PR-1", |state| {
+            attempt_mut(state, "PR-1", &retried.token).unwrap().phase = Phase::Exited;
+            Ok(())
+        })
+        .unwrap();
+    assert!(matches!(
+        select(&store, &c, None, 1).unwrap(),
+        Action::Skip(_)
+    ));
+    assert!(probe_unneeded_with_coverage(&store, &c, || None)
+        .unwrap()
+        .is_some());
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+        2
+    );
+}
+
+// trace:STORY-2705 | ai:codex
+#[test]
+fn story2705_parked_merge_head_is_unreserved_then_admitted_once_after_lease_ends() {
+    let (temp, store) = fixture();
+    let old = change(1, 1, false);
+    let verdicts = temp.path().join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    write_verdict(
+        &verdicts.join("PR-1.json"),
+        &verdict_json(&old.head, "request-changes"),
+    );
+    let merge_head = change(1, 2, false);
+    let reason = "deferred: implementer lane live (host-two, lease-one)";
+    for _ in 0..2 {
+        record_skip(&store, &merge_head, Some(reason)).unwrap();
+        let state = store.load().unwrap();
+        let entry = &state.entries["PR-1"];
+        assert!(entry.attempts.is_empty());
+        assert_eq!(entry.skipped.as_ref().unwrap().line, reason);
+        assert_eq!(skipped_changes(temp.path()).len(), 1);
+    }
+    // No live lease remains: the ordinary admission path reviews this exact
+    // head once, even if its only commit since the refusal was a merge.
+    record_skip(&store, &merge_head, None).unwrap();
+    assert!(skipped_changes(temp.path()).is_empty());
+    let attempt = dispatch(select(&store, &merge_head, None, 2).unwrap());
+    assert_eq!(attempt.head, merge_head.head);
+    assert!(matches!(
+        select(&store, &merge_head, None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    assert_eq!(store.load().unwrap().entries["PR-1"].attempts.len(), 1);
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_local_preclaim_exits_preserve_started_attempt_budget() {
+    for recover in [false, true] {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        for started in 1..=3 {
+            // Complete an actual claimed review without publishing a verdict.
+            complete(&store, &c, &attempt);
+            // The fixture claimed in this test process; model its reaped exit.
+            store
+                .transaction("PR-1", |state| {
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    attempt_mut(state, "PR-1", &attempt.token).unwrap().identity = Some(dead);
+                    Ok(())
+                })
+                .unwrap();
+            let Action::Skip(reason) = select(&store, &c, None, 2).unwrap() else {
+                panic!("started attempt must back off or exhaust");
+            };
+            if started == 3 {
+                assert!(reason.contains("three review attempts"), "{reason}");
+                assert_eq!(
+                    service::retry_blockers(&store.root, &store.dir)
+                        .unwrap()
+                        .len(),
+                    1
+                );
+                break;
+            }
+            assert!(reason.contains("retry after"), "{reason}");
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .no_verdict_retry_at =
+                        Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    Ok(())
+                })
+                .unwrap();
+            for _ in 0..4 {
+                attempt = dispatch(select(&store, &c, None, 2).unwrap());
+                assert_eq!(attempt.no_verdict_attempts, started + 1);
+                assert!(attempt.admission_hub.is_none());
+                if recover {
+                    store
+                        .transaction("PR-1", |state| {
+                            let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                            let mut dead = Identity::current()?;
+                            dead.boot = "previous-boot".into();
+                            a.dispatcher = Some(dead);
+                            store.reconcile_lost_dispatchers(state);
+                            Ok(())
+                        })
+                        .unwrap();
+                } else {
+                    mark_unclaimed_exit(&store, "PR-1", &attempt.token, "grant refused").unwrap();
+                }
+                let saved = store.load().unwrap().entries["PR-1"].attempts[0].clone();
+                assert_eq!(saved.phase, Phase::Failed);
+                assert_eq!(saved.no_verdict_attempts, started + 1);
+                assert!(service::retry_blockers(&store.root, &store.dir)
+                    .unwrap()
+                    .is_empty());
+            }
+            attempt = dispatch(select(&store, &c, None, 2).unwrap());
+            assert_eq!(attempt.no_verdict_attempts, started + 1);
+        }
+    }
+}
+
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_local_recovery_retains_live_and_ambiguous_process_gates() {
+    for mode in 0..5 {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transaction("PR-1", |state| {
+                let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                let mut dead = Identity::current()?;
+                dead.boot = "previous-boot".into();
+                a.dispatcher = Some(dead);
+                match mode {
+                    0 => a.dispatcher = Some(Identity::current()?),
+                    1 => a.spawning = true,
+                    2 => a.reviewer_spawning = true,
+                    3 => a.worker = Some(Identity::current()?),
+                    _ => a.reviewer = Some(Identity::current()?),
+                }
+                store.reconcile_lost_dispatchers(state);
+                Ok(())
+            })
+            .unwrap();
+        let phase = store.load().unwrap().entries["PR-1"].attempts[0]
+            .phase
+            .clone();
+        assert_eq!(
+            phase,
+            if mode == 0 {
+                Phase::Reserved
+            } else {
+                Phase::Exited
+            }
+        );
+        if mode != 0 {
+            assert!(matches!(
+                select(&store, &c, None, 2).unwrap(),
+                Action::Skip(_)
+            ));
+        }
+    }
+}
+
+// A reaped dispatcher alone cannot prove that an unrecorded descendant never
+// started. Exercise the direct exit path as well as PID-based recovery above.
+// trace:BUG-2518 | ai:codex
+#[test]
+fn bug2518_local_reaped_exit_retains_ambiguous_descendant_gates() {
+    for mode in 0..4 {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transaction("PR-1", |state| {
+                let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                assert!(a.admission_hub.is_none());
+                match mode {
+                    0 => a.spawning = true,
+                    1 => a.reviewer_spawning = true,
+                    2 => a.worker = Some(Identity::current()?),
+                    _ => a.reviewer = Some(Identity::current()?),
+                }
+                Ok(())
+            })
+            .unwrap();
+        mark_unclaimed_exit(&store, "PR-1", &attempt.token, "grant refused").unwrap();
+        assert_eq!(
+            store.load().unwrap().entries["PR-1"].attempts[0].phase,
+            Phase::Exited
+        );
+        assert!(matches!(
+            select(&store, &c, None, 2).unwrap(),
+            Action::Skip(_)
+        ));
+    }
+}
+
+// trace:BUG-2521 | ai:codex
+#[test]
+fn bug2521_waiting_backoff_cap_and_new_head() {
+    for phase in [Phase::Exited, Phase::Completed] {
+        let (_temp, store) = fixture();
+        let c = change(1, 1, false);
+        let mut attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+        write_verdict(
+            &verdicts.path().join("PR-1.json"),
+            &verdict_json(&c.head, "WAITING"),
+        );
+        for count in 1..=3 {
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                    a.phase = phase.clone();
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    a.diagnostic = Some("reviewer ended without recording".into());
+                    Ok(())
+                })
+                .unwrap();
+            let Action::Skip(reason) = select(&store, &c, None, 2).unwrap() else {
+                panic!("retry must be delayed or capped");
+            };
+            if count == 3 {
+                assert!(reason.contains("three review attempts"), "{reason}");
+                let blockers = service::retry_blockers(&store.root, &store.dir).unwrap();
+                assert_eq!(blockers.len(), 1);
+                assert!(blockers[0].contains("PR-1:") && blockers[0].contains("reviewer ended"));
+                assert!(
+                    no_verdict_blocker(&store.load().unwrap().entries["PR-1"].attempts[0])
+                        .is_some()
+                );
+                break;
+            }
+            assert!(reason.contains("retry after"), "{reason}");
+            let deadline = store.load().unwrap().entries["PR-1"].attempts[0]
+                .no_verdict_retry_at
+                .unwrap();
+            assert!((deadline - chrono::Utc::now()).num_seconds() >= 1190);
+            assert!(probe_unneeded_with_coverage(&store, &c, || None)
+                .unwrap()
+                .is_none());
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .no_verdict_retry_at =
+                        Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    Ok(())
+                })
+                .unwrap();
+            let reopened = Store::open(&store.root, &store.load().unwrap().repository).unwrap();
+            attempt = dispatch(select(&reopened, &c, None, 2).unwrap());
+            assert_eq!(attempt.no_verdict_attempts, count + 1);
+            assert_eq!(reopened.round_for("PR-1", &attempt).unwrap(), 1);
+        }
+        let fresh = dispatch(select(&store, &change(1, 2, false), None, 2).unwrap());
+        assert_eq!(fresh.no_verdict_attempts, 0);
+    }
+}
+
+// trace:BUG-2521 | ai:codex
+#[test]
+fn bug2521_waiting_preserves_capacity_and_conclusive_verdict_gates() {
+    for verdict in ["APPROVED", "CHANGES REQUESTED"] {
+        for phase in [Phase::Exited, Phase::Completed] {
+            let (_temp, store) = fixture();
+            let c = change(1, 1, false);
+            let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &attempt.token).unwrap();
+                    a.phase = Phase::Exited;
+                    a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::seconds(1));
+                    a.reviewer_spawning = true;
+                    Ok(())
+                })
+                .unwrap();
+            assert!(
+                matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+        if reason.contains("unfinished review processes"))
+            );
+            store
+                .transaction("PR-1", |state| {
+                    attempt_mut(state, "PR-1", &attempt.token)
+                        .unwrap()
+                        .reviewer_spawning = false;
+                    Ok(())
+                })
+                .unwrap();
+            let waiting = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+            write_verdict(
+                &waiting.path().join("PR-1.json"),
+                &verdict_json(&c.head, "WAITING"),
+            );
+            let other = change(2, 2, false);
+            let held = dispatch(select(&store, &other, None, 1).unwrap());
+            for _ in 0..3 {
+                assert!(
+                    matches!(select(&store, &c, None, 1).unwrap(), Action::Skip(reason)
+            if reason.contains("global reviewer capacity"))
+                );
+                assert_eq!(
+                    store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+                    1
+                );
+            }
+            store
+                .transaction("PR-2", |state| {
+                    attempt_mut(state, "PR-2", &held.token).unwrap().phase = Phase::Failed;
+                    Ok(())
+                })
+                .unwrap();
+            let retried = dispatch(select(&store, &c, None, 1).unwrap());
+            assert_eq!(retried.no_verdict_attempts, 2);
+            let verdicts = Directory::open(&store.runtime.path().join("review-verdicts")).unwrap();
+            write_verdict(
+                &verdicts.path().join("PR-1.json"),
+                &verdict_json(&c.head, verdict),
+            );
+            store
+                .transaction("PR-1", |state| {
+                    let a = attempt_mut(state, "PR-1", &retried.token).unwrap();
+                    a.phase = phase.clone();
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    Ok(())
+                })
+                .unwrap();
+            assert!(matches!(
+                select(&store, &c, None, 1).unwrap(),
+                Action::Skip(_)
+            ));
+            assert!(probe_unneeded_with_coverage(&store, &c, || None)
+                .unwrap()
+                .is_some());
+            assert_eq!(
+                store.load().unwrap().entries["PR-1"].attempts[0].no_verdict_attempts,
+                2
+            );
+        }
+    }
+}
+
+// Exercise real synced publications from the two-node signing fixture, with
+// either no local attempt or an elapsed local retry on the final shared try.
+// trace:BUG-2521 | ai:codex
+pub(crate) fn bug2521_assert_peer_waiting_backoff(
+    root: &Path,
+    deadline: chrono::DateTime<chrono::Utc>,
+) {
+    let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+    let mut c = change(7, 1, false);
+    c.head = "a".repeat(40);
+    for elapsed_local in [false, true] {
+        if elapsed_local {
+            store
+                .transaction("PR-7", |state| {
+                    let mut a: Attempt = serde_json::from_value(serde_json::json!({
+                        "head": c.head, "token": uuid::Uuid::new_v4().to_string(),
+                        "phase": "exited"
+                    }))
+                    .unwrap();
+                    a.no_verdict_attempts = 2;
+                    a.no_verdict_retry_at = Some(chrono::Utc::now() - chrono::Duration::minutes(2));
+                    state
+                        .entries
+                        .entry("PR-7".into())
+                        .or_default()
+                        .attempts
+                        .push(a);
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let attempts = |state: State| {
+            serde_json::to_value(
+                state
+                    .entries
+                    .get("PR-7")
+                    .map(|entry| &entry.attempts)
+                    .cloned()
+                    .unwrap_or_default(),
+            )
+            .unwrap()
+        };
+        let before = attempts(store.load().unwrap());
+        let action = select_with_coverage(&store, &c, None, 2, || None).unwrap();
+        assert!(
+            matches!(action, Action::Skip(ref reason) if reason.contains(&format!("retry after {deadline}"))),
+            "{action:?}"
+        );
+        let after = store.load().unwrap();
+        assert_eq!(
+            attempts(after),
+            before,
+            "backoff must not consume the final attempt"
+        );
+    }
+}
+
+// trace:BUG-2534 | ai:codex
+#[test]
+fn bug2534_ledger_only_verdict_stops_retries_and_preserves_rounds() {
+    use crate::gate::ledger::{ChangeKey, EventBody, GateEvent};
+    for gitlab in [false, true] {
+        let (temp, store) = fixture();
+        let mut c = change(1, 1, false);
+        c.gitlab = gitlab;
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        complete(&store, &c, &attempt);
+        store
+            .transaction(&c.key(), |state| {
+                let attempt = &mut state.entries.get_mut(&c.key()).unwrap().attempts[0];
+                attempt.no_verdict_attempts = 3;
+                attempt.no_verdict_retry_at = Some(chrono::Utc::now());
+                Ok(())
+            })
+            .unwrap();
+        let key = ChangeKey::parse(&c.key()).unwrap();
+        let record = verdict_json(&c.head, "approved")
+            .as_object()
+            .unwrap()
+            .clone();
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(key, EventBody::Verdict { record }),
+        )
+        .unwrap();
+        assert!(!temp.path().join(".aida/review-verdicts").exists());
+        assert!(store.history(&c.key()).unwrap().contains(&c.head));
+        assert!(matches!(
+            select(&store, &c, None, 2).unwrap(),
+            Action::Skip(_)
+        ));
+        assert!(store.load().unwrap().entries[&c.key()].attempts[0]
+            .no_verdict_retry_at
+            .is_none());
+        assert!(service::retry_blockers(&store.root, &store.dir)
+            .unwrap()
+            .is_empty());
+        c.head = format!("{:040x}", 2);
+        dispatch(select(&store, &c, None, 2).unwrap());
+        let record = verdict_json(&c.head, "request-changes")
+            .as_object()
+            .unwrap()
+            .clone();
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(key, EventBody::Verdict { record }),
+        )
+        .unwrap();
+        assert_eq!(store.history(&c.key()).unwrap().blocking(), 1);
+        // A pending delivery barrier left in the append-only ledger must not
+        // count as another refusing review round.
+        // trace:BUG-2534 | ai:claude
+        let mut barrier = verdict_json(&c.head, "request-changes")
+            .as_object()
+            .unwrap()
+            .clone();
+        barrier.insert("sweep_pending".into(), true.into());
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(key, EventBody::Verdict { record: barrier }),
+        )
+        .unwrap();
+        assert_eq!(store.history(&c.key()).unwrap().blocking(), 1);
+        // A failed delivery re-recorded at a later head archives the pending
+        // barrier inside `rounds`; nested barriers must not count either, while
+        // genuine archived refusals still do.
+        // trace:BUG-2534 | ai:claude
+        let pending_head = format!("{:040x}", 3);
+        let mut nested = verdict_json(&pending_head, "approved")
+            .as_object()
+            .unwrap()
+            .clone();
+        let mut archived_barrier = verdict_json(&pending_head, "request-changes")
+            .as_object()
+            .unwrap()
+            .clone();
+        archived_barrier.insert("sweep_pending".into(), true.into());
+        let other_barrier_head = format!("{:040x}", 4);
+        let mut other_barrier = verdict_json(&other_barrier_head, "request-changes")
+            .as_object()
+            .unwrap()
+            .clone();
+        other_barrier.insert("sweep_pending".into(), true.into());
+        nested.insert(
+            "rounds".into(),
+            serde_json::json!([archived_barrier, other_barrier]),
+        );
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(key, EventBody::Verdict { record: nested }),
+        )
+        .unwrap();
+        let history = store.history(&c.key()).unwrap();
+        assert_eq!(history.blocking(), 1);
+        assert!(history.contains(&pending_head));
+        assert!(!history.contains(&other_barrier_head));
+        let genuine_head = format!("{:040x}", 5);
+        let mut with_refusal = verdict_json(&genuine_head, "approved")
+            .as_object()
+            .unwrap()
+            .clone();
+        with_refusal.insert(
+            "rounds".into(),
+            serde_json::json!([verdict_json(&genuine_head, "request-changes")]),
+        );
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(
+                key,
+                EventBody::Verdict {
+                    record: with_refusal,
+                },
+            ),
+        )
+        .unwrap();
+        assert_eq!(store.history(&c.key()).unwrap().blocking(), 2);
+        std::fs::write(
+            temp.path()
+                .join(format!(".aida/gate-ledger/{}.jsonl", c.key())),
+            b"broken\n",
+        )
+        .unwrap();
+        assert!(store.history(&c.key()).is_err());
+    }
+}
+
+// Ledger-only history (no watcher or collector files): a head that holds only
+// a pending delivery barrier is not reviewed, and approvals whose deferred
+// findings were delivered across two heads spend no refusal round, so the
+// next head is still dispatched.
+// trace:BUG-2534 | ai:claude
+#[test]
+fn bug2534_ledger_only_pending_barriers_spend_no_round_across_heads() {
+    use crate::gate::ledger::{ChangeKey, EventBody, GateEvent};
+    let (temp, store) = fixture();
+    let mut c = change(7, 1, false);
+    let key = ChangeKey::parse(&c.key()).unwrap();
+    let append = |record: serde_json::Value| {
+        crate::gate::ledger::store::append_one(
+            temp.path(),
+            GateEvent::new(
+                key,
+                EventBody::Verdict {
+                    record: record.as_object().unwrap().clone(),
+                },
+            ),
+        )
+        .unwrap();
+    };
+    let barrier = |head: &str| {
+        let mut record = verdict_json(head, "request-changes");
+        record["sweep_pending"] = true.into();
+        record
+    };
+
+    // Pending only: the barrier neither concludes the head nor blocks.
+    append(barrier(&c.head));
+    assert!(!temp.path().join(".aida/review-verdicts").exists());
+    let history = store.history(&c.key()).unwrap();
+    assert!(!history.contains(&c.head), "a barrier is not a review");
+    assert!(!history.conclusive(&c.head), "a barrier is not conclusive");
+    assert_eq!(history.blocking(), 0);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    complete(&store, &c, &attempt);
+
+    // Two approved heads, each with its barrier retained before delivery.
+    for head in [2u64, 3] {
+        let head = format!("{head:040x}");
+        append(barrier(&head));
+        append(verdict_json(&head, "approved"));
+    }
+    let history = store.history(&c.key()).unwrap();
+    assert_eq!(history.blocking(), 0, "deferred approvals spend no round");
+    c.head = format!("{:040x}", 4);
+    dispatch(select(&store, &c, None, 2).unwrap());
+}
+
+// trace:STORY-2763 | ai:codex
+#[test]
+fn review_watch_fast_rounds_count_patch_changes_and_strict_counts_heads() {
+    use crate::gate::review_carryover::tests as carry;
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (fixture, approved) = carry::fixture();
+    let root = fixture.path();
+    carry::git(root, &["merge", "--quiet", "--no-edit", "main"]);
+    let merged = carry::head(root);
+    let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    write_verdict(
+        &dir.join("PR-42.json"),
+        &serde_json::json!({
+            "reviewed_sha": merged, "recorded_by": "reviewer", "recorded_at": "2026-11-13T00:01:00Z", "verdict": "FAIL",
+            "rounds": [{"reviewed_sha": approved, "recorded_by": "reviewer", "recorded_at": "2026-11-13T00:00:00Z", "verdict": "FAIL"}]
+        }),
+    );
+    assert_eq!(store.history("PR-42").unwrap().blocking(), 2);
+    assert!(
+        skipped_rounds(root).is_empty(),
+        "plain history audits nothing"
+    );
+    assert_eq!(
+        store.history_for_head("PR-42", &merged).unwrap().blocking(),
+        1
+    );
+    // AC5: the skipped round is audited on the ledger with its patch proof.
+    // trace:STORY-2763 | ai:claude
+    let skipped = skipped_rounds(root);
+    assert_eq!(skipped.len(), 1, "{skipped:?}");
+    let (head, policy, proof) = &skipped[0];
+    assert_eq!(head.as_deref(), Some(merged.as_str()));
+    assert_eq!(policy, "fast");
+    let pair: BTreeSet<&str> = [&proof["reviewed_sha"], &proof["same_patch_as"]]
+        .into_iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
+    assert_eq!(pair, BTreeSet::from([approved.as_str(), merged.as_str()]));
+    let patch = proof["patch_id"].as_str().unwrap();
+    assert!(
+        patch.len() == 40 && patch.chars().all(|c| c.is_ascii_hexdigit()),
+        "{proof}"
+    );
+    // A genuine new patch still consumes a distinct round.
+    carry::write(root, "new.txt", "new patch content\n");
+    let changed = carry::commit(root, "own patch changed");
+    let mut history = store.history_for_head("PR-42", &changed).unwrap();
+    history
+        .add(
+            &serde_json::to_vec(&verdict_json(&changed, "FAIL")).unwrap(),
+            "new.json",
+        )
+        .unwrap();
+    assert_eq!(history.blocking(), 2);
+    carry::git(root, &["checkout", "--quiet", "main"]);
+    carry::write(
+        root,
+        ".aida/config.toml",
+        "[review]\nfreshness = 'strict'\n",
+    );
+    let strict = carry::commit(root, "strict policy");
+    carry::git(root, &["update-ref", "refs/remotes/origin/main", &strict]);
+    let audited = skipped_rounds(root).len();
+    assert_eq!(
+        store.history_for_head("PR-42", &merged).unwrap().blocking(),
+        2
+    );
+    assert_eq!(
+        skipped_rounds(root).len(),
+        audited,
+        "the strict policy skips no round, so it audits none"
+    );
+}
+
+/// PR-42's `skipped-round` freshness decisions: (head, policy, proof).
+// trace:STORY-2763 | ai:claude
+fn skipped_rounds(root: &Path) -> Vec<(Option<String>, String, serde_json::Value)> {
+    use crate::gate::ledger::{self, ChangeKey, EventBody};
+    let Ok(store) = ledger::store_root(root) else {
+        return Vec::new();
+    };
+    ledger::checked::read_change_events(
+        &store,
+        ChangeKey::pr(42),
+        &mut ledger::checked::Budget::default(),
+    )
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|e| match e.body {
+        EventBody::FreshnessDecision {
+            policy,
+            decision,
+            proof,
+        } if decision == "skipped-round" => Some((e.head, policy, proof)),
+        _ => None,
+    })
+    .collect()
+}
+
+// AC2: a textual conflict found in preflight routes to rework, so the
+// reservation exits without launching work or failing a review round; any
+// other preflight refusal still fails the attempt.
+// trace:STORY-2763 | ai:claude
+#[test]
+fn story2763_conflict_preflight_exits_reservation_without_failing_a_round() {
+    let (_temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    let launched = std::cell::Cell::new(false);
+    execute_reservation(
+        &store,
+        &c.key(),
+        &attempt.token,
+        |_| Err(crate::gate::review_freshness::NeedsRework.into()),
+        |_| {
+            launched.set(true);
+            Ok(())
+        },
+    )
+    .expect("a routed conflict is not a reviewer failure");
+    assert!(!launched.get(), "no reviewer starts on a conflicting PR");
+    let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
+    // A routed conflict is a deliberate exit, never phase=failed.
+    // trace:STORY-2763 | ai:claude
+    assert_eq!(recorded.phase, Phase::Exited);
+    assert!(recorded
+        .diagnostic
+        .as_deref()
+        .unwrap()
+        .contains("conflicts with the protected base"));
+    assert_eq!(store.history(&c.key()).unwrap().blocking(), 0);
+    // A conflicting PR must release the sole slot for unrelated review work.
+    dispatch(select(&store, &change(2, 2, false), None, 1).unwrap());
+
+    let (_temp, store) = fixture();
+    let attempt = dispatch(select(&store, &c, None, 1).unwrap());
+    execute_reservation(
+        &store,
+        &c.key(),
+        &attempt.token,
+        |_| anyhow::bail!("other preflight refusal"),
+        |_| Ok(()),
+    )
+    .unwrap_err();
+    let recorded = &store.load().unwrap().entries[&c.key()].attempts[0];
+    assert_eq!(recorded.phase, Phase::Failed);
+}
+
+// trace:STORY-2857 | ai:codex
+#[test]
+fn story2857_terminal_review_transition_requires_process_exit_proof() {
+    for phase in [Phase::Exited, Phase::Completed] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let mut stopped = Identity::current().unwrap();
+        stopped.boot = "previous-boot".into();
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = phase;
+                a.identity = Some(stopped.clone());
+                a.reviewer_spawning = true;
+                a.reviewer = Some(Identity::current()?);
+                Ok(())
+            })
+            .unwrap();
+        // Live reviewer survives a terminal dispatcher and released mode claim.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let mut unknown = Identity::current()?;
+                unknown.pid_namespace = None;
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(unknown);
+                Ok(())
+            })
+            .unwrap();
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = None;
+                Ok(())
+            })
+            .unwrap();
+        // Lost spawn receipt cannot attest exit.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(stopped.clone());
+                Ok(())
+            })
+            .unwrap();
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid =
+                    Some(unsafe { libc::getpgrp() } as u32);
+                Ok(())
+            })
+            .unwrap();
+        // Dead recorded identities alone do not prove the group has stopped.
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid = Some(u32::MAX);
+                Ok(())
+            })
+            .unwrap();
+        assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_ok());
+    }
+}
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_manual_train_coexists_and_excludes_selected_review_reservations() {
+    let (temp, store) = fixture();
+    let _watcher =
+        crate::admission_owner::acquire(temp.path(), "legacy review-watch", true).unwrap();
+    dispatch(select(&store, &change(2, 2, false), None, 2).unwrap());
+    let _train = crate::admission_owner::cooperative_train(temp.path(), false).unwrap();
+    let members = train_members(temp.path(), &[1]).unwrap();
+    assert!(train_members(temp.path(), &[2]).is_err());
+    assert!(train_members(temp.path(), &[1]).is_err());
+    assert!(matches!(
+        select(&store, &change(1, 1, false), None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    assert!(crate::admission_owner::acquire(temp.path(), "land run", false).is_err());
+    drop(members);
+    dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
+    assert!(train_members(temp.path(), &[1]).is_err());
+}
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_terminal_member_history_requires_confirmed_dead_descendants() {
+    for phase in [Phase::Failed, Phase::Exited, Phase::Completed] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        let mut dead = Identity::current().unwrap();
+        dead.boot = "previous-boot".into();
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = phase;
+                a.no_verdict_attempts = 3;
+                a.identity = Some(dead.clone());
+                a.reviewer_spawning = true;
+                a.reviewer = Some(Identity::current()?);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let mut unknown = Identity::current()?;
+                unknown.pid_namespace = None;
+                attempt_mut(state, &c.key(), &attempt.token)
+                    .unwrap()
+                    .reviewer = Some(unknown);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.reviewer = Some(dead.clone());
+                a.pgid = Some(unsafe { libc::getpgrp() } as u32);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_err());
+        store
+            .transaction(&c.key(), |state| {
+                attempt_mut(state, &c.key(), &attempt.token).unwrap().pgid = Some(u32::MAX);
+                Ok(())
+            })
+            .unwrap();
+        assert!(train_members(temp.path(), &[1]).is_ok());
+    }
+}
+
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_remote_member_reservation_remains_a_blocker() {
+    let (temp, store) = fixture();
+    let c = change(1, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    store
+        .transaction(&c.key(), |state| {
+            attempt_mut(state, &c.key(), &attempt.token).unwrap().phase = Phase::RemoteHeld;
+            Ok(())
+        })
+        .unwrap();
+    assert!(train_members(temp.path(), &[1]).is_err());
+    assert!(train_members(temp.path(), &[2]).is_ok());
+}
+
+// Exercise the same all-ready member-locking step used by manual and automatic
+// trains, with blocked candidates first so they cannot consume --max slots.
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_all_ready_ejects_blocked_member_and_admits_rest() {
+    for phase in [
+        Phase::Reserved,
+        Phase::Running,
+        Phase::RemoteHeld,
+        Phase::Superseding,
+        Phase::Completed,
+    ] {
+        let (temp, store) = fixture();
+        let c = change(1, 1, false);
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = phase.clone();
+                if phase == Phase::Running {
+                    a.identity = Some(Identity::current()?);
+                }
+                if phase == Phase::Superseding {
+                    a.supersede = Some(Supersede {
+                        by: format!("{:040x}", 2),
+                        requested_at: chrono::Utc::now(),
+                        term_at: None,
+                        kill_at: None,
+                        diagnostic: None,
+                    });
+                }
+                if phase == Phase::Completed {
+                    let mut dead = Identity::current()?;
+                    dead.boot = "previous-boot".into();
+                    a.identity = Some(dead);
+                    let mut unknown = Identity::current()?;
+                    unknown.pid_namespace = None;
+                    a.reviewer = Some(unknown);
+                    a.reviewer_spawning = true;
+                }
+                Ok(())
+            })
+            .unwrap();
+        let _train = crate::admission_owner::cooperative_train(temp.path(), false).unwrap();
+        // Explicit lists retain whole-train refusal.
+        assert!(select_train_members(temp.path(), &[1, 2], false).is_err());
+        let (locks, ejected) = select_train_members(temp.path(), &[1, 2], true).unwrap();
+        assert_eq!(locks.len(), 1);
+        assert_eq!(ejected.len(), 1);
+        assert_eq!(ejected[0].pr, 1);
+        assert!(ejected[0].reason.contains(if phase == Phase::Completed {
+            "reviewer exit unconfirmed"
+        } else {
+            "review reservation active"
+        }));
+        // The surviving member remains protected against a new reservation.
+        assert!(matches!(
+            select(&store, &change(2, 2, false), None, 2).unwrap(),
+            Action::Skip(_)
+        ));
+        drop(locks);
+        assert!(matches!(
+            select(&store, &change(2, 2, false), None, 2).unwrap(),
+            Action::Dispatch(_)
+        ));
+    }
+}
+
+// Invalid shared state cannot become a per-member ejection or an empty train.
+// trace:BUG-2650 | ai:codex
+#[test]
+fn bug2650_all_ready_refuses_invalid_shared_review_evidence() {
+    let (temp, store) = fixture();
+    store.transaction("PR-1", |_| Ok(())).unwrap();
+    store.dir.write(STATE, b"{invalid").unwrap();
+    assert!(select_train_members(temp.path(), &[1, 2], true).is_err());
+    std::fs::remove_file(store.dir.path().join(STATE)).unwrap();
+    assert!(select_train_members(temp.path(), &[1, 2], true).is_err());
+}
+
+fn pause_for(reason: &str, duration: &str) -> pause::Control {
+    pause::Control::Pause {
+        reason: reason.into(),
+        duration: Some(duration.into()),
+    }
+}
+
+fn pause_events(store: &Store) -> Vec<serde_json::Value> {
+    let audit: serde_json::Value =
+        serde_json::from_slice(&store.dir.read("pause.json").unwrap().unwrap()).unwrap();
+    audit["events"].as_array().unwrap().clone()
+}
+
+// (a) The pause is a record, not a lock: a train reserves members while a
+// pause is active, and a pause is recorded while the train holds them.
+// trace:BUG-2650 | ai:claude
+#[test]
+fn bug2650_pause_never_blocks_train_reservations() {
+    let (temp, store) = fixture();
+    let now = chrono::Utc::now();
+    pause::fixture_change(&store, &pause_for("cutover", "1h"), "advisor-a", now).unwrap();
+    let _train = crate::admission_owner::cooperative_train(temp.path(), false).unwrap();
+    let (locks, ejected) = select_train_members(temp.path(), &[1, 2], true).unwrap();
+    assert_eq!(locks.len(), 2);
+    assert!(ejected.is_empty());
+    // Pause controls and launch checks proceed while the train holds members.
+    pause::fixture_change(&store, &pause_for("extend", "2h"), "advisor-a", now).unwrap();
+    assert!(pause::check_launch(&store)
+        .unwrap_err()
+        .is::<pause::Paused>());
+    // The member lock still decides first for a reserved change.
+    assert!(
+        matches!(select(&store, &change(1, 1, false), None, 2).unwrap(),
+        Action::Skip(reason) if reason == "change reserved by a merge train")
+    );
+    drop(locks);
+    assert!(store
+        .load()
+        .unwrap()
+        .entries
+        .values()
+        .all(|e| e.attempts.is_empty()));
+}
+
+// (b) A pause skips new launches (at selection and at the dispatcher's
+// pre-spawn check) and logs the owner and reason; a running review is never
+// cancelled and completes normally.
+// trace:BUG-2650 | ai:claude
+#[test]
+fn bug2650_pause_skips_new_launches_and_running_review_completes() {
+    let (temp, store) = fixture();
+    let running = change(1, 1, false);
+    let attempt = dispatch(select(&store, &running, None, 2).unwrap());
+    store
+        .transaction(&running.key(), |state| {
+            let a = attempt_mut(state, &running.key(), &attempt.token).unwrap();
+            a.phase = Phase::Running;
+            a.identity = Some(Identity::current()?);
+            Ok(())
+        })
+        .unwrap();
+    // A dispatcher reserved before the pause has not started queue work yet.
+    let late = change(3, 3, false);
+    let reserved = dispatch(select(&store, &late, None, 3).unwrap());
+
+    let now = chrono::Utc::now();
+    pause::fixture_change(
+        &store,
+        &pause_for("  rollback \"window\"  ", "3600"),
+        "advisor-a",
+        now,
+    )
+    .unwrap();
+    let repository = store.repository.clone();
+    drop(store);
+    let store = Store::open(temp.path(), &repository).unwrap();
+
+    let skipped = match select(&store, &change(2, 2, false), None, 3).unwrap() {
+        Action::Skip(reason) => reason,
+        other => panic!("expected pause skip: {other:?}"),
+    };
+    assert!(skipped.starts_with("review-watch paused by advisor-a until "));
+    assert!(skipped.ends_with(": rollback \"window\""));
+    assert!(
+        !store.load().unwrap().entries.contains_key("PR-2")
+            || store.load().unwrap().entries["PR-2"].attempts.is_empty()
+    );
+
+    let mut launched = false;
+    execute_reservation(
+        &store,
+        &late.key(),
+        &reserved.token,
+        |_| pause::check_launch(&store),
+        |_| {
+            launched = true;
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert!(!launched);
+    assert_eq!(
+        store.load().unwrap().entries["PR-3"].attempts[0].phase,
+        Phase::Failed
+    );
+
+    let state = store.load().unwrap();
+    assert_eq!(state.entries["PR-1"].attempts[0].phase, Phase::Running);
+    store
+        .transition(&running.key(), &attempt.token, Phase::Completed)
+        .unwrap();
+    assert_eq!(
+        store.load().unwrap().entries["PR-1"].attempts[0].phase,
+        Phase::Completed
+    );
+}
+
+// (c) Expiry auto-resumes launches and is audited once at its deadline.
+// trace:BUG-2650 | ai:claude
+#[test]
+fn bug2650_pause_expiry_auto_resumes() {
+    let (_temp, store) = fixture();
+    let past = chrono::Utc::now() - chrono::Duration::seconds(3600);
+    pause::fixture_change(&store, &pause_for("window", "30m"), "advisor-a", past).unwrap();
+    assert!(pause::check_launch(&store).is_ok());
+    dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
+    assert!(pause::current(&store, chrono::Utc::now())
+        .unwrap()
+        .is_none());
+    let events = pause_events(&store);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["pause"]["expires_at"], events[1]["expired"]["at"]);
+
+    // An unreadable record fails closed.
+    store.dir.write("pause.json", b"{").unwrap();
+    assert!(select(&store, &change(2, 2, false), None, 2).is_err());
+    assert!(pause::check_launch(&store).is_err());
+}
+
+// (d) Resume is audited with its actor; a redundant resume records nothing.
+// trace:BUG-2650 | ai:claude
+#[test]
+fn bug2650_resume_is_audited_with_actor() {
+    let (_temp, store) = fixture();
+    let now = chrono::Utc::now();
+    pause::fixture_change(&store, &pause_for("cutover", "1h"), "advisor-a", now).unwrap();
+    pause::fixture_change(
+        &store,
+        &pause::Control::Resume,
+        "operator-b (uid 1000)",
+        now,
+    )
+    .unwrap();
+    assert!(pause::check_launch(&store).is_ok());
+    dispatch(select(&store, &change(1, 1, false), None, 2).unwrap());
+    let message = pause::fixture_change(
+        &store,
+        &pause::Control::Resume,
+        "operator-b (uid 1000)",
+        now,
+    )
+    .unwrap();
+    assert!(message.contains("already inactive"));
+    let events = pause_events(&store);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["pause"]["actor"], "advisor-a");
+    assert_eq!(events[0]["pause"]["reason"], "cutover");
+    assert_eq!(events[1]["resume"]["actor"], "operator-b (uid 1000)");
+}
+
+// Durations default and cap from `[review] watch_pause_default/max`.
+// trace:BUG-2650 | ai:claude
+#[test]
+fn bug2650_pause_duration_limits_come_from_config() {
+    assert_eq!(
+        pause::parse_limits("").unwrap(),
+        pause::Limits {
+            default: 3600,
+            max: 86400
+        }
+    );
+    assert_eq!(
+        pause::parse_limits("[review]\nwatch_pause_default = \"30m\"\nwatch_pause_max = 7200\n")
+            .unwrap(),
+        pause::Limits {
+            default: 1800,
+            max: 7200
+        }
+    );
+    assert_eq!(
+        pause::parse_limits("[review]\nwatch_pause_max = \"10m\"\n").unwrap(),
+        pause::Limits {
+            default: 600,
+            max: 600
+        }
+    );
+    for bad in [
+        "[review]\nwatch_pause_default = \"2h\"\nwatch_pause_max = \"1h\"\n",
+        "[review]\nwatch_pause_max = 700000\n",
+        "[review]\nwatch_pause_max = 0\n",
+        "[review]\nwatch_pause_default = true\n",
+    ] {
+        assert!(pause::parse_limits(bad).is_err(), "{bad}");
+    }
+    let (_temp, store) = fixture();
+    let now = chrono::Utc::now();
+    assert!(pause::fixture_change(&store, &pause_for("long", "25h"), "advisor-a", now).is_err());
+    assert!(pause::fixture_change(&store, &pause_for("bad", "soon"), "advisor-a", now).is_err());
+    assert!(store.dir.read("pause.json").unwrap().is_none());
+    let default = pause::Control::Pause {
+        reason: "default".into(),
+        duration: None,
+    };
+    pause::fixture_change(&store, &default, "advisor-a", now).unwrap();
+    let paused = pause::current(&store, now).unwrap().unwrap();
+    assert_eq!(paused.expires_at, now + chrono::Duration::seconds(3600));
 }

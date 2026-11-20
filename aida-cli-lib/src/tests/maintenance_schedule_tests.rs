@@ -439,7 +439,7 @@ fn story_2351_session_hygiene_is_scheduled_off_the_hook_path() {
     // The disk guard's floor reclaim runs under the default ceiling; its
     // own budget leaves the re-probe and report room before the kill.
     assert!(
-        crate::doctor_cmd::FLOOR_RECLAIM_BUDGET * 2 <= SCHEDULED_COMMAND_TIMEOUT,
+        crate::maintenance_schedule::FLOOR_RECLAIM_BUDGET * 2 <= SCHEDULED_COMMAND_TIMEOUT,
         "the floor reclaim must stop well before the guard child is killed"
     );
 }
@@ -541,6 +541,79 @@ fn hanging_command_is_killed_at_the_timeout_and_reported_as_a_failure() {
     );
     let trip = failure_trip(&task, at(12), &outcome);
     assert!(trip.is_some(), "a 124 exit must mint a failure trip");
+}
+
+// trace:BUG-2667 | ai:codex
+#[cfg(unix)]
+#[test]
+fn shift_phase_timings_survive_scheduler_kill_and_reach_terminal_records() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut cmd = ProcessCommand::new("sh");
+    cmd.args([
+        "-c",
+        r#"test "$AIDA_SHIFT_PHASE_TRACE" = 1 || exit 2
+           printf 'aida-shift-phase-v1 %s\n' '0 0' '1 3' '2 3' '3 4' '4 5' '5 7' '6 8' '7 9' >&2
+           printf 'aida-shift-phase-v1 7 11\naida-shift-phase-v1 8 nope\naida-shift-phase-v1 8 10' >&2
+           sleep 30"#,
+    ]);
+    let outcome = run_with_kill_timeout(
+        cmd,
+        "shift tick",
+        tmp.path(),
+        std::time::Duration::from_secs(1),
+    );
+    assert_eq!(outcome.status, 124);
+    let expected = concat!(
+        "phases=[config=3ms,lock-and-state=0ms,drain-locks=1ms,events=1ms,",
+        "machine-readiness=2ms,queue=1ms,park-history=1ms] last-phase=hold-markers@9ms"
+    );
+    let task = task("night-shift", "10m", "shift tick");
+    let now = at(12);
+    let trip = failure_trip(&task, now, &outcome);
+    record_outcome_local(
+        tmp.path(),
+        &mut ScheduleState::default(),
+        &task,
+        now,
+        &outcome,
+        trip.as_ref(),
+    );
+    assert!(std::fs::read_to_string(log_path(tmp.path()))
+        .unwrap()
+        .contains(expected));
+    let events = crate::events::read_all(tmp.path());
+    assert!(events.iter().any(|event| matches!(
+        &event.kind,
+        EventKind::CronJobFailed { job, error, .. }
+            if job == "night-shift" && error.starts_with(TIMEOUT_EXIT_PREFIX)
+                && error.contains(expected)
+    )));
+}
+
+#[cfg(unix)]
+#[test]
+fn shift_phase_timings_record_success_without_a_failure_event() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut cmd = ProcessCommand::new("sh");
+    cmd.args([
+        "-c",
+        "printf 'aida-shift-phase-v1 0 0\naida-shift-phase-v1 20 0\n' >&2",
+    ]);
+    let outcome = run_with_kill_timeout(
+        cmd,
+        "shift tick",
+        tmp.path(),
+        std::time::Duration::from_secs(2),
+    );
+    assert_eq!(outcome.status, 0);
+    let task = task("night-shift", "10m", "shift tick");
+    let mut state = ScheduleState::default();
+    let now = at(12);
+    record_outcome_local(tmp.path(), &mut state, &task, now, &outcome, None);
+    assert_eq!(state.tasks["night-shift"].last_success_at, Some(now));
+    let log = std::fs::read_to_string(log_path(tmp.path())).unwrap();
+    assert!(log.contains("phases=[config=0ms] last-phase=finished@0ms"));
+    assert!(crate::events::read_all(tmp.path()).is_empty());
 }
 
 // Review follow-up: the GRANDCHILD case — a direct child that
@@ -2596,7 +2669,7 @@ fn story_1916_routed_disk_item_carries_the_stuck_sentence() {
         action: String::new(),
         safe_heal: false,
     };
-    let reason = crate::doctor_cmd::disk_headroom_fail_reason(&[finding]).unwrap();
+    let reason = crate::maintenance_schedule::disk_headroom_fail_reason(&[finding]).unwrap();
     let events = bug_1655_trip_disk_guard(tmp.path(), 1, &format!("warning: noise\n{reason}\n"));
     bug_1655_route(
         tmp.path(),
@@ -3545,4 +3618,131 @@ fn launch_due_jobs_section_omits_operator_escalations() {
     }
     let out = crate::agent_launch::render_launch_due_jobs_section(tmp.path(), None, "claude");
     assert!(out.contains(adv), "{out}");
+}
+
+// trace:STORY-b6b1278890774ef993d2ebc327862470-772.ac42195e | ai:codex
+// trace:STORY-b6b1278890774ef993d2ebc327862470-772.acfd3464 | ai:codex
+#[test]
+fn landing_health_tick_routes_to_live_codex_advisor_or_product() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let home = tempfile::tempdir().unwrap();
+    let _home = crate::test_env::EnvVarGuard::set("AIDA_HOME", home.path());
+    // Use the shipped guard pair, without bringing unrelated repo jobs along.
+    let source = include_str!("../../../.aida/config.toml");
+    // trace:STORY-2849 | ai:claude — stop at the next traced block so jobs
+    // appended after the pair (e.g. seat-health-guard) do not join the tick.
+    let pair = source
+        .split("# trace:STORY-2849 | ai:codex")
+        .nth(1)
+        .unwrap();
+    let pair = pair.split("\n# trace:").next().unwrap();
+    for claude_files in [true, false] {
+        for advisor_live in [true, false] {
+            let tmp = tempfile::tempdir().unwrap();
+            let root = tmp.path();
+            std::fs::create_dir_all(root.join(".aida")).unwrap();
+            std::fs::write(root.join(".aida/config.toml"), pair).unwrap();
+            std::fs::write(root.join("AGENTS.md"), "Codex checkout fixture").unwrap();
+            if claude_files {
+                std::fs::create_dir(root.join(".claude")).unwrap();
+                std::fs::write(root.join("CLAUDE.md"), "Claude fixture").unwrap();
+            }
+            let seat = if advisor_live { "advisor" } else { "product" };
+            crate::agent_registry::register_spawned_agent(
+                root,
+                "codex",
+                std::process::id(),
+                Some(seat.into()),
+                None,
+                root.to_path_buf(),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+            let live = crate::agent_registry::load_live_entries(root);
+            assert_eq!(live.len(), 1);
+            assert_eq!(live[0].agent_type, "codex");
+            let registry = load_registry(root).unwrap().unwrap();
+            let route = registry
+                .tasks
+                .iter()
+                .find(|t| t.name == "landing-health-guard-route")
+                .unwrap();
+            assert_eq!(route.seats, [seat]);
+            let rows = status_rows(root, &all_tasks(root).unwrap(), at(12)).unwrap();
+            for name in ["landing-health-guard", "landing-health-guard-route"] {
+                assert!(rows.iter().any(|r| r.name == name));
+            }
+            let mut state = ScheduleState::default();
+            // Prime the real event cursor on the first tick; the failure is
+            // emitted by the substrate executor and consumed on the next tick.
+            tick_with_executor(root, registry, &mut state, at(12), false, |_, cmd| {
+                assert_eq!(
+                    cmd.display,
+                    "doctor check landing-health --fail-on-findings"
+                );
+                Ok(TaskOutcome {
+                    status: 1,
+                    stdout: String::new(),
+                    stderr: "probable infrastructure or base cause: 3 open PRs fail Ratchet set"
+                        .into(),
+                })
+            })
+            .unwrap();
+            let guard = schedule_ledger::load(&store_root(root), "landing-health-guard").unwrap();
+            let trip = guard.failure_trips.last().unwrap();
+            let events = events::read_all(root);
+            assert!(events.iter().any(|e| matches!(&e.kind,
+                EventKind::CronJobFailed {job, trip_id: Some(id), ..}
+                    if job == "landing-health-guard" && id == &trip.trip_id)));
+            let mut routes = load_registry(root).unwrap().unwrap();
+            routes.tasks.retain(|t| t.kind == JobKind::Seat);
+            tick_core(
+                root,
+                routes,
+                &mut state,
+                Utc::now() + Duration::seconds(1),
+                false,
+                |_, _| unreachable!("seat jobs are delivered"),
+                |_| Snapshot::default(),
+                &events,
+            )
+            .unwrap();
+            let due = due_seat_jobs(root, Some(seat));
+            let delivered = due
+                .iter()
+                .find(|j| j.name == "landing-health-guard-route")
+                .unwrap();
+            assert!(delivered
+                .prompt
+                .as_deref()
+                .unwrap()
+                .starts_with("Diagnose the shared CI cause first"));
+            assert!(delivered
+                .prompt
+                .as_deref()
+                .unwrap()
+                .contains("aida doctor check landing-health"));
+            assert_eq!(delivered.failure.as_ref().unwrap().trip_id, trip.trip_id);
+            let artifact = render_due_jobs_block(&due, seat);
+            assert!(artifact.contains(&trip.trip_id), "{artifact}");
+            assert!(
+                artifact.contains("3 open PRs fail Ratchet set"),
+                "{artifact}"
+            );
+            let other = if advisor_live { "product" } else { "advisor" };
+            assert!(!due_seat_jobs(root, Some(other))
+                .iter()
+                .any(|j| j.name == "landing-health-guard-route"));
+            if !claude_files {
+                assert!(!root.join(".claude").exists());
+                assert!(!root.join("CLAUDE.md").exists());
+            }
+        }
+    }
 }

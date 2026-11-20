@@ -290,7 +290,8 @@ fn story2402_s3_migration_registered_cli_defaults_to_preview() {
     for flags in [vec![], vec!["--apply", "--json"]] {
         let mut argv = vec!["aida", "db", "migrate-defer-conditions"];
         argv.extend(&flags);
-        let matches = crate::command_registry::built_command()
+        let matches = crate::TEST_CLI
+            .built_command()
             .try_get_matches_from(argv)
             .unwrap();
         let args =

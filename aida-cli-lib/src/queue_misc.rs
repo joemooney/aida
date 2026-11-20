@@ -2,7 +2,18 @@
 //! queue helpers: batch tags, role and user filters, mail identity, effort load, stack/headless/worker commands (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    active_lease_for_cwd, branch_commits_ahead_main, branch_exists_anywhere, canonical_role_name,
+    change_lookup_for_branch, current_branch_at, effort_calibration, find_main_worktree_root,
+    headless_tail, is_terminal_status, run_worker_gc, stacks, worker, workflow_hints,
+    HeadlessCommand, StackCommand, StakeholderAction, WorkerCommand,
+};
+use aida_core::{Requirement, Storage};
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "queue_misc_args.rs"]
@@ -334,6 +345,18 @@ pub fn resolve_mail_sender_role() -> Option<String> {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .map(|raw| canonical_role_name(&raw))
+}
+
+/// The named seat this session holds (its bound registry row's seat, else
+/// `AIDA_ROTATION_SEAT`), recorded on sent mail as `from_seat` so a reply
+/// reaches whoever holds the seat. The row covers a Codex tool shell or a
+/// `--bg` session whose env does not carry the seat.
+// trace:STORY-2745 | ai:claude
+pub fn resolve_mail_sender_seat() -> Option<String> {
+    crate::collect_mail_identity_facts()
+        .seat()
+        .and_then(aida_core::mailbox_identity::seat_address)
+        .map(|address| address["seat:".len()..].to_string())
 }
 
 /// The queue identity for DRAINABLE handoff work (`aida backlog groom`): the

@@ -173,6 +173,8 @@ fn fixture_lane(tmp: &Path) -> LaneJobs {
     let fake = tmp.join("fake-cargo");
     crate::test_exec::write_executable(&fake,
         "#!/bin/sh\n\
+         for a in \"$@\"; do [ \"$a\" = -- ] && break; [ \"$a\" = --help ] && { echo \"Execute all unit and integration tests\"; exit 0; }; done\n\
+         echo \"    Finished \\`agent\\` profile [optimized] target(s) in 0.01s\"\n\
          filter=\"\"\n\
          seen=0\n\
          for a in \"$@\"; do\n\
@@ -473,6 +475,38 @@ fn job_env_carries_only_allow_listed_keys() {
     let scrubbed = scrub_host_env(dirty_host_env(tmp.path()));
     assert!(scrubbed.iter().all(|(k, _)| host_key_allowed(k)));
     assert!(!scrubbed.iter().any(|(k, _)| k == "AIDA_SESSION_GRANT"));
+}
+
+// Outer lane temporary directories disappear when bubblewrap replaces /dev.
+// Test projection without requiring bubblewrap or mutating the process env.
+// trace:TASK-3099 | ai:codex
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3099_job_tmpdir_is_private_for_cargo_and_fast_gates() {
+    let mut lane = LaneJobs {
+        seat: PathBuf::from("/seat"),
+        inbox: PathBuf::from("/seat/inbox"),
+        results: PathBuf::from("/results"),
+        lease_id: "lease-tmpdir".into(),
+        build_env: vec![("TMPDIR".into(), "/build/tmp".into())],
+        host_env: Vec::new(),
+        program: "cargo".into(),
+        sandbox: Sandbox::Bwrap,
+    };
+    for inherited in [None, Some("/dev/shm/unavailable-outer-tmp")] {
+        lane.host_env = inherited
+            .map(|value| ("TMPDIR".into(), value.into()))
+            .into_iter()
+            .collect();
+        for argv in [
+            vec!["cargo", "test", "--profile", "agent"],
+            vec!["make", "check-ci-fast"],
+        ] {
+            let mut request = job(&argv);
+            request.env.insert("TMPDIR".into(), "/request/tmp".into());
+            assert_eq!(lane.job_env(&request)["TMPDIR"], "/tmp");
+        }
+    }
 }
 
 #[cfg(unix)]
@@ -1015,9 +1049,85 @@ fn pre_test_failures_and_zero_matches_stay_untested() {
     );
 }
 
+/// The host cold-start slot is held until the lane's first build actually
+/// finishes: an accepted `--help` job exits 0 without building and keeps it;
+/// a later job whose cargo finished building releases it.
+// trace:BUG-2682 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2682_only_a_finished_build_releases_the_cold_start_slot() {
+    let tmp = tempfile::tempdir().unwrap();
+    let lane = fixture_lane(tmp.path());
+    let startup = crate::lane_admission::Startup::test_reservation();
+    let runner = Runner::start_with_admission(lane.clone(), Some(startup.release_handle()));
+
+    let help = job(&["cargo", "test", "--profile", "agent", "--help"]);
+    assert_eq!(validate(&help), Ok(()), "the runner accepts a help request");
+    let (rc, out) = run_through(&lane, &help);
+    assert_eq!(rc, 0, "{out}");
+    assert!(!cargo_built(out.as_bytes()), "{out}");
+    assert!(
+        startup.is_reserved(),
+        "a job that built nothing must keep the cold-start slot: {out}"
+    );
+    // `cargo check` finishes without emitting code: the test build is cold.
+    let (rc, out) = run_through(&lane, &job(&["cargo", "check", "--profile", "agent"]));
+    assert_eq!(rc, 101, "the fixture fails an unfiltered run: {out}");
+    assert!(cargo_built(out.as_bytes()), "{out}");
+    assert!(startup.is_reserved(), "a check keeps the cold-start slot");
+
+    let (rc, out) = run_through(
+        &lane,
+        &job(&["cargo", "test", "--profile", "agent", "--", "passing"]),
+    );
+    assert_eq!(rc, 0, "{out}");
+    // The rc is written before the runner loop releases; give it a moment.
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while startup.is_reserved() {
+        assert!(
+            Instant::now() < deadline,
+            "a finished build must release the slot"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    runner.stop();
+    let log = std::fs::read_to_string(lane.results.join("jobs.log")).unwrap();
+    assert_eq!(log.matches("first build finished").count(), 1, "{log}");
+}
+
+#[test]
+fn bug_2682_cargo_built_reads_cargo_completion_markers() {
+    for (built, output) in [
+        (
+            true,
+            "   Compiling x v0.1.0\n    Finished `agent` profile [optimized] target(s) in 41.2s\n",
+        ),
+        (
+            true,
+            "    Finished dev [unoptimized + debuginfo] target(s) in 0.31s\n",
+        ),
+        (
+            true,
+            "error: could not compile `aida-cli-lib` (lib test) due to 1 previous error\n",
+        ),
+        (
+            false,
+            "Execute all unit and integration tests and build examples of a local package\n",
+        ),
+        (false, "lane job refused: not allowed\n"),
+        (
+            false,
+            "   Compiling x v0.1.0\n\nlane job timed out after 900s\n",
+        ),
+        (false, ""),
+    ] {
+        assert_eq!(cargo_built(output.as_bytes()), built, "{output:?}");
+    }
+}
+
 // Exercise the production drain launch boundary with a real child submitting a
 // job through the env it receives; the vendor-specific resume loop stays separate.
-// trace:BUG-2383 | ai:codex
+// trace:BUG-2383 BUG-2682 | ai:codex
 #[cfg(unix)]
 #[test]
 fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence() {
@@ -1056,12 +1166,14 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
             let request_file = tmp.path().join("request");
             std::fs::write(&request_file, serde_json::to_vec(&request).unwrap()).unwrap();
             write_fixture_lease(&main, lease, &lane.seat);
+            let startup = crate::lane_admission::Startup::test_reservation();
             with_implementer_jobs(
                 &main,
                 "implementer",
                 Some(lease),
                 Some((&lane.seat, "branch")),
                 "implement this",
+                Some(startup.release_handle()),
                 |root, tree, offered_lease| {
                     assert_eq!(root, main);
                     assert_eq!(tree, lane.seat);
@@ -1109,6 +1221,11 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
                     );
                 },
             );
+            assert_eq!(
+                startup.is_reserved(),
+                refused,
+                "a rejected job must keep the startup slot; a completed Cargo job releases it"
+            );
             assert!(
                 resolve_seat_dirs(
                     Some(main.as_path()),
@@ -1133,6 +1250,7 @@ fn drain_launcher_supplies_jobs_for_all_implementer_vendors_and_reports_evidence
         Some("no-runner"),
         Some((tmp.path(), "branch")),
         "prompt",
+        None,
         |_, _, _| None,
         |prompt, _| {
             assert!(prompt.contains("untested=true"));
@@ -1189,7 +1307,7 @@ fn a_runner_is_published_on_its_lease_and_cleared_when_it_stops() {
         .is_err(),
         "no record, no runner"
     );
-    let runner = Runner::start_published(lane.clone(), &main);
+    let runner = Runner::start_published(lane.clone(), &main, None);
     let body = lease_body(&main, &lane.lease_id);
     let doc: toml::Value = toml::from_str(&body).unwrap();
     let record: RunnerRecord = doc[LEASE_FIELD].clone().try_into().unwrap();
@@ -1496,7 +1614,7 @@ fn a_published_runner_heartbeats_until_it_stops() {
     let lane = fixture_lane(tmp.path());
     let main = tmp.path().join("main");
     write_fixture_lease(&main, &lane.lease_id, &lane.seat);
-    let runner = Runner::start_published(lane.clone(), &main);
+    let runner = Runner::start_published(lane.clone(), &main, None);
     let doc: toml::Value = toml::from_str(&lease_body(&main, &lane.lease_id)).unwrap();
     let record: RunnerRecord = doc[LEASE_FIELD].clone().try_into().unwrap();
     assert!(seat_runner_alive(&record, &lane.results));
@@ -1663,7 +1781,7 @@ fn codex_core_tool_shell_reaches_the_runner_through_its_lease() {
         if let Some(id) = selector {
             child.env("AIDA_SESSION_ID", id);
         }
-        crate::launch::profile::finalize_codex(&mut child).unwrap();
+        crate::vendors::profile::finalize_codex(&mut child).unwrap();
         child
     };
     let job_argv = [
@@ -1705,7 +1823,7 @@ fn codex_core_tool_shell_reaches_the_runner_through_its_lease() {
     }
     assert_eq!(code, Some(0), "inherit=core control: {out}");
     for native in [false, true] {
-        let runner = Runner::start_published(lane.clone(), &main);
+        let runner = Runner::start_published(lane.clone(), &main, None);
         let (code, out) = in_tool_shell(&child_for(native, None), &seat);
         if native && code != Some(0) && out.contains("namespace") {
             eprintln!("SKIP: the native codex sandbox cannot start here: {out}");

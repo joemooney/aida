@@ -10,6 +10,7 @@
 //! sandbox-store playground. This module reaches shared helpers (e.g.
 //! `aida_store_override_from`) via `crate::`.
 
+use aida_core::DatabaseBackend;
 use anyhow::{Context, Result};
 use colored::Colorize;
 
@@ -18,7 +19,8 @@ use colored::Colorize;
 pub(crate) mod sandbox_cmd_args;
 pub(crate) use sandbox_cmd_args::*;
 
-use crate::*;
+use crate::cli;
+use aida_core::{RelationshipType, Requirement, RequirementStatus, RequirementType};
 
 /// Default sandbox store location: a stable per-user dir under the system temp
 /// directory, so repeated `aida sandbox create` / `path` point at the same

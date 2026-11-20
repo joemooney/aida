@@ -19,8 +19,14 @@ fn body_by(verdict: &str, sha: &str, recorded_by: &str, closed: Option<&str>) ->
         Some(sha) => format!(r#","closed_by_merge":"{sha}""#),
         None => String::new(),
     };
+    // trace:STORY-2698 | ai:codex — approvals contain no unresolved legacy findings.
+    let findings = if verdict == "approved" {
+        "[]"
+    } else {
+        r#"["f1"]"#
+    };
     format!(
-        r#"{{"verdict":"{verdict}","reviewed_sha":"{sha}","recorded_by":"{recorded_by}","findings":["f1"]{closed}}}"#
+        r#"{{"verdict":"{verdict}","reviewed_sha":"{sha}","recorded_by":"{recorded_by}","findings":{findings}{closed}}}"#
     )
 }
 

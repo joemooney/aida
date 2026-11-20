@@ -287,7 +287,7 @@ pub(crate) fn dispatch_record_active(now: DateTime<Utc>) -> bool {
     let Ok(dir) = mandate::mandate_dir() else {
         return false;
     };
-    let principal = crate::current_user_id(None);
+    let principal = crate::gate::mandate::operator_principal();
     let (valid, _) = mandate::load_valid(&dir, &principal, now);
     matches!(
         mandate::state_at(&valid, now),
@@ -806,7 +806,7 @@ pub(crate) fn handle_dispatch(action: &DispatchAction) -> Result<()> {
 
     match action {
         DispatchAction::Request { verb, json } => {
-            let principal = crate::current_user_id(None);
+            let principal = crate::gate::mandate::operator_principal();
             let submitted = submit_request(&main_worktree, &mandate_dir, &principal, verb, now)?;
             if *json {
                 let payload = serde_json::json!({
@@ -1072,6 +1072,7 @@ pub(crate) fn notify_advisor_outcome(
         archived: false,
         from_source: aida_core::mailbox::SenderSource::Explicit,
         from_role: Some("dispatch".to_string()),
+        from_seat: None,
         relayed_from: None,
     };
     if crate::mailbox_store::write_message(main_worktree, &msg).is_ok() {
@@ -2547,9 +2548,10 @@ pub(crate) fn prepare_lane_worktree(
             aida_core::mailbox_lifecycle::guard::retire_checkout(wt_path, "lane reuse")
                 .map_err(|refusal| anyhow::anyhow!("refusing to reuse worktree: {refusal}"))?;
         // The quiet re-check runs right before the checkout. trace:STORY-1843 | ai:claude
+        // Keep branch resets from writing inferred upstream config. trace:BUG-2211 | ai:codex
         let checkout = || {
             aida_core::git_ops::host_git_command(wt_path)
-                .args(["checkout", "-B", branch, &resolved_start])
+                .args(["checkout", "--no-track", "-B", branch, &resolved_start])
                 .output()
                 .with_context(|| format!("failed to checkout {branch} in {}", wt_path.display()))
                 .and_then(|out| {
@@ -2572,7 +2574,7 @@ pub(crate) fn prepare_lane_worktree(
         )?;
     } else {
         let out = aida_core::git_ops::host_git_command(main_worktree)
-            .args(["worktree", "add", "-B", branch])
+            .args(["worktree", "add", "--no-track", "-B", branch])
             .arg(wt_path)
             .arg(&resolved_start)
             .output()
@@ -2637,19 +2639,24 @@ pub(crate) fn build_implementer_launch_command(
         posture == crate::session::ContainmentPosture::None,
         "this dispatch vendor requires the supervised agent launcher"
     );
-    let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-        vendor: launch_vendor,
-        kind,
-        program: agent_bin.as_os_str().to_owned(),
-        // Switches above are launcher-owned. The name is a -n operand;
-        // the prompt is positional data, so neither is a flag tail.
-        args,
-        tail: Vec::new(),
-        posture,
-        cwd: wt_path.to_path_buf(),
-        set_cwd: true,
-        host_main: Some(main_worktree.to_path_buf()),
-    })?;
+    let ctx = {
+        let req = crate::launch::LaunchRequest {
+            vendor: launch_vendor,
+            kind,
+            program: agent_bin.as_os_str().to_owned(),
+            // Switches above are launcher-owned. The name is a -n operand;
+            // the prompt is positional data, so neither is a flag tail.
+            args,
+            tail: Vec::new(),
+            posture,
+            cwd: wt_path.to_path_buf(),
+            set_cwd: true,
+            host_main: Some(main_worktree.to_path_buf()),
+        };
+        // trace:STORY-2538 | ai:codex
+        let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+        crate::launch::LaunchContext::resolve(&exec, req)
+    }?;
     let mut cmd = crate::launch::spawn_agent(&ctx)?;
     // Critical Boundary B requirement: implementer lanes never inherit or hold
     // any session grant, purpose, or dispatch worker claim token.

@@ -325,8 +325,8 @@ mod tests {
 
     #[test]
     fn disposition_cli_parses_contract_and_rejects_inspection_selector() {
-        use crate::command_registry::try_parse_from;
-        let valid = try_parse_from([
+        use crate::TEST_CLI;
+        let valid = TEST_CLI.try_parse_from([
             "aida",
             "mailbox",
             "disposition",
@@ -362,7 +362,7 @@ mod tests {
                 "someone-else",
             ],
         ] {
-            assert!(try_parse_from(args).is_err());
+            assert!(TEST_CLI.try_parse_from(args).is_err());
         }
     }
 

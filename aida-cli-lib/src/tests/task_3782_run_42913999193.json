@@ -1,0 +1,50 @@
+[
+  {
+    "name": "CI (lib-0)",
+    "workflow": "CI",
+    "bucket": "pass",
+    "link": "https://github.com/owner/repo/actions/runs/42913999193/job/0"
+  },
+  {
+    "name": "CI (lib-1)",
+    "workflow": "CI",
+    "bucket": "pass",
+    "link": "https://github.com/owner/repo/actions/runs/42913999193/job/1"
+  },
+  {
+    "name": "CI (cli-0)",
+    "workflow": "CI",
+    "bucket": "pass",
+    "link": "https://github.com/owner/repo/actions/runs/42913999193/job/2"
+  },
+  {
+    "name": "CI (cli-1)",
+    "workflow": "CI",
+    "bucket": "pass",
+    "link": "https://github.com/owner/repo/actions/runs/42913999193/job/3"
+  },
+  {
+    "name": "CI (rest)",
+    "workflow": "CI",
+    "bucket": "pass",
+    "link": "https://github.com/owner/repo/actions/runs/42913999193/job/4"
+  },
+  {
+    "name": "CI (gates)",
+    "workflow": "CI",
+    "bucket": "pass",
+    "link": "https://github.com/owner/repo/actions/runs/42913999193/job/5"
+  },
+  {
+    "name": "CI (contracts)",
+    "workflow": "CI",
+    "bucket": "pass",
+    "link": "https://github.com/owner/repo/actions/runs/42913999193/job/6"
+  },
+  {
+    "name": "Release (${{ matrix.os }})",
+    "workflow": "CI",
+    "bucket": "skipping",
+    "link": "https://github.com/owner/repo/actions/runs/42913999193/job/7"
+  }
+]

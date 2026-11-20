@@ -301,6 +301,23 @@ pub fn check_worktree_removal(worktree: &Path) -> Result<(), WorktreeInUse> {
     }
 }
 
+/// Check cache removal without exempting the caller or its process chain.
+// trace:BUG-2684 | ai:codex
+/// An open-file list it could not read in full is "holder unknown".
+pub fn check_cache_removal(path: &Path) -> Result<(), WorktreeInUse> {
+    check_cache_removal_in(Path::new("/proc"), path, std::process::id())
+}
+
+/// [`check_cache_removal`] over an explicit proc root and caller pid.
+// trace:BUG-2684 | ai:claude
+pub fn check_cache_removal_in(
+    proc_root: &Path,
+    path: &Path,
+    self_pid: u32,
+) -> Result<(), WorktreeInUse> {
+    check_removal_in_impl(proc_root, path, self_pid, false)
+}
+
 /// [`check_worktree_removal`] over an explicit proc root and caller pid, so
 /// tests can drive the strict verdict with a fake `/proc` tree.
 // trace:BUG-1986 | ai:claude
@@ -309,7 +326,16 @@ pub fn check_removal_in(
     worktree: &Path,
     self_pid: u32,
 ) -> Result<(), WorktreeInUse> {
-    match scan_holders_in(proc_root, worktree, self_pid) {
+    check_removal_in_impl(proc_root, worktree, self_pid, true)
+}
+
+fn check_removal_in_impl(
+    proc_root: &Path,
+    worktree: &Path,
+    self_pid: u32,
+    exempt_caller: bool,
+) -> Result<(), WorktreeInUse> {
+    match scan_holders(proc_root, worktree, self_pid, exempt_caller) {
         Ok(holders) if holders.is_empty() => Ok(()),
         Ok(holders) => Err(WorktreeInUse {
             worktree: worktree.to_path_buf(),
@@ -411,6 +437,15 @@ pub fn scan_holders_in(
     worktree: &Path,
     self_pid: u32,
 ) -> Result<Vec<WorktreeHolder>, ScanUnverified> {
+    scan_holders(proc_root, worktree, self_pid, true)
+}
+
+fn scan_holders(
+    proc_root: &Path,
+    worktree: &Path,
+    self_pid: u32,
+    exempt_caller: bool,
+) -> Result<Vec<WorktreeHolder>, ScanUnverified> {
     // An empty base would match every path under `starts_with`.
     if worktree.as_os_str().is_empty() {
         return Ok(Vec::new());
@@ -488,23 +523,34 @@ pub fn scan_holders_in(
         .collect();
 
     let mut holders = Vec::new();
+    let mut incomplete = None;
     for &pid in &pids {
-        if excluded.contains(&pid) {
+        if exempt_caller && excluded.contains(&pid) {
             continue;
         }
         if let Some(root) = subtree_root {
             let same_session = sid.get(&pid).is_some_and(|s| exempt_sessions.contains(s));
-            if same_session && ancestry(&ppid, pid).contains(&root) {
+            if exempt_caller && same_session && ancestry(&ppid, pid).contains(&root) {
                 continue;
             }
         }
-        if let Some(hold) = holds(proc_root, pid, &inside) {
-            holders.push(WorktreeHolder {
+        // Cache removal does not exempt the caller, and a process whose open
+        // files could not all be checked is a possible holder.
+        // trace:BUG-2684 | ai:claude
+        match holds(proc_root, pid, &inside, !exempt_caller) {
+            Ok(Some(hold)) => holders.push(WorktreeHolder {
                 pid,
                 command: command_of(proc_root, pid),
                 hold,
-            });
+            }),
+            Ok(None) => {}
+            Err(reason) => {
+                incomplete.get_or_insert(reason);
+            }
         }
+    }
+    if let Some(reason) = incomplete.filter(|_| holders.is_empty()) {
+        return Err(ScanUnverified::other(reason));
     }
     // trace:BUG-1986 | ai:claude
     match namespace_unverified {
@@ -573,27 +619,126 @@ fn ancestry(ppid: &BTreeMap<u32, u32>, pid: u32) -> Vec<u32> {
 }
 
 /// The first way `pid` holds the worktree, checked from cheapest to costliest.
-fn holds(proc_root: &Path, pid: u32, inside: &dyn Fn(&Path) -> bool) -> Option<HoldKind> {
-    if read_link(proc_root, pid, "cwd").is_some_and(|p| inside(&p)) {
-        return Some(HoldKind::Cwd);
-    }
-    if read_link(proc_root, pid, "root").is_some_and(|p| inside(&p) && p != Path::new("/")) {
-        return Some(HoldKind::Root);
-    }
-    if read_link(proc_root, pid, "exe").is_some_and(|p| inside(&p)) {
-        return Some(HoldKind::Executable);
-    }
+/// `Err` (strict mode only) means some of this process's links could not be
+/// read, so it may hold the tree.
+fn holds(
+    proc_root: &Path,
+    pid: u32,
+    inside: &dyn Fn(&Path) -> bool,
+    strict: bool,
+) -> Result<Option<HoldKind>, String> {
     let dir = proc_root.join(pid.to_string());
-    // Unreadable: another user's process.
-    if let Ok(fds) = std::fs::read_dir(dir.join("fd")) {
+    let link = |name: &str| -> Result<Option<PathBuf>, String> {
+        match std::fs::read_link(dir.join(name)) {
+            Ok(target) => Ok(Some(target)),
+            Err(_) if !strict => Ok(None),
+            Err(e) => unreadable(&dir, pid, name, &e).map(|()| None),
+        }
+    };
+    if link("cwd")?.is_some_and(|p| inside(&p)) {
+        return Ok(Some(HoldKind::Cwd));
+    }
+    if link("root")?.is_some_and(|p| inside(&p) && p != Path::new("/")) {
+        return Ok(Some(HoldKind::Root));
+    }
+    if link("exe")?.is_some_and(|p| inside(&p)) {
+        return Ok(Some(HoldKind::Executable));
+    }
+    if strict {
+        if let Some(hold) = strict_fd_hold(&dir, pid, inside)? {
+            return Ok(Some(hold));
+        }
+    } else if let Ok(fds) = std::fs::read_dir(dir.join("fd")) {
+        // Unreadable: another user's process.
         for fd in fds.flatten().take(MAX_FDS_PER_PROCESS) {
             if let Ok(target) = std::fs::read_link(fd.path()) {
                 if inside(&target) {
-                    return Some(HoldKind::OpenFile(target));
+                    return Ok(Some(HoldKind::OpenFile(target)));
                 }
             }
         }
     }
+    Ok(mapped_hold(&dir, inside))
+}
+
+/// Strict mode's verdict on a `/proc/<pid>` read that failed: `Ok` when the
+/// process exited (or the link does not exist, as for a kernel thread's
+/// `exe`) or belongs to another user (skipped, as in the worktree scan);
+/// otherwise the holder is unknown.
+// trace:BUG-2684 | ai:claude
+#[cfg(unix)]
+fn unreadable(dir: &Path, pid: u32, what: &str, e: &std::io::Error) -> Result<(), String> {
+    use std::os::unix::fs::MetadataExt;
+    if e.kind() == std::io::ErrorKind::NotFound || e.raw_os_error() == Some(libc::ESRCH) {
+        return Ok(());
+    }
+    // SAFETY: geteuid has no preconditions.
+    let uid = unsafe { libc::geteuid() };
+    if e.kind() == std::io::ErrorKind::PermissionDenied
+        && (std::fs::metadata(dir).is_ok_and(|m| m.uid() != uid) || exited(dir))
+    {
+        return Ok(());
+    }
+    Err(format!("could not read {what} of pid {pid} ({e})"))
+}
+
+/// A zombie or dead task has closed every file, but its `fd` directory
+/// refuses listing with EACCES. So does a task that is exiting: it releases
+/// its memory (`statm` reads all zeros) just before closing its files. A
+/// process that vanished meanwhile has exited too.
+#[cfg(unix)]
+fn exited(dir: &Path) -> bool {
+    let state = match std::fs::read_to_string(dir.join("stat")) {
+        Ok(stat) => stat,
+        Err(e) => return e.kind() == std::io::ErrorKind::NotFound,
+    };
+    let dead = state.rfind(')').is_some_and(|end| {
+        matches!(
+            state[end + 1..].split_whitespace().next(),
+            Some("Z" | "X" | "x")
+        )
+    });
+    dead || std::fs::read_to_string(dir.join("statm")).is_ok_and(|statm| {
+        !statm.trim().is_empty() && statm.split_whitespace().all(|field| field == "0")
+    })
+}
+
+#[cfg(not(unix))]
+fn unreadable(_dir: &Path, pid: u32, what: &str, e: &std::io::Error) -> Result<(), String> {
+    Err(format!("could not read {what} of pid {pid} ({e})"))
+}
+
+/// The fd pass for automatic cache removal: a list cut short at
+/// [`MAX_FDS_PER_PROCESS`], an unreadable entry or link, or an unreadable fd
+/// directory of one of this user's processes is "holder unknown", never
+/// "unheld".
+// trace:BUG-2684 | ai:claude
+fn strict_fd_hold(
+    dir: &Path,
+    pid: u32,
+    inside: &dyn Fn(&Path) -> bool,
+) -> Result<Option<HoldKind>, String> {
+    let fds = match std::fs::read_dir(dir.join("fd")) {
+        Ok(fds) => fds,
+        Err(e) => return unreadable(dir, pid, "the open files", &e).map(|()| None),
+    };
+    for (seen, fd) in fds.enumerate() {
+        if seen == MAX_FDS_PER_PROCESS {
+            return Err(format!(
+                "pid {pid} has more than {MAX_FDS_PER_PROCESS} open files, so not all were checked"
+            ));
+        }
+        let fd = fd.map_err(|e| format!("could not read the open files of pid {pid} ({e})"))?;
+        match std::fs::read_link(fd.path()) {
+            Ok(target) if inside(&target) => return Ok(Some(HoldKind::OpenFile(target))),
+            Ok(_) => {}
+            Err(e) => unreadable(dir, pid, "an open file", &e)?,
+        }
+    }
+    Ok(None)
+}
+
+fn mapped_hold(dir: &Path, inside: &dyn Fn(&Path) -> bool) -> Option<HoldKind> {
     // A file mapped into memory (a shared library or an mmapped database
     // under the tree) holds it even after its fd is closed. Each
     // `map_files/<range>` link resolves to the mapped file's path.
@@ -703,6 +848,61 @@ mod tests {
 
     fn pids(h: &[WorktreeHolder]) -> Vec<u32> {
         h.iter().map(|h| h.pid).collect()
+    }
+
+    // A cache-removal scan cut short by the fd cap is "holder unknown", even
+    // when the only holding fd lies past the cap. The worktree scan keeps its
+    // legacy capped policy.
+    // trace:BUG-2684 | ai:claude
+    #[test]
+    fn bug_2684_cache_scan_past_the_fd_cap_is_unverified() {
+        let (_t, fake, wt, outside) = fixture();
+        fake.add(1, 0, "init", Path::new("/"));
+        fake.add(200, 1, "aida worktree gc", &outside);
+        let busy = fake.add(300, 1, "server", &outside);
+        for fd in 0..MAX_FDS_PER_PROCESS {
+            symlink(outside.join("log"), busy.join("fd").join(fd.to_string())).unwrap();
+        }
+        // A zombie's fd directory refuses listing, but it holds nothing.
+        let zombie = fake.add(400, 1, "defunct", &outside);
+        std::fs::write(zombie.join("stat"), "400 (defunct) Z 1 1 1 0").unwrap();
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mode = std::fs::Permissions::from_mode(0o000);
+            std::fs::set_permissions(zombie.join("fd"), mode).unwrap();
+        }
+        // Exactly at the cap every entry was read: verified, unheld.
+        check_cache_removal_in(&fake.root, &wt, 200).unwrap();
+
+        let last = busy.join("fd").join(MAX_FDS_PER_PROCESS.to_string());
+        symlink(wt.join("target/cache.bin"), &last).unwrap();
+        let err = check_cache_removal_in(&fake.root, &wt, 200).unwrap_err();
+        // Whichever entry the listing yields last, the cache is kept.
+        assert!(
+            err.unverified
+                .as_deref()
+                .is_some_and(|why| why.contains("more than 4096 open files"))
+                || pids(&err.holders) == vec![300],
+            "{err}"
+        );
+
+        std::fs::remove_file(&last).unwrap();
+        symlink(outside.join("log"), &last).unwrap();
+        let err = check_cache_removal_in(&fake.root, &wt, 200).unwrap_err();
+        assert!(err.holders.is_empty());
+        assert!(err.unverified.unwrap().contains("pid 300 has more than"));
+        // Legacy worktree policy is unchanged.
+        check_removal_in(&fake.root, &wt, 200).unwrap();
+
+        // An fd directory of this user's process that cannot be listed.
+        std::fs::remove_dir_all(busy.join("fd")).unwrap();
+        std::fs::write(busy.join("fd"), "not a directory").unwrap();
+        let err = check_cache_removal_in(&fake.root, &wt, 200).unwrap_err();
+        assert!(err
+            .unverified
+            .unwrap()
+            .contains("could not read the open files of pid 300"));
+        check_removal_in(&fake.root, &wt, 200).unwrap();
     }
 
     // trace:BUG-1947 | ai:claude

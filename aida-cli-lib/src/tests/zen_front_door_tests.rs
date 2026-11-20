@@ -114,7 +114,7 @@ fn zen_dry_run_renders_drafted_spec() {
 /// still PARSE.
 #[test]
 fn zen_help_hides_introspection_subcommands_but_keeps_them_runnable() {
-    let mut cli = crate::command_registry::built_command();
+    let mut cli = crate::TEST_CLI.built_command();
     let zen = cli
         .get_subcommands_mut()
         .find(|c| c.get_name() == "zen")
@@ -126,7 +126,8 @@ fn zen_help_hides_introspection_subcommands_but_keeps_them_runnable() {
     );
     // The visible-subcommand list must be empty (all three are hidden).
     assert!(
-        crate::command_registry::built_command()
+        crate::TEST_CLI
+            .built_command()
             .get_subcommands()
             .find(|c| c.get_name() == "zen")
             .unwrap()
@@ -136,7 +137,7 @@ fn zen_help_hides_introspection_subcommands_but_keeps_them_runnable() {
     );
 
     // Still runnable: the parser accepts `aida zen status`.
-    let parsed = crate::command_registry::try_parse_from(["aida", "zen", "status"]);
+    let parsed = crate::TEST_CLI.try_parse_from(["aida", "zen", "status"]);
     assert!(parsed.is_ok(), "aida zen status must still parse");
 }
 

@@ -1203,6 +1203,36 @@ pub(crate) fn load_ledger_checked(project_root: &Path) -> (Vec<AuthorshipRecord>
     (records, warning)
 }
 
+/// The author sessions a MERGE decision judges (the C2 author rule, for
+/// every caller: ship, drain, burndown, release, land and each train car),
+/// from ONE checked read of the authorship ledger. `Err(why)` when the
+/// ledger is missing, unreadable, or has malformed lines: a merge decision
+/// never falls back to live leases alone, since an author whose lease was
+/// released would vanish (promotion 23 review F2). `spec_ids` empty means
+/// the fail-closed every-author set, as [`all_author_sessions`].
+// trace:STORY-2905 trace:STORY-2903 | ai:claude
+pub(crate) fn author_sessions_checked(
+    project_root: &Path,
+    spec_ids: &[String],
+    head_branch: Option<&str>,
+) -> Result<Vec<crate::gate::ship::AuthorSession>, String> {
+    let (ledger, untrusted) = load_ledger_checked(project_root);
+    if let Some(why) = untrusted {
+        return Err(why);
+    }
+    Ok(if spec_ids.is_empty() {
+        all_author_sessions_from(project_root, &ledger, head_branch)
+    } else {
+        author_sessions(
+            &visible_leases(project_root),
+            &ledger,
+            spec_ids,
+            head_branch,
+            |l| manifest_session_id(project_root, l),
+        )
+    })
+}
+
 /// Print [`load_ledger_checked`]'s warning, if any, to stderr.
 pub(crate) fn warn_on_ledger_read(project_root: &Path) {
     if let (_, Some(warning)) = load_ledger_checked(project_root) {
@@ -1295,11 +1325,19 @@ pub(crate) fn all_author_sessions(
     project_root: &Path,
     head_branch: Option<&str>,
 ) -> Vec<crate::gate::ship::AuthorSession> {
+    all_author_sessions_from(project_root, &load_ledger(project_root), head_branch)
+}
+
+/// [`all_author_sessions`] over an already-read `ledger`.
+fn all_author_sessions_from(
+    project_root: &Path,
+    ledger: &[AuthorshipRecord],
+    head_branch: Option<&str>,
+) -> Vec<crate::gate::ship::AuthorSession> {
     let leases: Vec<SessionLease> = visible_leases(project_root)
         .into_iter()
         .filter(is_work_lease)
         .collect();
-    let ledger = load_ledger(project_root);
     let mut ids: Vec<String> = leases
         .iter()
         .map(|l| l.scope.trim().to_string())
@@ -1308,7 +1346,7 @@ pub(crate) fn all_author_sessions(
         .collect();
     ids.sort();
     ids.dedup();
-    author_sessions(&leases, &ledger, &ids, head_branch, |l| {
+    author_sessions(&leases, ledger, &ids, head_branch, |l| {
         manifest_session_id(project_root, l)
     })
 }
@@ -1331,6 +1369,9 @@ pub(crate) fn visible_leases(project_root: &Path) -> Vec<SessionLease> {
 /// the human-at-TTY floor when recording an approval of `sha`.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct HumanReviewReceipt {
+    // trace:STORY-2696 | ai:codex
+    #[serde(default = "super::review_verdict::carry_eligible_default")]
+    pub(crate) carry_eligible: bool,
     pub(crate) id: String,
     pub(crate) sha: String,
     pub(crate) subject: String,
@@ -1363,9 +1404,10 @@ pub(crate) fn write_human_receipt(
     subject: &str,
     identity: &[String],
     solo_human: bool,
+    carry_eligible: bool,
 ) -> anyhow::Result<String> {
     let dir = receipt_dir().ok_or_else(|| anyhow::anyhow!("cannot locate the AIDA home"))?;
-    write_human_receipt_as(&dir, sha, subject, identity, solo_human)
+    write_human_receipt_policy(&dir, sha, subject, identity, solo_human, carry_eligible)
 }
 
 pub(crate) fn write_human_receipt_in(
@@ -1387,8 +1429,21 @@ pub(crate) fn write_human_receipt_as(
     identity: &[String],
     solo_human: bool,
 ) -> anyhow::Result<String> {
+    write_human_receipt_policy(dir, sha, subject, identity, solo_human, true)
+}
+
+// trace:STORY-2696 | ai:codex
+pub(crate) fn write_human_receipt_policy(
+    dir: &Path,
+    sha: &str,
+    subject: &str,
+    identity: &[String],
+    solo_human: bool,
+    carry_eligible: bool,
+) -> anyhow::Result<String> {
     let id = uuid::Uuid::new_v4().to_string();
     let receipt = HumanReviewReceipt {
+        carry_eligible,
         id: id.clone(),
         sha: sha.trim().to_string(),
         subject: subject.trim().to_string(),
@@ -1479,6 +1534,7 @@ pub(crate) fn verified_authority_keys(
                 .receipt_id
                 .as_deref()
                 .and_then(|id| human_receipt_for(id, &att.sha))
+                .filter(|r| r.carry_eligible == att.carry_eligible)
                 .map(|r| r.identity),
         };
         if let Some(identity) = identity {

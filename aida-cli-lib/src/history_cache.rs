@@ -2238,7 +2238,8 @@ fn flow_catch_up(store: &Path, db_path: &Path, st: &HistoryCacheStatus) -> Resul
 }
 
 /// Advance an existing index under the caller-held IndexLock. This path never
-/// builds/resets an index and never counts a foreground catch-up failure.
+/// creates an index and never counts a foreground catch-up failure.
+/// Verified rewrites reset and backfill within the same maintenance budget.
 /// Retained chunks use finish_append, which clears the foreground stall counter.
 /// Returns `None` (no write) when this checkout is behind the index or the tip
 /// is live on another checkout. The budget is checked between chunks, so a
@@ -2268,9 +2269,12 @@ pub(crate) fn catch_up_background_at(
         match cache.classify_tip(store, &tip, &head)? {
             TipRelation::Ancestor => {}
             TipRelation::HeadBehind | TipRelation::LiveElsewhere => return Ok(None),
-            TipRelation::RootReplaced | TipRelation::Rewritten => anyhow::bail!(
-                "history index no longer matches this store; run `aida cache rebuild --history`"
-            ),
+            // trace:BUG-2598 | ai:codex
+            TipRelation::RootReplaced | TipRelation::Rewritten => {
+                cache.ensure_fresh(store, &head, budget)?;
+                cache.bound_wal(db_path, WAL_TRUNCATE_BYTES);
+                return Ok(Some((usize::try_from(cache.count("commits")?)?, 0)));
+            }
         }
     }
     let before = cache.count("commits")?;
@@ -2284,6 +2288,11 @@ pub(crate) fn catch_up_background_at(
             break;
         }
         tip = next;
+    }
+    // A budgeted reset can leave older history unfinished at the current tip.
+    // trace:BUG-2598 | ai:codex
+    if cache.meta("complete")?.as_deref() != Some("1") && !budget.expired() {
+        cache.backfill(store, budget)?;
     }
     let appended = usize::try_from(cache.count("commits")? - before)?;
     let lag = if tip == head {

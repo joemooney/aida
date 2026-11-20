@@ -23,8 +23,10 @@ pub(crate) enum EvidenceUnavailable {
     /// The forge could not be classified (unreadable config, unrecognized
     /// provider, failed `origin` lookup).
     ForgeDiscovery(String),
-    /// A configured forge this check has no query for.
+    /// A configured forge this operation has no query for.
     UnsupportedForge(ForgeKind),
+    /// A forge query could not establish open-change evidence.
+    ForgeQuery(String),
     /// The forge CLI executable could not be found.
     MissingExecutable(&'static str),
     /// The forge CLI could not be started.
@@ -54,6 +56,7 @@ impl std::fmt::Display for EvidenceUnavailable {
                 "the configured forge `{}` has no supported open-change query",
                 kind.config_token()
             ),
+            Self::ForgeQuery(why) => write!(f, "open-change query unavailable: {why}"),
             Self::MissingExecutable(cli) => write!(f, "`{cli}` executable not found"),
             Self::Spawn(e) => write!(f, "could not run `gh`: {e}"),
             Self::Exit { code, stderr } => {
@@ -99,11 +102,9 @@ pub(crate) enum OpenChangeCheck {
 /// forge. `forge` comes from [`crate::forge::checked_forge_kind`] (read-only)
 /// or, for compatibility callers, `resolve_forge_kind`.
 ///
-/// "Not GitHub" is two situations with opposite answers. A pure-git project
-/// has no change requests, so "none is open" is a measured truth — every
-/// candidate is `Clear`. A configured GitLab project has merge requests that
-/// `gh` cannot read, so its state is unknown and every candidate is
-/// `Unavailable`; unknown must never read as clear.
+/// Pure-git projects use the default-branch log as completion evidence and
+/// have no open changes. GitLab queries its provider; GitHub retains the
+/// checked search below. Unknown evidence always preserves the spec.
 ///
 /// With `stop_at_unavailable`, the first unavailable answer ends the scan
 /// (the compatibility wrapper needs only "all clear or not"); otherwise each
@@ -132,10 +133,31 @@ pub(crate) fn check_open_changes(
             ))
         }
         Ok(ForgeKind::None) => return all(OpenChangeCheck::Clear),
+        // trace:BUG-2516 | ai:codex
         Ok(ForgeKind::GitLab) => {
-            return all(OpenChangeCheck::Unavailable(
-                EvidenceUnavailable::UnsupportedForge(ForgeKind::GitLab),
-            ))
+            let provider = crate::forge::GitLabForge::new(project_root);
+            use crate::forge::Forge;
+            let mut out = Vec::with_capacity(ids.len());
+            for id in ids {
+                let check = confirm_clear(
+                    || match provider.change_for_spec(&id) {
+                        Ok(crate::forge::ChangeLookup::NoChange) => OpenChangeCheck::Clear,
+                        Ok(crate::forge::ChangeLookup::Found(change)) if change.id > 0 => {
+                            OpenChangeCheck::Open(change.id)
+                        }
+                        answer => OpenChangeCheck::Unavailable(EvidenceUnavailable::ForgeQuery(
+                            format!("{answer:?}"),
+                        )),
+                    },
+                    crate::forge_confirmation::backoff,
+                );
+                let stop = stop_at_unavailable && matches!(check, OpenChangeCheck::Unavailable(_));
+                out.push((id, check));
+                if stop {
+                    break;
+                }
+            }
+            return out;
         }
         Ok(ForgeKind::GitHub) => {}
     }
@@ -199,8 +221,8 @@ fn confirm_clear(
 }
 
 fn query_open_change_once(gh: &Path, project_root: &Path, spec_id: &str) -> OpenChangeCheck {
-    let out = match std::process::Command::new(gh)
-        .current_dir(project_root)
+    let mut cmd = std::process::Command::new(gh);
+    cmd.current_dir(project_root)
         // BUG-2134: GitHub search is token-fuzzy and also matches review
         // comments, so the first hit is not necessarily a PR that names the
         // spec. Fetch a page of hits with the fields the match is decided on
@@ -220,10 +242,14 @@ fn query_open_change_once(gh: &Path, project_root: &Path, spec_id: &str) -> Open
             // filter, which goes through GitHub's lagging search index.
             // trace:BUG-2163 | ai:claude
             "number,title,body,headRefName,state",
-        ])
-        .output_retrying_etxtbsy()
-    {
-        Ok(out) => out,
+        ]);
+    let out = match crate::forge_lookup_output(cmd) {
+        Ok(Some(out)) => out,
+        Ok(None) => {
+            return OpenChangeCheck::Unavailable(EvidenceUnavailable::ForgeQuery(
+                crate::FORGE_LOOKUP_TIMED_OUT.into(),
+            ))
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return OpenChangeCheck::Unavailable(EvidenceUnavailable::MissingExecutable("gh"))
         }
@@ -335,7 +361,7 @@ pub(crate) fn parse_open_change_rows(stdout: &[u8], spec_id: &str) -> OpenChange
 /// names a merged spec is not another deliverable of it, and counting it
 /// held BUG-2148 and BUG-2141 open after their PRs merged.
 // trace:BUG-2163 | ai:claude
-fn row_credits_spec(title: &str, body: &str, spec_id: &str) -> bool {
+pub(crate) fn row_credits_spec(title: &str, body: &str, spec_id: &str) -> bool {
     let mut credited = crate::zen_drive_root::extract_spec_ids_from_commit(title);
     for line in body.lines() {
         if !crate::pr_lookup::body_line_is_code_like(line) {
@@ -1039,7 +1065,7 @@ mod tests {
                 .iter()
                 .all(|(_, c)| matches!(
                     c,
-                    OpenChangeCheck::Unavailable(EvidenceUnavailable::UnsupportedForge(_))
+                    OpenChangeCheck::Unavailable(EvidenceUnavailable::ForgeQuery(_))
                 ))
         );
         assert!(check_open_changes(root, &Ok(ForgeKind::None), ids(), false)

@@ -64,6 +64,9 @@ Three cross-cutting truths the tree assumes:
 **Pickup checks before setup.** Role precedence is `--role`, queue routing, then scope default; a conflicting shell role is reported with the chosen source before acting. Interactive pickup checks branch occupancy and validates child-seat delegation before persisting an implicit queue row, calibration, lease, worktree, or status change. An occupied branch can be retired manually only when its checkout is idle, clean, unlocked, and unleased; pickup never removes it automatically. If setup succeeds but launch fails, the error prints `aida worktree enter <ID>` and the guided continuation `claude "/aida-guided-implement <ID>"` (ordinary pickup uses `/aida-pickup`).
 <!-- trace:TASK-1337 | ai:codex -->
 
+To continue a **Done** spec on its existing PR or MR, run `aida queue work <SPEC> --role implementer`. Pickup requires one verified open change on an origin branch and applies the regular rework holds and lease checks. It can restore the queue row after preflight if completion removed it. Use `aida queue rework <SPEC>` to route the spec without launching a session. If that command times out looking up the open change, it exits before changing the spec or queue. <!-- trace:STORY-2690 | ai:codex -->
+
+
 **A standalone reviewer receives recording attribution before launch.**
 `queue work PR-N --role reviewer` sets the selected vendor's
 `AIDA_AGENT_TYPE` and a vendor/reviewer `AIDA_AGENT_NAME` in the child, for
@@ -84,6 +87,18 @@ artifacts before running the command from an attested reviewer session. The
 launcher never records or accepts a verdict from log text.
 <!-- trace:BUG-2187 | ai:codex -->
 
+Review verdicts are keyed by the reviewer's leased `PR-N` or `MR-N`, never
+by looking up an open change for the spec. An explicit `--pr N` must agree
+with that lease. Without a change lease or explicit change number, a local
+spec-only review stays unbound. Recording for a change requires the pinned
+forge to report its current head. In `aida review record --sha <SHA>`, the
+supplied commit must resolve to that head. An old launch envelope or checkout
+cannot substitute for unavailable forge evidence. Ledger reads
+ignore a misplaced spec-routed copy when its matching change-keyed handshake
+proves that the same review belongs to another change; the original events
+remain untouched.
+<!-- trace:BUG-2517 | ai:codex -->
+
 **A standalone implementer reports one result line and an exit code.**
 An orchestrator, relay or advisor session launches an implementer as a
 separate process with Bash, not an in-session subagent:
@@ -100,6 +115,7 @@ branches on the exit code:
 | 32 | `implementer: punted reason=<summary>` | The implementer ran `aida punt`; read the spec's comments. |
 | 33 | `implementer: held branch=<branch>` | The branch is pushed and the PR is held (`aida pr hold`). |
 | 34 | (none) | Refused before any setup: the concurrency cap is reached. |
+| 36 | `implementer: refused-before-start ... reason=disk-deferred ...` | Deferred: the host is below its free-space floor. The setup was rolled back and the spec stays queued with the note `deferred: disk below floor at <time>`. Retry once space is free. |
 | 35 | `implementer: empty-rework pr=<n> head=<sha> action=requeued` | An unchanged GitHub rework head still has blocking findings, failed required checks, or conflicts. One retry was queued with a brief naming the blockers. |
 | 32 | `implementer: empty-rework pr=<n> head=<sha> action=punted` | The retry at that head was also empty; automatic implementer rows were removed and the advisor received request mail. |
 
@@ -167,13 +183,13 @@ The host merges any newer remote PR head before pushing, aborts on conflicts,
 and retains Refs trailers for a Refs PR. The live-owner check still applies.
 Other children must stop once their PR is open. Inside every standalone child,
 `aida pr ship` and `aida review record` refuse (the child carries
-`AIDA_STANDALONE_IMPLEMENTER`). Standalone implementers share a host-wide cap,
-defaulting to
-`max(1, floor(nproc/2))`. Set `[queue] standalone_implementer_cap` in
-`~/.aida/host.toml` to override the project `.aida/config.toml` cap. A launch past
-the cap exits 34
-without creating a lease, worktree, queue row or status change. Do not
-`aida claim` the spec yourself before launching: the pickup refuses a spec whose lease is held.
+`AIDA_STANDALONE_IMPLEMENTER`). Standalone implementers share a host-wide
+cap, defaulting to `max(1, floor(nproc/2))`. Set
+`[queue] standalone_implementer_cap` in `~/.aida/host.toml` to override the
+project `.aida/config.toml` cap. A launch past the cap exits 34 without
+creating a lease, worktree, queue row or status change.
+Do not `aida claim` the spec yourself before launching: the pickup refuses a
+spec whose lease is held.
 <!-- trace:STORY-1662 | ai:claude -->
 <!-- trace:TASK-2879 | ai:codex -->
 
@@ -231,7 +247,9 @@ The same recipe is embedded in every phase-failure comment, so the reader who de
 
 ### `aida lane`
 
-The host runs each lane's `make check-ci-fast` in the lane-job sandbox.
+The host runs each lane's `make check-ci-fast` in the lane-job sandbox with a
+one-hour timeout, independent of seat Cargo timeout overrides.
+<!-- trace:TASK-3100 | ai:codex -->
 A source failure gets one repair round; a timeout reports
 `fast_gate=skipped(timeout)` without consuming that round. A retry that times out
 retains an earlier `fast_gate=fail`. Gate jobs reuse the lane target seed and
@@ -592,6 +610,13 @@ when = "mail.oldest_unread_age > 15m"  # predicate; fires once per episode
 enabled = true
 ```
 
+<!-- trace:STORY-2856 | ai:codex -->
+`aida notify check` also monitors required GitHub workflows for consecutive
+zero-job startup failures. Auto-train runs the same monitor each discovery pass.
+See the [startup failure runbook](../advanced/ci-startup-failure.md) for thresholds,
+push transport configuration, backoff and recovery notices.
+
+
 `when` is a small typed grammar: `field op value`, joined by `&&` / `||` (`&&` binds tighter; parentheses allowed), durations like `90s` / `15m` / `2h`. A condition job fires **once when its predicate turns true and not again until it has been false** (once-until-cleared; the ledger records the episode). `while` takes the same grammar but is a gate, not a trigger: a job with `every` and `while` runs on its cadence only while the predicate holds, re-checked on every tick, and `while` alone never fires a job (`every` is required). The default `dispatch-tick` job uses it (`every = "2m"`, `while = "mandate.dispatch_active == true && dispatch.pending > 0"`), so it never runs without a dispatch mandate. A `while`-gated job is left out of `aida schedule emit-cron` and of the overdue-job doctor check. The field set is fixed: `mail.unread`, `mail.oldest_unread_age`, `drain.lock_free`, `queue.drain_mode_ready`, `queue.depth` (the existing seat meter), `queue.project_work_idle` (a strict flag for docs sweeps: all users’ local unrouted/implementer/reviewer work plus global implementer/reviewer work for this project; unreadable or corrupt evidence refuses the gate), `sessions.finished_unreaped`, `ci.red_prs` (0 without network), `findings.open`, `escalations.open`, `mandate.drive_active` (a flag: an unexpired, unstopped drive mandate exists), `mandate.dispatch_active` (a flag: an unexpired, unstopped mandate covering `dispatch` exists), `dispatch.pending` (validated `Pending` dispatch requests, plus one per `needs-recovery` record and one when the dispatch inventory is unreadable, so unknown state is never counted as zero). `on` accepts the event names the drain emits (`PrMerged`, `SpecShelved`, `QueueDrained`, `AdvisorEscalated`, `PuntFiled`, `CiTerminal`, `UnshippedWorkDetected`, `MailReceived`, …). `CronJobFailed` and `CronJobFired` may name their source job after a colon — `on = ["CronJobFailed:disk-headroom-guard"]` fires only when that job fails, and the due item shows that job's failure (a run killed at the 120 s scheduler timeout is labelled as a timeout, not a finding). A bare `CronJobFailed` still matches **every** job's failure, as before, so always bind a guard's route to its guard. A typo in an event name, or a malformed binding, is refused at config-load time. A binding that names a job missing from the registry disables only that job: `aida schedule status` shows it as `invalid` with the reason, the tick reports it as skipped, and every other job keeps running. `aida doctor` flags an enabled `*-route` job that still uses a bare `CronJobFailed`, and an enabled route disabled by an unknown bound job.
 
 **Registry** = the project's `[schedule]` section in `.aida/config.toml` plus the machine-global `~/.aida/schedule.toml` (same shape, or bare `[[jobs]]`), merged by name with the project entry winning. The original `[[schedule.tasks]]` / `interval` spelling still works. **Ledger** = one store object per job on the `aida-store` branch (`schedule/<job>.yaml`: `last_run`, `last_by` seat/session/vendor, `result`, `due_since`, `episode`), so "who last triaged the mailbox and when" has one answer on every clone; writes are debounced (a run clock moving <60 s with the same result is not committed) and merge last-writer-wins.
@@ -611,7 +636,7 @@ Verbs: `aida schedule list [--seat advisor] [--json]` (the merged registry, with
 **Subcommands.** `aida dispatch request <flow|review|take|impl|train> [--json]` queues a request (idempotent on duplicate `dedupe_key`; refuses conflicting in-flight requests on the same `target_key`), `aida dispatch list [--status <status>] [--json]` inspects the queue (marking pending `review`, `flow`, and `train` items as `waiting for serve`), `aida dispatch show <id> [--json]` prints one request and result record, `aida dispatch cancel <id>` cancels a pending request, `aida dispatch tick` runs one substrate pass that claims and executes pending `take` and `impl` requests (leaving grant-requiring `review`, `flow`, and `train` requests pending for `serve`), and `aida dispatch serve [--once] [--poll-ms <ms>]` runs the human-started executor from a bound advisor terminal to execute all pending requests (`review`, `flow`, `train`, `take`, and `impl`). A `review` runs for at most 60 minutes with no terminal input, in a process group of its own; at the limit the review and the vendor reviewer it started are killed. Ctrl+C, SIGTERM or SIGHUP sent to `serve` and its worker is passed on to an in-flight review, so it stops too.
 **Lock activation.** The dispatch lock is the directory `.aida/dispatch/tick.lock/` (holding `v2.lock` and a `version` marker). An older aida left a plain file at that path; every dispatch command refuses to run on it, and never replaces it on its own, because an older dispatch process could still be using it. To migrate, stop every `aida dispatch serve`, `tick` and `run` process and the schedule driver, then run `aida dispatch activate-lock` from your terminal. It refuses while any process still holds the old lock or has it open (checked through `/proc`). If a migration is interrupted, or its rollback fails, the directory is left without its `version` marker: every dispatch command refuses it (older binaries fail with `EISDIR`), and running `aida dispatch activate-lock` again finishes it once the old lock is quiescent.
 
-**Authority during a long run.** `flow` and `train` call the native `pr ship` and `pr train` code in the same process, carrying a dispatch execution context. The context is built from the request as written to disk and the worker's current `Running` claim. At every wait and before every side effect (after the CI wait, under the merge lease, before a merge-hold release, before the merge, and at each train step), it re-checks the request's original mandate, the requester and serving grants, the human gates, and the claim. It can only take authority away, never add it: a replacement mandate does not revive the request, and every native hold, CI and integrity check still applies. A refusal at any of these points stops the ship with the hold left in place. A refusal at a `pr ship` checkpoint also writes a `pr:<N>` row under the request's mandate; a refusal at a train step is recorded only in the dispatch request's result. While a request's context is alive in the worker, `pr ship` or `pr train` reached without it is refused before it does anything, so a call site that drops the context fails closed instead of shipping without the checks. The call sites are in `pr_cmd.rs`, `pr_train.rs` and `dispatch_flow.rs`, which are not gate-protected paths. The tests that pin them live under `aida-cli-lib/src/gate/tests/`, which is protected: every `pr ship` checkpoint present and in order, each train step re-checking, and, by running the real calls, ship and train refusing a dropped context while the flow tests' calls from `dispatch_flow.rs` get through only with it. Removing a checkpoint or dropping the context therefore fails those tests, and changing the tests needs a human merge.
+**Authority during a long run.** `flow` and `train` call the native `pr ship` and `pr train` code in the same process, carrying a dispatch execution context. The context is built from the request as written to disk and the worker's current `Running` claim. At every wait and before every side effect (after the CI wait, under the merge lease, before a merge-hold release, before the merge, and at each train step), it re-checks the request's original mandate, the requester and serving grants, the human gates, and the claim. It can only take authority away, never add it: a replacement mandate does not revive the request, and every native hold, CI and integrity check still applies. A refusal at any of these points stops the ship with the hold left in place. A refusal at a `pr ship` checkpoint also writes a `pr:<N>` row under the request's mandate; a refusal at a train step is recorded only in the dispatch request's result. While a request's context is alive in the worker, `pr ship` or `pr train` reached without it is refused before it does anything, so a call site that drops the context fails closed instead of shipping without the checks. The call sites are in `pr_cmd/mod.rs`, `pr_train.rs` and `dispatch_flow.rs`, which are not gate-protected paths. The tests that pin them live under `aida-cli-lib/src/gate/tests/`, which is protected: every `pr ship` checkpoint present and in order, each train step re-checking, and, by running the real calls, ship and train refusing a dropped context while the flow tests' calls from `dispatch_flow.rs` get through only with it. Removing a checkpoint or dropping the context therefore fails those tests, and changing the tests needs a human merge.
 
 **Recovery.** A request whose request or result file is missing or corrupt becomes a `needs-recovery` record in `.aida/dispatch/recovery.json`. It keeps its target, dedupe key and concurrency slot reserved, and it is never replayed. Fences are sticky: removing the record's files does not release one. To recover a record, find out what it actually did (`aida dispatch show <id>`, `.aida/dispatch/logs/<id>.log`, and the PR or lane it targeted). Then stop every dispatch process, move the record's files out of `requests/` and `results/`, and delete only that record's entry from `recovery.json`. Deleting the whole file releases every fence at once. The writer never writes an index larger than the reader accepts (4096 entries, 256 KiB); past that, dispatch refuses new work and keeps the last readable index.
 <!-- trace:STORY-1917 | ai:agy --> <!-- trace:STORY-1917 trace:TASK-2344 | ai:claude -->

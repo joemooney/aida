@@ -141,8 +141,10 @@ In particular, Claude seats that deny creation of AF_UNIX sockets cannot use
 this transport. Their admission or an alternative transport requires an advisor
 decision; the presence of a descriptor does not establish support.
 Host operator Joe owns deployment and the later completing slice for
-contained-seat AC2/AC5 on STORY-2630. The shared navigation prompt asks for the project host’s reviewed absolute
-client path; this repository’s AGENTS.md supplies the path above. Neither installs the client.
+contained-seat AC2/AC5 on STORY-2630. The host operator supplies the reviewed
+absolute client path for each deployment. The lane prompt and AGENTS.md direct
+agents to use `rg` when the operator-provided client is unavailable.
+<!-- trace:TASK-3134 | ai:codex -->
 This PR is a Refs slice under the 2026-11-08 advisor ruling. Do not treat a native run as AIDA-contained evidence.
 
 Status requests bypass the query/backup lock. Up to sixteen bounded request

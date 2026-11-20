@@ -24,7 +24,15 @@
 //! to `git fetch` rather than asserting nothing shipped.
 // trace:STORY-1649 | ai:claude
 
-use crate::*;
+use crate::scan_completed_without_commit;
+use crate::{
+    command_output_with_timeout_detail, completed_without_commit_expects_code,
+    completed_without_commit_opted_out, parse_squash_pr_number, referenced_spec_ids_from_messages,
+    resolve_default_branch_ref, resolve_default_branch_ref_until, BoundedCommandOutput,
+};
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
 
 /// The default-branch refs a linkage scan consults, in scan order:
 /// remote-tracking first (the merged-on-GitHub truth), local second.

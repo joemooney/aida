@@ -423,7 +423,7 @@ fn every_project_config_writer_refuses_the_projected_config() {
     );
     refused(
         "doctor counter-scope migration",
-        crate::doctor_cmd::update_config_counter_scope(&config, "global"),
+        crate::db_block::update_config_counter_scope(&config, "global"),
     );
     refused(
         "forge provider",

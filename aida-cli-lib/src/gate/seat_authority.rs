@@ -62,12 +62,41 @@ pub(crate) struct SeatGrant {
     // trace:STORY-2254 | ai:claude
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub launch_capability: Option<String>,
+    /// TASK-3820: the deadline a launcher capped this child grant to
+    /// ([`cap_launch_child_expiry`], BUG-2486: the lane's credential TTL).
+    /// Written in the same locked update as the shortened expiry, so a
+    /// mandate renewal can tell a deliberate cap from an extension it missed
+    /// on an earlier, partly failed run: it never extends a capped grant.
+    // trace:TASK-3820 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_expiry_cap: Option<DateTime<Utc>>,
+    /// TASK-3820: positive provenance for [`Self::launch_expiry_cap`]. Set
+    /// when the record is minted by a binary whose launcher always records
+    /// its credential deadline, so a delegated child without a recorded cap
+    /// is known to be uncapped. A record from an earlier binary (or one an
+    /// earlier binary rewrote, dropping this member) lacks it: its launcher
+    /// may have shortened its expiry without recording why, so a mandate
+    /// renewal refuses to extend it rather than infer it was never capped.
+    // trace:TASK-3820 | ai:claude
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub launch_cap_recorded: bool,
+}
+
+/// Why a mandate renewal cannot extend grant `g`: a delegated child whose
+/// record predates recorded launcher deadlines ([`SeatGrant::launch_cap_recorded`])
+/// may carry a launcher cap nothing recorded, so it is never extended.
+// trace:TASK-3820 | ai:claude
+fn unrecorded_launch_cap(g: &SeatGrant) -> Option<String> {
+    (g.parent_grant_id.is_some() && !g.launch_cap_recorded).then(|| {
+        "it was delegated before launcher deadlines were recorded, so a launcher may have capped it; relaunch it to renew".to_string()
+    })
 }
 
 /// The [`SeatGrant::origin`] of a parent grant `aida agent new` mints inline.
 // trace:STORY-2215 | ai:claude
 pub(crate) const INLINE_ORIGIN: &str = "agent-new-inline";
-/// The inline parent's lifetime ceiling (the configured seat max may lower it).
+/// The inline parent's default lifetime ceiling; [`inline_parent_max`] is
+/// the effective one (`[seat] inline_grant_max_hours`, the seat max).
 // trace:STORY-2215 | ai:claude
 pub(crate) const INLINE_PARENT_MAX: Duration = Duration::hours(8);
 
@@ -187,6 +216,7 @@ pub(crate) struct HeldGrant {
     pub holders: Vec<(u32, bool)>,
 }
 
+#[cfg(test)]
 impl HeldGrant {
     /// The first bound process that is alive, if any.
     pub(crate) fn live_holder(&self) -> Option<u32> {
@@ -577,6 +607,9 @@ pub(crate) enum GrantRejection {
     BadHandle,
     /// No readable record for the handle.
     Unreadable,
+    /// The mandate no longer authorizes a relay replacement grant.
+    // trace:TASK-3139 | ai:codex
+    MandateRefused,
     /// The record does not parse, or names a different id.
     Malformed,
     Revoked {
@@ -588,6 +621,11 @@ pub(crate) enum GrantRejection {
     /// The grant was minted for another identity than this process runs as.
     SubjectMismatch {
         grant_subject: String,
+        caller: String,
+    },
+    // trace:BUG-2520 | ai:codex
+    PrincipalMismatch {
+        principal: String,
         caller: String,
     },
     /// The team roster no longer allows the principal this seat.
@@ -625,12 +663,39 @@ pub(crate) enum GrantRejection {
     },
 }
 
+impl GrantRejection {
+    pub(crate) fn expired_at(&self) -> Option<DateTime<Utc>> {
+        match self {
+            Self::Expired { at } => Some(*at),
+            Self::Parent(inner) => inner.expired_at(),
+            _ => None,
+        }
+    }
+}
+
+// Keep the verdict alongside the existing launch diagnostic.
+// trace:BUG-2653 | ai:codex
+#[derive(Debug)]
+struct LaunchParentRefused {
+    reason: GrantRejection,
+    message: String,
+}
+
+impl std::fmt::Display for LaunchParentRefused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for LaunchParentRefused {}
+
 impl std::fmt::Display for GrantRejection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let stamp = |at: &DateTime<Utc>| at.format("%Y-%m-%dT%H:%MZ").to_string();
         match self {
             Self::BadHandle => write!(f, "the exported handle is not a grant id"),
             Self::Unreadable => write!(f, "no grant record exists for it on this machine"),
+            Self::MandateRefused => write!(f, "its relay renewal mandate is inactive or no longer authorizes it"),
             Self::Malformed => write!(f, "its record is malformed"),
             Self::Revoked { at } => write!(f, "it was revoked at {}", stamp(at)),
             Self::Expired { at } => write!(f, "it expired at {}", stamp(at)),
@@ -640,6 +705,10 @@ impl std::fmt::Display for GrantRejection {
             } => write!(
                 f,
                 "it was issued to `{grant_subject}` but this process runs as `{caller}`"
+            ),
+            Self::PrincipalMismatch { principal, caller } => write!(
+                f,
+                "its principal is `{principal}` but this deputy runs as `{caller}`"
             ),
             Self::RosterDenied { principal, seat } => write!(
                 f,
@@ -752,6 +821,19 @@ fn check_lifetime(grant: &SeatGrant, now: DateTime<Utc>) -> Result<(), GrantReje
 }
 
 fn check_roster(project_root: &Path, grant: &SeatGrant) -> Result<(), GrantRejection> {
+    use super::relay_parent::RefusalCode;
+    super::relay_parent::validate_origin(project_root, grant, Utc::now()).map_err(|e| {
+        match e.code {
+            RefusalCode::NoActiveMandate | RefusalCode::MandateOutOfScope => {
+                GrantRejection::MandateRefused
+            }
+            _ => GrantRejection::Unreadable,
+        }
+    })?;
+    check_roster_membership(project_root, grant)
+}
+
+fn check_roster_membership(project_root: &Path, grant: &SeatGrant) -> Result<(), GrantRejection> {
     if roster_allows(project_root, &grant.principal, &grant.seat) {
         Ok(())
     } else {
@@ -1055,6 +1137,20 @@ pub(crate) fn matched_binding(grant: &SeatGrant, presenter: &[String]) -> Vec<St
         .collect()
 }
 
+/// Whether `grant` is bound to the live process `pid` (a `proc:` token with
+/// that process's start identity). A seat uses it to tell whether a renewed
+/// grant covers the relay that named `pid`; a process this one cannot see
+/// (another PID namespace, already gone) is not covered.
+// trace:BUG-2585 | ai:claude
+pub(crate) fn bound_to_process(grant: &SeatGrant, pid: u32) -> bool {
+    pid_binding_token(pid).is_some_and(|token| {
+        grant.binding.iter().any(|bound| {
+            bound.starts_with("proc:")
+                && crate::gate::review_authority::binding_tokens_match(bound, &token)
+        })
+    })
+}
+
 /// `process 4242, terminal session 4200` for a refusal or status line.
 // trace:BUG-1934 | ai:claude
 pub(crate) fn describe_binding(binding: &[String]) -> String {
@@ -1150,6 +1246,28 @@ fn grant_check_for_at(
     caller: &str,
     now: DateTime<Utc>,
 ) -> GrantCheck {
+    grant_check_identity_at(project_root, id, caller, now, false)
+}
+
+/// Validate a deputy submitter against the operator principal, retaining the
+/// complete grant-chain checks. Peer presentation is checked by the deputy.
+// trace:BUG-2520 | ai:codex
+pub(crate) fn grant_check_for_principal(
+    project_root: &Path,
+    id: &str,
+    principal: &str,
+) -> GrantCheck {
+    grant_check_identity_at(project_root, id, principal, Utc::now(), true)
+}
+
+// trace:BUG-2520 | ai:codex
+fn grant_check_identity_at(
+    project_root: &Path,
+    id: &str,
+    caller: &str,
+    now: DateTime<Utc>,
+    principal: bool,
+) -> GrantCheck {
     let rejected = |seat: Option<String>, reason| GrantCheck::Rejected {
         id: id.to_string(),
         seat,
@@ -1160,10 +1278,15 @@ fn grant_check_for_at(
         Err(reason) => return rejected(None, reason),
     };
     // Checks run in the order `current_grant` always used: revoked, expired,
-    // subject, roster; then the parent's revoked, expired, principal,
+    // subject (or deputy principal), roster; then the parent's revoked, expired, principal,
     // roster, delegable.
     let own = check_lifetime(&grant, now).and_then(|()| {
-        if grant.subject == caller {
+        if principal && grant.principal != caller {
+            Err(GrantRejection::PrincipalMismatch {
+                principal: grant.principal.clone(),
+                caller: caller.to_string(),
+            })
+        } else if principal || grant.subject == caller {
             check_roster(project_root, &grant)
         } else {
             Err(GrantRejection::SubjectMismatch {
@@ -1635,9 +1758,68 @@ pub(crate) fn require_direct_human() -> Result<()> {
 pub(crate) const DEFAULT_MAX_GRANT_HOURS: u32 = 24;
 pub(crate) const HARD_CEILING_GRANT_HOURS: u32 = 168;
 
-/// Parse `[seat] max_grant_hours` from a config file's contents.
+/// `[seat] inline_grant_max_hours`: the cap on the one-time parent grant
+/// `aida agent new` mints. Absent = [`INLINE_PARENT_MAX`].
+// trace:STORY-2828 | ai:claude
+pub(crate) const INLINE_GRANT_MAX_KEY: (&str, &str) = ("seat", "inline_grant_max_hours");
+/// `[mandate] max_ttl_hours`: the cap on a mandate's lifetime. Absent =
+/// `gate::mandate::MAX_TTL`.
+// trace:STORY-2828 | ai:claude
+pub(crate) const MANDATE_MAX_TTL_KEY: (&str, &str) = ("mandate", "max_ttl_hours");
+const MAX_GRANT_KEY: (&str, &str) = ("seat", "max_grant_hours");
+
+/// Where an effective lifetime cap came from.
+// trace:STORY-2828 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CapSource {
+    /// No config names the key: the built-in default.
+    Default,
+    /// The operator's global config under `~/.aida`.
+    Global,
+    /// The project's config, which may only lower the cap.
+    Project,
+}
+
+/// An effective lifetime cap in hours, never above
+/// [`HARD_CEILING_GRANT_HOURS`], with the layer that set it.
+// trace:STORY-2828 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct HourCap {
+    pub hours: u32,
+    pub source: CapSource,
+}
+
+impl HourCap {
+    pub(crate) fn duration(&self) -> Duration {
+        Duration::hours(self.hours as i64)
+    }
+
+    /// For a refusal: where the cap was read from and the key that changes
+    /// it, e.g. `[mandate] max_ttl_hours in ~/.aida/config.toml`.
+    pub(crate) fn origin(&self, (section, key): (&str, &str)) -> String {
+        let ceiling = HARD_CEILING_GRANT_HOURS;
+        match self.source {
+            CapSource::Default => format!(
+                "the default; raise it with [{section}] {key} in ~/.aida/config.toml, up to {ceiling}h"
+            ),
+            CapSource::Global if self.hours >= ceiling => format!(
+                "[{section}] {key} in ~/.aida/config.toml, at the {ceiling}h hard ceiling, which is not configurable"
+            ),
+            CapSource::Global => format!(
+                "[{section}] {key} in ~/.aida/config.toml; raise it there, up to {ceiling}h"
+            ),
+            CapSource::Project => format!(
+                "lowered by [{section}] {key} in this project's .aida/config.toml; a project value can only lower the cap"
+            ),
+        }
+    }
+}
+
+/// Parse an hours cap `[section] key` from a config file's contents,
+/// clamped to [`HARD_CEILING_GRANT_HOURS`].
 // trace:TASK-1787 | ai:antigravity
-pub(crate) fn parse_max_grant_hours_from_str(body: &str) -> Option<u32> {
+// trace:STORY-2828 | ai:claude
+fn parse_hours_key_from_str(body: &str, (section, key): (&str, &str)) -> Option<u32> {
     let value: toml::Value = match toml::from_str(body) {
         Ok(v) => v,
         Err(_) => {
@@ -1649,27 +1831,76 @@ pub(crate) fn parse_max_grant_hours_from_str(body: &str) -> Option<u32> {
             return None;
         }
     };
-    let seat_table = value.get("seat")?;
-    let hours_val = seat_table.get("max_grant_hours")?;
+    let hours_val = value.get(section)?.get(key)?;
     if let Some(i) = hours_val.as_integer() {
         match u32::try_from(i) {
             Ok(val) => Some(std::cmp::min(val, HARD_CEILING_GRANT_HOURS)),
             Err(_) => {
-                eprintln!("Warning: [seat] max_grant_hours must be a positive integer, got `{i}`");
+                eprintln!("Warning: [{section}] {key} must be a positive integer, got `{i}`");
                 None
             }
         }
     } else {
-        eprintln!("Warning: [seat] max_grant_hours must be an integer, got `{hours_val}`");
+        eprintln!("Warning: [{section}] {key} must be an integer, got `{hours_val}`");
         None
     }
 }
 
-/// Read `[seat] max_grant_hours` from a TOML file path.
+/// The one loader for an hours cap: the global `~/.aida/config.toml` sets
+/// it, and the project's `.aida/config.toml` may only lower it.
+/// - both set: the lower of the two;
+/// - global only: the global value (it may exceed `default`);
+/// - project only: the lower of `default` and the project value;
+/// - neither: `default`.
+///
+/// Always clamped to [`HARD_CEILING_GRANT_HOURS`].
 // trace:TASK-1787 | ai:antigravity
-pub(crate) fn read_max_grant_hours_file(path: &Path) -> Option<u32> {
-    let body = std::fs::read_to_string(path).ok()?;
-    parse_max_grant_hours_from_str(&body)
+// trace:STORY-2828 | ai:claude
+pub(crate) fn resolve_hour_cap(
+    project_root: Option<&Path>,
+    key: (&str, &str),
+    default: u32,
+) -> HourCap {
+    resolve_hour_cap_from(
+        crate::gate::kernel_deps::aida_home_dir().as_deref(),
+        project_root,
+        key,
+        default,
+    )
+}
+
+/// [`resolve_hour_cap`] with the user's home named by the caller.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn resolve_hour_cap_from(
+    home: Option<&Path>,
+    project_root: Option<&Path>,
+    key: (&str, &str),
+    default: u32,
+) -> HourCap {
+    let read = |dir: &Path| {
+        let body = std::fs::read_to_string(dir.join(".aida").join("config.toml")).ok()?;
+        parse_hours_key_from_str(&body, key)
+    };
+    let global_val = home.and_then(read);
+    let project_val = project_root.and_then(read);
+    let (hours, source) = match (global_val, project_val) {
+        (Some(g), Some(p)) if p < g => (p, CapSource::Project),
+        (Some(g), _) => (g, CapSource::Global),
+        (None, Some(p)) if p < default => (p, CapSource::Project),
+        (None, _) => (default, CapSource::Default),
+    };
+    HourCap {
+        hours: std::cmp::min(hours, HARD_CEILING_GRANT_HOURS),
+        source,
+    }
+}
+
+/// [`resolve_hour_cap`] for a caller with no project in hand (a mandate is
+/// per user, not per project): the project is the one this command runs in,
+/// if any.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn resolve_hour_cap_here(key: (&str, &str), default: u32) -> HourCap {
+    resolve_hour_cap(crate::find_project_root().ok().as_deref(), key, default)
 }
 
 /// Resolve the configured maximum grant lifetime in hours:
@@ -1678,19 +1909,32 @@ pub(crate) fn read_max_grant_hours_file(path: &Path) -> Option<u32> {
 /// The project value alone may only lower the 24h default's ceiling.
 // trace:TASK-1787 | ai:antigravity
 pub(crate) fn resolve_max_grant_hours(project_root: &Path) -> u32 {
-    let global_val = crate::gate::kernel_deps::aida_home_dir()
-        .map(|h| h.join(".aida").join("config.toml"))
-        .as_deref()
-        .and_then(read_max_grant_hours_file);
-    let project_path = project_root.join(".aida").join("config.toml");
-    let project_val = read_max_grant_hours_file(&project_path);
-    let cap = match (global_val, project_val) {
-        (Some(g), Some(p)) => std::cmp::min(g, p),
-        (Some(g), None) => g,
-        (None, Some(p)) => std::cmp::min(DEFAULT_MAX_GRANT_HOURS, p),
-        (None, None) => DEFAULT_MAX_GRANT_HOURS,
-    };
-    std::cmp::min(cap, HARD_CEILING_GRANT_HOURS)
+    resolve_hour_cap(Some(project_root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS).hours
+}
+
+/// The one-time parent grant's lifetime cap: `[seat] inline_grant_max_hours`
+/// (default [`INLINE_PARENT_MAX`]), never above the effective
+/// `[seat] max_grant_hours`.
+// trace:STORY-2828 | ai:claude
+pub(crate) fn inline_parent_max(project_root: &Path) -> Duration {
+    inline_parent_max_from(
+        crate::gate::kernel_deps::aida_home_dir().as_deref(),
+        project_root,
+    )
+}
+
+/// [`inline_parent_max`] with the user's home named by the caller.
+// trace:STORY-2828 | ai:claude
+fn inline_parent_max_from(home: Option<&Path>, project_root: &Path) -> Duration {
+    let root = Some(project_root);
+    let knob = resolve_hour_cap_from(
+        home,
+        root,
+        INLINE_GRANT_MAX_KEY,
+        INLINE_PARENT_MAX.num_hours() as u32,
+    );
+    let seat_max = resolve_hour_cap_from(home, root, MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
+    std::cmp::min(knob.duration(), seat_max.duration())
 }
 
 /// Parse and validate `--ttl <dur>` against the configured cap and hard ceiling.
@@ -1947,6 +2191,8 @@ fn mint_direct(
         binding,
         origin: origin.map(str::to_string),
         launch_capability: None,
+        launch_expiry_cap: None,
+        launch_cap_recorded: true,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -1965,7 +2211,7 @@ static INLINE_PARENT_ID: std::sync::OnceLock<String> = std::sync::OnceLock::new(
 /// - no key secret: nothing is eval'd, so the grant never reaches the shell;
 /// - bound to this launcher process alone, so no other process in the
 ///   terminal session (the shell included) can present it;
-/// - lifetime `min(8h, the configured seat max)`; children clamp to it.
+/// - lifetime [`inline_parent_max`] (8h unless configured); children clamp to it.
 ///
 /// The caller must have proven a human keystroke at this terminal.
 // trace:STORY-2215 | ai:claude
@@ -1978,10 +2224,8 @@ pub(crate) fn issue_inline_parent(
     let launcher = own_process_token().context(
         "cannot bind the one-time grant: this launcher's process start identity could not be read",
     )?;
-    let lifetime = std::cmp::min(
-        INLINE_PARENT_MAX,
-        Duration::hours(resolve_max_grant_hours(project_root) as i64),
-    );
+    // trace:STORY-2828 | ai:claude
+    let lifetime = inline_parent_max(project_root);
     let grant = mint_direct(
         project_root,
         seat,
@@ -2233,13 +2477,84 @@ pub(crate) fn widen_delegation_command(
     command
 }
 
+/// Why a launch cannot use the grant it exports as the parent of a child
+/// grant. A presenter refusal usually means the launch outlived the shell
+/// that holds the grant: a launch started with `&`, `setsid` or `nohup` from a
+/// deputy job (or any shell) that then exits is re-parented away from the
+/// grant's process, so only launches still running inside that shell may
+/// delegate (BUG-2544).
+// trace:BUG-2544 | ai:claude
+pub(crate) fn parent_grant_refusal(id: &str, reason: &GrantRejection) -> String {
+    let short: String = id.chars().take(8).collect();
+    let mut message =
+        format!("no valid parent seat grant is active: grant {short} is refused because {reason}");
+    if matches!(
+        reason,
+        GrantRejection::PresenterNotBound { .. } | GrantRejection::KeyringUnavailable { .. }
+    ) {
+        message.push_str(
+            ". A launch started in the background (`&`, `setsid`, `nohup`) loses the grant once \
+             the shell that holds it exits, as a deputy job does when its script ends; run each \
+             launch in the foreground, one after another, or `wait` for background launches \
+             before the script exits",
+        );
+    }
+    message
+}
+
+/// For a parent grant refused by the roster, say which roster the check read
+/// and what it found. The grant verdict folds an unreachable store, a missing
+/// roster and a real denial into one sentence, and a launch repeats the check
+/// after setup from the root it then runs in, which can be another tree than
+/// the one its preflight read. A second read that allows the seat means the
+/// first one raced an update of the store (a sibling launch's store sync).
+/// Diagnostic only: the refusal stands either way.
+// trace:BUG-2544 | ai:claude
+fn parent_roster_refusal_detail(project_root: &Path, reason: &GrantRejection) -> Option<String> {
+    let (principal, seat) = match reason {
+        GrantRejection::RosterDenied { principal, seat } => (principal, seat),
+        GrantRejection::Parent(inner) => match inner.as_ref() {
+            GrantRejection::RosterDenied { principal, seat } => (principal, seat),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    let root = project_root.display();
+    Some(match roster_check(project_root, principal, seat) {
+        Ok(store) => format!(
+            ". Read again from `{root}`, the roster at `{}` allows it, so the first read missed the roster's current content (the store was changing at that moment, as it does while another launch syncs it); run the launch again, or start launches one after another",
+            roster_path(&store).display()
+        ),
+        Err(refusal) => format!(
+            ". The roster was looked up from `{root}`: {}",
+            refusal.describe(&format!("`{principal}` is not allowed the `{seat}` seat"))
+        ),
+    })
+}
+
 /// Read-only launch preflight; issuance repeats this validation after setup.
 // trace:TASK-1337 | ai:codex
 pub(crate) fn validate_child_delegation(
     project_root: &Path,
     requested_seat: &str,
 ) -> Result<SeatGrant> {
-    let parent = current_grant(project_root).context("no valid parent seat grant is active")?;
+    // BUG-2544: name why the parent grant failed instead of a bare refusal.
+    // trace:BUG-2544 | ai:claude
+    // trace:BUG-2544 | ai:codex
+    let parent = match grant_check(project_root) {
+        GrantCheck::Valid(parent) => parent,
+        GrantCheck::Absent => bail!(
+            "no valid parent seat grant is active: {GRANT_ENV} is absent; re-enter your role at a terminal before launching children"
+        ),
+        GrantCheck::Rejected { id, reason, .. } => {
+            let message = format!(
+                "{}{}",
+                parent_grant_refusal(&id, &reason),
+                parent_roster_refusal_detail(project_root, &reason).unwrap_or_default()
+            );
+            return Err(LaunchParentRefused { reason, message }.into());
+        }
+    };
     if !parent
         .delegable_seats
         .iter()
@@ -2300,6 +2615,14 @@ impl ChildGrantRefused {
     /// Whether `err`'s chain carries a [`ChildGrantRefused`].
     pub(crate) fn is_in(err: &anyhow::Error) -> bool {
         err.chain().any(|cause| cause.is::<ChildGrantRefused>())
+    }
+
+    // trace:BUG-2653 | ai:codex
+    pub(crate) fn is_parent_expired(err: &anyhow::Error) -> bool {
+        err.chain()
+            .filter_map(|cause| cause.downcast_ref::<Self>())
+            .filter_map(|refusal| refusal.0.downcast_ref::<LaunchParentRefused>())
+            .any(|refusal| refusal.reason.expired_at().is_some())
     }
 }
 
@@ -2766,6 +3089,8 @@ fn issue_child_from_with_delegation(
         binding,
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
+        launch_cap_recorded: true,
     };
     write_grant(&grant)?;
     Ok(grant)
@@ -2994,11 +3319,10 @@ pub(crate) fn revoke_by_id(id: &str) -> Result<bool> {
 pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
     let at = DateTime::<Utc>::from_timestamp(deadline, 0).context("invalid child deadline")?;
     anyhow::ensure!(at > Utc::now(), "child grant deadline is already expired");
-    // An ample token needs no mutation, including for a direct session grant.
     let grant = read_grant(id)?;
     // A direct session grant is not owned by this launch. The caller supplies
     // the credential-capped TTL to the lane without changing session authority.
-    if grant.parent_grant_id.is_none() || grant.expires_at <= at {
+    if grant.parent_grant_id.is_none() {
         return Ok(());
     }
     let launcher = own_process_token().context("launcher identity unavailable")?;
@@ -3008,20 +3332,32 @@ pub(crate) fn cap_launch_child_expiry(id: &str, deadline: i64) -> Result<()> {
             && g.revoked_at.is_none()
             && g.expires_at > Utc::now()
     };
+    // TASK-3820: record the credential deadline on every eligible delegated
+    // child under its record lock, even when its expiry is already shorter
+    // (an ample credential): a later mandate renewal must never extend it
+    // past the deadline. The expiry itself only ever shrinks.
+    // trace:TASK-3820 | ai:claude
+    let capped = |g: &SeatGrant| g.expires_at <= at && g.launch_expiry_cap.is_some_and(|c| c <= at);
     update_grant(
         id,
         |g| {
-            if !eligible(g) || g.expires_at <= at {
+            if !eligible(g) || capped(g) {
                 return false;
             }
-            g.expires_at = at;
+            g.expires_at = g.expires_at.min(at);
+            g.launch_expiry_cap = Some(g.launch_expiry_cap.map_or(at, |c| c.min(at)));
             true
         },
-        |g| g.expires_at <= at,
+        capped,
     )?;
     let current = read_grant(id)?;
+    if !eligible(&current) && current.expires_at <= at {
+        // Not this launcher's live child, but it cannot outlive the
+        // credential either: nothing of this launch's to record.
+        return Ok(());
+    }
     anyhow::ensure!(
-        eligible(&current) && current.expires_at <= at,
+        eligible(&current) && capped(&current),
         "cannot cap ChatGPT child grant: requires this launcher's live delegated grant"
     );
     Ok(())
@@ -3112,7 +3448,11 @@ pub(crate) fn grant_authorized_at(
         return false;
     }
     let valid_at = |g: &SeatGrant| {
-        g.issued_at <= at && at < g.expires_at && g.revoked_at.is_none_or(|r| r > at)
+        g.issued_at <= at
+            && at < g.expires_at
+            && g.revoked_at.is_none_or(|r| r > at)
+            // trace:TASK-3119 | ai:codex — recorded authority uses its recording instant.
+            && super::relay_parent::validate_origin(project_root, g, at).is_ok()
     };
     let Ok(grant) = read_grant(id) else {
         return false;
@@ -3314,6 +3654,11 @@ mod bug_2011_grant_expiry_verdict_tests;
 #[path = "tests/task_1787_grant_ttl_tests.rs"]
 mod task_1787_grant_ttl_tests;
 
+// trace:STORY-2828 | ai:claude
+#[cfg(test)]
+#[path = "tests/story_2828_hour_cap_tests.rs"]
+mod story_2828_hour_cap_tests;
+
 // trace:TASK-1752 | ai:claude
 #[cfg(test)]
 #[path = "tests/task_1752_grant_env_guard_tests.rs"]
@@ -3373,4 +3718,891 @@ pub(crate) fn issue_review_watch_child(
         false,
         &["reviewer".into()],
     )
+}
+
+/// Read-only operator inventory. This report grants no presenter authority.
+// trace:TASK-3816 | ai:codex
+// mandate-gate
+
+#[derive(Debug, Serialize)]
+pub(crate) struct GrantInventory {
+    pub grants: Vec<InventoryGrant>,
+    pub diagnostics: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct InventoryGrant {
+    pub id: String,
+    pub role: String,
+    pub subject: String,
+    pub parent: Option<String>,
+    pub holders: Vec<InventoryHolder>,
+    pub expires_at: DateTime<Utc>,
+    pub effective_cap_hours: u32,
+    pub config_origin: String,
+    pub valid: bool,
+    pub rejection: Option<String>,
+}
+
+/// A bound process, qualified by the pid namespace its token was taken in.
+/// `pid_ns: None` is the host namespace; any other value names a sandbox's
+/// namespace, where the same integer names an unrelated process.
+// trace:TASK-3816 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub(crate) struct InventoryHolder {
+    pub pid: u32,
+    pub pid_ns: Option<String>,
+}
+
+impl std::fmt::Display for InventoryHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.pid_ns {
+            None => write!(f, "{}@host", self.pid),
+            Some(ns) => write!(f, "{}@pidns:{ns}", self.pid),
+        }
+    }
+}
+
+impl GrantInventory {
+    pub(crate) fn text(&self) -> String {
+        let mut out = String::from("Session grants (expiry order; read-only):\n");
+        for g in &self.grants {
+            out.push_str(&format!(
+                "  {} role={} subject={} holders=[{}] parent={} expires={} cap={}h ({}) status={}\n",
+                g.id, g.role, g.subject, g.holders_text(),
+                g.parent.as_deref().unwrap_or("none"), g.expires_at.to_rfc3339(),
+                g.effective_cap_hours, g.config_origin,
+                g.rejection.as_deref().unwrap_or("valid")
+            ));
+        }
+        for diagnostic in &self.diagnostics {
+            out.push_str(&format!("  diagnostic: {diagnostic}\n"));
+        }
+        out
+    }
+}
+
+impl InventoryGrant {
+    pub(crate) fn holders_text(&self) -> String {
+        let parts: Vec<String> = self.holders.iter().map(ToString::to_string).collect();
+        parts.join(", ")
+    }
+}
+
+/// Grants use the role-enter identity domain (AIDA_USER), unlike mandates'
+/// OS operator identity. A delegated reader inherits its root principal even
+/// when that grant has expired; selecting report rows grants no authority.
+/// `root` (the main checkout) audits chains and rosters; `policy_root` is the
+/// invoking worktree whose `[seat] max_grant_hours` role enter enforces.
+pub(crate) fn operator_grant_inventory(
+    root: &Path,
+    policy_root: &Path,
+    now: DateTime<Utc>,
+) -> GrantInventory {
+    grant_inventory(root, policy_root, &inventory_principal(), now)
+}
+
+/// The principal whose grants the operator inventory and renewal cover.
+// trace:TASK-3816 | ai:codex
+// trace:TASK-3820 | ai:claude — shared by the S2b renewal.
+fn inventory_principal() -> String {
+    current_grant_id()
+        .and_then(|id| read_grant_checked(&id).ok())
+        .map(|g| g.principal)
+        .unwrap_or_else(|| crate::gate::kernel_deps::current_user_id(None))
+}
+
+/// Every grant id in the store, sorted.
+// trace:TASK-3816 | ai:codex
+fn scan_grant_ids() -> Result<Vec<String>> {
+    let dir = grant_dir()?;
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(e) => return Err(e.into()),
+    };
+    let mut ids = Vec::new();
+    for entry in entries {
+        let path = entry?.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("json") {
+            if let Some(id) = path.file_stem().and_then(|s| s.to_str()) {
+                ids.push(id.to_string());
+            }
+        }
+    }
+    ids.sort();
+    Ok(ids)
+}
+
+/// The ancestor chain of `g`, nearest parent first, bounded and cycle-safe.
+/// Stops at the first parent that cannot be read; `complete` says whether the
+/// walk reached a root.
+// trace:TASK-3820 | ai:claude
+fn ancestors(g: &SeatGrant) -> (Vec<SeatGrant>, bool) {
+    let mut chain = Vec::new();
+    let mut at = g.clone();
+    let mut seen = std::collections::HashSet::from([g.id.clone()]);
+    while let Some(parent) = at.parent_grant_id.clone() {
+        if seen.len() >= 64 || !seen.insert(parent.clone()) {
+            return (chain, false);
+        }
+        match read_grant_checked(&parent) {
+            Ok(p) => {
+                chain.push(p.clone());
+                at = p;
+            }
+            Err(_) => return (chain, false),
+        }
+    }
+    (chain, true)
+}
+
+/// Whether `g`'s chain reaches an inline `agent new` root: outside the
+/// operator's role-enter coverage.
+// trace:TASK-3816 | ai:codex
+fn inline_rooted(g: &SeatGrant) -> bool {
+    let (chain, complete) = ancestors(g);
+    complete && chain.last().unwrap_or(g).origin.as_deref() == Some(INLINE_ORIGIN)
+}
+
+fn grant_inventory(
+    root: &Path,
+    policy_root: &Path,
+    principal: &str,
+    now: DateTime<Utc>,
+) -> GrantInventory {
+    let mut report = GrantInventory {
+        grants: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    let ids = match scan_grant_ids() {
+        Ok(ids) => ids,
+        Err(e) => {
+            report
+                .diagnostics
+                .push(format!("cannot inventory session grants: {e}"));
+            return report;
+        }
+    };
+    // trace:TASK-3816 | ai:claude — the cap role enter enforces here.
+    let cap = resolve_hour_cap(Some(policy_root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
+    for id in ids {
+        let g = match read_grant_checked(&id) {
+            Ok(g) => g,
+            Err(e) => {
+                report.diagnostics.push(format!("grant {id}: {e}"));
+                continue;
+            }
+        };
+        if g.principal != principal {
+            continue;
+        }
+        // Use the shared chain/roster verdict without requiring this reader to
+        // possess another terminal's grant. Broken chains remain visible.
+        let mut rejection = match grant_check_identity_at(root, &id, principal, now, true) {
+            GrantCheck::Valid(_) => None,
+            GrantCheck::Rejected { reason, .. } => Some(reason.to_string()),
+            GrantCheck::Absent => Some("grant absent".into()),
+        };
+        // Inline agent-new parents are outside the operator role-enter scope.
+        if inline_rooted(&g) {
+            continue;
+        }
+        let holders = grant_holders(&g);
+        if g.binding.is_empty() && rejection.is_none() {
+            rejection = Some(GrantRejection::Unbound.to_string());
+        }
+        report.grants.push(InventoryGrant {
+            id,
+            role: g.seat,
+            subject: g.subject,
+            parent: g.parent_grant_id,
+            holders,
+            expires_at: g.expires_at,
+            effective_cap_hours: cap.hours,
+            config_origin: cap.origin(MAX_GRANT_KEY),
+            valid: rejection.is_none(),
+            rejection,
+        });
+    }
+    report
+        .grants
+        .sort_by(|a, b| a.expires_at.cmp(&b.expires_at).then(a.id.cmp(&b.id)));
+    report
+}
+
+/// The processes a grant is bound to, namespace-qualified, sorted, unique.
+// trace:TASK-3816 | ai:claude
+fn grant_holders(g: &SeatGrant) -> Vec<InventoryHolder> {
+    let mut holders: Vec<_> = g
+        .binding
+        .iter()
+        .filter_map(|b| binding_process(b))
+        .map(|(pid, ns, _)| InventoryHolder {
+            pid,
+            pid_ns: ns.map(str::to_string),
+        })
+        .collect();
+    holders.sort_unstable();
+    holders.dedup();
+    holders
+}
+
+#[cfg(test)]
+#[path = "tests/task_3816_grant_inventory_tests.rs"]
+mod task_3816_grant_inventory_tests;
+
+// ── S2b: `aida mandate renew` extends covered grants in place ──────────────
+// trace:TASK-3820 | ai:claude
+
+/// What `aida mandate renew` did with one grant the inventory lists.
+// trace:TASK-3820 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum ExtensionOutcome {
+    /// Extended in place to `expires_at`.
+    Extended,
+    /// Covered, but left as it was: it already lasts at least as long, or a
+    /// launcher capped it below its parent on purpose.
+    Kept,
+    /// Not covered by this renewal: expired, revoked, under an expired or
+    /// revoked root, or managed by a relay's own parent renewal.
+    Skipped,
+    /// Covered, and could not be extended. Any refusal fails the command.
+    Refused,
+}
+
+impl ExtensionOutcome {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Extended => "extended",
+            Self::Kept => "kept",
+            Self::Skipped => "skipped",
+            Self::Refused => "refused",
+        }
+    }
+}
+
+// trace:TASK-3820 | ai:claude
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct GrantExtension {
+    pub id: String,
+    pub role: String,
+    pub parent: Option<String>,
+    pub holders: Vec<InventoryHolder>,
+    pub previous_expires_at: DateTime<Utc>,
+    /// The expiry after the renewal (the previous one unless extended).
+    pub expires_at: DateTime<Utc>,
+    pub outcome: ExtensionOutcome,
+    pub reason: Option<String>,
+    /// Set when the grant carries a session key this process could not
+    /// reach: the key, used by sandboxed presenters, keeps its old expiry.
+    pub key_note: Option<String>,
+}
+
+// trace:TASK-3820 | ai:claude
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct GrantExtensionReport {
+    /// The renewed mandate's expiry: no grant is extended past it.
+    pub target_expires_at: DateTime<Utc>,
+    pub effective_cap_hours: u32,
+    pub config_origin: String,
+    pub grants: Vec<GrantExtension>,
+    pub diagnostics: Vec<String>,
+}
+
+impl GrantExtensionReport {
+    pub(crate) fn refused(&self) -> Vec<&GrantExtension> {
+        self.grants
+            .iter()
+            .filter(|g| g.outcome == ExtensionOutcome::Refused)
+            .collect()
+    }
+
+    pub(crate) fn text(&self) -> String {
+        let mut out = format!(
+            "Session grants (extended up to {}; seat cap {}h, {}):\n",
+            self.target_expires_at.to_rfc3339(),
+            self.effective_cap_hours,
+            self.config_origin
+        );
+        if self.grants.is_empty() {
+            out.push_str("  none found for this operator\n");
+        }
+        for g in &self.grants {
+            out.push_str(&format!(
+                "  {} {} role={} holders=[{}] parent={} expires {} -> {}",
+                g.outcome.as_str(),
+                g.id,
+                g.role,
+                g.holders
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                g.parent.as_deref().unwrap_or("none"),
+                g.previous_expires_at.to_rfc3339(),
+                g.expires_at.to_rfc3339(),
+            ));
+            if let Some(reason) = &g.reason {
+                out.push_str(&format!(" ({reason})"));
+            }
+            out.push('\n');
+            if let Some(note) = &g.key_note {
+                out.push_str(&format!("    note: {note}\n"));
+            }
+        }
+        for d in &self.diagnostics {
+            out.push_str(&format!("  diagnostic: {d}\n"));
+        }
+        out
+    }
+}
+
+/// Extend, in place, every live grant rooted in the operator's own
+/// `aida role enter` to at most `target` (the renewed mandate's expiry).
+/// Runs after the mandate renewal, behind the same direct-human floor.
+// trace:TASK-3820 | ai:claude
+pub(crate) fn extend_operator_grants_as_human(
+    root: &Path,
+    policy_root: &Path,
+    target: DateTime<Utc>,
+) -> Result<GrantExtensionReport> {
+    require_direct_human()?;
+    extend_grants(
+        root,
+        policy_root,
+        &inventory_principal(),
+        target,
+        Utc::now(),
+    )
+}
+
+/// Test seam: [`extend_grants`] without the direct-human floor.
+// trace:TASK-3820 | ai:claude
+#[cfg(test)]
+pub(crate) fn extend_grants_for_test(
+    root: &Path,
+    principal: &str,
+    target: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> GrantExtensionReport {
+    extend_grants(root, root, principal, target, now).unwrap()
+}
+
+/// The S2b renewal, signed off by the advisor on STORY-2828:
+/// - coverage: the principal's grants whose chain reaches a role-enter root
+///   (inline `agent new` roots are outside it, as in the inventory);
+/// - a root goes to `min(target, now + seat cap)`, a descendant to
+///   `min(its parent's new expiry, now + seat cap)`: never past its root,
+///   never above the 168h ceiling, never shortened; delegation, binding,
+///   subject and id are untouched;
+/// - a descendant is extended only while its whole chain validates; an
+///   expired or revoked grant (or one under an expired or revoked ancestor)
+///   is never revived;
+/// - each grant is rewritten under its own record lock, re-checked there, so
+///   a concurrent revoke wins; no rollback of grants that succeeded;
+/// - relay parent replacements, the predecessors they superseded, and their
+///   descendants are left to the relay's own renewal (TASK-3119): extending
+///   them here would double-extend the relay's authority.
+// trace:TASK-3820 | ai:claude
+fn extend_grants(
+    root: &Path,
+    policy_root: &Path,
+    principal: &str,
+    target: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> Result<GrantExtensionReport> {
+    let cap = resolve_hour_cap(Some(policy_root), MAX_GRANT_KEY, DEFAULT_MAX_GRANT_HOURS);
+    let mut report = GrantExtensionReport {
+        target_expires_at: target,
+        effective_cap_hours: cap.hours,
+        config_origin: cap.origin(MAX_GRANT_KEY),
+        grants: Vec::new(),
+        diagnostics: Vec::new(),
+    };
+    // Fail closed: a store that cannot be listed extends nothing, loudly.
+    let ids = scan_grant_ids().context("cannot list the session grant store")?;
+    let ceiling = now + Duration::hours(i64::from(cap.hours.min(HARD_CEILING_GRANT_HOURS)));
+    // Candidates in chain order (roots first), so each descendant sees its
+    // parent's new expiry.
+    let mut candidates = Vec::new();
+    for id in ids {
+        let g = match read_grant_checked(&id) {
+            Ok(g) => g,
+            Err(e) => {
+                report.diagnostics.push(format!("grant {id}: {e}"));
+                continue;
+            }
+        };
+        if g.principal != principal {
+            continue;
+        }
+        if inline_rooted(&g) {
+            continue;
+        }
+        let (chain, complete) = ancestors(&g);
+        candidates.push((chain.len(), g, chain, complete));
+    }
+    candidates.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.id.cmp(&b.1.id)));
+    // Each processed grant's expiry after this renewal, keyed by id.
+    let mut after = std::collections::HashMap::new();
+    for (_, g, chain, complete) in candidates {
+        let row = extend_one(
+            root, principal, &g, &chain, complete, target, ceiling, now, &after,
+        );
+        after.insert(row.id.clone(), (row.expires_at, row.outcome));
+        report.grants.push(row);
+    }
+    report.grants.sort_by(|a, b| {
+        a.previous_expires_at
+            .cmp(&b.previous_expires_at)
+            .then(a.id.cmp(&b.id))
+    });
+    Ok(report)
+}
+
+/// One grant of [`extend_grants`].
+// trace:TASK-3820 | ai:claude
+#[allow(clippy::too_many_arguments)]
+fn extend_one(
+    root: &Path,
+    principal: &str,
+    g: &SeatGrant,
+    chain: &[SeatGrant],
+    complete: bool,
+    target: DateTime<Utc>,
+    ceiling: DateTime<Utc>,
+    now: DateTime<Utc>,
+    after: &std::collections::HashMap<String, (DateTime<Utc>, ExtensionOutcome)>,
+) -> GrantExtension {
+    let row = |outcome, expires_at, reason: Option<String>| GrantExtension {
+        id: g.id.clone(),
+        role: g.seat.clone(),
+        parent: g.parent_grant_id.clone(),
+        holders: grant_holders(g),
+        previous_expires_at: g.expires_at,
+        expires_at,
+        outcome,
+        reason,
+        key_note: None,
+    };
+    let skip = |why: String| row(ExtensionOutcome::Skipped, g.expires_at, Some(why));
+    let refuse = |why: String| row(ExtensionOutcome::Refused, g.expires_at, Some(why));
+    // Never revive: the grant itself, then any ancestor.
+    if let Err(why) = check_lifetime(g, now) {
+        return skip(format!("{why}; never revived"));
+    }
+    for a in chain {
+        if let Err(why) = check_lifetime(a, now) {
+            return skip(format!("its ancestor {} {why}; never revived", a.id));
+        }
+    }
+    // A relay's parent (and everything under it) belongs to its relay.
+    for a in std::iter::once(g).chain(chain.iter()) {
+        if super::relay_parent::is_replacement(a) {
+            return skip(format!(
+                "relay parent replacement {}: its relay renews it (`aida role renew-parent`)",
+                a.id
+            ));
+        }
+        match super::relay_parent::superseded_by(&a.id) {
+            Ok(None) => {}
+            Ok(Some(by)) => {
+                return skip(format!(
+                    "{} was superseded by relay parent replacement {by}",
+                    a.id
+                ))
+            }
+            Err(e) => {
+                return refuse(format!(
+                    "cannot read relay parent renewal receipts, so a double extension cannot be ruled out: {e}"
+                ))
+            }
+        }
+    }
+    if !complete {
+        return refuse("its chain does not reach a readable root grant".into());
+    }
+    match grant_check_identity_at(root, &g.id, principal, now, true) {
+        GrantCheck::Valid(_) => {}
+        GrantCheck::Rejected { reason, .. } => return refuse(reason.to_string()),
+        GrantCheck::Absent => return refuse("grant absent".into()),
+    }
+    if g.binding.is_empty() {
+        return refuse(GrantRejection::Unbound.to_string());
+    }
+    // TASK-3820: never infer "uncapped" from a missing cap on a legacy child.
+    // trace:TASK-3820 | ai:claude
+    if let Some(why) = unrecorded_launch_cap(g) {
+        return refuse(why);
+    }
+    let new = match chain.first() {
+        None => target.min(ceiling),
+        Some(parent) => {
+            let parent_after = match after.get(&parent.id) {
+                Some((_, ExtensionOutcome::Refused)) => {
+                    return refuse(format!("its parent {} could not be extended", parent.id))
+                }
+                Some((at, _)) => *at,
+                None => parent.expires_at,
+            };
+            parent_after.min(target).min(ceiling)
+        }
+    };
+    // A launcher recorded its credential deadline on this child (BUG-2486):
+    // the child never outlives it, however far the mandate reaches. The cap
+    // is recorded on the grant, so a child merely left behind by an earlier,
+    // partly failed renewal still catches up with its parent.
+    // trace:TASK-3820 | ai:claude
+    let new = g.launch_expiry_cap.map_or(new, |cap| new.min(cap));
+    if let Some(cap) = g.launch_expiry_cap.filter(|cap| *cap <= g.expires_at) {
+        return row(
+            ExtensionOutcome::Kept,
+            g.expires_at,
+            Some(format!(
+                "capped by its launcher at {}; never extended past it",
+                cap.to_rfc3339()
+            )),
+        );
+    }
+    if new <= g.expires_at {
+        return row(
+            ExtensionOutcome::Kept,
+            g.expires_at,
+            Some("already lasts at least as long; never shortened".into()),
+        );
+    }
+    if let Err(e) = before_locked_renewal(&g.id) {
+        return refuse(format!("{e:#}"));
+    }
+    // Everything above read a snapshot. Under the grant's own record lock,
+    // and holding every ancestor's record lock too (a revoke or a relay
+    // parent renewal takes the same lock), re-validate the whole chain fresh:
+    // a revoke, an expiry, a relay supersession or a launcher cap that
+    // landed since the scan wins.
+    let mut verdict: Option<LockedVerdict> = None;
+    let mut held: Vec<std::fs::File> = Vec::new();
+    let result = update_grant(
+        &g.id,
+        |cur| {
+            held.clear();
+            verdict = None;
+            match locked_extension_check(root, principal, g, cur, new, &mut held) {
+                Ok(()) => {
+                    cur.expires_at = new;
+                    true
+                }
+                Err(v) => {
+                    verdict = Some(v);
+                    false
+                }
+            }
+        },
+        |cur| cur.expires_at == new && cur.revoked_at.is_none(),
+    );
+    drop(held);
+    match (result, verdict) {
+        (Err(e), _) => refuse(format!("{e:#}")),
+        (Ok(false), Some(LockedVerdict::Refuse(why))) => refuse(why),
+        (Ok(false), Some(LockedVerdict::Keep(why))) => row(
+            ExtensionOutcome::Kept,
+            read_grant(&g.id)
+                .map(|c| c.expires_at)
+                .unwrap_or(g.expires_at),
+            Some(why),
+        ),
+        (Ok(false), None) => refuse("its record could not be re-checked while renewing".into()),
+        (Ok(true), _) => {
+            let mut done = row(ExtensionOutcome::Extended, new, None);
+            if has_key_binding(g) {
+                let secs = (new - Utc::now()).num_seconds().clamp(1, u32::MAX as i64) as u32;
+                if !crate::grant_keyring::extend(&g.id, secs) {
+                    done.key_note = Some(format!(
+                        "its session key is held by another process and still expires at {}: sandboxed tool calls that present the key are refused after that, while bound processes keep the grant",
+                        g.expires_at.to_rfc3339()
+                    ));
+                }
+            }
+            done
+        }
+    }
+}
+
+/// Why the locked re-check did not extend a grant.
+// trace:TASK-3820 | ai:claude
+enum LockedVerdict {
+    Refuse(String),
+    Keep(String),
+}
+
+/// How long the renewal waits for an ancestor's record lock before it
+/// refuses the descendant rather than hang behind a stalled writer.
+// trace:TASK-3820 | ai:claude
+const ANCESTOR_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// Take grant `id`'s record lock (the one [`update_grant`], a revoke and a
+/// relay parent renewal take), waiting at most [`ANCESTOR_LOCK_WAIT`].
+// trace:TASK-3820 | ai:claude
+fn lock_grant_record_bounded(id: &str) -> Result<std::fs::File> {
+    use fs2::FileExt;
+    use std::os::unix::fs::OpenOptionsExt;
+    Uuid::parse_str(id)?;
+    let dir = grant_lock_dir()?;
+    std::fs::create_dir_all(&dir)?;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(dir.join(format!("{id}.lock")))?;
+    let deadline = std::time::Instant::now() + ANCESTOR_LOCK_WAIT;
+    loop {
+        match file.try_lock_exclusive() {
+            Ok(()) => return Ok(file),
+            Err(e)
+                if e.kind() == std::io::ErrorKind::WouldBlock
+                    && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(e) => return Err(e).context("its record lock stayed busy"),
+        }
+    }
+}
+
+/// The locked half of [`extend_one`]: `cur` is grant `g` as read under its
+/// record lock. Locks every ancestor (descendant before ancestor, the one
+/// order every renewal uses) into `held`, then re-validates the grant and
+/// its whole chain as they are now: lifetime, principal, roster and
+/// delegation ([`grant_check_identity_at`]), relay replacement and
+/// supersession of every link, the parent still lasting until `new`, and no
+/// launcher cap or shortening since the scan.
+// trace:TASK-3820 | ai:claude
+fn locked_extension_check(
+    root: &Path,
+    principal: &str,
+    g: &SeatGrant,
+    cur: &SeatGrant,
+    new: DateTime<Utc>,
+    held: &mut Vec<std::fs::File>,
+) -> Result<(), LockedVerdict> {
+    use LockedVerdict::{Keep, Refuse};
+    let at = Utc::now();
+    if let Err(why) = check_lifetime(cur, at) {
+        return Err(Refuse(format!(
+            "{why} while renewing; a concurrent change wins"
+        )));
+    }
+    // An earlier binary may have rewritten the record since the scan,
+    // dropping its cap provenance.
+    // trace:TASK-3820 | ai:claude
+    if let Some(why) = unrecorded_launch_cap(cur) {
+        return Err(Refuse(why));
+    }
+    // A credential deadline recorded since the scan (or below `new`) holds.
+    // trace:TASK-3820 | ai:claude
+    if let Some(cap) = cur.launch_expiry_cap.filter(|cap| *cap < new) {
+        return Err(Keep(format!(
+            "capped by its launcher at {} while renewing; never extended past it",
+            cap.to_rfc3339()
+        )));
+    }
+    if cur.expires_at < g.expires_at {
+        return Err(Refuse(format!(
+            "its expiry was shortened to {} while renewing; the shorter expiry stands",
+            cur.expires_at.to_rfc3339()
+        )));
+    }
+    if cur.expires_at >= new {
+        return Err(Keep(
+            "already lasts at least as long; never shortened".into(),
+        ));
+    }
+    if cur.parent_grant_id != g.parent_grant_id
+        || cur.delegable_seats != g.delegable_seats
+        || cur.seat != g.seat
+        || cur.principal != g.principal
+        || cur.origin != g.origin
+    {
+        return Err(Refuse("its record changed while renewing".into()));
+    }
+    // Lock, then read, each ancestor: what is read can no longer be revoked
+    // or superseded until the write lands.
+    let mut chain = Vec::new();
+    let mut next = cur.parent_grant_id.clone();
+    let mut seen = std::collections::HashSet::from([cur.id.clone()]);
+    while let Some(pid) = next {
+        if seen.len() >= 64 || !seen.insert(pid.clone()) {
+            return Err(Refuse(
+                "its chain does not reach a readable root grant".into(),
+            ));
+        }
+        match lock_grant_record_bounded(&pid) {
+            Ok(lock) => held.push(lock),
+            Err(e) => {
+                return Err(Refuse(format!(
+                    "cannot lock its ancestor {pid} while renewing: {e:#}"
+                )))
+            }
+        }
+        let p = read_grant_checked(&pid)
+            .map_err(|why| Refuse(format!("its ancestor {pid} is {why} while renewing")))?;
+        next = p.parent_grant_id.clone();
+        chain.push(p);
+    }
+    for a in std::iter::once(cur).chain(chain.iter()) {
+        if super::relay_parent::is_replacement(a) {
+            return Err(Refuse(format!(
+                "{} became a relay parent replacement while renewing",
+                a.id
+            )));
+        }
+        match super::relay_parent::superseded_by(&a.id) {
+            Ok(None) => {}
+            Ok(Some(by)) => {
+                return Err(Refuse(format!(
+                    "{} was superseded by relay parent replacement {by} while renewing",
+                    a.id
+                )))
+            }
+            Err(e) => {
+                return Err(Refuse(format!(
+                    "cannot read relay parent renewal receipts: {e}"
+                )))
+            }
+        }
+    }
+    // The ancestor lock waits and receipt reads above take time: judge the
+    // grant and its whole chain at a fresh instant, so a grant that expired
+    // while waiting is never revived. trace:TASK-3820 | ai:claude
+    let at = Utc::now();
+    match grant_check_identity_at(root, &cur.id, principal, at, true) {
+        GrantCheck::Valid(_) => {}
+        GrantCheck::Rejected { reason, .. } => {
+            return Err(Refuse(format!("{reason} while renewing")))
+        }
+        GrantCheck::Absent => return Err(Refuse("grant absent while renewing".into())),
+    }
+    if let Some(parent) = chain.first() {
+        if parent.expires_at < new {
+            return Err(Refuse(format!(
+                "its parent {} was not extended to {} while renewing",
+                parent.id,
+                new.to_rfc3339()
+            )));
+        }
+    }
+    if chain.last().unwrap_or(cur).origin.as_deref() == Some(INLINE_ORIGIN) {
+        return Err(Refuse(
+            "its chain reaches an inline `agent new` root while renewing".into(),
+        ));
+    }
+    // Last, immediately before the write: every link still live now.
+    let at = Utc::now();
+    for a in std::iter::once(cur).chain(chain.iter()) {
+        if let Err(why) = check_lifetime(a, at) {
+            let whose = if a.id == cur.id {
+                String::new()
+            } else {
+                format!("its ancestor {} ", a.id)
+            };
+            return Err(Refuse(format!(
+                "{whose}{why} while renewing; never revived"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Test seam: runs just before the locked re-check, so a test can land a
+/// concurrent revoke, cap or relay supersession, or fail the write.
+// trace:TASK-3820 | ai:claude
+#[cfg(test)]
+thread_local! {
+    pub(crate) static BEFORE_LOCKED_RENEWAL: std::cell::RefCell<Option<Box<dyn FnMut(&str) -> Result<()>>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+// trace:TASK-3820 | ai:claude
+#[cfg(test)]
+fn before_locked_renewal(id: &str) -> Result<()> {
+    let hook = BEFORE_LOCKED_RENEWAL.with(|h| h.borrow_mut().take());
+    let Some(mut hook) = hook else {
+        return Ok(());
+    };
+    let out = hook(id);
+    BEFORE_LOCKED_RENEWAL.with(|h| *h.borrow_mut() = Some(hook));
+    out
+}
+
+#[cfg(not(test))]
+fn before_locked_renewal(_id: &str) -> Result<()> {
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "tests/task_3820_grant_renewal_tests.rs"]
+pub(crate) mod task_3820_grant_renewal_tests;
+
+// trace:TASK-3119 | ai:codex
+pub(crate) fn renewable_parent(
+    root: &Path,
+    id: &str,
+    rotation: Duration,
+) -> Result<SeatGrant, super::relay_parent::Refusal> {
+    use super::relay_parent::RefusalCode::*;
+    let mut old =
+        read_grant_checked(id).map_err(|e| InvalidParent.caused_by(anyhow::Error::msg(e)))?;
+    if old.parent_grant_id.is_some() || old.revoked_at.is_some() || old.launch_capability.is_some()
+    {
+        return Err(InvalidParent.refuse());
+    }
+    if old.subject != super::kernel_deps::current_user_id(None)
+        || old.principal != super::mandate::operator_principal()
+    {
+        return Err(IdentityMismatch.refuse());
+    }
+    super::relay_parent::validate_origin(root, &old, Utc::now())?;
+    check_roster_membership(root, &old)
+        .map_err(|e| InvalidParent.caused_by(anyhow::Error::msg(e)))?;
+    let matched = matched_binding(&old, &presenter_tokens());
+    // Carry only live process bindings the requesting relay presents. A copied
+    // key token would refer to the old grant's keyring entry, not the new ID.
+    old.binding = matched
+        .into_iter()
+        .filter(|b| !b.starts_with("key:"))
+        .collect();
+    if old.binding.is_empty() {
+        return Err(PresenterNotBound.refuse());
+    }
+    if old.expires_at - Utc::now() >= rotation {
+        return Err(ParentNotExpiring.refuse());
+    }
+    Ok(old)
+}
+// trace:TASK-3119 | ai:codex
+pub(crate) fn persist_replacement(grant: &SeatGrant) -> Result<()> {
+    write_grant(grant)
+}
+// trace:TASK-3119 | ai:codex
+pub(crate) fn lock_parent(id: &str) -> Result<std::fs::File, super::relay_parent::Refusal> {
+    use super::relay_parent::RefusalCode::{AuthorityBusy, InvalidParent};
+    use fs2::FileExt;
+    use std::os::unix::fs::OpenOptionsExt;
+    Uuid::parse_str(id).map_err(|e| InvalidParent.caused_by(e))?;
+    let dir = grant_lock_dir().map_err(|e| AuthorityBusy.caused_by(e))?;
+    std::fs::create_dir_all(&dir).map_err(|e| AuthorityBusy.caused_by(e))?;
+    let file = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .mode(0o600)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(dir.join(format!("{id}.lock")))
+        .map_err(|e| AuthorityBusy.caused_by(e))?;
+    file.try_lock_exclusive()
+        .map_err(|e| AuthorityBusy.caused_by(e))?;
+    Ok(file)
 }

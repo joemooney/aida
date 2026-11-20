@@ -8,8 +8,10 @@ use crate::gate::merge_hold_core::MergeHoldRecord;
 use crate::gate::review_verdict::{JsonObj, RecorderAttestation, ATTESTATION_KEY};
 use std::path::Path;
 
-/// Schema version written on every event.
-pub(crate) const EVENT_VERSION: u32 = 1;
+/// Schema version written on every event. Version 2 writers bind every spec
+/// before they append (see [`super::bindings`]); readers accept 1 and 2.
+// trace:BUG-2531 | ai:claude
+pub(crate) const EVENT_VERSION: u32 = 2;
 
 /// One ledger line. `seq` and `at` are assigned by the appender under the
 /// change's lock; a caller's values are overwritten.
@@ -47,8 +49,23 @@ pub(crate) struct GateEvent {
     /// The recorder's attestation, as the verdict record carries it.
     #[serde(default)]
     pub actor: Option<RecorderAttestation>,
+    /// Advisory classifier evidence only; never review or shipping authority.
+    /// Keep data untyped here: malformed/future advisory metadata must not
+    /// prevent the authority-bearing verdict event from being read.
+    // trace:STORY-2698 | ai:codex
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<serde_json::Value>,
     #[serde(flatten)]
     pub body: EventBody,
+}
+
+// trace:BUG-2517 | ai:codex
+impl GateEvent {
+    /// Explicit local reviews never acquire change authority through later binding.
+    pub(crate) fn is_spec_only(&self) -> bool {
+        self.verdict_record()
+            .is_some_and(|r| r.get("change_binding").and_then(|v| v.as_str()) == Some("unbound"))
+    }
 }
 
 /// What happened. Slice 1 carried verdicts; slice 2 adds holds, their
@@ -57,9 +74,43 @@ pub(crate) struct GateEvent {
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub(crate) enum EventBody {
+    /// Freshness evidence only. Never grants review or merge authority.
+    // trace:STORY-2763 | ai:codex
+    FreshnessDecision {
+        policy: String,
+        decision: String,
+        proof: serde_json::Value,
+    },
+    /// Advisory escalation only; grants no review or merge authority.
+    // trace:BUG-2548 | ai:codex
+    ManualReviewRequested {
+        request_id: String,
+        recipient: String,
+    },
     /// Invocation evidence only. Never deserialized into merge authorization.
     // trace:BUG-b6b1278890774ef993d2ebc327862470-179 | ai:codex
     TrainCoverage { proof: serde_json::Value },
+    /// The under-lease mandate decision made while a train member was held.
+    // trace:BUG-2666 | ai:codex
+    TrainMandateCoverage {
+        mandate: String,
+        principal: String,
+        hold: Box<MergeHoldRecord>,
+        gate_path: Option<String>,
+    },
+    /// An advisor admitted one fresh review at a head that already carries
+    /// a conclusive verdict (the review contract changed after it). Lifts
+    /// the duplicate-review refusal only while that exact verdict
+    /// (`superseded_verdict` recorded at `superseded_recorded_at`) is still
+    /// the head's newest; the next recorded verdict ends it. Grants no
+    /// review or merge authority.
+    // trace:BUG-2557 | ai:claude
+    RereviewAdmitted {
+        reason: String,
+        by: String,
+        superseded_verdict: String,
+        superseded_recorded_at: String,
+    },
     /// A review verdict: the full record exactly as the verdict writer built
     /// it, so `parse_recorded_verdict` reads it unchanged.
     Verdict { record: JsonObj },
@@ -93,6 +144,9 @@ pub(crate) enum EventBody {
     CarryOverProof {
         proof: crate::gate::review_carryover::CarryOver,
         proof_version: u32,
+        // trace:STORY-2696 | ai:codex
+        #[serde(default = "crate::gate::review_verdict::carry_eligible_default")]
+        carry_eligible: bool,
     },
     /// AC4: the approval at `approved_sha` does NOT carry over to `new_head`,
     /// and `reason` says why (a changed patch identity, a non-merge commit,
@@ -104,6 +158,9 @@ pub(crate) enum EventBody {
         refusal: crate::gate::review_carryover::CarryOverRefusal,
         reason: String,
         proof_version: u32,
+        // trace:STORY-2696 | ai:codex
+        #[serde(default = "crate::gate::review_verdict::carry_eligible_default")]
+        carry_eligible: bool,
     },
 }
 
@@ -151,6 +208,7 @@ impl GateEvent {
             spec: None,
             spec_key: None,
             actor: None,
+            risk: None,
             body,
         }
     }
@@ -216,6 +274,15 @@ pub(crate) fn verdict_event(
     if let Some(head) = event.head.as_deref() {
         (event.base_ref, event.base_tip, event.patch_id) = patch_identity(root, head);
     }
+    // Compute afresh on every verdict, including refusals and collected verdicts.
+    // Keep this outside the signed body and delivery reconciliation identity.
+    // trace:STORY-2698 | ai:codex
+    event.risk = serde_json::to_value(crate::review_risk::assess(
+        root,
+        event.base_tip.as_deref(),
+        event.head.as_deref(),
+    ))
+    .ok();
     event
 }
 

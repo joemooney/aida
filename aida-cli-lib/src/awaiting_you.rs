@@ -184,6 +184,7 @@ pub(crate) struct AwaitingReport {
     /// so it rides the per-turn notice.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
     pub deputy_failed: Vec<crate::deputy::FailedJob>,
+    pub dead_deputies: Vec<crate::deputy_shell::DeadDeputy>,
     /// BUG-1530: the reading seat's session role (`AIDA_SESSION_ROLE` / the
     /// role file), as the caller already resolves it for every other
     /// role-scoped surface. Drives which channels the headline (`render`)
@@ -1975,6 +1976,7 @@ impl AwaitingReport {
             ("blocked_seats", self.blocked_seats.len()),
             // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
             ("deputy_failed", self.deputy_failed.len()),
+            ("dead_deputies", self.dead_deputies.len()),
         ]
     }
 
@@ -2334,6 +2336,35 @@ impl AwaitingReport {
             out,
             "{}",
             crate::toon::table_raw(
+                "dead_deputies",
+                &[
+                    "deputy",
+                    "last_runner_pid",
+                    "runner_recorded_at",
+                    "dead_as_of",
+                    "stranded_jobs"
+                ],
+                &self
+                    .dead_deputies
+                    .iter()
+                    .map(|d| vec![
+                        d.deputy.clone(),
+                        d.last_runner_pid.to_string(),
+                        d.runner_recorded_at.to_rfc3339(),
+                        d.dead_as_of.to_rfc3339(),
+                        d.stranded_jobs
+                            .iter()
+                            .map(|j| format!("{} (was {})", j.job, j.previous_state.as_str()))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                    ])
+                    .collect::<Vec<_>>(),
+            )
+        );
+        let _ = writeln!(
+            out,
+            "{}",
+            crate::toon::table_raw(
                 "stale_approvals",
                 &["pr", "spec", "reviewed", "head", "reason"],
                 &stale_approval_toon_rows(&self.stale_approvals),
@@ -2457,6 +2488,31 @@ impl AwaitingReport {
             )?;
             budget -= 1;
         }
+        // trace:TASK-3801 | ai:codex
+        for deputy in &self.dead_deputies {
+            if budget == 0 {
+                overflow += 1;
+                continue;
+            }
+            writeln!(
+                w,
+                "  Script deputy {} is dead as of {} (last runner PID {}, recorded at {})",
+                deputy.deputy,
+                deputy.dead_as_of.to_rfc3339(),
+                deputy.last_runner_pid,
+                deputy.runner_recorded_at.to_rfc3339(),
+            )?;
+            for job in &deputy.stranded_jobs {
+                writeln!(
+                    w,
+                    "    {} stranded (was {})",
+                    job.job,
+                    job.previous_state.as_str()
+                )?;
+            }
+            budget -= 1;
+        }
+
         // A deputy job submitted on your behalf failed: rc, who asked, and
         // where its log is, until it is acknowledged.
         // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
@@ -3311,6 +3367,7 @@ impl AwaitingReport {
                 "since_label": b.since_label,
             })).collect::<Vec<_>>(),
             // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
+            "dead_deputies": self.dead_deputies,
             "deputy_failed": self.deputy_failed.iter().map(|j| serde_json::json!({
                 "job": j.id,
                 "deputy": j.deputy,

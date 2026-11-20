@@ -25,7 +25,26 @@ const MAX_READ: u64 = 64 * 1024;
 /// never a FIFO or device) no larger than 64 KiB; `None` otherwise.
 // trace:BUG-2169 | ai:claude
 pub fn read_regular_file(path: &Path) -> Option<String> {
+    read_regular_file_result(path).ok()
+}
+
+/// Same bounded handle read, preserving filesystem errors for concurrent removal.
+// trace:STORY-2823 | ai:codex
+pub fn read_regular_file_result(path: &Path) -> std::io::Result<String> {
+    read_regular_file_result_with_limit(path, MAX_READ)
+}
+
+/// Same safe handle read with a caller-specific byte ceiling.
+/// Marker and alternates readers retain their independent 64 KiB default.
+// trace:BUG-2595 | ai:codex
+pub fn read_regular_file_result_with_limit(path: &Path, max_read: u64) -> std::io::Result<String> {
     use std::io::Read;
+    let invalid = || {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "unsafe or oversized regular file",
+        )
+    };
     // One open, then checks on that handle: a seat can swap a FIFO or a
     // symlink to /dev/zero in between a stat by name and a reopen. O_NOFOLLOW
     // refuses a final symlink, O_NONBLOCK keeps a FIFO open from blocking,
@@ -39,20 +58,21 @@ pub fn read_regular_file(path: &Path) -> Option<String> {
         options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
     #[cfg(not(unix))]
-    if !std::fs::symlink_metadata(path).ok()?.file_type().is_file() {
-        return None;
+    if !std::fs::symlink_metadata(path)?.file_type().is_file() {
+        return Err(invalid());
     }
-    let file = options.open(path).ok()?;
-    let meta = file.metadata().ok()?;
-    if !meta.file_type().is_file() || meta.len() > MAX_READ {
-        return None;
+    let file = options.open(path)?;
+    let meta = file.metadata()?;
+    if !meta.file_type().is_file() || meta.len() > max_read {
+        return Err(invalid());
     }
     let mut body = Vec::new();
-    file.take(MAX_READ + 1).read_to_end(&mut body).ok()?;
-    if body.len() as u64 > MAX_READ {
-        return None;
+    file.take(max_read.saturating_add(1))
+        .read_to_end(&mut body)?;
+    if body.len() as u64 > max_read {
+        return Err(invalid());
     }
-    String::from_utf8(body).ok()
+    String::from_utf8(body).map_err(|_| invalid())
 }
 
 /// Whether `path` itself (not a symlink target) is a directory.

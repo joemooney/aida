@@ -82,6 +82,7 @@ fn rebind(project: &Path, lock: &HeldLock, choice: Option<ReuseChoice>) -> Resul
         &lock.path,
         PROTOCOL,
         choice,
+        None,
     )
 }
 

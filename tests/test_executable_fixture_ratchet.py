@@ -52,6 +52,24 @@ def direct_executable_mode_changes(source: str) -> list[str]:
     return violations
 
 
+# trace:TASK-3780 | ai:codex
+def doctor_slot_directory_fixture(source: str) -> str:
+    """Retain the existing directory-permission probe after its test-file move."""
+    body = function_body(source, "unsafe_existing_slots_remain_visible_to_doctor")
+    if body is None or "std::fs::create_dir(&slot).unwrap();" not in body:
+        return source
+    masked = body
+    for mode in ("0o775", "0o700"):
+        statement = (
+            "std::fs::set_permissions(&slot, "
+            f"std::fs::Permissions::from_mode({mode})).unwrap();"
+        )
+        # Only the two original directory mutations receive an allowance;
+        # copies and executable-file mutations still reach the ratchet.
+        masked = masked.replace(statement, "", 1)
+    return source.replace(body, masked, 1)
+
+
 # The BUG-1725 Windows-reachability scan (unix-only APIs outside a cfg(unix)
 # scope) was removed: AIDA is Linux-only (ADR-72), so a Windows compile is not
 # a gate. The ETXTBSY fixture policy below is platform-neutral and stays.
@@ -75,6 +93,8 @@ class ExecutableFixtureRatchetTests(unittest.TestCase):
         offenders = []
         for path in source_root.rglob("*.rs"):
             source = path.read_text(encoding="utf-8")
+            if path == source_root / "doctor_cmd_story_2326_doctor_tests.rs":
+                source = doctor_slot_directory_fixture(source)
             for violation in direct_executable_mode_changes(source):
                 offenders.append(f"{path.relative_to(ROOT)}: {violation}")
         self.assertEqual([], offenders, "\n".join(offenders))
@@ -108,6 +128,21 @@ class ExecutableFixtureRatchetTests(unittest.TestCase):
 
     def test_checker_rejects_direct_executable_mode(self):
         self.assertTrue(direct_executable_mode_changes("permissions.set_mode(0o755);"))
+
+    # trace:TASK-3780 | ai:codex
+    def test_directory_allowance_does_not_cover_executable_files_or_copies(self):
+        directory = "std::fs::set_permissions(&slot, std::fs::Permissions::from_mode(0o775)).unwrap();"
+        source = (
+            "fn unsafe_existing_slots_remain_visible_to_doctor() {\n"
+            "std::fs::create_dir(&slot).unwrap();\n"
+            + directory + "\n"
+            + directory.replace("&slot", "&executable") + "\n"
+            + directory + "\n}\n"
+        )
+        self.assertEqual(2, len(direct_executable_mode_changes(doctor_slot_directory_fixture(source))))
+        # An unrelated test cannot borrow the directory fixture's allowance.
+        unrelated = source.replace("unsafe_existing_slots_remain_visible_to_doctor", "other_test")
+        self.assertEqual(3, len(direct_executable_mode_changes(doctor_slot_directory_fixture(unrelated))))
 
 
 if __name__ == "__main__":

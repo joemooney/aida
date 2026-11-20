@@ -56,6 +56,9 @@ pub fn slots_for_file(path: &Path) -> &'static [&'static str] {
         "settings.json" => &[
             "/hooks/PreToolUse",
             "/hooks/PostToolUse",
+            // trace:STORY-2748 | ai:codex
+            "/hooks/Stop",
+            "/hooks/SubagentStop",
             // trace:STORY-2662 | ai:codex
             "/hooks/PreCompact",
             "/hooks/SessionStart",
@@ -103,14 +106,19 @@ fn is_codex_hooks_json(path: &Path) -> bool {
     path.ends_with(".codex/hooks.json")
 }
 
-/// For files where AIDA owns individual hook entries inside each
-/// `/hooks/<Event>` slot rather than the whole slot, returns the command
-/// marker that identifies an AIDA entry. Today that is only
-/// `.codex/hooks.json`: Codex users hand-add hooks next to AIDA's, and a
-/// whole-slot merge would delete them on every upgrade.
-// trace:BUG-2395 | ai:claude
-fn entry_owner_marker(path: &Path) -> Option<&'static str> {
-    is_codex_hooks_json(path).then_some(CODEX_AIDA_HOOK_MARKER)
+/// Some slots share individual hook entries with the user. In Claude's
+/// terminal hooks, manage just the heartbeat and preserve existing handlers.
+// trace:BUG-2395 trace:STORY-2748 | ai:codex
+fn entry_owner_marker(path: &Path, slot: &str) -> Option<&'static str> {
+    if is_codex_hooks_json(path) {
+        Some(CODEX_AIDA_HOOK_MARKER)
+    } else if path.ends_with("settings.json")
+        && matches!(slot, "/hooks/Stop" | "/hooks/SubagentStop")
+    {
+        Some("/.claude/hooks/aida-activity-heartbeat.sh")
+    } else {
+        None
+    }
 }
 
 fn is_aida_hook(hook: &Value, marker: &str) -> bool {
@@ -186,7 +194,7 @@ pub fn managed_slot_matches(
     user: Option<&Value>,
     aida: Option<&Value>,
 ) -> bool {
-    match entry_owner_marker(path) {
+    match entry_owner_marker(path, slot) {
         Some(marker) => aida.is_none() || aida_entries(user, marker) == aida_entries(aida, marker),
         None => slot_value_matches(slot, user, aida),
     }
@@ -203,13 +211,15 @@ pub fn managed_slot_merge(
     user_doc: &Value,
     aida_doc: &Value,
 ) -> (Value, Vec<SlotChange>) {
-    let slots = slots_for_file(path);
-    let Some(marker) = entry_owner_marker(path) else {
-        return slot_merge(user_doc, aida_doc, slots);
-    };
-    let mut result = user_doc.clone();
-    let mut changes = Vec::new();
-    for slot in slots {
+    let (entry_slots, whole_slots): (Vec<_>, Vec<_>) = slots_for_file(path)
+        .iter()
+        .copied()
+        .partition(|slot| entry_owner_marker(path, slot).is_some());
+    let (mut result, mut changes) = slot_merge(user_doc, aida_doc, &whole_slots);
+    for slot in entry_slots {
+        let Some(marker) = entry_owner_marker(path, slot) else {
+            continue;
+        };
         let Some(aida_val) = aida_doc.pointer(slot) else {
             continue;
         };
@@ -226,7 +236,7 @@ pub fn managed_slot_merge(
         merged.extend(aida_entries(Some(aida_val), marker));
         set_or_create(&mut result, slot, Value::Array(merged));
         changes.push(SlotChange {
-            slot: (*slot).to_string(),
+            slot: slot.to_string(),
             kind,
         });
     }
@@ -461,17 +471,48 @@ mod tests {
         }
     }
 
-    /// Whole-slot ownership still applies to `.claude/settings.json`, and
+    /// Existing whole-slot ownership still applies to Claude PreToolUse, and
     /// `.agents/hooks.json` is not mistaken for the Codex file.
     // trace:BUG-2395 | ai:claude
     #[test]
-    fn bug_2395_entry_ownership_is_codex_only() {
+    fn bug_2395_existing_claude_slots_keep_whole_slot_ownership() {
         let settings = Path::new(".claude/settings.json");
         let user = json!({"hooks": {"PreToolUse": [{"hooks": [{"command": "mine"}]}]}});
         let aida = json!({"hooks": {"PreToolUse": [{"hooks": [{"command": "aida"}]}]}});
         let (merged, _) = managed_slot_merge(settings, &user, &aida);
         assert_eq!(merged["hooks"]["PreToolUse"], aida["hooks"]["PreToolUse"]);
         assert!(slots_for_file(Path::new(".agents/hooks.json")).is_empty());
+    }
+
+    #[test]
+    fn story2748_claude_terminal_hooks_preserve_existing_handlers() {
+        let path = Path::new(".claude/settings.json");
+        let user_hook = json!({"command": "./my-stop-hook"});
+        let heartbeat = json!({"command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-activity-heartbeat.sh claude"});
+        let release = json!({"command": "$CLAUDE_PROJECT_DIR/.claude/hooks/aida-subagent-stop.sh"});
+        let user = json!({"hooks": {
+            "Stop": [{"hooks": [user_hook.clone()]}],
+            "SubagentStop": [{"hooks": [release.clone()]}]
+        }});
+        let aida = json!({"hooks": {
+            "Stop": [{"hooks": [heartbeat.clone()]}],
+            "SubagentStop": [{"hooks": [release.clone(), heartbeat.clone()]}]
+        }});
+        let (merged, changes) = managed_slot_merge(path, &user, &aida);
+        assert_eq!(changes.len(), 2);
+        assert_eq!(
+            merged["hooks"]["Stop"],
+            json!([
+                {"hooks": [user_hook]}, {"hooks": [heartbeat.clone()]}
+            ])
+        );
+        assert_eq!(
+            merged["hooks"]["SubagentStop"],
+            json!([
+                {"hooks": [release]}, {"hooks": [heartbeat]}
+            ])
+        );
+        assert!(managed_slot_merge(path, &merged, &aida).1.is_empty());
     }
 
     #[test]

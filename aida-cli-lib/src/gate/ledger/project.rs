@@ -91,14 +91,20 @@ pub(crate) fn all_verdict_events(start: &Path) -> Vec<GateEvent> {
     let Ok(root) = store_root(start) else {
         return Vec::new();
     };
-    recorded_keys(&root)
+    let mut events: Vec<_> = recorded_keys(&root)
         .into_iter()
         .flat_map(|k| match ChangeKey::parse(&k) {
-            Some(change) => events(&root, change),
+            Some(change) => store::read_file(&root, change),
             None => store::read_unbound(&root, &k),
         })
         .filter(|e| e.verdict_record().is_some())
-        .collect()
+        .collect();
+    // trace:BUG-2517 | ai:codex
+    // Corpus scans already have all witnesses: avoid rediscovering the full
+    // ledger separately for every change.
+    let owners = MiskeyOwners::new(events.iter());
+    owners.filter(&mut events);
+    events
 }
 
 /// The ledger file `event` was read from under the store root `root`: its
@@ -114,19 +120,55 @@ pub(crate) fn event_file(root: &Path, event: &GateEvent) -> PathBuf {
 /// The changes the ledger has recorded `spec` against. A derived cache,
 /// rebuilt from events; never the place state lives.
 pub(crate) fn changes_for_spec(root: &Path, spec: &str) -> Vec<ChangeKey> {
-    let Some(path) = index_file(root, spec) else {
-        return Vec::new();
-    };
-    std::fs::read(&path)
-        .ok()
-        .and_then(|b| serde_json::from_slice::<SpecIndex>(&b).ok())
+    index_changes(root, spec).unwrap_or_default()
+}
+
+/// [`changes_for_spec`], telling an absent or unreadable index (`None`)
+/// from one that names no change.
+// trace:BUG-2531 | ai:claude
+fn index_changes(root: &Path, spec: &str) -> Option<Vec<ChangeKey>> {
+    let path = index_file(root, spec)?;
+    // trace:BUG-2543 | ai:claude — never blocks on a FIFO.
+    store::read_regular(&path)
+        .and_then(|b| serde_json::from_str::<SpecIndex>(&b).ok())
         .map(|i| {
             i.changes
                 .iter()
                 .filter_map(|c| ChangeKey::parse(c))
                 .collect()
         })
-        .unwrap_or_default()
+}
+
+/// Every change a spec-keyed read takes `spec`'s reviews from: its bindings
+/// and its index hint, and, only on evidence that a binding of the spec was
+/// lost ([`super::checked::binding_lost`]), every change whose ledger
+/// carries the spec (a full read: a deleted binding must not hide a newer
+/// refusal). `None` when that full read refuses: the set is then not known
+/// to be complete.
+// trace:BUG-2531 | ai:claude
+fn spec_changes(root: &Path, spec: &str) -> Option<Vec<ChangeKey>> {
+    let hint = index_changes(root, spec);
+    let bound = super::bindings::bound_changes_lossy(root, spec);
+    let keys = |changes: &[ChangeKey]| changes.iter().map(|c| c.as_key()).collect::<Vec<_>>();
+    let lost = super::checked::binding_lost(
+        hint.as_deref().map(keys).as_deref(),
+        bound.as_deref().map(keys).as_deref(),
+    );
+    let mut changes = hint.unwrap_or_default();
+    let mut add = |change: ChangeKey| {
+        if !changes.contains(&change) {
+            changes.push(change);
+        }
+    };
+    bound.into_iter().flatten().for_each(&mut add);
+    if lost {
+        super::checked::recorded_changes(root, spec)
+            .ok()?
+            .iter()
+            .filter_map(|key| ChangeKey::parse(key))
+            .for_each(&mut add);
+    }
+    Some(changes)
 }
 
 /// Add `change` to `spec`'s index entry.
@@ -150,9 +192,32 @@ pub(crate) fn index_spec(root: &Path, spec: &str, change: ChangeKey) -> std::io:
     })
 }
 
-/// The change's events, in ledger order.
+/// Replace `spec`'s index entry with exactly `changes` (the bindings
+/// bootstrap's rebuild, under the exclusive ledger lock).
+// trace:BUG-2531 | ai:claude
+pub(crate) fn write_index(root: &Path, spec: &str, changes: Vec<String>) -> std::io::Result<()> {
+    let Some(path) = index_file(root, spec) else {
+        return Ok(());
+    };
+    store::with_lock(root, &path.with_extension("lock"), || {
+        let body =
+            serde_json::to_vec_pretty(&SpecIndex { changes }).map_err(std::io::Error::other)?;
+        aida_core::fs_atomic::write_atomic(&path, body)
+    })
+}
+
+/// The change's events, in ledger order. Incomplete ownership discovery
+/// withholds every review copy a foreign change could own (historical foreign
+/// copies have no spec-only marker) but keeps holds and other evidence no
+/// witness can disqualify; callers needing diagnostics use the checked reader.
 pub(crate) fn events(root: &Path, change: ChangeKey) -> Vec<GateEvent> {
-    store::read_file(root, change)
+    // trace:BUG-2517 | ai:codex
+    let events = store::read_file(root, change)
+        .into_iter()
+        .filter(|e| !e.is_spec_only())
+        .collect::<Vec<_>>();
+    // trace:BUG-2517 | ai:claude
+    super::checked::filter_miskeyed_or_fail_closed(root, events)
 }
 
 /// Ledger verdict events for `key` — a change key, or a spec ID through the
@@ -161,17 +226,29 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     if let Some(change) = ChangeKey::parse(key) {
         return events(root, change)
             .into_iter()
-            .filter(|e| e.verdict_record().is_some())
+            .filter(|e| e.verdict_record().is_some() && terminal_annotation_matches(e, key))
             .collect();
     }
     let Some(spec) = spec_key(key) else {
         return Vec::new();
     };
-    let bound: Vec<GateEvent> = changes_for_spec(root, &spec)
+    // trace:BUG-2517 | ai:codex
+    // One discovery filters every related change. trace:BUG-2531 | ai:claude
+    // It reads only the ledgers bound to this spec, never the whole corpus.
+    // trace:BUG-2531 | ai:claude — the index is a hint; the bindings are
+    // the complete set of changes recorded against the spec; a full read
+    // replaces them only on evidence of a lost binding. A full read that
+    // refuses withholds every bound copy, as incomplete discovery does below.
+    let changes = spec_changes(root, &spec).unwrap_or_default();
+    let raw: Vec<GateEvent> = changes
         .into_iter()
-        .flat_map(|change| events(root, change))
+        .flat_map(|change| store::read_file(root, change))
+        .filter(|e| !e.is_spec_only())
         .filter(|e| e.verdict_record().is_some() && e.spec.as_deref() == Some(spec.as_str()))
         .collect();
+    // As for change-keyed reads, incomplete discovery withholds every bound
+    // copy a foreign change could own. trace:BUG-2517 | ai:claude
+    let bound = super::checked::filter_miskeyed_or_fail_closed(root, raw);
     // An unbound record already bound to a change (AC2) is read once, from
     // the change. trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let unbound: Vec<GateEvent> = store::read_unbound(root, &spec)
@@ -208,7 +285,18 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     {
         out.push(streams[index].pop_front().unwrap());
     }
+    out.retain(|e| terminal_annotation_matches(e, key));
     out
+}
+
+// A spec-scoped closure cannot replace the PR review or another spec review.
+// trace:BUG-2525 | ai:codex
+fn terminal_annotation_matches(event: &GateEvent, key: &str) -> bool {
+    event
+        .verdict_record()
+        .and_then(|r| r.get("terminal_wait_key"))
+        .and_then(|v| v.as_str())
+        .is_none_or(|target| target.eq_ignore_ascii_case(key))
 }
 
 /// The newest verdict event the ledger holds for `key`, read from `start`
@@ -219,10 +307,195 @@ pub(crate) fn newest_verdict_event(start: &Path, key: &str) -> Option<GateEvent>
     newest_of(verdict_events(&root, key))
 }
 
+/// The newest verdict event that speaks for change `pr` under `key`.
+///
+/// A spec key is shared by every change that ships the spec, so its newest
+/// event can be a verdict on some other change. Read for one change, a spec
+/// key answers with that change's own events and the spec's unbound ones; an
+/// event bound to another change counts only when it was recorded at `head`,
+/// the commit being judged. With no change (`pr` 0) or no head known, nothing
+/// is left out. A change key is read as [`newest_verdict_event`] reads it.
+// trace:BUG-2570 | ai:claude
+pub(crate) fn newest_verdict_event_for_change(
+    start: &Path,
+    key: &str,
+    pr: u64,
+    head: Option<&str>,
+) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    let mut events = verdict_events(&root, key);
+    if ChangeKey::parse(key).is_none() {
+        events.retain(|event| speaks_for_change(event, pr, head));
+    }
+    newest_of(events)
+}
+
+/// Whether `event`, read under a spec key, is evidence about change `pr` at
+/// `head` ([`newest_verdict_event_for_change`]).
+// trace:BUG-2570 | ai:claude
+fn speaks_for_change(event: &GateEvent, pr: u64, head: Option<&str>) -> bool {
+    let head = head.map(str::trim).filter(|head| !head.is_empty());
+    let (Some(bound), Some(head)) = (ChangeKey::parse(&event.change), head) else {
+        return true;
+    };
+    pr == 0
+        || bound.number == pr
+        || event
+            .head
+            .as_deref()
+            .is_some_and(|at| same_reviewed_sha(at, head))
+}
+
+/// [`newest_verdict_event_for_change`] as the merge gate reads a spec key:
+/// besides what speaks for change `pr`, a refusal bound to another change
+/// still counts while that change stands refused and the refused commit is
+/// part of the head being judged (`in_head`). A member merged ahead of its
+/// review and refused afterwards is carried by every change that contains
+/// its commit, so an approval must not be carried past it.
+// trace:BUG-2569 | ai:claude
+pub(crate) fn newest_verdict_event_for_merge(
+    start: &Path,
+    key: &str,
+    pr: u64,
+    head: Option<&str>,
+    in_head: &dyn Fn(&str) -> bool,
+) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    let mut events = verdict_events(&root, key);
+    if ChangeKey::parse(key).is_none() {
+        events.retain(|event| {
+            speaks_for_change(event, pr, head)
+                || has_round_at(event, head)
+                || standing_refusal_in_head(&root, event, in_head)
+        });
+    }
+    newest_of(events)
+}
+
+/// Whether any earlier round `event`'s record keeps was reviewed at `head`:
+/// such a record is evidence about `head` whatever its newest round names.
+// trace:BUG-2569 | ai:claude
+fn has_round_at(event: &GateEvent, head: Option<&str>) -> bool {
+    let Some(head) = head.map(str::trim).filter(|head| !head.is_empty()) else {
+        return false;
+    };
+    event
+        .verdict_record()
+        .and_then(|record| record.get("rounds"))
+        .and_then(|rounds| rounds.as_array())
+        .is_some_and(|rounds| {
+            rounds.iter().any(|round| {
+                round
+                    .get("reviewed_sha")
+                    .and_then(|sha| sha.as_str())
+                    .is_some_and(|sha| same_reviewed_sha(sha, head))
+            })
+        })
+}
+
+/// Whether `event`, a verdict bound to another change, is a refusal that
+/// change still stands under, of a commit `in_head` finds in the judged
+/// head. What cannot be read counts: an event with no parseable verdict or
+/// no recorded commit, and a change whose newest verdict does not approve.
+// trace:BUG-2569 | ai:claude
+fn standing_refusal_in_head(
+    root: &Path,
+    event: &GateEvent,
+    in_head: &dyn Fn(&str) -> bool,
+) -> bool {
+    let approves = |event: &GateEvent| {
+        event
+            .verdict_record()
+            .and_then(|record| serde_json::to_string(record).ok())
+            .and_then(|body| crate::gate::review_verdict::parse_recorded_verdict(&body))
+            .is_some_and(|verdict| verdict.kind.approves())
+    };
+    if approves(event) {
+        return false;
+    }
+    let superseded = ChangeKey::parse(&event.change)
+        .and_then(|bound| newest_of(verdict_events(root, &bound.as_key())))
+        .is_some_and(|newest| approves(&newest));
+    !superseded && event.head.as_deref().is_none_or(in_head)
+}
+
+/// Whether change `pr` has a verdict of its own on the ledger.
+// trace:BUG-2570 | ai:claude
+pub(crate) fn change_has_verdict(start: &Path, pr: u64) -> bool {
+    pr > 0 && newest_verdict_event(start, &ChangeKey::pr(pr).as_key()).is_some()
+}
+
+/// Select a review round before applying lifecycle annotations. An annotation
+/// carries no independent ordering authority against a legacy file: the source
+/// round must first win ordinary selection, then the exact-source overlay applies.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn newest_review_event(start: &Path, key: &str) -> Option<GateEvent> {
+    let root = store_root(start).ok()?;
+    newest_review_of(verdict_events(&root, key))
+}
+
+// Also used by the bounded alias reader with its already-checked snapshot.
+// Raw change projection keeps using newest_of so it retains valid closures.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn newest_review_of(events: Vec<GateEvent>) -> Option<GateEvent> {
+    newest_of(
+        events
+            .into_iter()
+            .filter(|event| {
+                !event
+                    .verdict_record()
+                    .is_some_and(|record| record.contains_key("terminal_wait_source"))
+            })
+            .collect(),
+    )
+}
+
+/// The latest lifecycle annotation before raw-review projection. Its source
+/// must be checked against the effective legacy, signed, or ledger verdict.
+/// Raw projection deliberately rejects annotations of independent reviews.
+// trace:BUG-2525 | ai:codex
+pub(crate) fn terminal_wait_annotation(start: &Path, key: &str) -> Option<JsonObj> {
+    let root = store_root(start).ok()?;
+    verdict_events(&root, key)
+        .into_iter()
+        .rev()
+        .filter_map(|event| event.verdict_record().cloned())
+        .find(|record| record.contains_key("terminal_wait_source"))
+}
+
 /// The answering event of one label's verdict events (oldest first): the
 /// last, or the ordinary origin a proved phase-3 overlay duplicates.
 // trace:BUG-2403 | ai:claude
 pub(crate) fn newest_of(mut events: Vec<GateEvent>) -> Option<GateEvent> {
+    // A lifecycle annotation is not a review of an independent ledger round.
+    // This also protects raw effective-gate projections, which partition the
+    // events themselves rather than reading one key through verdict_events.
+    // trace:BUG-2525 | ai:codex
+    while events.last().is_some_and(|event| {
+        let Some(source) = event
+            .verdict_record()
+            .and_then(|r| r.get("terminal_wait_source"))
+        else {
+            return false;
+        };
+        let mut preceding = events
+            .iter()
+            .rev()
+            .skip(1)
+            .filter(|e| e.verdict_record().is_some());
+        let prior = preceding.next();
+        // The writer observed the receipt-bearing origin when a proved
+        // phase-3 duplicate was the last raw event.
+        let prior = match (preceding.next(), prior) {
+            (Some(origin), Some(overlay)) if proved_phase3_origin(origin, overlay) => Some(origin),
+            (_, prior) => prior,
+        };
+        prior
+            .and_then(|event| event.verdict_record())
+            .is_some_and(|prior| source != &serde_json::Value::Object(prior.clone()))
+    }) {
+        events.pop();
+    }
     let newest = events.pop()?;
     // BUG-2403: a retained receipt-less phase-3 overlay answers with the
     // ordinary record it duplicates, when that pairing is proved.
@@ -308,6 +581,49 @@ pub(crate) fn verdict_records(start: &Path, key: &str) -> Vec<JsonObj> {
         .collect()
 }
 
+/// [`verdict_records`] for one change through the strict reader, each with
+/// the time the ledger took it: `Err` when the store root, the ledger or the
+/// change's file could not be read whole, so a caller never mistakes a
+/// corrupt or over-budget ledger for "no verdicts". Delivery-pending records
+/// are not acts of review and are left out.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn change_verdicts_checked(
+    start: &Path,
+    change: ChangeKey,
+) -> Result<Vec<(String, JsonObj)>, String> {
+    let root = store_root(start)
+        .map_err(|error| format!("the gate ledger's store could not be resolved: {error}"))?;
+    let key = change.as_key();
+    let events = super::checked::read_change_events(&root, change, &mut Default::default())
+        .map_err(|refused| refused.0)?;
+    Ok(events
+        .into_iter()
+        .filter(|e| !e.is_spec_only() && terminal_annotation_matches(e, &key))
+        .filter_map(|e| {
+            e.verdict_record()
+                .cloned()
+                .map(|record| (e.at.clone(), record))
+        })
+        .filter(|(_, record)| {
+            !crate::gate::review_verdict::delivery_pending(&serde_json::Value::Object(
+                record.clone(),
+            ))
+        })
+        .collect())
+}
+
+/// [`change_verdicts_checked`] without the times.
+// trace:STORY-2768 | ai:claude
+pub(crate) fn change_verdict_records_checked(
+    start: &Path,
+    change: ChangeKey,
+) -> Result<Vec<JsonObj>, String> {
+    Ok(change_verdicts_checked(start, change)?
+        .into_iter()
+        .map(|(_, record)| record)
+        .collect())
+}
+
 /// The newest verdict record the ledger holds for `key`.
 pub(crate) fn newest_verdict(start: &Path, key: &str) -> Option<JsonObj> {
     newest_verdict_event(start, key).and_then(|e| e.verdict_record().cloned())
@@ -339,19 +655,190 @@ pub(crate) fn carry_over_at(
     change: ChangeKey,
     approved: &str,
     head: &str,
+    carry_eligible: bool,
 ) -> Option<GateEvent> {
     use super::EventBody;
     let root = store_root(start).ok()?;
     events(&root, change).into_iter().rev().find(|e| {
-        let (a, h) = match &e.body {
-            EventBody::CarryOverProof { proof, .. } => (&proof.approved_sha, &proof.new_head),
+        let (a, h, eligible) = match &e.body {
+            EventBody::CarryOverProof {
+                proof,
+                carry_eligible,
+                ..
+            } => (&proof.approved_sha, &proof.new_head, *carry_eligible),
             EventBody::CarryOverRefused {
                 approved_sha,
                 new_head,
+                carry_eligible,
                 ..
-            } => (approved_sha, new_head),
+            } => (approved_sha, new_head, *carry_eligible),
             _ => return false,
         };
-        same_reviewed_sha(a, approved) && same_reviewed_sha(h, head)
+        eligible == carry_eligible && same_reviewed_sha(a, approved) && same_reviewed_sha(h, head)
     })
+}
+
+/// Fingerprint the act of review, omitting only the documented handshake
+/// overlay fields. Missing provenance never proves a misplaced copy.
+// trace:BUG-2517 | ai:codex
+fn review_fingerprint(event: &GateEvent) -> Option<String> {
+    let record = event.verdict_record()?;
+    // Matching numbers or payloads on different forges are not one change.
+    let forge = match ChangeKey::parse(&event.change)?.forge {
+        super::ChangeForge::Pr => "PR",
+        super::ChangeForge::Mr => "MR",
+    };
+    let spec = event.spec.as_deref()?;
+    let head = event.head.as_deref()?;
+    if !REQUIRED_FIELDS
+        .iter()
+        .all(|k| record.get(*k).is_some_and(|v| !v.is_null()))
+    {
+        return None;
+    }
+    // Borrow payloads while constructing the canonical fingerprint: the
+    // discovery owns only its serialized key, not a second review-body clone.
+    // A sorted map preserves the existing JSON object's canonical key order.
+    let semantic: std::collections::BTreeMap<&str, &serde_json::Value> = record
+        .iter()
+        .filter(|(k, _)| !OVERLAY_ONLY_FIELDS.contains(&k.as_str()))
+        .map(|(k, v)| (k.as_str(), v))
+        .collect();
+    serde_json::to_string(&(forge, spec, head, semantic)).ok()
+}
+
+// trace:BUG-2517 | ai:codex
+#[derive(Default)]
+pub(crate) struct MiskeyOwners {
+    owners: std::collections::HashMap<String, std::collections::HashSet<String>>,
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static OWNERSHIP_WORK: std::cell::Cell<(usize, usize)> = const { std::cell::Cell::new((0, 0)) };
+}
+
+impl MiskeyOwners {
+    /// Build once from the complete corpus, then reuse for every bucket and
+    /// any additional event vector filtered through the same discovery.
+    pub(crate) fn new<'a>(witnesses: impl IntoIterator<Item = &'a GateEvent>) -> Self {
+        let mut index = Self::default();
+        #[cfg(test)]
+        OWNERSHIP_WORK.with(|work| {
+            let (builds, visits) = work.get();
+            work.set((builds + 1, visits));
+        });
+        index.add(witnesses);
+        index
+    }
+
+    /// Fold more witnesses into this index (a streaming discovery adds each
+    /// ledger as it is read, retaining no payloads). Returns the bytes newly
+    /// retained, so the caller can charge them to its inventory budget.
+    // trace:BUG-2517 | ai:claude
+    pub(crate) fn add<'a>(&mut self, witnesses: impl IntoIterator<Item = &'a GateEvent>) -> u64 {
+        let mut retained = 0u64;
+        for witness in witnesses {
+            #[cfg(test)]
+            OWNERSHIP_WORK.with(|work| {
+                let (builds, visits) = work.get();
+                work.set((builds, visits + 1));
+            });
+            if ChangeKey::parse(&witness.change).is_none() || witness.is_spec_only() {
+                continue;
+            }
+            if witness
+                .verdict_record()
+                .and_then(|r| r.get("mode"))
+                .and_then(|v| v.as_str())
+                != Some(PHASE3_MODE)
+            {
+                continue;
+            }
+            if let Some(key) = review_fingerprint(witness) {
+                let len = (key.len() + witness.change.len()) as u64;
+                if self
+                    .owners
+                    .entry(key)
+                    .or_default()
+                    .insert(witness.change.clone())
+                {
+                    retained += len;
+                }
+            }
+        }
+        retained
+    }
+
+    pub(crate) fn filter(&self, events: &mut Vec<GateEvent>) {
+        events.retain(|event| match disqualifiable(event) {
+            Candidate::Keep => true,
+            Candidate::Drop => false,
+            Candidate::Fingerprint(key) => !self
+                .owners
+                .get(&key)
+                .is_some_and(|changes| changes.iter().any(|change| change != &event.change)),
+        });
+    }
+
+    /// Without a complete ownership index, keep exactly the events no witness
+    /// could disqualify: holds, carry-over proofs, phase-3 records and other
+    /// unfingerprintable evidence stay; every review copy that a foreign
+    /// change might own is withheld rather than presented as current. An
+    /// unrelated malformed ledger therefore neither resurrects a historical
+    /// foreign copy nor erases a change's hold state. Read-only.
+    // trace:BUG-2517 | ai:claude
+    pub(crate) fn fail_closed(events: &mut Vec<GateEvent>) {
+        events.retain(|event| matches!(disqualifiable(event), Candidate::Keep));
+    }
+}
+
+/// Whether any of `events` is a copy an ownership witness could disqualify.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn needs_witnesses(events: &[GateEvent]) -> bool {
+    events
+        .iter()
+        .any(|e| matches!(disqualifiable(e), Candidate::Fingerprint(_)))
+}
+
+/// The binding keys that hold every witness that could disqualify one of
+/// `events`. A witness must share the candidate's fingerprint, which
+/// includes its spec, so only changes bound to that spec can hold one; every
+/// spec label has a binding key, so no candidate goes unchecked.
+// trace:BUG-2531 | ai:claude
+pub(crate) fn witness_specs(events: &[GateEvent]) -> std::collections::BTreeSet<String> {
+    events
+        .iter()
+        .filter(|e| matches!(disqualifiable(e), Candidate::Fingerprint(_)))
+        .filter_map(|e| e.spec.as_deref().map(super::bindings::binding_key))
+        .collect()
+}
+
+// trace:BUG-2517 | ai:claude
+enum Candidate {
+    Keep,
+    Drop,
+    Fingerprint(String),
+}
+
+/// Whether ownership witnesses can disqualify `event` as a misplaced copy.
+// trace:BUG-2517 | ai:claude
+fn disqualifiable(event: &GateEvent) -> Candidate {
+    if ChangeKey::parse(&event.change).is_none() {
+        return Candidate::Keep;
+    }
+    // A copy made before spec-only isolation was enforced is still local
+    // evidence, never a change verdict or an ownership witness.
+    if event.is_spec_only() {
+        return Candidate::Drop;
+    }
+    if event
+        .verdict_record()
+        .and_then(|r| r.get("mode"))
+        .and_then(|v| v.as_str())
+        == Some(PHASE3_MODE)
+    {
+        return Candidate::Keep;
+    }
+    review_fingerprint(event).map_or(Candidate::Keep, Candidate::Fingerprint)
 }

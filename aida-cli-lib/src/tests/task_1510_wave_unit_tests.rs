@@ -1285,6 +1285,7 @@ pub(crate) fn ctx() -> TickCtx {
         state_error: None,
         log_path: PathBuf::from(LOG),
         clock: None,
+        phase_trace: false,
     }
 }
 

@@ -22,9 +22,9 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     ("queue_cmd/work.rs", "deferred_interactive_launch_hint"),
     ("queue_cmd/work.rs", "build_queue_work_claude_command"),
     // Host-cwd entry wrappers in the session module.
-    ("session.rs", "spawn_vendor_headless_with_seat"),
-    ("session.rs", "spawn_codex_headless_fork"),
-    ("session.rs", "exec_resume_command"),
+    ("session/headless.rs", "spawn_vendor_headless_with_seat"),
+    ("session/headless.rs", "spawn_codex_headless_fork"),
+    ("session/interactive.rs", "exec_resume_command"),
     // `aida agent new` / `aida session`, launched from the host project.
     ("agent_launch.rs", "handle_session_command"),
     ("agent_launch.rs", "agent_resume_launch_config"),
@@ -32,7 +32,7 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     ("agent_launch.rs", "wrapped_agent_program_and_args"),
     ("agent_launch.rs", "build_agent_new_bg_command"),
     ("agent_launch.rs", "run_agent_generation_with_io"),
-    ("lib_part2.rs", "apply_agent_default_flags"),
+    ("launch_defaults.rs", "apply_agent_default_flags"),
     // Coordinators and the orchestrator run at the host project root.
     ("autopilot_intake.rs", "handle_intake_command"),
     ("autopilot_intake.rs", "build_autopilot_intake_command"),
@@ -49,7 +49,7 @@ const ENTRY_POINTS: &[(&str, &str)] = &[
     ("advisor_watch.rs", "fork_and_run_to"),
     ("questions.rs", "questions_clarify"),
     ("questions.rs", "build_questions_clarify_command"),
-    ("lib_part5.rs", "review_spec_launch_reviewer"),
+    ("review_commands.rs", "review_spec_launch_reviewer"),
     ("leases.rs", "lease_tree_dirty_entries"),
 ];
 
@@ -86,9 +86,12 @@ fn production_calls(src: &Path) -> Vec<(String, String, usize)> {
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "rs"))
         .collect();
-    if src.join("queue_cmd").is_dir() {
+    for directory in ["queue_cmd", "session"] {
+        if !src.join(directory).is_dir() {
+            continue;
+        }
         files.extend(
-            std::fs::read_dir(src.join("queue_cmd"))
+            std::fs::read_dir(src.join(directory))
                 .unwrap()
                 .map(|e| e.unwrap().path())
                 .filter(|p| p.extension().is_some_and(|x| x == "rs")),
@@ -123,7 +126,11 @@ fn production_calls(src: &Path) -> Vec<(String, String, usize)> {
 }
 
 fn src_dir() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("src")
+    // trace:TASK-3791 | ai:codex — shared with the lightweight FAST harness.
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .join("aida-cli-lib/src")
 }
 
 #[test]

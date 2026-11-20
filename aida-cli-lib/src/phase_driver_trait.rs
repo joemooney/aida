@@ -1,7 +1,54 @@
 //! the impl auto_complete::PhaseDriver for RealPhaseDriver trait impl (STORY-1488 slice 1; Q9 split)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+// trace:TASK-3428 | ai:codex
+use crate::{
+    advisor, agent_seat_for_phase, aida_subcmd_queue_add_for_reviewer_using, assemble_punt_payload,
+    auto_complete, auto_complete_telemetry, blocking_rework_verdict, build_ci_fix_prompt,
+    build_implementer_phase_args, build_phase3_auto_rebase_args, calibration,
+    capture_review_calibration_for_spec, ci_gate, ci_probe_change_id, ci_probe_with_forge,
+    ci_red_recovery_hint, ci_red_refine_poll_interval, classify_branch_swap_attribution,
+    classify_drain_merge_failure, classify_rework_head_change, claude_log_indicates_api_outage,
+    commit, current_branch_head_sha, decide_shelve_attribution, discard_orchestrated_child_refusal,
+    dispatched_branch_head_sha, drain_lock, drain_merge_lease_failure, drain_state,
+    effective_calibration_mode, emit_ci_terminal, empty_launch_decision,
+    enrich_headless_wait_failure, enrich_no_verdict_with_headless_diagnostic,
+    ensure_implementer_branch_pushed, ensure_pr_open_spec_attribution, ensure_spec_done_after_pr,
+    events, exit_signal, extract_bughunter_severity, failing_ci_log_excerpt,
+    fetch_pr_ship_metadata_via_forge, file_agent_gate_warning_finding,
+    file_reviewer_verdict_unavailable_finding, find_main_worktree_root, forge, gate, graded_review,
+    harvest, headless_launch_log_evidence, hold_signal, implementer_preflight,
+    latest_run_id_for_branch, lease_path, list_leases, load_store_for_lookup,
+    main_worktree_root_from, mark_lease_escalated_to_human, matching_agent_gates_for_spec,
+    merge_hold, network_retry, open_pr_review_story_using, orchestrated_session_lease_evidence,
+    orchestrator, orchestrator_phase_child_env, pane_host, phase1_empty_launch_retry_delay,
+    phase1_empty_launch_retry_sleep, phase3_head_archive_fallback, pr_credit_match_with_sink,
+    pr_credited_spec_id_with_sink, pr_head_branch, pr_head_ref_best_effort,
+    pr_head_sha_best_effort, pr_rebase, preflight_intermediate_only_check_with_forge,
+    preflight_stale_base_check_with_forge, prepare_graded_review,
+    prepare_orchestrated_lease_receipt, punt, queue_cmd, read_commits_in_range,
+    read_headless_log_for_session, read_review_mode, reclaim_implementer_retry_predecessor,
+    reconcile_orchestrated_branch, reconcile_verdict, release_dead_phase_predecessor_leases,
+    remote_head_sha, render_auto_queue_outcome, require_review_handoff, resolve_gh_binary,
+    resolve_pickup_workspace, resolve_shelve_gate_range, resume_command_with_cwd,
+    reviewer_wrote_message, rework_no_op_message, role, schedule, session, shelve_spec_on_failure,
+    sibling_verdict_sweep_for_phase3, spec_status, spec_verdict_fallback_for_phase3,
+    stamp_pr_review_verdict, try_auto_queue_pr_review,
+    try_open_orchestrator_pr_for_no_pr_pushed_branch, try_open_orchestrator_pr_for_no_pr_worktree,
+    verified_phase2_branch, wait_for_ci_terminal, watch_ci_for_context_with_forge,
+    watchdog_failure_with_committed_work, worktree, AdvisorPass, AgentGateOnFail, AutoQueueOrigin,
+    AutoQueueStatus, CiProbe, EmptyLaunchLog, OpenPrInfo, Phase1PrResolve, Phase1Workspace,
+    Phase3StaleOverlapAction, PhaseWatchdog, RealPhaseDriver, RequirementStatus, ReworkHeadChange,
+    ShelveAttribution,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+
+/// The marker the drain records when its CI phase did not wait for CI
+/// (review-gated landing): the head it bound is reviewed, not CI-tested.
+// trace:STORY-2903 | ai:claude
+pub(crate) const CI_SKIPPED_REVIEW_GATED: &str = "ci-skipped: review-gated";
 
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
@@ -102,7 +149,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         else {
             return;
         };
-        let body = fetch_pr_ship_metadata_via_gh(&self.project_root, change.id)
+        let body = fetch_pr_ship_metadata_via_forge(&self.project_root, change.id)
             .map(|meta| meta.body)
             .unwrap_or_default();
         if !queue_cmd::rework_pr_head_matches_spec(
@@ -334,16 +381,18 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // fails (the old `.ok().flatten()` launched with no --branch/--path).
         // trace:BUG-1628 trace:BUG-1629 | ai:claude
         let (intended_path, intended_branch) = self.phase1_launch_workspace()?;
-        let args = build_implementer_phase_args(
+        let mut args = build_implementer_phase_args(
             &self.spec,
             &session_uuid,
-            self.steal,
             self.force_claim || self.retry_implementer_worktree.is_some(),
             Some(intended_branch.as_str()),
             Some(intended_path.as_path()),
             headless_impl,
             self.permission_mode.as_deref(),
         );
+        if self.over_wip {
+            args.push("--over-wip".to_string());
+        }
         let mut cmd = self.control_child().map_err(|e| {
             auto_complete::PhaseFailure::of(
                 auto_complete::FailureKind::Spawn,
@@ -598,6 +647,21 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             None
         };
         if let exit_signal::ExitOutcome::Natural(status) = &outcome {
+            // BUG-2684: the child's lane disk preflight refused below the
+            // floor and rolled its setup back, leaving the spec queued. No
+            // implementer launched, so there is no lease, log or branch to
+            // recover and no replacement launch to spend.
+            // trace:BUG-2684 | ai:claude
+            if status.code() == Some(crate::lane_disk_deferral::EXIT_CODE) {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::DiskDeferred,
+                    format!(
+                        "the implementer launch was deferred: the host is below its free-space \
+                         floor; {} stays queued for the next admission",
+                        self.spec
+                    ),
+                ));
+            }
             if !status.success() {
                 // BUG-1716: BUG-826's zero-byte check alone missed the
                 // never-started sibling — a vendor that rejects its own argv
@@ -1463,6 +1527,52 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             self.ensure_implementer_branch_pushed(&branch)?;
         }
 
+        // A review-gated project merges on an approval at the exact head;
+        // CI runs on the default branch after the merge, so this phase does
+        // not wait for it. trace:STORY-2903 | ai:claude
+        let entry = crate::gate::landing_merge::Entry::capture(&self.project_root);
+        let skip = !entry.policy.waits_for_ci();
+        self.landing_entry = Some(entry);
+        if skip {
+            println!(
+                "  {} landing mode is review-gated: not waiting for CI on `{}`; the merge waits \
+                 on an approval at the exact head, and CI runs after it",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                branch
+            );
+            // The review still binds to an exact head: record the PR's
+            // current head as the one this phase concluded on, marked as a
+            // CI skip, so the review checks bind the reviewer to it. Then
+            // hand off to review as a CI pass does. trace:STORY-2903 | ai:claude
+            let pr = match self.pr_number.or(self.phase_done_pr) {
+                Some(pr) => pr,
+                None => match crate::ci_probe::ci_probe_change_id(&ci_probe_with_forge(
+                    &self.project_root,
+                    self.lifecycle_forge,
+                    &branch,
+                )) {
+                    Some(pr) => pr,
+                    None => {
+                        return Err(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::CiUnavailable,
+                            format!("no open change could be resolved for `{branch}`"),
+                        ))
+                    }
+                },
+            };
+            self.set_pr_number(pr);
+            self.ci_terminal_sha = pr_head_sha_best_effort(self, pr);
+            if self.ci_terminal_sha.is_none()
+                && self.lifecycle_forge != crate::forge::ForgeKind::None
+            {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiUnavailable,
+                    format!("the current head of PR-{pr} is unavailable, so its review cannot be bound to it"),
+                ));
+            }
+            self.ci_skipped = Some(CI_SKIPPED_REVIEW_GATED);
+            return self.end_implementer_session();
+        }
         // Probe, then block until CI is terminal. `lifecycle:trivial` remains
         // represented by a forge-level NoCi result, but a running check is
         // never allowed to overlap review: a verdict without terminal CI for
@@ -1875,32 +1985,55 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // / `should_auto_rebase_stale_base` take it by `&mut` to guard a second
         // rebase attempt; with no re-entry it is always `false` here.
         let mut auto_rebase_attempted = false;
+        // The project's `[review] stale_base` policy decides which stale heads
+        // reach the refusal (and its auto-rebase); the rest proceed with a
+        // warning. The child's own pre-flight reads the same setting.
+        // trace:STORY-2821 | ai:claude
+        let stale_policy = crate::review_helpers::read_stale_base_policy(&self.project_root)
+            .map_err(|e| auto_complete::PhaseFailure::new(format!("{e:#}")))?;
         match preflight_stale_base_check_with_forge(
             &self.project_root,
             pr as u64,
             self.lifecycle_forge,
         ) {
-            Ok(pr_rebase::StaleBaseOutcome::Current) => {}
-            Ok(pr_rebase::StaleBaseOutcome::StaleNoOverlap { behind }) => {
-                eprintln!(
-                    "  {} {}",
-                    crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
-                    pr_rebase::stale_base_warn_message(pr as u64, behind).yellow()
-                );
-            }
-            Ok(pr_rebase::StaleBaseOutcome::StaleOverlap {
-                behind,
-                overlap_files,
-                ..
-            }) => {
-                let msg = pr_rebase::stale_base_block_message(pr as u64, behind, &overlap_files);
-                match self.resolve_phase3_stale_overlap(pr, &mut auto_rebase_attempted, msg) {
-                    Phase3StaleOverlapAction::Proceed => {}
-                    Phase3StaleOverlapAction::Refuse(failure) => {
-                        return Err(failure);
+            Ok(outcome) => match pr_rebase::stale_base_launch(pr as u64, stale_policy, &outcome) {
+                pr_rebase::StaleBaseLaunch::Silent => {}
+                pr_rebase::StaleBaseLaunch::Warn(msg) => {
+                    eprintln!(
+                        "  {} {}",
+                        crate::glyph(crate::glyphs::Glyph::Warning).yellow().bold(),
+                        msg.yellow()
+                    );
+                }
+                pr_rebase::StaleBaseLaunch::Refuse(msg) => {
+                    // The policy above made the refusal. A fast-freshness head
+                    // the base no longer merges into never has its branch
+                    // updated: the refusal is recorded as implementer rework
+                    // instead of an auto-rebase. `--allow-stale-base` still
+                    // proceeds. trace:STORY-2763 | ai:claude
+                    let allowed = self.should_auto_rebase_stale_base(auto_rebase_attempted)
+                        == Err("allow-stale-base");
+                    if !allowed
+                        && crate::review_launch::route_refused_conflict(
+                            &self.project_root,
+                            pr as u64,
+                            &outcome,
+                        )
+                        .map_err(|e| auto_complete::PhaseFailure::new(format!("{e:#}")))?
+                    {
+                        return Err(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::StaleBaseConflict,
+                            crate::gate::review_freshness::NeedsRework.to_string(),
+                        ));
+                    }
+                    match self.resolve_phase3_stale_overlap(pr, &mut auto_rebase_attempted, msg) {
+                        Phase3StaleOverlapAction::Proceed => {}
+                        Phase3StaleOverlapAction::Refuse(failure) => {
+                            return Err(failure);
+                        }
                     }
                 }
-            }
+            },
             Err(e) => {
                 eprintln!(
                     "  {} pre-flight stale-base check failed ({e}); proceeding with reviewer",
@@ -2641,6 +2774,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Merge);
+        // The landing policy and floor authority this merge phase starts
+        // under; the merge boundary re-checks both at the merge.
+        // trace:STORY-2903 | ai:claude
+        let landing_entry = self
+            .landing_entry
+            .clone()
+            .unwrap_or_else(|| crate::gate::landing_merge::Entry::capture(&self.project_root));
         // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
         crate::standalone_implementer::refuse_under_marker("drain merge").map_err(|e| {
             auto_complete::PhaseFailure::of(auto_complete::FailureKind::Internal, format!("{e:#}"))
@@ -2658,7 +2798,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // be computed refuses too. trace:BUG-1468 | ai:claude
         // trace:STORY-1690 | ai:claude
         if let Some(branch) = self.branch.clone() {
-            crate::gate::ci_freshness::ship_behind_base_gate(
+            // trace:STORY-2903 | ai:claude
+            crate::gate::landing_merge::behind_base_gate(
                 &self.project_root,
                 &branch,
                 pr as u64,
@@ -2709,7 +2850,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let change_ref = crate::forge::ChangeRef {
             id: pr as u64,
             url: String::new(),
-            branch: String::new(),
+            // The merge boundary judges base freshness on this branch.
+            // trace:STORY-2903 | ai:claude
+            branch: self.branch.clone().unwrap_or_default(),
             base: String::new(),
             title: None,
         };
@@ -2800,9 +2943,33 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 crate::glyph(crate::glyphs::Glyph::Info).cyan()
             );
         }
-        self.lifecycle_forge()
-            .merge_change(&change_ref, &opts, &mut sink)
-            .map_err(|e| classify_drain_merge_failure(self.lifecycle_forge, pr, &e))?;
+        // trace:STORY-2903 | ai:claude
+        match crate::gate::landing_merge::merge(
+            self.lifecycle_forge().as_ref(),
+            &self.project_root,
+            crate::gate::landing_merge::Caller::Drain,
+            &landing_entry,
+            &change_ref,
+            std::slice::from_ref(&self.spec),
+            &opts,
+            &mut sink,
+            &crate::pr_train::pr_head_pin_journals,
+        ) {
+            Ok(_) => {}
+            Err(crate::gate::landing_merge::MergeError::Refused(kind, why)) => {
+                return Err(auto_complete::PhaseFailure::of(
+                    if kind == crate::gate::ship::ShipRefusal::BehindBase {
+                        auto_complete::FailureKind::BehindBase
+                    } else {
+                        auto_complete::FailureKind::Failed
+                    },
+                    why,
+                ))
+            }
+            Err(crate::gate::landing_merge::MergeError::Forge(e)) => {
+                return Err(classify_drain_merge_failure(self.lifecycle_forge, pr, &e))
+            }
+        }
         println!(
             "  {} merged PR-{}",
             crate::glyph(crate::glyphs::Glyph::Check).green(),
@@ -3027,9 +3194,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // A spawn ENOENT, a missing tool, or a violated invariant is a local
         // / tooling fault — not an out-of-band success. Leave it standing
         // without spending a `gh` round-trip on it.
+        // BUG-2684: a disk deferral launched nothing this round.
         if matches!(
             failure.kind,
-            FailureKind::Spawn | FailureKind::MissingTool | FailureKind::Internal
+            FailureKind::Spawn
+                | FailureKind::MissingTool
+                | FailureKind::Internal
+                | FailureKind::DiskDeferred
         ) {
             return PhaseReconcile::GenuineFailure;
         }
@@ -4141,7 +4312,7 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             if let Some(lease) = &self.implementer_lease {
                 child_cmd.env(crate::gate::review_authority::WORKER_SESSION_ENV, lease);
             }
-            crate::launch::profile::finalize_codex(&mut child_cmd)
+            crate::vendors::profile::finalize_codex(&mut child_cmd)
                 .map_err(|e| std::io::Error::other(format!("{e:#}")))
         } else {
             Ok(())
@@ -4321,21 +4492,26 @@ pub(crate) fn build_phase_driver_ci_fix_command(
         }
         cmd
     } else {
-        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-            vendor: crate::launch::context::launch_vendor(vendor),
-            kind: aida_core::launch_policy::LaunchKind::Fresh,
-            program: program.into(),
-            // Trusted output of session::headless_vendor_args (including
-            // posture flags and a prompt), not a default_flags/template tail.
-            // Caller configuration flags must be validated before this builder.
-            args: headless_vendor_args.to_vec(),
-            tail: Vec::new(),
-            posture,
-            cwd: worktree.to_path_buf(),
-            set_cwd: true,
-            // Native/None constructors do not cross the AIDA boundary.
-            host_main: None,
-        })?;
+        let ctx = {
+            let req = crate::launch::LaunchRequest {
+                vendor: crate::launch::context::launch_vendor(vendor),
+                kind: aida_core::launch_policy::LaunchKind::Fresh,
+                program: program.into(),
+                // Trusted output of session::headless_vendor_args (including
+                // posture flags and a prompt), not a default_flags/template tail.
+                // Caller configuration flags must be validated before this builder.
+                args: headless_vendor_args.to_vec(),
+                tail: Vec::new(),
+                posture,
+                cwd: worktree.to_path_buf(),
+                set_cwd: true,
+                // Native/None constructors do not cross the AIDA boundary.
+                host_main: None,
+            };
+            // trace:STORY-2538 | ai:codex
+            let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+            crate::launch::LaunchContext::resolve(&exec, req)
+        }?;
         crate::launch::spawn_agent(&ctx)?
     };
     cmd.current_dir(worktree)

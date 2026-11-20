@@ -531,7 +531,9 @@ impl Drop for MarkerGuard {
 // trace:STORY-1662.AC6 | ai:claude
 #[test]
 fn pr_ship_refuses_under_the_marker() {
-    let cli = crate::command_registry::try_parse_from(["aida", "pr", "ship", "42"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "pr", "ship", "42"])
+        .unwrap();
     let args = cli.command.registered::<crate::pr_cmd::PrArgs>();
     let _marker = MarkerGuard::set();
     let err = crate::pr_cmd::handle_pr_command(&args.inner).unwrap_err();
@@ -598,7 +600,11 @@ fn burndown_and_release_merges_refuse_under_the_marker() {
         branch: "claude/story-9".into(),
     };
     assert!(
-        !crate::burndown_run::merge_wave_pr(tmp.path(), &pr),
+        !crate::burndown_run::merge_wave_pr(
+            tmp.path(),
+            &pr,
+            &crate::gate::landing_merge::Entry::capture(tmp.path())
+        ),
         "a wave merge does not run"
     );
     let err =
@@ -888,7 +894,42 @@ fn baseline_reason_distinguishes_no_grant_from_not_delegated() {
 #[cfg(unix)]
 #[test]
 fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leaked() {
-    if crate::test_env::run_path_isolated_test() {
+    assert_fresh_publication_veto(false);
+}
+
+// trace:BUG-2648 | ai:codex
+#[cfg(unix)]
+#[test]
+fn stub_vendor_that_holds_exits_33_and_keeps_publication_vetoed() {
+    assert_fresh_publication_veto(true);
+}
+
+#[cfg(unix)]
+fn assert_fresh_publication_veto(held: bool) {
+    let (signal_env, signal, skip_line, receipt_kind, exit_code) = if held {
+        (
+            crate::punt::HOLD_SIGNAL_FILE_ENV,
+            r#"{"spec":"STORY-9","branch":"claude/story-9","reason":"wait for a smoke test"}"#,
+            "PUBLISH SKIPPED: implementer held (wait for a smoke test)",
+            "held",
+            HELD_EXIT_CODE,
+        )
+    } else {
+        (
+            crate::punt::SIGNAL_FILE_ENV,
+            r#"{"spec":"STORY-9","category":"design-fork","detail":"pick a schema"}"#,
+            "PUBLISH SKIPPED: implementer punted (pick a schema)",
+            "punted",
+            PUNTED_EXIT_CODE,
+        )
+    };
+    if let Some(output) = crate::test_env::run_path_isolated_test_output() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(
+            stderr.lines().filter(|line| *line == skip_line).count(),
+            1,
+            "{stderr}"
+        );
         return;
     }
     let tmp = tempfile::tempdir().unwrap();
@@ -896,8 +937,49 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
     let project = tmp.path().join("project");
     let worktree = tmp.path().join("wt");
     std::fs::create_dir_all(home.join(".aida")).unwrap();
+    std::fs::write(
+        home.join(".gitconfig"),
+        "[user]\nname = AIDA Test\nemail = test@example.invalid\n",
+    )
+    .unwrap();
     std::fs::create_dir_all(project.join(".aida")).unwrap();
+    // The stub runs in a small scratch filesystem under the lane test runner.
+    std::fs::write(
+        project.join(".aida/config.toml"),
+        "[doctor.disk_headroom]\nmin_free_gib = 1\n",
+    )
+    .unwrap();
     std::fs::create_dir_all(&worktree).unwrap();
+    let remote = tmp.path().join("remote.git");
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        let output = crate::test_git::git_command()
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{args:?}: {output:?}");
+        String::from_utf8(output.stdout).unwrap()
+    };
+    git(tmp.path(), &["init", "--bare", remote.to_str().unwrap()]);
+    git(&worktree, &["init", "-b", "claude/story-9"]);
+    git(
+        &worktree,
+        &[
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.invalid",
+            "commit",
+            "--allow-empty",
+            "-m",
+            "base",
+        ],
+    );
+    git(
+        &worktree,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    let head = git(&worktree, &["rev-parse", "HEAD"]);
     let dump = tmp.path().join("child-env.txt");
     let started = tmp.path().join("started");
     let release = tmp.path().join("release");
@@ -907,10 +989,12 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
         format!(
             "#!/bin/sh\nenv > \"{dump}\"\necho $$ > \"{started}\"\n\
              i=0; while [ ! -f \"{release}\" ] && [ $i -lt 300 ]; do sleep 0.1; i=$((i+1)); done\n\
-             printf '%s' '{{\"spec\":\"STORY-9\",\"category\":\"design-fork\",\"detail\":\"pick a schema\"}}' > \"$AIDA_PUNT_SIGNAL_FILE\"\nexit 0\n",
+             printf 'recoverable draft\\n' > \"{draft}\"\n\
+             printf '%s' '{signal}' > \"${signal_env}\"\nexit 0\n",
             dump = dump.display(),
             started = started.display(),
             release = release.display(),
+            draft = worktree.join("draft.rs").display(),
         ),
     );
     let mut env = crate::test_env::EnvVarsGuard::apply(&[
@@ -972,7 +1056,7 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
 
     let result = std::thread::scope(|scope| {
         let launch = scope.spawn(|| {
-            run(Launch {
+            run_for_test(Launch {
                 project_root: &project,
                 vendor: crate::session::HeadlessVendor::Claude,
                 prompt: "/aida-pickup STORY-9",
@@ -993,6 +1077,12 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
             {
                 break pid;
             }
+            if launch.is_finished() {
+                panic!(
+                    "lane finished before the stub started: {:?}",
+                    launch.join().unwrap()
+                );
+            }
             assert!(
                 std::time::Instant::now() < deadline,
                 "the stub never started"
@@ -1000,7 +1090,24 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
             std::thread::sleep(std::time::Duration::from_millis(50));
         };
         let live_checks = || {
-            let leases = crate::list_leases(&project);
+            // The stub can write `started` before the launcher's on_spawn
+            // callback stamps its PID. Wait for registration, not scheduling.
+            // Keep this inside catch_unwind so a timeout still releases the stub.
+            // trace:BUG-2649 | ai:codex
+            let leases = loop {
+                let leases = crate::list_leases(&project);
+                if leases
+                    .iter()
+                    .any(|l| l.id == LEASE && l.active_pid == Some(child_pid))
+                {
+                    break leases;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "the child PID {child_pid} was not registered on its lease: {leases:?}"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            };
             let ours = leases
                 .iter()
                 .find(|l| l.id == LEASE)
@@ -1041,12 +1148,32 @@ fn stub_vendor_that_punts_exits_32_as_a_live_implementer_lane_with_no_grant_leak
         }
         result
     });
-    let err = result.expect_err("a punted run is not an open PR");
+    let err = result.expect_err("a vetoed run is not an open PR");
+    // Real child spawn and punt must agree with the durable terminal result.
+    // trace:STORY-2690 | ai:codex
+    let receipts: Vec<_> = std::fs::read_dir(project.join(".aida/lane-results"))
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .collect();
+    assert_eq!(receipts.len(), 1);
+    let receipt: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&receipts[0]).unwrap()).unwrap();
+    assert_eq!(receipt["result"], receipt_kind);
+    assert_eq!(git(&worktree, &["rev-parse", "HEAD"]), head);
+    assert!(git(&remote, &["for-each-ref"]).is_empty());
+    // trace:BUG-2606 | ai:codex
     assert_eq!(
-        crate::exit_code_for_error(&err),
-        PUNTED_EXIT_CODE,
-        "{err:#}"
+        std::fs::read_to_string(worktree.join("draft.rs")).unwrap(),
+        "recoverable draft\n"
     );
+    assert!(
+        lease_file.exists(),
+        "vetoed dirty lane must keep recovery ownership"
+    );
+    assert_eq!(receipt["started"], true);
+    assert!(receipt["child_pid"].as_u64().is_some());
+
+    assert_eq!(crate::exit_code_for_error(&err), exit_code, "{err:#}");
 
     let child: BTreeMap<String, String> = std::fs::read_to_string(&dump)
         .unwrap()
@@ -1119,4 +1246,65 @@ fn bug_2493_native_prompts_name_safe_body_file_surface() {
         assert!(text.contains("/tmp"));
         assert!(text.contains("Help-Golden: unchanged"));
     }
+}
+
+// trace:BUG-2679 | ai:codex
+#[test]
+fn bug_2679_retains_pending_merge_even_when_staged_resolution_matches_head() {
+    let root = tempfile::tempdir().unwrap();
+    let repo = root.path().join("main");
+    let tree = root.path().join("rework seat");
+    std::fs::create_dir(&repo).unwrap();
+    let git = |dir: &Path, args: &[&str]| {
+        crate::test_git::git_command()
+            .current_dir(dir)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let ok = |dir: &Path, args: &[&str]| {
+        let out = git(dir, args);
+        assert!(
+            out.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        out.stdout
+    };
+    ok(&repo, &["init", "-q", "-b", "main"]);
+    ok(&repo, &["config", "user.name", "Test"]);
+    ok(&repo, &["config", "user.email", "test@example.org"]);
+    std::fs::write(repo.join("conflict"), "common\n").unwrap();
+    ok(&repo, &["add", "conflict"]);
+    ok(&repo, &["commit", "-qm", "common"]);
+    ok(
+        &repo,
+        &["worktree", "add", "-qb", "rework", tree.to_str().unwrap()],
+    );
+    std::fs::write(tree.join("conflict"), "ours\n").unwrap();
+    ok(&tree, &["commit", "-qam", "rework"]);
+    let original = ok(&tree, &["rev-parse", "HEAD"]);
+    std::fs::write(repo.join("conflict"), "theirs\n").unwrap();
+    ok(&repo, &["commit", "-qam", "main"]);
+    let stale_pr = Outcome::PrOpened { pr: 42, head: None };
+    ok(&tree, &["branch", "MERGE_HEAD"]);
+    assert!(retained_merge(&repo, &tree, &stale_pr).is_none());
+    ok(&tree, &["branch", "-D", "MERGE_HEAD"]);
+    assert!(!git(&tree, &["merge", "--no-edit", "main"]).status.success());
+    let merge_head = ok(&tree, &["rev-parse", "MERGE_HEAD"]);
+    assert!(retained_merge(&repo, &tree, &stale_pr).is_some());
+    ok(&tree, &["checkout", "--ours", "--", "conflict"]);
+    ok(&tree, &["add", "conflict"]);
+    assert!(ok(&tree, &["diff", "--cached", "--name-only"]).is_empty());
+    let detail = retained_merge(&repo, &tree, &stale_pr).unwrap();
+    assert!(detail.contains("pending merge retained at"));
+    let punted = classify(Some(punt()), None, || panic!("punt must win"));
+    let held = classify(None, Some(hold()), || panic!("hold must win"));
+    assert!(retained_merge(&repo, &tree, &punted).is_none());
+    assert!(retained_merge(&repo, &tree, &held).is_none());
+    assert_eq!(ok(&tree, &["rev-parse", "HEAD"]), original);
+    assert_eq!(ok(&tree, &["rev-parse", "MERGE_HEAD"]), merge_head);
+    ok(&tree, &["commit", "--no-edit"]);
+    assert_eq!(ok(&tree, &["rev-parse", "HEAD^2"]), merge_head);
+    assert!(retained_merge(&repo, &tree, &stale_pr).is_none());
 }

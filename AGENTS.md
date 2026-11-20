@@ -1,8 +1,26 @@
+Cross-label gate-ledger discovery has a separate 128 MiB/200,000-attempt
+aggregate work ceiling, including unrelated payloads and torn retries; exhaustion
+refuses selection. Automatic archive retention and discovery limited to relevant
+changes remain unresolved. See docs/internal/testing/bug-2531-ledger-selection-budget.md.
+<!-- trace:BUG-2531 | ai:codex -->
+
+Repair adoption transfers journal ownership at the verified successor-lease
+boundary. Pending-merge publication requires successful preparation, retries
+failed generation through resume, and records successful regeneration against
+the staged tree. Ignored portable-pack outputs come from a closed pre-run
+inventory of host paths and staged skill masters. See OVERVIEW.md.
+<!-- trace:STORY-2710 | ai:codex -->
+
 MCP transport and its store handler live in `aida-mcp`; the binary injects the
 handler into cli-lib's `mcp-serve` registration before parsing. Shared descriptors
 and claim naming stay below that boundary. CLI-local MCP tests include the
 transport source to retain private fixtures. See OVERVIEW.md.
 <!-- trace:TASK-3429 | ai:codex -->
+
+Local spec-only reviews neither bind to changes nor settle their review claims.
+Effective gate reads share one pinned discovery and refuse indexes naming
+missing change ledgers. Legacy pre-change binding remains. See OVERVIEW.md.
+<!-- trace:BUG-2517 | ai:codex -->
 
 CI freshness compares pinned workflow content: the GitHub `.github/workflows`
 tree or GitLab `.gitlab-ci.yml` blob. Equal digests avoid stale-definition
@@ -93,11 +111,13 @@ set; counter migration refuses newly active unconfirmed blocks. See the
 [writer inventory](docs/plans/2026-10-19-store-writer-inventory.md).
 <!-- trace:TASK-1981 | ai:codex -->
 
-CI runs four test lanes plus separate guards and binary-contract lanes; the aggregate
-`Build (ubuntu-latest)` remains the required check. CLI halves use committed
-main-run timings; each shard keeps its timing budget and root hygiene check.
-See [CI fan-out](docs/internal/testing/ci-test-shards.md).
-<!-- trace:TASK-1949 | ai:codex -->
+Ordinary GitHub PRs default to FAST source guards plus workspace/test compilation.
+`ci:full` or `AIDA_PR_CI_TIER=full` selects FULL; main/train, merge groups and
+scheduled/manual runs always use FULL's seven lanes. The required aggregate
+`Build (ubuntu-latest)` validates the selected tier. Direct ship requires FULL;
+FAST PRs use the train. Each full test shard retains its timing and root hygiene
+checks. See [CI tiers](docs/internal/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 STORY-2735 | ai:codex -->
 
 Rust mandate exclusions also add module comments outside fn/impl ranges and
 inline-module headers, including traces between items and at EOF. Leading
@@ -476,7 +496,8 @@ next agent.
 
 ## Project Orientation
 
-For code navigation, use the reviewed host client `/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph callers <symbol>` (or `callees <symbol>` / `impact <symbol>` with that same absolute executable) against the shared primary-checkout index (main, not your lane branch); confirm “no callers” with `rg`, since large or unindexed files can be absent. Never run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes. The host must deploy this fixed client path before use; do not derive an executable from the seat’s `.codegraph` link. AIDA-contained and AF_UNIX-denied seats still require separate admission and acceptance.
+For code navigation, use the reviewed host query client only when the host operator supplies its absolute path and the file is executable from this lane. If either condition is missing, codegraph is unavailable on this host; use `rg`. With the reviewed client, use `callers <symbol>`, `callees <symbol>` or `impact <symbol>` against the shared primary-checkout index (main, not your lane branch). Confirm “no callers” with `rg`, since large or unindexed files can be absent. Never derive an executable from the seat’s `.codegraph` link or run `codegraph init`, `index` or `sync` from a lane. Use `aida doctor check codegraph` to diagnose missing tools or unreachable/stale indexes. AIDA-contained and AF_UNIX-denied seats still require separate admission and acceptance.
+<!-- trace:TASK-3134 | ai:codex -->
 <!-- trace:STORY-2630 | ai:codex -->
 
 AIDA is an agent-collaboration substrate: stable spec IDs, typed
@@ -494,7 +515,7 @@ Pure vendor descriptors and headless argv/settings composition live in
 STORY-2539 token ratchet inventories remaining vendor literals and typed
 references outside `vendors/` by path and enclosing item; its ledger only shrinks.
 Test-only exclusions include compound `cfg(all(test, ...))` and qualified test attributes.
-`aida-cli-lib/src/vendors/` renders hints from that registry; `launch/profile.rs` keeps effectful finalization. Capability lookup
+`aida-cli-lib/src/vendors/` renders hints from that registry; `vendors/profile.rs` keeps effectful finalization. Capability lookup
 never grants launch admission or containment credit.
 <!-- trace:STORY-2539 | ai:codex -->
 
@@ -742,7 +763,7 @@ Do implementation work in a sibling worktree:
 
 ```bash
 git fetch origin main:refs/remotes/origin/main
-git worktree add /home/joe/ai/aida-<spec> -b <branch> origin/main
+git worktree add --no-track /home/joe/ai/aida-<spec> -b <branch> origin/main
 cd /home/joe/ai/aida-<spec>
 ```
 

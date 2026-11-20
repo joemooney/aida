@@ -1,8 +1,21 @@
 //! batch and single-branch drain drivers and cluster PRs (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::current_branch_head_sha;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, auto_complete, branch_ahead_of, detect_open_pr_for_spec_via_forge, drain_caps,
+    drain_state, drain_summary, drive_robustness, emit_drain_cap_stop, entry_matches_role_filter,
+    events, finalize_drain_summary, find_main_worktree_root, find_project_root, last_drain,
+    maybe_digest_mailbox_best_effort, pr_ship, prompt_yes_no, queue_cmd, queue_role_fallback,
+    resolve_queue_role_filter, run_auto_complete, sum_headless_log_tokens, DrainTuning, PrLookup,
+    ResumeEntry, DEFAULT_MAX_FAILURES, DRAIN_CAP_EXIT_CODE,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use aida_core::Storage;
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 // Child-process batch pipelining preserves the existing per-spec engine while
 // passing the in-process outcome back to the parent scheduler.
@@ -568,6 +581,7 @@ pub(crate) struct RealBatchDriver<'a> {
     /// TASK-559: outer `--force-claim` flag, propagated to every member's
     /// phase-1 subprocess so ambiguous spec status can be claimed.
     pub(crate) force_claim: bool,
+    pub(crate) over_wip: bool,
     /// STORY-281: outer `--allow-stale-base` flag, propagated to every
     /// member's phase-3 pre-flight check so the stale-base + overlap
     /// signal becomes a warning instead of a refusal.
@@ -645,6 +659,7 @@ impl auto_complete::BatchDriver for RealBatchDriver<'_> {
                 false,
                 self.steal,
                 self.force_claim,
+                self.over_wip,
                 self.allow_stale_base,
                 self.no_auto_rebase,
                 None,
@@ -790,6 +805,7 @@ pub(crate) fn pipelined_child_common_args(
     escalate_mode: auto_complete::EscalateMode,
     steal: bool,
     force_claim: bool,
+    over_wip: bool,
     allow_stale_base: bool,
     no_auto_rebase: bool,
 ) -> Vec<String> {
@@ -823,6 +839,9 @@ pub(crate) fn pipelined_child_common_args(
     if force_claim {
         args.push("--force-claim".to_string());
     }
+    if over_wip {
+        args.push("--over-wip".to_string());
+    }
     if allow_stale_base {
         args.push("--allow-stale-base".to_string());
     }
@@ -849,6 +868,7 @@ impl RealBatchDriver<'_> {
             self.escalate_mode,
             self.steal,
             self.force_claim,
+            self.over_wip,
             self.allow_stale_base,
             self.no_auto_rebase,
         )
@@ -983,6 +1003,7 @@ impl auto_complete::PipelinedBatchDriver for RealBatchDriver<'_> {
             false,
             self.steal,
             self.force_claim,
+            self.over_wip,
             self.allow_stale_base,
             self.no_auto_rebase,
             resume,
@@ -1016,6 +1037,7 @@ pub(crate) fn handle_auto_complete_batch(
     steal: bool,
     // TASK-559: outer `--force-claim`, threaded to every batch member's phase 1.
     force_claim: bool,
+    over_wip: bool,
     // STORY-281: outer `--allow-stale-base`, threaded to every batch
     // member's phase 3 pre-flight stale-base check.
     allow_stale_base: bool,
@@ -1108,6 +1130,7 @@ pub(crate) fn handle_auto_complete_batch(
         escalate_mode,
         steal,
         force_claim,
+        over_wip,
         allow_stale_base,
         no_auto_rebase,
         token_meter,
@@ -1463,6 +1486,8 @@ pub(crate) fn open_cluster_pr(
     title: &str,
     body: &str,
 ) -> Result<u64> {
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(project_root, branch)?;
     // trace:TASK-2270 | ai:claude
     aida_core::git_ops::clear_sandbox_config_lock(project_root);
     let push = std::process::Command::new("git")
@@ -1700,6 +1725,7 @@ pub(crate) fn handle_auto_complete_batches(
     escalate_mode: auto_complete::EscalateMode,
     steal: bool,
     force_claim: bool,
+    over_wip: bool,
     // STORY-281: outer `--allow-stale-base`, threaded into every member's
     // RealBatchDriver via the per-batch closure below.
     allow_stale_base: bool,
@@ -1801,6 +1827,7 @@ pub(crate) fn handle_auto_complete_batches(
                 escalate_mode,
                 steal,
                 force_claim,
+                over_wip,
                 allow_stale_base,
                 no_auto_rebase,
                 // TASK-966: shared start + root → cumulative token meter.

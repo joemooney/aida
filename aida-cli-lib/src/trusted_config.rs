@@ -61,11 +61,18 @@ pub fn trusted_default_branch_sha(project_root: &Path) -> Option<String> {
     None
 }
 
+/// A local git read; a scoped read deadline (`train --check --timeout`)
+/// bounds it, and one it cut off reads as unavailable (`None`).
+// trace:TASK-3792 | ai:claude
+fn scoped_output(cmd: Command) -> Option<std::process::Output> {
+    crate::forge_lookup::deadline_output(cmd, Command::output).ok()
+}
+
 /// `git rev-parse --verify --quiet <refname>^{commit}` → the resolved SHA, or
 /// `None` if the ref doesn't exist / doesn't point at a commit.
-fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
-    let out = Command::new("git")
-        .arg("-C")
+pub(crate) fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(project_root)
         .args([
             "rev-parse",
@@ -73,9 +80,8 @@ fn rev_parse_commit(project_root: &Path, refname: &str) -> Option<String> {
             "--quiet",
             crate::git_arg_guard::END_OF_OPTIONS,
         ]) // trace:BUG-1622 | ai:claude
-        .arg(format!("{refname}^{{commit}}"))
-        .output()
-        .ok()?;
+        .arg(format!("{refname}^{{commit}}"));
+    let out = scoped_output(cmd)?;
     if !out.status.success() {
         return None;
     }
@@ -116,13 +122,22 @@ pub(crate) fn local_trusted_default_branch_sha(project_root: &Path) -> Option<St
     rev_parse_commit(project_root, &branch_ref)
 }
 
+/// The default branch's name as the local trusted-config read resolves it
+/// (`origin/HEAD`, else the first of origin/main, origin/master, main,
+/// master), without the `origin/` prefix: the branch a caller fetches so
+/// that read sees the remote's current tip.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn local_default_branch_name(project_root: &Path) -> Option<String> {
+    local_default_branch_ref(project_root)
+        .map(|r| r.strip_prefix("origin/").map(str::to_string).unwrap_or(r))
+}
+
 fn local_default_branch_ref(project_root: &Path) -> Option<String> {
-    let symbolic = Command::new("git")
-        .arg("-C")
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(project_root)
-        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"])
-        .output()
-        .ok()
+        .args(["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]);
+    let symbolic = scoped_output(cmd)
         .filter(|out| out.status.success())
         .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
         .filter(|branch| !branch.is_empty());
@@ -140,17 +155,27 @@ fn local_default_branch_ref(project_root: &Path) -> Option<String> {
 // trace:TASK-2705 | ai:codex — shared pinned policy snapshot for the closed tracer.
 pub(crate) fn read_config_at_sha(project_root: &Path, sha: &str) -> Option<String> {
     let spec = format!("{sha}:{CONFIG_RELPATH}");
-    let out = Command::new("git")
-        .arg("-C")
-        .arg(project_root)
-        .args(["show", &spec])
-        .output()
-        .ok()?;
+    let mut cmd = Command::new("git");
+    cmd.arg("-C").arg(project_root).args(["show", &spec]);
+    let out = scoped_output(cmd)?;
     if out.status.success() {
         Some(String::from_utf8_lossy(&out.stdout).to_string())
     } else {
         None
     }
+}
+
+/// Whether the commit `sha` has a `.aida/config.toml` entry: `Some(false)`
+/// when the tree has none, `None` when git cannot say. Lets a caller tell an
+/// absent config from one that exists but could not be read.
+// trace:STORY-2913 | ai:claude
+pub(crate) fn config_present_at_sha(project_root: &Path, sha: &str) -> Option<bool> {
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
+        .arg(project_root)
+        .args(["ls-tree", "--name-only", sha, "--", CONFIG_RELPATH]);
+    let out = scoped_output(cmd).filter(|out| out.status.success())?;
+    Some(!out.stdout.iter().all(u8::is_ascii_whitespace))
 }
 
 #[cfg(test)]

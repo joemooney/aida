@@ -279,7 +279,6 @@ pub(crate) struct DriverArgs {
 
 // `aida driver` reads/writes `.aida/drivers/` only. trace:STORY-1653 | ai:claude
 fn run_driver(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
     let args = <DriverArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
     return self::handle_driver_command(cmd);

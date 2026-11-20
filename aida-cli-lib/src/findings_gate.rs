@@ -2,7 +2,28 @@
 //! Findings command: promote, dismiss, add, recur, gate authority and promote-to-gate, reviewer-verdict and non-blocking findings (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    advisor, auto_complete, auto_complete_telemetry, calibration, cli, completion, current_user_id,
+    detect_distributed_store_from, dispatch, extract_pr_number_from_commit_subject,
+    find_merged_commit_referencing_ids, findings, fnv1a_hex,
+    for_target_requires_dispatch_authority, gate, get_default_author, git_arg_guard,
+    handle_review_classes, load_dispenser, not_found, output_format_is_json, parse_status,
+    parse_tag_list, print_requeue_hint_row, punt, queue_at_filing_refusal,
+    queue_promoted_finding_entry, queue_spec_for_role, record_role_activity, requeue,
+    resolve_current_session_id, role, run, status_write_race_seam, truncate, AgentGateConfig,
+};
+
+use crate::cli::{CalibrationAction, FindingsCommand};
+use crate::requirements_cli::list_requirements;
+use aida_core::{
+    Comment, DatabaseBackend, RelationshipType, Requirement, RequirementStatus, RequirementType,
+    Storage,
+};
+use anyhow::{Context, Result};
+use clap::Parser;
+use colored::Colorize;
+use std::collections::HashSet;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "findings_gate_args.rs"]
@@ -2057,6 +2078,19 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
     let Some(verdict) = completion_verdict(project_root, spec_id) else {
         return Ok(0);
     };
+    emit_verdict_findings(project_root, store_path, spec_id, sha, pr_hint, &verdict)
+}
+
+// trace:STORY-2698 | ai:codex
+/// Explicit verdict input also supports approval-time delivery before publication.
+pub(crate) fn emit_verdict_findings(
+    project_root: &std::path::Path,
+    store_path: &std::path::Path,
+    spec_id: &str,
+    sha: &str,
+    pr_hint: Option<u64>,
+    verdict: &crate::gate::review_verdict::RecordedVerdict,
+) -> anyhow::Result<usize> {
     // Cheap pre-check against an empty history: if nothing would ever be filed
     // regardless of what's already on record (not approved, or no findings),
     // skip opening the store entirely.
@@ -2102,12 +2136,31 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
     };
     let reviewed_sha = verdict.reviewed_sha.clone().unwrap_or_default();
 
+    // trace:TASK-3814 | ai:codex
+    let individual = crate::gate::kernel_deps::review_blocking::enabled(project_root)?;
+    let mut missing_parent = false;
     let mut filed = 0usize;
     let mut sweep_id = None;
     backend.update_atomically(|store| {
+        // trace:TASK-3814 | ai:claude — the source spec is resolved by identity
+        // (UUID, native spec_id or agreed id, via the store's unambiguous
+        // resolver), never by a label search, so an agreed-ID review files its
+        // follow-ups and a retry through any alias deduplicates against them.
+        let parent = if individual {
+            match store.resolve_unambiguous_index(spec_id.trim()) {
+                Ok(Some(index)) => Some(store.requirements[index].id),
+                // The early return above guarantees something would be filed.
+                Ok(None) | Err(_) => {
+                    missing_parent = true;
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         // Retain legacy per-source hashes, but use paired keys on sweeps so
         // hashes from different source specs cannot form false matches.
-        let already_filed = store
+        let mut already_filed: std::collections::HashSet<String> = store
             .requirements
             .iter()
             .flat_map(|r| {
@@ -2126,8 +2179,62 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
                 })
             })
             .collect();
+        // trace:TASK-3814 | ai:claude — follow-ups already linked to this
+        // source's UUID deduplicate whichever alias filed them.
+        if let Some(parent) = parent {
+            already_filed.extend(
+                store
+                    .requirements
+                    .iter()
+                    .filter(|r| {
+                        !r.tags.contains("kind:finding-sweep")
+                            && r.relationships.iter().any(|rel| {
+                                rel.target_id == parent
+                                    && rel.rel_type == aida_core::RelationshipType::References
+                            })
+                    })
+                    .flat_map(|r| {
+                        r.tags
+                            .iter()
+                            .filter(|t| t.starts_with("finding-hash:"))
+                            .cloned()
+                    }),
+            );
+        }
         let to_file = findings_needing_a_successor(&verdict, &already_filed);
         if to_file.is_empty() {
+            return;
+        }
+        // Tier-policy follow-ups are separate specs, each linked to its source.
+        // Selection and hash deduplication remain under the same writer lock.
+        // trace:TASK-3814 | ai:codex
+        if let Some(parent) = parent {
+            for (text, hash_tag) in to_file {
+                let title = format!(
+                    "Review follow-up: {}",
+                    text.chars().take(90).collect::<String>()
+                );
+                let mut req = aida_core::Requirement::new(
+                    title,
+                    format!("From {spec_upper}\nReviewed sha: {reviewed_sha}\n\n{text}"),
+                );
+                req.req_type = aida_core::RequirementType::Task;
+                req.status = aida_core::RequirementStatus::Draft;
+                req.owner = get_default_author();
+                req.tags.insert(review_tag.clone());
+                req.tags.insert(carried_from_tag.clone());
+                req.tags.insert(hash_tag);
+                req.relationships.push(aida_core::Relationship {
+                    target_id: parent,
+                    rel_type: aida_core::RelationshipType::References,
+                    created_at: Some(chrono::Utc::now()),
+                    created_by: None,
+                });
+                aida_core::provenance::stamp_if_absent(&mut req);
+                let prefix = store.get_type_prefix(&req.req_type);
+                store.add_requirement_with_id(req, None, prefix.as_deref());
+                filed += 1;
+            }
             return;
         }
         let index = store
@@ -2183,6 +2290,10 @@ pub(crate) fn try_emit_nonblocking_findings_on_completion(
         }
         req.modified_at = chrono::Utc::now();
     })?;
+    anyhow::ensure!(
+        !missing_parent,
+        "deferred findings require a canonical source spec for linked follow-ups: {spec_upper}"
+    );
     if let Some(id) = sweep_id {
         record_role_activity(&id, "findings-add");
     }
@@ -2202,16 +2313,13 @@ pub(crate) struct FindingsArgs {
 
 fn run_findings(
     matches: &clap::ArgMatches,
-    ctx: &crate::command_registry::DispatchCtx,
-) -> anyhow::Result<crate::command_registry::Flow> {
-    use crate::*;
+    ctx: &crate::cmdkit::DispatchCtx,
+) -> anyhow::Result<crate::cmdkit::Flow> {
     let args = <FindingsArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::command_registry::Flow::Continue),
-        Some(crate::command_registry::StoreCtx::Distributed { .. }) => {
-            Ok(crate::command_registry::Flow::Continue)
-        }
-        Some(crate::command_registry::StoreCtx::Git {
+        None => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
+        Some(crate::cmdkit::StoreCtx::Git {
             store_path,
             backend,
         }) => {
@@ -2268,9 +2376,9 @@ fn run_findings(
                     }
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
-        Some(crate::command_registry::StoreCtx::Legacy {
+        Some(crate::cmdkit::StoreCtx::Legacy {
             storage,
             requirements_path,
         }) => {
@@ -2287,30 +2395,29 @@ fn run_findings(
                     );
                 }
             }
-            Ok(crate::command_registry::Flow::Continue)
+            Ok(crate::cmdkit::Flow::Continue)
         }
     }
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static FINDINGS: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "findings",
-        help_after: "del",
-        command: <FindingsArgs as clap::CommandFactory>::command,
-        policy: findings_cli_policy,
-        run: crate::command_registry::Handler::Store(run_findings),
-    };
+pub(crate) static FINDINGS: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "findings",
+    help_after: "del",
+    command: <FindingsArgs as clap::CommandFactory>::command,
+    policy: findings_cli_policy,
+    run: crate::cmdkit::Handler::Store(run_findings),
+};
 
 // Per-verb policy, carried over from the legacy stakeholder and per-write
 // auto-push tables. An unparseable invocation gets the fail-closed answer.
 // trace:STORY-1728 | ai:claude
-fn findings_cli_policy(matches: &clap::ArgMatches) -> crate::command_registry::CmdPolicy {
+fn findings_cli_policy(matches: &clap::ArgMatches) -> crate::cmdkit::CmdPolicy {
     use crate::cli::FindingsCommand;
     use crate::stakeholder_role::StakeholderAction as SA;
     let args = <FindingsArgs as clap::FromArgMatches>::from_arg_matches(matches).ok();
     let cmd = args.as_ref().map(|args| args.cmd.as_ref());
-    crate::command_registry::CmdPolicy {
+    crate::cmdkit::CmdPolicy {
         stakeholder: if matches!(
             cmd,
             Some(None | Some(FindingsCommand::List { .. } | FindingsCommand::Classes { .. }))

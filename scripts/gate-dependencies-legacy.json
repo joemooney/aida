@@ -1,0 +1,239 @@
+{
+  "ceiling": 150,
+  "edges": {
+    "aida-cli-lib/src/gate/approval.rs": [
+      "crate::auto_complete::FailureKind",
+      "crate::auto_complete::PhaseFailure",
+      "crate::pr_cmd::append_ship_activity_line",
+      "crate::pr_cmd::commit_committed_at",
+      "crate::pr_cmd::log_ship_activity",
+      "crate::pr_cmd::normalized_spec_ids",
+      "crate::pr_cmd::pr_gate_subject",
+      "crate::pr_ship::ShipStep",
+      "crate::pr_ship::StepOutcome",
+      "crate::pr_train::before_train_forge_call"
+    ],
+    "aida-cli-lib/src/gate/ci_freshness.rs": [
+      "crate::pr_cmd::fetch_ship_refs",
+      "crate::pr_cmd::pr_ship_target_branch"
+    ],
+    "aida-cli-lib/src/gate/ledger/hold.rs": [
+      "crate::session::process_contained"
+    ],
+    "aida-cli-lib/src/gate/ledger/migrate.rs": [
+      "crate::drain_lock::read_pid_live_lock"
+    ],
+    "aida-cli-lib/src/gate/ledger/mod.rs": [
+      "crate::seat_clone::MainFor",
+      "crate::seat_clone::main_for",
+      "crate::session::process_contained"
+    ],
+    "aida-cli-lib/src/gate/ledger/story_2324_writer_tests.rs": [
+      "crate::pr_cmd::hold_signal"
+    ],
+    "aida-cli-lib/src/gate/ledger/tests.rs": [
+      "crate::auto_complete::ReviewerOutcome",
+      "crate::auto_complete::Verdict",
+      "crate::merge_hold::place_collected_refusal",
+      "crate::pr_cmd::ship_refusal_release",
+      "crate::queue_cmd::StandaloneVerdictChecks",
+      "crate::queue_cmd::apply_queue_work_contained_env",
+      "crate::session::aida_contained_env",
+      "crate::session::process_contained"
+    ],
+    "aida-cli-lib/src/gate/mandate_drive.rs": [
+      "crate::pr_cmd::pr_ship_hold_root"
+    ],
+    "aida-cli-lib/src/gate/mandate_ship.rs": [
+      "crate::merge_hold::PinnedChange",
+      "crate::merge_hold::fetch_pinned_change",
+      "crate::merge_hold::sync_label",
+      "crate::pr_cmd::fetch_change_info_via_resolved_forge",
+      "crate::pr_cmd::fetch_ship_refs",
+      "crate::pr_cmd::normalized_spec_ids",
+      "crate::pr_cmd::pr_gate_subject",
+      "crate::pr_cmd::ship_unlabel_failure",
+      "crate::store_sync::detect_distributed_store_from"
+    ],
+    "aida-cli-lib/src/gate/merge_hold_core.rs": [
+      "crate::merge_hold::reconcile_recusal_route",
+      "crate::merge_hold::sync_label",
+      "crate::seat_clone::MainFor",
+      "crate::seat_clone::main_for"
+    ],
+    "aida-cli-lib/src/gate/review_carryover.rs": [
+      "crate::pr_cmd::pr_ship_target_branch",
+      "crate::pr_train::before_train_forge_call"
+    ],
+    "aida-cli-lib/src/gate/rework_hold_release.rs": [
+      "crate::merge_hold::ChangeState",
+      "crate::merge_hold::LabelSyncError",
+      "crate::merge_hold::PinnedChange",
+      "crate::merge_hold::fetch_pinned_change",
+      "crate::merge_hold::resolve_pinned_repo",
+      "crate::merge_hold::sync_label",
+      "crate::pr_cmd::ship_refusal_release",
+      "crate::pr_ship::extract_trailing_spec_ids_from_subject"
+    ],
+    "aida-cli-lib/src/gate/role_authority.rs": [
+      "crate::orchestrator::OrchestratorContext",
+      "crate::orchestrator::detect"
+    ],
+    "aida-cli-lib/src/gate/seat_authority.rs": [
+      "crate::orchestrator::OrchestratorContext",
+      "crate::orchestrator::detect",
+      "crate::store_sync::aida_store_setting"
+    ],
+    "aida-cli-lib/src/gate/ship.rs": [
+      "crate::awaiting_you::PrReviewRow",
+      "crate::awaiting_you::classify_pr_review",
+      "crate::drain_lock::LockStatus",
+      "crate::drain_lock::probe_lock",
+      "crate::drain_state::DrainState",
+      "crate::drain_state::drain_phase_display",
+      "crate::session::HeadlessVendor",
+      "crate::session::resolve_headless_vendor"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_1918_review_authority_tests.rs": [
+      "crate::pr_cmd::commit_committed_at",
+      "crate::pr_cmd::pr_gate_subject"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_1934_keyring_tests.rs": [
+      "crate::queue_cmd::refused_review_launch_releases_lease"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_2176_merge_hold_primary_root_tests.rs": [
+      "crate::merge_hold::adopt_worktree_hold",
+      "crate::merge_hold::stray_marker_warning",
+      "crate::merge_hold::stray_markers_json",
+      "crate::merge_hold::stray_worktree_markers"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_2186_archived_history_release_tests.rs": [
+      "crate::pr_cmd::ship_refusal_release"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_2199_refs_authorship_tests.rs": [
+      "crate::pr_ship::extract_authorship_spec_ids_from_subject",
+      "crate::pr_ship::extract_trailing_refs_spec_ids_from_subject",
+      "crate::pr_ship::extract_trailing_spec_ids_from_subject"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_2214_cleared_hold_tests.rs": [
+      "crate::merge_hold::ChangeState",
+      "crate::merge_hold::PinnedChange",
+      "crate::pr_cmd::fetch_ship_refs"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_2403_alias_selection_tests.rs": [
+      "crate::queue_cmd::findings_recur_consecutively",
+      "crate::queue_cmd::resolve_rework_findings",
+      "crate::queue_cmd::rework_findings_block_for_spec"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_2403_same_origin_receipt_tests.rs": [
+      "crate::queue_cmd::refuse_waiting_review"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_2419_pid_namespace_identity_tests.rs": [
+      "crate::session::LEASE_CHILD_GRANT_KEY",
+      "crate::session::stamp_lease_detached_worker_at"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_2430_rework_change_key_tests.rs": [
+      "crate::queue_cmd::resolve_rework_findings"
+    ],
+    "aida-cli-lib/src/gate/tests/bug_2500_waiting_tests.rs": [
+      "crate::auto_complete::ReviewerOutcome",
+      "crate::auto_complete::Verdict",
+      "crate::awaiting_you::BlockedReason",
+      "crate::awaiting_you::PrReviewRow",
+      "crate::awaiting_you::classify_pr_review",
+      "crate::queue_cmd::findings_recur_consecutively",
+      "crate::queue_cmd::handle_queue_rework",
+      "crate::queue_cmd::refuse_waiting_review",
+      "crate::queue_cmd::resolve_rework_findings"
+    ],
+    "aida-cli-lib/src/gate/tests/merge_hold_core_tests.rs": [
+      "crate::merge_hold::ClearedLabel",
+      "crate::merge_hold::HOLD_LABEL",
+      "crate::merge_hold::HOLD_RECORDED_LABEL",
+      "crate::merge_hold::PinnedRepo",
+      "crate::merge_hold::sync_label_command",
+      "crate::merge_hold::sync_label_with",
+      "crate::pr_cmd::ship_refusal_release"
+    ],
+    "aida-cli-lib/src/gate/tests/pr_ship_gate_tests.rs": [
+      "crate::drain_lock::drain_lock_path",
+      "crate::drain_state::DrainState",
+      "crate::drain_state::set_phase_with_tuning",
+      "crate::drain_state::set_run"
+    ],
+    "aida-cli-lib/src/gate/tests/review_verdict_tests.rs": [
+      "crate::auto_complete::ReviewerOutcome",
+      "crate::auto_complete::Verdict",
+      "crate::awaiting_you::classify_pr_review"
+    ],
+    "aida-cli-lib/src/gate/tests/seat_authority_tests.rs": [
+      "crate::queue_cmd::refused_review_launch_releases_lease",
+      "crate::queue_cmd::release_refused_review_lease"
+    ],
+    "aida-cli-lib/src/gate/tests/story_1698_mandate_tests.rs": [
+      "crate::pr_cmd::refusal_with_mandate_rearm"
+    ],
+    "aida-cli-lib/src/gate/tests/story_1700_drive_mandate_tests.rs": [
+      "crate::drain_lock::drain_lock_path",
+      "crate::session::HeadlessVendor"
+    ],
+    "aida-cli-lib/src/gate/tests/story_1887_pr_ship_batch_tests.rs": [
+      "crate::pr_cmd::PrArgs",
+      "crate::pr_cmd::ship_gate_known_ids"
+    ],
+    "aida-cli-lib/src/gate/tests/story_1917_dispatch_flow_schedule_tests.rs": [
+      "crate::pr_cmd::NO_HOLD_RELEASED_NOTE",
+      "crate::pr_cmd::ShipCheckpoint",
+      "crate::pr_cmd::TEST_SHIP_CHECKPOINT_OBSERVER",
+      "crate::pr_cmd::pr_ship_hold_root",
+      "crate::pr_cmd::pr_ship_with_method",
+      "crate::pr_cmd::pr_ship_with_method_and_dispatch_ctx",
+      "crate::pr_train::Built",
+      "crate::pr_train::Car",
+      "crate::pr_train::CiVerdict",
+      "crate::pr_train::ForgeRails",
+      "crate::pr_train::LiveTrainForge",
+      "crate::pr_train::Member",
+      "crate::pr_train::Rails",
+      "crate::pr_train::TrainForge",
+      "crate::pr_train::TrainJournalBusy",
+      "crate::pr_train::TrainOptions",
+      "crate::pr_train::pr_train_handler",
+      "crate::pr_train::pr_train_handler_with_dispatch_ctx"
+    ],
+    "aida-cli-lib/src/gate/tests/story_2492_entry_tests.rs": [
+      "crate::pr_cmd::pr_ship_handler",
+      "crate::pr_train::TrainOptions",
+      "crate::pr_train::pr_train_handler"
+    ],
+    "aida-cli-lib/src/gate/tests/story_2492_publication_tests.rs": [
+      "crate::queue_cmd::refuse_waiting_review"
+    ],
+    "aida-cli-lib/src/gate/tests/task_1448_drain_merge_approval_gate_tests.rs": [
+      "crate::auto_complete::FailureKind",
+      "crate::auto_complete::HintContext",
+      "crate::auto_complete::Phase",
+      "crate::auto_complete::PhaseFailure",
+      "crate::auto_complete::recovery_hint",
+      "crate::auto_complete::should_retry_transient_failure"
+    ],
+    "aida-cli-lib/src/gate/tests/task_1800_trace_replay_tests.rs": [
+      "crate::store_sync::detect_distributed_store_from"
+    ],
+    "aida-cli-lib/src/gate/tests/task_1960_carryover_tests.rs": [
+      "crate::pr_train::train_rider_refusal"
+    ],
+    "aida-cli-lib/src/gate/tests/trailer_coverage_tests.rs": [
+      "crate::pr_cmd::PrShipMetadata",
+      "crate::pr_cmd::derive_pr_ship_squash_subject_from_message",
+      "crate::pr_cmd::ship_completion_trailer",
+      "crate::pr_cmd::ship_completion_trailer_for_method",
+      "crate::pr_cmd::ship_gate_known_ids"
+    ],
+    "aida-cli-lib/src/gate/trailer_coverage.rs": [
+      "crate::pr_ship::extract_spec_ids_from_text"
+    ]
+  },
+  "owner": "TASK-3785",
+  "version": 1
+}

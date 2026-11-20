@@ -2,7 +2,52 @@
 //! session leases: lease listing and gates, cross-clone leases, prune and force cleanup, shelve/phase-1 status flips and stale-lease recovery (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::canonical_role_name;
+#[cfg(test)]
+use crate::mcp;
+use crate::{
+    acquire_review_lease_with_mode, apply_unbound_occupant, awaiting_you, build_running_work,
+    claim_worktree_path, classify_seat_activity, clear_worktree_session_leases,
+    collapse_salvageable_by_worktree, collect_blocked_seat_items, dispatch, dispatch_health_ps,
+    gather_running_work, harness_lease_without_pid_signal, humanize_duration_secs, is_own_claim,
+    leases, mail_identity_status_from_env, mark_lease_escalated_to_human, mark_lease_manual_enter,
+    orphaned_in_progress_items, pending_approval, ps_adopted_note, ps_apply_integration_standing,
+    ps_column_width, ps_display_role, ps_elapsed_secs, ps_integration_base_state,
+    ps_integration_overlay_candidate, ps_lease_is_main_checkout, ps_live_fanout_leases,
+    ps_live_in_worktree, ps_liveness_warning, ps_locked_by_cell, ps_manual_enter_secs,
+    ps_orphan_excluded_type, ps_orphan_excluded_type_str, ps_orphan_likely_fanout,
+    ps_orphan_verdict, ps_pid_liveness, ps_prune_orphans_with_occupant, ps_row_role,
+    ps_session_started_at, ps_started_cell, ps_unattributed_movement_note, ps_wrap_cell,
+    read_transcript_tail, role, running_work_spec_from_summary, seat_activity_with_marker,
+    session_reap, spec_scoped_lease, tail_cmd, worker, worktree, MailIdentityStatus, PsDispatch,
+    PsOrphan, PsRow, ReviewLeaseConflictMode, RunningWorkSpec, SeatActivity,
+    LONG_TOOL_CALL_THRESHOLD_SECS, PS_ADOPTED_SLACK_SECS, PS_ROLE_MAX_WIDTH, PS_ROLE_MIN_WIDTH,
+    PS_SPEC_MAX_WIDTH, PS_SPEC_MIN_WIDTH, PS_SUBAGENT_ROLE,
+};
+use crate::{
+    agent_registry, aggregate_session_activity_into_roles, auto_complete,
+    auto_complete_phase1_target_status, confirm, coordination, current_branch_at,
+    detect_default_branch_ref, detect_distributed_store_from, drain_state,
+    effective_display_status, find_main_worktree_root, find_orchestrated_lease, find_project_root,
+    git_arg_guard, glyph, hostname, in_flight_lease_role_map, load_dispenser, orchestrator,
+    process_probe, punt, queue_cmd, record_role_activity, requeue, session, session_manifest,
+    slugify, status_display, strip_toml_inline_comment, truncate, unique_prefix_len,
+    worktree_dirty_entries, worktree_lease,
+};
+use aida_core::liveness::{
+    classify_lease_state, classify_stale_lease_recovery, LeaseState, StaleLeaseRecovery,
+};
+use aida_core::liveness::{classify_spec_liveness, SpecLiveness};
+use aida_core::DatabaseBackend;
+use aida_core::{
+    write_atomic, RelationshipType, Requirement, RequirementStatus, RequirementType,
+    RequirementsStore, Storage,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::collections::HashSet;
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 // trace:STORY-1728 | ai:claude
 #[path = "leases_args.rs"]
@@ -275,6 +320,36 @@ pub(crate) const SESS_LABEL_MAX: usize = 20;
 
 pub(crate) fn lease_path(project_root: &std::path::Path, id: &str) -> std::path::PathBuf {
     leases_dir(project_root).join(format!("{}.toml", id))
+}
+
+/// Exact evidence read: only a genuinely absent file means no lease.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn read_exact_lease(
+    root: &std::path::Path,
+    id: &str,
+) -> anyhow::Result<Option<SessionLease>> {
+    anyhow::ensure!(
+        !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
+        "invalid lease id"
+    );
+    let path = lease_path(root, id);
+    use std::io::Read;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut file = match std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(&path)
+    {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    anyhow::ensure!(file.metadata()?.is_file(), "lease is not a regular file");
+    let mut raw = String::new();
+    file.read_to_string(&mut raw)?;
+    let lease: SessionLease = toml::from_str(&raw)?;
+    anyhow::ensure!(lease.id == id, "lease identity mismatch");
+    Ok(Some(lease))
 }
 
 /// The lease's last sign of life: the later of `started_at` and its lease
@@ -3369,8 +3444,10 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
 
     // BUG-2169: a contained seat's private clone is not a worktree of main
     // and host git never runs in it. `seat_clone::destroy` probes it in its
-    // sandbox, salvages unshipped work, and removes the clone, its cargo
-    // target and its base pin; the lease goes only once the clone is gone.
+    // sandbox and retains unshipped work. Only explicit operator discard or
+    // dismiss may salvage-and-delete; automatic cleanup keeps the dirty clone,
+    // its cargo target, base pin and lease for recovery.
+    // trace:BUG-2606 | ai:codex
     // trace:TASK-2053 | ai:claude
     if lease.tree_kind == crate::seat_clone::TreeKind::Clone {
         let kept = |why: String| {
@@ -3403,7 +3480,7 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         return match crate::seat_clone::destroy_retained(
             project_root,
             &lease.worktree_path,
-            crate::seat_clone::DestroyMode::SalvageUnshipped,
+            crate::seat_clone::DestroyMode::RetainUnshipped,
             None,
             &[],
             retirement,
@@ -3550,8 +3627,9 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // BUG-2139: a headless child's grant ends with its lease.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(lease_target);
-    match std::fs::remove_file(lease_target) {
-        Ok(_) | Err(_) => {}
+    if std::fs::remove_file(lease_target).is_ok() {
+        // trace:BUG-2651 | ai:codex
+        crate::seat_target_overlay::cleanup_ended(project_root, &lease.id);
     }
     // trace:STORY-2325 | ai:claude
     crate::ownership::dual::lease_released(project_root, &lease.id, "lease cleaned up");
@@ -4223,7 +4301,7 @@ mod bug_1656_subagent_liveness_tests;
 // trace:BUG-1680 | ai:antigravity
 #[cfg(test)]
 #[path = "tests/bug_1680_salvage_main_tests.rs"]
-mod bug_1680_salvage_main_tests;
+pub(crate) mod bug_1680_salvage_main_tests;
 
 // trace:BUG-1941 | ai:claude
 #[cfg(test)]
@@ -4911,6 +4989,8 @@ pub(crate) fn remove_session_lease_record_only(
         Err(_) => false,
     };
     if removed {
+        // trace:BUG-2651 | ai:codex
+        crate::seat_target_overlay::cleanup_ended(project_root, lease_id);
         // trace:TASK-2902 | ai:codex
         crate::native_publication::release(project_root, lease_id);
         // trace:STORY-2325 | ai:claude
@@ -5133,7 +5213,7 @@ fn run_fasttrack(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{fasttrack_lane_filing, handle_fasttrack_status, FasttrackArgs};
     let args = <FasttrackArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -5203,7 +5283,7 @@ fn run_fasttrack(
                     if let Some(mode) = mode {
                         argv.push(format!("--mode={mode}"));
                     }
-                    let add = crate::command_registry::try_parse_from(argv).map_err(|err| {
+                    let add = crate::CLI_SUPPORT.try_parse_from(argv).map_err(|err| {
                         anyhow::anyhow!("fasttrack could not build its `aida add`: {err}")
                     })?;
                     return crate::cmdkit::returned(

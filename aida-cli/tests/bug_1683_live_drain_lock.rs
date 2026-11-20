@@ -341,6 +341,7 @@ fn burndown_run_gates_on_the_drain_lock_before_machine_readiness() {
 /// Binding alias evidence: inspect actual dispatch bodies, paired with the
 /// process fixtures at their independent queue-work/integrate boundaries.
 // trace:BUG-1683 | ai:codex
+// trace:TASK-3428 | ai:codex
 #[test]
 fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
     fn body<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
@@ -361,16 +362,8 @@ fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
                 .1;
         }
     }
-    let mut lib = include_str!("../../aida-cli-lib/src/lib.rs").to_string();
-    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part1.rs"));
-    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part2.rs"));
-    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part3.rs"));
-    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part4.rs"));
-    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part5.rs"));
-    lib.push_str(include_str!("../../aida-cli-lib/src/lib_part6.rs"));
-    lib.push_str(include_str!("../../aida-cli-lib/src/zen_drive_root.rs"));
-    lib.push_str(include_str!("../../aida-cli-lib/src/ps_integrate.rs"));
-    let lib = &lib;
+    let integrate = include_str!("../../aida-cli-lib/src/ps_integrate.rs");
+    let drive = include_str!("../../aida-cli-lib/src/zen_drive_root.rs");
     let queue = include_str!("../../aida-cli-lib/src/queue_cmd/work.rs");
     let drain = include_str!("../../aida-cli-lib/src/drain_cmd.rs");
     let auto = include_str!("../../aida-cli-lib/src/autoprogress.rs");
@@ -378,7 +371,7 @@ fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
     let zen = include_str!("../../aida-cli-lib/src/zen_drive.rs");
     ordered(
         body(
-            lib,
+            integrate,
             "fn handle_integrate(opts:",
             "use std::collections::HashSet;",
         ),
@@ -407,7 +400,7 @@ fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
         ],
     );
     ordered(
-        body(lib, "fn run_do_drive(", "fn run_zen_drive("),
+        body(drive, "fn run_do_drive(", "fn run_zen_drive("),
         &[
             "match effective",
             "ExecutionMode::Drain =>",
@@ -417,7 +410,7 @@ fn launch_aliases_delegate_to_the_tested_lock_boundaries() {
         ],
     );
     ordered(
-        body(lib, "fn run_zen_drive(", "fn zen_file_thought_as_draft("),
+        body(drive, "fn run_zen_drive(", "fn zen_file_thought_as_draft("),
         &[
             "zen_drive::drive_args(",
             "crate::launch::control_child()?",

@@ -13,7 +13,8 @@ import shutil
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
-EXCLUDED = ("internal", "archive", "plans", "aida", "api")
+# Research reports are contributor evidence. trace:SPIKE-714 | ai:codex
+EXCLUDED = ("internal", "archive", "plans", "spikes", "aida", "api")
 
 
 def prune(output):

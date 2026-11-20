@@ -1,7 +1,12 @@
 //! `aida merge-hold`/`merge-lock` handlers and stale-hold partitioning (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    all_requirement_summaries, collect_open_prs, current_user_id, events, find_main_worktree_root,
+    find_project_root, forge, leases, merge_hold, merge_lock, network_retry, pr_claim_surface,
+    pr_is_merged_with_sink, print_merge_hold_no_forge, spec_status, Result,
+};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "merge_hold_cmd_args.rs"]
@@ -195,10 +200,45 @@ struct ClearTail<'a> {
     label_only_actor: Option<(&'a str, String)>,
 }
 
+// trace:STORY-2893 | ai:codex
+fn hold_clear_verdict_notice(
+    record: &crate::gate::merge_hold_core::MergeHoldRecord,
+    head: Option<&str>,
+    release: Option<&crate::gate::merge_hold_core::VerdictRef>,
+) -> String {
+    use crate::gate::review_verdict::{same_reviewed_sha, short_sha};
+    let old = record
+        .verdict_ref
+        .as_ref()
+        .and_then(|v| v.reviewed_sha.as_deref())
+        .or(record.target_head_sha.as_deref());
+    let mut notice = match (old, head) {
+        (Some(old), Some(head)) if !same_reviewed_sha(old, head) => {
+            format!("stale hold for superseded head {} cleared", short_sha(old))
+        }
+        (Some(old), _) => format!("hold from review at {} cleared", short_sha(old)),
+        _ => "prior review hold cleared".into(),
+    };
+    if let Some(head) = head {
+        notice.push_str(&format!("; current head {}", short_sha(head)));
+        if release
+            .and_then(|v| v.reviewed_sha.as_deref())
+            .is_some_and(|sha| same_reviewed_sha(sha, head))
+        {
+            notice.push_str(" APPROVED");
+        } else {
+            notice.push_str(" verdict unverified");
+        }
+    } else {
+        notice.push_str("; current-head verdict unverified");
+    }
+    notice
+}
+
 /// The forge half of `aida merge-hold clear N`, after the clearance is
 /// recorded and the marker removed. Returns the lines to print. A label that
 /// could not be dropped is never reported as dropped: the hold label keeps
-/// merge-hold-gate failing, so that is an error (non-zero exit) naming the
+/// merge-hold-gate blocking, so that is an error (non-zero exit) naming the
 /// retry. The forge calls and the release event are injected so each branch
 /// is testable.
 // trace:TASK-1951 trace:TASK-2152 | ai:claude
@@ -234,7 +274,7 @@ fn finish_clear(
         }
         if let Err(err) = &unlabel {
             anyhow::bail!(
-                "Removed the merge-hold marker on PR #{pr} and recorded the clearance, but the `aida:merge-hold` label could not be dropped ({err}); merge-hold-gate keeps failing until it is. Re-run `aida merge-hold clear {pr}` when the forge is reachable, or drop the label by hand."
+                "Removed the merge-hold marker on PR #{pr} and recorded the clearance, but the `aida:merge-hold` label could not be dropped ({err}); merge-hold-gate keeps blocking until it is. Re-run `aida merge-hold clear {pr}` when the forge is reachable, or drop the label by hand."
             );
         }
         lines.push(format!(
@@ -626,10 +666,21 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
             };
             let premise_of = |pr: u64| -> Option<String> {
                 let record = crate::gate::merge_hold_core::read_hold_record(&root, pr)?;
+                // The verdict as it concerns this change: a spec shared with
+                // another open change must not answer with that one's review.
+                // trace:BUG-2570 | ai:claude
+                let head = head_of(pr).or_else(|| record.target_head_sha.clone());
                 merge_hold::premise_stale(
                     &record,
                     head_of(pr).as_deref(),
-                    |spec| crate::gate::review_verdict::read_recorded_verdict(&root, spec),
+                    |spec| {
+                        crate::gate::review_verdict::read_recorded_verdict_for_change(
+                            &root,
+                            spec,
+                            pr,
+                            head.as_deref(),
+                        )
+                    },
                     |spec| spec_status.get(&spec.to_ascii_uppercase()).cloned(),
                 )
             };
@@ -645,6 +696,7 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             &[root.as_path()],
                             &record,
                             head_of(pr).as_deref(),
+                            true,
                         )
                     })
                 };
@@ -1129,9 +1181,10 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                     // documented, recorded escape — but is told when the
                     // condition is not met, and the clearance records which
                     // verdict (if any) met it. trace:BUG-1532 | ai:claude
+                    let mut observed_head = None;
                     let released_by_verdict = match &cleared {
                         Some((record, _)) if record.is_refusal() => {
-                            let head = merge_hold::fetch_pinned_change(
+                            observed_head = merge_hold::fetch_pinned_change(
                                 &root,
                                 forge::resolve_forge_kind(&root),
                                 *pr,
@@ -1142,7 +1195,8 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             match crate::pr_cmd::ship_refusal_release(
                                 &[root.as_path()],
                                 record,
-                                head.as_deref(),
+                                observed_head.as_deref(),
+                                true,
                             ) {
                                 crate::gate::merge_hold_core::RefusalRelease::Released(v) => {
                                     Some(v)
@@ -1193,7 +1247,16 @@ pub(crate) fn handle_merge_hold(action: &crate::cli::MergeHoldAction) -> Result<
                             events::EventKind::MergeHoldChanged {
                                 pr: *pr as u32,
                                 placed: false,
-                                reason: Some(format!("merge-hold clear: {detail}")),
+                                reason: Some(match &cleared {
+                                    Some((record, _)) if record.is_refusal() => {
+                                        hold_clear_verdict_notice(
+                                            record,
+                                            observed_head.as_deref(),
+                                            released_by_verdict.as_ref(),
+                                        )
+                                    }
+                                    _ => format!("merge-hold clear: {detail}"),
+                                }),
                                 // BUG-2214: the cleared-by-human mandate cover
                                 // needs the event to name a human principal and
                                 // carry the integrity-floor attestation this
@@ -1312,7 +1375,7 @@ pub(crate) struct MergeLockArgs {
 // `aida ps`. trace:STORY-1171 | ai:claude
 fn run_merge_lock(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <MergeLockArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     if let Some(path) = &args.check_file {
@@ -1327,19 +1390,18 @@ fn run_merge_lock(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MERGE_LOCK: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "merge-lock",
-        help_after: "ps",
-        command: <MergeLockArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_merge_lock),
-    };
+pub(crate) static MERGE_LOCK: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "merge-lock",
+    help_after: "ps",
+    command: <MergeLockArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_merge_lock),
+};
 
 /// Inspect and clear supervised merge-hold markers (`.aida/merge-holds/`).
 ///
@@ -1364,7 +1426,7 @@ pub(crate) struct MergeHoldArgs {
 // trace:TASK-161 | ai:claude
 fn run_merge_hold(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <MergeHoldArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let MergeHoldArgs { action } = &args;
@@ -1372,19 +1434,18 @@ fn run_merge_hold(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static MERGE_HOLD: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "merge-hold",
-        help_after: "merge-lock",
-        command: <MergeHoldArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_merge_hold),
-    };
+pub(crate) static MERGE_HOLD: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "merge-hold",
+    help_after: "merge-lock",
+    command: <MergeHoldArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_merge_hold),
+};
 
 // trace:TASK-1951 | ai:claude
 #[cfg(test)]
@@ -1494,4 +1555,28 @@ mod task_1951_orphan_cleared_label_tests {
             ]
         );
     }
+}
+
+// trace:STORY-2893 | ai:codex
+#[cfg(test)]
+#[test]
+fn story_2893_hold_clear_notice_pins_approval_to_the_observed_head() {
+    use crate::gate::merge_hold_core::{refusal_hold, VerdictRef};
+    let old = "2".repeat(40);
+    let head = "e".repeat(40);
+    let hold = refusal_hold(
+        3986,
+        "BUG-2564",
+        "CHANGES REQUESTED",
+        Some(old.clone()),
+        None,
+    );
+    let current = VerdictRef::new("BUG-2564", Some(3986), Some(head.clone()), None);
+    let stale = VerdictRef::new("BUG-2564", Some(3986), Some(old), None);
+    let notice = hold_clear_verdict_notice(&hold, Some(&head), Some(&current));
+    assert!(notice.starts_with("stale hold for superseded head "));
+    assert!(notice.ends_with(" APPROVED"));
+    assert!(!notice.contains("CHANGES REQUESTED"));
+    assert!(hold_clear_verdict_notice(&hold, Some(&head), Some(&stale))
+        .ends_with(" verdict unverified"));
 }

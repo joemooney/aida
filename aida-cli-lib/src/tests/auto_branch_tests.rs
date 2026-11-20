@@ -157,10 +157,23 @@ fn bug_2451_pickup_refuses_two_found_changes_naming_both() {
             })
             .collect(),
     );
-    for explicit in [None, Some("head-42"), Some("head-43")] {
-        let error = pickup_pr_branch(&forge, "BUG-2451", explicit)
-            .unwrap_err()
-            .to_string();
-        assert!(error.contains("#42") && error.contains("#43"), "{error}");
+    let error = pickup_pr_branch(&forge, "BUG-2451", None)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("#42") && error.contains("#43"), "{error}");
+    for branch in ["head-42", "head-43"] {
+        assert!(
+            error.contains(&format!("--branch {branch} --force-claim")),
+            "{error}"
+        );
     }
+    // trace:BUG-2656 | ai:codex
+    for id in [42, 43] {
+        let branch = format!("head-{id}");
+        assert_eq!(
+            pickup_pr_branch(&forge, "BUG-2451", Some(&branch)).unwrap(),
+            Some((id, branch))
+        );
+    }
+    assert!(pickup_pr_branch(&forge, "BUG-2451", Some("unrelated")).is_err());
 }

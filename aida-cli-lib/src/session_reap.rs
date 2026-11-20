@@ -36,6 +36,11 @@
 //
 // trace:TASK-1177 | ai:claude
 
+use crate::{
+    attributable_live_sessions, forge, inspector_pids, lease_has_durable_owner,
+    lease_owner_unknown, worktree,
+};
+use aida_core::DatabaseBackend;
 use anyhow::Result;
 use colored::Colorize;
 
@@ -43,7 +48,20 @@ use crate::doctor_cmd::{
     branch_content_fully_landed, branch_paths_match_default, classify_agent_worktree,
     AgentWorktreeFacts, AgentWorktreeVerdict,
 };
-use crate::*;
+use crate::{
+    active_worktree_paths, agent_registry, aggregate_session_activity_into_roles, awaiting_you,
+    collect_unshipped_work_items, confirm, current_user_id, detect_distributed_store_from,
+    detect_merged_pr_for_branch_via_forge, extract_referenced_spec_ids_from_commit,
+    extract_spec_ids_from_commit, find_project_root, is_plan_commit_subject, lease_path,
+    lease_recorded_owner, leases, list_leases, load_dispenser, mailbox_store,
+    main_worktree_root_from, process_probe, resolve_default_branch_ref, run,
+    salvage_worktree_patch, session_activity_path, session_manifest, worktree_dirty_entries,
+    worktree_is_active, worktree_is_locked, worktree_pool_global_hooks, PrLookup, SessionLease,
+};
+use aida_core::liveness::{LeaseState, StaleLeaseRecovery};
+use aida_core::{RequirementStatus, Storage};
+use std::collections::HashSet;
+use std::io::IsTerminal;
 
 /// The reap verdict for one session lease. `Reap` carries the reason the pass
 /// judged it finished; `Skip` carries the strongest objection.
@@ -877,6 +895,14 @@ pub(crate) fn gather_merge_facts_pinned(
 /// and the process-liveness probe. Nothing is mutated here.
 // trace:TASK-1177 | ai:claude
 pub(crate) fn scan_reapable(project_root: &std::path::Path) -> ReapReport {
+    let mut report = scan_reapable_leases(project_root);
+    let summaries = requirement_summaries(project_root);
+    report.unshipped_work = collect_unshipped_work_items(project_root, &summaries, false, true);
+    report
+}
+
+// trace:BUG-2626 | ai:codex
+fn scan_reapable_leases(project_root: &std::path::Path) -> ReapReport {
     let _confirmation_sweep = crate::forge_confirmation::Sweep::new();
     scan_reapable_with(project_root, |pr| {
         crate::queue_cmd::review_pr_is_merged_or_closed(
@@ -897,8 +923,6 @@ pub(crate) fn scan_reapable_with(
 ) -> ReapReport {
     let leases = list_leases(project_root);
     let mut report = ReapReport::default();
-    let summaries = requirement_summaries(project_root);
-    report.unshipped_work = collect_unshipped_work_items(project_root, &summaries, false, true);
     report.orphan_pins = crate::seat_clone::orphan_pins(project_root); // trace:TASK-2053 | ai:claude
     if leases.is_empty() {
         return report;
@@ -990,7 +1014,7 @@ pub(crate) fn scan_reapable_with(
             has_worktree && worktree_is_active(&lease.worktree_path, &active);
         let owner_gone = crate::leases::lease_owner_gone(lease);
         let process_exited = session_process_exited(
-            lease_state_for(lease, &live, now),
+            leases::lease_state_for(lease, &live, now),
             owner_gone,
             worktree_has_live_process,
         );
@@ -1191,13 +1215,22 @@ fn reap_one_with_clear_hooks(
         // the tree is kept. trace:TASK-1955 | ai:claude (BUG-2206)
         // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
         if let Some(pr) = crate::gate::review_authority::review_lease_pr(lease) {
-            if let Err(e) = crate::merge_hold::adopt_worktree_hold(
+            // An unrecorded reviewer draft lives only in this gitignored
+            // tree; removing the tree would delete its findings.
+            // trace:BUG-2684 | ai:claude
+            if let Some(why) = crate::review_draft::unconsumed_draft_retention(&lease.worktree_path)
+            {
+                return format!("skipped — {why}");
+            }
+            match crate::merge_hold::preserve_review_worktree_holds(
                 project_root,
                 &lease.worktree_path,
                 pr,
                 lease.started_at.into(),
             ) {
-                return format!("skipped — could not adopt the PR-{pr} merge-hold marker ({e})");
+                Ok(true) => {}
+                Ok(false) => return format!("skipped — review tree still contains merge-hold markers for inspection (PR-{pr})"),
+                Err(e) => return format!("skipped — could not preserve the PR-{pr} merge-hold marker ({e})"),
             }
         }
         if let Err(e) = aida_core::worktree_pool_destroy::teardown_worktree_path(
@@ -1358,7 +1391,7 @@ fn scan_clone_lease(
 ) -> ReapRow {
     let owner_gone = crate::leases::lease_owner_gone(lease);
     let process_exited = session_process_exited(
-        lease_state_for(lease, live, now),
+        leases::lease_state_for(lease, live, now),
         owner_gone,
         worktree_is_active(&lease.worktree_path, active),
     );
@@ -1592,7 +1625,10 @@ pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str
     // BUG-2139: a reaped lease takes its headless child's grant with it.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(&lease_path(project_root, lease_id));
-    let _ = std::fs::remove_file(lease_path(project_root, lease_id));
+    if std::fs::remove_file(lease_path(project_root, lease_id)).is_ok() {
+        // trace:BUG-2651 | ai:codex
+        crate::seat_target_overlay::cleanup_ended(project_root, lease_id);
+    }
     // trace:TASK-2902 | ai:codex
     crate::native_publication::release(project_root, lease_id);
     // trace:STORY-2325 | ai:claude
@@ -1686,8 +1722,8 @@ pub(crate) fn release_gone_worktree_leases(
         .collect()
 }
 
-/// Reap a standalone review the moment its reviewer exits with its verdict
-/// collected: the review tree, its lease, and its local review branch go
+/// Reap an eligible standalone review after its reviewer exits:
+/// the review tree, its lease, and its local review branch go
 /// together, through the same [`reap_one`] the post-merge reap uses. A tree
 /// that is dirty, unreadable, in use, or whose branch holds a commit neither
 /// the PR head nor `origin` has is kept WITH its lease, so the dead-reviewer
@@ -1705,6 +1741,13 @@ pub(crate) fn reap_finished_review(
     if lease.worktree_path.as_os_str().is_empty() || !lease.worktree_path.exists() {
         return Err("its review tree is not on disk".to_string());
     }
+    if worktree_is_locked(project_root, &lease.worktree_path) {
+        return Err("its review tree is locked".to_string());
+    }
+    // trace:BUG-2684 | ai:claude
+    if let Some(why) = crate::review_draft::unconsumed_draft_retention(&lease.worktree_path) {
+        return Err(why);
+    }
     if worktree_status_dirty(&lease.worktree_path) {
         return Err("its review tree has uncommitted changes".to_string());
     }
@@ -1714,10 +1757,48 @@ pub(crate) fn reap_finished_review(
             "its review branch `{branch}` could not be resolved"
         ));
     };
-    if !review_branch_within_pr_head(project_root, Some(&tip), lease) {
+    // Pickup may have fetched the review ref successfully while the
+    // forge metadata command failed, leaving no head SHA on the lease.
+    // Reconfirm the remote head before treating such a branch as disposable.
+    // trace:BUG-2684 | ai:codex
+    let fetched_head;
+    let review_head = if review_branch_within_pr_head(project_root, Some(&tip), lease) {
+        lease.pr_head_sha.as_deref()
+    } else if let Some((forge, n)) = crate::pr_lease_takeover::reviewer_target(lease) {
+        fetched_head = crate::pr_lease_takeover::fetch_review_head(project_root, forge, n)
+            .map_err(|error| format!("could not confirm the review branch on origin: {error:#}"))?;
+        if !aida_core::git_ops::is_ancestor(project_root, &tip, &fetched_head).unwrap_or(false) {
+            return Err(format!(
+                "its review branch `{branch}` holds commits the PR does not"
+            ));
+        }
+        Some(fetched_head.as_str())
+    } else {
         return Err(format!(
             "its review branch `{branch}` holds commits the PR does not"
         ));
+    };
+    if lease.tree_kind == crate::seat_clone::TreeKind::Worktree
+        && crate::seat_clone::seat_clone_root(&lease.worktree_path).is_none()
+    {
+        // Also check the checkout's actual HEAD. It may be detached or switched
+        // away from the lease branch, which by itself cannot cover those commits.
+        // trace:BUG-2684 | ai:codex
+        match crate::seat_clone::remote_missing_commits_with_review_head(
+            project_root,
+            &lease.worktree_path,
+            false,
+            branch,
+            review_head,
+        ) {
+            Ok(0) => {}
+            Ok(_) => return Err("its review checkout holds unpublished commits".to_string()),
+            Err(error) => {
+                return Err(format!(
+                    "its review checkout could not be verified: {error:#}"
+                ))
+            }
+        }
     }
     let outcome = reap_one(project_root, lease, Some(&tip));
     if outcome.starts_with("reaped") {
@@ -1993,6 +2074,7 @@ fn notify_finished_live_sessions(project_root: &std::path::Path, rows: &mut [Not
             // trace:BUG-1533 | ai:claude
             from_source: aida_core::mailbox::SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         };
         if let Err(e) = mailbox_store::write_message(project_root, &msg) {
@@ -2538,7 +2620,7 @@ pub(crate) fn reap_quiet_outcomes(project_root: &std::path::Path) -> QuietReap {
             )
         })
         .collect();
-    let report = scan_reapable(project_root);
+    let report = scan_reapable_leases(project_root);
     release_orphan_pins(project_root, &report.orphan_pins); // trace:TASK-2053 | ai:claude
     if report.reapable.is_empty() {
         return QuietReap {

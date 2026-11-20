@@ -39,7 +39,11 @@ pub(crate) use unix::{request, serve_service, Server};
 pub(crate) const MAX_ANCESTRY: usize = 64;
 
 /// The one documented way to let a sandboxed session reach the runner.
-pub(crate) const SANDBOX_OPT_IN: &str = "this session's sandbox blocks unix sockets, so it cannot reach the script deputy. Submit from an unsandboxed shell, or the operator may exempt the two commands that need the socket: add `aida deputy shell submit` and `aida deputy shell cancel` to the sandbox's `excludedCommands` (docs/advanced/deputies.md, \"Letting a sandboxed advisor submit\")";
+// trace:BUG-2608 | ai:codex
+pub(crate) const SANDBOX_OPT_IN: &str = "this session's sandbox blocks unix sockets, so it cannot reach the script deputy. \
+    If this call was piped, redirected or chained, run it bare. Run the command by itself, without `cd`, `&&`, pipes, redirects or `$(...)`. \
+    Submit from an unsandboxed shell, or have the operator add `aida deputy shell submit *` and `aida deputy shell cancel *` to the sandbox's `excludedCommands` for a sandboxed advisor session. \
+    Restart the session after editing the settings. See docs/advanced/deputies.md, \"Letting a sandboxed advisor submit\".";
 
 /// One request on the socket.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -570,7 +574,8 @@ mod unix {
                             )),
                         "service peer changed during attribution"
                     );
-                    crate::review_watch::service::rebind(&project, &q.name, &grant)
+                    crate::review_watch::service::rebind(&project, &q.name, &grant)?;
+                    crate::review_watch::train_service::rebind(&project, &q.name, &grant)
                 })();
                 match result {
                     Ok(()) => Response::accepted("review-watch"),

@@ -8,6 +8,14 @@ use std::path::PathBuf;
 // trace:EPIC-19 | ai:claude
 #[derive(Subcommand, Debug)]
 pub enum DoctorCommand {
+    /// Report obsolete cache files; remove only with --fix.
+    // trace:BUG-2598 | ai:codex
+    CacheRetention {
+        /// Remove obsolete files, skipping locked history indexes.
+        #[clap(long)]
+        fix: bool,
+    },
+
     /// Diagnose cached compiler-wrapper failures; remove only with --fix.
     // trace:TASK-2324 | ai:codex
     RustcCache {
@@ -62,6 +70,11 @@ pub enum DoctorCommand {
         /// Category to heal, e.g. stale-leases, orphan-branches,
         /// stale-remote-branches, OBE-briefs.
         category: String,
+
+        /// Heal only this exact finding ID (as shown by doctor check).
+        // trace:BUG-2655 | ai:codex
+        #[clap(long)]
+        id: Option<String>,
 
         /// Skip confirmation prompts.
         #[clap(long, short = 'y')]

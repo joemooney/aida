@@ -29,6 +29,7 @@ fn mandate(include_supervised: bool) -> Mandate {
         seat: crate::gate::mandate::MANDATE_SEAT.into(),
         scope: crate::gate::mandate::SCOPE_SHIP_HELD.into(),
         include_supervised,
+        include_gate_paths: false,
         reason: Some("fire".into()),
         issued_at: Utc::now() - chrono::Duration::hours(1),
         expires_at: Utc::now() + chrono::Duration::hours(7),
@@ -37,6 +38,8 @@ fn mandate(include_supervised: bool) -> Mandate {
         scopes: Default::default(),
         kind: None,
         renewals: Vec::new(),
+        relay_parent: None,
+        revived: None,
     }
 }
 
@@ -95,6 +98,8 @@ impl Case {
             binding: Vec::new(),
             origin: None,
             launch_capability: None,
+            launch_expiry_cap: None,
+            launch_cap_recorded: false,
         };
         let mut hold = mh::typed_hold(PR, HoldReasonKind::Rework, "rework", Some(OLD.into()));
         hold.verdict_ref = Some(mh::VerdictRef::new(
@@ -569,7 +574,7 @@ fn bug_2398_actual_ungranted_record_keeps_auto_release_marker_and_labels() {
         ],
     );
     let head = crate::test_git::commit_fixture(root);
-    crate::handle_review_record_at(
+    crate::handle_review_record_fixture_at(
         root.to_path_buf(),
         "TASK-37",
         "approved",

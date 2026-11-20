@@ -350,7 +350,8 @@ mod tests {
         let md = scaffolder.generate_agents_md(&store);
         // trace:STORY-2630 | ai:codex
         assert!(!md.contains("/home/joe/ai/aida"));
-        assert!(md.contains("absolute path supplied by this project"));
+        // trace:TASK-3134 | ai:codex
+        assert!(md.contains("codegraph is unavailable on this host; use `rg`"));
 
         assert!(md.contains("## Codex Operating Discipline"));
         assert!(md.contains("docs/agents/codex-mcp-setup.md"));

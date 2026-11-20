@@ -15,7 +15,7 @@ use aida_core::launch_policy::{
     LaunchKind, AGENT_CMD_ENV, CONTAINED_ENV, GRANT_ENV, LANE_MARKER_ENV, POSTURE_ENV, PURPOSE_ENV,
     ROLE_ENV, STANDALONE_MARKER_ENV,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use super::context::LaunchContext;
 use crate::session::ContainmentPosture;
@@ -34,16 +34,23 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     // Claude is the first vendor cutover. The explicit uncontained fixture
     // override keeps integration harness inputs, never contained launches.
     // trace:STORY-2326 | ai:codex
-    let profile = super::profile::VendorProfile::for_vendor(ctx.vendor());
+    let profile = crate::vendors::profile::VendorProfile::for_vendor(ctx.vendor());
     // trace:STORY-2641 | ai:codex
     let resources = if ctx.fixture_override() || ctx.wrapper_environment() {
         None
     } else {
-        super::resources::SandboxResources::for_seat(ctx.host_main(), ctx.cwd())?
+        super::resources::SandboxResources::for_seat(
+            ctx.exec_context(),
+            ctx.host_main(),
+            ctx.cwd(),
+        )?
     };
     if profile.clears_environment() && !ctx.fixture_override() && !ctx.wrapper_environment() {
-        let parent = aida_core::exec_context::Environment::capture();
-        let env = profile.child_env(ctx.kind(), &parent, resources.as_ref())?;
+        let env = profile.child_env(
+            ctx.kind(),
+            ctx.exec_context().environment(),
+            resources.as_ref(),
+        )?;
         cmd.env_clear().envs(env.pairs());
     }
     // Vendors that retain parent env still receive the seat-owned build values.
@@ -65,6 +72,12 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     {
         cmd.env("RUSTC_WRAPPER", "");
     }
+    // The host-limit override covers the one launch the launcher already
+    // admitted; vendors that retain parent env (Codex, Antigravity, wrapper
+    // launches) must not carry it into the agent's tool environment, where a
+    // nested launch would reuse it without its own decision.
+    // trace:BUG-2682 | ai:claude
+    cmd.env_remove(crate::lane_admission::OVERRIDE_ENV);
     cmd.args(ctx.argv());
     if ctx.sets_cwd() {
         cmd.current_dir(ctx.cwd());
@@ -188,7 +201,7 @@ pub(crate) fn assign_seat(
             // Exec retains this validated session's selectors after env_clear;
             // new child and lane decisions above always replace them.
             // trace:STORY-2326 | ai:codex
-            if super::profile::environment_is_cleared(cmd) {
+            if crate::vendors::profile::environment_is_cleared(cmd) {
                 for key in [
                     ROLE_ENV,
                     PURPOSE_ENV,
@@ -230,4 +243,27 @@ pub(crate) fn exec_agent(cmd: &mut std::process::Command) -> Result<()> {
             .with_context(|| format!("failed to spawn {program}"))?;
         std::process::exit(status.code().unwrap_or(1));
     }
+}
+
+// trace:BUG-2699 | ai:codex
+pub(crate) fn exec_agent_with_delivery(
+    cmd: &mut std::process::Command,
+    on_delivery: Option<&dyn Fn()>,
+) -> Result<()> {
+    use crate::process_retry::RetryEtxtbsy;
+    use std::os::unix::process::ExitStatusExt;
+
+    let Some(deliver) = on_delivery else {
+        return exec_agent(cmd);
+    };
+    let mut child = cmd
+        .spawn_retrying_etxtbsy()
+        .context("failed to launch agent")?;
+    deliver();
+    let status = child.wait().context("failed to wait for agent")?;
+    std::process::exit(
+        status
+            .code()
+            .unwrap_or_else(|| 128 + status.signal().unwrap_or(0)),
+    );
 }

@@ -505,3 +505,144 @@ fn story1843_b2c_receipt_inspector_honours_deadline_and_byte_budget() {
     assert_eq!(small.lookup("bob", "m1"), ReceiptLookup::Unknown);
     assert!(small.partial());
 }
+
+// trace:BUG-2641 | ai:codex
+#[test]
+fn bug2641_over_32_mib_history_keeps_unread_bodies_and_durable_ack() {
+    let dir = repo();
+    let root = dir.path();
+    let mut first = message("000-unread");
+    first.body = format!("000-unread: {}", "complete unread body ".repeat(100));
+    write_local_message(root, &first).unwrap();
+    // Archived history still occupies real payload bytes (gc does not yet
+    // compact it). Insert the second unread message only after the history
+    // has already exceeded the old byte ceiling.
+    for n in 0..70 {
+        let mut history = message(&format!("history-{n:03}"));
+        history.archived = true;
+        history.body = "h".repeat(512 * 1024);
+        write_local_message(root, &history).unwrap();
+    }
+    let mut last = message("zzz-unread");
+    last.body = format!("zzz-unread: {}", "complete unread body ".repeat(100));
+    write_local_message(root, &last).unwrap();
+    let (ctx, snap) = snapshot(root);
+    assert!(snap.history_truncated);
+    assert!(!snap.complete(), "history omission stays visible");
+    assert!(snap.ack_eligible(), "discovery was complete");
+    let unread: Vec<_> = snap
+        .records
+        .iter()
+        .filter(|r| !r.message.archived)
+        .collect();
+    assert_eq!(unread.len(), 2);
+    for r in &unread {
+        assert_eq!(
+            r.message.body,
+            format!("{}: {}", r.message.id, "complete unread body ".repeat(100))
+        );
+        assert!(snap.record_ack_complete(r));
+    }
+    let ack = AckPlan::prepare(&snap, ctx.repository().map(|r| r.path()), &bob(), &unread)
+        .unwrap()
+        .unwrap();
+    assert!(
+        !ledger_path(root).exists(),
+        "preparation never acknowledges"
+    );
+    ack.commit(&bob()).unwrap();
+    let (_, again) = snapshot(root);
+    for id in ["000-unread", "zzz-unread"] {
+        assert!(ledger_holds(root, "bob", id));
+        assert!(matches!(
+            again
+                .records
+                .iter()
+                .find(|r| r.message.id == id)
+                .unwrap()
+                .read,
+            ReadEvidence::Acknowledged {
+                origin: AckOrigin::Anchor { .. },
+                ..
+            }
+        ));
+    }
+}
+
+// trace:BUG-2641 | ai:codex
+#[test]
+fn bug2641_discovery_exhaustion_and_uncertified_records_refuse_ack() {
+    let dir = repo();
+    let root = dir.path();
+    write_local_message(root, &message("m1")).unwrap();
+    let (ctx, snap) = snapshot(root);
+    let mut altered = snap.records[0].clone();
+    altered.message.body.push_str("not discovered");
+    assert!(matches!(
+        AckPlan::prepare(
+            &snap,
+            ctx.repository().map(|r| r.path()),
+            &bob(),
+            &[&altered]
+        ),
+        Err(AckError::Partial)
+    ));
+    let mut limits = ReadLimits::explicit_read();
+    limits.max_discovery_bytes = 1;
+    let partial = logical_snapshot(&ctx, &bob(), &Query::Inbox, &limits);
+    assert!(!partial.ack_eligible());
+    assert!(!partial.record_ack_complete(&snap.records[0]));
+    assert!(!ledger_path(root).exists());
+}
+
+// trace:BUG-2641 | ai:codex
+#[test]
+fn bug2641_history_omission_preserves_cohort_ownership_and_uuid_receipts() {
+    use crate::mailbox_delivery::{DeliverySidecar, RecipientUuid};
+    use crate::mailbox_identity::MailIdentityFacts;
+    let dir = repo();
+    let root = dir.path();
+    let uuid = RecipientUuid::parse("00000000-0000-4000-8000-0000000000aa").unwrap();
+    let facts = MailIdentityFacts::fixture(
+        Some("bob"),
+        Some("codex"),
+        "joe",
+        false,
+        &[],
+        Some("advisor"),
+        None,
+    )
+    .with_recipient(uuid.clone());
+    let audience = ResolvedAudience::from_facts(&facts);
+    let mut history = message("history");
+    history.archived = true;
+    write_local_message(root, &history).unwrap();
+    for id in ["hello-a", "hello-b", "hello-c"] {
+        let mut mail = message(id);
+        mail.to = Recipient::Agent("advisor".into());
+        let sidecar = DeliverySidecar::cohort(id, "advisor", 1, &[uuid.clone()]);
+        crate::mailbox::write_local_message_with_deliveries(root, &mail, Some(&sidecar)).unwrap();
+    }
+    let ctx = MailboxContext::resolve(root, None).unwrap();
+    let mut limits = ReadLimits::explicit_read();
+    limits.max_total_bytes = 1;
+    let snap = logical_snapshot(&ctx, &audience, &Query::Inbox, &limits);
+    assert!(snap.history_truncated);
+    let shown: Vec<_> = snap.records.iter().collect();
+    assert_eq!(shown.len(), 3);
+    for record in &shown {
+        assert_eq!(record.delivered_to.as_ref(), Some(&uuid));
+        assert!(snap.record_ack_complete(record));
+    }
+    AckPlan::prepare(&snap, ctx.repository().map(|r| r.path()), &audience, &shown)
+        .unwrap()
+        .unwrap()
+        .commit(&audience)
+        .unwrap();
+    let again = logical_snapshot(&ctx, &audience, &Query::Inbox, &ReadLimits::explicit_read());
+    for record in again.records.iter().filter(|r| !r.message.archived) {
+        assert!(ledger_holds(root, &uuid.receipt_key(), &record.message.id));
+        assert!(!ledger_holds(root, "advisor", &record.message.id));
+        assert!(matches!(record.read, ReadEvidence::Acknowledged { .. }));
+    }
+}

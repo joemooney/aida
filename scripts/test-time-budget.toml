@@ -34,6 +34,7 @@ default_limit = 30
 untouched_factor = 3
 
 [budget]
+"aida-cli-lib review_watch::tests::task1993_state_stays_bounded_far_past_one_thousand_changes" = 45  # TASK-3809: PR-4188 measured 30.1s; advisor-approved headroom for the bounded-state stress test.
 # PR #3731 / train PR #3733 measured 11.7s; x2 rounded up to 5s.
 # trace:TASK-3777 | ai:codex
 "aida-cli-lib findings_gate::story_1421_carry_forward_findings_tests::task_3749_sweep_keys_preserve_source_scope_and_closed_sweeps_roll_over" = 25
@@ -305,6 +306,10 @@ untouched_factor = 3
 "aida-core allocation_authority::tests::bug_2017_batch_alias_conflicts_refuse_before_any_persistence" = 15  # max 5.273s, median 3.223s over 9 runs
 "aida-cli-lib gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor" = 35  # max 15.320s, median 11.180s over 9 runs
 "aida-cli-lib gate::mandate_gates::story_1888_gate_paths_tests::dispatch_policy_suites_are_mounted_on_the_floor" = 25  # max 11.087s, median 8.688s over 9 runs
+# STORY-2903: parses every production source with syn to prove one merge
+# boundary; 35.0s measured in CI run 44643928149 (promotion 23), x2.
+# trace:STORY-2903 | ai:claude
+"aida-cli-lib gate::landing_merge::story_2903_merge_boundary_tests::only_the_landing_boundary_calls_merge_change" = 70
 "aida-cli-lib gate::mandate_traces::replay_tests::task_1800_audited_cases_replay_from_the_vendored_bundle" = 70  # max 34.240s, median 26.260s over 9 runs
 
 # Newly sampled slow tests; same measured x2 policy. trace:TASK-2020 | ai:codex
@@ -350,6 +355,7 @@ untouched_factor = 3
 "aida-cli-lib pr_train::verified::bug2406::bug2438_old_head_spec_keyed_refusal_is_superseded_by_current_head_approval" = 15  # max 5.750s, median 5.057s over 9 runs
 "aida-cli-lib pr_train::verified::bug2406::bug2441_rework_branch_with_resolved_commit_trailer_trains" = 15  # max 5.864s, median 5.155s over 9 runs
 "aida-cli-lib pr_train::verified::bug2406::bug2441_rework_branch_with_resolved_title_trains" = 15  # max 5.833s, median 5.109s over 9 runs
+"aida-cli-lib pr_train::verified::bug2406::bug2538_long_review_history_trains_with_compact_audit" = 85  # BUG-2538: 41-round / 100+-line review history is the regression itself; measured 41.162s in CI job 131528928601, x2 rounded up
 "aida-cli-lib regen::consensus::tests::completed_rejected_or_archived_gap_allows_a_new_investigation" = 15  # max 6.811s, median 5.469s over 9 runs
 "aida-cli-lib regen::consensus::tests::explicit_file_is_idempotent_and_report_default_does_not_write" = 15  # max 6.004s, median 5.017s over 9 runs
 "aida-cli-lib requirements_cli::tags_replace_warning_tests::doctor_detects_and_heals_all_thirteen_incident_specs" = 15  # max 6.671s, median 5.321s over 9 runs

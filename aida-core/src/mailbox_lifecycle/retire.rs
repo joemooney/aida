@@ -40,10 +40,10 @@
 //! trace:STORY-1843 | ai:claude
 
 use super::{
-    activation_state, check_regular, delete_record, ensure_dir, enter_lock_class, fsync_dir, hex,
-    load_or_create, load_record, lock, mint_generation, open_checked, read_json, resolve_source,
-    store_record, write_json, ActivationState, LifecycleError, Result, SourceState, JOURNAL_DIR,
-    LIFECYCLE_LOCK_TIMEOUT, RETAINED_DIR, SCHEMA,
+    check_regular, delete_record, ensure_dir, enter_lock_class, fsync_dir, hex, load_or_create,
+    load_record, lock, mint_generation, open_checked, read_json, resolve_source, store_record,
+    write_json, LifecycleError, Result, SourceState, JOURNAL_DIR, LIFECYCLE_LOCK_TIMEOUT,
+    RETAINED_DIR, SCHEMA,
 };
 use crate::process_probe::{Probe, ProbeSource};
 use serde::{Deserialize, Serialize};
@@ -102,6 +102,9 @@ pub(crate) enum RefusalReason {
     /// The source holds mail, receipt or watermark bytes and no operator has
     /// recorded that every writer host is admitting (QC1).
     MailBearingBeforeActivation,
+    /// A fresh scan after fencing could not verify all writer admissions.
+    // trace:TASK-3420 | ai:codex
+    WriterAdmissionUnknown,
     /// The source holds mail and the recorded activation names another
     /// source build (`None`: one that named none), so this build must record
     /// its own. `this` is this build's identity, if it has one.
@@ -110,6 +113,11 @@ pub(crate) enum RefusalReason {
         this: Option<String>,
     },
     PreserveFailed {
+        detail: String,
+    },
+    /// Undelivered mail or mail without a readable canonical copy.
+    // trace:TASK-3420 | ai:codex
+    MessageState {
         detail: String,
     },
     ManifestMismatch {
@@ -151,6 +159,11 @@ impl std::fmt::Display for RefusalReason {
                  take a write permit yet; run `{}` to check and record that",
                 super::ACTIVATION_COMMAND
             ),
+            RefusalReason::WriterAdmissionUnknown => write!(
+                f,
+                "the fresh writer-admission scan could not verify every mail writer; run `{}` to inspect writer admission",
+                super::ACTIVATION_COMMAND
+            ),
             RefusalReason::ActivationForOtherBuild { recorded, this } => write!(
                 f,
                 "the mailbox holds mail, and its mail retention activation was recorded by a \
@@ -165,6 +178,7 @@ impl std::fmt::Display for RefusalReason {
             RefusalReason::PreserveFailed { detail } => {
                 write!(f, "the mailbox could not be preserved: {detail}")
             }
+            RefusalReason::MessageState { detail } => write!(f, "mail must be retained: {detail}"),
             RefusalReason::ManifestMismatch { path } => write!(
                 f,
                 "the preserved copy of {} does not match the original",
@@ -637,27 +651,6 @@ fn drive(mut entry: JournalEntry, opts: &RetireOptions) -> Result<RetireOutcome>
                 advance(&mut entry, Phase::Quiesced)?;
             }
             Phase::Quiesced => {
-                let data = entry.retained_dir().join("data");
-                let unactivated = match activation_state(&entry.anchor)? {
-                    ActivationState::Current => None,
-                    ActivationState::Absent => Some(RefusalReason::MailBearingBeforeActivation),
-                    // BUG-2411: another build's record is honoured when a
-                    // fresh scan shows every writer host runs this build.
-                    // trace:BUG-2411 | ai:claude
-                    ActivationState::OtherBuild { .. }
-                        if super::activation::fresh_scan_admits() =>
-                    {
-                        None
-                    }
-                    ActivationState::OtherBuild { recorded, this } => {
-                        Some(RefusalReason::ActivationForOtherBuild { recorded, this })
-                    }
-                };
-                if let Some(reason) = unactivated {
-                    if mailbox_holds_bytes(&entry.mailbox)? || holds_bytes(&data)? {
-                        return abort(entry, reason);
-                    }
-                }
                 if let Err(reason) = preserve(&entry, opts)? {
                     return abort(entry, reason);
                 }
@@ -1012,6 +1005,19 @@ fn manifest_files(
 /// device and inode and an empty mailbox must all be unchanged since the
 /// fence. Then journal `Committed` and mark the source `Retired`.
 fn final_check(entry: &mut JournalEntry) -> Result<std::result::Result<(), RefusalReason>> {
+    let common = entry
+        .anchor
+        .parent()
+        .and_then(Path::parent)
+        .ok_or_else(|| LifecycleError::Corrupt {
+            path: entry.anchor.clone(),
+            why: "missing common Git directory".into(),
+        })?;
+    if let Err(detail) =
+        crate::mailbox_logical::retirement_message_state(common, &entry.retained_dir().join("data"))
+    {
+        return Ok(Err(RefusalReason::MessageState { detail }));
+    }
     let held = match lock(&entry.anchor, LIFECYCLE_LOCK_TIMEOUT) {
         Ok(held) => held,
         Err(LifecycleError::LockTimeout { .. }) => return Ok(Err(RefusalReason::LockBusy)),
@@ -1042,6 +1048,12 @@ fn final_check(entry: &mut JournalEntry) -> Result<std::result::Result<(), Refus
         .collect();
     if !late.is_empty() {
         return Ok(Err(RefusalReason::LateWriter { entries: late }));
+    }
+    // The fresh admission scan is mandatory even with a current activation.
+    // Hold Lifecycle so no new permit can appear between the scan and commit.
+    // trace:TASK-3420 | ai:codex
+    if !super::activation::fresh_scan_admits() {
+        return Ok(Err(RefusalReason::WriterAdmissionUnknown));
     }
     advance(entry, Phase::Committed)?;
     record.state = SourceState::Retired {

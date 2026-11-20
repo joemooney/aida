@@ -683,6 +683,7 @@ mod tests {
             process_backed: false,
             review_verb: false,
             authorized_by: None,
+            lease_id: None,
         };
         // The filename stem only has to be unique per scope: `list_claims`
         // reads every `*.toml` in the tree and takes the scope from the record.

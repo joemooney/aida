@@ -139,6 +139,10 @@ pub(crate) fn fixture() -> (Fixture, String) {
     git(repo, &["config", "commit.gpgsign", "false"]);
     // Gate-ledger and activity writes never ride along in a test commit.
     std::fs::write(repo.join(".git/info/exclude"), ".aida/\n").unwrap();
+    // trace:STORY-2763 | ai:codex
+    std::fs::create_dir_all(repo.join(".aida")).unwrap();
+    write(repo, ".aida/config.toml", "[review]\nfreshness = 'fast'\n");
+    git(repo, &["add", "-f", ".aida/config.toml"]);
     write(repo, "a.txt", &lines(30, "a"));
     write(repo, "b.txt", &lines(30, "b"));
     commit(repo, "base");
@@ -403,7 +407,7 @@ fn record_is_written_and_reread_on_a_second_attempt() {
         &ledger,
         body.replace(
             &format!("\"proof_version\":{PROOF_VERSION}"),
-            "\"proof_version\":0",
+            "\"proof_version\":1",
         ),
     )
     .unwrap();
@@ -604,7 +608,7 @@ fn unresolvable_inputs_refuse() {
 }
 
 /// An attested, independent approval recorded at `sha`.
-fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
+pub(crate) fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
     use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
     RecordedVerdict {
         kind: VerdictKind::Approved,
@@ -624,7 +628,7 @@ fn approval(sha: &str) -> crate::gate::review_verdict::RecordedVerdict {
 
 /// A ship policy under which [`approval`]'s attestation verifies and the
 /// shipper is not its author.
-fn policy(
+pub(crate) fn policy(
     v: &crate::gate::review_verdict::RecordedVerdict,
 ) -> crate::gate::ship::ShipApprovalPolicy {
     let mut p = crate::gate::ship::ShipApprovalPolicy {
@@ -886,6 +890,92 @@ fn merge_path_gate_carries_over_and_refuses_with_the_reason() {
     let err = decide(&evil, Some("main")).expect_err("an evil merge refuses");
     assert!(err.contains("did not carry over"), "{err}");
     assert!(err.contains("changes of its own"), "{err}");
+}
+
+// A read-only site reaches the same decisions and leaves nothing behind: no
+// carry-over answer on the gate ledger, no activity line, no file at all
+// outside git's object store.
+// trace:STORY-2824 | ai:claude
+#[test]
+fn story_2824_read_only_merge_path_decision_writes_nothing() {
+    use crate::gate::review_verdict::{RecordedVerdict, RecorderAttestation, VerdictKind};
+    fn files(dir: &Path, out: &mut Vec<(std::path::PathBuf, u64)>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_name() == ".git" {
+                continue;
+            }
+            if path.is_dir() {
+                files(&path, out);
+            } else {
+                out.push((path, entry.metadata().unwrap().len()));
+            }
+        }
+        out.sort();
+    }
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let v = RecordedVerdict {
+        kind: VerdictKind::Approved,
+        raw: "approved".into(),
+        reviewed_sha: Some(approved.clone()),
+        recorded_at: Some("2026-09-23T00:00:00Z".into()),
+        attestation: Some(RecorderAttestation {
+            sha: approved.clone(),
+            human_at_tty: true,
+            receipt_id: Some("rcpt".into()),
+            identity: vec!["session:independent-reviewer".into()],
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let mut policy = crate::gate::ship::ShipApprovalPolicy {
+        reviewed_committed_at: Some("2026-09-22T00:00:00Z".parse().unwrap()),
+        shipper: vec!["session:independent-shipper".into()],
+        ..Default::default()
+    };
+    let a = v.attestation.as_ref().unwrap();
+    policy.verified_authority.insert(
+        a.authority_key(v.recorded_at.as_deref()).unwrap(),
+        a.identity.clone(),
+    );
+    let peek = |head: &str, base_now: Option<&str>| {
+        let site = CarryOverSite::read_only(repo, Some("main"));
+        let base_now = base_now.map(str::to_string);
+        crate::gate::approval::merge_path_approval_decision(
+            repo,
+            PR,
+            std::slice::from_ref(&v),
+            &policy,
+            Some(head),
+            &site,
+            &|| base_now.clone(),
+        )
+    };
+    let clean = clean_merge(repo);
+    let mut before = Vec::new();
+    files(repo, &mut before);
+    assert_eq!(peek(&clean, Some("main")), Ok(Some(clean.clone())));
+    let retargeted = peek(&clean, Some("x")).expect_err("a retargeted base refuses");
+    assert!(retargeted.contains("now targets `x`"), "{retargeted}");
+    assert!(proof_event(repo, &clean).is_none(), "no answer is recorded");
+    let mut after = Vec::new();
+    files(repo, &mut after);
+    assert_eq!(before, after, "a read-only decision leaves no file behind");
+
+    let evil = evil_merge(repo, &approved);
+    let mut before = Vec::new();
+    files(repo, &mut before);
+    let err = peek(&evil, Some("main")).expect_err("an evil merge refuses");
+    assert!(err.contains("did not carry over"), "{err}");
+    assert!(
+        carry_events(repo, &evil).is_empty(),
+        "no refusal is recorded"
+    );
+    let mut after = Vec::new();
+    files(repo, &mut after);
+    assert_eq!(before, after, "a read-only refusal leaves no file behind");
 }
 
 // ── TASK-1968: the verdict-corpus merge gate honours the same carry-over ────
@@ -1484,4 +1574,369 @@ fn consumer_verdict_display_exposes_coverage_without_restamping_or_writing() {
         .contains("carried to"));
     assert_eq!(std::fs::read(path).unwrap(), before);
     assert_eq!(carry_events(repo, &h).len(), count);
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_no_carry_exact_head_and_cached_proof() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    use crate::gate::approval::{approval_decision, HeadDecision};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let mut v = approval(&approved);
+    let site = CarryOverSite::new(repo, Some("main"));
+    assert!(matches!(
+        approval_decision(PR, &[v.clone()], Some(&h), &policy(&v), Some(&site)).unwrap(),
+        HeadDecision::CarriedOver(..)
+    ));
+    assert!(proof_event(repo, &h).is_some());
+    v.attestation.as_mut().unwrap().carry_eligible = false;
+    assert!(matches!(
+        approval_decision(PR, &[v.clone()], Some(&approved), &policy(&v), Some(&site)).unwrap(),
+        HeadDecision::Covered(_)
+    ));
+    let answer = approval_decision(PR, &[v.clone()], Some(&h), &policy(&v), Some(&site)).unwrap();
+    assert!(
+        matches!(answer, HeadDecision::Stale { message, .. } if message.contains("not carry-eligible"))
+    );
+    // No Git or cache operation is necessary for a reviewer-policy refusal.
+    let absent = CarryOverSite::new(Path::new("/no/such/repo"), Some("main"));
+    let refusal = crate::gate::ship::approval_head_refusal(&[v.clone()], Some(&h)).unwrap();
+    assert_eq!(
+        prove_for_refusal(&absent, PR, &refusal),
+        Some(Err(CarryOverRefusal::ReviewerPolicy))
+    );
+    assert!(!CarryOverRefusal::ReviewerPolicy.is_deterministic());
+    v.attestation.as_mut().unwrap().carry_eligible = true;
+    assert!(matches!(
+        approval_decision(PR, &[v.clone()], Some(&h), &policy(&v), Some(&site)).unwrap(),
+        HeadDecision::CarriedOver(..)
+    ));
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_cache_key_policy_and_legacy_version_recompute() {
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    let path =
+        crate::gate::ledger::store::ledger_file(repo, crate::gate::ledger::ChangeKey::pr(PR));
+    let original = std::fs::read_to_string(&path).unwrap();
+    assert!(original.contains("\"carry_eligible\":true"));
+    std::fs::write(
+        &path,
+        original.replace("\"carry_eligible\":true", "\"carry_eligible\":false"),
+    )
+    .unwrap();
+    assert!(stored_answer(repo, PR, "main", &approved, &h).is_none());
+    // A missing legacy policy is true, but a v1 proof must be recomputed.
+    let legacy = original
+        .replace(",\"carry_eligible\":true", "")
+        .replace("\"proof_version\":2", "\"proof_version\":1");
+    std::fs::write(&path, legacy).unwrap();
+    assert!(stored_answer(repo, PR, "main", &approved, &h).is_none());
+    let (_, outcome) = carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .unwrap();
+    assert_eq!(outcome, Some(RecordOutcome::Written));
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_corpus_refuses_policy_before_prover() {
+    use crate::gate::merge_hold_core::{corpus_merge_gate_carrying, CorpusMergeGate};
+    let approved = "a".repeat(40);
+    let head = "b".repeat(40);
+    let body = serde_json::json!({"verdict":"approved", "reviewed_sha":approved,
+        "recorder_attestation":{"sha":approved,"seat":"reviewer","carry_eligible":false}})
+    .to_string();
+    let corpus = vec![("PR-7".into(), body)];
+    let prove = &|_: &crate::gate::ship::ApprovalHeadRefusal| {
+        panic!("no-carry must not consult proof cache")
+    };
+    assert!(matches!(
+        corpus_merge_gate_carrying(7, &corpus, Some(&approved), prove),
+        CorpusMergeGate::Clear
+    ));
+    assert!(
+        matches!(corpus_merge_gate_carrying(7, &corpus, Some(&head), prove), CorpusMergeGate::Refuse { message, .. } if message.contains("not carry-eligible"))
+    );
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_corpus_superseded_policy_cannot_veto_clean_merge() {
+    use crate::gate::merge_hold_core::{corpus_merge_gate_carrying, CorpusMergeGate};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let head = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    corpus_gate(repo, &[], "main", &head).unwrap();
+    let proof = proof_event(repo, &head).unwrap();
+    for key in ["STORY-2696", "PR-99"] {
+        let path = crate::gate::review_verdict::verdict_path(repo, key);
+        let mut stale_a = None;
+        let mut latest = None;
+        for (index, eligible) in [false, false, true].into_iter().enumerate() {
+            let mut act = crate::gate::review_verdict::build_verdict_object_with_policy(
+                repo,
+                &path,
+                Some("approved"),
+                Some(&approved),
+                None,
+                None,
+                &[],
+                "reviewer",
+                Some(eligible),
+            )
+            .unwrap();
+            act.insert(
+                "recorded_at".into(),
+                format!("2026-11-10T00:00:0{index}Z").into(),
+            );
+            act.insert(
+                "recorder_attestation".into(),
+                serde_json::json!({
+                    "sha":approved, "seat":"reviewer", "carry_eligible":eligible,
+                    "receipt_id":format!("receipt-{index}")
+                }),
+            );
+            if index == 1 {
+                let previous =
+                    crate::gate::review_verdict::read_current_verdict_object(&path).unwrap();
+                assert_eq!(
+                    crate::gate::review_verdict::record_outcome(Some(&previous), &act),
+                    crate::gate::review_verdict::RecordOutcome::Unchanged
+                );
+            }
+            crate::gate::review_verdict::write_verdict_object(&path, &act).unwrap();
+            if index == 0 {
+                stale_a = Some(serde_json::to_string(&act).unwrap());
+            }
+            latest = Some(serde_json::to_string(&act).unwrap());
+        }
+        for reverse in [false, true] {
+            let mut corpus = vec![
+                ("PR-7".into(), stale_a.clone().unwrap()),
+                ("STORY-2696".into(), latest.clone().unwrap()),
+            ];
+            if reverse {
+                corpus.reverse();
+            }
+            let prove = &|_: &crate::gate::ship::ApprovalHeadRefusal| Some(Ok(proof.clone()));
+            assert!(matches!(
+                corpus_merge_gate_carrying(PR, &corpus, Some(&head), prove),
+                CorpusMergeGate::Clear
+            ));
+        }
+    }
+}
+
+// trace:STORY-2763 | ai:codex
+#[test]
+fn review_watch_fast_proof_is_revoked_by_trusted_strict_policy() {
+    use crate::gate::review_freshness::{for_head, Freshness};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    // Two changes in the same file, in disjoint hunks, merge cleanly.
+    git(repo, &["checkout", "--quiet", "main"]);
+    set_line(repo, "a.txt", 25, "main moved in the same file");
+    commit(repo, "overlapping file, disjoint hunk");
+    publish_main(repo);
+    git(repo, &["checkout", "--quiet", "pr"]);
+    git(repo, &["merge", "--quiet", "--no-edit", "main"]);
+    let h = head(repo);
+    let site = CarryOverSite::new(repo, Some("main"));
+    assert_eq!(for_head(repo, &h), Freshness::Fast);
+    assert!(carry_over_for_refusal(&site, PR, &moved(&approved, &h))
+        .unwrap()
+        .is_ok());
+    assert_eq!(carry_events(repo, &h).len(), 1);
+    // A branch cannot lower trusted strict policy, including by reusing a proof.
+    git(repo, &["checkout", "--quiet", "main"]);
+    write(
+        repo,
+        ".aida/config.toml",
+        "[review]\nfreshness = 'strict'\n",
+    );
+    commit(repo, "operator raises assurance");
+    publish_main(repo);
+    git(repo, &["checkout", "--quiet", "pr"]);
+    write(repo, ".aida/config.toml", "[review]\nfreshness = 'fast'\n");
+    assert_eq!(for_head(repo, &h), Freshness::Strict);
+    assert_eq!(
+        carry_over_for_refusal(&site, PR, &moved(&approved, &h)).unwrap(),
+        Err(CarryOverRefusal::StrictPolicy)
+    );
+    assert_eq!(
+        carry_events(repo, &h).len(),
+        1,
+        "strict does not replace the historical proof"
+    );
+}
+
+// trace:STORY-2763 | ai:codex
+#[test]
+fn review_watch_current_base_tree_accepts_overlap_and_types_textual_conflict() {
+    use crate::gate::review_freshness::{landed_tree, NeedsRework};
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    git(repo, &["checkout", "--quiet", "main"]);
+    set_line(repo, "a.txt", 25, "main changed this distant hunk");
+    let base = commit(repo, "same file without conflict");
+    let tree = landed_tree(repo, &base, &approved).unwrap();
+    let patch = git(repo, &["diff", &base, &tree]);
+    assert!(patch.contains("reviewed change"));
+    assert!(!patch.contains("main changed this distant hunk"));
+    set_line(repo, "a.txt", 5, "main competes with the reviewed hunk");
+    let conflicting = commit(repo, "textual conflict");
+    let error = landed_tree(repo, &conflicting, &approved).unwrap_err();
+    assert!(error.is::<NeedsRework>(), "{error:#}");
+}
+
+// AC4: a trusted `freshness_strict_paths` glob raises a fast project to strict
+// for a PR whose own diff (merge-base(trusted base, head)..head) touches it:
+// carry-over is refused, so the review is a full one. A PR that does not touch
+// the glob keeps the fast policy.
+// trace:STORY-2763 | ai:claude
+#[test]
+fn review_watch_strict_path_glob_refuses_carry_over_under_fast_policy() {
+    use crate::gate::review_freshness::{for_head, Freshness};
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    for (glob, expected) in [("a.*", Freshness::Strict), ("gate/**", Freshness::Fast)] {
+        let (tmp, approved) = fixture();
+        let repo = tmp.path();
+        git(repo, &["checkout", "--quiet", "main"]);
+        write(
+            repo,
+            ".aida/config.toml",
+            &format!("[review]\nfreshness = 'fast'\nfreshness_strict_paths = ['{glob}']\n"),
+        );
+        commit(repo, "operator protects a path");
+        publish_main(repo);
+        git(repo, &["checkout", "--quiet", "pr"]);
+        let h = clean_merge(repo);
+        // b.txt and the config arrive from the base: only the PR's own a.txt
+        // edit is in merge-base(base, head)..head.
+        assert_eq!(for_head(repo, &h), expected, "glob {glob}");
+        let site = CarryOverSite::new(repo, Some("main"));
+        let answer = carry_over_for_refusal(&site, PR, &moved(&approved, &h)).unwrap();
+        if expected == Freshness::Strict {
+            assert_eq!(answer, Err(CarryOverRefusal::StrictPolicy));
+            assert!(proof_event(repo, &h).is_none());
+        } else {
+            assert!(answer.is_ok(), "{answer:?}");
+        }
+    }
+}
+
+/// A verdict on `change`'s ledger for `spec`, as `aida review record
+/// <spec> --pr <change>` leaves it.
+fn ledger_verdict(repo: &Path, change: u64, spec: &str, verdict: &str, sha: &str) {
+    use crate::gate::ledger;
+    let record = serde_json::json!({"verdict": verdict, "reviewed_sha": sha,
+        "recorded_by": "reviewer-b", "recorded_at": "2026-11-13T00:00:00Z"});
+    let path = crate::gate::review_verdict::verdict_path(repo, &format!("PR-{change}"));
+    ledger::record_verdict_at(
+        &path,
+        record.as_object().unwrap(),
+        Some(&crate::gate::canon::GateSpec::with_key(spec, None)),
+    )
+    .unwrap();
+}
+
+// Train 9: promotion #3966 named 45 specs in its car body. Two of them had a
+// refusal recorded for an unrelated change, and that stopped an approval
+// that had carried over a clean base merge. A refusal of another change at
+// another commit says nothing about this one.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_a_refusal_of_another_change_does_not_stop_a_carried_approval() {
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    let ids = vec!["BUG-9".to_string()];
+    let elsewhere = "c".repeat(40);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    ledger_verdict(repo, 99, "BUG-9", "request-changes", &elsewhere);
+    corpus_gate(repo, &ids, "main", &h)
+        .expect("another change's refusal at another commit is not about this head");
+    assert!(proof_event(repo, &h).is_some());
+}
+
+// What still stops the carry-over: a refusal of this change under a spec
+// key, and another change's refusal recorded at this very head.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_this_changes_refusal_and_a_refusal_at_this_head_still_stop_it() {
+    let ids = vec!["BUG-9".to_string()];
+
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    ledger_verdict(repo, PR, "BUG-9", "request-changes", &"c".repeat(40));
+    assert!(
+        corpus_gate(repo, &ids, "main", &h).is_err(),
+        "this change's own refusal under a spec key stands"
+    );
+
+    let (tmp, approved) = fixture();
+    let repo = tmp.path();
+    let h = clean_merge(repo);
+    record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+    ledger_verdict(repo, 99, "BUG-9", "request-changes", &h);
+    let text = format!("{:#}", corpus_gate(repo, &ids, "main", &h).unwrap_err());
+    assert!(text.contains("outstanding"), "{text}");
+}
+
+// A change merged ahead of its review and refused afterwards rides inside
+// every head that contains its commit. Its refusal stops a carried approval
+// while it stands and the commit is in the head, and only then.
+// trace:BUG-2569 | ai:claude
+#[test]
+fn bug_2569_a_standing_refusal_of_a_commit_in_the_head_stops_the_carry_over() {
+    let ids = vec!["BUG-9".to_string()];
+    let carried = |after: &dyn Fn(&Path, &str, &str)| {
+        let (tmp, approved) = fixture();
+        let repo = tmp.path();
+        let h = clean_merge(repo);
+        record_corpus_verdict(repo, &format!("PR-{PR}"), "approved", &approved);
+        after(repo, &approved, &h);
+        corpus_gate(repo, &ids, "main", &h)
+    };
+
+    // The refused commit is in the head and change 99 still stands refused.
+    let stands = carried(&|repo, approved, _| {
+        ledger_verdict(repo, 99, "BUG-9", "request-changes", approved);
+    });
+    assert!(
+        stands.is_err(),
+        "a standing refusal inside the head stops it"
+    );
+
+    // Change 99 was approved afterwards: the refusal is a past round.
+    carried(&|repo, approved, _| {
+        ledger_verdict(repo, 99, "BUG-9", "request-changes", approved);
+        ledger_verdict(repo, 99, "BUG-8", "approved", &"d".repeat(40));
+    })
+    .expect("a refusal its own change has since been approved past does not count");
+
+    // Change 99 stands refused, at a commit this head does not contain.
+    carried(&|repo, _, h| {
+        let tree = format!("{h}^{{tree}}");
+        let outside = git(repo, &["commit-tree", &tree, "-p", h, "-m", "outside"]);
+        ledger_verdict(repo, 99, "BUG-9", "request-changes", &outside);
+    })
+    .expect("a refused commit outside the head is not part of what merges");
 }

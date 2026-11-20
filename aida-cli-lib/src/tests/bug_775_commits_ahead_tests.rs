@@ -335,6 +335,16 @@ fn the_handshake_the_verb_writes_is_the_handshake_phase4_parses() {
 // trace:BUG-912 | ai:codex
 #[test]
 fn review_record_pr_handshake_honors_explicit_verdict_file() {
+    record_pr_handshake(false);
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_record_no_carry_matches_spec_and_handshake() {
+    record_pr_handshake(true);
+}
+
+fn record_pr_handshake(no_carry: bool) {
     let drive = tempfile::tempdir().unwrap();
     // BUG-b6b1278890774ef993d2ebc327862470-013: a typed `--sha` must resolve
     // to a real commit in the write root.
@@ -367,7 +377,10 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
     };
     crate::with_review_pr_subject(subject, || {
         crate::gate::review_authority::with_identity_source(reviewer, || {
-            crate::handle_review_record(
+            // trace:BUG-2517 | ai:codex
+            // Pin the forge head without a live network dependency.
+            crate::handle_review_record_with_head_at(
+                crate::drive_root_or_project_root().unwrap(),
                 "STORY-993",
                 "approved",
                 Some(&head),
@@ -376,13 +389,18 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
                 &[],
                 &[],
                 Some(1706),
+                no_carry,
+                |_, change| {
+                    assert_eq!(change, crate::gate::ledger::ChangeKey::pr(1706));
+                    Ok(head.clone())
+                },
             )
         })
     })
     .unwrap();
 
     // M1 slice 2: both records are on the gate ledger, the handshake at the
-    // anchor's root and the spec record at the drive root.
+    // anchor's root and the change-bound record at the drive root.
     // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
     let body_at = |root: &std::path::Path, key: &str| {
         crate::gate::review_verdict::current_verdict_body(root, key, None)
@@ -392,31 +410,45 @@ fn review_record_pr_handshake_honors_explicit_verdict_file() {
         "handshake must land at the orchestrator-provided anchor"
     );
     // BUG-1466: exercise the real writer and prove the PR-keyed handshake
-    // carries the exact same provenance as the spec-keyed record.
+    // carries the exact same provenance as the change-bound record.
     // trace:BUG-1466 | ai:codex
-    let spec_body = body_at(drive.path(), "STORY-993").unwrap();
-    let spec_json: serde_json::Value = serde_json::from_str(&spec_body).unwrap();
+    let review_body = body_at(drive.path(), "PR-1706").unwrap();
+    assert_eq!(
+        body_at(drive.path(), "STORY-993").as_deref(),
+        Some(review_body.as_str()),
+        "the spec index must discover the same change-bound review"
+    );
+    let review_json: serde_json::Value = serde_json::from_str(&review_body).unwrap();
     let handshake_body = body_at(parent.path(), "PR-1706").unwrap();
     let handshake_json: serde_json::Value = serde_json::from_str(&handshake_body).unwrap();
+    assert_eq!(
+        crate::gate::review_verdict::parse_recorded_verdict(&review_body)
+            .unwrap()
+            .attestation
+            .unwrap()
+            .carry_eligible,
+        !no_carry
+    );
     for field in [
+        "recorder_attestation",
         "reviewed_sha",
         "reviewed_branch",
         "recorded_at",
         "recorded_by",
     ] {
         assert_eq!(
-            handshake_json[field], spec_json[field],
+            handshake_json[field], review_json[field],
             "{field} must match across the two artifacts"
         );
     }
     assert!(
-        !drive
+        drive
             .path()
             .join(".aida")
             .join("gate-ledger")
             .join("PR-1706.jsonl")
             .exists(),
-        "the worktree drive root must not receive the PR handshake when the explicit anchor exists"
+        "the drive root retains the PR-keyed review while the handshake uses the explicit anchor"
     );
 }
 
@@ -1096,5 +1128,66 @@ fn concurrent_sibling_publication_has_one_winner_and_never_two_links() {
             leftovers.is_empty(),
             "staged files left behind: {leftovers:?}"
         );
+    }
+}
+
+// trace:STORY-2696 | ai:codex
+#[test]
+fn story_2696_no_carry_nonapproval_refuses_without_writing() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_STANDALONE_IMPLEMENTER", None)]);
+    for verdict in ["request-changes", "waiting", "rejected"] {
+        let err = crate::handle_review_record_policy_at(
+            tmp.path().into(),
+            "STORY-993",
+            verdict,
+            None,
+            None,
+            None,
+            &[],
+            &[],
+            None,
+            true,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--no-carry requires an approved verdict"),
+            "{err:#}"
+        );
+        assert!(!tmp.path().join(".aida").exists());
+    }
+}
+
+// trace:BUG-2527 | ai:claude
+#[test]
+fn bug_2527_handler_refuses_explicit_approval_over_blocking_findings() {
+    let tmp = tempfile::tempdir().unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_STANDALONE_IMPLEMENTER", None)]);
+    let path = crate::gate::review_verdict::verdict_path(tmp.path(), "STORY-993");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let prior =
+        r#"{"verdict":"request-changes","findings":["unresolved bug"],"recorded_by":"reviewer"}"#;
+    std::fs::write(&path, prior).unwrap();
+    for findings in [vec![], vec!["new blocking bug".to_string()]] {
+        let err = crate::handle_review_record_policy_at(
+            tmp.path().into(),
+            "STORY-993",
+            "approved",
+            None,
+            None,
+            None,
+            &findings,
+            &[],
+            None,
+            false,
+        )
+        .unwrap_err();
+        assert!(
+            err.to_string().contains("cannot record approved"),
+            "{err:#}"
+        );
+        assert!(err.to_string().contains("--finding \"\""), "{err:#}");
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), prior);
     }
 }

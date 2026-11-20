@@ -422,7 +422,7 @@ pub fn merge_spec_three_way(
     merged
 }
 
-/// Pull policy: upstream owns scalars; append-only evidence survives from all
+/// Pull policy: three-way scalars with upstream winning collisions; evidence survives from all
 /// snapshots. This is separate from the symmetric reconciliation policy.
 // trace:BUG-2501 | ai:codex
 pub fn merge_spec_upstream(
@@ -430,8 +430,97 @@ pub fn merge_spec_upstream(
     upstream: &Requirement,
     local: &Requirement,
 ) -> Requirement {
+    merge_spec_upstream_with_overrides(base, upstream, local).0
+}
+
+/// Return the overridden fields as well as their durable recovery history.
+// trace:BUG-2613 | ai:codex
+pub(crate) fn merge_spec_upstream_with_overrides(
+    base: &Requirement,
+    upstream: &Requirement,
+    local: &Requirement,
+) -> (Requirement, Vec<String>) {
     let mut merged = upstream.clone();
     merged.history = union_history(&[&base.history, &upstream.history, &local.history]);
+    let mut changes = Vec::new();
+    macro_rules! scalar {
+        ($field:ident, $name:expr) => {
+            merged.$field = pull_scalar(
+                $name,
+                &base.$field,
+                &upstream.$field,
+                &local.$field,
+                &mut changes,
+            );
+        };
+    }
+    scalar!(title, "title");
+    scalar!(description, "description");
+    // Resolve coupled state as a unit, but audit every displaced component.
+    // trace:BUG-2613 | ai:codex
+    macro_rules! coupled {
+        ($($field:ident),+ $(,)?) => {{
+            let base_state = ($(&base.$field,)+);
+            let upstream_state = ($(&upstream.$field,)+);
+            let local_state = ($(&local.$field,)+);
+            if upstream_state == base_state {
+                $(merged.$field = local.$field.clone();)+
+            } else if local_state != base_state && local_state != upstream_state {
+                $(if local.$field != upstream.$field {
+                    changes.push(crate::models::FieldChange {
+                        field_name: stringify!($field).into(),
+                        old_value: serde_json::to_string(&local.$field).expect("scalar serializes"),
+                        new_value: serde_json::to_string(&upstream.$field).expect("scalar serializes"),
+                    });
+                })+
+            }
+        }};
+    }
+    coupled!(priority, custom_priority);
+    coupled!(archived, archived_at);
+    coupled!(deferred, deferred_at, deferred_until, deferred_reason);
+    scalar!(assignee, "assignee");
+    scalar!(meta_subtype, "meta_subtype");
+    scalar!(human_only, "human_only");
+    scalar!(execution_mode, "execution_mode");
+    scalar!(origin, "origin");
+    scalar!(verify, "verify");
+    scalar!(risk_notes, "risk_notes");
+    scalar!(test_coverage_notes, "test_coverage_notes");
+    scalar!(implementation_summary, "implementation_summary");
+    scalar!(req_type, "type");
+    scalar!(owner, "owner");
+    scalar!(feature, "feature");
+    scalar!(weight, "weight");
+    scalar!(prefix_override, "prefix_override");
+    // Heft is derived cache data, not a Requirement scalar. Custom keys
+    // (including any user-defined heft key) merge independently.
+    let keys: std::collections::BTreeSet<_> = base
+        .custom_fields
+        .keys()
+        .chain(upstream.custom_fields.keys())
+        .chain(local.custom_fields.keys())
+        .collect();
+    merged.custom_fields.clear();
+    for key in keys {
+        let value = pull_scalar(
+            &format!("custom_fields.{key}"),
+            &base.custom_fields.get(key).cloned(),
+            &upstream.custom_fields.get(key).cloned(),
+            &local.custom_fields.get(key).cloned(),
+            &mut changes,
+        );
+        if let Some(value) = value {
+            merged.custom_fields.insert(key.clone(), value);
+        }
+    }
+    let overridden = changes.iter().map(|c| c.field_name.clone()).collect();
+    if !changes.is_empty() {
+        merged.history.push(crate::models::HistoryEntry::new(
+            "aida-pull-merge".into(),
+            changes,
+        ));
+    }
     merged.comments = union_comments(&[&upstream.comments, &local.comments, &base.comments]);
     merged.processing_record = union_processing_records(&[
         &base.processing_record,
@@ -453,7 +542,28 @@ pub fn merge_spec_upstream(
     );
     // Pre-registration evidence remains monotonic across every merge policy.
     crate::hypothesis::preserve_merge(Some(base), upstream, local, &mut merged);
-    merged
+    (merged, overridden)
+}
+
+// trace:BUG-2613 | ai:codex
+fn pull_scalar<T: PartialEq + Clone + Serialize>(
+    field: &str,
+    base: &T,
+    upstream: &T,
+    local: &T,
+    changes: &mut Vec<crate::models::FieldChange>,
+) -> T {
+    if upstream == base {
+        return local.clone();
+    }
+    if local != base && local != upstream {
+        changes.push(crate::models::FieldChange {
+            field_name: field.into(),
+            old_value: serde_json::to_string(local).expect("scalar serializes"),
+            new_value: serde_json::to_string(upstream).expect("scalar serializes"),
+        });
+    }
+    upstream.clone()
 }
 
 /// History authors that sign automated (machine-derived) status transitions:
@@ -487,6 +597,7 @@ pub const AUTOMATED_STATUS_AUTHORS: &[&str] = &[
     SESSION_START_AUTHOR,
     ZEN_APPROVE_AUTHOR,
     ORCHESTRATOR_PHASE1_AUTHOR,
+    PUBLICATION_DONE_AUTHOR,
 ];
 
 /// History author for the merge-driven auto-bump (Done→Completed,
@@ -518,6 +629,10 @@ pub const ZEN_APPROVE_AUTHOR: &str = "aida-zen-approve";
 /// and its restore after a lease failure.
 // trace:BUG-1637 | ai:claude
 pub const ORCHESTRATOR_PHASE1_AUTHOR: &str = "aida-orchestrator-phase1";
+/// History author for the Done write a completing implementer push makes
+/// (declared completeness, not the PR title trailer).
+// trace:BUG-2696 | ai:claude
+pub const PUBLICATION_DONE_AUTHOR: &str = "aida-publication-done";
 
 /// True when `status` is terminal (Completed, Rejected, Superseded — the
 /// `lifecycle::State::is_terminal` set). Automated writers use it to refuse
@@ -1297,11 +1412,315 @@ mod tests {
         assert_eq!(merged.dependencies, local.dependencies);
         assert_eq!(merged.title, "upstream");
         assert_eq!(merged.modified_at, upstream.modified_at);
-        assert_eq!(merged.history.len(), 3);
+        assert_eq!(merged.history.len(), 4);
         assert_eq!(merged.history[1].author, "local");
         assert_eq!(merged.comments.len(), 2);
         assert_eq!(merged.comments[0].id, a.id);
         assert_eq!(merged.comments[1].id, b.id);
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_remaining_editable_fields() {
+        use serde_json::json;
+        let base = make_req("base", "Draft");
+        for (field, left, right) in [
+            ("assignee", json!("alice"), json!("bob")),
+            ("meta_subtype", json!("Prompt"), json!("Skill")),
+            ("custom_priority", json!("urgent"), json!("routine")),
+            ("human_only", json!(true), json!(false)),
+            ("execution_mode", json!("guided"), json!("operator")),
+            ("origin", json!({"repo":"one"}), json!({"repo":"two"})),
+            (
+                "verify",
+                json!({"version":1,"checks":[]}),
+                json!({"version":2}),
+            ),
+            ("risk_notes", json!("local"), json!("remote")),
+            ("test_coverage_notes", json!("local"), json!("remote")),
+            ("implementation_summary", json!("local"), json!("remote")),
+            ("deferred_until", json!("manual"), json!("date:2027-01-01")),
+            ("deferred_reason", json!("local hold"), json!("remote hold")),
+            (
+                "deferred_at",
+                json!("2026-01-01T00:00:00Z"),
+                json!("2026-02-01T00:00:00Z"),
+            ),
+            ("deferred", json!(true), json!(false)),
+        ] {
+            let mut value = serde_json::to_value(&base).unwrap();
+            value[field] = left.clone();
+            let local: Requirement = serde_json::from_value(value.clone()).unwrap();
+            let mut upstream = base.clone();
+            upstream.title = "unrelated upstream edit".into();
+            let merged = merge_spec_upstream(&base, &upstream, &local);
+            assert_eq!(
+                serde_json::to_value(&merged).unwrap()[field],
+                left,
+                "{field}"
+            );
+            let reverse = merge_spec_upstream(&base, &local, &upstream);
+            assert_eq!(
+                serde_json::to_value(&reverse).unwrap()[field],
+                left,
+                "{field}"
+            );
+            assert!(merged.history.is_empty(), "one-sided {field}");
+            assert!(
+                merge_spec_upstream(&base, &local, &local)
+                    .history
+                    .is_empty(),
+                "equal {field}"
+            );
+            // A boolean alone cannot have three distinct values.
+            if right.is_boolean() {
+                continue;
+            }
+            value[field] = right.clone();
+            upstream = serde_json::from_value(value).unwrap();
+            let (merged, names) = merge_spec_upstream_with_overrides(&base, &upstream, &local);
+            assert!(names.contains(&field.to_string()), "{field}: {names:?}");
+            assert_eq!(serde_json::to_value(&merged).unwrap()[field], right);
+            let change = merged
+                .history
+                .last()
+                .unwrap()
+                .changes
+                .iter()
+                .find(|c| c.field_name == field)
+                .unwrap();
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&change.old_value).unwrap(),
+                left
+            );
+        }
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_coupled_state() {
+        let mut base = make_req("base", "Draft");
+        base.custom_priority = Some("urgent".into());
+        let mut local = base.clone();
+        local.custom_priority = None;
+        local.priority = crate::models::RequirementPriority::High;
+        local.archived = true;
+        local.archived_at = Some(chrono::Utc::now());
+        local.deferred = true;
+        local.deferred_at = local.archived_at;
+        local.deferred_reason = Some("hold".into());
+        local.deferred_until = Some("manual".into());
+        let mut upstream = base.clone();
+        upstream.title = "unrelated".into();
+        let merged = merge_spec_upstream(&base, &upstream, &local);
+        assert_eq!(merged.custom_priority, None);
+        assert_eq!(merged.priority, local.priority);
+        assert_eq!(
+            (merged.archived, merged.archived_at),
+            (true, local.archived_at)
+        );
+        assert_eq!(
+            (merged.deferred, merged.deferred_reason),
+            (true, local.deferred_reason.clone())
+        );
+        let mut unarchived = local.clone();
+        unarchived.archived = false;
+        unarchived.archived_at = None;
+        upstream = local.clone();
+        upstream.title = "another edit".into();
+        let merged = merge_spec_upstream(&local, &upstream, &unarchived);
+        assert_eq!((merged.archived, merged.archived_at), (false, None));
+        // Concurrent defer and undefer must not combine a cleared flag with a hold.
+        let mut undeferred = local.clone();
+        undeferred.deferred = false;
+        undeferred.deferred_at = None;
+        undeferred.deferred_until = None;
+        undeferred.deferred_reason = None;
+        upstream = local.clone();
+        upstream.deferred_reason = Some("new upstream hold".into());
+        let (merged, names) = merge_spec_upstream_with_overrides(&local, &upstream, &undeferred);
+        assert!(merged.deferred);
+        assert_eq!(merged.deferred_reason, upstream.deferred_reason);
+        assert!(names.contains(&"deferred".into()));
+        assert!(names.contains(&"deferred_reason".into()));
+        // Both archivers choose different timestamps: retain one complete pair.
+        upstream = base.clone();
+        upstream.archived = true;
+        upstream.archived_at = Some(local.archived_at.unwrap() + chrono::Duration::seconds(1));
+        upstream.custom_priority = Some("upstream urgent".into());
+        let (merged, names) = merge_spec_upstream_with_overrides(&base, &upstream, &local);
+        assert_eq!(
+            (merged.archived, merged.archived_at),
+            (true, upstream.archived_at)
+        );
+        assert_eq!(
+            (merged.priority, merged.custom_priority),
+            (upstream.priority, upstream.custom_priority)
+        );
+        for field in ["archived_at", "priority", "custom_priority"] {
+            assert!(names.contains(&field.to_string()), "{field}: {names:?}");
+            let change = merged
+                .history
+                .last()
+                .unwrap()
+                .changes
+                .iter()
+                .find(|c| c.field_name == field)
+                .unwrap();
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&change.old_value).unwrap(),
+                serde_json::to_value(&local).unwrap()[field]
+            );
+        }
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_scalar_edits_and_recoverable_collisions() {
+        let base = make_req("base", "Draft");
+        let original = serde_json::to_value(&base).unwrap();
+        let mut edited = original.clone();
+        edited["title"] = serde_json::json!("local title");
+        edited["description"] = serde_json::json!("local description");
+        edited["priority"] =
+            serde_json::to_value(crate::models::RequirementPriority::High).unwrap();
+        edited["req_type"] = serde_json::to_value(crate::models::RequirementType::Bug).unwrap();
+        edited["owner"] = serde_json::json!("local owner");
+        edited["feature"] = serde_json::json!("local feature");
+        edited["archived"] = serde_json::json!(true);
+        edited["weight"] = serde_json::json!(3.5);
+        edited["prefix_override"] = serde_json::json!("SEC");
+        let fields = [
+            "title",
+            "description",
+            "priority",
+            "req_type",
+            "owner",
+            "feature",
+            "archived",
+            "weight",
+            "prefix_override",
+        ];
+        for field in fields {
+            assert_ne!(
+                edited[field], original[field],
+                "{field} fixture must change"
+            );
+            let mut local_json = original.clone();
+            local_json[field] = edited[field].clone();
+            let local: Requirement = serde_json::from_value(local_json).unwrap();
+            let merged = merge_spec_upstream(&base, &base, &local);
+            assert_eq!(
+                serde_json::to_value(&merged).unwrap()[field],
+                edited[field],
+                "{field}"
+            );
+            assert!(merged.history.is_empty());
+            let merged = merge_spec_upstream(&base, &local, &base);
+            assert_eq!(
+                serde_json::to_value(&merged).unwrap()[field],
+                edited[field],
+                "{field}"
+            );
+            // Equal concurrent edits never produce a loss event.
+            assert!(merge_spec_upstream(&base, &local, &local)
+                .history
+                .is_empty());
+        }
+
+        // Every scalar with three distinct values can truly collide.
+        for (field, upstream_value) in [
+            ("title", serde_json::json!("remote")),
+            ("description", serde_json::json!("remote")),
+            ("priority", serde_json::json!("Low")),
+            ("req_type", serde_json::json!("Story")),
+            ("owner", serde_json::json!("remote")),
+            ("feature", serde_json::json!("remote")),
+            ("weight", serde_json::json!(8.0)),
+            ("prefix_override", serde_json::json!("DOC")),
+        ] {
+            let mut remote_json = original.clone();
+            remote_json[field] = upstream_value.clone();
+            let upstream: Requirement = serde_json::from_value(remote_json).unwrap();
+            let local: Requirement = serde_json::from_value(edited.clone()).unwrap();
+            let (merged, overridden) = merge_spec_upstream_with_overrides(&base, &upstream, &local);
+            assert_eq!(
+                serde_json::to_value(&merged).unwrap()[field],
+                upstream_value
+            );
+            let name = if field == "req_type" { "type" } else { field };
+            assert_eq!(overridden, vec![name]);
+            let change = &merged.history.last().unwrap().changes[0];
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&change.old_value).unwrap(),
+                edited[field]
+            );
+            assert_eq!(
+                serde_json::from_str::<serde_json::Value>(&change.new_value).unwrap(),
+                upstream_value
+            );
+        }
+
+        let mut upstream = base.clone();
+        upstream.title = "upstream title".into();
+        let mut local = base.clone();
+        local.title = "recover this local title".into();
+        local.description = "one-sided description".into();
+        let (merged, overridden) = merge_spec_upstream_with_overrides(&base, &upstream, &local);
+        assert_eq!(merged.title, upstream.title);
+        assert_eq!(merged.description, local.description);
+        assert_eq!(overridden, vec!["title"]);
+        let change = &merged.history.last().unwrap().changes[0];
+        assert_eq!(change.field_name, "title");
+        assert_eq!(
+            serde_json::from_str::<String>(&change.old_value).unwrap(),
+            local.title
+        );
+        assert_eq!(
+            serde_json::from_str::<String>(&change.new_value).unwrap(),
+            upstream.title
+        );
+        assert_eq!(merged.id, upstream.id);
+        assert_eq!(merged.created_at, upstream.created_at);
+        assert_eq!(merged.filed_at, upstream.filed_at);
+    }
+
+    // trace:BUG-2613 | ai:codex
+    #[test]
+    fn pull_merge_custom_keys_add_edit_delete_and_collision() {
+        let mut base = make_req("base", "Draft");
+        base.custom_fields.insert("heft".into(), "1".into());
+        base.custom_fields.insert("removed".into(), "old".into());
+        let mut upstream = base.clone();
+        upstream
+            .custom_fields
+            .insert("remote".into(), "added".into());
+        upstream.custom_fields.insert("heft".into(), "2".into());
+        let mut local = base.clone();
+        local.custom_fields.insert("local".into(), "added".into());
+        local.custom_fields.insert("heft".into(), "3".into());
+        local.custom_fields.remove("removed");
+        let (merged, overridden) = merge_spec_upstream_with_overrides(&base, &upstream, &local);
+        assert_eq!(merged.custom_fields["heft"], "2");
+        assert_eq!(merged.custom_fields["local"], "added");
+        assert_eq!(merged.custom_fields["remote"], "added");
+        assert!(!merged.custom_fields.contains_key("removed"));
+        assert_eq!(overridden, vec!["custom_fields.heft"]);
+        assert_eq!(merged.history.last().unwrap().changes[0].old_value, "\"3\"");
+        // A deletion colliding with an upstream edit is recoverable as null.
+        upstream
+            .custom_fields
+            .insert("removed".into(), "edited".into());
+        let (merged, overridden) = merge_spec_upstream_with_overrides(&base, &upstream, &local);
+        assert!(overridden.contains(&"custom_fields.removed".into()));
+        assert_eq!(merged.custom_fields["removed"], "edited");
+        assert!(merged
+            .history
+            .last()
+            .unwrap()
+            .changes
+            .iter()
+            .any(|c| c.field_name == "custom_fields.removed" && c.old_value == "null"));
     }
 
     // trace:BUG-2501 | ai:codex
@@ -2706,6 +3125,7 @@ mod tests {
             SESSION_START_AUTHOR,
             ZEN_APPROVE_AUTHOR,
             ORCHESTRATOR_PHASE1_AUTHOR,
+            PUBLICATION_DONE_AUTHOR, // trace:BUG-2696 | ai:claude
         ] {
             assert!(is_automated_status_author(author), "{author}");
         }

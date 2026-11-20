@@ -106,6 +106,8 @@ verify:
   stage: verify
   extends: .merge-gate
   script:
+    # trace:TASK-3779 | ai:codex
+    - python3 -m unittest tests/test_terminal_glyph_padding.py
     - env -u AIDA_SESSION_ROLE cargo test --workspace --doc
     - cargo fmt --all -- --check
     # Deny-by-default CORRECTNESS lints; style/pedantic stay warnings (matches

@@ -748,8 +748,14 @@ fn build_running_work_resolves_specs_and_orphans_on_fixture() {
         live_dir.path().to_path_buf(),
     )];
     // ONE /proc snapshot, reused for every liveness check (single probe).
+    // The synthetic pid stays outside the inspector's ancestry: a fixed pid
+    // can collide with a CI runner's and be correctly excluded (BUG-2513).
+    // trace:BUG-2618 | ai:claude
+    let live_pid = (4242..=u32::MAX)
+        .find(|pid| !inspector_pids().contains(pid))
+        .unwrap();
     let live = vec![process_probe::LiveSession {
-        pid: 4242,
+        pid: live_pid,
         cwd: live_dir.path().to_path_buf(),
         jsonl: None,
         stale_cwd: false,
@@ -776,7 +782,7 @@ fn build_running_work_resolves_specs_and_orphans_on_fixture() {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].spec.as_deref(), Some("TASK-1"));
     assert_eq!(rows[0].state, LeaseState::Live);
-    assert_eq!(rows[0].pid, Some(4242));
+    assert_eq!(rows[0].pid, Some(live_pid));
     // TASK-1143: no lock probe returned a value → the row is unlocked.
     assert_eq!(rows[0].locked_by, None);
 

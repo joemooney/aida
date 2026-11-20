@@ -276,7 +276,7 @@ def publish_heartbeat(directory, descriptor, data):
         print(f"codegraph proxy: heartbeat publication failed: {exc}", file=sys.stderr)
 
 
-def serve(primary, state, upstream):
+def serve(primary, state, upstream, stopping):
     host = Host(primary, state, upstream)
     directory = host.primary / ".codegraph"
     path = directory / "lane-query.sock"
@@ -337,7 +337,7 @@ def serve(primary, state, upstream):
         refresher.start()
         next_heartbeat = 0.0
         try:
-            while True:
+            while not stopping():
                 if time.monotonic() >= next_heartbeat:
                     data = {**host.status(), "socket": str(path), "observed_at": time.time()}
                     publish_heartbeat(directory, descriptor, data)
@@ -401,12 +401,16 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == "serve":
+            stopping = False
             def terminate(_signal, _frame):
-                raise SystemExit(0)
+                # Do not unwind through Thread.start or other synchronization:
+                # finish the current accept iteration, then join normally.
+                nonlocal stopping
+                stopping = True
             signal.signal(signal.SIGTERM, terminate)
             if not all(p.is_absolute() for p in (args.primary, args.state, args.upstream)):
                 raise ValueError("host paths must be absolute")
-            serve(args.primary, args.state, args.upstream)
+            serve(args.primary, args.state, args.upstream, lambda: stopping)
             return 0
         request = {"op": args.command}
         if args.command != "status":

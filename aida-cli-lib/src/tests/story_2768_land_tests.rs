@@ -1,0 +1,962 @@
+// trace:STORY-2768 | ai:claude
+use super::*;
+
+/// A snapshot of every fact; each test changes only what it is about.
+struct Fake {
+    conflict: std::result::Result<bool, String>,
+    reviewing: std::result::Result<Option<String>, String>,
+    ci: std::result::Result<Ci, String>,
+    approval: std::result::Result<Approval, String>,
+    hold: std::result::Result<Option<Hold>, String>,
+    rounds: std::result::Result<Rounds, String>,
+    lane: std::result::Result<Option<String>, String>,
+    /// `false` models review-gated landing. trace:STORY-2897 | ai:claude
+    ci_gates: bool,
+}
+
+impl Default for Fake {
+    fn default() -> Self {
+        Self {
+            conflict: Ok(false),
+            reviewing: Ok(None),
+            ci: Ok(Ci::Green),
+            approval: Ok(Approval::Refused("no approval covers the head".into())),
+            hold: Ok(None),
+            rounds: Ok(Rounds::default()),
+            lane: Ok(None),
+            ci_gates: true,
+        }
+    }
+}
+
+impl Evidence for Fake {
+    fn ci_gates_landing(&self) -> bool {
+        self.ci_gates
+    }
+    fn conflict(&self, _: &Pr) -> std::result::Result<bool, String> {
+        self.conflict.clone()
+    }
+    fn reviewing(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+        self.reviewing.clone()
+    }
+    fn ci(&self, _: &Pr) -> std::result::Result<Ci, String> {
+        self.ci.clone()
+    }
+    fn approval(&self, _: &Pr) -> std::result::Result<Approval, String> {
+        self.approval.clone()
+    }
+    fn hold(&self, _: &Pr) -> std::result::Result<Option<Hold>, String> {
+        self.hold.clone()
+    }
+    fn rounds(&self, _: &Pr) -> std::result::Result<Rounds, String> {
+        self.rounds.clone()
+    }
+    fn lane(&self, _: &Pr) -> std::result::Result<Option<String>, String> {
+        self.lane.clone()
+    }
+}
+
+fn pr(base: &str, branch: &str) -> Pr {
+    Pr {
+        id: 7,
+        head: "a".repeat(40),
+        base: base.into(),
+        branch: Some(branch.into()),
+        title: "feat(x): a change (STORY-1)".into(),
+        updated_at: None,
+        hold_label: None,
+        ci: None,
+    }
+}
+
+fn decided(fake: Fake) -> (State, Action) {
+    let row = derive(&pr("main", "feature"), &fake);
+    (row.state, row.action)
+}
+
+fn approved() -> Fake {
+    Fake {
+        approval: Ok(Approval::Approved("approved at aaaaaaaaaaaa".into())),
+        ..Fake::default()
+    }
+}
+
+fn blocking(rounds: usize) -> std::result::Result<Rounds, String> {
+    Ok(Rounds {
+        at_content: true,
+        content_rounds: rounds,
+        since: Some("2026-11-13T09:00:00Z".into()),
+    })
+}
+
+#[test]
+fn an_unreviewed_change_needs_a_review() {
+    assert_eq!(
+        decided(Fake::default()),
+        (State::NeedsReview, Action::LaunchReview)
+    );
+}
+
+#[test]
+fn a_conflict_wins_over_every_later_fact_and_dispatches_rework() {
+    let fake = Fake {
+        conflict: Ok(true),
+        reviewing: Ok(Some("reviewer".into())),
+        ..approved()
+    };
+    assert_eq!(decided(fake), (State::Conflict, Action::DispatchRework));
+}
+
+#[test]
+fn rework_is_not_dispatched_twice_while_a_lane_is_live() {
+    let fake = Fake {
+        conflict: Ok(true),
+        lane: Ok(Some("lease-1".into())),
+        ..Fake::default()
+    };
+    assert_eq!(decided(fake), (State::Conflict, Action::Wait));
+    let fake = Fake {
+        rounds: blocking(1),
+        lane: Ok(Some("lease-1".into())),
+        ..Fake::default()
+    };
+    assert_eq!(decided(fake), (State::ChangesRequested, Action::Wait));
+}
+
+#[test]
+fn a_live_review_waits_even_when_an_approval_exists() {
+    let fake = Fake {
+        reviewing: Ok(Some("codex reviewing".into())),
+        ..approved()
+    };
+    assert_eq!(decided(fake), (State::Reviewing, Action::Wait));
+}
+
+#[test]
+fn an_approved_change_is_ready_and_lands_by_its_track() {
+    assert_eq!(decided(approved()), (State::Ready, Action::Train));
+    let row = derive(&pr("integration", "feature"), &approved());
+    assert_eq!(
+        (row.track, row.state, row.action),
+        (
+            Track::Integration,
+            State::Ready,
+            Action::ReportToIntegration
+        )
+    );
+}
+
+#[test]
+fn an_approved_change_stacked_on_another_branch_waits_for_its_base() {
+    let row = derive(
+        &pr("story-1-first-slice", "story-1-second-slice"),
+        &approved(),
+    );
+    assert_eq!((row.state, row.action), (State::Ready, Action::Wait));
+    assert!(
+        row.reason.contains("stacked on `story-1-first-slice`"),
+        "{}",
+        row.reason
+    );
+    // It is still reviewed like any other change.
+    let unreviewed = derive(
+        &pr("story-1-first-slice", "story-1-second-slice"),
+        &Fake::default(),
+    );
+    assert_eq!(
+        (unreviewed.state, unreviewed.action),
+        (State::NeedsReview, Action::LaunchReview)
+    );
+}
+
+#[test]
+fn an_approval_wins_over_older_requested_changes() {
+    let fake = Fake {
+        rounds: blocking(2),
+        ..approved()
+    };
+    assert_eq!(decided(fake), (State::Ready, Action::Train));
+}
+
+#[test]
+fn a_hold_is_judged_by_its_release_condition() {
+    assert_eq!(
+        decided(held(HoldRelease::Met)),
+        (State::Ready, Action::ClearHoldAndLand)
+    );
+    assert_eq!(
+        decided(held(HoldRelease::Unmet(
+            "operator-only spec always requires a human clear".into()
+        ))),
+        (State::Blocked, Action::AdvisorRuling)
+    );
+}
+
+fn held(release: HoldRelease) -> Fake {
+    Fake {
+        hold: Ok(Some(Hold {
+            detail: "rework hold: round 1".into(),
+            release,
+            since: Some("2026-11-13T08:00:00Z".into()),
+        })),
+        ..approved()
+    }
+}
+
+#[test]
+fn a_hold_awaiting_the_mandates_cover_is_not_ready() {
+    let row = derive(
+        &pr("main", "feature"),
+        &held(HoldRelease::PendingCover("m-1".into())),
+    );
+    assert_eq!(
+        (row.state.clone(), row.action.clone()),
+        (State::ReadyPendingCover, Action::ClearHoldAndLand)
+    );
+    assert_eq!(row.state.label(), "READY-PENDING-COVER");
+    assert_ne!(row.state, State::Ready);
+    assert!(
+        row.reason
+            .contains("needs mandate m-1's cover, judged at release"),
+        "{}",
+        row.reason
+    );
+    // The table's summary counts it under its own label, never as READY.
+    let table = render(&[row]);
+    assert!(table.contains("READY-PENDING-COVER"), "{table}");
+    assert!(
+        !table.contains("1 READY,") && !table.contains("1 READY\n"),
+        "{table}"
+    );
+}
+
+#[test]
+fn a_blocked_hold_carries_its_reason_and_when_it_was_placed() {
+    let row = derive(
+        &pr("main", "feature"),
+        &held(HoldRelease::Unmet(
+            "composed holds require a human clear".into(),
+        )),
+    );
+    assert_eq!(row.state, State::Blocked);
+    assert_eq!(row.since.as_deref(), Some("2026-11-13T08:00:00Z"));
+    assert!(
+        row.reason.contains("composed holds require a human clear"),
+        "{}",
+        row.reason
+    );
+}
+
+#[test]
+fn unreadable_approval_or_review_ownership_waits_and_launches_nothing() {
+    // An unreadable verdict artifact is not "no approval": no reviewer is
+    // launched and no rework dispatched, even with a refusal on record.
+    let unread = Fake {
+        approval: Err("unreadable verdict artifact".into()),
+        rounds: blocking(1),
+        ..Fake::default()
+    };
+    let row = derive(&pr("main", "feature"), &unread);
+    assert_eq!((row.state, row.action), (State::Unknown, Action::Wait));
+    assert!(row.reason.starts_with("approval unknown"), "{}", row.reason);
+
+    // A marker that is there but unreadable is not "no reviewer": an
+    // approved change does not land and an unapproved one gets no second
+    // reviewer.
+    for fake in [
+        Fake {
+            reviewing: Err("the review marker could not be read".into()),
+            ..approved()
+        },
+        Fake {
+            reviewing: Err("the review marker could not be read".into()),
+            ..Fake::default()
+        },
+    ] {
+        let row = derive(&pr("main", "feature"), &fake);
+        assert_eq!((row.state, row.action), (State::Unknown, Action::Wait));
+        assert!(
+            row.reason.starts_with("review ownership unknown"),
+            "{}",
+            row.reason
+        );
+    }
+}
+
+#[test]
+fn the_review_marker_read_tells_missing_from_unreadable() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let read = |pr| crate::gate::review_marker::live_description_checked(root, pr, None);
+    assert_eq!(read(7).unwrap(), None);
+    // A directory where the marker file belongs cannot be read as one.
+    std::fs::create_dir_all(crate::gate::review_marker::marker_path(root, 7)).unwrap();
+    assert!(read(7).is_err());
+}
+
+#[test]
+fn the_round_history_read_refuses_a_ledger_it_cannot_read_whole() {
+    use crate::gate::ledger::{project::change_verdict_records_checked, ChangeKey};
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let root = root.as_path();
+    // No ledger at all is an empty history.
+    assert_eq!(
+        change_verdict_records_checked(root, ChangeKey::pr(7)).unwrap(),
+        Vec::new()
+    );
+    // A ledger file that is not valid events is an error, never "no rounds".
+    let file = crate::gate::ledger::store::ledger_file(root, ChangeKey::pr(7));
+    std::fs::create_dir_all(file.parent().unwrap()).unwrap();
+    std::fs::write(&file, "{ this is not an event\n{\"nor\": \"this\"}\n").unwrap();
+    let refused = change_verdict_records_checked(root, ChangeKey::pr(7));
+    assert!(refused.is_err(), "{refused:?}");
+}
+
+#[test]
+fn requested_changes_at_the_content_dispatch_rework_until_the_round_cap() {
+    let fake = |rounds| Fake {
+        rounds: blocking(rounds),
+        ..Fake::default()
+    };
+    assert_eq!(
+        decided(fake(2)),
+        (State::ChangesRequested, Action::DispatchRework)
+    );
+    assert_eq!(decided(fake(3)), (State::Blocked, Action::AdvisorRuling));
+}
+
+#[test]
+fn requested_changes_at_older_content_only_need_a_new_review() {
+    let fake = Fake {
+        rounds: Ok(Rounds {
+            at_content: false,
+            content_rounds: 1,
+            since: None,
+        }),
+        ..Fake::default()
+    };
+    assert_eq!(decided(fake), (State::NeedsReview, Action::LaunchReview));
+}
+
+/// Review-gated landing: red pre-merge CI is informational; an approved,
+/// unheld head is ready, not sent to CI-only rework. trace:STORY-2897 | ai:claude
+#[test]
+fn story2897_review_gated_red_ci_does_not_rework_an_approved_head() {
+    let fake = Fake {
+        ci: Ok(Ci::Red("build".into())),
+        ci_gates: false,
+        ..approved()
+    };
+    let (state, _) = decided(fake);
+    assert_eq!(state, State::Ready);
+    let fake = Fake {
+        ci: Ok(Ci::Red("build".into())),
+        ..approved()
+    };
+    assert_eq!(
+        decided(fake),
+        (State::CiFailed, Action::DispatchRework),
+        "ci-gated unchanged"
+    );
+}
+
+#[test]
+fn red_ci_sends_the_head_to_rework_before_any_review_or_landing() {
+    let red = || Ok::<Ci, String>(Ci::Red("build".into()));
+    let fake = Fake {
+        ci: red(),
+        ..Fake::default()
+    };
+    assert_eq!(decided(fake), (State::CiFailed, Action::DispatchRework));
+    let fake = Fake {
+        ci: red(),
+        ..approved()
+    };
+    assert_eq!(decided(fake), (State::CiFailed, Action::DispatchRework));
+    let fake = Fake {
+        ci: red(),
+        lane: Ok(Some("implementer@dell1".into())),
+        ..Fake::default()
+    };
+    let row = derive(&pr("main", "feature"), &fake);
+    assert_eq!((row.state, row.action), (State::CiFailed, Action::Wait));
+    assert_eq!(row.actor.as_deref(), Some("implementer@dell1"));
+}
+
+#[test]
+fn running_ci_gates_the_landing_and_never_the_review() {
+    for ci in [Ci::Pending, Ci::None, Ci::Green] {
+        let fake = Fake {
+            ci: Ok(ci.clone()),
+            ..Fake::default()
+        };
+        assert_eq!(decided(fake), (State::NeedsReview, Action::LaunchReview));
+        let fake = Fake {
+            ci: Ok(ci),
+            ..approved()
+        };
+        assert_eq!(decided(fake), (State::Ready, Action::Train));
+    }
+    let fake = Fake {
+        ci: Ok(Ci::Pending),
+        ..approved()
+    };
+    assert_eq!(
+        derive(&pr("main", "feature"), &fake).ci.as_deref(),
+        Some("pending")
+    );
+}
+
+#[test]
+fn a_met_hold_is_the_reconcilers_to_release() {
+    assert_eq!(Action::ClearHoldAndLand.owner(), "reconciler");
+    assert!(Action::ClearHoldAndLand.label().starts_with("release"));
+}
+
+#[test]
+fn a_head_whose_reviewers_timed_out_twice_goes_to_the_advisor() {
+    struct TimedOut(Fake, u32);
+    impl Evidence for TimedOut {
+        fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
+            self.0.conflict(pr)
+        }
+        fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+            self.0.reviewing(pr)
+        }
+        fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
+            self.0.ci(pr)
+        }
+        fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String> {
+            self.0.approval(pr)
+        }
+        fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
+            self.0.hold(pr)
+        }
+        fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
+            self.0.rounds(pr)
+        }
+        fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+            self.0.lane(pr)
+        }
+        fn review_timeouts(&self, _: &Pr) -> u32 {
+            self.1
+        }
+        fn rework_stop(&self, _: &Pr) -> Option<String> {
+            Some("its seat has 2 commit(s) that no remote has".into())
+        }
+    }
+    let change = pr("main", "feature");
+    let once = derive(&change, &TimedOut(Fake::default(), 1));
+    assert_eq!(
+        (once.state, once.action),
+        (State::NeedsReview, Action::LaunchReview)
+    );
+    let twice = derive(&change, &TimedOut(Fake::default(), 2));
+    assert_eq!(
+        (twice.state, twice.action),
+        (State::Blocked, Action::AdvisorRuling)
+    );
+    // A lane that refused over unpushed seat work is never launched over.
+    let conflicted = Fake {
+        conflict: Ok(true),
+        ..Fake::default()
+    };
+    let stopped = derive(&change, &TimedOut(conflicted, 0));
+    assert_eq!(
+        (stopped.state, stopped.action),
+        (State::Blocked, Action::AdvisorRuling)
+    );
+    assert!(
+        stopped.reason.contains("no remote has"),
+        "{}",
+        stopped.reason
+    );
+}
+
+#[test]
+fn a_check_rollup_sums_to_one_ci_state() {
+    let ci = |json: &str| ci_of_rollup(&serde_json::from_str(json).unwrap());
+    assert_eq!(ci("[]"), Ci::None);
+    assert_eq!(ci("null"), Ci::None);
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","status":"COMPLETED","conclusion":"SUCCESS"},{"context":"b","state":"SUCCESS"},{"name":"c","status":"COMPLETED","conclusion":"SKIPPED"}]"#
+        ),
+        Ci::Green
+    );
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","status":"COMPLETED","conclusion":"SUCCESS"},{"name":"b","status":"IN_PROGRESS","conclusion":""}]"#
+        ),
+        Ci::Pending
+    );
+    assert_eq!(
+        ci(
+            r#"[{"name":"b","status":"IN_PROGRESS","conclusion":""},{"name":"z","status":"COMPLETED","conclusion":"FAILURE"},{"name":"a","status":"COMPLETED","conclusion":"CANCELLED"}]"#
+        ),
+        Ci::Red("z".into())
+    );
+}
+
+#[test]
+fn a_cancelled_run_is_not_a_failure_and_a_later_run_replaces_it() {
+    let ci = |json: &str| ci_of_rollup(&serde_json::from_str(json).unwrap());
+    // Cancelled and never rerun: the head was not tested.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"CANCELLED","startedAt":"2026-11-13T10:00:00Z"}]"#
+        ),
+        Ci::Pending
+    );
+    // The same check ran again later at this head: only that run counts.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"CANCELLED","startedAt":"2026-11-13T10:00:00Z"}]"#
+        ),
+        Ci::Green
+    );
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"FAILURE","startedAt":"2026-11-13T10:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"}]"#
+        ),
+        Ci::Green
+    );
+    // A later failure is a failure, whatever ran before it.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T10:00:00Z"},{"name":"a","workflowName":"CI","conclusion":"FAILURE","startedAt":"2026-11-13T11:00:00Z"}]"#
+        ),
+        Ci::Red("a".into())
+    );
+    // The same name in another workflow is another check.
+    assert_eq!(
+        ci(
+            r#"[{"name":"a","workflowName":"CI","conclusion":"SUCCESS","startedAt":"2026-11-13T11:00:00Z"},{"name":"a","workflowName":"Docs","conclusion":"FAILURE","startedAt":"2026-11-13T10:00:00Z"}]"#
+        ),
+        Ci::Red("a".into())
+    );
+}
+
+#[test]
+fn a_change_from_a_forge_without_a_check_rollup_has_no_checks_and_keeps_its_title() {
+    let change = crate::review_watch::forge::Change {
+        id: 7,
+        head: "a".repeat(40),
+        base: "main".into(),
+        author: "someone".into(),
+        gitlab: true,
+        overlap: None,
+        conflict: None,
+        behind: None,
+        head_branch: Some("feature".into()),
+    };
+    let pr = plain_change(change, "feat(x): a change (STORY-1)".into());
+    // "No check has reported", not "unknown": the change is derived.
+    assert_eq!(pr.ci, Some(Ci::None));
+    assert_eq!(specs_of(&pr), ["STORY-1"]);
+    let fake = Fake {
+        ci: Ok(pr.ci.clone().unwrap()),
+        ..Fake::default()
+    };
+    let row = derive(&pr, &fake);
+    assert_eq!(
+        (row.state, row.action),
+        (State::NeedsReview, Action::LaunchReview)
+    );
+}
+
+#[test]
+fn a_claim_covers_a_change_by_spec_or_branch() {
+    let change = Pr {
+        title: "[AI:codex] fix(x): y (Refs BUG-2546)".into(),
+        ..pr("main", "bug-b6b1278890774ef993d2ebc327862470-311")
+    };
+    assert_eq!(specs_of(&change), vec!["BUG-2546".to_string()]);
+    assert!(claim_covers("BUG-2546", &change));
+    assert!(claim_covers(
+        "BUG-b6b1278890774ef993d2ebc327862470-311",
+        &change
+    ));
+    assert!(!claim_covers("BUG-2547", &change));
+    assert!(!claim_covers("", &change));
+}
+
+#[test]
+fn unreadable_evidence_is_unknown_and_never_acts() {
+    for fake in [
+        Fake {
+            conflict: Err("fetch failed".into()),
+            ..approved()
+        },
+        Fake {
+            hold: Err("label unreadable".into()),
+            ..approved()
+        },
+        Fake {
+            ci: Err("checks unreadable".into()),
+            ..approved()
+        },
+        Fake {
+            rounds: Err("ledger unreadable".into()),
+            ..Fake::default()
+        },
+        Fake {
+            conflict: Ok(true),
+            lane: Err("leases unreadable".into()),
+            ..Fake::default()
+        },
+    ] {
+        assert_eq!(decided(fake), (State::Unknown, Action::Wait));
+    }
+}
+
+#[test]
+fn trains_and_the_integration_branch_are_the_landing_itself() {
+    let row = derive(&pr("main", "train/abc-1"), &Fake::default());
+    assert_eq!((row.state, row.action), (State::Landing, Action::Wait));
+    let row = derive(&pr("main", "integration"), &Fake::default());
+    assert_eq!((row.state, row.action), (State::Landing, Action::Wait));
+}
+
+/// A promotion is reviewed and lands like any change, and whatever is wrong
+/// with it, no lane is sent to rework its head.
+#[test]
+fn a_promotion_is_never_sent_to_rework() {
+    let promotion = pr("main", "promote/integration-9");
+    let wrong = [
+        Fake {
+            conflict: Ok(true),
+            ..Fake::default()
+        },
+        Fake {
+            ci: Ok(Ci::Red("build".into())),
+            ..Fake::default()
+        },
+        Fake {
+            rounds: Ok(Rounds {
+                at_content: true,
+                content_rounds: 1,
+                since: None,
+            }),
+            ..Fake::default()
+        },
+    ];
+    for fake in wrong {
+        let row = derive(&promotion, &fake);
+        assert_eq!(
+            (row.state.clone(), row.action.clone()),
+            (State::Blocked, Action::AdvisorRuling),
+            "{}",
+            row.reason
+        );
+        assert!(
+            row.reason.contains("never reworked by a lane"),
+            "{}",
+            row.reason
+        );
+        // The same facts on an ordinary change do go to rework.
+        assert_eq!(
+            derive(&pr("main", "feature"), &fake).action,
+            Action::DispatchRework
+        );
+    }
+    // Nothing wrong with it: it is reviewed, and once approved it boards.
+    assert_eq!(
+        derive(&promotion, &Fake::default()).state,
+        State::NeedsReview
+    );
+    assert_eq!(derive(&promotion, &approved()).action, Action::Train);
+}
+
+#[test]
+fn the_table_lists_each_change_once_with_a_state_summary() {
+    let changes = [
+        Pr {
+            id: 9,
+            ..pr("main", "b")
+        },
+        Pr {
+            id: 3,
+            ..pr("integration", "a")
+        },
+    ];
+    let rows = pass(&changes, &approved());
+    assert_eq!(rows.iter().map(|r| r.pr).collect::<Vec<_>>(), vec![3, 9]);
+    let table = render(&rows);
+    assert!(table.contains("report to integration seat"), "{table}");
+    assert_eq!(rows[0].action.owner(), "integration seat");
+    assert!(table.contains("add to next train"), "{table}");
+    assert!(table.ends_with("2 open change(s): 2 READY\n"), "{table}");
+}
+
+/// Approved for one change only; every other fact as [`Fake::default`].
+struct ApprovedOnly(u64);
+
+impl Evidence for ApprovedOnly {
+    fn conflict(&self, pr: &Pr) -> std::result::Result<bool, String> {
+        Fake::default().conflict(pr)
+    }
+    fn reviewing(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        Fake::default().reviewing(pr)
+    }
+    fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
+        Fake::default().ci(pr)
+    }
+    fn approval(&self, pr: &Pr) -> std::result::Result<Approval, String> {
+        if pr.id == self.0 {
+            approved().approval(pr)
+        } else {
+            Fake::default().approval(pr)
+        }
+    }
+    fn hold(&self, pr: &Pr) -> std::result::Result<Option<Hold>, String> {
+        Fake::default().hold(pr)
+    }
+    fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String> {
+        Fake::default().rounds(pr)
+    }
+    fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        Fake::default().lane(pr)
+    }
+}
+
+// The forge lists changes in its own order and `pass` sorts the rows: the
+// row an admission reads must be the change's own, whatever the order.
+// trace:STORY-2772 | ai:claude
+#[test]
+fn a_change_is_admitted_on_its_own_row_not_its_neighbours() {
+    let at = |id| Pr {
+        id,
+        ..pr("integration", "feature")
+    };
+    let changes = vec![at(20), at(10)];
+    let rows = pass(&changes, &ApprovedOnly(10));
+    assert_eq!(rows.iter().map(|row| row.pr).collect::<Vec<_>>(), [10, 20]);
+    let (change, row) = change_and_row(&changes, &rows, 20).expect("#20");
+    assert_eq!((change.id, row.pr), (20, 20));
+    assert_ne!(row.state, State::Ready, "#20 is not approved: {row:?}");
+    let (change, row) = change_and_row(&changes, &rows, 10).expect("#10");
+    assert_eq!((change.id, row.pr), (10, 10));
+    assert_eq!(row.state, State::Ready, "{row:?}");
+    assert!(change_and_row(&changes, &rows, 30).is_none());
+}
+
+// trace:BUG-2692 | ai:codex
+#[test]
+fn bug_2692_land_ignores_verified_cancelled_fast_run() {
+    let head = "a".repeat(40);
+    let row = |run, name, conclusion| {
+        serde_json::json!({
+            "name": name, "conclusion": conclusion,
+            "detailsUrl": format!("https://github.com/o/r/actions/runs/{run}/job/1"),
+        })
+    };
+    let mut rows = vec![
+        row(10, "ci-tier: fast", "FAILURE"),
+        row(10, "CI (matrix)", "CANCELLED"),
+        row(10, "Build (ubuntu-latest)", "FAILURE"),
+        row(11, "ci-tier: full", "SUCCESS"),
+    ];
+    let metadata = |id, workflow, sha: &str| {
+        Ok(serde_json::json!({
+            "id":id, "workflow_id":workflow, "head_sha":sha, "event":"pull_request",
+            "head_branch":"feature", "head_repository":{"id":1},
+            "conclusion":if id == 10 { "cancelled" } else { "success" },
+        }))
+    };
+    let observe = |rows, workflow, sha: &str| {
+        ci_of_github_rollup(&serde_json::Value::Array(rows), &head, |id| {
+            metadata(
+                id,
+                if id == 10 { 1 } else { workflow },
+                if id == 10 { &head } else { sha },
+            )
+        })
+    };
+    assert_eq!(observe(rows.clone(), 1, &head), Ci::Pending);
+    let mut earlier_success = rows.clone();
+    earlier_success.push(row(9, "Build (ubuntu-latest)", "SUCCESS"));
+    assert_eq!(observe(earlier_success, 1, &head), Ci::Pending);
+    rows.push(row(11, "Build (ubuntu-latest)", "SUCCESS"));
+    assert_eq!(observe(rows.clone(), 1, &head), Ci::Green);
+    assert_eq!(
+        decided(Fake {
+            ci: Ok(observe(rows.clone(), 1, &head)),
+            ..approved()
+        }),
+        (State::Ready, Action::Train),
+    );
+    rows.reverse();
+    assert_eq!(observe(rows.clone(), 1, &head), Ci::Green);
+    assert!(matches!(observe(rows.clone(), 2, &head), Ci::Red(_)));
+    assert!(matches!(
+        observe(rows.clone(), 1, &"b".repeat(40)),
+        Ci::Red(_)
+    ));
+    assert!(matches!(
+        ci_of_github_rollup(&serde_json::Value::Array(rows.clone()), &head, |_| {
+            anyhow::bail!("metadata unavailable")
+        }),
+        Ci::Red(_)
+    ));
+    rows.push(row(11, "CI (lib-0)", "FAILURE"));
+    assert_eq!(observe(rows, 1, &head), Ci::Red("CI (lib-0)".into()));
+}
+
+// trace:BUG-2690 | ai:codex
+#[test]
+fn bug_2690_stale_ci_neither_lands_nor_dispatches_rework() {
+    for ci_gates in [false, true] {
+        let stale = Fake {
+            ci: Ok(Ci::StaleBase("old base".into())),
+            ci_gates,
+            ..approved()
+        };
+        let row = derive(&pr("main", "feature"), &stale);
+        assert_eq!(row.state.label(), "STALE-CI-BASE");
+        assert_eq!(row.action, Action::UpdateBranch);
+        assert_eq!(row.ci.as_deref(), Some("stale-base"));
+        assert!(row.reason.contains("update-branch"));
+
+        assert_eq!(
+            decided(Fake {
+                lane: Ok(Some("implementer".into())),
+                ..stale
+            }),
+            (State::StaleCiBase, Action::Wait)
+        );
+    }
+    assert_eq!(
+        decided(Fake {
+            ci: Ok(Ci::StaleBase("old base".into())),
+            hold: Ok(Some(Hold {
+                detail: "operator hold".into(),
+                release: HoldRelease::Met,
+                since: None,
+            })),
+            ..approved()
+        }),
+        (State::StaleCiBase, Action::Wait)
+    );
+    assert_eq!(
+        decided(Fake {
+            ci: Err("logs expired".into()),
+            ..approved()
+        }),
+        (State::Unknown, Action::Wait)
+    );
+}
+
+/// BUG-2690 scenario end to end through the real CI observer: a red CI run
+/// whose checkout merged the head onto an older base tip, read from a fake
+/// `gh` (job log, then the merge commit), derives STALE-CI-BASE with an
+/// update-branch, not CI-FAILED with a rework. The same run on the current
+/// base stays a real failure.
+// trace:BUG-2690 | ai:claude
+#[test]
+fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    const OLD: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const TIP: &str = "cccccccccccccccccccccccccccccccccccccccc";
+    const MERGE: &str = "dddddddddddddddddddddddddddddddddddddddd";
+    let head = "a".repeat(40);
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("repo");
+    std::fs::create_dir_all(&root).unwrap();
+    for args in [
+        &["init", "-q"][..],
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/owner/repo.git",
+        ],
+    ] {
+        assert!(std::process::Command::new("git")
+            .args(args)
+            .current_dir(&root)
+            .status()
+            .unwrap()
+            .success());
+    }
+    std::fs::write(
+        temp.path().join("job.log"),
+        format!(
+            "2026-11-18T18:33:52.0264683Z ##[group]Run actions/checkout@v5\n\
+             2026-11-18T18:33:55.3848028Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/7/merge\n\
+             2026-11-18T18:33:55.7678426Z [command]/usr/bin/git log -1 --format=%H\n\
+             2026-11-18T18:33:55.7704505Z {MERGE}\n"
+        ),
+    )
+    .unwrap();
+    std::fs::write(
+        temp.path().join("merge.json"),
+        serde_json::json!({"sha": MERGE, "parents": [{"sha": OLD}, {"sha": head}]}).to_string(),
+    )
+    .unwrap();
+    let bin = temp.path().join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        format!(
+            "#!/bin/sh\ncase \"$*\" in\n  \
+             'api --allow-escape-sequences repos/owner/repo/actions/jobs/202/logs') cat ../job.log ;;\n  \
+             'api --allow-escape-sequences repos/owner/repo/git/commits/{MERGE}') cat ../merge.json ;;\n  \
+             *) exit 99 ;;\nesac\n"
+        ),
+    );
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let _env =
+        crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(path.as_str())), ("GH_REPO", None)]);
+    let check = |name: &str, conclusion: &str, job: u64, start: &str| {
+        serde_json::json!({
+            "workflowName": "CI",
+            "name": name,
+            "conclusion": conclusion,
+            "startedAt": start,
+            "detailsUrl": format!("https://github.com/owner/repo/actions/runs/20/job/{job}"),
+        })
+    };
+    let rollup = serde_json::json!([
+        check("CI (gates)", "SUCCESS", 202, "2026-11-18T18:00:00Z"),
+        check(
+            crate::forge::CI_AGGREGATOR_CHECK,
+            "FAILURE",
+            201,
+            "2026-11-18T19:00:00Z"
+        ),
+    ]);
+    let repo = crate::review_watch::forge::Repository::load(&root).unwrap();
+    let change = pr("main", "feature");
+
+    let observed = ci_base::observe(&root, &repo, &rollup, &change, TIP).unwrap();
+    assert!(
+        matches!(&observed, Ci::StaleBase(detail) if detail.contains("CI run 20")),
+        "{observed:?}"
+    );
+    let row = derive(
+        &change,
+        &Fake {
+            ci: Ok(observed),
+            ..approved()
+        },
+    );
+    assert_eq!(row.state.label(), "STALE-CI-BASE");
+    assert_eq!(row.action, Action::UpdateBranch);
+
+    // The run tested the current base: its failure is the change's own.
+    let observed = ci_base::observe(&root, &repo, &rollup, &change, OLD).unwrap();
+    assert!(matches!(observed, Ci::Red(_)), "{observed:?}");
+    let row = derive(
+        &change,
+        &Fake {
+            ci: Ok(observed),
+            ..approved()
+        },
+    );
+    assert_eq!(row.state, State::CiFailed);
+}

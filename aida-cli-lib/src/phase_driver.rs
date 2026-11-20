@@ -1,8 +1,31 @@
 //! phase driver: DrainConfigToml and read_drain_config, RealPhaseDriver with its config, agent gates and inherent impls, ci-fix prompt and AutonomyMode (STORY-1488 slice 1; Q9 split)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    advisor, agent_seat_for_phase, auto_complete, auto_complete_telemetry, branch_exists_anywhere,
+    build_auto_punt_args, build_phase3_auto_rebase_args, change_lookup_from_pr_lookup_for_branch,
+    classify_rebase_subprocess_exit, current_branch_at, detect_merged_pr_for_branch_via_forge,
+    dispatched_branch_head_sha, drain_state, ensure_implementer_branch_pushed, events, exit_signal,
+    find_main_worktree_root, find_orchestrated_lease, implementer_preflight, lease_ids_in,
+    list_leases, load_store_for_lookup, local_commits_not_on_branch, lost_child_state_reason,
+    merged_at_satisfies_latest_reopen, network_retry, orchestrated_lease_receipt_path,
+    pending_text_question_from_headless_log, phase1_advanced_to_finished_during_run,
+    phase1_branch_race_reason, phase1_fresh_branch_raced, phase1_lost_child_retry_allowed,
+    phase1_spec_status_text, pr_credit_match_with_sink, pr_head_branch, pr_head_sha_best_effort,
+    pr_is_merged_with_sink, pr_lookup_from_change_lookup, probe_branch_on_origin, punt,
+    read_headless_log_for_session, read_orchestrated_lease_receipt, read_project_config_value,
+    resolve_aida_exe, resolve_gh_binary, scope_conflict_lease_failure, session,
+    spec_latest_reopen_transition_at, spec_status, strip_toml_inline_comment,
+    take_orchestrated_child_refusal, try_open_orchestrator_pr_for_no_pr_worktree,
+    unattended_git_mutation_refusal, unique_worktree_on_branch, worktree_is_locked,
+    worktree_is_unleased, zen, AdvisorPass, BranchOriginProbe, DrainTuning, OpenPrInfo,
+    Phase1Workspace, PrCreditMatch, PrLookup, PHASE1_LOST_CHILD_STATE_CAUSE,
+};
 use aida_core::git_ops::RemoteCredentialsExt as _;
+use aida_core::RequirementStatus;
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// Run `git -C <worktree> <args>` and capture trimmed stdout, or `None` on any
 /// spawn / non-zero / decode error. trace:BUG-420 | ai:claude
@@ -126,6 +149,16 @@ pub(crate) fn parse_duration_seconds(raw: &str) -> Option<u64> {
 
 pub(crate) struct RealPhaseDriver {
     pub(crate) project_root: std::path::PathBuf,
+    /// The landing policy (and floor authority) the CI phase decided under;
+    /// the merge phase merges under the same snapshot, so a mode change in
+    /// between refuses at the merge rather than merging a change whose CI
+    /// was skipped (STORY-2903 F5).
+    // trace:STORY-2903 | ai:claude
+    pub(crate) landing_entry: Option<crate::gate::landing_merge::Entry>,
+    /// Set when the CI phase did not wait for CI (review-gated landing):
+    /// `ci_terminal_sha` then names the reviewed head, not a CI-tested one.
+    // trace:STORY-2903 | ai:claude
+    pub(crate) ci_skipped: Option<&'static str>,
     /// BUG-1037: the auto-complete lifecycle forge, resolved once from the
     /// target project root and reused by phase consumers. This intentionally
     /// uses the open-change resolver so a stale pure-git config cannot make
@@ -223,16 +256,11 @@ pub(crate) struct RealPhaseDriver {
     /// `run_implementer` launches.
     // trace:BUG-2386 | ai:claude
     pub(crate) implementer_vendor: Option<crate::session::HeadlessVendor>,
-    /// BUG-311: thread the user's `aida queue work --auto-complete --steal`
-    /// flag through to the phase-1 implementer subprocess. Without this the
-    /// outer `--steal` is dropped on the floor — phase 1's `handle_queue_work`
-    /// sees the dormant lease, bails with the canned "pass --steal" message,
-    /// and the orchestrator reports a generic phase-1 failure even though
-    /// the user *did* pass --steal. trace:BUG-311 | ai:claude
-    pub(crate) steal: bool,
     /// TASK-559: thread the user's `aida queue work --auto-complete
     /// --force-claim` flag through to the phase-1 implementer subprocess.
     pub(crate) force_claim: bool,
+    // trace:TASK-3799 | ai:codex
+    pub(crate) over_wip: bool,
     /// STORY-281: opt out of the reviewer pre-flight stale-base refusal.
     /// When false (default), phase 3 refuses to launch the reviewer if the
     /// PR's base is behind origin AND a file the PR touches has moved on
@@ -649,7 +677,9 @@ impl RealPhaseDriver {
         // carried alongside `no_human`. trace:ADR-10 | ai:claude
         autonomy_mode: AutonomyMode,
         run_token: String,
-        steal: bool,
+        // Compatibility argument; queue-work refuses it before dispatch.
+        // trace:STORY-2325 | ai:codex
+        _steal: bool,
         force_claim: bool,
         allow_stale_base: bool,
         no_auto_rebase: bool,
@@ -676,6 +706,8 @@ impl RealPhaseDriver {
             pr_number: None,
             phase_done_pr: None,
             phase_done_head: None,
+            landing_entry: None,
+            ci_skipped: None,
             ci_run_id: None,
             ci_terminal_sha: None,
             ci_terminal_green: None,
@@ -694,8 +726,8 @@ impl RealPhaseDriver {
             implementer_session: None,
             implementer_worktree: None,
             implementer_vendor: None,
-            steal,
             force_claim,
+            over_wip: false,
             allow_stale_base,
             no_auto_rebase,
             auto_rebase_events: Vec::new(),
@@ -2351,7 +2383,7 @@ impl RealPhaseDriver {
                 .env(crate::gate::seat_authority::GRANT_ENV, &grant.id)
                 .env("AIDA_USER", crate::current_user_id(None))
                 .env("AIDA_PROJECT_ROOT", &self.project_root);
-            if let Err(error) = crate::launch::profile::finalize_codex(&mut child_cmd) {
+            if let Err(error) = crate::vendors::profile::finalize_codex(&mut child_cmd) {
                 session::revoke_headless_child_grant(&grant.id);
                 return Err(PhaseFailure::of(
                     FailureKind::Spawn,
@@ -2536,22 +2568,27 @@ pub(crate) fn build_phase_driver_advisor_command(
         }
         cmd
     } else {
-        let ctx = crate::launch::LaunchContext::resolve(crate::launch::LaunchRequest {
-            vendor: crate::launch::context::launch_vendor(vendor),
-            kind: aida_core::launch_policy::LaunchKind::Fresh,
-            program: program.into(),
-            // Trusted output of session::advisor_tier_program_and_args_with_posture
-            // and contained_child_program_and_args (including
-            // posture flags and a prompt), not a default_flags/template tail.
-            // Caller configuration flags must be validated before this builder.
-            args: headless_vendor_args.to_vec(),
-            tail: Vec::new(),
-            posture,
-            cwd: project_root.to_path_buf(),
-            set_cwd: true,
-            // Native/None constructors do not cross the AIDA boundary.
-            host_main: None,
-        })?;
+        let ctx = {
+            let req = crate::launch::LaunchRequest {
+                vendor: crate::launch::context::launch_vendor(vendor),
+                kind: aida_core::launch_policy::LaunchKind::Fresh,
+                program: program.into(),
+                // Trusted output of session::advisor_tier_program_and_args_with_posture
+                // and contained_child_program_and_args (including
+                // posture flags and a prompt), not a default_flags/template tail.
+                // Caller configuration flags must be validated before this builder.
+                args: headless_vendor_args.to_vec(),
+                tail: Vec::new(),
+                posture,
+                cwd: project_root.to_path_buf(),
+                set_cwd: true,
+                // Native/None constructors do not cross the AIDA boundary.
+                host_main: None,
+            };
+            // trace:STORY-2538 | ai:codex
+            let exec = crate::session::capture_launch_exec(&req.cwd, req.host_main.as_deref())?;
+            crate::launch::LaunchContext::resolve(&exec, req)
+        }?;
         crate::launch::spawn_agent(&ctx)?
     };
     // The consult uses the launcher's advisor authority. Transport its selector

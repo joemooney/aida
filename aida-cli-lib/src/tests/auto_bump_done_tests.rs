@@ -381,17 +381,22 @@ fn open_pr_for_same_spec_defers_auto_bump() {
     assert_eq!(req.status, RequirementStatus::Done);
 }
 
-/// BUG-1454 F1: on a NON-GitHub forge the open-PR lookup cannot be performed.
-/// That is the unknown case, and the unknown case must preserve — the function
-/// previously returned `Some(empty)`, which asserts "the lookup ran and nothing
-/// is open" and auto-bumped every candidate on GitLab and pure-git projects.
-///
-/// This repo's CI runs against GitHub only, so no green build reaches this
-/// path; the regression is only visible from a test that sets the remote.
-// trace:BUG-1454 | ai:claude
+/// An unreadable GitLab query must preserve the candidate, even though its
+/// completion trailer is on the default branch.
+// trace:BUG-1454 BUG-2516 | ai:codex
 #[test]
-fn non_github_forge_defers_rather_than_completing() {
+fn gitlab_unavailable_forge_defers_rather_than_completing() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
     let (_tmp, project_root, store_path) = init_test_project();
+    let bin = project_root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("glab"),
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\nexit 1\n",
+    );
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
     seed_spec_at(&store_path, "BUG-1456", "Done");
     run_git(
         &project_root,
@@ -1348,6 +1353,8 @@ fn auto_bump_flips_review_story_via_pr_number_match() {
         req.status
     );
     let info = req.implementation_info.as_ref().expect("info populated");
+    // trace:BUG-2597 | ai:codex — review stories retain the completion date too.
+    assert!(info.completed_at.is_some());
     assert_eq!(
         info.completion_sha.as_deref(),
         Some(merge_sha.as_str()),
@@ -3485,6 +3492,98 @@ fn queue_advance_close_dispatch_with_shipped_commit_does_not_warn() {
     assert!(matches!(status, aida_core::RequirementStatus::Completed));
 }
 
+// ── BUG-2597: the close path stamps and preserves completed_at ──────────
+
+/// Reload `spec` from the git-canonical fixture store at `store_dir`.
+// trace:BUG-2597 | ai:claude
+fn bug2597_reload(store_dir: &std::path::Path, spec: &str) -> aida_core::Requirement {
+    use aida_core::db::DatabaseBackend;
+    crate::test_env::home_fixture_cached_backend(
+        store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(store_dir),
+    )
+    .unwrap()
+    .get_requirement_by_spec_id(spec)
+    .unwrap()
+    .unwrap()
+}
+
+/// AC1, close path: `queue advance`'s Close action moves a Done spec into
+/// Completed and persists `completed_at` inside the call window, agreeing with
+/// the Completed history entry it writes; closing it again leaves the stamp
+/// exactly as it was.
+// trace:BUG-2597 | ai:claude
+#[test]
+fn bug2597_queue_close_persists_completed_at_and_a_reclose_preserves_it() {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+    std::fs::create_dir_all(project_root.join(".aida")).unwrap();
+    let backend = crate::test_env::home_fixture_cached_backend(
+        &store_dir,
+        &aida_core::CachedGitBackend::default_cache_path(&store_dir),
+    )
+    .unwrap();
+    let mut req = aida_core::Requirement::new("close me".into(), String::new());
+    req.spec_id = Some("TASK-25971".into());
+    req.req_type = aida_core::RequirementType::Task;
+    req.tags.insert("doctor:no-code".into());
+    req.set_status_from_str("Done");
+    backend.add_requirement(req).unwrap();
+    drop(backend);
+    assert!(
+        bug2597_reload(&store_dir, "TASK-25971")
+            .implementation_info
+            .and_then(|i| i.completed_at)
+            .is_none(),
+        "a Done spec carries no completion date yet"
+    );
+
+    let _role = crate::test_env::EnvVarGuard::set("AIDA_SESSION_ROLE", "advisor");
+    // A second of slack either side: the store may serialise at lower precision.
+    let before = chrono::Utc::now() - chrono::Duration::seconds(1);
+    crate::queue_cmd::advance_dispatch_close("TASK-25971", &store_dir).unwrap();
+    let after = chrono::Utc::now() + chrono::Duration::seconds(1);
+
+    let closed = bug2597_reload(&store_dir, "TASK-25971");
+    assert!(matches!(
+        closed.status,
+        aida_core::RequirementStatus::Completed
+    ));
+    let stamp = closed
+        .implementation_info
+        .as_ref()
+        .and_then(|i| i.completed_at)
+        .expect("the close path must persist completed_at");
+    assert!(
+        before <= stamp && stamp <= after,
+        "{before} <= {stamp} <= {after}"
+    );
+    let history = aida_core::terminal_timestamps::status_date(&closed, "Completed")
+        .expect("the close path records a Completed history entry");
+    assert!(
+        (history - stamp).num_seconds().abs() < 5,
+        "stamp {stamp} and history {history} describe the same transition"
+    );
+    assert_eq!(
+        aida_core::terminal_timestamps::completed_at(&closed),
+        Some(stamp)
+    );
+
+    // Closing an already-Completed spec is not a new transition.
+    crate::queue_cmd::advance_dispatch_close("TASK-25971", &store_dir).unwrap();
+    let reclosed = bug2597_reload(&store_dir, "TASK-25971");
+    assert!(matches!(
+        reclosed.status,
+        aida_core::RequirementStatus::Completed
+    ));
+    assert_eq!(
+        reclosed.implementation_info.and_then(|i| i.completed_at),
+        Some(stamp),
+        "a re-close must preserve the original completion date"
+    );
+}
+
 /// BUG-1996: `queue advance --yes` leaves a ready-to-close parent open (B1 revert).
 /// Only autonomous actions (drain a ready spec, approve a groomed draft) run under `--yes`;
 /// Close is operator-confirmed and must never be auto-taken under `--yes`.
@@ -4999,12 +5098,15 @@ fn non_completing_merge_does_not_complete_review_story_covered_specs() {
     assert_eq!(status("TASK-9201"), RequirementStatus::Done);
     assert!(has_flip(&flips, "TASK-9202"), "control: flips: {flips:?}");
     assert_eq!(status("TASK-9202"), RequirementStatus::Completed);
-    // A `(Refs X)`-only squash subject and a `--no-complete` ship body are
-    // non-completing too. trace:TASK-1951 trace:TASK-1765 | ai:claude
-    for id in ["TASK-9203", "TASK-9204"] {
-        assert!(!has_flip(&flips, id), "{id}: flips: {flips:?}");
-        assert_eq!(status(id), RequirementStatus::Done, "{id}");
-    }
+    // A `--no-complete` ship body is non-completing too.
+    // trace:TASK-1951 trace:TASK-1765 | ai:claude
+    assert!(!has_flip(&flips, "TASK-9204"), "flips: {flips:?}");
+    assert_eq!(status("TASK-9204"), RequirementStatus::Done);
+    // BUG-2696 D4: a `(Refs X)` landing completes a spec the implementer
+    // already marked Done (declared complete for its scope); it no longer
+    // strands it at Done. trace:BUG-2696 | ai:claude
+    assert!(has_flip(&flips, "TASK-9203"), "flips: {flips:?}");
+    assert_eq!(status("TASK-9203"), RequirementStatus::Completed);
 }
 
 /// TASK-2114: a squash subject that mixes a `(Refs A)` group with a
@@ -5145,4 +5247,1414 @@ fn slice_subject_exclusion_is_scoped_to_rebased_commits() {
     assert!(has_flip(&flips, "TASK-9302"), "flips: {flips:?}");
     assert!(!has_flip(&flips, "TASK-9303"), "flips: {flips:?}");
     assert!(!has_flip(&flips, "TASK-9304"), "flips: {flips:?}");
+}
+
+// Fake GitLab search deliberately excludes source_branch, as the REST API does.
+// trace:BUG-2516 | ai:codex
+fn bug_2516_write_glab(bin: &std::path::Path, rows: &[serde_json::Value]) {
+    bug_2516_write_glab_pages(bin, rows, false);
+}
+
+// trace:BUG-2516 | ai:codex
+fn bug_2516_write_glab_pages(bin: &std::path::Path, rows: &[serde_json::Value], fail_second: bool) {
+    let rows = serde_json::to_string(rows).unwrap();
+    let fail_second = if fail_second { "True" } else { "False" };
+    crate::test_exec::write_executable(
+        &bin.join("glab"),
+        format!(
+            r#"#!/usr/bin/python3
+import json, sys
+from pathlib import Path
+if sys.argv[1:] == ['--version']:
+    print('glab-test')
+    sys.exit(0)
+if 'state=opened' not in sys.argv or 'per_page=100' not in sys.argv:
+    sys.exit(1)
+rows = json.loads('{rows}')
+for arg in sys.argv[1:]:
+    if arg.startswith('search='):
+        term = arg.split('=', 1)[1].lower()
+        rows = [r for r in rows if term in (r.get('title', '') + ' ' + (r.get('description') or '')).lower()]
+page = int(next(arg.split('=', 1)[1] for arg in sys.argv if arg.startswith('page=')))
+with Path(__file__).with_suffix('.pages').open('a') as log:
+    print(page, file=log)
+if page == 2 and {fail_second}:
+    print('second page failed', file=sys.stderr)
+    sys.exit(1)
+print(json.dumps(rows[(page - 1) * 100:page * 100]))
+"#
+        ),
+    );
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_pull_completion_trailers() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, store_path) = init_test_project();
+    let remote = root.join("remote.git");
+    run_git(
+        &root,
+        &[
+            "clone",
+            "--bare",
+            root.to_str().unwrap(),
+            remote.to_str().unwrap(),
+        ],
+    );
+    run_git(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"gitlab\"\n",
+    )
+    .unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    bug_2516_write_glab(&bin, &{
+        let mut rows = vec![
+            serde_json::json!({
+                "iid": 2, "title": "unrelated", "description": "",
+                "source_branch": "other", "state": "opened"
+            });
+            99
+        ];
+        rows.push(serde_json::json!({
+            "iid": 3, "title": "follow-up", "description": "",
+            "source_branch": "fix/bug-2518-rework", "state": "opened"
+        }));
+        rows
+    });
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    seed_spec_at(&store_path, "BUG-2516", "InProgress");
+    seed_spec_at(&store_path, "BUG-2517", "InProgress");
+    seed_spec_at(&store_path, "BUG-2518", "InProgress");
+    let pre = run_git(&root, &["rev-parse", "HEAD"]);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fix: completing squash (BUG-2516, BUG-2518)",
+        ],
+    );
+    let completing_sha = run_git(&root, &["rev-parse", "HEAD"]);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            "fix: partial squash (Refs BUG-2517)",
+        ],
+    );
+    let storage = Storage::new(&store_path);
+    run_git(&root, &["push", "origin", "main"]);
+    run_git(&root, &["reset", "--hard", &pre]);
+    crate::store_push_pull::handle_pull_command(&store_path, false, false, true, true, false)
+        .unwrap();
+    let store = storage.load().unwrap();
+    let completed = store.get_requirement_by_spec_id("BUG-2516").unwrap();
+    assert_eq!(completed.status, RequirementStatus::Completed);
+    assert_eq!(
+        completed
+            .implementation_info
+            .as_ref()
+            .unwrap()
+            .completion_sha
+            .as_deref(),
+        Some(completing_sha.as_str())
+    );
+    assert_eq!(
+        store.get_requirement_by_spec_id("BUG-2517").unwrap().status,
+        // trace:BUG-2549 | ai:codex — the Refs slice leaves unheld work retryable.
+        RequirementStatus::Approved
+    );
+    assert_eq!(
+        store.get_requirement_by_spec_id("BUG-2518").unwrap().status,
+        RequirementStatus::InProgress,
+        "branch-only open MR must prevent completion after pull"
+    );
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_open_or_unreadable_changes_preserve() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _store_path) = init_test_project();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"gitlab\"\n",
+    )
+    .unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    for response in [
+        "exit 1",
+        "printf ''",
+        "echo garbage",
+        "echo '{}'",
+        "echo '[{}]'",
+        "echo '[{\"iid\":0}]'",
+    ] {
+        crate::test_exec::write_executable(&bin.join("glab"), format!("#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\n{response}\n"));
+        assert_eq!(
+            specs_with_open_prs(&root, ["BUG-2516".into()]),
+            None,
+            "{response}"
+        );
+    }
+    crate::test_exec::write_executable(
+        &bin.join("glab"),
+        "#!/bin/sh\nif [ \"$1\" = --version ]; then echo glab-test; exit 0; fi\necho '[{\"iid\":2,\"title\":\"another deliverable (BUG-2516)\",\"description\":null,\"source_branch\":\"other\"}]'\n",
+    );
+    assert_eq!(
+        specs_with_open_prs(&root, ["BUG-2516".into()]),
+        Some(std::collections::BTreeMap::from([("BUG-2516".into(), 2)]))
+    );
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_search_contains_spec_across_whole_page() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _store_path) = init_test_project();
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"gitlab\"\n",
+    )
+    .unwrap();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    let miss = serde_json::json!({
+        "iid": 2, "title": "follow-up from TASK-999",
+        "description": "follow-up from TASK-999", "source_branch": "task-999",
+        "state": "opened"
+    });
+    let check = |rows: Vec<serde_json::Value>, expected| {
+        bug_2516_write_glab(&bin, &rows);
+        assert_eq!(specs_with_open_prs(&root, ["BUG-2516".into()]), expected);
+    };
+    check(vec![miss.clone()], Some(std::collections::BTreeMap::new()));
+    for (title, description, branch) in [
+        ("follow-up for bUg-2516", "", "follow-up"),
+        ("fix (TASK-999)", "follow-up for bug-2516", "other"),
+        ("fix (TASK-999)", "", "prefixbug-2516suffix"),
+    ] {
+        check(
+            vec![
+                miss.clone(),
+                serde_json::json!({
+                    "iid": 3, "title": title, "description": description,
+                    "source_branch": branch, "state": "opened"
+                }),
+            ],
+            Some(std::collections::BTreeMap::from([("BUG-2516".into(), 3)])),
+        );
+    }
+    // Missing or malformed evidence must preserve status, even after a match.
+    for field in ["description", "source_branch"] {
+        for invalid in [
+            None,
+            Some(serde_json::json!(42)),
+            Some(serde_json::json!({})),
+            Some(serde_json::Value::Null),
+        ] {
+            if field == "description" && invalid == Some(serde_json::Value::Null) {
+                continue;
+            }
+            let mut incomplete = miss.clone();
+            incomplete.as_object_mut().unwrap().remove(field);
+            if let Some(value) = invalid {
+                incomplete[field] = value;
+            }
+            check(vec![incomplete.clone()], None);
+            check(
+                vec![
+                    serde_json::json!({
+                        "iid": 3, "title": "BUG-2516", "description": "",
+                        "source_branch": "other", "state": "opened"
+                    }),
+                    incomplete,
+                ],
+                None,
+            );
+        }
+    }
+    let mut null_description = miss.clone();
+    null_description["description"] = serde_json::Value::Null;
+    check(
+        vec![null_description.clone()],
+        Some(std::collections::BTreeMap::new()),
+    );
+    null_description["source_branch"] = serde_json::json!("BUG-2516");
+    check(
+        vec![null_description],
+        Some(std::collections::BTreeMap::from([("BUG-2516".into(), 2)])),
+    );
+    // A full nonmatching page needs the empty second page to establish clear.
+    check(
+        vec![miss.clone(); 100],
+        Some(std::collections::BTreeMap::new()),
+    );
+    let mut rows = vec![miss; 100];
+    rows.push(serde_json::json!({
+        "iid": 3, "title": "follow-up", "description": "",
+        "source_branch": "fix/bug-2516-rework", "state": "opened"
+    }));
+    check(
+        rows.clone(),
+        Some(std::collections::BTreeMap::from([("BUG-2516".into(), 3)])),
+    );
+    bug_2516_write_glab_pages(&bin, &rows, true);
+    assert_eq!(specs_with_open_prs(&root, ["BUG-2516".into()]), None);
+}
+
+// trace:BUG-2516 | ai:codex
+#[test]
+fn bug_2516_gitlab_pagination_requires_readable_final_page() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _store_path) = init_test_project();
+    let bin = root.join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    let rows: Vec<_> = (1..=100)
+        .map(|iid| {
+            serde_json::json!({
+                "iid": iid, "title": "unrelated", "description": "",
+                "source_branch": format!("task-{iid}"), "state": "opened"
+            })
+        })
+        .collect();
+    use crate::forge::{ChangeLookup, Forge, GitLabForge};
+    let provider = GitLabForge::new(&root);
+    let log = bin.join("glab.pages");
+    let assert_pages = || {
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "1\n2\n");
+        std::fs::remove_file(&log).unwrap();
+    };
+    bug_2516_write_glab(&bin, &rows);
+    assert!(matches!(
+        provider.change_for_spec("BUG-2516").unwrap(),
+        ChangeLookup::NoChange
+    ));
+    assert_pages();
+
+    let mut owning = rows.clone();
+    owning.push(serde_json::json!({
+        "iid": 101, "title": "unrelated", "description": "",
+        "source_branch": "fix/bug-2516-rework", "state": "opened"
+    }));
+    bug_2516_write_glab(&bin, &owning);
+    assert!(
+        matches!(provider.change_for_spec("BUG-2516").unwrap(), ChangeLookup::Found(change) if change.id == 101)
+    );
+    assert_pages();
+
+    bug_2516_write_glab_pages(&bin, &rows, true);
+    assert!(matches!(
+        provider.change_for_spec("BUG-2516").unwrap(),
+        ChangeLookup::CliFailed(_)
+    ));
+    assert_pages();
+
+    // Exit success with a truncated page is still unknown, never absence.
+    let script = std::fs::read_to_string(bin.join("glab")).unwrap().replace(
+        "print('second page failed', file=sys.stderr)\n    sys.exit(1)",
+        "print('[{')\n    sys.exit(0)",
+    );
+    crate::test_exec::write_executable(&bin.join("glab"), script);
+    assert!(matches!(
+        provider.change_for_spec("BUG-2516").unwrap(),
+        ChangeLookup::CliFailed(_)
+    ));
+    assert_pages();
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_unrelated_101_commit_pr_allows_completion() {
+    db_reconcile_refs_observation_case("truncated");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_failed_graphql_uses_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-failed");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_malformed_graphql_uses_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-malformed");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_graphql_errors_use_rest_completion_evidence() {
+    db_reconcile_refs_observation_case("graphql-errors");
+}
+
+// trace:BUG-2593 | ai:codex
+#[test]
+fn db_reconcile_unknown_refs_preserves_ordinary_completion() {
+    db_reconcile_refs_observation_case("all-failed");
+}
+
+fn db_reconcile_refs_observation_case(mode: &str) {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let (_tmp, root, _) = init_test_project();
+    run_git(
+        &root,
+        &["remote", "add", "origin", "https://github.com/o/r.git"],
+    );
+    let store_path = root.join(".aida-store");
+    std::fs::create_dir_all(store_path.join("objects")).unwrap();
+    run_git(
+        &store_path,
+        &["init", "--initial-branch=aida-store", "--quiet"],
+    );
+    run_git(&store_path, &["config", "user.email", "test@example.com"]);
+    run_git(&store_path, &["config", "user.name", "Test"]);
+    std::fs::write(store_path.join("objects/.keep"), "").unwrap();
+    run_git(&store_path, &["add", "-A"]);
+    run_git(&store_path, &["commit", "-qm", "init store"]);
+    let node = aida_core::work_binding::bootstrap(&store_path)
+        .unwrap()
+        .unwrap()
+        .node_id;
+    let partial = format!("BUG-{node}-001");
+    let completing = format!("BUG-{node}-002");
+    seed_spec_at(&store_path, &partial, "InProgress");
+    seed_spec_at(&store_path, &completing, "Done");
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    let gh = bin.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/usr/bin/python3
+import json, sys
+args = sys.argv[1:]
+head = format(101, '040x')
+if args == ['--version']:
+    print('gh version 2.0.0')
+elif args[:2] == ['pr', 'list']:
+    if '-q' in args:
+        print('7\tunrelated\thttps://github.com/o/r/pull/7\tother')
+    else:
+        print(json.dumps([{'number':7,'title':'unrelated','body':'','headRefName':'other','state':'OPEN'}]))
+elif 'graphql' in args:
+    print(json.dumps({'data':{'repository':{'p7':{'headRefOid':head,'commits':{'totalCount':101,'nodes':[]}}}}}))
+elif any('/pulls/7/commits?' in a for a in args):
+    page = 2 if any('page=2' in a for a in args) else 1
+    print(json.dumps([{'sha':format(n,'040x'),'commit':{'message':'unrelated work'}} for n in (range(1,101) if page == 1 else [101])]))
+elif any(a.endswith('/pulls/7') for a in args):
+    print(json.dumps({'commits':101,'head':{'sha':head}}))
+else:
+    print('unexpected request: '+repr(args), file=sys.stderr)
+    sys.exit(1)
+"#,
+    );
+    let script = std::fs::read_to_string(&gh).unwrap();
+    let script = if mode == "graphql-malformed" {
+        script.replace(
+            "elif 'graphql' in args:\n",
+            "elif 'graphql' in args:\n    print('invalid JSON')\n    sys.exit(0)\n",
+        )
+    } else if mode == "graphql-errors" {
+        script.replace("elif 'graphql' in args:\n", "elif 'graphql' in args:\n    print(json.dumps({'errors':[{'message':'quota exhausted'}]}))\n    sys.exit(0)\n")
+    } else if mode != "truncated" {
+        script.replace(
+            "elif 'graphql' in args:\n",
+            "elif 'graphql' in args:\n    sys.exit(1)\n",
+        )
+    } else {
+        script
+    };
+    let script = if mode == "all-failed" {
+        script.replace("    page = 2", "    sys.exit(1)\n    page = 2")
+    } else {
+        script
+    };
+    crate::test_exec::write_executable(&gh, &script);
+    let _path = crate::test_env::EnvVarGuard::prepend_path(&bin);
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: partial (Refs {partial})"),
+        ],
+    );
+    run_git(
+        &root,
+        &[
+            "commit",
+            "--allow-empty",
+            "-m",
+            &format!("fix: complete ({completing})"),
+        ],
+    );
+    let snapshot = Storage::new(&store_path).load().unwrap();
+    let observation =
+        crate::pr_lookup::reference_specs_with_open_prs(&root, &[partial.clone()], &snapshot);
+    if mode == "all-failed" {
+        assert!(observation.is_err());
+    } else {
+        assert!(observation.unwrap().is_empty());
+    }
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
+    let store = Storage::new(&store_path).load().unwrap();
+    assert_eq!(
+        store
+            .get_requirement_by_spec_id(&completing)
+            .unwrap()
+            .status,
+        RequirementStatus::Completed
+    );
+    assert_eq!(
+        store.get_requirement_by_spec_id(&partial).unwrap().status,
+        if mode == "all-failed" {
+            RequirementStatus::InProgress
+        } else {
+            RequirementStatus::Approved
+        }
+    );
+    // Completion itself changes the store HEAD. The following idle scan
+    // checkpoints that settled snapshot rather than claiming it was swept.
+    crate::store_push_pull::run_deferred_code_reconcile(&root, &store_path, None, true, false);
+    assert_eq!(
+        crate::store_pull_coalesce::reconcile_is_current(&root, &store_path),
+        mode != "all-failed"
+    );
+}
+
+// trace:BUG-2635 | ai:codex
+#[test]
+fn bug_2635_in_progress_auto_completion_records_round_warning() {
+    let (_tmp, root, _) = init_test_project();
+    let mut req = Requirement::new("active round".into(), String::new());
+    req.status = RequirementStatus::InProgress;
+    let sha = aida_core::git_ops::head_sha(&root).unwrap();
+    let flip = AutoBumpFlip::new("BUG-2635".into(), sha, req.status.clone());
+    assert!(apply_auto_bump_flip(
+        &mut req,
+        &flip,
+        chrono::Utc::now(),
+        &root
+    ));
+    assert!(req
+        .comments
+        .iter()
+        .any(|c| c.content.contains("Auto-completion warning:")));
+}
+
+fn land(project_root: &std::path::Path, file: &str, subject: &str) {
+    std::fs::write(project_root.join(file), subject).unwrap();
+    run_git(project_root, &["add", file]);
+    run_git(project_root, &["commit", "-m", subject]);
+}
+
+fn status_of(storage: &Storage, id: &str) -> RequirementStatus {
+    storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id(id)
+        .unwrap()
+        .status
+        .clone()
+}
+
+/// BUG-2696 AC2: a Done spec completes when its commit lands, whether the
+/// trailer is `(SPEC)` or `(Refs SPEC)`.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_done_spec_completes_on_completing_and_refs_landings() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_done_spec(&store_path, "BUG-9101");
+    seed_done_spec(&store_path, "BUG-9102");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(&project_root, "a.txt", "fix: whole fix (BUG-9101) (#71)");
+    land(
+        &project_root,
+        "b.txt",
+        "fix: whole fix (Refs BUG-9102) (#72)",
+    );
+    let storage = Storage::new(store_path.clone());
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    let mut ids: Vec<_> = flips.iter().map(|f| f.spec_id.clone()).collect();
+    ids.sort();
+    assert_eq!(ids, ["BUG-9101", "BUG-9102"]);
+    for id in ["BUG-9101", "BUG-9102"] {
+        assert_eq!(
+            status_of(&storage, id),
+            RequirementStatus::Completed,
+            "{id}"
+        );
+    }
+}
+
+/// BUG-2696 AC3: a Refs landing on a spec that is not Done leaves it open and
+/// records one visible note per landing, however often the scan replays.
+/// A numbered non-final slice never completes even a Done spec.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_refs_landing_on_open_spec_stays_open_with_one_note() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-9103", "Approved");
+    seed_done_spec(&store_path, "BUG-9104");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "c.txt",
+        "fix: first slice (Refs BUG-9103) (#73)",
+    );
+    land(
+        &project_root,
+        "d.txt",
+        "[1/3] fix: slice one (Refs BUG-9104)",
+    );
+    let storage = Storage::new(store_path.clone());
+    for scan_base in [Some(pre_sha.as_str()), None] {
+        let flips =
+            auto_bump_done_to_completed(&project_root, &store_path, scan_base, &storage).unwrap();
+        assert!(flips.is_empty(), "{flips:?}");
+    }
+    assert_eq!(status_of(&storage, "BUG-9103"), RequirementStatus::Approved);
+    assert_eq!(status_of(&storage, "BUG-9104"), RequirementStatus::Done);
+    let store = storage.load().unwrap();
+    let notes: Vec<_> = store
+        .get_requirement_by_spec_id("BUG-9103")
+        .unwrap()
+        .comments
+        .iter()
+        .filter(|c| c.content.contains(crate::db_reconcile::REFS_LANDING_MARKER))
+        .collect();
+    assert_eq!(notes.len(), 1, "{notes:?}");
+    assert!(notes[0].content.contains("stays open"));
+}
+
+/// BUG-2696 AC6 (regression): a spec with a recorded slice plan whose first
+/// slice lands stays open. The completing-looking push is partial because a
+/// child slice is outstanding, so it never sets Done, and the landing that
+/// follows leaves the spec open.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_sliced_spec_first_slice_landing_stays_open() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "STORY-9105", "In Progress");
+    seed_spec_at(&store_path, "TASK-9106", "Approved");
+    let storage = Storage::new(store_path.clone());
+    storage
+        .update_atomically(|s| {
+            let child = s.get_requirement_by_spec_id("TASK-9106").unwrap().id;
+            s.get_requirement_by_spec_id_mut("STORY-9105")
+                .unwrap()
+                .relationships
+                .push(aida_core::Relationship {
+                    rel_type: aida_core::RelationshipType::Parent,
+                    target_id: child,
+                    created_at: None,
+                    created_by: None,
+                });
+        })
+        .unwrap();
+    let store = storage.load().unwrap();
+    assert!(!crate::publication_completion::completes_spec(
+        Some(&store),
+        "STORY-9105",
+        false
+    ));
+    assert!(!crate::publication_completion::mark_done_after_push_in(
+        &storage,
+        "STORY-9105",
+        "feat: slice one (STORY-9105)",
+        "abc"
+    )
+    .unwrap());
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "e.txt",
+        "feat: slice one (Refs STORY-9105) (#75)",
+    );
+    auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    let after = status_of(&storage, "STORY-9105");
+    assert!(
+        !matches!(
+            after,
+            RequirementStatus::Done | RequirementStatus::Completed
+        ),
+        "{after:?}"
+    );
+}
+
+/// BUG-2696 round 7 (finding 1, AC6): a committed seat slice titled as a
+/// completion, `feat: slice one (STORY-…)`, lands on a parent whose child
+/// slice is still outstanding. The host's push verdict is partial, so the
+/// spec is not Done; and the landing — a bare subject trailer, and the same
+/// completion trailer retained in a squash body — never completes it either.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_committed_completing_slice_with_open_child_never_completes_at_landing() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "STORY-9107", "In Progress");
+    seed_spec_at(&store_path, "TASK-9108", "Approved");
+    let storage = Storage::new(store_path.clone());
+    link_parent(&storage, "STORY-9107", "TASK-9108");
+    let subject = "feat: slice one (STORY-9107)";
+    let verdict = crate::publication_completion::push_completion_with(
+        &storage,
+        "STORY-9107",
+        subject,
+        "abc",
+        || {},
+    )
+    .unwrap();
+    assert!(!verdict.completes, "{verdict:?}");
+    let store = storage.load().unwrap();
+    assert_eq!(
+        crate::ship_from_seat::aligned_title(
+            Some(&store),
+            subject,
+            "STORY-9107",
+            subject,
+            verdict.completes
+        )
+        .as_deref(),
+        Some("feat: slice one (Refs STORY-9107)")
+    );
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    // Even if a completing subject reached main (title not yet retitled),
+    // and a squash body retains the completion trailer:
+    land(&project_root, "h.txt", "feat: slice one (STORY-9107) (#77)");
+    std::fs::write(project_root.join("i.txt"), "i").unwrap();
+    run_git(&project_root, &["add", "i.txt"]);
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "-m",
+            "feat: slice one (Refs STORY-9107) (#78)",
+            "-m",
+            "* feat: slice one (STORY-9107)",
+        ],
+    );
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(flips.iter().all(|f| f.spec_id != "STORY-9107"), "{flips:?}");
+    // (Reference recovery may return the In Progress spec to Approved.)
+    let after = status_of(&storage, "STORY-9107");
+    assert!(
+        !matches!(
+            after,
+            RequirementStatus::Done | RequirementStatus::Completed
+        ),
+        "{after:?}"
+    );
+    // Once the child is terminal, a completing landing completes again.
+    mutate_spec(&store_path, "TASK-9108", |r| {
+        r.status = RequirementStatus::Completed
+    });
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(flips.iter().any(|f| f.spec_id == "STORY-9107"), "{flips:?}");
+}
+
+/// BUG-2696 round 7 (finding 1, A2): the declaration passes on the unlocked
+/// snapshot, but a child slice is added before the locked Done write. The
+/// verdict is partial (title → Refs), the spec is not Done, and the landing
+/// of the completing commit does not complete the parent.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_lock_time_graph_change_publication_then_landing_stays_open() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "STORY-9109", "In Progress");
+    seed_spec_at(&store_path, "TASK-9110", "Approved");
+    let storage = Storage::new(store_path.clone());
+    let subject = "feat: whole thing (STORY-9109)";
+    let verdict = crate::publication_completion::push_completion_with(
+        &storage,
+        "STORY-9109",
+        subject,
+        "abc",
+        || link_parent(&storage, "STORY-9109", "TASK-9110"),
+    )
+    .unwrap();
+    assert!(!verdict.completes && !verdict.moved, "{verdict:?}");
+    let store = storage.load().unwrap();
+    assert_eq!(
+        crate::ship_from_seat::aligned_title(
+            Some(&store),
+            subject,
+            "STORY-9109",
+            subject,
+            verdict.completes
+        )
+        .as_deref(),
+        Some("feat: whole thing (Refs STORY-9109)")
+    );
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "j.txt",
+        "feat: whole thing (STORY-9109) (#79)",
+    );
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(flips.iter().all(|f| f.spec_id != "STORY-9109"), "{flips:?}");
+    let after = status_of(&storage, "STORY-9109");
+    assert!(
+        !matches!(
+            after,
+            RequirementStatus::Done | RequirementStatus::Completed
+        ),
+        "{after:?}"
+    );
+}
+
+/// BUG-2696 round 7 (finding 2, AC3): a refused Refs-landing note write
+/// leaves the scan incomplete (no checkpoint, the pending scan base stays),
+/// and the retry with unchanged inputs writes exactly one durable note.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_refused_refs_note_write_keeps_the_scan_retryable() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-9113", "Approved");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "k.txt",
+        "fix: first slice (Refs BUG-9113) (#80)",
+    );
+    let storage = Storage::new(store_path.clone());
+    struct Refuse;
+    impl Drop for Refuse {
+        fn drop(&mut self) {
+            crate::db_reconcile::REFUSE_REFS_NOTE_WRITE.with(|r| r.set(false));
+        }
+    }
+    {
+        let _refuse = Refuse;
+        crate::db_reconcile::REFUSE_REFS_NOTE_WRITE.with(|r| r.set(true));
+        for scan_base in [Some(pre_sha.as_str()), None] {
+            let (flips, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+                &project_root,
+                &store_path,
+                scan_base,
+                &storage,
+                true,
+            )
+            .unwrap();
+            assert!(flips.is_empty(), "{flips:?}");
+            assert!(
+                !scanned,
+                "a refused note write must not checkpoint the scan"
+            );
+        }
+        assert_eq!(refs_notes(&storage, "BUG-9113"), 0);
+    }
+    for _ in 0..2 {
+        let (_, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+            &project_root,
+            &store_path,
+            Some(&pre_sha),
+            &storage,
+            true,
+        )
+        .unwrap();
+        assert!(scanned);
+    }
+    assert_eq!(refs_notes(&storage, "BUG-9113"), 1);
+    assert_eq!(status_of(&storage, "BUG-9113"), RequirementStatus::Approved);
+}
+
+fn link_parent(storage: &Storage, parent: &str, child: &str) {
+    storage
+        .update_atomically(|s| {
+            let child = s.get_requirement_by_spec_id(child).unwrap().id;
+            s.get_requirement_by_spec_id_mut(parent)
+                .unwrap()
+                .relationships
+                .push(aida_core::Relationship {
+                    rel_type: aida_core::RelationshipType::Parent,
+                    target_id: child,
+                    created_at: None,
+                    created_by: None,
+                });
+        })
+        .unwrap();
+}
+
+fn refs_notes(storage: &Storage, id: &str) -> usize {
+    storage
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id(id)
+        .unwrap()
+        .comments
+        .iter()
+        .filter(|c| c.content.contains(crate::db_reconcile::REFS_LANDING_MARKER))
+        .count()
+}
+
+/// BUG-2696 F5 (AC3): notification is independent of completion
+/// eligibility. A numbered non-final slice and a commit carrying the explicit
+/// non-completing marker both leave an open (Approved) spec open AND noted.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_f5_numbered_slices_and_no_complete_markers_are_noted() {
+    let (_tmp, project_root, store_path) = init_test_project();
+    seed_spec_at(&store_path, "BUG-9111", "Approved");
+    seed_spec_at(&store_path, "BUG-9112", "Approved");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(
+        &project_root,
+        "f.txt",
+        "[1/3] fix: slice one (Refs BUG-9111)",
+    );
+    std::fs::write(project_root.join("g.txt"), "g").unwrap();
+    run_git(&project_root, &["add", "g.txt"]);
+    run_git(
+        &project_root,
+        &[
+            "commit",
+            "-m",
+            "fix: groundwork (Refs BUG-9112) (#76)",
+            "-m",
+            "aida: no-complete",
+        ],
+    );
+    let storage = Storage::new(store_path.clone());
+    let flips =
+        auto_bump_done_to_completed(&project_root, &store_path, Some(&pre_sha), &storage).unwrap();
+    assert!(flips.is_empty(), "{flips:?}");
+    for id in ["BUG-9111", "BUG-9112"] {
+        assert_eq!(status_of(&storage, id), RequirementStatus::Approved, "{id}");
+        assert_eq!(
+            refs_notes(&storage, id),
+            1,
+            "{id} must carry one triage note"
+        );
+    }
+}
+
+/// BUG-2696 F6 (AC5): a landing completion whose shared-store push is
+/// rejected stays owed. The scan reports it unconfirmed (no checkpoint), a
+/// later scan with nothing new to write retries the push, and once the remote
+/// accepts it another host sees the spec Completed.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_f6_rejected_store_push_is_retried_until_confirmed() {
+    let (tmp, project_root, _yaml) = init_test_project();
+    let remote = tmp.path().join("store-origin.git");
+    run_git(
+        tmp.path(),
+        &["init", "--bare", "--quiet", "store-origin.git"],
+    );
+    let store = tmp.path().join("shared-store");
+    std::fs::create_dir_all(&store).unwrap();
+    let storage = crate::test_env::home_fixture_storage(&store);
+    aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
+    let mut req = aida_core::Requirement::new("landing".into(), String::new());
+    req.spec_id = Some("BUG-9121".into());
+    req.req_type = RequirementType::Bug;
+    req.status = RequirementStatus::Done;
+    storage
+        .update_atomically(|s| s.requirements.push(req.clone()))
+        .unwrap();
+    run_git(&store, &["add", "-A"]);
+    if !run_git(&store, &["status", "--porcelain"]).is_empty() {
+        run_git(&store, &["commit", "-qm", "seed BUG-9121"]);
+    }
+    run_git(
+        &store,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    let branch = run_git(&store, &["symbolic-ref", "--short", "HEAD"]);
+    run_git(&store, &["push", "--quiet", "origin", &branch]);
+    // The shared remote rejects every push for now.
+    let hook = remote.join("hooks/pre-receive");
+    crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(&project_root, "h.txt", "fix: whole fix (BUG-9121) (#81)");
+    let (flips, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+        &project_root,
+        &store,
+        Some(&pre_sha),
+        &storage,
+        true,
+    )
+    .unwrap();
+    assert_eq!(flips.len(), 1, "{flips:?}");
+    assert!(!scanned, "an unconfirmed push must not checkpoint the scan");
+    assert_eq!(
+        status_of(&storage, "BUG-9121"),
+        RequirementStatus::Completed
+    );
+    // What another host fetches: the spec's object on the shared remote,
+    // located in the remote's own tree.
+    let on_remote = || {
+        let tree = run_git(
+            &remote,
+            &[
+                "ls-tree",
+                "-r",
+                "--name-only",
+                &format!("refs/heads/{branch}"),
+            ],
+        );
+        let object = tree
+            .lines()
+            .find(|path| path.to_ascii_lowercase().contains("9121"))
+            .unwrap_or_else(|| panic!("no BUG-9121 object on the remote:\n{tree}"))
+            .to_string();
+        run_git(&remote, &["show", &format!("refs/heads/{branch}:{object}")])
+    };
+    let remote_head = || run_git(&remote, &["rev-parse", &format!("refs/heads/{branch}")]);
+    assert_ne!(
+        remote_head(),
+        aida_core::git_ops::head_sha(&store).unwrap(),
+        "the rejected push must leave the remote behind"
+    );
+
+    // Still rejected: a rescan writes nothing new but still owes the push.
+    let (_, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+        &project_root,
+        &store,
+        Some(&pre_sha),
+        &storage,
+        true,
+    )
+    .unwrap();
+    assert!(!scanned);
+
+    // The remote recovers: the next scan (HEAD unchanged, nothing to flip)
+    // retries, confirms the push and checkpoints again.
+    std::fs::remove_file(&hook).unwrap();
+    let (flips, scanned) = crate::db_reconcile::auto_bump_done_to_completed_with(
+        &project_root,
+        &store,
+        Some(&pre_sha),
+        &storage,
+        true,
+    )
+    .unwrap();
+    assert!(flips.is_empty(), "{flips:?}");
+    assert!(scanned, "a confirmed push checkpoints the scan");
+    assert_eq!(remote_head(), aida_core::git_ops::head_sha(&store).unwrap());
+    assert!(on_remote().contains("Completed"), "{}", on_remote());
+    // Nothing owed any more: the Done write path's retry is a no-op.
+    crate::publication_completion::propagate_store_writes(&store, "test").unwrap();
+}
+
+/// A git-canonical store at `<tmp>/shared-store` holding `seed` (id, status),
+/// committed and pushed to a bare `origin`. Returns (remote, store, storage,
+/// branch).
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+fn bug_2696_shared_store(
+    tmp: &std::path::Path,
+    seed: &[(&str, RequirementStatus)],
+) -> (std::path::PathBuf, std::path::PathBuf, Storage, String) {
+    let remote = tmp.join("store-origin.git");
+    run_git(tmp, &["init", "--bare", "--quiet", "store-origin.git"]);
+    let store = tmp.join("shared-store");
+    std::fs::create_dir_all(&store).unwrap();
+    // The store is its own repository. Without this, git discovery from the
+    // store reaches the enclosing project repo, so the store's config, status
+    // and pushes are really the project's.
+    run_git(&store, &["init", "--quiet"]);
+    let storage = crate::test_env::home_fixture_storage(&store);
+    aida_core::git_ops::configure_user(&store, "fixture", "fixture@localhost").unwrap();
+    for (id, status) in seed {
+        let mut req = aida_core::Requirement::new(format!("{id} spec"), String::new());
+        req.spec_id = Some((*id).into());
+        req.req_type = RequirementType::Bug;
+        req.status = status.clone();
+        storage
+            .update_atomically(|s| s.requirements.push(req.clone()))
+            .unwrap();
+    }
+    bug_2696_commit_all(&store, "seed");
+    run_git(
+        &store,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    let branch = run_git(&store, &["symbolic-ref", "--short", "HEAD"]);
+    run_git(&store, &["push", "--quiet", "origin", &branch]);
+    (remote, store, storage, branch)
+}
+
+#[cfg(unix)]
+fn bug_2696_commit_all(store: &std::path::Path, msg: &str) {
+    run_git(store, &["add", "-A"]);
+    if !run_git(store, &["status", "--porcelain"]).is_empty() {
+        run_git(store, &["commit", "-qm", msg]);
+    }
+}
+
+#[cfg(unix)]
+fn bug_2696_set_status(storage: &Storage, id: &str, status: RequirementStatus) {
+    storage
+        .update_atomically(|s| {
+            aida_core::conflict::set_status_recorded(
+                s.get_requirement_by_spec_id_mut(id).unwrap(),
+                status,
+                "fixture",
+            );
+        })
+        .unwrap();
+}
+
+/// BUG-2696 round 3, finding 2: overlapping publications. Writer A commits
+/// H1 and starts its push; writer B commits H2 and its push is rejected; A's
+/// older push of H1 then succeeds. Nothing is recorded that A's success could
+/// clear: the store is still ahead of its remote, so a retry that writes
+/// nothing publishes H2.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_older_push_success_does_not_hide_newer_failed_write() {
+    let tmp = tempfile::tempdir().unwrap();
+    let (remote, store, storage, branch) = bug_2696_shared_store(
+        tmp.path(),
+        &[
+            ("BUG-9131", RequirementStatus::Done),
+            ("BUG-9132", RequirementStatus::Done),
+        ],
+    );
+    let remote_head = || run_git(&remote, &["rev-parse", &format!("refs/heads/{branch}")]);
+    let publish = |reason| crate::publication_completion::propagate_store_writes(&store, reason);
+    assert!(!crate::publication_completion::store_owes_shared_push(
+        &store
+    ));
+
+    // Writer A: H1, its push in flight.
+    bug_2696_set_status(&storage, "BUG-9131", RequirementStatus::Completed);
+    bug_2696_commit_all(&store, "H1");
+    let h1 = aida_core::git_ops::head_sha(&store).unwrap();
+    // Writer B: H2, its push rejected.
+    bug_2696_set_status(&storage, "BUG-9132", RequirementStatus::Completed);
+    bug_2696_commit_all(&store, "H2");
+    let h2 = aida_core::git_ops::head_sha(&store).unwrap();
+    assert_ne!(h1, h2);
+    let hook = remote.join("hooks/pre-receive");
+    crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
+    assert!(publish("writer B").is_err(), "B's push is unconfirmed");
+    std::fs::remove_file(&hook).unwrap();
+    // Writer A's older push of H1 now completes.
+    run_git(
+        &store,
+        &[
+            "push",
+            "--quiet",
+            "origin",
+            &format!("{h1}:refs/heads/{branch}"),
+        ],
+    );
+    assert_eq!(remote_head(), h1);
+    assert!(
+        crate::publication_completion::store_owes_shared_push(&store),
+        "H2 is still owed after the older push succeeded"
+    );
+
+    // A later implementer push that writes nothing (a Refs subject) still
+    // publishes H2.
+    assert!(!crate::publication_completion::mark_done_after_push_in(
+        &storage,
+        "BUG-9131",
+        "fix: slice (Refs BUG-9131)",
+        "abc",
+    )
+    .unwrap());
+    assert_eq!(remote_head(), h2, "the no-write retry published H2");
+    assert!(!crate::publication_completion::store_owes_shared_push(
+        &store
+    ));
+    publish("idle").unwrap();
+}
+
+/// BUG-2696 round 3, finding 3: a status write is committed and the process
+/// exits before any push (or before recording anything about it). A
+/// restarted landing scan with nothing new to land finds the store ahead of
+/// its remote, withholds its checkpoint while the remote rejects, and
+/// checkpoints only once the remote holds the status.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_status_committed_before_a_crash_is_published_on_restart() {
+    let (tmp, project_root, _yaml) = init_test_project();
+    let (remote, store, storage, branch) =
+        bug_2696_shared_store(tmp.path(), &[("BUG-9133", RequirementStatus::InProgress)]);
+    let remote_head = || run_git(&remote, &["rev-parse", &format!("refs/heads/{branch}")]);
+    let synced = remote_head();
+    // The Done write lands locally; the process dies before its push.
+    bug_2696_set_status(&storage, "BUG-9133", RequirementStatus::Done);
+    assert!(crate::publication_completion::store_owes_shared_push(
+        &store
+    ));
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    let scan = || {
+        crate::db_reconcile::auto_bump_done_to_completed_with(
+            &project_root,
+            &store,
+            Some(&pre_sha),
+            &storage,
+            true,
+        )
+        .unwrap()
+    };
+    let hook = remote.join("hooks/pre-receive");
+    crate::test_exec::write_executable(&hook, "#!/bin/sh\nexit 1\n");
+    let (flips, scanned) = scan();
+    assert!(flips.is_empty(), "{flips:?}");
+    assert!(!scanned, "the remote lacks the status: no checkpoint");
+    assert_eq!(remote_head(), synced);
+
+    std::fs::remove_file(&hook).unwrap();
+    let (flips, scanned) = scan();
+    assert!(flips.is_empty(), "{flips:?}");
+    assert!(scanned, "a confirmed push checkpoints the scan");
+    assert_eq!(remote_head(), aida_core::git_ops::head_sha(&store).unwrap());
+    let tree = run_git(
+        &remote,
+        &[
+            "ls-tree",
+            "-r",
+            "--name-only",
+            &format!("refs/heads/{branch}"),
+        ],
+    );
+    let object = tree
+        .lines()
+        .find(|p| p.contains("9133"))
+        .unwrap_or_else(|| panic!("no BUG-9133 object on the remote:\n{tree}"))
+        .to_string();
+    let shown = run_git(&remote, &["show", &format!("refs/heads/{branch}:{object}")]);
+    assert!(shown.contains("Done"), "{shown}");
+}
+
+/// BUG-2696 round 4, finding 2: a repository or remote probe that cannot
+/// answer is never read as "local-only, nothing owed". A status commit the
+/// remote lacks stays owed while the store's git config is unreadable, both
+/// before the push and in the recheck after a failed push, and no landing
+/// scan checkpoints until the status reaches the remote.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_r4_failing_store_probe_never_reports_propagation() {
+    let (tmp, project_root, _yaml) = init_test_project();
+    let (remote, store, storage, branch) =
+        bug_2696_shared_store(tmp.path(), &[("BUG-9134", RequirementStatus::InProgress)]);
+    let remote_head = || run_git(&remote, &["rev-parse", &format!("refs/heads/{branch}")]);
+    let synced = remote_head();
+    bug_2696_set_status(&storage, "BUG-9134", RequirementStatus::Done);
+    bug_2696_commit_all(&store, "unpushed status");
+    let config = std::path::PathBuf::from(run_git(&store, &["rev-parse", "--git-path", "config"]));
+    let config = if config.is_absolute() {
+        config
+    } else {
+        store.join(config)
+    };
+    let good = std::fs::read(&config).unwrap();
+    let corrupt = || std::fs::write(&config, "[core\n").unwrap();
+    let restore = || std::fs::write(&config, &good).unwrap();
+    let publish = || crate::publication_completion::propagate_store_writes(&store, "test");
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+
+    // The probes cannot answer: owed, the push is unconfirmed, and the push
+    // helper does not report local-only success.
+    corrupt();
+    assert!(crate::publication_completion::store_has_shared_remote(&store).is_err());
+    assert!(crate::publication_completion::store_owes_shared_push(
+        &store
+    ));
+    assert!(crate::store_push_pull::push_store_confirmed(&store, "test").is_err());
+    assert!(publish().is_err(), "an unanswered probe is not propagation");
+    let scan = || {
+        crate::db_reconcile::auto_bump_done_to_completed_with(
+            &project_root,
+            &store,
+            Some(&pre_sha),
+            &storage,
+            true,
+        )
+    };
+    assert!(
+        !matches!(scan(), Ok((_, true))),
+        "no checkpoint while the probe fails"
+    );
+    restore();
+    assert_eq!(remote_head(), synced);
+
+    // The post-push-error recheck: the remote rejects the push and, before
+    // the recheck, the store's config becomes unreadable.
+    let hook = remote.join("hooks/pre-receive");
+    crate::test_exec::write_executable(
+        &hook,
+        &format!(
+            "#!/bin/sh\nprintf '[core\\n' > '{}'\nexit 1\n",
+            config.display()
+        ),
+    );
+    assert!(
+        publish().is_err(),
+        "a failed push rechecked blind is still owed"
+    );
+    std::fs::remove_file(&hook).unwrap();
+    restore();
+    assert_eq!(remote_head(), synced);
+
+    // Readable again: the next scan publishes the status and checkpoints.
+    let (_, scanned) = scan().unwrap();
+    assert!(scanned, "a confirmed push checkpoints the scan");
+    assert_eq!(remote_head(), aida_core::git_ops::head_sha(&store).unwrap());
+    assert!(
+        !crate::publication_completion::store_owes_shared_push(&store),
+        "store still owes a push: status={:?} ahead={:?}",
+        run_git(&store, &["status", "--porcelain"]),
+        run_git(
+            &store,
+            &[
+                "rev-list",
+                "--count",
+                &format!("refs/remotes/origin/{branch}..HEAD")
+            ]
+        ),
+    );
+}
+
+/// What a [`bug_2696_canonical_landing_race`] hook does to the store between
+/// the landing scan and the locked completion write.
+// trace:BUG-2696 | ai:claude
+#[derive(Clone, Copy)]
+enum Bug2696LandingRace {
+    /// Nothing: the graph is unchanged.
+    None,
+    /// The Completed child is reopened.
+    ReopenChild,
+    /// A new, open child slice is added under the parent.
+    AddOpenChild,
+}
+
+/// BUG-2696 round 8: a Git-canonical store holding a Done parent with one
+/// Completed child; a completing `(PARENT)` commit lands, and `race` runs at
+/// the seam between the scan and the write. Returns whether the seam ran and
+/// the parent's status afterwards.
+// trace:BUG-2696 | ai:claude
+fn bug_2696_canonical_landing_race(race: Bug2696LandingRace) -> (bool, RequirementStatus) {
+    use aida_core::db::DatabaseBackend;
+
+    let (_tmp, project_root, store_dir) = init_git_canonical_test_project();
+    let backend = crate::test_env::home_fixture_backend(&store_dir).unwrap();
+    let mut parent = aida_core::Requirement::new("parent".into(), String::new());
+    parent.spec_id = Some("STORY-9801".into());
+    parent.status = RequirementStatus::Done;
+    let mut child = aida_core::Requirement::new("child".into(), String::new());
+    child.spec_id = Some("TASK-9802".into());
+    child.status = RequirementStatus::Completed;
+    parent.relationships.push(aida_core::Relationship {
+        rel_type: aida_core::RelationshipType::Parent,
+        target_id: child.id,
+        created_at: None,
+        created_by: None,
+    });
+    let mut store = aida_core::RequirementsStore::default();
+    store.requirements.push(parent);
+    store.requirements.push(child);
+    backend.save(&store).unwrap();
+    drop(backend);
+
+    let pre_sha = aida_core::git_ops::head_sha(&project_root).unwrap();
+    land(&project_root, "p.txt", "feat: last slice (STORY-9801)");
+
+    let ran = std::rc::Rc::new(std::cell::Cell::new(false));
+    let seen = ran.clone();
+    crate::inject_status_write_race(move |store_root| {
+        seen.set(true);
+        let backend = crate::test_env::home_fixture_backend(store_root).unwrap();
+        backend
+            .update_atomically(|s| match race {
+                Bug2696LandingRace::None => {}
+                Bug2696LandingRace::ReopenChild => {
+                    s.get_requirement_by_spec_id_mut("TASK-9802")
+                        .unwrap()
+                        .status = RequirementStatus::Approved;
+                }
+                Bug2696LandingRace::AddOpenChild => {
+                    let mut late = aida_core::Requirement::new("late".into(), String::new());
+                    late.spec_id = Some("TASK-9803".into());
+                    late.status = RequirementStatus::Approved;
+                    let late_id = late.id;
+                    s.requirements.push(late);
+                    s.get_requirement_by_spec_id_mut("STORY-9801")
+                        .unwrap()
+                        .relationships
+                        .push(aida_core::Relationship {
+                            rel_type: aida_core::RelationshipType::Parent,
+                            target_id: late_id,
+                            created_at: None,
+                            created_by: None,
+                        });
+                }
+            })
+            .unwrap();
+    });
+    let storage = Storage::new(store_dir.clone());
+    auto_bump_done_to_completed(&project_root, &store_dir, Some(&pre_sha), &storage).unwrap();
+    (ran.get(), status_of(&storage, "STORY-9801"))
+}
+
+/// BUG-2696 round 8 (A2): on the Git-canonical landing path, a child
+/// reopened after the scan saw it Completed keeps the parent open.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_canonical_landing_child_reopened_after_scan_keeps_parent_open() {
+    let (ran, status) = bug_2696_canonical_landing_race(Bug2696LandingRace::ReopenChild);
+    assert!(ran, "the scan-to-write seam must run on the canonical path");
+    assert_eq!(status, RequirementStatus::Done);
+}
+
+/// BUG-2696 round 8 (A2): on the Git-canonical landing path, a slice added
+/// under the parent after the scan keeps the parent open.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_canonical_landing_slice_added_after_scan_keeps_parent_open() {
+    let (ran, status) = bug_2696_canonical_landing_race(Bug2696LandingRace::AddOpenChild);
+    assert!(ran, "the scan-to-write seam must run on the canonical path");
+    assert_eq!(status, RequirementStatus::Done);
+}
+
+/// BUG-2696 round 8: the positive control — with the graph unchanged between
+/// scan and write, the completing landing completes the parent.
+// trace:BUG-2696 | ai:claude
+#[test]
+fn bug_2696_canonical_landing_unchanged_graph_completes_parent() {
+    let (ran, status) = bug_2696_canonical_landing_race(Bug2696LandingRace::None);
+    assert!(ran, "the scan-to-write seam must run on the canonical path");
+    assert_eq!(status, RequirementStatus::Completed);
 }

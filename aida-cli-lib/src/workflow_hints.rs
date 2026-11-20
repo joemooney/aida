@@ -851,6 +851,7 @@ pub fn after_queue_drained(
 /// they name the `aida pull` auto-bump targets when known. Pure (no I/O)
 /// so it is unit-testable.
 fn session_end_pr_hint_lines(
+    vendor: Option<&aida_core::vendors::VendorProfile>,
     kind: crate::forge::ForgeKind,
     pr_number: u64,
     covered_specs: &[String],
@@ -863,7 +864,11 @@ fn session_end_pr_hint_lines(
     // chain that silently drops the `aida pull` auto-bump. Branch deletion is
     // deferred to worktree cleanup. trace:BUG-758 | ai:claude
     // trace:BUG-1807 | ai:codex
+    // Preserve the configured launcher and choose the unattended review path
+    // explicitly; a bare pickup can select an interactive containment refusal.
+    // trace:BUG-2514 | ai:codex
     let noun = kind.change_noun();
+    let review_cmd = crate::vendors::review_pickup_cmd(vendor, noun, pr_number);
     let merge_cmd = kind
         .change_cmd_hint("merge", &format!("{} --squash", pr_number))
         .unwrap_or_else(|| "merge it to your default branch".to_string());
@@ -877,19 +882,16 @@ fn session_end_pr_hint_lines(
         // `;` not `&&`: the pull auto-bump must run even if a merge-side
         // cleanup step is refused. trace:BUG-758 | ai:claude
         return vec![format!(
-            "{noun} #{} next: `aida queue work {noun}-{} --role reviewer` → `{}` → `aida pull` \
+            "{noun} #{} next: `{review_cmd}` → `{}` → `aida pull` \
              (or self-merge: `{}; aida pull`).",
-            pr_number, pr_number, merge_cmd, merge_cmd
+            pr_number, merge_cmd, merge_cmd
         )];
     }
     // trace:TASK-840 | ai:claude — route the primary-action marker through the registry.
     let active = crate::glyphs::Glyph::FlowActive.render(crate::glyphs::active_profile(None));
     vec![
         format!("Next steps for {noun} #{}:", pr_number),
-        format!(
-            "  1. {active} {:<14}   aida queue work {noun}-{} --role reviewer",
-            "Start review", pr_number
-        ),
+        format!("  1. {active} {:<14}   {review_cmd}", "Start review"),
         format!("  2. ↓ {:<14}   {}", "After approval", merge_cmd),
         format!("  3. ↓ {:<14}   aida pull   ({})", "Then pull", bump_phrase),
         String::new(),
@@ -917,7 +919,9 @@ pub fn after_session_end_with_pr(
     let kind = project_root
         .map(crate::forge::resolve_forge_kind)
         .unwrap_or(crate::forge::ForgeKind::None);
-    let lines = session_end_pr_hint_lines(kind, pr_number, covered_specs, tty);
+    // trace:BUG-2514 | ai:codex
+    let vendor = project_root.map(|root| crate::vendor_hints::hint_vendor(root).profile());
+    let lines = session_end_pr_hint_lines(vendor, kind, pr_number, covered_specs, tty);
     if !tty {
         // Single-line summary routes through `emit` for the standard
         // info-glyph `Workflow hint:` prefix.
@@ -1057,7 +1061,8 @@ mod tests {
     #[test]
     fn session_end_hint_tty_is_numbered_sequential_block() {
         let specs = vec!["TASK-259".to_string()];
-        let lines = session_end_pr_hint_lines(crate::forge::ForgeKind::GitHub, 47, &specs, true);
+        let lines =
+            session_end_pr_hint_lines(None, crate::forge::ForgeKind::GitHub, 47, &specs, true);
         // Header + 3 numbered steps + blank + sidebar header + sidebar cmd.
         assert_eq!(lines.len(), 7);
         assert_eq!(lines[0], "Next steps for PR #47:");
@@ -1078,10 +1083,37 @@ mod tests {
         assert!(!lines[6].contains("--delete-branch"));
     }
 
+    // trace:BUG-2514 | ai:codex
+    #[test]
+    fn session_end_hint_preserves_contained_codex_project_review_launch() {
+        let td = TempDir::new().unwrap();
+        write_config(
+            td.path(),
+            "[agents]\nvendor = \"codex\"\n[contained.vendors]\ncodex = \"native\"\n",
+        );
+        let vendor = crate::vendor_hints::hint_vendor(td.path());
+        assert_eq!(vendor, crate::session::HeadlessVendor::Codex);
+        for kind in [
+            crate::forge::ForgeKind::GitLab,
+            crate::forge::ForgeKind::GitHub,
+        ] {
+            for tty in [false, true] {
+                let rendered =
+                    session_end_pr_hint_lines(Some(vendor.profile()), kind, 2, &[], tty).join("\n");
+                let noun = kind.change_noun();
+                let expected = format!(
+                    "aida queue work {noun}-2 --role reviewer --vendor codex --no-human --strict"
+                );
+                assert!(rendered.contains(&expected), "{rendered}");
+            }
+        }
+    }
+
     #[test]
     fn session_end_hint_non_tty_is_single_line() {
         let specs = vec!["TASK-259".to_string()];
-        let lines = session_end_pr_hint_lines(crate::forge::ForgeKind::GitHub, 47, &specs, false);
+        let lines =
+            session_end_pr_hint_lines(None, crate::forge::ForgeKind::GitHub, 47, &specs, false);
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("aida queue work PR-47"));
         // trace:BUG-758 | ai:claude
@@ -1094,13 +1126,14 @@ mod tests {
     #[test]
     fn session_end_hint_names_multiple_covered_specs() {
         let specs = vec!["TASK-259".to_string(), "BUG-113".to_string()];
-        let lines = session_end_pr_hint_lines(crate::forge::ForgeKind::GitHub, 47, &specs, true);
+        let lines =
+            session_end_pr_hint_lines(None, crate::forge::ForgeKind::GitHub, 47, &specs, true);
         assert!(lines[3].contains("auto-bumps TASK-259, BUG-113 → Completed"));
     }
 
     #[test]
     fn session_end_hint_generic_when_no_covered_specs() {
-        let lines = session_end_pr_hint_lines(crate::forge::ForgeKind::GitHub, 47, &[], true);
+        let lines = session_end_pr_hint_lines(None, crate::forge::ForgeKind::GitHub, 47, &[], true);
         assert!(lines[3].contains("auto-bumps the merged spec → Completed"));
     }
 
@@ -1989,7 +2022,7 @@ mod bug_1807_handoff_tests {
             (crate::forge::ForgeKind::GitHub, "PR", "gh pr"),
         ] {
             for tty in [false, true] {
-                let rendered = session_end_pr_hint_lines(kind, 35, &[], tty).join("\n");
+                let rendered = session_end_pr_hint_lines(None, kind, 35, &[], tty).join("\n");
                 assert!(rendered.contains(&format!("{noun} #35")), "{rendered}");
                 assert!(
                     rendered.contains(&format!("aida queue work {noun}-35 --role reviewer")),

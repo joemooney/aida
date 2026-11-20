@@ -49,7 +49,7 @@ fn mediated_mcp_committed_success_matches_advertised_output_schema() {
         ),
         (
             "update_requirement",
-            json!({"id":route.origin,"title":"schema accepted title","weight":0.75}),
+            json!({"id":route.origin,"title":"schema accepted title","weight":0.75,"tags":["alpha", " beta ", "alpha", ""]}),
         ),
     ] {
         let result = mediated_mcp_response(
@@ -97,6 +97,12 @@ fn mediated_mcp_committed_success_matches_advertised_output_schema() {
     let row = route.row();
     assert_eq!(row.title, "schema accepted title");
     assert_eq!(row.weight, Some(0.75));
+    assert_eq!(
+        row.tags,
+        ["alpha".to_owned(), "beta".to_owned()]
+            .into_iter()
+            .collect()
+    );
     assert_eq!(row.comments.len(), 1);
     assert_eq!(row.comments[0].content, "schema accepted comment");
 }
@@ -126,10 +132,12 @@ fn mediated_mcp_advertises_only_translated_tools_with_existing_profile_and_perso
             if tool["name"] == "update_requirement" {
                 assert_eq!(
                     tool["description"],
-                    "Update an owned requirement's title, description, priority or weight through the mediated store service. At least one edit field is required."
+                    "Update an owned requirement's title, description, priority, weight or nonstructural tags through the mediated store service. At least one edit field is required."
                 );
                 let properties = tool["inputSchema"]["properties"].as_object().unwrap();
                 assert!(properties.contains_key("priority"));
+                assert_eq!(properties["tags"]["type"], "array");
+                assert!(!properties.contains_key("force"));
                 assert_eq!(properties["weight"]["type"], json!(["number", "null"]));
                 assert!(!properties.contains_key("status"));
                 assert_eq!(tool["inputSchema"]["additionalProperties"], false);
@@ -143,6 +151,14 @@ fn mediated_mcp_refuses_unrouted_calls_and_extra_mutation_semantics_before_store
     let client = client();
     let store = Path::new("/missing-mcp-store");
     for (name, args) in [
+        (
+            "update_requirement",
+            json!({"id":"TASK-1", "tags":[], "force":true}),
+        ),
+        (
+            "update_requirement",
+            json!({"id":"TASK-1", "tags":[], "replace_tags":true}),
+        ),
         ("claim_task", json!({"id":"TASK-1"})),
         ("queue_done", json!({"id":"TASK-1"})),
         ("add_requirement", json!({"title":"no allocation"})),

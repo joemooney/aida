@@ -36,7 +36,7 @@ fn args_of(cmd: &std::process::Command) -> Vec<String> {
 // wrapper commands must retain an explicit removal decision.
 // trace:STORY-2326 | ai:codex
 fn env_of(cmd: &mut std::process::Command, key: &str) -> Option<Option<String>> {
-    let cleared = crate::launch::profile::environment_is_cleared(cmd);
+    let cleared = crate::vendors::profile::environment_is_cleared(cmd);
     let value = cmd
         .get_envs()
         .find(|(k, _)| *k == key)

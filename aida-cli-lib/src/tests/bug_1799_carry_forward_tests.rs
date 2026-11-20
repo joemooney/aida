@@ -23,11 +23,28 @@ fn bug_1799_carry_forward_sweep_skips_inherited_findings() {
     .unwrap();
     write_verdict_object(&file, &obj1).unwrap();
 
-    // 2. Approve at sha B with no finding flags
-    let obj2 = build_verdict_object(
+    // trace:BUG-2527 | ai:claude
+    // 2a. An explicit approval over the inherited blocking finding is refused
+    //     rather than silently recorded as request-changes.
+    let refused = build_verdict_object(
         root,
         &file,
         Some("approved"),
+        Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
+        None,
+        None,
+        &[],
+        "me",
+    )
+    .unwrap_err();
+    assert_eq!(refused.kind(), std::io::ErrorKind::InvalidInput);
+
+    // 2b. Re-record request-changes at sha B with no finding flags; F is
+    //     inherited, not newly filed.
+    let obj2 = build_verdict_object(
+        root,
+        &file,
+        Some("request-changes"),
         Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"),
         None,
         None,
@@ -49,7 +66,8 @@ fn bug_1799_carry_forward_sweep_skips_inherited_findings() {
         "inherited findings should not carry forward"
     );
 
-    // 3. Explicitly re-record at sha C
+    // trace:STORY-2698 | ai:codex
+    // 3. Explicitly re-record a deferred finding at sha C
     let obj3 = build_verdict_object(
         root,
         &file, // read from the same file which has the `request-changes` state in `obj1` + `obj2` changes if we wrote it, but we didn't write obj2
@@ -57,7 +75,7 @@ fn bug_1799_carry_forward_sweep_skips_inherited_findings() {
         Some("cccccccccccccccccccccccccccccccccccccccc"),
         None,
         None,
-        &["F".to_string()],
+        &[serde_json::json!({"text":"F","severity":"minor","disposition":"deferred","rationale":"safe follow-up"}).to_string()],
         "me",
     )
     .unwrap();

@@ -46,6 +46,8 @@ pub(crate) fn handle_cache_command(
         CacheCommand::Rebuild { history: false } => {
             // trace:BUG-1940 | ai:claude
             let outcome = backend.rebuild_cache_recovering()?;
+            // trace:BUG-2598 | ai:codex
+            backend.cache().checkpoint_truncate()?;
             print_quarantine_notice(&outcome);
             let n = outcome.count;
             println!(
@@ -656,7 +658,6 @@ fn run_cache(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <CacheArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

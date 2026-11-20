@@ -6,6 +6,63 @@ use anyhow::Result;
 use chrono::Utc;
 use std::path::Path;
 
+/// Compatibility death observation for shared-claim creators and headless
+/// workers. Callers bind the recorded process to a local-host claim or a child
+/// they launched; a foreign/unknown PID view cannot supply death evidence.
+/// Use the shared process observer until these claims carry admitted ownership
+/// witnesses, alongside the other ownership compatibility readers.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn local_claim_process_is_dead(
+    pid: u32,
+    recorded_start: Option<&str>,
+    pid_namespace: Option<u64>,
+) -> bool {
+    pid != 0
+        && aida_core::pid_observer::PidObserver::current().can_observe(pid_namespace)
+        && match aida_core::proc_identity::observe_legacy_registry(
+            pid,
+            recorded_start,
+            pid_namespace,
+        ) {
+            aida_core::proc_identity::Verdict::Dead(
+                aida_core::proc_identity::DeadReason::Absent,
+            ) => true,
+            aida_core::proc_identity::Verdict::Dead(
+                aida_core::proc_identity::DeadReason::Reused,
+            ) => {
+                // The strict observer requires a boot-bound identity and only
+                // reports Reused when the boot matches. Legacy tick-only
+                // stamps cannot prove this and retain the claim.
+                aida_core::proc_identity::ProcIdentity::from_registry(
+                    pid,
+                    recorded_start,
+                    pid_namespace,
+                )
+                .is_some_and(|id| {
+                    matches!(
+                        aida_core::proc_identity::observe(&id, true),
+                        aida_core::proc_identity::Verdict::Dead(
+                            aida_core::proc_identity::DeadReason::Reused
+                        )
+                    )
+                })
+            }
+            _ => false,
+        }
+}
+
+/// Advisory death observation for local deputy processes. The caller must
+/// establish that the process is visible in the reader's PID namespace.
+// trace:TASK-3801 | ai:codex
+pub(crate) fn local_deputy_process_is_dead(pid: u32, recorded_start: Option<&str>) -> bool {
+    pid > 0
+        && pid <= i32::MAX as u32
+        && matches!(
+            aida_core::proc_identity::observe_legacy_registry(pid, recorded_start, None),
+            aida_core::proc_identity::Verdict::Dead(_)
+        )
+}
+
 pub(crate) fn load(root: &Path, key: &WorkKey) -> Result<Option<Ownership>> {
     match super::store::OwnershipStore::for_project(root)? {
         Some(store) => store.load(key),
@@ -42,6 +99,60 @@ pub(crate) fn owner(record: &Ownership) -> OwnerVerdict {
         },
         |holder| super::judge_owner(holder, &host, Utc::now()),
     )
+}
+
+/// Explicit clone force-claim can independently prove a refused worker dead.
+/// The caller must first bind this cleanup record to the retained lease.
+// trace:BUG-2552 | ai:codex
+pub(crate) fn force_claim_clone_owner(
+    record: &Ownership,
+    lease: &crate::SessionLease,
+) -> OwnerVerdict {
+    let verdict = owner(record);
+    if !matches!(verdict, OwnerVerdict::Unknown { .. }) {
+        return verdict;
+    }
+    // Admission refusal is not process liveness. Require a local,
+    // observable recorded worker PID to be absent; never infer death
+    // from a changed start identity or an expired heartbeat here.
+    // trace:BUG-2552 | ai:codex
+    let refused_holder = record.holder.as_ref().is_some_and(|holder| {
+        !holder.witnesses.is_empty()
+            && holder.witnesses.iter().all(|witness| {
+                matches!(witness.kind, crate::ownership::WitnessKind::Process { .. })
+                    && witness
+                        .admission
+                        .as_ref()
+                        .is_some_and(|record| record.refusal().is_some())
+            })
+    });
+    let dead = refused_holder
+        && lease.tree_kind == crate::seat_clone::TreeKind::Clone
+        && lease.hostname == crate::coordination::hostname()
+        && aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
+        && crate::leases::lease_holder_record(lease)
+            .is_some_and(|record| record.refusal().is_some())
+        && lease.active_pid.is_some_and(|pid| {
+            pid != 0
+                && matches!(
+                    aida_core::proc_identity::observe_legacy_registry(
+                        pid,
+                        lease.active_pid_start_time.as_deref(),
+                        lease.pid_namespace,
+                    ),
+                    aida_core::proc_identity::Verdict::Dead(
+                        aida_core::proc_identity::DeadReason::Absent
+                            | aida_core::proc_identity::DeadReason::Exited
+                    )
+                )
+        });
+    if dead {
+        OwnerVerdict::Dead {
+            proof: "local refused worker process exited".into(),
+        }
+    } else {
+        verdict
+    }
 }
 
 /// Explicit release or positive death proof. Unknown and absent records retain
@@ -323,9 +434,14 @@ fn review_finished_reason(lease: &crate::SessionLease) -> Result<String> {
 // the supervisor receipt; foreign/unreadable recorded workers remain protected.
 // trace:BUG-2498 | ai:codex
 fn review_completion_matches(lease: &crate::SessionLease, why: &str) -> bool {
-    if !review_finished_reason(lease).is_ok_and(|expected| why == expected) {
-        return false;
-    }
+    review_finished_reason(lease).is_ok_and(|expected| why == expected)
+        && finished_review_worker_is_gone(lease)
+}
+
+/// After supervised exit, veto cleanup when the recorded worker remains
+/// alive or its identity cannot be verified.
+// trace:BUG-2498 BUG-2684 | ai:codex
+pub(crate) fn finished_review_worker_is_gone(lease: &crate::SessionLease) -> bool {
     if crate::leases::lease_holder_record(lease).is_some() {
         return matches!(
             crate::leases::lease_process_verdict(lease),

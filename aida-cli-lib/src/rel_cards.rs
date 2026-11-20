@@ -2,7 +2,23 @@
 //! `aida rel` edge add/remove, relationship type matching and rows, tree, comment and card rendering (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::is_terminal_status_str;
+use crate::{
+    build_intent_neighborhood, discover_plan_context, extract_acceptance_section,
+    find_main_worktree_root, get_default_author, intent, is_terminal_status, load_store_for_lookup,
+    not_found, print_git_linkage, resolve_current_session_id, status_display, SessionLease,
+};
+use crate::{do_dispatch, effective_display_status, parse_requirement_id, trailer_spec_or_skip};
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use aida_core::{
+    Comment, RelationshipType, Requirement, RequirementPriority, RequirementStatus,
+    RequirementsStore,
+};
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
+use uuid::Uuid;
 
 /// Read node_id from the store's node.toml; defaults to 1 for unregistered nodes.
 pub(crate) fn load_node_id(store_path: &std::path::Path) -> String {

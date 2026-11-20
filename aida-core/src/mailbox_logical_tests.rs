@@ -444,13 +444,13 @@ fn story1843_budget_layout_and_missing_worktree_are_reported() {
         .unwrap()
         .len() as u64;
     let mut limits = ReadLimits::explicit_read();
-    limits.max_total_bytes = inventory_bytes - 1;
+    limits.max_discovery_bytes = inventory_bytes - 1;
     let s = logical_snapshot(&ctx, &advisor(), &Query::Inbox, &limits);
     assert_eq!(
         s.inventory_error,
         Some(SourceErrorCode::InventoryOverBudget)
     );
-    limits.max_total_bytes = inventory_bytes + 8;
+    limits.max_discovery_bytes = inventory_bytes + 8;
     let s = logical_snapshot(&ctx, &advisor(), &Query::Inbox, &limits);
     assert_eq!(s.inventory_error, None);
     assert_eq!(
@@ -812,10 +812,9 @@ fn inspector(r: &Repo, limits: &ReadLimits) -> ReceiptInspector {
 #[test]
 fn story1843_receipt_lookups_are_exact_per_id_at_scale() {
     let r = repo();
-    let limits = ReadLimits::explicit_read();
     // More receipt entries than the whole listing budget, spread over keys
     // and worktrees.
-    let per_key = limits.max_entries / 4 + 1;
+    let per_key = ReadLimits::explicit_read().max_entries / 4 + 1;
     for (n, root) in [&r.main, &r.sib_a, &r.sib_b, &r.pool0].iter().enumerate() {
         for k in 0..2 {
             let dir = root
@@ -828,7 +827,9 @@ fn story1843_receipt_lookups_are_exact_per_id_at_scale() {
         }
     }
     receipt(&r.pool0, "advisor", "wanted", 42);
+    // trace:STORY-2697 | ai:codex — fixture writes do not consume the read budget.
     let started = Instant::now();
+    let limits = ReadLimits::explicit_read();
     let inspect = inspector(&r, &limits);
     assert_eq!(
         inspect.lookup("advisor", "wanted"),

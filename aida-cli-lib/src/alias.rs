@@ -246,7 +246,8 @@ pub fn registry() -> Vec<AliasGroup> {
     // `external` with the resolved path. Like user aliases they are shown to
     // every caller; unlike user aliases every caller can run them.
     // trace:STORY-1641 | ai:claude
-    let externals = crate::external_cmd::discover();
+    // trace:STORY-2704 | ai:codex
+    let externals = crate::external_cmd::discover_invocations();
     if !externals.is_empty() {
         groups.push(AliasGroup {
             surface: "External commands".to_string(),
@@ -426,7 +427,8 @@ mod tests {
         // clap `intake` alias reaches the Groom command (STORY-708: groom is
         // canonical; assess/intake are deprecated aliases)
         assert!(matches!(
-            crate::command_registry::try_parse_from(["aida", "intake"])
+            crate::TEST_CLI
+                .try_parse_from(["aida", "intake"])
                 .unwrap()
                 .command
                 .registered::<crate::autopilot_intake::GroomArgs>(),

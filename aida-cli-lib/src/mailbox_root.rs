@@ -1,7 +1,9 @@
 //! MailboxPolicy, MailboxResolveFailure (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{agent_registry, current_user_id, list_roles, AGENT_ROLES};
+use anyhow::Result;
+use colored::Colorize;
 
 // trace:STORY-583 trace:TASK-782 | ai:codex,claude
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

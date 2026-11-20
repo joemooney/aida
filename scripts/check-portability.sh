@@ -55,7 +55,7 @@ if [[ -n "$BASE_REF" ]]; then
      git show "$BASE_REF:scripts/portability-rules.json" >"$tmp_base_rules" 2>/dev/null; then
     # trace:BUG-1301 | ai:codex
     python3 "$ROOT/scripts/check-portability-growth.py" \
-      "$tmp_base" "$tmp_base_rules" "$ALLOWLIST" "$RULES"
+      "$tmp_base" "$tmp_base_rules" "$ALLOWLIST" "$RULES" --base-rev "$BASE_REF"
   else
     echo "portability allowlist growth check: no baseline exists at $BASE_REF; skipping initial bootstrap comparison"
   fi

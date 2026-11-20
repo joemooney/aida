@@ -377,6 +377,11 @@ fn containment_doctor_and_permission_reports_distinguish_native() {
     let codex = report.agents.iter().find(|r| r.agent == "codex").unwrap();
     assert!(!codex.refused_under_containment);
     assert_eq!(codex.net_effect, "native sandbox, not AIDA-contained");
+    // trace:BUG-2513 | ai:codex
+    assert!(codex
+        .launch_readiness
+        .starts_with("ready: native sandbox, not AIDA-contained"));
+    assert!(codex.launch_fix.is_none());
     // TASK-2712: the report shows the posture; the launch appends the
     // tree-specific `--add-dir` write set after it.
     // trace:TASK-2712 | ai:claude

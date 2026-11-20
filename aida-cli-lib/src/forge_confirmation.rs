@@ -31,6 +31,9 @@ pub(crate) fn pause() -> Duration {
 
 pub(crate) fn backoff() {
     let pause = pause();
+    let pause = crate::forge_lookup::forge_lookup_deadline().map_or(pause, |deadline| {
+        pause.min(deadline.saturating_duration_since(std::time::Instant::now()))
+    });
     if !pause.is_zero() {
         std::thread::sleep(pause);
     }
@@ -51,21 +54,39 @@ mod pause_tests {
     }
 }
 
+const CONFIRMATION_GIT_TIMEOUT: Duration = Duration::from_secs(30);
+
 fn git(root: &Path, args: &[&str], remote: bool) -> Result<Output> {
     // Confirmation fetches are nested train forge calls too. Persist intent
     // again before each base/head fetch, including absent-head recovery.
     // trace:STORY-2401 | ai:codex
-    if remote {
-        crate::pr_train::before_train_forge_call("confirmation Git fetch")?;
-    }
+    let deadline = if remote {
+        crate::pr_train::before_train_forge_call("confirmation Git fetch")?
+    } else {
+        crate::forge_lookup::forge_lookup_deadline()
+    };
+    // A scoped read deadline (`train --check --timeout`) tightens the 30s
+    // bound; once it has passed nothing runs and the evidence is unknown.
+    // trace:TASK-3792 | ai:claude
+    let bound = match deadline {
+        None => CONFIRMATION_GIT_TIMEOUT,
+        Some(deadline) => {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            anyhow::ensure!(
+                !left.is_zero(),
+                "confirmation Git read skipped: the read deadline passed"
+            );
+            left.min(CONFIRMATION_GIT_TIMEOUT)
+        }
+    };
     // Retain the private-seat clone refusal even for evidence-only fetches.
     let mut cmd = aida_core::git_ops::host_git_command(root);
     cmd.args(args).stdin(Stdio::null());
     if remote {
         aida_core::git_ops::configure_remote_credentials(&mut cmd, root, "origin");
     }
-    crate::command_output_with_timeout(cmd, Duration::from_secs(30))
-        .context("confirmation Git read failed or exceeded 30 seconds")
+    crate::command_output_with_timeout(cmd, bound)
+        .context("confirmation Git read failed or exceeded its time bound")
 }
 
 fn stdout(root: &Path, args: &[&str]) -> Result<String> {

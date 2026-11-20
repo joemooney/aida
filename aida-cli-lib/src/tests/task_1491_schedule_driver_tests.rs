@@ -997,9 +997,9 @@ fn shift_install_is_gated_and_installs_driver_after_yes() {
 
 #[test]
 fn shift_install_and_schedule_systemd_verbs_parse() {
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "shift", "install", "--systemd-user"])
-            .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "shift", "install", "--systemd-user"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::shift::ShiftArgs>(),
         crate::shift::ShiftArgs {
@@ -1009,8 +1009,9 @@ fn shift_install_and_schedule_systemd_verbs_parse() {
             }
         }
     ));
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "shift", "install", "--cron"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "shift", "install", "--cron"])
+        .unwrap();
     assert!(matches!(
         cli.command.registered::<crate::shift::ShiftArgs>(),
         crate::shift::ShiftArgs {
@@ -1020,17 +1021,15 @@ fn shift_install_and_schedule_systemd_verbs_parse() {
             }
         }
     ));
-    assert!(crate::command_registry::try_parse_from(["aida", "shift", "install"]).is_err());
-    assert!(crate::command_registry::try_parse_from([
-        "aida",
-        "shift",
-        "install",
-        "--cron",
-        "--systemd-user"
-    ])
-    .is_err());
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "schedule", "install-systemd"]).unwrap();
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "shift", "install"])
+        .is_err());
+    assert!(crate::TEST_CLI
+        .try_parse_from(["aida", "shift", "install", "--cron", "--systemd-user"])
+        .is_err());
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "schedule", "install-systemd"])
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::maintenance_schedule::ScheduleArgs>(),
@@ -1038,8 +1037,9 @@ fn shift_install_and_schedule_systemd_verbs_parse() {
             inner: MaintenanceScheduleCommand::InstallSystemd
         }
     ));
-    let cli =
-        crate::command_registry::try_parse_from(["aida", "schedule", "uninstall-systemd"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "schedule", "uninstall-systemd"])
+        .unwrap();
     assert!(matches!(
         cli.command
             .registered::<crate::maintenance_schedule::ScheduleArgs>(),

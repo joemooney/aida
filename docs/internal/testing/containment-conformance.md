@@ -470,6 +470,11 @@ In particular, the loopback network fixture still cannot establish a C3 pass,
 and the UNIX canary does not establish all C4 lifecycle properties. No report
 claims a whole-lane pass. Launch stdout/stderr and fixture state are retained for
 inspection; grants retain their normal production expiry and revocation rules.
+On refusal, `report.json` lists the diagnostic files that exist. Setup
+commands that fail before launcher output is created record their exit status
+and available diagnostics in the report. For a launcher process that exits
+before acceptance, see the `launch.exit_code` field and `stderr.txt`.
+<!-- trace:BUG-2602 | ai:codex -->
 
 The advisor owns the live run through deputy 3 after merge and attaches its
 report to BUG-2447/2448. The managed-seat offline result alone provides no live
@@ -494,6 +499,9 @@ identity remains set throughout.
 The native `agy --sandbox` experiment is diagnostic only. Its report always
 retains `production_launcher_credit=false` and `whole_lane_pass=false`; a native
 sandbox result cannot admit the outer-only vendor.
+It discovers the OAuth token under the invoking user's
+`~/.gemini/antigravity-cli` runtime directory, including directory symlinks.
+Missing credentials produce a `credential not found at <path>` diagnostic.
 
 The AIDA fixture accepts `--vendor agy --boundary aida`, pins the fixture
 vendor selection and queries the selected binary's runtime policy. AGY uses
@@ -506,7 +514,9 @@ preflight and live receipt/exec barrier. The unmeasured inventory exception is
 local to this explicit entry and never relaxes trusted allowed-host approval.
 `Adapter::require_conformance` and ordinary wrapper preparation remain closed.
 
-The credential source is retained before authority HOME relocation; only its
+The credential path comes from the tested binary's runtime-policy descriptor
+and the invoking user's original HOME. A missing credential is reported in
+`report.json` before fixture role entry. Only the credential's
 checked leaf handle is mounted read-only. Both the relocated and original
 `.gemini` parents are masked. Runtime state is private and writable except for the credential and mandatory
 `settings.json` leaves, which are pinned read-only by handle. The settings source

@@ -2,7 +2,20 @@
 //! session prune/show/handoff/manifest and queue-work launch helpers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::canonical_role_name;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, drain_lock, find_lease_by_id_prefix, find_project_root, force_cleanup_lease,
+    humanize_age_secs, humanize_relative, humanize_size, lease_covers_cwd, lease_has_durable_owner,
+    lease_path, list_leases, load_session_activity, load_store_for_lookup, main_worktree_root_from,
+    parent_project_root_for_session, probe_dangling_claudes_at_path,
+    probe_live_claudes_in_worktree, process_probe, seat_rotation, session, session_manifest,
+    shell_quote, PruneCandidate, QueueWorkPlan, SessionLease, SessionManifestCommand,
+};
+use aida_core::{RequirementStatus, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 pub(crate) fn session_prune_orphans(dry_run: bool, yes: bool) -> Result<()> {
     let home = crate::home_dir().context("HOME not set; cannot locate Claude project dir")?;
@@ -977,6 +990,88 @@ pub(crate) fn resolve_handoff_seat_from(
         })
 }
 
+// trace:STORY-2893 | ai:codex
+fn operator_waiting_prs(note: &str) -> Vec<u64> {
+    static ASK: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?i)\b(?:waiting (?:on|for)|awaiting|needs?) (?:the )?(?:operator|joe|human)\b|\b(?:operator|joe|human)[ -](?:only|waiting)\b|\b(?:operator|joe|human) (?:action|needed|required|to (?:merge|ship|clear|train))\b|\bfrom (?:his|your|joe's|the operator's) terminal\b").unwrap()
+    });
+    static PR: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(?i)(?:^|[^\p{L}\p{N}_/#-])(?:#|PR[- ])([0-9]+)\b").unwrap()
+    });
+    static ITEM: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"^(?:[-*+]|[0-9]+[.)])\s+").unwrap());
+    static HEADING: std::sync::LazyLock<regex::Regex> =
+        std::sync::LazyLock::new(|| regex::Regex::new(r"^#{1,6}\s").unwrap());
+    let mut ids = std::collections::BTreeSet::new();
+    // An operator ask opens a section two ways: a non-bullet heading
+    // ("## Waiting on Joe", "**Waiting on Joe:**") covers every bullet until
+    // the next non-bullet line; a bullet heading ("- Waiting on Joe:") covers
+    // the bullets nested deeper than it. Both are judged on the same
+    // emphasis-stripped prose as the ask itself. trace:STORY-2893 | ai:claude
+    let mut section = false;
+    let mut bullet_section: Option<usize> = None;
+    for raw in note.lines() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let indent = raw.len() - raw.trim_start().len();
+        let bullet = ITEM.find(line);
+        let body = bullet.map_or(line, |m| &line[m.end()..]);
+        let prose = body.replace(['*', '`', '_'], "");
+        let prose = prose.trim();
+        let ask = ASK.is_match(prose);
+        let heading = ask && (HEADING.is_match(prose) || prose.ends_with(':'));
+        if bullet.is_none() {
+            section = heading;
+            bullet_section = None;
+        } else if bullet_section.is_some_and(|open| indent <= open) {
+            bullet_section = None;
+        }
+        let covered = section || bullet_section.is_some();
+        if ask || (covered && bullet.is_some()) {
+            ids.extend(
+                PR.captures_iter(line)
+                    .filter_map(|c| c[1].parse::<u64>().ok())
+                    .filter(|&pr| pr > 0),
+            );
+        }
+        if bullet.is_some() && heading && bullet_section.is_none() {
+            bullet_section = Some(indent);
+        }
+    }
+    ids.into_iter().collect()
+}
+
+fn operator_waiting_warnings(
+    note: &str,
+    observe: impl FnOnce(&[u64]) -> Result<std::collections::BTreeMap<u64, crate::pr_train::NextActor>>,
+) -> Vec<String> {
+    let prs = operator_waiting_prs(note);
+    if prs.is_empty() {
+        return Vec::new();
+    }
+    match observe(&prs) {
+        Ok(mut actors) => prs
+            .into_iter()
+            .filter_map(|pr| {
+                let next = actors.remove(&pr).unwrap_or_else(|| {
+                    crate::pr_train::NextActor::unverified("train gate evidence unavailable")
+                });
+                (next.actor != "operator").then(|| {
+                    format!(
+                        "handoff names the operator for PR #{pr}; next actor is {} ({}: {})",
+                        next.actor, next.gate, next.reason
+                    )
+                })
+            })
+            .collect(),
+        Err(error) => vec![format!(
+            "handoff operator asks for PRs {prs:?} are unverified ({error:#})"
+        )],
+    }
+}
+
 /// STORY-1464: write or show a seat handoff note (the rotation primitive).
 // trace:STORY-1464 | ai:claude
 pub(crate) fn session_handoff_seat(
@@ -1020,6 +1115,13 @@ pub(crate) fn session_handoff_seat(
             std::fs::read_to_string(src).with_context(|| format!("reading {src}"))?
         };
         anyhow::ensure!(!body.trim().is_empty(), "handoff note is empty");
+        if !snapshot && body.len() <= seat_rotation::HANDOFF_MAX_BYTES {
+            for warning in
+                operator_waiting_warnings(&body, |prs| crate::pr_train::next_actors(&cwd, prs))
+            {
+                eprintln!("warning: {warning}");
+            }
+        }
         let mut resolved_spec = spec.map(str::to_string);
         let body = if let Some(ref condition) = condition {
             let spec =
@@ -1671,6 +1773,7 @@ pub(crate) fn session_manifest_write(
         batch_name,
         agent_name: None,
         plan: None,
+        seat: None,
         items: manifest_items,
     };
 
@@ -1825,6 +1928,7 @@ pub(crate) fn write_queue_work_manifest(
         batch_name: batch_name.map(str::to_string),
         agent_name: None,
         plan: plan_context,
+        seat: None,
         items,
     };
     let path = session_manifest::manifest_path(project_root, &lease.id);
@@ -2097,4 +2201,118 @@ pub(crate) fn resume_command_with_cwd(
         }
         _ => base.to_string(),
     }
+}
+
+// trace:STORY-2893 | ai:codex
+#[cfg(test)]
+#[test]
+fn story_2893_handoff_finds_operator_claims_and_deduplicates_prs() {
+    assert_eq!(
+        operator_waiting_prs(
+            "## Waiting on Joe\n\n- #4217 and PR-4229\n- #4217\n\n## CI\n- #77\n\nTrain #4224 from his terminal"
+        ),
+        [4217, 4224, 4229]
+    );
+    assert!(operator_waiting_prs(
+        "Reviewer needed for #4233\nWaiting on CI for PR-9\nWaiting on Joe for owner/repo#81"
+    )
+    .is_empty());
+}
+
+#[cfg(test)]
+#[test]
+fn story_2893_handoff_warns_with_corrected_actor() {
+    use crate::pr_train::NextActor;
+    let warnings = operator_waiting_warnings("Waiting on Joe for #4217, #4233, #4234", |prs| {
+        assert_eq!(prs, [4217, 4233, 4234]);
+        Ok([
+            (
+                4217,
+                NextActor {
+                    actor: "train",
+                    gate: "riding-train",
+                    reason: "already riding #4238".into(),
+                    head: None,
+                },
+            ),
+            (
+                4233,
+                NextActor {
+                    actor: "reviewer",
+                    gate: "approval",
+                    reason: "no approval at head".into(),
+                    head: None,
+                },
+            ),
+            (
+                4234,
+                NextActor {
+                    actor: "operator",
+                    gate: "mandate",
+                    reason: "human-only gate".into(),
+                    head: None,
+                },
+            ),
+        ]
+        .into())
+    });
+    assert_eq!(warnings.len(), 2);
+    assert!(warnings[0].contains("PR #4217; next actor is train (riding-train:"));
+    assert!(warnings[1].contains("PR #4233; next actor is reviewer (approval:"));
+}
+
+// Review round 2: the operator section is recognised after the same Markdown
+// normalisation as the ask itself, and a bullet heading keeps operator
+// context for the list nested under it.
+// trace:STORY-2893 | ai:claude
+#[cfg(test)]
+#[test]
+fn story_2893_handoff_sections_survive_emphasis_and_nested_lists() {
+    use crate::pr_train::NextActor;
+    let train = |pr| NextActor {
+        actor: "train",
+        gate: "train-eligible",
+        reason: format!("#{pr} is train-eligible"),
+        head: None,
+    };
+    for note in [
+        "**Waiting on Joe:**\n- #4217\n\nDone\n- #77",
+        "__Waiting on Joe__:\n* #4217",
+        "- Waiting on Joe:\n  - #4217\n- #77",
+        "1. **Waiting on Joe:**\n   1. PR-4217\n2. #77",
+        "## Next\n- Waiting on Joe:\n  - #4217\n- reviewer #77",
+    ] {
+        let mut asked = Vec::new();
+        let warnings = operator_waiting_warnings(note, |prs| {
+            asked = prs.to_vec();
+            Ok(prs.iter().map(|&pr| (pr, train(pr))).collect())
+        });
+        assert_eq!(asked, [4217], "{note:?}");
+        assert_eq!(warnings.len(), 1, "{note:?}: {warnings:?}");
+        assert!(
+            warnings[0].contains("PR #4217; next actor is train (train-eligible:"),
+            "{note:?}: {warnings:?}"
+        );
+    }
+    // A nested bullet that needs a reviewer is also reported, not dropped.
+    let warnings = operator_waiting_warnings("- Waiting on Joe:\n  - #4233", |prs| {
+        Ok(prs
+            .iter()
+            .map(|&pr| {
+                (
+                    pr,
+                    NextActor {
+                        actor: "reviewer",
+                        gate: "approval",
+                        reason: "no approval at head".into(),
+                        head: None,
+                    },
+                )
+            })
+            .collect())
+    });
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert!(warnings[0].contains("PR #4233; next actor is reviewer (approval:"));
+    // Neither form widens to ordinary lists without an operator ask.
+    assert!(operator_waiting_prs("**Waiting on CI:**\n- #4217\n- Notes:\n  - #4218").is_empty());
 }

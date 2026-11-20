@@ -21,9 +21,18 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 1. Resolve the PR number from the active session lease's scope, or accept `--pr N`
 1a. `aida review claim --pr N` to mark PR-N under review, so a merge surface refuses to land it before your verdict; `aida review record` (step 6) clears it
 2. `aida review prompt --pr N --write .aida/review-prompt-pr-N.md` to generate the per-spec checklist (STORY-67)
-3. Walk each spec: read the diff against acceptance criteria, run the test plan, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence; use WAITING when only external CI or host evidence is missing
+3. Walk each spec: read the diff against the applicable criteria in the generated worksheet, check the evidence, post a ✅ PASS / ⚠️ PARTIAL / ❌ FAIL verdict with evidence; approve despite pending CI; use WAITING only for independent host evidence or a specific named test result needed for judgment
 4. Fix-forward mechanical issues (fmt drift, cfg-gated tests, typos) as small commits; never fix-forward semantic gaps
-5. Gate on required CI green, applying the merge-hold exception in the review decision fixtures below before selecting a verdict. If required CI or host evidence is unavailable, record `waiting` with dependency, responsible actor and resume condition, omit `--finding`, then stop for a fresh review at the current head.
+5. Record approval independently of pending CI, applying the review decision fixtures below. Gate merging on required CI green. If independent host evidence or a specific named test result needed for judgment is unavailable, record `waiting` with dependency, responsible actor and resume condition, omit `--finding`, then stop for a fresh review at the current head.
+**Standalone headless draft contract:** when the launch prompt supplies an
+absolute `draft.json` path, write its closed version-1 data-only JSON contract
+there and exit. Include the full reviewed SHA, complete summary and all
+findings. This supersedes the record command below, including on resume or
+after a refused legacy record attempt. Do not add identity, grants,
+attestations, receipts, covered specs, commands or destinations. The parent
+validates and records it; do not claim in-sandbox recording succeeded.
+<!-- trace:BUG-2564 | ai:codex -->
+
 6. **Record the verdict FIRST** — before the PR comment, before any merge, before exit.
    This is the orchestrator's phase-3 → phase-4 handshake; a review that skips it reads as
    "the review did not complete" no matter how good the prose verdict was, and the PR comment
@@ -46,14 +55,17 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 7. Post a consolidated review comment with the verdict table
 8. Interactive sessions: pause for explicit user confirmation before `gh pr merge N --squash`.
    Headless (`--no-human`) sessions: never prompt — act on the verdict-file default
-9. After merge: `aida edit X --status completed` for every spec that PASSed; leave partials/fails In Progress
+9. After merge: `aida edit X --status completed` for each passing completing spec. Leave Refs-only specs and partials/fails In Progress
 10. If a STORY-66 auto-queued `Review PR-N` story exists, mark it Completed too via `aida queue done`
 11. Hand off — the user runs `aida session end` themselves from outside the worktree
 
 Pairs with `/aida-pr` (implementer side) and `/aida-code-review` (orthogonal exhaustive audit — NOT a substitute).
 
 <!-- trace:BUG-2500 | ai:codex -->
-A review blocked solely on external CI or host evidence records `waiting`
+<!-- trace:STORY-2697 | ai:codex -->
+When there are no actionable defects, record APPROVED even if CI is pending or running; state "CI pending at review time" in the rationale. A later CI failure keeps the approval unusable through readiness; a fix creates a new head requiring fresh review (or eligible clean-merge carry-over), with destination-head CI still required. Existing ship CI opt-outs are unchanged. Existing CI-only WAITING records are not migrated and still require fresh review. CI alone is not a reason for WAITING: readiness still requires exact-head CI, and landing still requires ship CI or stacked-tip CI. WAITING is reserved for independent external evidence (such as an operator-only canary), or a specific named test result on which the reviewer's judgment depends. Name the dependency, responsible actor and resume condition, with no substantive findings.
+
+A review blocked on that independent evidence records `waiting`
 (displayed `WAITING`), with a summary naming the dependency, responsible actor
 and resume condition, and no substantive findings. Code defects still require
 `request-changes`. Waiting blocks completion and merge without implementer
@@ -62,7 +74,7 @@ Only a fresh recorded review at the current head ends the wait; green CI or
 a changed head alone does not. There is no automatic resume service.
 
 <!-- trace:BUG-2508 | ai:codex -->
-A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when required CI is otherwise green and there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR.
+A red merge-hold-gate or supervised human/advisor clearance that this review's own fresh APPROVED verdict can release is not external evidence: record approved when there are no actionable defects. Approval does not release the hold or authorize merge; leave clearance to the authorized actor. Outstanding independent evidence, such as an operator-only canary, still requires waiting even on a held PR.
 
 Review decision fixtures (same current head, no actionable defects):
 
@@ -70,3 +82,5 @@ Review decision fixtures (same current head, no actionable defects):
 | --- | --- | --- | --- |
 | Green except merge-hold-gate | This review’s fresh APPROVED verdict, then authorized clearance | None | APPROVED |
 | Green except merge-hold-gate | This review’s fresh APPROVED verdict, then authorized clearance | Operator-only canary result | WAITING |
+| Pending or running | Fresh APPROVED verdict may release Rework hold | None | APPROVED |
+| Pending or running | Any | Specific named test result needed for judgment | WAITING |

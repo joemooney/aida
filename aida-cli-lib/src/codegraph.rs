@@ -483,25 +483,17 @@ mod tests {
 
     #[test]
     fn lane_host_doctor_flag_parses_and_conflicts_with_heal() {
-        let cli = crate::command_registry::try_parse_from([
-            "aida",
-            "doctor",
-            "--lane-codegraph",
-            "--json",
-        ])
-        .unwrap();
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "doctor", "--lane-codegraph", "--json"])
+            .unwrap();
         assert!(
             cli.command
                 .registered::<crate::doctor_cmd::DoctorArgs>()
                 .lane_codegraph
         );
-        assert!(crate::command_registry::try_parse_from([
-            "aida",
-            "doctor",
-            "--lane-codegraph",
-            "--heal"
-        ])
-        .is_err());
+        assert!(crate::TEST_CLI
+            .try_parse_from(["aida", "doctor", "--lane-codegraph", "--heal"])
+            .is_err());
     }
 
     #[test]
@@ -711,6 +703,7 @@ mod tests {
         use crate::queue_cmd::{QueueWorkMode, QueueWorkPlan};
         use crate::session_start::ReviewForge;
         let plan = QueueWorkPlan {
+            done_rework_change: None,
             mode: QueueWorkMode::Item,
             entries: Vec::new(),
             scope: "STORY-2630".into(),
@@ -734,7 +727,7 @@ mod tests {
                     role,
                     plan_only: false,
                     guided: false,
-                    review_findings: None,
+                    review_findings: crate::rework_direction::ReviewResult::Unavailable,
                     spec_comments: &[],
                     conflict: None,
                     ci_failures: None,
@@ -761,17 +754,15 @@ mod tests {
     #[test]
     fn root_agents_navigation_matches_template_master() {
         let agents = include_str!("../../AGENTS.md");
+        // trace:TASK-3134 | ai:codex
         let navigation = agents
-            .split("For code navigation, ")
-            .nth(1)
-            .unwrap()
-            .split("\n<!-- trace:STORY-2630")
-            .next()
+            .lines()
+            .find(|line| line.starts_with("For code navigation, "))
             .unwrap();
-        assert!(navigation.contains("/home/joe/ai/aida/.codegraph/proxy-state/bin/codegraph"));
         let shared = include_str!("../../aida-core/templates/dispatch/code-navigation.md");
-        assert!(!shared.contains("/home/joe"));
-        assert!(shared.contains("absolute path supplied by this project"));
+        assert_eq!(navigation, shared.trim());
+        assert!(!shared.contains("proxy-state/bin/codegraph"));
+        assert!(shared.contains("codegraph is unavailable on this host; use `rg`"));
     }
 
     // trace:STORY-2630 | ai:codex

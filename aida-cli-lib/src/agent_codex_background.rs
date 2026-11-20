@@ -80,6 +80,8 @@ const WORKER_AMBIENT_ENV: &[&str] = &[
     "RUSTUP_HOME",
     "AIDA_HOME",
     "AIDA_BIN",
+    // trace:STORY-2765 | ai:codex — retain the dispatcher admission track.
+    "AIDA_TRACK",
     "NO_COLOR",
 ];
 /// Prefix families the worker keeps (locale only).
@@ -383,6 +385,21 @@ fn worker_ambient_env(
 
 #[cfg(test)]
 mod env_passthrough_tests {
+    // trace:STORY-2765 | ai:codex
+    #[cfg(unix)]
+    #[test]
+    fn story_2765_detached_worker_child_keeps_track() {
+        let env = super::worker_ambient_env([("AIDA_TRACK".into(), "integration".into())], &[]);
+        let output = std::process::Command::new("/bin/sh")
+            .args(["-c", "printf '%s' \"$AIDA_TRACK\""])
+            .env_clear()
+            .envs(env)
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"integration");
+    }
+
     // trace:BUG-2510 | ai:codex
     #[test]
     fn env_passthrough_worker_projection() {
@@ -392,11 +409,15 @@ mod env_passthrough_tests {
             "OPENAI_API_KEY",
             "LC_TIME",
             "AIDA_ROLE",
+            "AIDA_TRACK",
         ]
         .map(|key| (key.into(), "secret".into()));
         let kept = super::worker_ambient_env(vars, &["XAIAA_API_KEY".into()]);
         let names: Vec<_> = kept.iter().map(|(key, _)| key.to_str().unwrap()).collect();
-        assert_eq!(names, ["XAIAA_API_KEY", "OPENAI_API_KEY", "LC_TIME"]);
+        assert_eq!(
+            names,
+            ["XAIAA_API_KEY", "OPENAI_API_KEY", "LC_TIME", "AIDA_TRACK"]
+        );
     }
 }
 
@@ -429,6 +450,10 @@ pub(crate) struct SupervisorInit {
     pub description: Option<String>,
     pub mail_wake: String,
     pub context_path: Option<std::path::PathBuf>,
+    /// The launch's named seat (`--seat`), recorded on the worker's row.
+    // trace:STORY-2745 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seat: Option<String>,
 }
 
 /// Control messages (newline-delimited JSON on the private channels).
@@ -567,6 +592,13 @@ impl Drop for DispatcherGuard {
 /// `aida agent new codex --bg`.
 pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
     validate_request(&req)?;
+    // A named seat is validated before any side effect. trace:STORY-2745 | ai:claude
+    let seat = req
+        .flag_options
+        .seat
+        .as_deref()
+        .map(crate::seat_rotation::sanitize_seat)
+        .transpose()?;
     // A contained parent refuses codex outright (inherited containment is
     // sticky; native is never relabelled as AIDA containment).
     refuse_uncontained_child_of_contained_parent(&AgentLaunchConfig {
@@ -651,6 +683,14 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         req.verbose,
         false,
     );
+    // trace:STORY-2765 | ai:codex
+    preflight_agent_new_track(
+        &project_root,
+        Some(&expected_role),
+        spec.as_deref(),
+        false,
+        true,
+    )?;
     preflight_agent_new_delegation(&project_root, Some(&expected_role))?;
     crate::gate::seat_authority::validate_launch_delegable_seats(
         &project_root,
@@ -723,7 +763,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
 
     req.resume.duplicate_check = true;
     let mut handle_guard = crate::agent_handle::LaunchReservationGuard::new(&project_root);
-    let (plan, setup_receipt) = {
+    let (mut plan, setup_receipt) = {
         // This invocation's own lease write is not refused by its own,
         // already admitted, attempt.
         let _own = receipt::OwnAttemptScope::enter(&attempt);
@@ -745,8 +785,9 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
             },
         )?
     };
-    // TASK-2712: the shared write set, scoped to the lane's own tree.
-    // trace:TASK-2712 | ai:claude
+    plan.seat = seat; // trace:STORY-2745 | ai:claude
+                      // TASK-2712: the shared write set, scoped to the lane's own tree.
+                      // trace:TASK-2712 | ai:claude
     crate::agent_launch::rescope_contained_settings(
         &mut config,
         &plan.launch_cwd,
@@ -893,6 +934,7 @@ pub(crate) fn agent_new_codex_bg(mut req: CodexBgRequest) -> Result<()> {
         description,
         mail_wake: mail_wake.as_str().to_string(),
         context_path: context_path.clone(),
+        seat: plan.seat.clone(),
     };
     let mut line = serde_json::to_vec(&init)?;
     line.push(b'\n');
@@ -1217,6 +1259,10 @@ fn build_worker_exec(
     if let Some(spec) = &plan.current_spec {
         command.env("AIDA_SESSION_SCOPE", spec);
     }
+    // The worker names its seat. trace:STORY-2745 | ai:claude
+    if let Some(seat) = &plan.seat {
+        command.env(crate::agent_rotation::SEAT_ENV, seat);
+    }
     apply_agent_lease_identity(&mut command, plan.lease_id.as_deref());
     // trace:TASK-2902 | ai:codex
     if super::native_post_exit_spec(config, plan).is_some() {
@@ -1231,7 +1277,7 @@ fn build_worker_exec(
     command
         .env("AIDA_SESSION_ROLE", role)
         .env(crate::gate::seat_authority::GRANT_ENV, grant_id);
-    crate::launch::profile::finalize_codex(&mut command)?;
+    crate::vendors::profile::finalize_codex(&mut command)?;
     // The finalizer rebuilds the Command (default inheritance); the barrier
     // execs ONLY the explicit entries, never the launcher's environment.
     let env = command
@@ -1574,6 +1620,8 @@ pub(crate) fn supervise_attempt(
                 name: Some(init.agent_name.clone()),
                 native_session_id: None,
                 resumed_from: None,
+                // trace:STORY-2745 | ai:claude
+                seat: init.seat.clone(),
                 description: Some(
                     init.description
                         .clone()
@@ -2230,6 +2278,28 @@ mod story_2254_codex_background_tests;
 #[cfg(all(test, target_os = "linux"))]
 #[path = "tests/story_2254_codex_bg_supervisor_tests.rs"]
 mod story_2254_codex_bg_supervisor_tests;
+
+// The detached worker's environment, as the barrier would exec it.
+// trace:STORY-2745 | ai:claude
+#[cfg(test)]
+pub(crate) fn test_worker_env(
+    binary: &std::path::Path,
+    config: &AgentLaunchConfig,
+    plan: &AgentLaunchPlan,
+) -> Result<Vec<(String, String)>> {
+    build_worker_exec(
+        binary,
+        config,
+        plan,
+        &[],
+        None,
+        "implementer",
+        // A baseline seat's explicit empty grant: no grant probe runs.
+        "",
+        agent_registry::MailWake::Off,
+    )
+    .map(|worker| worker.env)
+}
 
 // Exercise the real detached-worker builder without spawning a supervisor.
 // trace:TASK-2902 | ai:codex

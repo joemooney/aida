@@ -199,12 +199,16 @@ fn bug_2418_read_only_cargo_home_maps_to_one_line() {
     );
 }
 
-fn lane_env() -> LaneBuildEnv {
+// trace:STORY-2695 | ai:codex
+fn lane_env(root: &Path) -> LaneBuildEnv {
+    for dir in ["runtime", "home/.cargo"] {
+        std::fs::create_dir_all(root.join(dir)).unwrap();
+    }
     LaneBuildEnv {
-        runtime_dir: Some(PathBuf::from("/run/user/1000")),
+        runtime_dir: Some(root.join("runtime")),
         uid: Some(1000),
-        home: Some(PathBuf::from("/home/u")),
-        cargo_home: Some(PathBuf::from("/home/u/.cargo")),
+        home: Some(root.join("home")),
+        cargo_home: Some(root.join("home/.cargo")),
     }
 }
 
@@ -212,12 +216,13 @@ fn lane_env() -> LaneBuildEnv {
 /// shared sccache cache (advisor correction, ruling O2).
 #[test]
 fn bug_2418_task_2772_lane_build_paths_are_only_the_slot_pair() {
-    let paths = lane_build_write_paths_from(&lane_env());
+    let (_tmp, root) = real_tmp();
+    let paths = lane_build_write_paths_from(&lane_env(&root));
     assert_eq!(
         paths,
         [
-            PathBuf::from("/run/user/1000/cargo-slots-1000"),
-            PathBuf::from("/home/u/.local/state/cargo-slots"),
+            root.join("runtime/cargo-slots-1000"),
+            root.join("home/.local/state/cargo-slots"),
         ]
     );
     assert!(paths
@@ -229,28 +234,29 @@ fn bug_2418_task_2772_lane_build_paths_are_only_the_slot_pair() {
 /// relative paths are dropped.
 #[test]
 fn bug_2418_task_2772_lane_build_paths_never_reach_cargo_home() {
+    let (_tmp, root) = real_tmp();
     let env = LaneBuildEnv {
-        runtime_dir: Some(PathBuf::from("/home/u/.cargo")),
-        ..lane_env()
+        runtime_dir: Some(root.join("home/.cargo")),
+        ..lane_env(&root)
     };
     assert_eq!(
         lane_build_write_paths_from(&env),
-        [PathBuf::from("/home/u/.local/state/cargo-slots")]
+        [root.join("home/.local/state/cargo-slots")]
     );
 
     let env = LaneBuildEnv {
-        cargo_home: Some(PathBuf::from("/home/u")),
-        ..lane_env()
+        cargo_home: Some(root.join("home")),
+        ..lane_env(&root)
     };
     assert_eq!(
         lane_build_write_paths_from(&env),
-        [PathBuf::from("/run/user/1000/cargo-slots-1000")]
+        [root.join("runtime/cargo-slots-1000")]
     );
 
     let env = LaneBuildEnv {
         runtime_dir: Some(PathBuf::from("run")),
         home: None,
-        ..lane_env()
+        ..lane_env(&root)
     };
     assert!(lane_build_write_paths_from(&env).is_empty());
 }

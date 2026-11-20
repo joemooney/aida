@@ -14,7 +14,11 @@
 //! `digest_mailbox_to_canonical`) stay in `main.rs`; this dispatcher reaches
 //! them via `crate::`.
 
+use crate::process_retry::RetryEtxtbsy;
+use crate::{digest, human};
+use crate::{format_mail_age, format_mail_timestamp};
 use anyhow::{Context as _, Result};
+use clap::Parser;
 use colored::Colorize;
 use std::io::Read;
 
@@ -24,7 +28,13 @@ pub(crate) mod mailbox_cmd_args;
 pub(crate) use mailbox_cmd_args::*;
 
 use crate::cli::MailboxCommand;
-use crate::*;
+use crate::{
+    digest_mailbox_to_canonical, ensure_mailbox_mutation_allowed, humanize_relative,
+    inbox_identities, known_mailbox_identities, list_roles, mailbox_line_body, mailbox_policy,
+    mailbox_store, print_mailbox_line, print_mailbox_line_tagged, render_mailbox_notice,
+    resolve_mailbox_message, Cli, Command,
+};
+use anyhow::Context;
 
 // trace:STORY-1843 | ai:codex
 #[path = "mailbox_migration.rs"]
@@ -400,9 +410,6 @@ pub(crate) fn handle_mailbox_command(
             let resolution = if *broadcast {
                 None
             } else {
-                let target = to
-                    .as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("specify --to <agent> or --broadcast"))?;
                 let directory = crate::mailbox_resolver::RecipientDirectory::load_for_send(
                     project_root,
                     store_root,
@@ -410,7 +417,27 @@ pub(crate) fn handle_mailbox_command(
                 for warning in directory.warnings() {
                     eprintln!("{warning}");
                 }
-                Some(directory.resolve_send(target, *queue_for_role)?)
+                match (to.as_deref(), in_reply_to.as_deref()) {
+                    (Some(target), _) => Some(directory.resolve_send(target, *queue_for_role)?),
+                    // A reply without --to goes back to the parent's sender:
+                    // its seat, else its role, else its id. trace:STORY-2745 | ai:claude
+                    (None, Some(reply_target)) => {
+                        let merged = crate::mailbox_view::addressable(project_root, store_root)
+                            .messages()
+                            .to_vec();
+                        let parent = resolve_mailbox_message(&merged, reply_target)
+                            .with_context(|| {
+                                format!("--in-reply-to '{reply_target}' was not resolved; reply refused")
+                            })?;
+                        let (target, resolved) =
+                            resolve_reply_recipient(&directory, parent, *queue_for_role)?;
+                        eprintln!("replying to {target}");
+                        Some(resolved)
+                    }
+                    (None, None) => anyhow::bail!(
+                        "specify --to <agent>, --to seat:<name>, --in-reply-to <id> or --broadcast"
+                    ),
+                }
             };
             let recipient = resolution
                 .as_ref()
@@ -432,6 +459,8 @@ pub(crate) fn handle_mailbox_command(
             let (sender, from_source) = crate::resolve_mail_sender_identity(from.as_deref());
             // trace:BUG-1592 | ai:claude
             let from_role = crate::resolve_mail_sender_role();
+            // trace:STORY-2745 | ai:claude
+            let from_seat = crate::resolve_mail_sender_seat();
             let id = uuid::Uuid::new_v4().to_string();
             // A role send records its send-time cohort beside the message.
             // trace:STORY-1843 | ai:claude
@@ -545,6 +574,7 @@ pub(crate) fn handle_mailbox_command(
                 archived: false,
                 from_source,
                 from_role,
+                from_seat,
                 relayed_from,
             };
             mailbox_store::write_message_with_deliveries(project_root, &msg, deliveries.as_ref())?;
@@ -701,7 +731,8 @@ pub(crate) fn handle_mailbox_command(
             // process through SIGPIPE (BUG-99's default disposition) before
             // the commit, so mail it never received stays unread and is
             // shown again: a possible duplicate read beats silent loss. A
-            // partial view plans no ACK and says so.
+            // view with incomplete discovery plans no ACK and says so;
+            // history omission alone may retain certified unread ACKs.
             // trace:BUG-1482 trace:STORY-1843 | ai:claude
             let (plan, ack_note) = if *archived || *peek {
                 (None, None)
@@ -748,32 +779,23 @@ pub(crate) fn handle_mailbox_command(
             if let Some(note) = &ack_note {
                 println!("  {}", note.yellow());
             }
-            anyhow::Context::context(
-                std::io::Write::flush(&mut std::io::stdout()),
-                "writing the inbox",
-            )?;
-            if let Some(plan) = plan {
-                // Authority is re-resolved after the flush, before any lock.
-                let current = crate::mailbox_view::own_audience();
-                crate::mailbox_view::commit_ack(project_root, plan, &current).map_err(|e| {
-                    anyhow::anyhow!(
-                        "the mail above was shown, but recording it as read did not finish: {e:#}; run `aida mailbox inbox` again to show and record what is still unrecorded"
-                    )
-                })?;
-                // Reading a hello is the advisor's ack of it.
-                // trace:STORY-B6B1278890774EF993D2EBC327862470-100 | ai:claude
-                let shown: Vec<&Message> = inbox.iter().map(|r| &r.message).collect();
-                for handle in crate::advisor_handshake::ack_hellos(
-                    project_root,
-                    store_root,
-                    &shown,
-                    chrono::Utc::now(),
-                ) {
-                    println!(
-                        "  {}",
-                        format!("acked the advisor-handshake hello from {handle}").dimmed()
-                    );
-                }
+            let shown = if *archived || *peek {
+                Vec::new()
+            } else {
+                inbox.clone()
+            };
+            for handle in crate::mailbox_cmd::finish_inbox_read(
+                &mut std::io::stdout(),
+                project_root,
+                store_root,
+                plan,
+                &shown,
+                crate::mailbox_view::own_audience,
+            )? {
+                println!(
+                    "  {}",
+                    format!("acked the advisor-handshake hello from {handle}").dimmed()
+                );
             }
             Ok(())
         }
@@ -1682,6 +1704,47 @@ pub(crate) fn notice_text(
     out
 }
 
+/// Publish receipts only after successful output, then acknowledge precisely
+/// the hellos whose message receipts are durable. Also retries handshake reply
+/// failures on a later read of an already acknowledged hello.
+// trace:BUG-2641 | ai:codex
+pub(crate) fn finish_inbox_read(
+    output: &mut impl std::io::Write,
+    project_root: &std::path::Path,
+    store_root: &std::path::Path,
+    plan: Option<aida_core::mailbox_lifecycle::ack::AckPlan>,
+    shown: &[&aida_core::mailbox_logical::SnapshotRecord],
+    current: impl FnOnce() -> aida_core::mailbox_logical::ResolvedAudience,
+) -> Result<Vec<String>> {
+    output.flush().context("writing the inbox")?;
+    let mut published = std::collections::HashSet::new();
+    if let Some(plan) = plan {
+        // Re-resolve authority after output, before acquiring locks.
+        let committed = crate::mailbox_view::commit_ack(project_root, plan, &current())
+            .map_err(|e| anyhow::anyhow!(
+                "the mail above was shown, but recording it as read did not finish: {e:#}; run `aida mailbox inbox` again to show and record what is still unrecorded"
+            ))?;
+        published.extend(committed.by_key.values().flatten().cloned());
+    }
+    let hellos: Vec<_> = shown
+        .iter()
+        .filter(|r| {
+            published.contains(&r.message.id)
+                || matches!(
+                    r.read,
+                    aida_core::mailbox_logical::ReadEvidence::Acknowledged { .. }
+                )
+        })
+        .map(|r| &r.message)
+        .collect();
+    Ok(crate::advisor_handshake::ack_hellos(
+        project_root,
+        store_root,
+        &hellos,
+        chrono::Utc::now(),
+    ))
+}
+
 /// The rows an own-audience inbox shows, in display order: archived (newest
 /// first), unread only (oldest first), or the default view — every unread
 /// message newest first, then the `recent_read_tail` newest read ones (a
@@ -1773,6 +1836,65 @@ fn inspect_inbox(
     Ok(())
 }
 
+/// The recipient a reply without `--to` goes to. A parent sent from a named
+/// seat is answered to that seat and nowhere else: its live holder, else
+/// queued for the seat's next holder. It never falls through to the
+/// sender's role, which would fan the reply out to the whole role cohort.
+/// A parent with no sender seat goes to its sender's role, else its id, the
+/// first that resolves. Returns the address used and its resolution.
+// trace:STORY-2745 | ai:claude
+pub(crate) fn resolve_reply_recipient(
+    directory: &crate::mailbox_resolver::RecipientDirectory,
+    parent: &aida_core::mailbox::Message,
+    queue_for_role: bool,
+) -> Result<(String, crate::mailbox_resolver::ResolvedRecipient)> {
+    let candidates = reply_candidates(parent);
+    if let Some(seat) = candidates.first().filter(|t| t.starts_with("seat:")) {
+        let resolved = match directory.resolve_send(seat, queue_for_role) {
+            Ok(resolved) => resolved,
+            Err(_) => {
+                eprintln!("{seat} has no live holder; the reply is queued for its next holder");
+                crate::mailbox_resolver::RecipientDirectory::queued_for_seat(seat)
+            }
+        };
+        return Ok((seat.clone(), resolved));
+    }
+    let mut refusals = Vec::new();
+    for target in candidates {
+        match directory.resolve_send(&target, queue_for_role) {
+            Ok(resolved) => return Ok((target, resolved)),
+            Err(e) => refusals.push(format!("{target}: {e:#}")),
+        }
+    }
+    anyhow::bail!(
+        "reply refused: the sender of {} is not reachable ({}); pass --to",
+        parent.id,
+        refusals.join("; ")
+    )
+}
+
+/// PURE: the reply addresses for `parent`, in order: its sender's seat, its
+/// sender's role, its sender id.
+// trace:STORY-2745 | ai:claude
+pub(crate) fn reply_candidates(parent: &aida_core::mailbox::Message) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let seat = parent
+        .from_seat
+        .as_deref()
+        .and_then(aida_core::mailbox_identity::seat_address);
+    for target in [seat, parent.from_role.clone(), Some(parent.from.clone())]
+        .into_iter()
+        .flatten()
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+    {
+        if !out.iter().any(|o| o.eq_ignore_ascii_case(&target)) {
+            out.push(target);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1858,6 +1980,7 @@ mod tests {
             archived: false,
             from_source: aida_core::mailbox::SenderSource::Explicit,
             from_role: None,
+            from_seat: None,
             relayed_from: None,
         }
     }
@@ -2006,7 +2129,8 @@ mod tests {
     // trace:BUG-1297 | ai:codex
     #[test]
     fn mailbox_read_cli_accepts_a_message_prefix() {
-        let cli = crate::command_registry::try_parse_from(["aida", "mailbox", "read", "0fa629d6"])
+        let cli = crate::TEST_CLI
+            .try_parse_from(["aida", "mailbox", "read", "0fa629d6"])
             .unwrap();
         match cli.command.registered::<crate::mailbox_cmd::MailboxArgs>() {
             crate::mailbox_cmd::MailboxArgs {
@@ -2362,18 +2486,19 @@ mod tests {
     // trace:TASK-1250 | ai:codex
     #[test]
     fn mailbox_send_cli_accepts_file_or_stdin_without_positional_body() {
-        let from_file = crate::command_registry::try_parse_from([
-            "aida",
-            "mailbox",
-            "send",
-            "--to",
-            "codex",
-            "--body-file",
-            "mail.txt",
-            "--subject",
-            "Review requested",
-        ])
-        .unwrap();
+        let from_file = crate::TEST_CLI
+            .try_parse_from([
+                "aida",
+                "mailbox",
+                "send",
+                "--to",
+                "codex",
+                "--body-file",
+                "mail.txt",
+                "--subject",
+                "Review requested",
+            ])
+            .unwrap();
         match from_file
             .command
             .registered::<crate::mailbox_cmd::MailboxArgs>()
@@ -2394,14 +2519,9 @@ mod tests {
             other => panic!("expected mailbox send, got {other:?}"),
         }
 
-        let from_stdin = crate::command_registry::try_parse_from([
-            "aida",
-            "mailbox",
-            "send",
-            "--broadcast",
-            "--stdin",
-        ])
-        .unwrap();
+        let from_stdin = crate::TEST_CLI
+            .try_parse_from(["aida", "mailbox", "send", "--broadcast", "--stdin"])
+            .unwrap();
         match from_stdin
             .command
             .registered::<crate::mailbox_cmd::MailboxArgs>()
@@ -3206,7 +3326,6 @@ fn run_mailbox(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
     let args = <MailboxArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

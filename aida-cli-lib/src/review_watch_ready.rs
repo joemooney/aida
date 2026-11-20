@@ -81,6 +81,13 @@ pub(super) trait Evidence {
     /// round-cap wake asks this, since a capped change's earlier blocking
     /// rounds can keep the corpus refusing a head that was reviewed.
     // trace:TASK-2238 | ai:claude
+    fn train_approval(
+        &self,
+        change: &forge::Change,
+    ) -> std::result::Result<Approval, crate::pr_train::MemberGateError> {
+        self.approval(change)
+            .map_err(crate::pr_train::MemberGateError::Refused)
+    }
     fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         self.approval(change)
     }
@@ -97,6 +104,11 @@ pub(super) trait Evidence {
     /// Commits behind the base, and whether the base's changes overlap the
     /// change's paths.
     fn base(&self, change: &forge::Change) -> Result<(u64, bool)>;
+    /// Whether policy permits an overlapping stale head with a verified clean merge.
+    // trace:TASK-3108 | ai:codex
+    fn clean_stale_overlap(&self, _change: &forge::Change) -> Result<bool> {
+        Ok(false)
+    }
     /// The change's head, re-read from the forge.
     fn head(&self, change: &forge::Change) -> Result<String>;
 }
@@ -120,7 +132,16 @@ pub(super) fn evaluate(
         Ok(base) => base,
         Err(error) => return not(format!("base evidence unknown: {error:#}")),
     };
-    if behind > 0 && overlap {
+    // trace:TASK-3108 | ai:codex
+    let clean_stale_overlap = if behind > 0 && overlap {
+        match evidence.clean_stale_overlap(change) {
+            Ok(clean) => clean,
+            Err(error) => return not(format!("base merge evidence unknown: {error:#}")),
+        }
+    } else {
+        false
+    };
+    if behind > 0 && overlap && !clean_stale_overlap {
         return not(format!(
             "{behind} commit(s) behind `{}` with overlapping paths; merge `{}` into the branch",
             change.base, change.base
@@ -166,7 +187,7 @@ pub(super) fn evaluate(
         Ok(head) => return not(format!("head moved to {} during evaluation", short(&head))),
         Err(error) => return not(format!("head re-read refused: {error:#}")),
     }
-    let readiness = if behind > 0 {
+    let readiness = if behind > 0 && !clean_stale_overlap {
         Readiness::ReadyAfterUpdateBranch { behind }
     } else {
         Readiness::Ready
@@ -215,7 +236,10 @@ pub(super) fn wake_message(
             ),
         ),
         _ => (
-            format!("0 commits behind `{}`", change.base),
+            format!(
+                "ready under the base freshness policy for `{}`",
+                change.base
+            ),
             format!("Run {ship} to merge it."),
         ),
     };
@@ -247,6 +271,7 @@ pub(super) fn wake_message(
         archived: false,
         from_source: SenderSource::Explicit,
         from_role: None,
+        from_seat: None,
         relayed_from: None,
     }
 }
@@ -258,9 +283,72 @@ pub(super) struct Live<'a> {
     pub repo: &'a forge::Repository,
 }
 
+// Both readiness readers use the same base-evidence probe adapter.
+// trace:TASK-3108 | ai:codex
+impl Live<'_> {
+    fn probe_base(&self, change: &forge::Change) -> Result<forge::Change> {
+        let mut probed = change.clone();
+        self.repo.probe(self.root, &mut probed)?;
+        Ok(probed)
+    }
+}
+
 impl Evidence for Live<'_> {
     fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         live_approval(self.root, change)
+    }
+    fn train_approval(
+        &self,
+        change: &forge::Change,
+    ) -> std::result::Result<Approval, crate::pr_train::MemberGateError> {
+        use crate::forge_observed::Observed;
+        use crate::pr_train::MemberGateError::{Refused, Unavailable};
+        let (_, _, ids) = crate::gate::approval::merge_approval_subject(
+            &[self.root],
+            self.root,
+            change.id,
+            &[],
+            change.head_branch.as_deref(),
+            Some(&change.head),
+        );
+        train_verdict_reads(self.root, change.id, &ids)?;
+        match crate::gate::approval::observe_merge_path_approval_gate(
+            self.root,
+            change.id,
+            &[],
+            change.head_branch.as_deref(),
+            Some(&change.head),
+        ) {
+            Observed::Known(result) => {
+                result.map_err(Refused)?;
+            }
+            Observed::Pending(why) | Observed::Transient(why) => return Err(Unavailable(why)),
+        }
+        let (candidates, policy, ids) = crate::gate::approval::merge_approval_subject(
+            &[self.root],
+            self.root,
+            change.id,
+            &[],
+            None,
+            Some(&change.head),
+        );
+        let site =
+            crate::gate::review_carryover::CarryOverSite::read_only(self.root, Some(&change.base));
+        let approval =
+            approval_at(change.id, &candidates, &change.head, &policy, &site).map_err(Refused)?;
+        let decision = crate::gate::merge_hold_core::corpus_gate_decision(
+            self.root,
+            change.id,
+            &ids,
+            Some(&change.base),
+            || Some(change.head.clone()),
+            false,
+        )
+        .map_err(|e| Unavailable(format!("{e:#}")))?;
+        if let crate::gate::merge_hold_core::CorpusMergeGate::Refuse { message, .. } = decision {
+            return Err(Refused(message));
+        }
+        Ok(approval)
     }
     fn approval_only(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         live_approval_only(self.root, change)
@@ -281,12 +369,28 @@ impl Evidence for Live<'_> {
         if let (Some(behind), Some(overlap)) = (change.behind, change.overlap) {
             return Ok((behind, overlap));
         }
-        let mut probed = change.clone();
-        self.repo.probe(self.root, &mut probed)?;
+        let probed = self.probe_base(change)?;
         Ok((
             probed.behind.context("behind count unknown")?,
             probed.overlap.context("overlap unknown")?,
         ))
+    }
+    // trace:TASK-3108 | ai:codex
+    fn clean_stale_overlap(&self, change: &forge::Change) -> Result<bool> {
+        use crate::pr_rebase::StaleBasePolicy;
+        if crate::review_helpers::read_stale_base_policy(self.root)?
+            == StaleBasePolicy::RefuseOnOverlap
+        {
+            return Ok(false);
+        }
+        let conflict = match change.conflict {
+            Some(conflict) => conflict,
+            None => self
+                .probe_base(change)?
+                .conflict
+                .context("merge-tree conflict evidence unknown")?,
+        };
+        Ok(!conflict)
     }
     fn head(&self, change: &forge::Change) -> Result<String> {
         Ok(self.repo.change(self.root, change.id)?.head)
@@ -295,6 +399,28 @@ impl Evidence for Live<'_> {
 
 // The Live adapters' bodies, free of the forge repository so tests drive
 // them on real fixtures. trace:TASK-1945 | ai:claude (TASK-2203)
+// Optional absent verdicts are settled absence; refused or malformed current
+// artifacts are unavailable evidence, never a withdrawn approval.
+// trace:STORY-2691 | ai:codex
+pub(super) fn train_verdict_reads(
+    root: &Path,
+    pr: u64,
+    ids: &[String],
+) -> std::result::Result<(), crate::pr_train::MemberGateError> {
+    use crate::pr_train::MemberGateError::Unavailable;
+    let main = crate::main_worktree_root_from(root);
+    for root in [root, main.as_path()] {
+        for key in std::iter::once(format!("PR-{pr}")).chain(ids.iter().cloned()) {
+            crate::gate::review_verdict::checked_current_verdict(root, &key).map_err(|error| {
+                Unavailable(format!(
+                    "approval evidence {key} unreadable or invalid: {error}"
+                ))
+            })?;
+        }
+    }
+    Ok(())
+}
+
 pub(super) fn live_approval(
     root: &Path,
     change: &forge::Change,

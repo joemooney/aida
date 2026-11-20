@@ -935,7 +935,8 @@ pub(crate) struct TailArgs {
 // no store, no network — so dispatch early like `aida ps`.
 // trace:TASK-1167 | ai:claude
 fn run_tail(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> anyhow::Result<()> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::output_format::handle_tail_cli;
     let args = <TailArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let TailArgs {
         target,

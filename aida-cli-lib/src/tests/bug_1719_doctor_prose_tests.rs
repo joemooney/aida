@@ -84,7 +84,11 @@ fn bug_1719_reworded_finding_prose_does_not_change_action_or_reclaimable_count()
 // trace:BUG-1719 | ai:codex
 #[test]
 fn bug_1719_no_reason_or_summary_contains_controls_decisions() {
-    let source = include_str!("../doctor_cmd.rs");
+    let source = concat!(
+        include_str!("../doctor_cmd.rs"),
+        "\n",
+        include_str!("../doctor/worktrees.rs")
+    );
     let command = source
         .split("fn doctor_multi_agent")
         .nth(1)

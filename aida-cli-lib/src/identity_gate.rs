@@ -386,13 +386,15 @@ fn parse_log_records(stdout: &str) -> Vec<CommitIdentity> {
 }
 
 fn git_log_identities(repo: &Path, range_args: &[&str]) -> Result<Vec<CommitIdentity>> {
-    let out = Command::new("git")
-        .arg("-C")
+    let mut cmd = Command::new("git");
+    cmd.arg("-C")
         .arg(repo)
         .args(["log", &format!("--format={LOG_FORMAT}")])
         .args(range_args)
-        .arg("--")
-        .output()
+        .arg("--");
+    // A scoped read deadline (`train --check --timeout`) bounds the read.
+    // trace:TASK-3792 | ai:claude
+    let out = crate::forge_lookup::deadline_output(cmd, Command::output)
         .context("failed to run git log")?;
     if !out.status.success() {
         bail!(
@@ -1268,7 +1270,12 @@ fn run_identity(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::identity_gate;
+    use crate::kernel::find_project_root;
+    use crate::status_awaiting::{
+        handle_identity_link, handle_identity_list, handle_identity_show,
+    };
     let args = <IdentityArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {

@@ -112,8 +112,9 @@ batched form of `aida pr ship`:
    means main is about to move, so the train rebuilds instead of aborting.
    A forge error mid-run closes the open train PRs, comments on every member
    left unlanded, and is reported in the run's summary.
-5. **Red trains bisect.** A red train is rerun once to rule out a flake, then
-   split in halves, two sub-trains at a time. A green half lands at once,
+5. **Red trains bisect.** A train with a failed test is not rerun: it is
+   split in halves at once, two sub-trains at a time. Only a train whose CI
+   was cancelled before it gave a test result is rerun, once. A green half lands at once,
    and the other half is rebuilt on the new main and retested. A one-member
    train that is red leaves that PR open with a comment saying why.
 
@@ -134,6 +135,21 @@ An approved, green PR whose head is behind main is shelved with the
 `aida pr train N`. The merge seat collects those PRs and lands them with
 `aida pr train N...` (or `--all-ready`); it does not update the branch and
 re-run the drain.
+
+**Unset execution mode.** <!-- trace:STORY-2884 | ai:claude --> A spec with
+no `execution_mode` is supervised: `aida pr ship` and `aida pr train` hold its
+merge for a human or a mandate. A project can change that with
+`[gate.unset_mode]` in `.aida/config.toml` (see the configuration guide).
+With `default = "drain"`, an unset spec of a type listed in `drain_types` gates
+as `drain`. That never applies to a spec that sets its own mode, to a
+sensitive spec (keystone, security, authority, containment or
+`operator-only`), or to a PR that touches a protected gate path. Every other
+gate still applies: an independent approval at the head, green CI and no
+holds. The refusal text names the effective mode and its source, for example
+`unset (supervised: not defaulted, the change touches ...)`, and `aida show`
+prints `Effective mode: drain (project default for unset bug)`. The default
+stays `supervised`. Turning the setting on for a project is the operator's
+decision, made and recorded on its own, not as part of a feature PR.
 
 Mechanical enforcement is still pending. It arrives with the identity-bound
 approval gate in `aida pr ship` (BUG-1918). Until then, ADR-73 is policy, not

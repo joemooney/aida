@@ -101,17 +101,18 @@ fn assert_sanitized(text: &str) {
 
 #[test]
 fn bug_2017_audit_ids_parses_as_a_read_only_db_verb() {
-    let cli = crate::command_registry::try_parse_from([
-        "aida",
-        "db",
-        "audit-ids",
-        "--json",
-        "--against",
-        "origin/aida-store",
-        "--against",
-        "other",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "db",
+            "audit-ids",
+            "--json",
+            "--against",
+            "origin/aida-store",
+            "--against",
+            "other",
+        ])
+        .unwrap();
     let crate::cli::Command::Registered(invocation) = &cli.command;
     let policy = invocation.policy();
     assert_eq!(

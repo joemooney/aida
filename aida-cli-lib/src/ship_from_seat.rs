@@ -55,6 +55,7 @@ pub(crate) struct FromSeatOptions {
 
 /// `clone` as a seat clone `main` recorded, or the refusal.
 // trace:BUG-HOME-038 | ai:claude
+// trace:BUG-2657 | ai:codex
 pub(crate) fn recorded_seat(main: &Path, clone: &Path) -> Result<HostRecordedClone> {
     aida_core::seat_clone_detect::note_host_main(main);
     let main = main.canonicalize().unwrap_or_else(|_| main.to_path_buf());
@@ -62,11 +63,111 @@ pub(crate) fn recorded_seat(main: &Path, clone: &Path) -> Result<HostRecordedClo
     crate::seat_clone::host_recorded_clone(&main, clone).ok_or_else(|| {
         anyhow::anyhow!(
             "refusing to publish from {}: it is not a seat clone this checkout recorded \
-                 (no `clone` session lease in {} names it)",
+                 (the clone marker, alternates and host lease must agree). \
+                 Inspect host leases with `aida session leases --all` in {}; \
+                 run `aida queue recover <SPEC> --dry-run` there to inspect recovery. \
+                 Keep the seat and its pending merge; do not bypass clone verification",
             clone.display(),
             main.display()
         )
     })
+}
+
+/// Host-side publication failures stay distinguishable from transport errors.
+// trace:BUG-2633 | ai:codex
+#[derive(Debug)]
+pub(crate) struct PublicationOwnershipRefusal {
+    branch: String,
+    owner: String,
+}
+impl std::fmt::Display for PublicationOwnershipRefusal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "publication refused for branch `{}`: owned by {}; retain the lane and ask its owning seat", self.branch, self.owner)
+    }
+}
+impl std::error::Error for PublicationOwnershipRefusal {}
+
+// The host lease, never child environment or spec mentions, grants the exact
+// destination. Reserved refs cannot be granted by an implementer lease.
+// trace:BUG-2633 | ai:codex
+fn check_publication_branch(role: Option<&str>, owned: &str, branch: &str) -> Result<()> {
+    let reserved = branch == "integration" || branch.starts_with("promote/");
+    if reserved && !matches!(role, Some("integrator" | "integration" | "advisor")) {
+        return Err(PublicationOwnershipRefusal {
+            branch: branch.into(),
+            owner: "the integration seat".into(),
+        }
+        .into());
+    }
+    if branch != owned {
+        return Err(PublicationOwnershipRefusal {
+            branch: branch.into(),
+            owner: "another seat (not this lane's host lease)".into(),
+        }
+        .into());
+    }
+    Ok(())
+}
+
+// Also used by the alternate host rework publisher before importing objects.
+// trace:BUG-2633 | ai:codex
+pub(crate) fn require_publication_branch(main: &Path, tree: &Path, branch: &str) -> Result<()> {
+    let tree = tree.canonicalize()?;
+    let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
+    let mut owners = leases.iter().filter(|lease| {
+        lease
+            .worktree_path
+            .canonicalize()
+            .is_ok_and(|path| path == tree)
+    });
+    let lease = owners
+        .next()
+        .context("publication ownership unknown: no host lease for seat")?;
+    anyhow::ensure!(
+        owners.next().is_none(),
+        "publication ownership ambiguous: multiple host leases for seat"
+    );
+    if branch == "integration" || branch.starts_with("promote/") {
+        check_publication_branch(lease.role.as_deref(), &lease.branch, branch)?;
+    }
+    if let Some(other) = leases
+        .iter()
+        .find(|other| other.id != lease.id && other.branch == branch)
+    {
+        return Err(PublicationOwnershipRefusal {
+            branch: branch.into(),
+            owner: format!("seat {} ({})", other.id, other.worktree_path.display()),
+        }
+        .into());
+    }
+    check_publication_branch(lease.role.as_deref(), &lease.branch, branch)
+}
+
+/// Validate forge evidence before a host lane changes PR metadata.
+// trace:BUG-2633 | ai:codex
+pub(crate) fn require_publication_change(
+    owned: &str,
+    head: &str,
+    cross_repository: bool,
+) -> Result<()> {
+    // Reserved-ref authority was checked against the host lease by the caller.
+    // Here both integration and implementer publishers must match the forge head.
+    if head != owned {
+        return Err(PublicationOwnershipRefusal {
+            branch: head.into(),
+            owner: if head == "integration" || head.starts_with("promote/") {
+                "the integration seat".into()
+            } else {
+                "another seat (not this lane's host lease)".into()
+            },
+        }
+        .into());
+    }
+    anyhow::ensure!(
+        !cross_repository && !head.is_empty(),
+        "publication ownership unknown: PR head repository is foreign or unavailable"
+    );
+    Ok(())
 }
 
 /// The branch and scope of `seat`'s `clone` lease, read from the host-side
@@ -102,6 +203,7 @@ fn seat_lease(seat: &HostRecordedClone) -> Result<crate::SessionLease> {
             lease.branch.escape_debug()
         );
     }
+    require_publication_branch(&seat.main, &seat.root, &lease.branch)?;
     Ok(lease)
 }
 
@@ -179,6 +281,11 @@ fn seat_write_preflight(
              lease), then rerun. {unchanged}",
             seat.root.display()
         );
+    }
+    // trace:BUG-2648 | ai:codex — wrappers cannot commit around a lane veto.
+    refuse_publication_veto(&seat.main, &seat.root, &lease.scope)?;
+    if let Some(spec) = explicit_spec {
+        refuse_publication_veto(&seat.main, &seat.root, spec)?;
     }
     pending_message_check(&seat.main, message, explicit_spec)?;
     let pinned = crate::seat_clone::dir_identity(&seat.root)?;
@@ -347,6 +454,37 @@ pub(crate) fn post_exit_commit(
     clean_exit: bool,
     commit: &dyn Fn(&Path, &Path, &str, &str) -> Result<Option<String>>,
 ) -> PostExitCommit {
+    post_exit_commit_as(main, tree, spec, lane, clean_exit, None, commit)
+}
+
+/// The host's default post-exit message carries the `[AI:<tool>]` tag of the
+/// lane it was built for; a lane of another vendor re-tags it as itself.
+// trace:BUG-2705 | ai:claude
+fn retag_post_exit_message(message: String, tool: Option<&str>) -> String {
+    let Some(tool) = tool else {
+        return message;
+    };
+    match message
+        .strip_prefix("[AI:")
+        .and_then(|rest| rest.split_once(']'))
+    {
+        Some((_, rest)) => format!("[AI:{tool}]{rest}"),
+        None => message,
+    }
+}
+
+/// [`post_exit_commit`] for a lane whose host default message is tagged
+/// `[AI:<tool>]` (`None` keeps the default tag).
+// trace:BUG-2705 | ai:claude
+pub(crate) fn post_exit_commit_as(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+    tool: Option<&str>,
+    commit: &dyn Fn(&Path, &Path, &str, &str) -> Result<Option<String>>,
+) -> PostExitCommit {
     let main = crate::main_worktree_root_from(main);
     aida_core::seat_clone_detect::note_host_main(&main);
     // TASK-2032: anchored on the host main the lane recorded, never the cwd.
@@ -356,13 +494,17 @@ pub(crate) fn post_exit_commit(
     }
     // trace:TASK-2902 | ai:codex
     // Every exit path honors vetoes before resolving or inspecting intent.
-    let seat_veto = match seat_publication_veto(tree, spec) {
-        Ok(veto) => veto,
+    match report_publication_veto(&main, tree, spec) {
+        Ok(true) => {
+            // trace:BUG-2675 | ai:codex
+            eprintln!(
+                "Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}",
+                tree.display()
+            );
+            return PostExitCommit::Clean;
+        }
+        Ok(false) => {}
         Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
-    };
-    if publication_veto(&main, spec) || seat_veto {
-        eprintln!("Native publication vetoed for {spec} by punt/hold; pending work remains uncommitted in {}", tree.display());
-        return PostExitCommit::Clean;
     }
     let validated = (|| -> Result<(String, Option<String>)> {
         let canonical = crate::native_publication::resolve_scope(&main, spec)?;
@@ -374,19 +516,11 @@ pub(crate) fn post_exit_commit(
         Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
     };
     let spec = spec.as_str();
-    // Resolve against the host forge, never seat-controlled remote config.
-    // trace:TASK-2879 | ai:codex
-    let completing = recorded_seat(&main, tree)
-        .and_then(|seat| lease_branch(&seat))
-        .ok()
-        .and_then(|(branch, _)| {
-            crate::forge::forge_for_open_change(&main)
-                .change_for_branch(&branch)
-                .ok()
-        })
-        .is_some_and(|lookup| post_exit_completion_allowed(&lookup));
     if let Some(mut message) = declared {
-        if !clean_exit || !completing {
+        // D2: a declaration's trailer already derives from its declared
+        // completeness, on a rework round too; only a failed exit downgrades
+        // it to salvage. trace:BUG-2696 | ai:claude
+        if !clean_exit {
             // trace:BUG-2493 | ai:codex
             let (subject, body) = crate::native_publication::split_message(&message);
             let prefix = subject.rsplit_once('(').expect("validated trailer").0;
@@ -399,6 +533,17 @@ pub(crate) fn post_exit_commit(
             Err(e) => PostExitCommit::Failed(format!("{e:#}")),
         };
     }
+    // Resolve against the host forge, never seat-controlled remote config.
+    // trace:TASK-2879 | ai:codex
+    let completing = recorded_seat(&main, tree)
+        .and_then(|seat| lease_branch(&seat))
+        .ok()
+        .and_then(|(branch, _)| {
+            crate::forge::forge_for_open_change(&main)
+                .change_for_branch(&branch)
+                .ok()
+        })
+        .is_some_and(|lookup| post_exit_completion_allowed(&lookup));
     // Resolve the lease's origin ID against the host store before formatting.
     // trace:BUG-2459 | ai:codex
     let store = crate::load_store_for_lookup(&main);
@@ -407,6 +552,10 @@ pub(crate) fn post_exit_commit(
     let requirement = store
         .as_ref()
         .and_then(|store| store.get_requirement_by_spec_id(spec));
+    // D1: outstanding slices make the host's default message partial too.
+    // trace:BUG-2696 | ai:claude
+    let completing =
+        completing && crate::publication_completion::completes_spec(store.as_ref(), spec, false);
     let message = match post_exit_message_with_completion(
         requirement,
         &trailer_spec,
@@ -414,7 +563,7 @@ pub(crate) fn post_exit_commit(
         clean_exit,
         completing,
     ) {
-        Ok(message) => message,
+        Ok(message) => retag_post_exit_message(message, tool),
         Err(e) => return PostExitCommit::Failed(format!("{e:#}")),
     };
     match commit_seat_pending(&main, tree, Some(spec), &message, commit) {
@@ -463,6 +612,20 @@ pub(crate) fn post_exit_commit_reported(
     lane: &str,
     clean_exit: bool,
 ) -> PostExitCommit {
+    post_exit_commit_reported_as(main, tree, spec, lane, clean_exit, None)
+}
+
+/// [`post_exit_commit_reported`] tagged `[AI:<tool>]` (see
+/// [`post_exit_commit_as`]).
+// trace:BUG-2705 | ai:claude
+pub(crate) fn post_exit_commit_reported_as(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    lane: &str,
+    clean_exit: bool,
+    tool: Option<&str>,
+) -> PostExitCommit {
     #[cfg(test)]
     if let Some(outcome) = POST_EXIT_STEP.with(|s| {
         s.borrow()
@@ -471,12 +634,13 @@ pub(crate) fn post_exit_commit_reported(
     }) {
         return outcome;
     }
-    let outcome = post_exit_commit(
+    let outcome = post_exit_commit_as(
         main,
         tree,
         spec,
         lane,
         clean_exit,
+        tool,
         &crate::seat_clone::commit_pending,
     );
     match &outcome {
@@ -546,7 +710,12 @@ pub(crate) fn publish_queue_exit_recorded(
         let main = crate::main_worktree_root_from(main);
         // trace:BUG-2488 | ai:codex
         crate::standalone_implementer::reconcile_signals(&main, tree, spec)?;
-        if publication_veto(&main, spec) || seat_publication_veto(tree, spec)? {
+        if report_publication_veto(&main, tree, spec)? {
+            return Ok(QueueExitOutcome::Continue);
+        }
+        // trace:BUG-2648 | ai:codex — failed children never publish automatically.
+        if !clean_exit {
+            eprintln!("PUBLISH SKIPPED: implementer failed; seat retained");
             return Ok(QueueExitOutcome::Continue);
         }
         let no_change =
@@ -576,6 +745,7 @@ pub(crate) fn publish_queue_exit_recorded(
                 crate::lane_fast_gate::annotate(
                     &main,
                     pr,
+                    &branch,
                     &head,
                     &crate::lane_fast_gate::marker(&main, &branch),
                 )
@@ -611,6 +781,7 @@ pub(crate) fn publish_queue_exit_recorded(
                             crate::lane_fast_gate::annotate(
                                 &main,
                                 pr,
+                                &branch,
                                 &head,
                                 &crate::lane_fast_gate::marker(&main, &branch),
                             )
@@ -729,7 +900,8 @@ pub(crate) fn publish_queue_exit_with(
     publish: impl Fn() -> Result<()>,
     notify: impl FnOnce() -> Result<()>,
 ) -> Result<QueueExitOutcome> {
-    if publication_veto(main, spec) {
+    if let Some(message) = host_veto_message(main, spec) {
+        eprintln!("{message}");
         return Ok(QueueExitOutcome::Continue);
     }
     let no_change = std::cell::Cell::new(false);
@@ -756,15 +928,53 @@ pub(crate) fn publish_queue_exit_with(
     })
 }
 
-// trace:BUG-2488 | ai:codex
-fn seat_publication_veto(tree: &Path, spec: &str) -> Result<bool> {
-    // Read both even if the first veto is present, so unsafe evidence refuses.
+// trace:BUG-2648 | ai:codex
+fn punt_message(signal: crate::punt::PuntSignal) -> String {
+    format!("PUBLISH SKIPPED: implementer punted ({})", signal.detail)
+}
+
+fn hold_message(signal: crate::punt::HoldSignal) -> String {
+    format!(
+        "PUBLISH SKIPPED: implementer held ({})",
+        signal.reason.as_deref().unwrap_or("publication hold")
+    )
+}
+
+fn host_veto_message(main: &Path, spec: &str) -> Option<String> {
+    crate::punt::read_signal(&crate::punt::signal_path(main, spec))
+        .map(punt_message)
+        .or_else(|| {
+            crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec))
+                .map(hold_message)
+        })
+}
+
+fn publication_veto_message(main: &Path, tree: &Path, spec: &str) -> Result<Option<String>> {
+    // Validate both seat signals even when the host already vetoes.
     let punt = crate::punt::read_seat_signal(tree, spec)?;
     let hold = crate::punt::read_seat_hold_signal(tree, spec)?;
-    Ok(punt.is_some() || hold.is_some())
+    Ok(host_veto_message(main, spec)
+        .or_else(|| punt.map(punt_message))
+        .or_else(|| hold.map(hold_message)))
+}
+
+pub(crate) fn report_publication_veto(main: &Path, tree: &Path, spec: &str) -> Result<bool> {
+    if let Some(message) = publication_veto_message(main, tree, spec)? {
+        eprintln!("{message}");
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+fn refuse_publication_veto(main: &Path, tree: &Path, spec: &str) -> Result<()> {
+    if let Some(message) = publication_veto_message(main, tree, spec)? {
+        anyhow::bail!("{message}");
+    }
+    Ok(())
 }
 
 // trace:TASK-2902 | ai:codex
+#[cfg(test)]
 fn publication_veto(main: &Path, spec: &str) -> bool {
     crate::punt::read_signal(&crate::punt::signal_path(main, spec)).is_some()
         || crate::punt::read_hold_signal(&crate::punt::hold_signal_path(main, spec)).is_some()
@@ -790,6 +1000,18 @@ fn finish_queue_exit(
 /// Queue the request when the advisor has no current reader.
 // trace:STORY-2475 | ai:codex
 pub(crate) fn advisor_request(main: &Path, subject: &str, message: &str) -> Result<()> {
+    advisor_request_on_thread(main, subject, message, None)
+}
+
+/// `thread` names a caller-owned delivery identity, so the caller can find an
+/// accepted message again after losing its own acceptance receipt.
+// trace:TASK-3804 | ai:claude
+pub(crate) fn advisor_request_on_thread(
+    main: &Path,
+    subject: &str,
+    message: &str,
+    thread: Option<&str>,
+) -> Result<()> {
     let mut cmd = std::process::Command::new(crate::resolve_aida_exe());
     cmd.current_dir(main).args([
         "mailbox",
@@ -801,9 +1023,11 @@ pub(crate) fn advisor_request(main: &Path, subject: &str, message: &str) -> Resu
         "request",
         "--subject",
         subject,
-        "--",
-        message,
     ]);
+    if let Some(thread) = thread {
+        cmd.args(["--thread", thread]);
+    }
+    cmd.args(["--", message]);
     match crate::command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(20)) {
         crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
         crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
@@ -1036,6 +1260,54 @@ mod queue_exit_tests {
             .unwrap();
             // Also cover the public boundary with actual on-disk signals.
             publish_queue_exit(main, &main.join("missing-seat"), spec, "lane", true).unwrap();
+        }
+    }
+
+    // trace:BUG-2648 | ai:codex
+    #[test]
+    fn bug_2648_direct_publication_veto_checks_host_and_seat() {
+        for host in [false, true] {
+            for hold in [false, true] {
+                let main = tempfile::tempdir().unwrap();
+                let tree = tempfile::tempdir().unwrap();
+                let spec = "BUG-2648";
+                assert!(refuse_publication_veto(main.path(), tree.path(), spec).is_ok());
+                let root = if host { main.path() } else { tree.path() };
+                if hold {
+                    crate::punt::write_hold_signal(
+                        &crate::punt::hold_signal_path(root, spec),
+                        &crate::punt::HoldSignal {
+                            spec: spec.into(),
+                            branch: "rework".into(),
+                            reason: Some("do not publish".into()),
+                            spec_key: None,
+                        },
+                    )
+                    .unwrap();
+                } else {
+                    crate::punt::write_signal(
+                        &crate::punt::signal_path(root, spec),
+                        &crate::punt::PuntSignal {
+                            spec: spec.into(),
+                            category: aida_core::PuntCategory::DesignFork,
+                            detail: "do not publish".into(),
+                            lean: None,
+                        },
+                    )
+                    .unwrap();
+                }
+                let err = refuse_publication_veto(main.path(), tree.path(), spec).unwrap_err();
+                assert_eq!(
+                    err.to_string(),
+                    format!(
+                        "PUBLISH SKIPPED: implementer {} (do not publish)",
+                        if hold { "held" } else { "punted" }
+                    )
+                );
+                for clean in [false, true] {
+                    publish_queue_exit(main.path(), tree.path(), spec, "lane", clean).unwrap();
+                }
+            }
         }
     }
 
@@ -1484,6 +1756,41 @@ fn git_text(main: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// Refuse publishing a host-prepared conflict merge (first parent the journaled
+/// original head, second parent its base) whose exact tree has no successful
+/// host compile validation: e.g. one the lane committed itself. Commits already
+/// on the default branch or the remote-tracking PR branch are not re-judged.
+// trace:TASK-3804 | ai:claude
+fn refuse_unvalidated_repair_merges(main: &Path, branch: &str, tip: &str) -> Result<()> {
+    let mut args = vec![
+        "log".to_string(),
+        "--merges".into(),
+        "--format=%T %P".into(),
+        tip.into(),
+        "--not".into(),
+    ];
+    let base = crate::detect_default_branch_ref(main).unwrap_or_else(|| "origin/main".into());
+    for published in [base, format!("refs/remotes/origin/{branch}")] {
+        let probe = format!("{published}^{{commit}}");
+        if git_text(main, &["rev-parse", "-q", "--verify", &probe]).is_ok() {
+            args.push(published);
+        }
+    }
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let log = git_text(main, &args).context("could not list merges to publish; nothing pushed")?;
+    let merges: Vec<[String; 3]> = log
+        .lines()
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            match fields.as_slice() {
+                [tree, first, second] => Some([*tree, *first, *second].map(str::to_owned)),
+                _ => None,
+            }
+        })
+        .collect();
+    crate::repair_journal::RepairGuard::lock(main)?.require_validated_merges(branch, &merges)
+}
+
 /// A verified seat branch fetched into a quarantine ref: in main for a real
 /// run, or in a scratch repository borrowing main's objects for a dry run, so
 /// a dry run leaves no ref in main.
@@ -1587,7 +1894,8 @@ pub(crate) fn seat_trailer_check<F>(repo: &Path, range: &str, resolve: F) -> Res
 where
     F: FnMut(&str) -> crate::trace::SpecResolution,
 {
-    let commits = crate::trace::read_commits_in_range(repo, range)?;
+    // trace:BUG-2632 | ai:codex — publication checks the exact imported range.
+    let commits = crate::trace::read_commits_in_range_unadjusted(repo, range)?;
     if commits.is_empty() {
         anyhow::bail!("refusing to publish: the seat branch adds no commit ({range})");
     }
@@ -1834,6 +2142,8 @@ pub(crate) fn run_from_with_reconciliation(
     let seat = recorded_seat(&main, &opts.clone)?;
     let main = seat.main.clone();
     let (branch, scope) = lease_branch(&seat)?;
+    // trace:BUG-2596 | ai:codex — explicit publication shares the red-gate veto.
+    crate::lane_fast_gate::refuse_failed_gate(&main, &branch)?;
     let spec = crate::ship::resolve_spec(opts.spec.as_deref(), &branch, Some(&scope)).ok_or_else(
         || {
             anyhow::anyhow!(
@@ -1843,6 +2153,9 @@ pub(crate) fn run_from_with_reconciliation(
             )
         },
     )?;
+    // trace:BUG-2648 | ai:codex — before pruning, committing, bundling or pushing.
+    refuse_publication_veto(&main, &seat.root, &scope)?;
+    refuse_publication_veto(&main, &seat.root, &spec)?;
     eprintln!(
         "{} aida ship --from-seat — {} on branch {} from {}{}",
         "→".cyan().bold(),
@@ -1910,7 +2223,7 @@ pub(crate) fn run_from_with_reconciliation(
                     Some(1) => {}
                     _ => anyhow::bail!("could not check remote PR head ancestry; nothing pushed"),
                 }
-                let message = format!("[host] chore(seat): merge remote PR head (Refs {spec})");
+                let message = format!("{HOST_RECONCILE_SUBJECT} (Refs {spec})");
                 let plan = seat_write_preflight(
                     &main,
                     &opts.clone,
@@ -1963,6 +2276,26 @@ pub(crate) fn run_from_with_reconciliation(
         false,
         crate::lane_fast_gate::check_import(&main, &branch, tip, automatic),
     )?;
+    // A host-prepared conflict merge reaches origin only after the host compile
+    // check passed on its exact tree. trace:TASK-3804 | ai:claude
+    drop_quarantine_on_refusal(
+        &staged,
+        false,
+        refuse_unvalidated_repair_merges(&main, &branch, tip),
+    )?;
+    // trace:BUG-2618 | ai:codex
+    drop_quarantine_on_refusal(
+        &staged,
+        false,
+        crate::pr_head_guard::check_branch(&main, &branch),
+    )?;
+    // Re-read ownership after preparation, before the remote mutation.
+    // trace:BUG-2633 | ai:codex
+    drop_quarantine_on_refusal(
+        &staged,
+        false,
+        require_publication_branch(&main, &seat.root, &branch),
+    )?;
     eprintln!("  pushing {tip} to origin/{branch}");
     aida_core::git_ops::clear_sandbox_config_lock(&main);
     let push = aida_core::git_ops::host_git_command(&main)
@@ -1985,10 +2318,211 @@ pub(crate) fn run_from_with_reconciliation(
              retrying{recovery}"
         );
     }
+    // D3 (BUG-2696): a completing push sets Done, first round and rework
+    // alike. The publication's own subject carries the trailer derived from
+    // the declared completeness; a host reconciliation merge on top of it
+    // (F2) does not cancel it. An unreadable subject sets nothing (A2).
+    // Vetoed and refused publications never reach this line. The write runs
+    // as soon as origin has confirmed the code push, before the quarantine
+    // cleanup and PR bookkeeping, so a failure there cannot strand pushed
+    // complete work without its Done (round-4 finding 1).
+    // trace:BUG-2696 | ai:claude
+    // Round 7 (finding 1): the host's decision travels with the publication.
+    // A partial verdict (an outstanding child, a graph that changed under the
+    // writer lock, an unreadable subject or store) makes the PR title a
+    // `(Refs SPEC)` however the seat's commit was titled.
+    let completes = mark_done_after_confirmed_push(&main, &spec, tip);
     // Pushed: the quarantine ref has done its job (a failure above keeps it
     // for investigation; a later run prunes it once stale).
     git_text(&main, &["update-ref", "-d", quarantine, tip])?;
-    finish_published(&main, &seat, &branch, &spec, tip, opts.no_pr, deps)
+    finish_published(
+        &main,
+        &seat,
+        &branch,
+        &spec,
+        tip,
+        Publication {
+            no_pr: opts.no_pr,
+            completes,
+        },
+        deps,
+    )?;
+    Ok(())
+}
+
+/// D3 (BUG-2696): after origin confirmed the push of `tip`, set `spec` Done
+/// when the publication subject behind `tip` completes it. Reported on
+/// stderr; never fails the caller: the code push already succeeded. Returns
+/// the host's completion decision (`false` whenever it could not decide).
+// trace:BUG-2696 | ai:claude
+pub(crate) fn mark_done_after_confirmed_push(main: &Path, spec: &str, tip: &str) -> bool {
+    publication_subject(main, tip).is_some_and(|subject| {
+        crate::publication_completion::mark_done_after_push_reported(main, spec, &subject, tip)
+    })
+}
+
+/// D3 (BUG-2696 reopen): the Done write for a SELF-PUBLISHED lane round. A
+/// lane the host does not publish for (a Claude lane, an uncontained Codex
+/// lane) pushes its own branch from the seat, so the host never runs
+/// [`run_from_with_reconciliation`] and its D3 hook. Each self-published exit
+/// (`aida queue work` through the standalone implementer, a queue resume and
+/// a drain lane) calls this once its fast gate has settled.
+///
+/// Sets nothing (A2: fail closed) unless every one of these holds:
+/// - the child exited cleanly and left no punt or hold;
+/// - the fast gate did not fail for `branch`;
+/// - this run pushed: the seat `HEAD` moved past `launch_head` (which must be
+///   known) and `origin` is at it, so an earlier round's completing tip that
+///   a no-op round leaves on the PR never sets Done;
+/// - the host's own fetch of `origin/<branch>` confirms that tip.
+///
+/// Then the same decision as a host-published push applies, bounded to this
+/// round: the publication subject, looked up only among commits above
+/// `launch_head` (reconciliation merges skipped), must complete the spec, so
+/// a round that pushed only a reconciliation merge over an earlier round's
+/// completing commit sets nothing. A `launch_head` the host cannot resolve
+/// (a rewritten branch) sets nothing either. The slice graph re-read
+/// under the writer lock must have no outstanding child. Reported on stderr;
+/// never fails the caller, because the code push already succeeded. Returns
+/// whether the host decided the round completes the spec.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn mark_done_after_self_published_round(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    branch: &str,
+    launch_head: Option<&str>,
+    clean_exit: bool,
+) -> bool {
+    if !clean_exit || crate::lane_fast_gate::veto(main, spec) {
+        return false;
+    }
+    // An unreadable seat signal is a veto too (A2).
+    if !matches!(publication_veto_message(main, tree, spec), Ok(None)) {
+        return false;
+    }
+    if crate::lane_fast_gate::refuse_failed_gate(main, branch).is_err() {
+        return false;
+    }
+    let Some(launch_head) = launch_head else {
+        return false;
+    };
+    let seat = crate::headless_background::SeatState::read(tree, branch);
+    if seat.pushed_since(Some(launch_head)) != Some(true) {
+        return false;
+    }
+    let Some(pushed) = seat.pushed_head().map(str::to_string) else {
+        return false;
+    };
+    let shown = aida_core::node_alias::display_spec_id(spec);
+    // The host fetches the pushed tip itself: origin, not the seat's view of
+    // it, is what confirms the push, and the subject walk needs the commit.
+    let pin = match pin_remote_branch(main, branch) {
+        Ok(Some(pin)) if pin.tip == pushed => pin,
+        Ok(_) => {
+            eprintln!(
+                "  warning: {shown} not marked Done: origin/{branch} is not at the lane's push \
+                 {pushed}"
+            );
+            return false;
+        }
+        Err(e) => {
+            eprintln!(
+                "  warning: {shown} not marked Done: could not confirm the lane's push: {e:#}"
+            );
+            return false;
+        }
+    };
+    let scope = match crate::native_publication::resolve_scope(main, spec) {
+        Ok(scope) => scope,
+        Err(e) => {
+            eprintln!("  warning: {shown} not marked Done: {e:#}");
+            return false;
+        }
+    };
+    // Only a completion this round declared counts: the subject comes from a
+    // commit above `launch_head`, never an earlier round's completing commit
+    // that a reconciliation-only push leaves beneath the new tip.
+    publication_subject_since(main, &pin.tip, Some(launch_head)).is_some_and(|subject| {
+        crate::publication_completion::mark_done_after_push_reported(
+            main, &scope, &subject, &pin.tip,
+        )
+    })
+}
+
+/// How [`finish_published`] finishes a pushed publication.
+// trace:BUG-2696 | ai:claude
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct Publication {
+    pub(crate) no_pr: bool,
+    /// The host's completion decision for the pushed tip.
+    pub(crate) completes: bool,
+}
+
+/// Subject prefix of the host's reconciliation merge of a diverged remote PR
+/// head into a seat branch. Always a `(Refs SPEC)` subject: it carries no
+/// completeness of its own.
+// trace:TASK-2879 trace:BUG-2696 | ai:claude
+pub(crate) const HOST_RECONCILE_SUBJECT: &str = "[host] chore(seat): merge remote PR head";
+
+/// F2 (BUG-2696): the subject of the publication commit behind `tip`: the
+/// first commit on `tip`'s first-parent line, above the default branch, that
+/// is not a host reconciliation merge. A reconciliation merge's first parent
+/// is the seat's own tip, so this is the subject the lane (or the host, from
+/// its declaration) wrote. The walk never reaches default-branch history, so
+/// a round whose only new commit is a reconciliation merge has no
+/// publication subject. `None` when git cannot be read (A2: no completion).
+// trace:BUG-2696 | ai:claude
+pub(crate) fn publication_subject(main: &Path, tip: &str) -> Option<String> {
+    publication_subject_since(main, tip, None)
+}
+
+/// [`publication_subject`] bounded to one round: with `since` (the seat head
+/// the round launched on), the walk also stops at everything reachable from
+/// `since`, so only a commit THIS round added can supply the subject. A round
+/// that pushed only a host reconciliation merge on top of an earlier round's
+/// completing commit has no publication subject (A2: no completion).
+/// `since` must be a full commit id; an unreadable one yields `None`.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn publication_subject_since(
+    main: &Path,
+    tip: &str,
+    since: Option<&str>,
+) -> Option<String> {
+    let base = crate::detect_default_branch_ref(main).unwrap_or_else(|| "origin/main".into());
+    let base_oid = git_text(
+        main,
+        &["rev-parse", "--verify", &format!("{base}^{{commit}}")],
+    )
+    .ok()?;
+    let mut range = vec![tip.to_string(), format!("^{base_oid}")];
+    if let Some(since) = since {
+        // A launch head is a commit id from git, never a ref or an option.
+        if since.is_empty() || !since.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let since_oid = git_text(
+            main,
+            &["rev-parse", "--verify", &format!("{since}^{{commit}}")],
+        )
+        .ok()?;
+        range.push(format!("^{since_oid}"));
+    }
+    let mut args = vec![
+        "log",
+        "--first-parent",
+        "-n",
+        "32",
+        "--format=%s",
+        crate::git_arg_guard::END_OF_OPTIONS,
+    ];
+    args.extend(range.iter().map(String::as_str));
+    let log = git_text(main, &args).ok()?;
+    log.lines()
+        .map(str::trim)
+        .find(|subject| !subject.starts_with(HOST_RECONCILE_SUBJECT))
+        .filter(|subject| !subject.is_empty())
+        .map(str::to_string)
 }
 
 /// Everything [`run_from`] checks on a staged import before it pushes: the
@@ -2045,10 +2579,10 @@ fn finish_published(
     branch: &str,
     spec: &str,
     tip: &str,
-    no_pr: bool,
+    publication: Publication,
     deps: &Deps<'_>,
 ) -> Result<()> {
-    if no_pr {
+    if publication.no_pr {
         eprintln!(
             "{} aida ship --from-seat — {branch} pushed (--no-pr; no PR opened)",
             crate::glyph(crate::glyphs::Glyph::Check).green().bold()
@@ -2061,17 +2595,54 @@ fn finish_published(
     // open PR, and opening another would duplicate it.
     let pr = match forge.change_for_branch(branch) {
         Ok(crate::forge::ChangeLookup::Found(change)) => {
+            require_publication_branch(main, &seat.root, branch)?;
             eprintln!("  found open PR-{} for branch {branch}", change.id);
             // Repair titles left by older rework publishers without overwriting
             // a descriptive title an author has already chosen.
             // trace:TASK-2891 | ai:codex
+            let mut current = change.title.clone();
             if let Some(subject) = change
                 .title
                 .as_deref()
                 .filter(|title| generic_rework_title(title))
             {
+                let metadata =
+                    forge.change_metadata(change.id, &mut crate::network_retry::NoopSink)?;
+                require_publication_change(
+                    branch,
+                    &metadata.head_ref,
+                    metadata.is_cross_repository,
+                )?;
                 let title = publication_title(main, spec, subject)?;
-                forge.set_change_title(change.id, &title)?;
+                forge.set_change_title(change.id, &title, branch)?;
+                current = Some(title);
+            }
+            // D2 (BUG-2696): the PR title's trailer follows the publication's
+            // derived trailer, so a rework round that changes the declared
+            // completeness changes what the squash merge says. F2: read past
+            // a host reconciliation merge; an unreadable subject retitles
+            // nothing.
+            // trace:BUG-2696 | ai:claude
+            let tip_subject = publication_subject(main, tip).unwrap_or_default();
+            let store = crate::load_store_for_lookup(main);
+            if let Some(title) = current.as_deref().and_then(|title| {
+                aligned_title(
+                    store.as_ref(),
+                    title,
+                    spec,
+                    &tip_subject,
+                    publication.completes,
+                )
+            }) {
+                let metadata =
+                    forge.change_metadata(change.id, &mut crate::network_retry::NoopSink)?;
+                require_publication_change(
+                    branch,
+                    &metadata.head_ref,
+                    metadata.is_cross_repository,
+                )?;
+                eprintln!("  retitled PR-{} to match the push: {title}", change.id);
+                forge.set_change_title(change.id, &title, branch)?;
             }
             // trace:STORY-2492 | ai:claude — a rework push is a new head; its
             // author sessions travel with it so a remote re-review can publish.
@@ -2084,9 +2655,15 @@ fn finish_published(
             );
             change.id
         }
-        Ok(crate::forge::ChangeLookup::NoChange) => {
-            open_seat_pr(&*forge, main, seat, branch, spec, tip)?
-        }
+        Ok(crate::forge::ChangeLookup::NoChange) => open_seat_pr(
+            &*forge,
+            main,
+            seat,
+            branch,
+            spec,
+            tip,
+            publication.completes,
+        )?,
         Ok(other) => anyhow::bail!(
             "{branch} was pushed, but looking up its open PR failed ({}); no PR was opened. \
              Check the forge CLI, then run `aida ship --from-seat {}` again",
@@ -2110,6 +2687,48 @@ fn finish_published(
         aida_core::node_alias::display_spec_id(spec).bold()
     );
     Ok(())
+}
+
+/// D2 (BUG-2696): `title` with its single-spec trailer switched to the form
+/// the pushed tip carries, or `None` when they already agree, the title
+/// names more than this spec, or the tip names neither form. The tip
+/// completes only when its subject does AND `host_completes`, the host's own
+/// decision for the push (round-7 finding 1): a host veto turns a completing
+/// subject into a `(Refs SPEC)` title, never the reverse.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn aligned_title(
+    store: Option<&aida_core::RequirementsStore>,
+    title: &str,
+    spec: &str,
+    tip_subject: &str,
+    host_completes: bool,
+) -> Option<String> {
+    let req = store?.get_requirement_unambiguous(spec).ok()??;
+    let completing = crate::pr_ship::extract_trailing_spec_ids_from_subject(title);
+    let refs = crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(title);
+    let single = match (completing.as_slice(), refs.as_slice()) {
+        ([id], []) | ([], [id]) => id.clone(),
+        _ => return None,
+    };
+    let names = |id: &str| {
+        store
+            .and_then(|s| s.get_requirement_unambiguous(id).ok().flatten())
+            .is_some_and(|r| r.id == req.id)
+    };
+    if !names(&single) {
+        return None;
+    }
+    let subject_completes =
+        crate::publication_completion::subject_completes(store, tip_subject, req);
+    let tip_completes = subject_completes && host_completes;
+    let tip_refs = crate::pr_ship::extract_trailing_refs_spec_ids_from_subject(tip_subject)
+        .iter()
+        .any(|id| names(id));
+    let title_completes = !completing.is_empty();
+    if tip_completes == title_completes || !(subject_completes || tip_refs) {
+        return None;
+    }
+    crate::publication_completion::derive_trailer(title, &single, tip_completes).ok()
 }
 
 /// Why a lookup that neither found nor ruled out an open change failed.
@@ -2148,10 +2767,20 @@ fn open_seat_pr(
     branch: &str,
     spec: &str,
     tip: &str,
+    completes: bool,
 ) -> Result<u64> {
     let message = git_text(main, &["log", "-1", "--format=%B", tip])?;
     let subject = git_text(main, &["log", "-1", "--format=%s", tip])?;
     let title = publication_title(main, spec, &subject)?;
+    // Round 7 (finding 1): a host veto downgrades a completing title.
+    // trace:BUG-2696 | ai:claude
+    let title = if completes {
+        title
+    } else {
+        let store = crate::load_store_for_lookup(main);
+        let tip_subject = publication_subject(main, tip).unwrap_or_default();
+        aligned_title(store.as_ref(), &title, spec, &tip_subject, false).unwrap_or(title)
+    };
     let seat_name = seat
         .root
         .file_name()
@@ -2160,7 +2789,11 @@ fn open_seat_pr(
     let specs = crate::extract_spec_ids_from_commit(&message);
     let req = crate::forge::OpenChange {
         branch: branch.to_string(),
-        base: crate::forge::default_branch_of(main),
+        // trace:BUG-2604 | ai:codex — integration lanes must never open against main.
+        base: match crate::queue_cmd::launcher_track().as_str() {
+            "integration" => "integration".to_string(),
+            _ => crate::forge::default_branch_of(main),
+        },
         title,
         body: seat_pr_body(&message, &seat_name),
         draft: false,
@@ -2334,4 +2967,35 @@ pub(crate) fn seat_pr_title(
         "the owning spec title would change completion/reference credit; remove authority-bearing groups from its summary"
     );
     Ok(title)
+}
+
+// trace:BUG-2633 | ai:codex
+#[cfg(test)]
+mod bug_2633_tests {
+    use super::*;
+
+    #[test]
+    fn bug_2633_reserved_and_foreign_destinations_refuse_with_typed_owner() {
+        for branch in ["promote/integration-15", "integration"] {
+            let error = check_publication_branch(Some("implementer"), branch, branch).unwrap_err();
+            assert!(error
+                .downcast_ref::<PublicationOwnershipRefusal>()
+                .is_some());
+            assert!(error.to_string().contains("integration seat"));
+        }
+        assert!(check_publication_branch(Some("implementer"), "bug-1", "bug-2").is_err());
+        assert!(check_publication_branch(Some("implementer"), "bug-1", "bug-1").is_ok());
+        for role in ["integrator", "integration", "advisor"] {
+            assert!(check_publication_branch(Some(role), "promote/p15", "promote/p15").is_ok());
+        }
+    }
+
+    #[test]
+    fn bug_2633_foreign_pr_head_refuses_before_metadata_mutation() {
+        for head in ["promote/p15", "integration", "bug-2", ""] {
+            assert!(require_publication_change("bug-1", head, false).is_err());
+        }
+        assert!(require_publication_change("bug-1", "bug-1", true).is_err());
+        assert!(require_publication_change("bug-1", "bug-1", false).is_ok());
+    }
 }

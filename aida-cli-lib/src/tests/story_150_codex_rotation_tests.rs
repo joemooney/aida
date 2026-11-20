@@ -85,6 +85,7 @@ fn plan(project: &std::path::Path, lease_id: Option<&str>) -> AgentLaunchPlan {
         launch_cwd: project.to_path_buf(),
         role: None,
         role_instance: RoleInstanceKind::Driver,
+        seat: None,
         current_spec: None,
         name: HANDLE.into(),
         lease_id: lease_id.map(str::to_string),
@@ -117,6 +118,7 @@ fn supervise(fx: &Fixture, plan: AgentLaunchPlan, on_gap: &mut dyn FnMut(u64)) -
         Supervision {
             policy: quick(),
             on_gap,
+            tick: &mut || panic!("unexpected relaunch wait"),
         },
         || {},
     )
@@ -298,10 +300,21 @@ exit 0
         rows.insert(field(line, "row").to_string());
     }
     assert_eq!(rows.len(), 3, "one row per generation");
+    // Automatic maintenance archives earlier generations when the next one
+    // binds. Inspect retained history as well as the final active-directory row.
+    // trace:BUG-2639 | ai:codex
+    let entries = agent_registry::load_entries(&fx.project);
     for row in rows {
-        let body =
-            std::fs::read_to_string(fx.project.join(format!(".aida/agents/{row}.toml"))).unwrap();
-        let entry: agent_registry::AgentRegistryEntry = toml::from_str(&body).unwrap();
+        let (path, entry) = entries
+            .iter()
+            .find(|(path, _)| path.file_stem().and_then(|stem| stem.to_str()) == Some(&row))
+            .unwrap_or_else(|| panic!("missing retained generation row {row}"));
+        if row != field(lines.last().unwrap(), "row") {
+            assert_eq!(
+                path.parent().unwrap(),
+                fx.project.join(".aida/agents/retired")
+            );
+        }
         assert_eq!(entry.name.as_deref(), Some(HANDLE));
         assert!(entry.ended_at.is_some());
         assert_eq!(entry.mail_wake, Some(agent_registry::MailWake::Retired));

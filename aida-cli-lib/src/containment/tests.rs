@@ -446,7 +446,7 @@ fn task_2705_policy_errors_are_redacted_and_aida_selector_stays_closed() {
     );
     let mut unwired = std::process::Command::new("codex");
     unwired.env("AIDA_PROJECT_ROOT", partial.path());
-    assert!(crate::launch::profile::finalize_codex(&mut unwired)
+    assert!(crate::vendors::profile::finalize_codex(&mut unwired)
         .unwrap_err()
         .to_string()
         .contains(crate::codex_tool_env::UNWIRED_AIDA_POSTURE));

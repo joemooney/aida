@@ -21,6 +21,54 @@ fn pinned_env() -> EnvVarsGuard {
     env
 }
 
+// trace:BUG-2544 | ai:codex
+#[test]
+fn bug_2544_delegation_preserves_parent_rejection_reason() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    env.set_key("AIDA_HOME", tmp.path().join("home"));
+    env.unset_key(GRANT_ENV);
+    let absent = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
+    assert!(absent.to_string().contains("AIDA_SESSION_GRANT is absent"));
+    let id = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &id);
+    env.set_key("AIDA_USER", "different-launcher");
+    let mismatch = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
+    let text = mismatch.to_string();
+    assert!(text.contains("different-launcher"), "{text}");
+    assert!(text.contains(SUBJECT), "{text}");
+    assert!(
+        !text.contains(&id),
+        "only the grant prefix should be disclosed"
+    );
+    env.set_key("AIDA_USER", SUBJECT);
+    revoke_by_id(&id).unwrap();
+    let revoked = validate_child_delegation(tmp.path(), "reviewer").unwrap_err();
+    assert!(revoked.to_string().contains("revoked at"), "{revoked}");
+}
+
+// trace:BUG-2544 | ai:codex
+#[test]
+fn bug_2544_sibling_reviewers_do_not_consume_parent_grant() {
+    let tmp = tempfile::tempdir().unwrap();
+    let mut env = pinned_env();
+    env.set_key("AIDA_HOME", tmp.path().join("home"));
+    let id = test_support::mint_grant_for(tmp.path(), SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &id);
+    let before = std::fs::read(grant_path(&id).unwrap()).unwrap();
+    let first = issue_child(tmp.path(), "reviewer", "reviewer-one").unwrap();
+    let second = issue_child(tmp.path(), "reviewer", "reviewer-two").unwrap();
+    assert_ne!(first.id, second.id);
+    assert_eq!(std::fs::read(grant_path(&id).unwrap()).unwrap(), before);
+    revoke_by_id(&first.id).unwrap();
+    validate_child_delegation(tmp.path(), "reviewer").unwrap();
+    assert!(matches!(
+        grant_check_for(tmp.path(), &second.id, "reviewer-two"),
+        GrantCheck::Valid(_)
+    ));
+    revoke_by_id(&second.id).unwrap();
+}
+
 /// Apply `pairs` for this value's lifetime under the test's already-held
 /// [`pinned_env`] guard (the env lock is not reentrant), restoring each
 /// key's prior value on drop.
@@ -76,6 +124,8 @@ fn expired_notice_rejects_changed_timestamp_or_seat() {
         binding: Vec::new(),
         origin: None,
         launch_capability: None,
+        launch_expiry_cap: None,
+        launch_cap_recorded: false,
     };
     for (expires_at, seat, emits) in [
         (at, "advisor", true),
@@ -638,9 +688,20 @@ fn bug_2486_child_cap_preserves_parent_binding_and_revocation() {
     child.id = Uuid::new_v4().to_string();
     child.parent_grant_id = Some(parent.clone());
     write_grant(&child).unwrap();
+    // An ample token lifetime keeps the fractional grant expiry, but
+    // TASK-3820 records the credential deadline so renewal honors it.
+    // trace:TASK-3820 | ai:claude
+    let ample = child.expires_at.timestamp() + 3600;
+    cap_launch_child_expiry(&child.id, ample).unwrap();
+    let recorded = read_grant(&child.id).unwrap();
+    assert_eq!(recorded.expires_at, child.expires_at);
+    assert_eq!(
+        recorded.launch_expiry_cap.map(|c| c.timestamp()),
+        Some(ample)
+    );
+    // Repeating the same deadline makes no write.
     let before = std::fs::read(grant_path(&child.id).unwrap()).unwrap();
-    // Ample token lifetime makes no write, retaining fractional grant expiry.
-    cap_launch_child_expiry(&child.id, child.expires_at.timestamp() + 3600).unwrap();
+    cap_launch_child_expiry(&child.id, ample).unwrap();
     assert_eq!(
         std::fs::read(grant_path(&child.id).unwrap()).unwrap(),
         before
@@ -674,4 +735,158 @@ fn bug_2486_child_cap_preserves_parent_binding_and_revocation() {
     revoked.binding.clear();
     write_grant(&revoked).unwrap();
     assert!(cap_launch_child_expiry(&child.id, deadline - 60).is_err());
+}
+
+// BUG-2544: a parent grant refused by the roster names the roster the check
+// read and what it found there: a real denial, a store or roster that could
+// not be reached from the launch's root, or a first read that a second read
+// contradicts. Other rejections get no roster detail.
+// trace:BUG-2544 | ai:claude
+#[test]
+fn bug_2544_roster_refusal_names_the_roster_that_was_read() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let mut env = pinned_env();
+    let id = test_support::mint_grant_for(root, SUBJECT, "advisor", &["reviewer"]);
+    env.set_key(GRANT_ENV, &id);
+    validate_child_delegation(root, "reviewer").unwrap();
+    let denied = GrantRejection::RosterDenied {
+        principal: SUBJECT.into(),
+        seat: "advisor".into(),
+    };
+
+    // The roster allows the seat on the second read: the first one raced.
+    let raced = parent_roster_refusal_detail(root, &denied).unwrap();
+    assert!(raced.contains("Read again from"), "{raced}");
+    assert!(raced.contains("one after another"), "{raced}");
+    let via_parent =
+        parent_roster_refusal_detail(root, &GrantRejection::Parent(Box::new(denied.clone())));
+    assert_eq!(via_parent.as_deref(), Some(raced.as_str()));
+    assert_eq!(
+        parent_roster_refusal_detail(
+            root,
+            &GrantRejection::Expired {
+                at: chrono::Utc::now()
+            }
+        ),
+        None
+    );
+
+    // A roster that no longer lists the seat is named by its path.
+    let store = crate::detect_distributed_store_from(root).unwrap();
+    let roster = store.join("registry").join("team.toml");
+    std::fs::write(&roster, "[members]\n").unwrap();
+    let text = validate_child_delegation(root, "reviewer")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        text.starts_with("no valid parent seat grant is active: grant "),
+        "{text}"
+    );
+    assert!(text.contains("the team roster no longer allows"), "{text}");
+    assert!(
+        text.contains(&format!("looked up from `{}`", root.display())),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("by the team roster (`{}`)", roster.display())),
+        "{text}"
+    );
+    assert!(!text.contains("Read again"), "{text}");
+
+    // A roster that cannot be read is reported as missing, not as a denial
+    // by a roster nobody read.
+    std::fs::remove_file(&roster).unwrap();
+    let text = validate_child_delegation(root, "reviewer")
+        .unwrap_err()
+        .to_string();
+    assert!(
+        text.contains(&format!("looked up from `{}`", root.display())),
+        "{text}"
+    );
+    assert!(!text.contains("by the team roster (`"), "{text}");
+    assert!(
+        text.contains(&store.display().to_string()),
+        "the store without a roster is named: {text}"
+    );
+}
+
+// BUG-2544: a launch that outlived the deputy job holding its grant failed
+// with a bare "no valid parent seat grant is active". The refusal now names
+// the grant and the rejection, and a presenter refusal says how to launch.
+// trace:BUG-2544 | ai:claude
+#[test]
+fn bug_2544_parent_grant_refusal_names_reason_and_background_fix() {
+    let id = "215c5bb6-63cc-41ab-ac56-b5960df84452";
+    let presenter = parent_grant_refusal(
+        id,
+        &GrantRejection::PresenterNotBound {
+            bound_to: "process 3297532".into(),
+        },
+    );
+    assert!(
+        presenter.starts_with("no valid parent seat grant is active: grant 215c5bb6"),
+        "{presenter}"
+    );
+    assert!(
+        presenter.contains("bound to process 3297532"),
+        "{presenter}"
+    );
+    assert!(
+        presenter.contains("background") && presenter.contains("`wait`"),
+        "{presenter}"
+    );
+    let expired = parent_grant_refusal(
+        id,
+        &GrantRejection::Expired {
+            at: chrono::Utc::now(),
+        },
+    );
+    assert!(expired.contains("it expired at"), "{expired}");
+    assert!(!expired.contains("background"), "{expired}");
+}
+
+/// Review F1: only a [`ChildGrantRefused`] wrapping a [`LaunchParentRefused`]
+/// whose reason is expiry (directly or a nested `Parent` expiry) counts as
+/// parent-expired; revocation, other parent rejections, untyped child-grant
+/// refusals and an unwrapped expiry do not.
+// trace:BUG-2653 | ai:claude
+#[test]
+fn bug_2653_is_parent_expired_accepts_only_typed_expiry() {
+    let at = Utc::now();
+    let child = |reason: GrantRejection| {
+        anyhow::Error::new(ChildGrantRefused(
+            LaunchParentRefused {
+                reason,
+                message: "refused".into(),
+            }
+            .into(),
+        ))
+        .context("launching the child")
+    };
+    let expired = GrantRejection::Expired { at };
+    assert!(ChildGrantRefused::is_parent_expired(&child(
+        expired.clone()
+    )));
+    assert!(ChildGrantRefused::is_parent_expired(&child(
+        GrantRejection::Parent(Box::new(expired.clone()))
+    )));
+    for other in [
+        GrantRejection::Revoked { at },
+        GrantRejection::Parent(Box::new(GrantRejection::Revoked { at })),
+        GrantRejection::Malformed,
+        GrantRejection::ParentPrincipalMismatch,
+    ] {
+        let error = child(other.clone());
+        assert!(ChildGrantRefused::is_in(&error), "{other:?}");
+        assert!(!ChildGrantRefused::is_parent_expired(&error), "{other:?}");
+    }
+    let untyped = anyhow::Error::new(ChildGrantRefused(anyhow::anyhow!("expired")));
+    assert!(ChildGrantRefused::is_in(&untyped));
+    assert!(!ChildGrantRefused::is_parent_expired(&untyped));
+    let unwrapped = anyhow::Error::new(LaunchParentRefused {
+        reason: expired,
+        message: "refused".into(),
+    });
+    assert!(!ChildGrantRefused::is_parent_expired(&unwrapped));
 }

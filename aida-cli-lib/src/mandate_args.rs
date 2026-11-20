@@ -21,6 +21,9 @@ pub enum MandateAction {
         // trace:STORY-1917 | ai:agy
         #[clap(long = "scope", value_name = "SCOPE")]
         scopes: Vec<String>,
+        /// Target and delegated seats authorized for relay parent renewal (default advisor).
+        #[clap(long = "relay-seat", value_name = "SEAT")]
+        relay_seats: Vec<String>,
         /// A DRIVE mandate: also covers advisor signoff of sketches
         /// and dispatching fixers, and turns on the 15-minute drive tick that
         /// routes every stalled lane. Implies --ship-held and covers sensitive
@@ -35,8 +38,9 @@ pub enum MandateAction {
         /// With --drive: keep sensitive specs human-only.
         #[clap(long, requires = "drive", conflicts_with = "include_supervised")]
         exclude_supervised: bool,
-        /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h).
-        /// Extend an active one with `aida mandate renew`.
+        /// How long it lasts, e.g. `8h` or `90m` (default 8h, at most 24h
+        /// unless `[mandate] max_ttl_hours` in ~/.aida/config.toml raises the
+        /// cap). Extend an active one with `aida mandate renew`.
         #[clap(long)]
         ttl: Option<String>,
         /// Why the mandate exists, recorded with it.
@@ -46,16 +50,60 @@ pub enum MandateAction {
         /// guided, keystone). Operator-only specs are never covered.
         #[clap(long)]
         include_supervised: bool,
+        /// Allow mandate ships and trains to take protected-path PRs. Requires
+        /// a human at a terminal; all other gates still apply.
+        // trace:STORY-2733 | ai:codex
+        #[clap(long)]
+        include_gate_paths: bool,
     },
     /// Extend the active mandate in place, or revive the latest expired one
-    /// with a fresh ID. Keeps scope, flags and reason. Stopped mandates stay
-    /// stopped. Human at an interactive terminal only.
+    /// with a fresh ID. Everything not named on the command line is kept:
+    /// scope, supervised flag, protected paths and reason. The start flags
+    /// change the renewed mandate; each change is recorded with the renewal.
+    /// Stopped mandates stay stopped. Then extends your live session grants
+    /// from `aida role enter`, and the grants delegated from them, up to the
+    /// new expiry (never shortened, never revived; relay parent grants are
+    /// left to their relay), prints each one, and exits non-zero naming any
+    /// it could not extend. Human at an interactive terminal only.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-166 | ai:claude
+    // trace:STORY-2771 | ai:claude
+    // trace:TASK-3820 | ai:claude
     Renew {
         /// How long from now it lasts, e.g. `8h` or `90m` (default: the
-        /// duration it was started with, at most 24h).
-        #[clap(long = "for", value_name = "DURATION")]
+        /// duration it was started with, at most 24h unless `[mandate]
+        /// max_ttl_hours` in ~/.aida/config.toml raises the cap).
+        #[clap(long = "for", visible_alias = "ttl", value_name = "DURATION")]
         duration: Option<String>,
+        /// Also cover shipping held PRs.
+        #[clap(long)]
+        ship_held: bool,
+        /// Scopes to add (e.g. `--scope dispatch`). Renewal never removes a
+        /// scope: stop the mandate and start a narrower one for that.
+        #[clap(long = "scope", value_name = "SCOPE")]
+        scopes: Vec<String>,
+        /// Target and delegated seats authorized for relay parent renewal (default advisor).
+        #[clap(long = "relay-seat", value_name = "SEAT")]
+        relay_seats: Vec<String>,
+        /// Make it a drive mandate (standard drive scopes and the drive tick). The
+        /// supervised flag is kept unless --include-supervised or
+        /// --exclude-supervised says otherwise.
+        #[clap(long)]
+        drive: bool,
+        /// Also cover sensitive specs from now on.
+        #[clap(long, conflicts_with = "exclude_supervised")]
+        include_supervised: bool,
+        /// Keep sensitive specs human-only from now on.
+        #[clap(long)]
+        exclude_supervised: bool,
+        /// Allow protected-path ships and trains from now on.
+        #[clap(long, conflicts_with = "exclude_gate_paths")]
+        include_gate_paths: bool,
+        /// Stop allowing protected-path ships and trains.
+        #[clap(long)]
+        exclude_gate_paths: bool,
+        /// Replace the recorded reason.
+        #[clap(long)]
+        reason: Option<String>,
     },
     /// End the active mandate now. Human at an interactive terminal only.
     Stop,

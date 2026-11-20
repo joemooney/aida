@@ -1,7 +1,21 @@
 //! `aida doctor` findings collection, completed-without-commit scan and GC headers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::LeaseState;
+use crate::{
+    agent_registry, branch_behind_main, branch_exists_anywhere, brief, cli, collect_agent_briefs,
+    collect_cleanup_report, config_lookup, current_user_id, detect_default_branch_ref,
+    detect_merged_pr_for_branch_via_forge, distributed_mode_declared_from, external_import_bleed,
+    findings, humanize_duration_secs, init_cmd, is_plan_commit_subject, leases, list_leases,
+    list_worktrees, maintenance_schedule, parse_trace_id_token, process_probe,
+    read_project_config_value, resolve_completed_since_cutoff, resolve_default_branch_ref, role,
+    schedule, vendors, PrLookup,
+};
+
+use crate::cli::{Cli, Command};
+use aida_core::{RequirementStatus, RequirementType, Storage};
+use anyhow::Result;
+use colored::Colorize;
 
 /// How long an uncommitted new spec (one a contained session filed, or a host
 /// add whose commit did not run) may wait for a host commit before `aida doctor` reports it (`store-queued-specs`).
@@ -1063,10 +1077,42 @@ pub(crate) fn collect_doctor_findings_at(
         }
     }
 
+    // Shared claims may outlive the local session table. Keep separate IDs so
+    // healing one never falls through to ending a similarly named local lease.
+    // trace:BUG-2655 | ai:codex
+    if let Some(root) =
+        aida_core::store_locate::detect_distributed_store_from(project_root).filter(|_| {
+            filter
+                .as_deref()
+                .is_none_or(|category| category == "stale-leases")
+        })
+    {
+        for claim in crate::coordination::list_claims(&root) {
+            if let Some(id) = claim
+                .claim_id
+                .as_deref()
+                .filter(|_| crate::coordination::exited_holder_is_dead(&claim, now))
+            {
+                push(DoctorFinding {
+                    category: "stale-leases".into(),
+                    id: format!("shared-{id}"),
+                    summary: format!(
+                        // trace:BUG-2697 | ai:claude — also an admission that never spawned
+                        "expired shared claim for {} (lease {}, no running worker, dead creator)",
+                        claim.scope,
+                        claim.lease_id.as_deref().unwrap_or("unknown")
+                    ),
+                    action: format!("aida doctor heal stale-leases --id shared-{id} --yes"),
+                    safe_heal: true,
+                });
+            }
+        }
+    }
+
     for lease in &leases {
         let worktree_exists = lease.worktree_path.exists();
         // BUG-511: review-verb leases classify by creator PID, not worktree.
-        let state = lease_state_for(lease, &live_sessions, now);
+        let state = crate::leases::lease_state_for(lease, &live_sessions, now);
         let pid_dead = lease
             .creator_pid
             .is_some_and(|pid| !process_probe::pid_is_alive(pid));
@@ -1758,6 +1804,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         ],
         "review-verdicts",
     ),
+    // BUG-2531: the gate ledger's spec-to-change bindings are incomplete;
+    // the heal runs the one-time bootstrap. trace:BUG-2531 | ai:claude
+    (
+        &["gate-ledger-bindings", "gate-ledger", "ledger-bindings"],
+        "gate-ledger-bindings",
+    ),
     // TASK-1122: raw machine identity (corporate email/hostname) already in
     // the store despite configured redaction. trace:TASK-1122 | ai:claude
     (
@@ -1856,6 +1908,8 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // STORY-1699: relay runs stopped at `state=blocked` / `exited` with no
     // `.done` acknowledgement. trace:STORY-1699 | ai:claude
+    // trace:STORY-2849 | ai:codex
+    (&["landing-health"], "landing-health"),
     (
         &[
             "relay-stall",
@@ -1985,6 +2039,7 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
     ),
     // trace:TASK-2324 | ai:codex
     (&["rustc-cache", "rustc-info"], "rustc-cache"),
+    (&["cache-retention"], "cache-retention"),
     // TASK-1595: work committed in an agent worktree that is on no remote, or
     // a spec commit left reachable only from a reflog. Heal pins dangling
     // commits to `recovered/<spec>`; nothing is deleted. trace:TASK-1595 | ai:claude

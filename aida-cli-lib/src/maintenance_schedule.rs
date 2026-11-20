@@ -874,6 +874,17 @@ fn load_registry(project_root: &Path) -> Result<Option<LoadedScheduleConfig>> {
         config.tasks.extend(local);
     }
     if let Some(config) = merged.as_mut() {
+        // trace:STORY-2849 | ai:codex — resolve roles independently of vendor.
+        if let Some(task) = config
+            .tasks
+            .iter_mut()
+            .find(|task| task.name == "landing-health-guard-route")
+        {
+            let advisor_live = crate::agent_registry::load_live_entries(project_root)
+                .iter()
+                .any(|agent| agent.role.as_deref() == Some("advisor"));
+            task.seats = vec![landing_health_route_seat(advisor_live).into()];
+        }
         disable_unknown_bindings(config);
     }
     Ok(merged)
@@ -3694,6 +3705,21 @@ fn command_table() -> &'static [(&'static [&'static str], ScheduledCommand)] {
                 hook_allowed: false,
             },
         ),
+        // trace:STORY-2849 | ai:codex
+        (
+            &["doctor check landing-health --fail-on-findings"],
+            ScheduledCommand {
+                display: "doctor check landing-health --fail-on-findings",
+                args: &[
+                    "doctor",
+                    "check",
+                    "landing-health",
+                    "--json",
+                    "--fail-on-findings",
+                ],
+                hook_allowed: false,
+            },
+        ),
         // STORY-1699: relay stall guard — store-free, silent unless a relay
         // run is blocked/exited without a `.done` acknowledgement.
         // trace:STORY-1699 | ai:claude
@@ -3902,26 +3928,67 @@ fn run_with_kill_timeout(
     // (`record_outcome_local`/`failure_trip`), never as ok. PRIN-5: a result
     // we could not observe must never be reported as the ok/success case.
     // trace:TASK-1535 | ai:codex
-    match crate::command_output_with_timeout_detail(cmd, timeout) {
-        crate::BoundedCommandOutput::Completed(output) => TaskOutcome {
-            status: output.status.code().unwrap_or(1),
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        },
-        crate::BoundedCommandOutput::TimedOut => TaskOutcome {
-            status: TIMEOUT_EXIT_STATUS,
-            stdout: String::new(),
-            stderr: format!(
-                "timed out: {display} did not complete within {}s (killed)",
-                timeout.as_secs()
-            ),
-        },
-        crate::BoundedCommandOutput::SpawnFailed => TaskOutcome {
-            status: TIMEOUT_EXIT_STATUS,
-            stdout: String::new(),
-            stderr: format!("could not be spawned: {display}"),
-        },
+    // Only the fixed shift command may add phase diagnostics to its outcome.
+    // trace:BUG-2667 | ai:codex
+    let shift_tick = display == "shift tick";
+    let started = std::time::Instant::now();
+    let (output, timeout_stderr) = if shift_tick {
+        cmd.env(crate::shift::PHASE_TRACE_ENV, "1");
+        crate::bounded_process::command_output_with_timeout_stderr(cmd, timeout)
+    } else {
+        (
+            crate::command_output_with_timeout_detail(cmd, timeout),
+            Vec::new(),
+        )
+    };
+    let elapsed_ms = started.elapsed().as_millis();
+    let (mut outcome, mut phase_stderr) = match output {
+        crate::BoundedCommandOutput::Completed(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+            (
+                TaskOutcome {
+                    status: output.status.code().unwrap_or(1),
+                    stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+                    stderr: String::new(),
+                },
+                stderr,
+            )
+        }
+        crate::BoundedCommandOutput::TimedOut => (
+            TaskOutcome {
+                status: TIMEOUT_EXIT_STATUS,
+                stdout: String::new(),
+                stderr: format!(
+                    "timed out: {display} did not complete within {}s (killed)",
+                    timeout.as_secs()
+                ),
+            },
+            String::from_utf8_lossy(&timeout_stderr).into_owned(),
+        ),
+        crate::BoundedCommandOutput::SpawnFailed => {
+            return TaskOutcome {
+                status: TIMEOUT_EXIT_STATUS,
+                stdout: String::new(),
+                stderr: format!("could not be spawned: {display}"),
+            };
+        }
+    };
+    if !shift_tick {
+        if outcome.stderr.is_empty() {
+            outcome.stderr = phase_stderr;
+        }
+        return outcome;
     }
+
+    let timing = crate::shift::take_phase_summary(&mut phase_stderr, elapsed_ms);
+    if outcome.status != 0 && outcome.stderr.is_empty() {
+        outcome.stderr = phase_stderr.trim().to_string();
+    }
+    if !outcome.stderr.is_empty() {
+        outcome.stderr.push_str("; ");
+    }
+    outcome.stderr.push_str(&timing);
+    outcome
 }
 
 fn quiet_now(task: &Task) -> bool {
@@ -3943,12 +4010,19 @@ fn record_outcome_local(
     let entry = state.tasks.entry(task.name.clone()).or_default();
     entry.last_run_at = Some(now);
     entry.last_status = Some(outcome.status);
+    if outcome.status != 0
+        || task
+            .command
+            .as_ref()
+            .is_some_and(|c| c.display == "shift tick")
+    {
+        if let Err(err) = append_log(project_root, task, outcome, trip) {
+            eprintln!("warning: could not append schedule outcome log: {err}");
+        }
+    }
     if outcome.status == 0 {
         entry.last_success_at = Some(now);
     } else {
-        if let Err(err) = append_log(project_root, task, outcome, trip) {
-            eprintln!("warning: could not append schedule failure log: {err}");
-        }
         events::emit(
             project_root,
             &Event::new(
@@ -4233,14 +4307,15 @@ pub(crate) fn parse_duration(s: &str) -> Result<Duration> {
     if n <= 0 {
         anyhow::bail!("duration '{s}' must be positive");
     }
-    match unit {
-        "s" => Ok(Duration::seconds(n)),
-        "m" => Ok(Duration::minutes(n)),
-        "h" => Ok(Duration::hours(n)),
-        "d" => Ok(Duration::days(n)),
-        "w" => Ok(Duration::weeks(n)),
+    let duration = match unit {
+        "s" => Duration::try_seconds(n),
+        "m" => Duration::try_minutes(n),
+        "h" => Duration::try_hours(n),
+        "d" => Duration::try_days(n),
+        "w" => Duration::try_weeks(n),
         _ => anyhow::bail!("duration '{s}' has unknown unit '{unit}'"),
-    }
+    };
+    duration.with_context(|| format!("duration '{s}' is out of range"))
 }
 
 fn parse_quiet_hours(s: &str) -> Result<QuietHours> {
@@ -4321,7 +4396,7 @@ fn run_schedule(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
     let args = <ScheduleArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -4375,3 +4450,69 @@ pub(crate) static SCHEDULE: crate::cmdkit::CommandReg = crate::cmdkit::CommandRe
     },
     run: crate::cmdkit::Handler::Store(run_schedule),
 };
+
+/// The floor reclaim's wall-clock budget: half the guard child's kill
+/// ceiling, leaving the re-probe, the stuck scan and the report time to run.
+// trace:STORY-2351 | ai:claude
+pub(crate) const FLOOR_RECLAIM_BUDGET: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// The disk-headroom `--fail-on-findings` reason: one line, and it leads
+/// with the STUCK sentence (reclaim cannot restore the floor, plus the top
+/// consumers) when there is one, so the routed item carries it. `None` when
+/// there are no findings.
+// trace:STORY-1916.ac641c6e | ai:claude
+pub(crate) fn disk_headroom_fail_reason(findings: &[DoctorFinding]) -> Option<String> {
+    if findings.is_empty() {
+        return None;
+    }
+    let tail = format!(
+        "{} finding(s) in {DISK_HEADROOM_CATEGORY} — failing because --fail-on-findings was requested",
+        findings.len()
+    );
+    let stuck = findings
+        .iter()
+        .find_map(|f| f.summary.find("STUCK:").map(|i| &f.summary[i..]));
+    let reason = match stuck {
+        Some(stuck) => format!("{stuck} — {tail}"),
+        None => tail,
+    };
+    Some(reason.replace(['\n', '\r'], " "))
+}
+
+use crate::doctor_cmd::DISK_HEADROOM_CATEGORY;
+use crate::doctor_root::DoctorFinding;
+
+// trace:STORY-2849 | ai:codex
+fn landing_health_route_seat(advisor_live: bool) -> &'static str {
+    if advisor_live {
+        "advisor"
+    } else {
+        "product"
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn landing_health_schedule_fixture() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let config = load_config(root).unwrap().unwrap();
+    let guard = config
+        .tasks
+        .iter()
+        .find(|t| t.name == "landing-health-guard")
+        .unwrap();
+    assert!(guard.enabled);
+    assert_eq!(guard.interval, Some(Duration::minutes(15)));
+    let route = config
+        .tasks
+        .iter()
+        .find(|t| t.name == "landing-health-guard-route")
+        .unwrap();
+    assert!(route.enabled);
+    let prompt = route.prompt.as_deref().unwrap();
+    assert!(prompt.starts_with("Diagnose the shared CI cause first"));
+    assert!(prompt.contains("aida doctor check landing-health"));
+    assert_eq!(route.on[0].job.as_deref(), Some("landing-health-guard"));
+    assert_eq!(landing_health_route_seat(true), "advisor");
+    assert_eq!(landing_health_route_seat(false), "product");
+}

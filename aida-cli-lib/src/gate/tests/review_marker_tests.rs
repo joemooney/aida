@@ -10,6 +10,7 @@ fn claim(pr: u64, head: &str, started_at: u64, ttl: u64) -> Marker {
         pid: 0,
         pid_start: None,
         started_at,
+        started_at_nanos: None,
         ttl_secs: ttl,
     }
 }
@@ -172,6 +173,26 @@ fn prc_dead_or_recycled_marker_without_ownership_clears_at_merge_gate() {
     assert!(is_live_at(dir.path(), &live));
     assert_eq!(
         merge_gate(dir.path(), 7, || Some("abc".into())),
+        MergeGate::UnderReview(live)
+    );
+}
+
+// A read-only report sees the same expiry and leaves the marker in place.
+// trace:STORY-2824 | ai:claude
+#[test]
+fn story_2824_peek_reports_an_expired_claim_without_clearing_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let m = claim(7, "ABCDEF", now_secs() - 120, 60);
+    write(dir.path(), &m).unwrap();
+    assert!(matches!(
+        merge_gate_peek(dir.path(), 7, || panic!("expired")),
+        MergeGate::ExpiredCleared(_, _)
+    ));
+    assert_eq!(read(dir.path(), 7), Some(m));
+    let live = Marker::for_this_process(7, Some("abc"), None, "drain reviewer");
+    write(dir.path(), &live).unwrap();
+    assert_eq!(
+        merge_gate_peek(dir.path(), 7, || Some("abc".into())),
         MergeGate::UnderReview(live)
     );
 }
@@ -395,4 +416,281 @@ fn prc_only_the_markers_process_ownership_overrides_its_ttl() {
         !is_live_at(root, &m),
         "matching dead ownership ends the marker"
     );
+}
+
+// trace:BUG-2530 | ai:codex
+#[test]
+fn bug2530_duplicate_admission_and_redundant_claim() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("home");
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        dir.path(),
+        None,
+        &[
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args([
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "-q"]);
+    git(&["commit", "--allow-empty", "-qm", "reviewed change"]);
+    let sha = git(&["rev-parse", "HEAD"]);
+    let head = sha.as_str();
+    let identity = vec!["session:independent-reviewer".to_string()];
+    let receipt =
+        super::super::review_authority::write_human_receipt(head, "PR-7", &identity, false, true)
+            .unwrap();
+    let m = claim(7, head, now_secs() + 10, CLAIM_TTL_SECS);
+    write(dir.path(), &m).unwrap();
+    let path = super::super::review_verdict::verdict_path(dir.path(), "PR-7");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut record = serde_json::json!({
+        "verdict": "approved", "reviewed_sha": head,
+        "recorded_at": chrono::DateTime::from_timestamp((m.started_at - 10) as i64, 0).unwrap().to_rfc3339(),
+        "recorder_attestation": {"sha":head, "human_at_tty":true, "receipt_id":receipt, "identity":identity}
+    });
+    for kind in [
+        "approved",
+        "request-changes",
+        "rejected",
+        "waiting",
+        "unknown",
+    ] {
+        record["verdict"] = kind.into();
+        std::fs::write(&path, record.to_string()).unwrap();
+        assert_eq!(
+            refuse_conclusive_head(dir.path(), 7, Some(head)).is_err(),
+            matches!(kind, "approved" | "request-changes" | "rejected")
+        );
+        assert!(refuse_conclusive_head(
+            dir.path(),
+            7,
+            Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+        )
+        .is_ok());
+        let gate = merge_gate(dir.path(), 7, || Some(head.into()));
+        assert_eq!(gate == MergeGate::Clear, kind == "approved");
+    }
+    record["verdict"] = "approved".into();
+    record["recorded_at"] = chrono::DateTime::from_timestamp((m.started_at + 10) as i64, 0)
+        .unwrap()
+        .to_rfc3339()
+        .into();
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(matches!(
+        merge_gate(dir.path(), 7, || Some(head.into())),
+        MergeGate::UnderReview(_)
+    ));
+    // Exercise both orderings within one second, including the reported
+    // 0.1s claim / 0.9s approval race. Equal instants and legacy intervals
+    // cannot prove that a claim followed the approval.
+    for (claim_nanos, approval_nanos, redundant) in [
+        (None, 900_000_000, false),
+        (Some(100_000_000), 900_000_000, false),
+        (Some(900_000_000), 100_000_000, true),
+        (Some(500_000_000), 500_000_000, false),
+    ] {
+        let mut precise = m.clone();
+        precise.started_at_nanos = claim_nanos;
+        write(dir.path(), &precise).unwrap();
+        assert_eq!(read(dir.path(), 7).unwrap(), precise);
+        record["recorded_at"] =
+            chrono::DateTime::from_timestamp(m.started_at as i64, approval_nanos)
+                .unwrap()
+                .to_rfc3339()
+                .into();
+        std::fs::write(&path, record.to_string()).unwrap();
+        let gate = merge_gate(dir.path(), 7, || Some(head.into()));
+        if redundant {
+            assert_eq!(gate, MergeGate::Clear);
+        } else {
+            assert_eq!(gate, MergeGate::UnderReview(precise.clone()));
+        }
+        assert_eq!(
+            live_description(dir.path(), 7, Some(head)).is_none(),
+            redundant
+        );
+        assert_eq!(
+            read(dir.path(), 7).unwrap(),
+            precise,
+            "reads retain the claim"
+        );
+    }
+    record["recorded_at"] = "invalid".into();
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(matches!(
+        merge_gate(dir.path(), 7, || Some(head.into())),
+        MergeGate::UnderReview(_)
+    ));
+    record["recorded_at"] = chrono::DateTime::from_timestamp((m.started_at - 10) as i64, 0)
+        .unwrap()
+        .to_rfc3339()
+        .into();
+    record
+        .as_object_mut()
+        .unwrap()
+        .remove("recorder_attestation");
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(matches!(
+        merge_gate(dir.path(), 7, || Some(head.into())),
+        MergeGate::UnderReview(_)
+    ));
+    assert!(
+        refuse_conclusive_head(dir.path(), 7, Some(head)).is_ok(),
+        "unattested approval must remain reviewable"
+    );
+    record["recorder_attestation"] = serde_json::json!({
+        "sha":head, "human_at_tty":true, "receipt_id":"missing", "identity":identity
+    });
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(
+        refuse_conclusive_head(dir.path(), 7, Some(head)).is_ok(),
+        "invalid authority must remain reviewable"
+    );
+    assert!(read(dir.path(), 7).is_some());
+}
+
+/// BUG-2557: an advisor's `--rereview` admits exactly one fresh review at a
+/// head whose conclusive verdict the review contract outdated; the next
+/// recorded verdict at that head ends the admission.
+// trace:BUG-2557 | ai:claude
+#[test]
+fn bug2557_rereview_admits_one_fresh_review_at_a_conclusive_head() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().join("home");
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        dir.path(),
+        None,
+        &[
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("AIDA_CONTAINED", None),
+        ],
+    );
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(dir.path())
+            .args([
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+            ])
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "-q"]);
+    git(&["commit", "--allow-empty", "-qm", "reviewed change"]);
+    let sha = git(&["rev-parse", "HEAD"]);
+    let head = sha.as_str();
+    let path = super::super::review_verdict::verdict_path(dir.path(), "PR-7");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+
+    // No verdict yet: nothing to admit, nothing recorded.
+    assert_eq!(
+        admit_rereview(dir.path(), 7, Some(head), "coverage fixed", "advisor").unwrap(),
+        None
+    );
+
+    let mut record = serde_json::json!({
+        "verdict": "request-changes", "reviewed_sha": head,
+        "recorded_at": "2026-11-13T04:50:00+00:00",
+    });
+    std::fs::write(&path, record.to_string()).unwrap();
+    let refusal = refuse_conclusive_head(dir.path(), 7, Some(head))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        refusal.contains("--rereview"),
+        "refusal names the supported path: {refusal}"
+    );
+
+    assert!(
+        admit_rereview(dir.path(), 7, Some(head), "   ", "advisor").is_err(),
+        "a reason is required"
+    );
+    assert!(
+        admit_rereview(dir.path(), 7, None, "coverage fixed", "advisor").is_err(),
+        "an unresolved head cannot be admitted"
+    );
+    assert!(refuse_conclusive_head(dir.path(), 7, Some(head)).is_err());
+
+    assert_eq!(
+        admit_rereview(
+            dir.path(),
+            7,
+            Some(head),
+            "STORY-2750 Covers corrected",
+            "advisor"
+        )
+        .unwrap(),
+        Some("CHANGES REQUESTED")
+    );
+    assert!(
+        refuse_conclusive_head(dir.path(), 7, Some(head)).is_ok(),
+        "the admitted head accepts one fresh review"
+    );
+    let store = crate::gate::ledger::store_root(dir.path()).unwrap();
+    let admitted: Vec<_> =
+        crate::gate::ledger::project::events(&store, crate::gate::ledger::ChangeKey::pr(7))
+            .into_iter()
+            .filter_map(|e| match e.body {
+                crate::gate::ledger::EventBody::RereviewAdmitted { reason, .. } => {
+                    Some((e.head, reason))
+                }
+                _ => None,
+            })
+            .collect();
+    assert_eq!(
+        admitted,
+        vec![(
+            Some(head.to_string()),
+            "STORY-2750 Covers corrected".to_string()
+        )],
+        "the admission and its reason are on the gate ledger"
+    );
+    // A different head is unaffected by the admission.
+    assert!(refuse_conclusive_head(
+        dir.path(),
+        7,
+        Some("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+    )
+    .is_ok());
+
+    // The fresh review records its verdict: the admission is spent.
+    record["recorded_at"] = "2026-11-13T05:30:00+00:00".into();
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(
+        refuse_conclusive_head(dir.path(), 7, Some(head)).is_err(),
+        "only one fresh review is admitted"
+    );
+
+    // A verdict with no recording time cannot be told apart from a later one.
+    record.as_object_mut().unwrap().remove("recorded_at");
+    std::fs::write(&path, record.to_string()).unwrap();
+    assert!(admit_rereview(dir.path(), 7, Some(head), "coverage fixed", "advisor").is_err());
 }

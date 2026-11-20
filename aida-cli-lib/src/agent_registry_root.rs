@@ -1,7 +1,46 @@
 //! `aida agent list/gc/stop/register`, registered-process validation and child signal forwarding (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+#[cfg(test)]
+use crate::{
+    advisor, agent_guidance_files, agent_initial_prompt_args, agent_launch_env_inputs,
+    agent_launch_should_prompt, agent_new_bg_dispatch, agent_new_command_for_type,
+    agent_new_with_config, agent_resume_args, agent_resume_prompt_enabled, agent_seed_session_args,
+    agent_type_picker_choices, alias, apply_agent_default_flags, apply_presentation_env_policy,
+    brief, build_agent_new_bg_command, burndown, child_role_picker_default_highlight,
+    classify_presentation_env, claude_args_request_dontask, cli, dedupe_codex_no_daemon,
+    default_role_guidance, derisk_launch_request, describe_presentation_env,
+    enabled_agent_type_picker_choices_for_project, enforce_agent_singleton,
+    enforce_agent_singleton_preflight, enforce_agent_type_enabled,
+    guard_interactive_claude_dontask, guided_review_launch_request, is_contained_launch, launch,
+    launch_runs_scope_preflight, live_duplicate_allows_anyway_prompt, live_pids,
+    load_agents_bypass, load_agents_contained, load_agents_inherit_env, mail_wake,
+    matching_ended_resume_views_from, matching_live_duplicate, maybe_prompt_agent_posture,
+    merge_agent_flags_from_file, prepare_agent_launch, prepare_agent_launch_dry,
+    read_agents_bool_from_file, read_agents_bypass_from_file, redact_launch_command_line,
+    redact_prompt_arg_for_diagnostics, render_agent_launch_context,
+    render_agent_launch_diagnostics, render_agent_launch_noexec, render_agent_show_prompt,
+    resolve_interactive_launch_mode_for_root, resolve_launch_prompt, role,
+    role_picker_launch_annotations, run, run_tracked_agent, session, ship,
+    singleton_preflight_or_pick_spec_with, split_posture_flags, terminate_pids_with_grace,
+    tool_bypass_flags, tool_contained_flags, write_global_agents_permission_posture,
+    write_global_agents_posture, AgentCommand, AgentContextOptions, AgentDefaultFlagOptions,
+    AgentLaunchConfig, AgentLaunchContext, AgentLaunchPlan, AgentNewCommand,
+    AgentPermissionPosture, AgentPromptOptions, AgentResumeOptions, PresentationEnvPolicy,
+    ResolvedClaudeLaunch, RoleInstanceKind, RoleState, SpecChoice, TerminateTarget, AGENT_ROLES,
+    AGENT_ROLE_INFOS, CODEX_NO_DAEMON_FLAG,
+};
+use crate::{
+    agent_registry, build_agent_classify_context, list_leases, looks_like_spec_id,
+    main_worktree_root_from, merge_agent_views_with_lease_fallback, output_format_is_json,
+    process_probe, status_sections, validate_registered_agent_role,
+};
+#[cfg(test)]
+use aida_core::vendors::PromptTransport as AgentPromptStyle;
+#[cfg(test)]
+use aida_core::{Requirement, RequirementStatus};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 /// The HANDLE column: the agent's address, or `-` when it has none, so a
 /// pid or lease id never reads as something mail can be sent to.
@@ -32,7 +71,14 @@ pub(crate) fn agent_ls_in(
 ) -> Result<()> {
     let project_root = project_root.to_path_buf();
     if !show_all && !stale_only && !ended_only {
-        let _ = agent_registry::gc_dead_agents(&project_root, false, None);
+        // trace:BUG-2639 | ai:codex
+        if let Err(error) = agent_registry::maintain_allocation_records(&project_root) {
+            eprintln!("warning: automatic agent maintenance failed: {error:#}");
+        }
+    }
+    // trace:BUG-2639 | ai:codex
+    for fault in crate::relay_mail::rotation_faults(&project_root) {
+        eprintln!("warning: {} — {}", fault.summary, fault.action);
     }
     let leases = list_leases(&project_root);
     // trace:TASK-2272 | ai:claude
@@ -57,8 +103,23 @@ pub(crate) fn agent_ls_in(
         });
     }
 
+    // Peer consumers need the same actionable block evidence as the terminal view.
+    // trace:BUG-2631 | ai:codex
+    let health = if ended_only {
+        Default::default()
+    } else {
+        crate::seat_health::notes_by_id(&project_root)
+    };
     if output_format_is_json() {
-        println!("{}", serde_json::to_string_pretty(&agents)?);
+        let mut rows = serde_json::to_value(&agents)?;
+        if let Some(rows) = rows.as_array_mut() {
+            for (row, agent) in rows.iter_mut().zip(&agents) {
+                if let Some(note) = health.get(&agent.id) {
+                    row["operator_input"] = serde_json::Value::String(note.clone());
+                }
+            }
+        }
+        println!("{}", serde_json::to_string_pretty(&rows)?);
         return Ok(());
     }
 
@@ -131,6 +192,9 @@ pub(crate) fn agent_ls_in(
             Some(g) => format!("  {g}"),
             None => String::new(),
         };
+        // trace:BUG-2625 | ai:codex
+        let seat = agent.seat.as_deref().unwrap_or("(none)");
+        paused_note.push_str(&format!("  seat:{seat}"));
         paused_note.push_str(&crate::agent_rotation::ls_rotation_note(rotation, now));
         if let Some(census) = &handshake {
             paused_note.push_str(&crate::advisor_handshake::ls_note(
@@ -199,6 +263,10 @@ pub(crate) fn agent_ls_in(
                 paused_note
             );
         }
+    }
+    // trace:BUG-2631 | ai:codex
+    for note in health.values() {
+        println!("{note}");
     }
     for note in notes {
         println!("{note}");

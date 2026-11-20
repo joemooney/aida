@@ -1,7 +1,7 @@
 //! Host-capacity preflight for unattended drains.
 // trace:TASK-1298 | ai:codex
 
-use crate::*;
+use crate::{aida_exe_path, build_git_sha, find_project_root};
 use anyhow::Result;
 use colored::Colorize;
 use serde::Serialize;
@@ -80,6 +80,46 @@ pub(crate) fn decide_capacity(available: u64, required: u64, warn_only: bool) ->
     } else {
         Level::Fail
     }
+}
+
+/// Recheck at each lane launch, including standalone launches and resumes.
+// trace:BUG-2651 | ai:codex
+pub(crate) fn lane_disk_preflight(main: &Path) -> Result<()> {
+    let cfg = crate::read_project_config_value(main);
+    let floor = crate::doctor_cmd::disk_headroom_min_free_gib(cfg.as_ref());
+    for requested in [
+        main.to_path_buf(),
+        main.join("target"),
+        std::env::temp_dir(),
+    ] {
+        let probe = nearest_existing(requested.clone());
+        let stats = crate::disk_emergency::fs_stats(&probe).ok_or_else(|| {
+            anyhow::anyhow!("cannot measure lane disk headroom at {}", probe.display())
+        })?;
+        require_lane_space(&requested, stats.avail, floor)?;
+    }
+    Ok(())
+}
+
+// trace:BUG-2651 | ai:codex
+// trace:BUG-2684 | ai:claude
+pub(crate) fn require_lane_space(path: &Path, available: u64, floor_gib: u64) -> Result<()> {
+    if available >= floor_gib.saturating_mul(GIB) {
+        return Ok(());
+    }
+    Err(anyhow::Error::new(
+        crate::lane_disk_deferral::LaneSpaceRefused {
+            at: chrono::Utc::now(),
+            message: format!(
+                "lane launch refused: {} has {} free, below the {} GiB floor \
+             ([doctor.disk_headroom] min_free_gib); inspect `aida worktree gc` and \
+             reclaim ended overlays with `aida worktree gc --apply` before retrying",
+                path.display(),
+                human_bytes(available),
+                floor_gib
+            ),
+        },
+    ))
 }
 
 fn containing_disk<'a>(disks: &'a Disks, path: &Path) -> Option<&'a sysinfo::Disk> {
@@ -347,5 +387,23 @@ mod tests {
         // and a genuine shortage still fails, or the fix would just stop checking
         assert_eq!(inode_level(&Ok(9_999), 10_000), Level::Fail);
         assert_eq!(inode_level(&Ok(10_000), 10_000), Level::Pass);
+    }
+}
+
+// trace:BUG-2651 | ai:codex
+#[cfg(test)]
+mod lane_disk_tests {
+    use super::*;
+    #[test]
+    fn bug_2651_lane_disk_floor_refuses_below_and_accepts_boundary() {
+        let path = Path::new("/build-target");
+        let error = require_lane_space(path, 60 * GIB - 1, 60)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("lane launch refused"));
+        assert!(error.contains("aida worktree gc --apply"));
+        assert!(require_lane_space(path, 60 * GIB, 60).is_ok());
+        assert!(require_lane_space(path, 2 * GIB, 2).is_ok());
+        assert!(require_lane_space(path, GIB, 2).is_err());
     }
 }

@@ -2,7 +2,25 @@
 //! burndown command, burndown run waves, wave PR integration and burndown config (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    aida_exe_path, aida_home_dir, all_queued_added_at, all_queued_requirement_ids, burndown,
+    collect_open_prs, collect_open_prs_uncached, current_role_instance_is_companion,
+    current_user_id, detect_distributed_store_from, drain_lock, drive_robustness,
+    find_main_worktree_root, find_project_root, findings, forge, get_default_author, headless_tee,
+    humanize_relative, in_flight_lease_role_map, integrate, leases, list_leases, load_dispenser,
+    load_store_for_lookup, machine_readiness, main_worktree_root_from, maybe_sync_pull,
+    network_retry, pane_host, parse_requirement_type, process_probe, queue_cmd,
+    record_role_activity, session, shelve_spec_on_failure, spec_title_cell, status_cleanup,
+    truncate, wait_for_ci_terminal, CiProbe,
+};
+use crate::{pid_start_time, role, worktree};
+use aida_core::liveness::LeaseState;
+use aida_core::DatabaseBackend;
+use aida_core::RequirementStatus;
+use aida_core::{Requirement, RequirementType};
+use anyhow::{Context, Result};
+use colored::Colorize;
 
 // trace:STORY-1728 | ai:claude
 #[path = "burndown_run_args.rs"]
@@ -835,6 +853,13 @@ pub(crate) fn integrate_wave_prs(
         residual.unmerged_prs.len(),
     );
 
+    // A review-gated project merges on an approval at the exact head; CI
+    // runs after the merge, so the wave does not wait for it.
+    // trace:STORY-2903 | ai:claude
+    // One snapshot for the wave: the merges below run under it, so a mode
+    // change mid-wave refuses at the merge (STORY-2903 F5).
+    let landing_entry = crate::gate::landing_merge::Entry::capture(project_root);
+    let review_gated = !landing_entry.policy.waits_for_ci();
     for pr in &residual.unmerged_prs {
         println!(
             "  {} PR-{} ({}) — waiting for CI to reach a terminal state",
@@ -851,6 +876,12 @@ pub(crate) fn integrate_wave_prs(
         // The bounded foreground wait. `NoSignal` carrying a bound message is
         // the "wait expired" case ADR-22 requires us to PARK, not abort.
         let (ci, wait_expired) = if supervision_label.is_some() {
+            (integrate::CiState::None, None)
+        } else if review_gated {
+            println!(
+                "    {} landing mode is review-gated: not waiting for CI",
+                "·".dimmed()
+            );
             (integrate::CiState::None, None)
         } else {
             match wait_for_ci_terminal(Some(project_root), &pr.branch) {
@@ -897,7 +928,7 @@ pub(crate) fn integrate_wave_prs(
         });
 
         let succeeded = match &action {
-            burndown::WavePrAction::Merge => merge_wave_pr(project_root, pr),
+            burndown::WavePrAction::Merge => merge_wave_pr(project_root, pr, &landing_entry),
             burndown::WavePrAction::Hold(why) => {
                 println!(
                     "  {} PR-{} held — {}",
@@ -1306,7 +1337,11 @@ mod bug_1581_merge_block_tests {
 /// chain) used to swallow the pull leg — worktree pruning owns branch deletion
 /// (BUG-758). Returns whether the merge itself succeeded.
 // trace:TASK-1169 | ai:claude
-pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::ResidualPr) -> bool {
+pub(crate) fn merge_wave_pr(
+    project_root: &std::path::Path,
+    pr: &burndown::ResidualPr,
+    landing_entry: &crate::gate::landing_merge::Entry,
+) -> bool {
     // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
     if let Err(e) = crate::standalone_implementer::refuse_under_marker("burndown merge") {
         eprintln!("  {e:#}");
@@ -1425,7 +1460,18 @@ pub(crate) fn merge_wave_pr(project_root: &std::path::Path, pr: &burndown::Resid
         delete_branch: false,
         match_head: wave_match_head, // trace:BUG-1918
     };
-    match forge::forge_for(project_root).merge_change(&change_ref, &opts, &mut sink) {
+    // trace:STORY-2903 | ai:claude
+    match crate::gate::landing_merge::merge(
+        forge::forge_for(project_root).as_ref(),
+        project_root,
+        crate::gate::landing_merge::Caller::Burndown,
+        landing_entry,
+        &change_ref,
+        std::slice::from_ref(&pr.spec),
+        &opts,
+        &mut sink,
+        &crate::pr_train::pr_head_pin_journals,
+    ) {
         Ok(_) => {
             println!(
                 "  {} merged PR-{} ({})",
@@ -1644,7 +1690,7 @@ pub(crate) fn leased_spec_ids(project_root: &std::path::Path) -> std::collection
     let live = process_probe::probe_live_claude_sessions();
     list_leases(project_root)
         .into_iter()
-        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .filter(|l| !matches!(leases::lease_state_for(l, &live, now), LeaseState::Stale))
         .map(|l| l.scope)
         .collect()
 }
@@ -1733,7 +1779,7 @@ pub(crate) fn handle_burndown_status(json: bool) -> Result<()> {
     let live = process_probe::probe_live_claude_sessions();
     let in_flight: Vec<InFlightLease> = list_leases(&project_root)
         .into_iter()
-        .filter(|l| !matches!(lease_state_for(l, &live, now), LeaseState::Stale))
+        .filter(|l| !matches!(leases::lease_state_for(l, &live, now), LeaseState::Stale))
         .map(|l| InFlightLease {
             scope: l.scope.clone(),
             branch: l.branch.clone(),
@@ -3252,7 +3298,7 @@ pub(crate) struct BurndownArgs {
 // trace:STORY-527 | ai:claude
 fn run_burndown(
     matches: &clap::ArgMatches,
-    _ctx: &crate::command_registry::DispatchCtx,
+    _ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<()> {
     let args = <BurndownArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let cmd = &args.inner;
@@ -3260,16 +3306,15 @@ fn run_burndown(
 }
 
 // trace:STORY-1728 | ai:claude
-pub(crate) static BURNDOWN: crate::command_registry::CommandReg =
-    crate::command_registry::CommandReg {
-        name: "burndown",
-        help_after: "release",
-        command: <BurndownArgs as clap::CommandFactory>::command,
-        policy: |_| crate::command_registry::CmdPolicy {
-            stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-            per_write_auto_push: false,
-            skip_role_restore_prompt: false,
-            team_identity_write: false,
-        },
-        run: crate::command_registry::Handler::Early(run_burndown),
-    };
+pub(crate) static BURNDOWN: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
+    name: "burndown",
+    help_after: "release",
+    command: <BurndownArgs as clap::CommandFactory>::command,
+    policy: |_| crate::cmdkit::CmdPolicy {
+        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+        per_write_auto_push: false,
+        skip_role_restore_prompt: false,
+        team_identity_write: false,
+    },
+    run: crate::cmdkit::Handler::Early(run_burndown),
+};

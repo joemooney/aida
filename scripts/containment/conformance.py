@@ -502,12 +502,38 @@ def agy_unsupported_reason(root):
     return None
 
 
+# trace:BUG-2624 | ai:codex
+def safe_child_group(group):
+    """Reject special kill targets and objects with implicit integer coercions.
+
+    Callers supply only PIDs from children spawned with process_group=0 or
+    start_new_session=True. In particular, a mock must never become kill(-1).
+    """
+    return type(group) is int and 1 < group <= 2**31 - 1 and group != os.getpgrp()
+
+
+# trace:BUG-2624 | ai:codex
+def signal_child_group(group, signum):
+    if not safe_child_group(group):
+        return False
+    try:
+        os.killpg(group, signum)
+    except ProcessLookupError:
+        pass
+    return True
+
+
 def bounded_launch(argv, workspace, env, root, seconds, pass_fds=(), on_tick=None,
                    preserve_session=False):
     with (root / "stdout.jsonl").open("wb") as out, (root / "stderr.txt").open("wb") as err:
         session_options = {"process_group": 0} if preserve_session else {"start_new_session": True}
-        child = subprocess.Popen(argv, cwd=workspace, env=env, stdin=subprocess.DEVNULL,
-                                 stdout=out, stderr=err, pass_fds=pass_fds, **session_options)
+        # trace:BUG-2602 | ai:codex
+        try:
+            child = subprocess.Popen(argv, cwd=workspace, env=env, stdin=subprocess.DEVNULL,
+                                     stdout=out, stderr=err, pass_fds=pass_fds, **session_options)
+        except OSError as error:
+            err.write(f"{error}\n".encode(errors="backslashreplace"))
+            return {"exit_code": None, "spawn_error": str(error)}
         deadline = time.monotonic() + seconds
         output_limit = False
         try:
@@ -522,10 +548,7 @@ def bounded_launch(argv, workspace, env, root, seconds, pass_fds=(), on_tick=Non
             timed_out = child.poll() is None
         finally:
             # Stop the entire invocation group, including ordinary descendants.
-            try:
-                os.killpg(child.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+            signal_child_group(child.pid, signal.SIGKILL)
             child.wait(timeout=5)
     return {"exit_code": child.returncode, "timed_out": timed_out, "output_limit_exceeded": output_limit,
             "cleanup": "process group killed; escaped descendants unverified"}
@@ -536,6 +559,12 @@ def bounded_launch(argv, workspace, env, root, seconds, pass_fds=(), on_tick=Non
 # trace:TASK-3131 | ai:codex
 def aida_refuse(root, report, reason):
     report["unsupported_reason"] = reason
+    # trace:BUG-2602 | ai:codex
+    # Preflight refusals are recorded in the report's setup rows and may
+    # occur before there is any launcher output.
+    report["diagnostic_files"] = ["report.json"]
+    report["diagnostic_files"].extend(
+        name for name in ("stdout.jsonl", "stderr.txt") if (root / name).is_file())
     # A late cleanup/setup refusal must also withdraw previously computed
     # aggregate credit; retain individual observations for diagnosis.
     # trace:TASK-3048 | ai:codex
@@ -609,6 +638,10 @@ def preserved_terminal():
 @contextlib.contextmanager
 def foreground_continuation(group):
     """Lend a controlling terminal to the child before releasing its script."""
+    # Refuse before attempting to lend a real operator terminal to a mock or
+    # special process group. trace:BUG-2624 | ai:codex
+    if not safe_child_group(group):
+        raise ValueError("unsafe continuation process group")
     terminal = os.dup(0)
     previous = None
     try:
@@ -664,17 +697,11 @@ def launch_aida_continuation(script, repo, env, seconds, cleanup_grace=10):
             # Keep foreground ownership through nested cleanup, then reclaim
             # the operator's group. This handles interruptions delivered to this
             # supervisor; foreground Ctrl+C is recorded by the continuation.
-            try:
-                os.killpg(child.pid, signal.SIGTERM)
-            except ProcessLookupError:
-                pass
+            signal_child_group(child.pid, signal.SIGTERM)
             try:
                 child.wait(timeout=cleanup_grace)
             except subprocess.TimeoutExpired:
-                try:
-                    os.killpg(child.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                signal_child_group(child.pid, signal.SIGKILL)
                 child.wait(timeout=5)
             if isinstance(error, subprocess.TimeoutExpired):
                 raise ValueError("aida-boundary-continuation-timeout: inspect report.json and launch diagnostics") from error
@@ -790,6 +817,14 @@ def run_aida(args):
                 raise ValueError("fixture-runtime-policy-query-failed") from error
             report["runtime_policy"] = runtime
         fixture_policy(config, args.vendor, runtime)
+        if args.vendor == "agy":
+            # Use the tested binary's descriptor under the original HOME.
+            # The launcher still owns validation and opening of this source.
+            credential = credential_home / runtime["relative"] / runtime["credential"]
+            try:
+                credential.lstat()
+            except FileNotFoundError as error:
+                raise ValueError(f"credential not found at {credential}") from error
         skill = repo / ".agents/skills/aida-pickup/SKILL.md"
         skill.parent.mkdir(parents=True)
         invocation = shlex.join([sys.executable, str(root / "payload/runner.py"),
@@ -821,7 +856,7 @@ def run_aida(args):
         block = fixture_role_enter(aida, repo, env, root, report, "advisor")
         state = {"report": report, "aida": str(aida), "timeout": args.timeout}
         if args.vendor == "agy":
-            state["credential_source"] = str(credential_home / runtime["relative"] / runtime["credential"])
+            state["credential_source"] = str(credential)
             (authority / runtime["relative"]).mkdir(parents=True, mode=0o700)
         write_json(root / "aida-state.json", state)
         script = continuation_script(block, root, "--aida-setup")
@@ -836,7 +871,7 @@ def run_aida(args):
         result = launch_aida_continuation(script, repo, env, args.timeout + 600,
                                           cleanup_grace=25)
         if result:
-            raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
+            raise ValueError(f"aida-boundary-launch-refused (exit {result}): inspect report.json")
     except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
         # The continuation owns newer setup evidence. Never overwrite it
         # with the pre-continuation snapshot on an outer timeout.
@@ -914,7 +949,7 @@ def setup_aida(root):
         result = launch_aida_continuation(continuation_script(block, root, "--aida-continue"),
                                           repo, env, state["timeout"] + 180)
         if result:
-            raise ValueError("aida-boundary-launch-refused: inspect report.json and launch diagnostics")
+            raise ValueError(f"aida-boundary-launch-refused (exit {result}): inspect report.json")
     except (KeyboardInterrupt, ValueError, OSError, subprocess.SubprocessError) as error:
         # The launch continuation owns newer evidence after the seat switch.
         saved = root / "report.json"
@@ -1051,7 +1086,9 @@ def continue_aida(root):
                                 preserve_session=True)
         report["launch"] = launch
         if not observed:
-            raise ValueError("fixture-production-launch-not-accepted: inspect stdout.jsonl and stderr.txt")
+            outcome = (f"spawn failed: {launch['spawn_error']}" if "spawn_error" in launch else
+                       f"exit {launch['exit_code']}")
+            raise ValueError(f"fixture-production-launch-not-accepted ({outcome}): inspect report.json")
         results = None
         logs = ([root / "stdout.jsonl"] if report["vendor"] == "agy" else
                 (repo / ".aida/headless-logs").glob("*.jsonl"))
@@ -1203,7 +1240,10 @@ def run(args):
         try:
             mounts = ["--ro-bind", str(payload_dir), str(payload_dir)]
             for source in inputs:
-                fd = os.open(source, os.O_PATH | os.O_NOFOLLOW)
+                try:
+                    fd = os.open(source, os.O_PATH | os.O_NOFOLLOW)
+                except FileNotFoundError as error:
+                    raise ValueError(f"credential not found at {source}") from error
                 descriptors.append(fd)
                 if not stat.S_ISREG(os.fstat(fd).st_mode):
                     raise ValueError("runtime input is not a non-symlink regular file")
@@ -1211,6 +1251,8 @@ def run(args):
             argv = wrapper + mounts + ["--"] + vendor
             write_json(root / "argv.json", argv)
             launch = bounded_launch(argv, workspace, env, root, args.timeout, tuple(descriptors))
+            if "spawn_error" in launch:
+                raise ValueError(f"fixture-launch-spawn-failed: inspect {root / 'stderr.txt'}")
         finally:
             for fd in descriptors:
                 os.close(fd)

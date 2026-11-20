@@ -676,6 +676,11 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         ),
         // trace:STORY-2571 | ai:codex
         ("aida advisor loops status", &["advisor", "loops", "status"]),
+        // trace:STORY-2691 | ai:codex
+        (
+            "aida advisor loops train-status",
+            &["advisor", "loops", "train-status"],
+        ),
         ("aida fasttrack status", &["fasttrack", "status"]),
         ("aida show", &["show", &spec, "--no-git"]),
         ("aida list", &["list", "--limit", "1"]),
@@ -713,10 +718,45 @@ fn checked_in_audit_is_exhaustive_and_every_honoured_probe_parses() {
         assert!(audit.contains(&format!("| `{path}` | JSON honoured |")));
     }
 
+    // trace:TASK-3813 | ai:codex — metrics honours the global pin directly.
+    let metrics = audit_json(
+        &aida(
+            &repo,
+            &home,
+            &["land", "metrics", "--since", "1h", "--format", "json"],
+        ),
+        "aida land metrics",
+    );
+    // A rolling hour intersects one or two UTC hour buckets.
+    assert!((1..=2).contains(&metrics["hours"].as_array().unwrap().len()));
+    assert!(metrics["hours"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|hour| hour["merges"] == 0 && hour["source"] == "main git history"));
+    assert_eq!(metrics["review_rounds_source"], "verdict history");
+    let local_metrics = audit_json(
+        &aida(
+            &repo,
+            &home,
+            &["land", "metrics", "--since", "1h", "--json"],
+        ),
+        "aida land metrics --json",
+    );
+    for field in [
+        "review_rounds",
+        "review_rounds_source",
+        "ready_waits",
+        "recording_began",
+    ] {
+        assert_eq!(metrics[field], local_metrics[field], "{field}");
+    }
+
     let verified: BTreeSet<&str> = probes
         .iter()
         .chain(attachment_probes.iter())
         .map(|(path, _)| *path)
+        .chain(std::iter::once("aida land metrics"))
         .collect();
     let mut unsupported: Vec<String> = Vec::new();
     for entry in catalog.as_array().unwrap() {
@@ -1179,4 +1219,14 @@ fn task_3219_native_background_entry_keeps_bg_without_wrapper_opt_in() {
         assert!(preview.contains("native prompt with spaces"), "{preview}");
         assert!(!preview.contains("claude-bg-supervise"), "{preview}");
     }
+}
+
+// trace:STORY-2704 | ai:codex
+#[test]
+fn flow_data_audit_uses_substrate_spelling_for_parent_and_report() {
+    let audit = include_str!("../../docs/internal/cli-format-json-audit.md");
+    assert!(audit.contains("| `aida flow-data` | JSON not honoured |"));
+    assert!(audit.contains("| `aida flow-data report` | COULD NOT VERIFY |"));
+    assert!(!audit.contains("| `aida flow` |"));
+    assert!(!audit.contains("| `aida flow report` |"));
 }

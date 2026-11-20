@@ -38,7 +38,7 @@ fn shadowed_globals(cmd: &clap::Command, path: &str, inherited: &[String], out: 
 
 #[test]
 fn no_subcommand_arg_shadows_a_global_arg_id() {
-    let root = built_command();
+    let root = crate::TEST_CLI.built_command();
     root.clone().debug_assert();
     let mut shadowed = Vec::new();
     shadowed_globals(&root, "aida", &[], &mut shadowed);
@@ -64,15 +64,16 @@ fn shadow_walk_detects_a_local_arg_reusing_a_global_id() {
 
 #[test]
 fn export_parses_its_export_format() {
-    let cli = try_parse_from([
-        "aida",
-        "export",
-        "--export-format",
-        "tree",
-        "--output",
-        "out.json",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "export",
+            "--export-format",
+            "tree",
+            "--output",
+            "out.json",
+        ])
+        .unwrap();
     assert!(cli.globals.format.is_none());
     let args = cli
         .command
@@ -82,12 +83,15 @@ fn export_parses_its_export_format() {
         args.output.as_deref(),
         Some(std::path::Path::new("out.json"))
     );
-    let args = try_parse_from(["aida", "export", "-f", "json"])
+    let args = crate::TEST_CLI
+        .try_parse_from(["aida", "export", "-f", "json"])
         .unwrap()
         .command
         .registered::<crate::import_export_cmd::ExportArgs>();
     assert_eq!(args.format, "json");
-    let cli = try_parse_from(["aida", "export", "--output", "out.json"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "export", "--output", "out.json"])
+        .unwrap();
     assert_eq!(
         cli.command
             .registered::<crate::import_export_cmd::ExportArgs>()
@@ -98,16 +102,17 @@ fn export_parses_its_export_format() {
 
 #[test]
 fn report_ai_integration_parses_its_report_format() {
-    let cli = try_parse_from([
-        "aida",
-        "report",
-        "ai-integration",
-        "--report-format",
-        "html",
-        "--output",
-        "r.html",
-    ])
-    .unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from([
+            "aida",
+            "report",
+            "ai-integration",
+            "--report-format",
+            "html",
+            "--output",
+            "r.html",
+        ])
+        .unwrap();
     assert!(cli.globals.format.is_none());
     match cli
         .command
@@ -127,7 +132,8 @@ fn report_ai_integration_parses_its_report_format() {
             "html",
         ),
     ] {
-        match try_parse_from(argv)
+        match crate::TEST_CLI
+            .try_parse_from(argv)
             .unwrap()
             .command
             .registered::<crate::report_cmd::ReportArgs>()
@@ -143,7 +149,9 @@ fn report_ai_integration_parses_its_report_format() {
 
 #[test]
 fn config_format_parses_positional_format() {
-    let cli = try_parse_from(["aida", "config", "format", "two"]).unwrap();
+    let cli = crate::TEST_CLI
+        .try_parse_from(["aida", "config", "format", "two"])
+        .unwrap();
     assert!(cli.globals.format.is_none());
     match cli
         .command
@@ -161,7 +169,7 @@ fn global_format_applies_on_either_side_of_each_command() {
         &["aida", "--format", "json", "export", "-f", "tree"][..],
         &["aida", "export", "-f", "tree", "--format", "json"][..],
     ] {
-        let cli = try_parse_from(argv).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(argv).unwrap();
         assert!(matches!(
             cli.globals.format,
             Some(crate::cli::OutputFormat::Json)
@@ -177,7 +185,7 @@ fn global_format_applies_on_either_side_of_each_command() {
         &["aida", "report", "ai-integration", "--format", "toon"][..],
         &["aida", "config", "format", "single", "--format", "toon"][..],
     ] {
-        let cli = try_parse_from(argv).unwrap();
+        let cli = crate::TEST_CLI.try_parse_from(argv).unwrap();
         assert!(matches!(
             cli.globals.format,
             Some(crate::cli::OutputFormat::Toon)
@@ -187,7 +195,7 @@ fn global_format_applies_on_either_side_of_each_command() {
 
 /// Run the command's handler at the early dispatch point (no store opened).
 fn dispatch_early(argv: &[&str]) -> Result<Flow> {
-    let cli = try_parse_from(argv).unwrap();
+    let cli = crate::TEST_CLI.try_parse_from(argv).unwrap();
     let Command::Registered(invocation) = &cli.command;
     invocation.run_early(&cli.globals)
 }

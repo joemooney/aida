@@ -87,6 +87,8 @@ elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,title.*mergedA
   fi
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'state,mergeable,reviewDecision,headRefOid'; then
   printf 'OPEN\tMERGEABLE\t\tab12cd34ef56ab12cd34ef56ab12cd34ef56ab12\n'
+elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q -- '--json baseRefName'; then
+  printf '%s\n' "${AIDA_FIXTURE_BASE:-main}"
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q -- '--json labels'; then
   printf '%s\n' false
 elif [ "$1 $2" = "pr view" ] && printf '%s' "$*" | grep -q 'title,body'; then
@@ -125,9 +127,35 @@ fn serve_origin_locally(root: &Path, repo: &Path) {
 /// The fixture's forge setting, for every `.aida/config.toml` it writes.
 const FORGE_GITHUB: &str = "[forge]\nprovider = \"github\"\n";
 
-// trace:BUG-1953.ac87d12b | ai:claude
-#[test]
-fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
+/// A repo on `main` whose PR-42 head branch `task-123-work` holds a live
+/// implementer lease whose worktree is the shell's cwd, with `landing`
+/// appended to the committed config; ships PR-42 and returns the output.
+fn ship_from_inside_the_lease_worktree(
+    landing: &str,
+) -> (
+    tempfile::TempDir,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    String,
+) {
+    let shipped = ship_pr_42(landing, "main", None);
+    (shipped.temp, shipped.repo, shipped.state, shipped.text)
+}
+
+/// What one fixture ship left behind.
+struct Shipped {
+    temp: tempfile::TempDir,
+    repo: std::path::PathBuf,
+    state: std::path::PathBuf,
+    text: String,
+    code: Option<i32>,
+}
+
+/// `ship_from_inside_the_lease_worktree`, with PR-42 targeting `base` (a
+/// branch at the same commit as `main`) and, when `remote_main_landing` is
+/// set, a later commit on the origin's `main` only (never fetched before the
+/// ship) whose config carries that `[landing]` section.
+fn ship_pr_42(landing: &str, base: &str, remote_main_landing: Option<&str>) -> Shipped {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().canonicalize().unwrap();
     let repo = root.join("repo");
@@ -143,6 +171,15 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         std::fs::create_dir_all(dir).unwrap();
     }
     std::fs::write(repo.join(".github/workflows/ci.yml"), "name: CI\n").unwrap();
+    if !landing.is_empty() {
+        // The landing policy is read from the default branch only.
+        std::fs::create_dir_all(repo.join(".aida")).unwrap();
+        std::fs::write(
+            repo.join(".aida/config.toml"),
+            format!("{FORGE_GITHUB}{landing}"),
+        )
+        .unwrap();
+    }
     git(&repo, &["init", "-q", "-b", "main"]);
     git(&repo, &["config", "user.email", "test@example.com"]);
     git(&repo, &["config", "user.name", "AIDA Test"]);
@@ -167,6 +204,9 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     .trim()
     .to_string();
     git(&repo, &["branch", "task-123-work"]);
+    if base != "main" {
+        git(&repo, &["branch", base]);
+    }
     git(
         &repo,
         &[
@@ -177,8 +217,36 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         ],
     );
     serve_origin_locally(&root, &repo);
+    if let Some(remote_landing) = remote_main_landing {
+        // Another machine lands a policy change on the default branch.
+        let other = root.join("other");
+        git(
+            &root,
+            &[
+                "clone",
+                "-q",
+                root.join("origin.git").to_str().unwrap(),
+                other.to_str().unwrap(),
+            ],
+        );
+        git(&other, &["config", "user.email", "test@example.com"]);
+        git(&other, &["config", "user.name", "AIDA Test"]);
+        std::fs::create_dir_all(other.join(".aida")).unwrap();
+        std::fs::write(
+            other.join(".aida/config.toml"),
+            format!("{FORGE_GITHUB}{remote_landing}"),
+        )
+        .unwrap();
+        git(&other, &["add", "."]);
+        git(&other, &["commit", "-q", "-m", "landing policy"]);
+        git(&other, &["push", "-q", "origin", "main"]);
+    }
     std::fs::create_dir_all(repo.join(".aida")).unwrap();
-    std::fs::write(repo.join(".aida/config.toml"), FORGE_GITHUB).unwrap();
+    std::fs::write(
+        repo.join(".aida/config.toml"),
+        format!("{FORGE_GITHUB}{landing}"),
+    )
+    .unwrap();
 
     // A live lease on the PR head branch — the shell itself stays on `main`.
     let sessions = repo.join(".aida/sessions");
@@ -196,7 +264,17 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     .unwrap();
 
     let gh = bin.join("gh");
-    std::fs::write(&gh, FAKE_GH.replace(HEAD_SHA, &head_sha)).unwrap();
+    std::fs::write(
+        &gh,
+        FAKE_GH
+            .replace(HEAD_SHA, &head_sha)
+            .replace(
+                "\"baseRefName\":\"main\"",
+                &format!("\"baseRefName\":\"{base}\""),
+            )
+            .replace("task-123-work\\tmain", &format!("task-123-work\\t{base}")),
+    )
+    .unwrap();
     approve_at_head(&home, &repo, &head_sha);
     let mut permissions = std::fs::metadata(&gh).unwrap().permissions();
     permissions.set_mode(0o755);
@@ -209,9 +287,15 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
     let output = Command::new(env!("CARGO_BIN_EXE_aida"))
         .current_dir(&repo)
         .args(["pr", "ship", "42", "--no-pull", "--no-trailer-check"])
+        .args(if base == "main" {
+            &[][..]
+        } else {
+            &["--allow-stacked-base"][..]
+        })
         .env("HOME", &home)
         .env("PATH", path)
         .env("AIDA_FIXTURE_STATE", &state)
+        .env("AIDA_FIXTURE_BASE", base)
         .env("AIDA_TEST_GH_BINARY", &gh)
         .env("AIDA_TELEMETRY", "0")
         .env("NO_COLOR", "1")
@@ -230,6 +314,21 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    Shipped {
+        temp,
+        repo,
+        state,
+        text,
+        code: output.status.code(),
+    }
+}
+
+// trace:BUG-1953.ac87d12b | ai:claude
+#[test]
+fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
+    // The default landing policy reproduces today's ci-gated behaviour: an
+    // author may ship their own approved change. trace:STORY-2897 | ai:claude
+    let (_temp, repo, state, text) = ship_from_inside_the_lease_worktree("");
 
     // The real CLI must dispatch the detached worker using this build, not an
     // older installed binary that does not know the internal subcommand.
@@ -267,5 +366,49 @@ fn ship_by_number_from_main_matches_the_lease_on_the_pr_head_branch() {
         text.contains("step 5: lease 01bug1953abc")
             && text.contains("holds the shipped branch task-123-work"),
         "step 5 must match the head branch's lease (BUG-61 inside-worktree skip): {text}"
+    );
+}
+
+/// STORY-2897/2903: in `review-gated` mode the advisor performs merges
+/// (operator direction 2026-11-18): a session holding no advisor seat is
+/// refused before anything merges, with the review/authority exit category.
+/// The author rule (C2) behind it is covered where the advisor merges.
+// trace:STORY-2897 trace:STORY-2903 | ai:claude
+#[test]
+fn review_gated_landing_refuses_a_ship_by_a_non_advisor() {
+    let shipped = ship_pr_42("[landing]\nmode = \"review-gated\"\n", "main", None);
+    let (state, text) = (&shipped.state, &shipped.text);
+    assert!(
+        text.contains("has the advisor perform its merges"),
+        "a non-advisor's ship must be refused: {text}"
+    );
+    assert!(!state.join("merged").exists(), "nothing merges: {text}");
+    // An authority refusal, not the behind-base condition (26).
+    assert_eq!(
+        shipped.code,
+        Some(23),
+        "review refusal exit category: {text}"
+    );
+}
+
+/// STORY-2897: a ship into a non-default base still decides under the
+/// default branch's policy as the remote has it at the merge. Origin's
+/// `main` names the advisor as merger (never fetched before the ship); the
+/// final re-check refreshes `main`, sees the change, and refuses.
+// trace:STORY-2897 | ai:claude
+#[test]
+fn a_remote_default_branch_policy_change_refuses_a_ship_into_another_base() {
+    let shipped = ship_pr_42("", "integration", Some("[landing]\nmerger = \"advisor\"\n"));
+    let (state, text) = (&shipped.state, &shipped.text);
+    assert!(
+        text.contains("the landing policy changed while it waited")
+            && text.contains("merger any-non-author -> advisor"),
+        "the superseded policy must not decide the merge: {text}"
+    );
+    assert!(!state.join("merged").exists(), "nothing merges: {text}");
+    assert_eq!(
+        shipped.code,
+        Some(23),
+        "review refusal exit category: {text}"
     );
 }

@@ -1891,7 +1891,10 @@ fn run_harvest(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    // trace:TASK-3428 | ai:codex
+    use crate::harvest;
+    use crate::kernel::find_project_root;
+    use aida_core::DatabaseBackend;
     let args = <HarvestArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),

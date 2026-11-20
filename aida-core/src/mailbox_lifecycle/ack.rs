@@ -67,7 +67,7 @@ pub const MAX_PLAN_KEYS: usize = 64;
 /// never carry message IDs, bodies, recipients or private paths.
 #[derive(Debug)]
 pub enum AckError {
-    /// The view was partial; a partial view never advances an ACK.
+    /// Discovery evidence for a selected record was incomplete.
     Partial,
     /// More IDs or keys than one plan may carry.
     TooLarge,
@@ -91,7 +91,7 @@ pub enum AckError {
 impl std::fmt::Display for AckError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AckError::Partial => f.write_str("the view was partial, so nothing was acknowledged"),
+            AckError::Partial => f.write_str("record discovery was incomplete, so nothing was acknowledged"),
             AckError::TooLarge => write!(
                 f,
                 "more than {MAX_PLAN_IDS} messages or {MAX_PLAN_KEYS} inboxes to acknowledge at once"
@@ -252,7 +252,7 @@ impl AckPlan {
         if wanted.is_empty() {
             return Ok(None);
         }
-        if !snapshot.ack_eligible() {
+        if !snapshot.ack_eligible() || wanted.iter().any(|r| !snapshot.record_ack_complete(r)) {
             return Err(AckError::Partial);
         }
         if wanted.len() > MAX_PLAN_IDS {

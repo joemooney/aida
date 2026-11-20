@@ -16,8 +16,13 @@ Contained-seat acceptance remains outstanding. See the
 [deployment and acceptance guide](scripts/codegraph/README.md).
 <!-- trace:STORY-2630 | ai:codex -->
 
+`cmdkit::CliSupport<T>` provides tree building and parsing over callbacks injected
+by the crate root's `CLI_SUPPORT` (`TEST_CLI` in tests). The registry supplies its
+cached pristine tree and matches decoder at that boundary; consumers and the
+leaf helper do not import the registry. <!-- trace:TASK-3448 | ai:codex -->
+
 `cmdkit` holds the command-framework types and shared output/stakeholder vocabulary;
-existing CLI, registry and stakeholder paths re-export them.
+existing CLI and stakeholder paths re-export them.
 <!-- trace:TASK-3425 | ai:codex -->
 
 Mailbox delivery resolves named agents against current registry liveness,
@@ -30,7 +35,8 @@ Review watch discovers open non-draft GitHub/GitLab changes against pinned
 origin and each change's own base-branch evidence and dispatches ordinary attested reviewers before
 CI settles. Atomic version-1 state under the main worktree's `.aida/review-watch`
 and permanent admission/per-change locks enforce one reservation per head, a
-local cap of two, and the two-round limit. PID/start/boot receipts precede queue
+local reviewer concurrency cap, and the project’s `[review] max_rounds` limit
+(default 2, set to 4 here). PID/start/boot receipts precede queue
 work; capacity is released only by a terminal receipt or proof that the
 dispatcher's exact process is gone. Stale overlap notices name the change's
 base branch and publish idempotently to the exact forge author's local mailbox.
@@ -50,12 +56,16 @@ are retained with recovery instructions; failed children revoke only the grant
 issued for that launch. See [session launch behavior](docs/cli/06-roles-sessions.md).
 <!-- trace:BUG-2188 BUG-2168 | ai:codex -->
 
-CI fan-out keeps libtest: two CLI-library unit halves, two deterministic
-CLI-integration halves, remaining workspace tests/doctests, and two gate lanes
-run on seven parallel Linux runners. The aggregate `Build (ubuntu-latest)` fails unless all
-lanes succeed. Test timing budgets remain per binary, and each test lane checks
-for untracked root entries. See [CI fan-out](docs/internal/testing/ci-test-shards.md).
-<!-- trace:TASK-1949 | ai:codex -->
+GitHub CI defaults ordinary PRs to FAST source gates and a parallel workspace/test
+compile check. The `ci:full` label or Actions variable `AIDA_PR_CI_TIER=full`
+selects FULL; main/train, merge groups, scheduled and manual runs always use
+FULL. Seven full lanes cover two CLI-library unit halves, two deterministic
+CLI-integration halves, remaining workspace tests/doctests, and two gate lanes.
+The aggregate `Build (ubuntu-latest)` requires every selected job to succeed.
+Direct ship refuses FAST CI; the train remains its route to main. Test timing
+budgets and untracked-root hygiene remain per full test lane. GitLab relay/MR
+pipelines remain full-only. See [CI tiers](docs/internal/testing/ci-test-shards.md).
+<!-- trace:TASK-1949 STORY-2735 | ai:codex -->
 
 `aida agent new` supplies the selected executable's reported `--version` to
 foreground/background children as `AIDA_HARNESS_VERSION`. Failed, empty or
@@ -124,8 +134,12 @@ merge base, unreadable diff/blob/store, changed symlink, invalid text or
 moving store or dirty canonical objects refuses coverage. Coordination leases,
 mail and other non-evidence dirt do not block the object snapshot; untracked
 objects remain evidence even when Git ignore rules hide them. The home exclusion
-ledger is read separately and retains its fail-closed trust checks. Retry after
-fetching missing evidence or finishing an object write. A stale local origin base
+ledger is read separately and retains its fail-closed trust checks. Dirty-object
+discovery streams status, untracked names and both full-context tracked diffs
+under one 16 MiB aggregate output cap and a shared 10-second query deadline.
+Overflow or timeout kills and reaps Git and refuses scoped acceptance.
+<!-- trace:BUG-2647 | ai:codex -->
+Retry after fetching missing evidence or finishing an object write. A stale local origin base
 can exclude more specs by including older changes. Store HEAD and ref tips are checked around collection;
 the existing history reader includes versions reachable through all store refs.
 <!-- trace:TASK-1790 | ai:codex -->
@@ -435,6 +449,31 @@ Snapshots grant no completion, review or publication authority. Codex remains
 disabled pending its trusted-hook test.
 <!-- trace:STORY-2662 | ai:codex -->
 
+### Conflict repair evidence
+
+Host-staged conflict repairs retain their original conflict paths in the shared,
+versioned `.aida/repair-journal.json`, protected by a permanent journal lock.
+Verified orphan adoption transfers ownership to the newly minted lease before
+removing its predecessor; setup rollback restores that ownership with the orphan.
+An unrelated lane cannot acquire the repair through adoption or resume.
+
+Preparation restores registered products while authoritative sources may still
+have conflicts. Publication stages resolved sources and runs full regeneration
+inside the sandbox. Failed preparation or regeneration retains the merge and
+refuses direct publication; resume must successfully retry the failed phase.
+Successful publication regeneration records the exact staged tree in the journal,
+and the commit gate requires that tree's evidence. Each publication attempt
+invalidates earlier generation evidence before executing a generator.
+
+The generator inventory includes the ignored `.agents/skills/aida-*` portable
+pack. Expected paths are frozen before generator execution from the host's real
+renderer inventory and staged template masters; helper-only directories and
+portable overrides without an ordinary skill prompt grant no new output paths.
+Fresh or stale ignored pack files therefore work without allowing arbitrary
+writes under `.agents/`. Original conflict paths remain the authority for the
+lane brief and marker gate across retries.
+<!-- trace:STORY-2710 | ai:codex -->
+
 ### Agent launch migration
 
 `aida-cli-lib/src/launch/` resolves launch policy into `LaunchContext` and
@@ -475,7 +514,7 @@ Its checked-in ledger permits reductions only and excludes tests, fixtures and
 docs, including `cfg(all(test, ...))` and qualified test attributes. Cheap
 source/literal candidate checks retain escaped strings before decoding; mutant
 fixtures exercise new literals, match arms and aliases.
-The effectful `launch/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
+The effectful `vendors/profile.rs` adapter references the same descriptor and retains the existing finalizer. Capabilities do not admit
 launches or grant containment credit; AGY's outer-only containment candidate
 still refuses pending conformance. Hook layouts, event contracts and backend
 selection now drive the init hook consumer. Pure parsing/fixture validation stays
@@ -529,6 +568,16 @@ The orphan branch `aida-store` is the writer of record. Each requirement is one 
 - **Cache:** `.aida/cache.db` — read projection for fast `list / search / filter`; ordinary reads use the [bounded cache-read contract](#bounded-cache-reads) when freshness differs
 - **Sync:** `aida db sync --pull --push` (fetches the explicit store branch into a temporary ref, then rebases onto its pinned commit for linear orphan history; shared `FETCH_HEAD` is neither read nor written)
 <!-- trace:TASK-1604 | ai:codex -->
+
+Conflicting spec YAML merges user-editable scalars against the common base.
+One-sided edits survive; upstream wins concurrent collisions, naming each
+lost field in the pull note and preserving local/upstream values in spec history.
+Priority plus custom priority, archive state plus timestamp, and deferral state
+plus trigger/reason/timestamp resolve as units so a merge cannot mix a cleared
+flag with the other side's hold or timestamp. Pull add/add conflicts with no
+base refuse automatic resolution before writing; they need manual resolution.
+Identity, filing provenance, status and collection merge policies are unchanged.
+<!-- trace:BUG-2613 | ai:codex -->
 
 **Adoption without product files.** The same branch can carry an `adoption/` namespace of shared, non-executable settings and guidance. Each worktree projects one pinned revision into git-ignored `.aida/` (config, guidance and an ownership manifest), excluded through `.git/info/exclude`; config readers and `aida agent` launches consume the projection, and scaffold and config writers refuse to touch product files in an adopted clone. `aida init` in an adopted clone projects instead of scaffolding. `aida adoption` covers status, refresh, a revision-pinned CI bootstrap, a dry-run migration inventory for tracked scaffolding, and an ownership-checked uninstall. Executable configuration stays under config-trust. See [`aida adoption`](docs/cli/07-project-setup.md#aida-adoption).
 <!-- trace:STORY-1741 | ai:claude -->
@@ -693,6 +742,14 @@ constituent commit trailers still participate in the landing scan.
 The native desktop and WASM clients (egui-based) were extracted to a separate repo on 2026-05-02. The React dashboard's keyboard navigation (`j/k`, `g+key` chords, quick pickers) covers the vi-feel use case.
 
 ### Canonical gate ledger
+
+Cross-label discovery uses a scan-wide 128 MiB read ceiling and a 200,000
+JSON-parse-attempt ceiling, independently of the 64 MiB selection budget.
+Unrelated payloads and torn retries count; exhausting discovery refuses the
+lookup. This is an interim safety cap: relevant-only discovery and automatic
+archive retention still need the completeness and revival design described in
+[the proposed sketch](docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md).
+<!-- trace:BUG-2531 | ai:codex -->
 
 The gate architecture is **effective gate state = f(head SHA, canonical IDs,
 ledger)**. `gate::canon` resolves a change's spec labels against one committed
@@ -1447,6 +1504,41 @@ Verdict collection validates metadata and reads bytes from the same opened
 regular-file handle, with `O_NOFOLLOW | O_NONBLOCK` and a bounded read. The FIFO
 regression runs under an exact-test subprocess watchdog.
 <!-- trace:TASK-1786 | ai:codex -->
+
+Review recording resolves the reviewer's leased `PR-N` or `MR-N` before
+inheriting findings or choosing approval/hold routing. Both classification and
+the verdict builder read that change's record; a shared spec does not select
+another change's findings. An explicit `AIDA_REVIEW_VERDICT_FILE` remains the
+exact handshake destination, including gate suffixes. Standalone launch and
+contained artifact collection use the same forge-qualified change filename.
+Explicit local spec-only verdicts retain their local history but never bind to
+later changes, affect their gates, or clear their review claims. Legacy
+pre-change reviews remain eligible for binding to one change. Effective gates
+reuse one pinned ledger discovery across related changes under one aggregate
+budget; an index naming a missing change ledger refuses as incomplete evidence.
+Historical foreign-copy isolation also fails closed when ownership discovery is
+incomplete: lossy verdict readers withhold potentially misplaced review copies
+while retaining holds and phase-3 ownership records. Each discovery builds one
+ownership index from its change corpus and reuses it across spec/change buckets
+and additional event vectors; these reads never rewrite ledger history.
+<!-- trace:BUG-2517 | ai:codex -->
+
+Standalone headless reviewer launches pin the change head and give fresh and
+resumed children an absolute, exclusive `draft.json` path in their review tree.
+The closed version-1 draft carries data only; it supplies no identity or grant.
+After the child exits, the parent reads through the directory descriptor held
+since before spawn, refuses unsafe files and conflicting legacy evidence, and
+revalidates its issued reviewer grant and the current forge head. The normal
+record policy checks the routed session against authorship and derives recorder
+attestation and hold-release evidence from that child grant. Missing drafts can
+still use the existing grant-stamped collector; rejected drafts never fall back.
+No conversational log or command supplies verdict evidence. Failed recording
+retains the draft; successful durable collection marks it `recorded.json` before
+ordinary review-tree cleanup. Canonical publication failures keep their existing
+pending recovery route. The canonical record retains the exclusive launch ID and
+SHA-256 of the typed draft; identical retries reuse that record, changed drafts
+and older replays after a newer review refuse.
+<!-- trace:BUG-2564 | ai:codex -->
 
 Verdict reads use a held `review-verdicts` directory descriptor and `openat`
 with `O_DIRECTORY|O_NOFOLLOW` for archive descent. File opens use

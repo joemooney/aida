@@ -1,7 +1,14 @@
 //! agents.toml posture readers and writers (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::{
+    aida_home_dir, authority_stdin_is_terminal, authority_stdout_is_terminal, bypass_confirm, cli,
+    config_cmd, config_edit, config_lookup, config_path_for_project, read_project_config_value,
+    session,
+};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 pub(crate) fn load_agent_default_flags(
     project_root: &std::path::Path,

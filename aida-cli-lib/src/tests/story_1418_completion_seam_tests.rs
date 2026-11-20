@@ -700,6 +700,12 @@ fn transition_to_completed_emits_only_on_a_real_transition() {
         "test",
         |r, prior| {
             assert!(matches!(r.status, aida_core::RequirementStatus::Completed));
+            // trace:BUG-2597 | ai:codex — queue close persists this seam's stamp.
+            assert!(r
+                .implementation_info
+                .as_ref()
+                .and_then(|i| i.completed_at)
+                .is_some());
             assert!(matches!(prior, aida_core::RequirementStatus::Done));
             persisted += 1;
             Ok(())

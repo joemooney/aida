@@ -662,7 +662,7 @@ impl BatchPorts for GitHubPorts {
             "outcome": outcome,
             "detail": detail,
         });
-        crate::pr_cmd::append_ship_activity_line(&self.main_worktree, &line.to_string());
+        crate::pr_service::append_ship_activity_line(&self.main_worktree, &line.to_string());
         // TASK-2155: every step also reaches the events feed, so
         // `aida history events --kind ship-batch-step` shows the run.
         // trace:STORY-1887 | ai:claude

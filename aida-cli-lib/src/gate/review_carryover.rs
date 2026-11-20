@@ -72,7 +72,8 @@ pub(crate) struct CarryOver {
 /// The version of the proof's rules (diff flags, protected-base policy). A
 /// ledger event from another version is not reused: the head proves afresh.
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-pub(crate) const PROOF_VERSION: u32 = 1;
+// trace:STORY-2696 | ai:codex — old proofs remain readable and are recomputed.
+pub(crate) const PROOF_VERSION: u32 = 2;
 
 /// Why an approval does NOT carry over. Each variant names the reason the
 /// refusal prints.
@@ -80,22 +81,39 @@ pub(crate) const PROOF_VERSION: u32 = 1;
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "refusal", rename_all = "kebab-case")]
 pub(crate) enum CarryOverRefusal {
+    /// Reviewer policy forbids extending the approval to another head.
+    // trace:STORY-2696 | ai:codex
+    ReviewerPolicy,
+    // trace:STORY-2763 | ai:codex
+    StrictPolicy,
     /// A commit or ref could not be resolved locally.
-    Unresolvable { what: String },
+    Unresolvable {
+        what: String,
+    },
     /// The head does not descend from the approved commit (a rebase or other
     /// rewritten history).
     NotDescendant,
     /// A commit after the approved one is not a merge.
-    NotAMerge { commit: String },
+    NotAMerge {
+        commit: String,
+    },
     /// A merge's parents are not one PR-side commit plus one commit already
     /// on the base branch.
-    NotABaseMerge { commit: String },
+    NotABaseMerge {
+        commit: String,
+    },
     /// A merge's tree differs from git's automatic merge of its parents.
-    MergeEdited { commit: String },
+    MergeEdited {
+        commit: String,
+    },
     /// A merge's parents do not merge cleanly (a conflict was resolved).
-    MergeConflicted { commit: String },
+    MergeConflicted {
+        commit: String,
+    },
     /// A diff endpoint has more than one merge base with the base branch.
-    AmbiguousBase { sha: String },
+    AmbiguousBase {
+        sha: String,
+    },
     /// The PR's own diff is empty, so there is nothing to compare.
     EmptyDiff,
     /// The PR's own diff changed.
@@ -105,12 +123,19 @@ pub(crate) enum CarryOverRefusal {
     },
     /// The PR's base is not the remote's default branch, so the carry-over
     /// has no protected base to be proven against.
-    BaseNotProtected { base: String, protected: String },
+    BaseNotProtected {
+        base: String,
+        protected: String,
+    },
     /// git itself failed.
-    Git { detail: String },
+    Git {
+        detail: String,
+    },
     /// An active train could not persist its intent before a remote call.
     // trace:STORY-2401 | ai:codex
-    IntentUnavailable { detail: String },
+    IntentUnavailable {
+        detail: String,
+    },
 }
 
 impl CarryOverRefusal {
@@ -119,6 +144,8 @@ impl CarryOverRefusal {
     pub(crate) fn reason(&self) -> String {
         let short = |s: &str| crate::gate::review_verdict::short_sha(s).to_string();
         match self {
+            Self::StrictPolicy => "strict policy: re-review required".into(),
+            Self::ReviewerPolicy => "the reviewer marked this approval as not carry-eligible; fresh review of the new head is required".into(),
             Self::Unresolvable { what } => format!("{what} could not be resolved locally"),
             Self::NotDescendant => "the head does not descend from the approved commit (a rebase \
                  or rewritten history), so it cannot be shown to add only base merges"
@@ -173,7 +200,9 @@ impl CarryOverRefusal {
     pub(crate) fn is_deterministic(&self) -> bool {
         !matches!(
             self,
-            Self::Unresolvable { .. }
+            Self::StrictPolicy
+                | Self::ReviewerPolicy
+                | Self::Unresolvable { .. }
                 | Self::Git { .. }
                 | Self::BaseNotProtected { .. }
                 | Self::IntentUnavailable { .. }
@@ -344,6 +373,13 @@ fn proved_for_refusal(
     pr: u64,
     refusal: &crate::gate::ship::ApprovalHeadRefusal,
 ) -> Option<Proved> {
+    // trace:STORY-2696 | ai:codex — enforce before any cache or Git reads.
+    if matches!(
+        refusal,
+        crate::gate::ship::ApprovalHeadRefusal::NoCarry { .. }
+    ) {
+        return Some(Err(CarryOverRefusal::ReviewerPolicy));
+    }
     let crate::gate::ship::ApprovalHeadRefusal::Moved {
         reviewed_sha,
         head_sha,
@@ -351,6 +387,31 @@ fn proved_for_refusal(
     else {
         return None;
     };
+    // Evaluate policy before reusing any cached proof. A raised policy revokes
+    // carry-over without deleting historical evidence.
+    // trace:STORY-2763 | ai:codex
+    if super::review_freshness::for_head(site.repo, head_sha)
+        == super::review_freshness::Freshness::Strict
+    {
+        // The refusal stays fail-closed either way; an unaudited refusal is
+        // surfaced rather than silently dropped.
+        // trace:STORY-2763 | ai:claude
+        if site.append {
+            if let Err(error) = super::review_freshness::record(
+                site.repo,
+                pr,
+                head_sha,
+                super::review_freshness::Freshness::Strict,
+                "re-review-required",
+                serde_json::json!({"approved_sha": reviewed_sha}),
+            ) {
+                eprintln!(
+                    "warning: PR-{pr}: strict re-review requirement could not be recorded on the gate ledger: {error:#}"
+                );
+            }
+        }
+        return Some(Err(CarryOverRefusal::StrictPolicy));
+    }
     let pr_base = site
         .base_branch
         .map(str::trim)
@@ -373,6 +434,14 @@ fn proved_for_refusal(
         Ok(protected) => protected,
         Err(why) => return Some(Err(why)),
     };
+    // Refresh can reveal an operator's policy change. Recheck it before
+    // treating any previously stored proof as authority.
+    // trace:STORY-2763 | ai:codex
+    if super::review_freshness::for_head(site.repo, head_sha)
+        == super::review_freshness::Freshness::Strict
+    {
+        return Some(Err(CarryOverRefusal::StrictPolicy));
+    }
     if let Some(stored) = stored_answer(site.repo, pr, &pr_base, reviewed_sha, head_sha) {
         return Some(stored);
     }
@@ -388,7 +457,7 @@ fn proved_for_refusal(
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
 fn stored_answer(repo: &Path, pr: u64, base: &str, approved: &str, head: &str) -> Option<Proved> {
     use crate::gate::ledger::{project, ChangeKey, EventBody};
-    let event = project::carry_over_at(repo, ChangeKey::pr(pr), approved, head)?;
+    let event = project::carry_over_at(repo, ChangeKey::pr(pr), approved, head, true)?;
     let tip = resolve_commit(repo, &format!("refs/remotes/origin/{base}"))?;
     if event.base_ref.as_deref() != Some(base) || event.base_tip.as_deref() != Some(tip.as_str()) {
         return None;
@@ -397,14 +466,18 @@ fn stored_answer(repo: &Path, pr: u64, base: &str, approved: &str, head: &str) -
         EventBody::CarryOverProof {
             proof,
             proof_version,
-        } if proof_version == PROOF_VERSION && proof.base_branch() == base => {
+            carry_eligible,
+        } if carry_eligible && proof_version == PROOF_VERSION && proof.base_branch() == base => {
             Some(Ok((proof, Stored::Read(event.at))))
         }
         EventBody::CarryOverRefused {
             refusal,
             proof_version,
+            carry_eligible,
             ..
-        } if proof_version == PROOF_VERSION && refusal.is_deterministic() => Some(Err(refusal)),
+        } if carry_eligible && proof_version == PROOF_VERSION && refusal.is_deterministic() => {
+            Some(Err(refusal))
+        }
         _ => None,
     }
 }
@@ -427,6 +500,7 @@ fn append_answer(
             EventBody::CarryOverProof {
                 proof: proof.clone(),
                 proof_version: PROOF_VERSION,
+                carry_eligible: true,
             },
             proof.new_head.clone(),
             Some(proof.head_patch_id.clone()),
@@ -444,6 +518,7 @@ fn append_answer(
                     reason: refusal.reason(),
                     refusal: refusal.clone(),
                     proof_version: PROOF_VERSION,
+                    carry_eligible: true,
                 },
                 head.trim().to_string(),
                 patch_id,
@@ -461,6 +536,10 @@ fn append_answer(
     event.base_ref = Some(base.to_string());
     event.base_tip = Some(base_tip);
     record_event(repo, event).is_ok()
+        && super::review_freshness::record(repo, pr, head,
+            super::review_freshness::Freshness::Fast,
+            if proved.is_ok() { "carried-over" } else { "carry-over-refused" },
+            serde_json::json!({"approved_sha": approved, "proof_version": PROOF_VERSION, "result": proved})).is_ok()
 }
 
 /// [`prove_for_refusal`] for the gate that pins the merge. A proof that is
@@ -553,7 +632,7 @@ pub(crate) fn prove_carry_over(
 }
 
 // trace:STORY-2694 | ai:codex
-fn refresh_base(repo: &Path, base_branch: &str) -> Result<(), CarryOverRefusal> {
+pub(crate) fn refresh_base(repo: &Path, base_branch: &str) -> Result<(), CarryOverRefusal> {
     if base_branch.is_empty()
         || base_branch.starts_with('-')
         || !git_ok(repo, &["check-ref-format", "--branch", base_branch])
@@ -779,28 +858,15 @@ pub(crate) fn patch_id(repo: &Path, from: &str, to: &str) -> Result<String, Carr
     if diff.stdout.is_empty() {
         return Err(CarryOverRefusal::EmptyDiff);
     }
-    use std::io::Write;
-    let mut child = std::process::Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(["patch-id", "--verbatim"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .map_err(|e| CarryOverRefusal::Git {
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C").arg(repo).args(["patch-id", "--verbatim"]);
+    // trace:TASK-3792 | ai:claude
+    let out = super::kernel_deps::local_output_fed(cmd, diff.stdout).map_err(|e| {
+        CarryOverRefusal::Git {
             detail: format!("could not run `git patch-id`: {e}"),
-        })?;
-    let wrote = child
-        .stdin
-        .take()
-        .map(|mut stdin| stdin.write_all(&diff.stdout));
-    let out = child
-        .wait_with_output()
-        .map_err(|e| CarryOverRefusal::Git {
-            detail: format!("`git patch-id` failed: {e}"),
-        })?;
-    if !matches!(wrote, Some(Ok(()))) || !out.status.success() {
+        }
+    })?;
+    if !out.status.success() {
         return Err(CarryOverRefusal::Git {
             detail: format!(
                 "`git patch-id --verbatim` failed: {}",
@@ -819,7 +885,7 @@ pub(crate) fn patch_id(repo: &Path, from: &str, to: &str) -> Result<String, Carr
 /// `sha` resolved to a full commit id; a full sha missing locally is fetched
 /// from `origin` once. An abbreviated sha is never fetched or guessed.
 // trace:TASK-1960 | ai:claude
-fn resolve_sha_fetching(repo: &Path, sha: &str) -> Option<String> {
+pub(crate) fn resolve_sha_fetching(repo: &Path, sha: &str) -> Option<String> {
     let sha = sha.trim().to_ascii_lowercase();
     if sha.len() < 7 || !sha.bytes().all(|c| c.is_ascii_hexdigit()) {
         return None;
@@ -864,22 +930,30 @@ fn git_raw_via(
 ) -> Result<std::process::Output, CarryOverRefusal> {
     let mut cmd = std::process::Command::new("git");
     cmd.arg("-C").arg(repo).args(args);
+    let mut deadline = None;
     if let Some(remote) = remote {
         // Nested approval/corpus proofs can fetch after the outer train gate
         // checkpoint. Persist the same pinned intent before every remote call.
         // trace:STORY-2401 | ai:codex
-        crate::pr_train::before_train_forge_call("approval carry-over remote git").map_err(
-            |e| CarryOverRefusal::IntentUnavailable {
+        // The checkpoint also hands back a scoped read deadline
+        // (`train --check --timeout`) the remote call must not outlive.
+        // trace:TASK-3792 | ai:claude
+        deadline = crate::pr_train::before_train_forge_call("approval carry-over remote git")
+            .map_err(|e| CarryOverRefusal::IntentUnavailable {
                 detail: format!("{e:#}"),
-            },
-        )?;
+            })?;
         aida_core::git_ops::configure_remote_credentials(&mut cmd, repo, remote);
     }
-    cmd.stdin(std::process::Stdio::null())
-        .output()
-        .map_err(|e| CarryOverRefusal::Git {
-            detail: format!("could not run git: {e}"),
-        })
+    cmd.stdin(std::process::Stdio::null());
+    // A local read has no deadline of its own, but a scoped read deadline
+    // still bounds it through the transport. trace:TASK-3792 | ai:claude
+    let out = match remote {
+        None => super::kernel_deps::local_output(cmd),
+        Some(_) => super::kernel_deps::output_before(cmd, deadline),
+    };
+    out.map_err(|e| CarryOverRefusal::Git {
+        detail: format!("could not run git: {e}"),
+    })
 }
 
 fn git(repo: &Path, args: &[&str]) -> Result<String, CarryOverRefusal> {
@@ -909,6 +983,24 @@ fn git_via(repo: &Path, remote: Option<&str>, args: &[&str]) -> Result<String, C
 
 fn git_ok(repo: &Path, args: &[&str]) -> bool {
     git_raw(repo, args).is_ok_and(|o| o.status.success())
+}
+
+/// Whether commit `sha` is part of `head`'s history in `repo`. Only a
+/// definite answer is `false`: git says it is not an ancestor, or `head` is
+/// here and `sha` is not (a commit this repository never received cannot be
+/// in a head it holds). Anything unreadable counts as contained.
+// trace:BUG-2569 | ai:claude
+pub(crate) fn commit_in_head(repo: &Path, sha: &str, head: &str) -> bool {
+    let code = |args: &[&str]| git_raw(repo, args).ok().and_then(|out| out.status.code());
+    match code(&["merge-base", "--is-ancestor", sha, head]) {
+        Some(0) => true,
+        Some(1) => false,
+        _ => {
+            let present =
+                |rev: &str| code(&["cat-file", "-e", &format!("{rev}^{{commit}}")]) == Some(0);
+            !(present(head) && !present(sha))
+        }
+    }
 }
 
 #[cfg(test)]

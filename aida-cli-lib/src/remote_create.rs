@@ -2325,7 +2325,7 @@ pub(crate) fn run_remote_mirror(
         // trace:BUG-1972 | ai:claude
         // An empty `existing` means `git remote get-url` failed: nothing to probe.
         if let Some(u) = url.filter(|_| !existing.is_empty()) {
-            if crate::doctor_cmd::same_remote(&existing, u) {
+            if crate::remote_create::same_remote(&existing, u) {
                 // The stored URL is left as configured; the probe keeps any
                 // embedded token out of argv per invocation.
                 // trace:BUG-2119 | ai:antigravity
@@ -5147,4 +5147,36 @@ host = \"should.not.count\"
             assert!(chained.contains(GUARD_CHAIN_MARKER), "{chained}");
         }
     }
+}
+
+/// Whether two clone URLs name the same repository.
+///
+/// The same repo is written `https://host/o/n.git`, `git@host:o/n.git` and
+/// `ssh://git@host/o/n` — comparing raw strings would report drift on every
+/// project whose manifest was written from one form and whose remote uses
+/// another. Reduced to `host/owner/name`.
+// trace:STORY-781 | ai:claude
+pub(crate) fn same_remote(a: &str, b: &str) -> bool {
+    fn key(url: &str) -> String {
+        let u = url.trim().trim_end_matches('/');
+        let u = u.strip_suffix(".git").unwrap_or(u);
+        // scp-style: git@host:owner/name
+        if let Some(rest) = u.split_once('@').map(|(_, r)| r) {
+            if let Some((host, path)) = rest.split_once(':') {
+                if !path.starts_with("//") {
+                    return format!("{}/{}", host.to_lowercase(), path.trim_start_matches('/'));
+                }
+            }
+        }
+        let after_scheme = u.split_once("://").map(|(_, r)| r).unwrap_or(u);
+        let after_user = after_scheme
+            .split_once('@')
+            .map(|(_, r)| r)
+            .unwrap_or(after_scheme);
+        match after_user.split_once('/') {
+            Some((host, path)) => format!("{}/{}", host.to_lowercase(), path),
+            None => after_user.to_lowercase(),
+        }
+    }
+    key(a) == key(b)
 }

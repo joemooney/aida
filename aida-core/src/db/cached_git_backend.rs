@@ -286,9 +286,18 @@ impl CachedGitBackend {
 
     // trace:BUG-1535 trace:BUG-1670 | ai:claude
     fn resolve_unambiguous(&self, id: &str, strict: bool) -> Result<Option<Requirement>> {
+        // Remember which literal/expanded IDs already paid for a fallback, so
+        // a stale locator's not-found result cannot trigger the same scan again.
+        // trace:BUG-2402 | ai:codex
+        let mut scanned_ids = std::collections::HashSet::new();
         // trace:STORY-B6B1278890774EF993D2EBC327862470-078 | ai:claude
-        let resolved = crate::node_alias::resolve_literal_first(id, |id| {
-            self.resolve_unambiguous_exact(id, strict)
+        let resolved = crate::node_alias::resolve_literal_first(id, |id| -> Result<_> {
+            let mut scanned = false;
+            let result = self.resolve_unambiguous_exact(id, strict, &mut scanned)?;
+            if scanned {
+                scanned_ids.insert(id.to_string());
+            }
+            Ok(result)
         })?;
         // Try both literal and expanded object/index lookups before paying for
         // an agreed-ID scan. A current projection already answers agreed IDs.
@@ -302,6 +311,9 @@ impl CachedGitBackend {
         }
         let deadline = self.fallback_deadline();
         crate::node_alias::resolve_literal_first(id, |id| {
+            if scanned_ids.contains(id) {
+                return Ok(None);
+            }
             self.resolve_by_bounded_scan(
                 id,
                 deadline,
@@ -312,16 +324,21 @@ impl CachedGitBackend {
 
     /// [`Self::resolve_unambiguous`] for `id` exactly as given (no node-alias
     /// expansion).
-    fn resolve_unambiguous_exact(&self, id: &str, strict: bool) -> Result<Option<Requirement>> {
+    fn resolve_unambiguous_exact(
+        &self,
+        id: &str,
+        strict: bool,
+        scanned: &mut bool,
+    ) -> Result<Option<Requirement>> {
         if let Ok(uuid) = Uuid::parse_str(id.trim()) {
             return self.get_requirement(&uuid);
         }
-        let scanned = if strict {
+        let indexed = if strict {
             self.id_candidates_strict(id)
         } else {
             self.id_candidates(id)
         };
-        let candidates = match scanned {
+        let candidates = match indexed {
             Ok(c) => c,
             // BUG-b6b1278890774ef993d2ebc327862470-008: a READ whose cache scan
             // failed (a concurrent writer under show's fast-fail ladder) degrades
@@ -335,6 +352,7 @@ impl CachedGitBackend {
                 // trace:TASK-b6b1278890774ef993d2ebc327862470-029 | ai:claude
                 // trace:TASK-b6b1278890774ef993d2ebc327862470-037 | ai:claude
                 let deadline = self.fallback_deadline();
+                *scanned = true;
                 return self.resolve_by_bounded_scan(id, deadline, &e);
             }
             Err(_) => {
@@ -427,6 +445,18 @@ impl CachedGitBackend {
                     }
                 }
             }
+        }
+        // A rejected locator (or a stale collision reduced to one candidate)
+        // must not escape show's invocation-wide deadline through the legacy
+        // agreed-ID scan. Strict writes keep their authoritative resolver.
+        // trace:BUG-2402 | ai:codex
+        if !strict && self.snapshot_only {
+            *scanned = true;
+            return self.resolve_by_bounded_scan(
+                id,
+                self.fallback_deadline(),
+                &anyhow::anyhow!("read-only cache locator no longer answers to ID"),
+            );
         }
         self.get_requirement_by_spec_id(id)
     }
@@ -680,9 +710,17 @@ impl CachedGitBackend {
             let Some(recorded) = self.cache.source_head_sha()? else {
                 break;
             };
+            // Ancestry is only an optimization. Missing, rewritten or slow
+            // history must rebuild rather than disable canonical writes.
+            // trace:BUG-2599 | ai:codex
             if recorded.is_empty()
-                || !crate::git_ops::is_ancestor(self.inner.path(), &recorded, &head)
-                    .unwrap_or(false)
+                || !crate::git_ops::is_recent_cache_ancestor(
+                    self.inner.path(),
+                    &recorded,
+                    &head,
+                    std::time::Duration::from_secs(2),
+                )
+                .unwrap_or(false)
             {
                 break;
             }
@@ -2565,6 +2603,115 @@ mod tests {
     mod bug2402_locator {
         use super::super::super::cache_refresh::{test_counts, CacheReadScope, ReadBudget};
         use super::*;
+
+        // A stale projected candidate used to bypass the snapshot deadline and
+        // enter GitBackend's unbounded agreed-ID scan. Exercise the public read
+        // resolver, with canonical mutations after projection and no real HOME.
+        // trace:BUG-2402 | ai:codex
+        #[test]
+        fn show_snapshot_rejected_locator_bounds_store_scans() {
+            const NODE: &str = "b6b1278890774ef993d2ebc327862470";
+            let dir = tempdir().unwrap();
+            let (backend, store, cache) = task_1515_backend(dir.path());
+            let objects = store.join("objects");
+            let mut projected = sample_req(&format!("BUG-{NODE}-175"), "projected owner");
+            projected.agreed_id = Some(format!("BUG-{NODE}-2402"));
+            crate::object_store::write_object(&objects, &projected).unwrap();
+            crate::git_ops::add_all(&store, "objects").unwrap();
+            crate::git_ops::commit(&store, "projected owner").unwrap();
+            backend.rebuild_cache().unwrap();
+            drop(backend);
+            let mut aliases = crate::node_alias::NodeAliasMap::default();
+            aliases.set("ZQ", NODE).unwrap();
+            let _aliases = crate::node_alias::install_for_thread(aliases);
+
+            // The old locator still exists but its UUID and agreed ID changed.
+            // Another canonical object now owns the queried agreed ID.
+            let mut replacement = projected.clone();
+            replacement.id = Uuid::new_v4();
+            replacement.agreed_id = Some("BUG-2403".into());
+            crate::object_store::write_object(&objects, &replacement).unwrap();
+            let mut moved = projected.clone();
+            moved.spec_id = Some(format!("BUG-{NODE}-176"));
+            moved.title = "current owner".into();
+            crate::object_store::write_object(&objects, &moved).unwrap();
+            let malformed = crate::object_store::object_path(&objects, "TASK-99999").unwrap();
+            std::fs::create_dir_all(malformed.parent().unwrap()).unwrap();
+            std::fs::write(&malformed, "invalid: [").unwrap();
+            crate::git_ops::add_all(&store, "objects").unwrap();
+            crate::git_ops::commit(&store, "move agreed owner after projection").unwrap();
+            let before = std::fs::read(&cache).unwrap();
+            let reader = CachedGitBackend::with_inner_stale_snapshot(
+                GitBackend::new(&store).unwrap(),
+                &cache,
+            )
+            .unwrap();
+            assert!(reader.cache_snapshot_is_stale().unwrap());
+            for id in [
+                format!("BUG-{NODE}-2402"),
+                format!("bug-{NODE}-02402"),
+                "BUG-ZQ-2402".into(),
+            ] {
+                test_counts();
+                let found = reader
+                    .get_requirement_unambiguous_for_read(&id)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(found.id, moved.id);
+                assert_eq!(found.title, "current owner");
+                let counts = test_counts();
+                assert_eq!(
+                    counts.get("read_id_store_scan"),
+                    Some(&1),
+                    "{id}: {counts:?}"
+                );
+                assert_eq!(counts.get("agreed_id_store_scan"), None, "{id}: {counts:?}");
+            }
+
+            // Collisions introduced since projection still refuse.
+            let mut collision = moved.clone();
+            collision.id = Uuid::new_v4();
+            collision.spec_id = Some(format!("BUG-{NODE}-177"));
+            crate::object_store::write_object(&objects, &collision).unwrap();
+            test_counts();
+            let err = reader
+                .get_requirement_unambiguous_for_read(projected.agreed_id.as_deref().unwrap())
+                .unwrap_err();
+            assert!(err
+                .downcast_ref::<crate::id_collisions::AmbiguousIdError>()
+                .is_some());
+            let counts = test_counts();
+            assert_eq!(counts.get("read_id_store_scan"), Some(&1), "{counts:?}");
+            assert_eq!(counts.get("agreed_id_store_scan"), None, "{counts:?}");
+
+            // Exhaust the deadline before lookup, deterministically: the legacy
+            // fallback would still scan and return the moved owner. No timing
+            // assertion or sleep is involved. A literal hit must remain usable.
+            std::fs::remove_file(
+                crate::object_store::object_path(&objects, collision.spec_id.as_deref().unwrap())
+                    .unwrap(),
+            )
+            .unwrap();
+            let mut spent = reader;
+            spent.snapshot_deadline = Some(std::time::Instant::now());
+            test_counts();
+            assert!(spent
+                .get_requirement_unambiguous_for_read(projected.agreed_id.as_deref().unwrap())
+                .unwrap()
+                .is_none());
+            let counts = test_counts();
+            assert_eq!(counts.get("agreed_id_store_scan"), None, "{counts:?}");
+            assert_eq!(counts.get("read_id_store_scan"), Some(&1), "{counts:?}");
+            assert_eq!(
+                spent
+                    .get_requirement_unambiguous_for_read(replacement.spec_id.as_deref().unwrap())
+                    .unwrap()
+                    .unwrap()
+                    .id,
+                replacement.id
+            );
+            assert_eq!(std::fs::read(&cache).unwrap(), before);
+        }
 
         #[test]
         fn canonical_hits_and_stale_locator_effects() {
@@ -4466,6 +4613,150 @@ mod tests {
         );
         assert_eq!(rows.len(), 1, "serves the last committed snapshot");
         holder.execute_batch("ROLLBACK").unwrap();
+    }
+
+    // trace:BUG-2601 | ai:codex
+    #[test]
+    fn bug2601_comment_write_survives_ancestry_timeout() {
+        use super::super::cache_refresh::test_counts;
+        let dir = tempdir().unwrap();
+        let (backend, root, _) = task_1515_backend(dir.path());
+        task_1515_external_retitle(&root, "advanced");
+        // Expire the production two-second write budget before the first poll.
+        // Reset during unwinding too, since the seam is thread-local.
+        struct Reset;
+        impl Drop for Reset {
+            fn drop(&mut self) {
+                crate::git_ops::ANCESTOR_CHECK_SPAWN_DELAY
+                    .with(|d| d.set(std::time::Duration::ZERO));
+            }
+        }
+        let _reset = Reset;
+        test_counts();
+        crate::git_ops::ANCESTOR_CHECK_SPAWN_DELAY
+            .with(|d| d.set(std::time::Duration::from_millis(2100)));
+        let mut store = backend.load().unwrap();
+        store.requirements[0].add_comment(crate::models::Comment::new(
+            "test".into(),
+            "after timeout".into(),
+        ));
+        backend.save(&store).unwrap();
+        let counts = test_counts();
+        assert_eq!(counts.get("full_rebuild"), Some(&1), "{counts:?}");
+        assert!(backend
+            .load()
+            .unwrap()
+            .requirements
+            .iter()
+            .any(|r| r.comments.iter().any(|c| c.content == "after timeout")));
+        assert_eq!(
+            backend.cache.source_head_sha().unwrap(),
+            Some(crate::git_ops::head_sha(&root).unwrap())
+        );
+    }
+
+    // trace:BUG-2601 | ai:codex
+    #[test]
+    fn bug2601_hour_idle_cache_refreshes_without_rebuild() {
+        use super::super::cache_refresh::test_counts;
+        let dir = tempdir().unwrap();
+        let (backend, root, _) = task_1515_backend(dir.path());
+        for _ in 0..143 {
+            assert!(crate::test_git::git_command()
+                .current_dir(&root)
+                .args(["commit", "--allow-empty", "-m", "advance"])
+                .output()
+                .unwrap()
+                .status
+                .success());
+        }
+        task_1515_external_retitle(&root, "after idle");
+        test_counts();
+        backend.ensure_cache_fresh().unwrap();
+        let counts = test_counts();
+        assert_eq!(counts.get("incremental"), Some(&1), "{counts:?}");
+        assert_eq!(counts.get("full_rebuild"), None, "{counts:?}");
+    }
+
+    // trace:BUG-2599 | ai:codex
+    #[test]
+    fn bug2599_rewritten_cache_head_allows_comment_write() {
+        let dir = tempdir().unwrap();
+        let (backend, root, path) = task_1515_backend(dir.path());
+        let old = backend.cache.source_head_sha().unwrap().unwrap();
+        drop(backend);
+        // Amend the tip as a rebase would: keep the canonical objects but
+        // replace the commit cached by the previous process.
+        let result = crate::test_git::git_command()
+            .current_dir(&root)
+            .args(["commit", "--amend", "-m", "rewritten store tip"])
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let new = crate::git_ops::head_sha(&root).unwrap();
+        assert_ne!(old, new);
+        assert!(!crate::git_ops::is_ancestor(&root, &old, &new).unwrap());
+        let backend = home_fixture_cached(&root, &path).unwrap();
+        // The load + save shape used by `aida comment add`, after reopening
+        // the stale cache. No manual cache rebuild is performed.
+        let mut store = backend.load().unwrap();
+        store.requirements[0].add_comment(crate::models::Comment::new(
+            "test".into(),
+            "after rebase".into(),
+        ));
+        let id = store.requirements[0].id;
+        backend.save(&store).unwrap();
+        assert!(backend
+            .load()
+            .unwrap()
+            .requirements
+            .iter()
+            .find(|r| r.id == id)
+            .unwrap()
+            .comments
+            .iter()
+            .any(|c| c.content == "after rebase"));
+        assert_eq!(
+            backend.cache.source_head_sha().unwrap(),
+            Some(crate::git_ops::head_sha(&root).unwrap())
+        );
+    }
+
+    // trace:BUG-2589 | ai:codex
+    #[test]
+    fn bug2589_current_target_refresh_skips_ancestry_walk() {
+        let dir = tempdir().unwrap();
+        let (backend, root, _) = task_1515_backend(dir.path());
+        let target = task_1515_external_retitle(&root, "advanced");
+        let before = super::super::cache_refresh::test_counts()
+            .get("refresh_head_ancestry")
+            .copied()
+            .unwrap_or(0);
+        let mut applied = false;
+        assert!(backend
+            .cache
+            .apply_incremental(&target, &root, "", |_| {
+                applied = true;
+                Ok(true)
+            })
+            .unwrap());
+        assert!(applied, "a stale snapshot must not suppress the refresh");
+        assert_eq!(
+            backend.cache.source_head_sha().unwrap().as_deref(),
+            Some(target.as_str())
+        );
+        let after = super::super::cache_refresh::test_counts()
+            .get("refresh_head_ancestry")
+            .copied()
+            .unwrap_or(0);
+        assert_eq!(
+            before, after,
+            "current-target refresh must not walk history"
+        );
     }
 
     // trace:TASK-1526 | ai:codex

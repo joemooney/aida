@@ -9,6 +9,8 @@
 //!   `build/` are hardlinked, `.fingerprint/` is really copied (cargo rewrites
 //!   fingerprints in place), `incremental/` is skipped. The snapshot is taken
 //!   under the primary's `.cargo-lock`, so it never sees a half-written build.
+//!   Cargo 1.100's unit layout stores fingerprints inside `build/`; snapshots
+//!   copy that entire directory to keep its mutable unit state off shared inodes.
 //! - **upper/work**: per lane, `<main>/target/lane-overlay/<lease>/{upper,work}`,
 //!   kept between jobs (the second job is warm) and discarded when the lane
 //!   moves to another generation. They live beside `lane-base/`, outside every
@@ -52,6 +54,8 @@ const GENERATION_RECORD: &str = "generation";
 const PINS: &str = ".pins";
 /// The (name, size, mtime) manifest of a generation's hardlinked `deps/`.
 const MANIFEST: &str = ".manifest.json";
+/// Recursive manifest for copied Cargo 1.100 unit state and outputs.
+const BUILD_MANIFEST: &str = ".build-manifest.json";
 /// The directories every complete generation holds.
 const REQUIRED_DIRS: &[&str] = &["deps", "build", ".fingerprint"];
 /// Hardlinked into a snapshot.
@@ -104,6 +108,61 @@ fn mtime_ns(m: &std::fs::Metadata) -> i64 {
 /// Fingerprint files at most this large are hashed by content.
 const HASHED_FINGERPRINT_BYTES: u64 = 64 * 1024;
 
+/// Cargo 1.100 stores each unit's fingerprints beside its outputs under
+/// build/<package>/<hash>/fingerprint instead of .fingerprint/<unit>.
+/// Keep this bounded to the two layout levels; never follow directory links.
+// trace:BUG-2539 | ai:codex
+fn build_fingerprints(src: &Path) -> Option<Vec<PathBuf>> {
+    let build = src.join("build");
+    if !build.exists() {
+        return Some(Vec::new());
+    }
+    let mut units = Vec::new();
+    for package in std::fs::read_dir(build).ok()? {
+        let package = package.ok()?;
+        if !package.file_type().ok()?.is_dir() {
+            continue;
+        }
+        for unit in std::fs::read_dir(package.path()).ok()? {
+            let unit = unit.ok()?;
+            if unit.file_type().ok()?.is_dir() {
+                let fingerprint = unit.path().join("fingerprint");
+                if std::fs::symlink_metadata(&fingerprint).is_ok_and(|m| m.is_dir()) {
+                    units.push(fingerprint);
+                }
+            }
+        }
+    }
+    units.sort();
+    Some(units)
+}
+
+/// Metadata of the new layout's outputs and mutable state. Unlike the legacy
+/// deps manifest this covers nested files, without following directory links.
+// trace:BUG-2539 | ai:codex
+fn build_manifest(root: &Path) -> Option<Vec<(String, u64, i64)>> {
+    let mut pending = vec![root.to_path_buf()];
+    let mut files = Vec::new();
+    while let Some(dir) = pending.pop() {
+        for entry in std::fs::read_dir(dir).ok()? {
+            let entry = entry.ok()?;
+            let path = entry.path();
+            let metadata = std::fs::symlink_metadata(&path).ok()?;
+            if metadata.is_dir() {
+                pending.push(path);
+            } else {
+                files.push((
+                    path.strip_prefix(root).ok()?.to_str()?.to_string(),
+                    metadata.len(),
+                    mtime_ns(&metadata),
+                ));
+            }
+        }
+    }
+    files.sort();
+    Some(files)
+}
+
 /// The generation id of `<main_target>/<profile>`, derived from what a
 /// snapshot would hold (BUG-2383 review r7, F1): the toolchain cargo
 /// recorded in `<main_target>/.rustc_info.json`, every fingerprint file's
@@ -111,23 +170,36 @@ const HASHED_FINGERPRINT_BYTES: u64 = 64 * 1024;
 /// [`deps_manifest`] of `deps/`. A rebuild that rewrites a fingerprint or an
 /// artifact, even in place within one second, yields a new id, so it never
 /// lands on a generation a live lane still uses. `None` when the profile
-/// has no fingerprints (nothing to warm from).
+/// has no fingerprints (nothing to warm from). The Cargo 1.100 layout also
+/// includes nested unit fingerprints and a recursive build/ metadata manifest.
 // trace:BUG-2383 | ai:claude
+// trace:BUG-2539 | ai:codex
 pub(crate) fn generation_id(main_target: &Path, profile: &str) -> Option<String> {
     let src = main_target.join(profile);
-    let mut units: Vec<_> = std::fs::read_dir(src.join(".fingerprint"))
-        .ok()?
-        .flatten()
-        .collect();
+    let mut units: Vec<PathBuf> = match std::fs::read_dir(src.join(".fingerprint")) {
+        Ok(entries) => entries
+            .map(|e| e.ok().map(|e| e.path()))
+            .collect::<Option<_>>()?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(_) => return None,
+    };
+    let build_units = build_fingerprints(&src)?;
+    let new_layout = !build_units.is_empty();
+    units.extend(build_units);
     if units.is_empty() {
         return None;
     }
-    units.sort_by_key(|e| e.file_name());
+    units.sort();
     let mut h = Fnv::new();
     h.feed(&std::fs::read(main_target.join(".rustc_info.json")).unwrap_or_default());
     for unit in units {
-        h.feed(unit.file_name().as_encoded_bytes());
-        let mut files: Vec<_> = std::fs::read_dir(unit.path())
+        if unit.parent() == Some(src.join(".fingerprint").as_path()) {
+            // Preserve existing legacy generation identities and their live pins.
+            h.feed(unit.file_name()?.as_encoded_bytes());
+        } else {
+            h.feed(unit.strip_prefix(&src).ok()?.as_os_str().as_encoded_bytes());
+        }
+        let mut files: Vec<_> = std::fs::read_dir(&unit)
             .into_iter()
             .flatten()
             .flatten()
@@ -149,6 +221,14 @@ pub(crate) fn generation_id(main_target: &Path, profile: &str) -> Option<String>
         h.feed(name.as_bytes());
         h.feed(&len.to_le_bytes());
         h.feed(&mtime.to_le_bytes());
+    }
+    if new_layout {
+        h.feed(b"cargo-unit-layout-v1");
+        for (name, len, mtime) in build_manifest(&src.join("build"))? {
+            h.feed(name.as_bytes());
+            h.feed(&len.to_le_bytes());
+            h.feed(&mtime.to_le_bytes());
+        }
     }
     Some(format!("{profile}-{:016x}", h.0))
 }
@@ -225,10 +305,20 @@ fn deps_manifest(deps: &Path) -> Vec<(String, u64, i64)> {
 /// symlink) holding every [`REQUIRED_DIRS`] entry and a manifest that
 /// still matches its `deps/` ([`deps_manifest`]). A generation a collection
 /// removed half-way, one missing a dependency file, or any other leftover,
-/// is not.
+/// is not. Copied new-layout build/ state has its own recursive manifest.
 // trace:BUG-2383 | ai:claude
 fn complete(dir: &Path) -> bool {
-    std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir())
+    // trace:BUG-2539 | ai:codex
+    let build_complete = if dir.join(BUILD_MANIFEST).exists() {
+        std::fs::read(dir.join(BUILD_MANIFEST))
+            .ok()
+            .and_then(|b| serde_json::from_slice::<Vec<(String, u64, i64)>>(&b).ok())
+            .is_some_and(|recorded| build_manifest(&dir.join("build")).as_ref() == Some(&recorded))
+    } else {
+        build_fingerprints(dir).is_some_and(|units| units.is_empty())
+    };
+    build_complete
+        && std::fs::symlink_metadata(dir).is_ok_and(|m| m.is_dir())
         && REQUIRED_DIRS
             .iter()
             .all(|d| std::fs::symlink_metadata(dir.join(d)).is_ok_and(|m| m.is_dir()))
@@ -336,13 +426,19 @@ pub(crate) fn snapshot(
     let generation = Generation { id: name, dir };
     let tmp = base.join(format!(".{}.tmp-{}", generation.id, std::process::id()));
     let _ = std::fs::remove_dir_all(&tmp);
+    // New-layout build/ contains fingerprints and other mutable unit state.
+    // Copy it all: hardlinking it would let a primary rebuild mutate a live lower.
+    // trace:BUG-2539 | ai:codex
+    let new_layout = !build_fingerprints(&src)
+        .ok_or_else(|| "cannot read build fingerprints".to_string())?
+        .is_empty();
     let built = (|| {
         std::fs::create_dir_all(&tmp).map_err(|e| format!("create {}: {e}", tmp.display()))?;
         for (dirs, link) in [(LINKED_DIRS, true), (COPIED_DIRS, false)] {
             for d in dirs {
                 let from = src.join(d);
                 if from.is_dir() {
-                    cp(&from, &tmp.join(d), link)?;
+                    cp(&from, &tmp.join(d), link && !(new_layout && *d == "build"))?;
                 }
             }
         }
@@ -354,6 +450,13 @@ pub(crate) fn snapshot(
         let manifest = serde_json::to_vec(&deps_manifest(&tmp.join("deps")))
             .map_err(|e| format!("manifest: {e}"))?;
         std::fs::write(tmp.join(MANIFEST), manifest).map_err(|e| format!("manifest: {e}"))?;
+        if new_layout {
+            let files = build_manifest(&tmp.join("build"))
+                .ok_or_else(|| "cannot read build snapshot".to_string())?;
+            let manifest = serde_json::to_vec(&files).map_err(|e| format!("manifest: {e}"))?;
+            std::fs::write(tmp.join(BUILD_MANIFEST), manifest)
+                .map_err(|e| format!("build manifest: {e}"))?;
+        }
         std::fs::create_dir_all(tmp.join(PINS)).map_err(|e| format!("pins: {e}"))
     })();
     drop(build_lock);
@@ -375,11 +478,65 @@ pub(crate) fn snapshot(
 }
 
 /// Remove `path` whatever it is, never following a symlink.
-fn remove_any(path: &Path) -> std::io::Result<()> {
+// trace:TASK-3121 | ai:codex
+pub(crate) fn remove_any(path: &Path) -> std::io::Result<()> {
     if std::fs::symlink_metadata(path)?.is_dir() {
-        std::fs::remove_dir_all(path)
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        use std::os::unix::io::AsRawFd;
+
+        // Overlayfs leaves work/work mode 000. Open without reading first,
+        // then chmod through the pinned handle so links cannot redirect it.
+        let dir = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_PATH | libc::O_DIRECTORY | libc::O_NOFOLLOW)
+            .open(path)?;
+        let pinned = PathBuf::from(format!("/proc/self/fd/{}", dir.as_raw_fd()));
+        let mode = dir.metadata()?.permissions().mode();
+        std::fs::set_permissions(&pinned, std::fs::Permissions::from_mode(mode | 0o700))?;
+        for entry in std::fs::read_dir(&pinned)? {
+            remove_any(&entry?.path())?;
+        }
+        std::fs::remove_dir(path)
     } else {
         std::fs::remove_file(path)
+    }
+}
+
+/// Reclaim only an ended lease's overlay. Retained salvage leases keep theirs.
+// trace:BUG-2651 | ai:codex
+pub(crate) fn cleanup_ended(project_root: &Path, lease: &str) {
+    let main = crate::main_worktree_root_from(project_root);
+    let main = main.as_path();
+    if !crate::lane_job::valid_id(lease) {
+        return;
+    }
+    let sessions = aida_core::liveness::leases_dir(main);
+    if !matches!(std::fs::symlink_metadata(sessions.join(format!("{lease}.toml"))),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+    {
+        return;
+    }
+    if crate::worktree_lifecycle_gc::overlays_retained_for_salvage(main).unwrap_or(true) {
+        return;
+    }
+    let overlay = lane_overlay_dir(&main.join("target"), lease);
+    if !overlay.exists() {
+        return;
+    }
+    // Refuse cleanup roots redirected through symlinks.
+    for ancestor in overlay.ancestors() {
+        if crate::seat_clone::dir_identity(ancestor).is_err() {
+            return;
+        }
+    }
+    if aida_core::worktree_holders::check_worktree_removal(&overlay).is_err() {
+        return;
+    }
+    if let Err(error) = remove_any(&overlay) {
+        eprintln!(
+            "warning: could not remove ended lane overlay {}: {error}",
+            overlay.display()
+        );
     }
 }
 
@@ -415,8 +572,18 @@ pub(crate) fn gc(
     lock_wait: Duration,
 ) -> Vec<PathBuf> {
     let sessions = main_root.join(".aida").join("sessions");
-    let live = |lease: &str| sessions.join(format!("{lease}.toml")).is_file();
+    let live = |lease: &str| {
+        !matches!(
+            std::fs::symlink_metadata(sessions.join(format!("{lease}.toml"))),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound
+        )
+    };
     let mut removed = Vec::new();
+    // Retained clones can still need both an upper and its pinned generation.
+    // trace:BUG-2651 | ai:codex
+    if crate::worktree_lifecycle_gc::overlays_retained_for_salvage(main_root).unwrap_or(true) {
+        return removed;
+    }
     let base = main_target.join(LANE_BASE);
     let Ok(base_lock) = open_lock(&base.join(".lock")) else {
         return removed;
@@ -449,8 +616,14 @@ pub(crate) fn gc(
         .flatten()
     {
         let lease = entry.file_name().to_string_lossy().into_owned();
-        if !live(&lease) && remove_any(&entry.path()).is_ok() {
-            removed.push(entry.path());
+        if !live(&lease) {
+            match remove_any(&entry.path()) {
+                Ok(()) => removed.push(entry.path()),
+                Err(error) => eprintln!(
+                    "warning: could not remove lane overlay {}: {error}",
+                    entry.path().display()
+                ),
+            }
         }
     }
     removed

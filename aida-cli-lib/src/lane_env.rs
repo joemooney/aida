@@ -15,7 +15,9 @@
 //! are still validated wherever they are used.
 // trace:STORY-1662 | ai:claude
 
-use crate::*;
+use crate::{claim, role, worktree};
+use crate::{list_leases, SessionLease};
+use anyhow::{Context, Result};
 use std::path::Path;
 
 /// The variables a lane correction may touch. ONE list: the renderer only

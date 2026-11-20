@@ -1,7 +1,24 @@
 //! `aida human` review-awaiting list, advisor worklist, and the unblock/audit sweep (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    agent_registry, all_queued_requirement_ids, auto_complete, awaiting_you, burndown,
+    change_lookup_for_branch, clarify_default_specs, classify_human_review_bucket,
+    classify_review_surface, cli, collect_decision_requests, collect_findings_by_spec,
+    collect_git_linkage_opts, collect_open_facts, collect_open_prs, contains_any,
+    copy_to_clipboard, extract_referenced_spec_ids_from_commit, extract_spec_ids_from_commit,
+    extract_trace_line_spec_ids, find_project_root, findings, glyph, human_audit,
+    human_routed_spec_ids, in_flight_lease_role_map, in_flight_lease_scopes, is_implementable_type,
+    load_store_for_lookup, non_interactive_confirm, pr_ship, presence_cmd, read_verdict_file,
+    report_drain_readiness, requirement_is_deferred, requirement_text, resolve_default_branch_ref,
+    seats, self_invoke_aida, spec_title_cell, status_cleanup, HumanReviewBucket, ReviewSurface,
+};
+use aida_core::DatabaseBackend;
+use aida_core::RequirementStatus;
+use anyhow::Result;
+use colored::Colorize;
+use std::collections::HashSet;
 
 /// STORY-611: one row in the "Reviews awaiting you" bucket — a spec with a
 /// code-review surface that the human still has to act on.

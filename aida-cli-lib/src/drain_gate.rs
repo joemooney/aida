@@ -1,7 +1,22 @@
 //! drain human-gate refusals, from-pr entry, plan prelude, and auto-complete run (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+use crate::process_retry::RetryEtxtbsy;
+use crate::{
+    agent_registry, aida_exe_path, auto_complete, cli, detect_distributed_store_from, drain_resume,
+    drain_state, ensure_queued_for_implementer, find_main_worktree_root, format_review_label,
+    maybe_digest_mailbox_best_effort, network_retry, parse_review_scope,
+    phase1_restore_report_line, pr_head_branch, pr_is_merged_with_sink,
+    prepare_registered_auto_complete_phase1, presence, probe_resume_facts, prompt_yes_no,
+    record_auto_complete_run, release_dead_leases_for_resume, resolve_lifecycle_skip,
+    resolve_pr_to_spec, restore_phase1_status_on_lease_failure, should_clear_drain_state,
+    solo_spec_is_keystone, spec_status, verified_from_pr_ci_head,
+    write_pipelined_child_result_sidecar, AutonomyMode, RealPhaseDriver, ResumeEntry,
+};
+use aida_core::{RequirementStatus, Storage};
+use anyhow::{Context, Result};
+use colored::Colorize;
+use std::io::IsTerminal;
 
 // trace:STORY-1728 | ai:claude
 #[path = "drain_gate_args.rs"]
@@ -294,6 +309,7 @@ pub(crate) fn handle_from_pr(
     escalate_mode: auto_complete::EscalateMode,
     steal: bool,
     force_claim: bool,
+    over_wip: bool,
     allow_stale_base: bool,
     no_auto_rebase: bool,
 ) -> ! {
@@ -483,6 +499,7 @@ pub(crate) fn handle_from_pr(
                 true,
                 steal,
                 force_claim,
+                over_wip,
                 allow_stale_base,
                 no_auto_rebase,
                 resume_entry,
@@ -514,6 +531,7 @@ pub(crate) fn handle_auto_complete(
     // recover NeedsAttention / ambiguous InProgress specs the same way a
     // direct `aida queue work <SPEC> --force-claim` does.
     force_claim: bool,
+    over_wip: bool,
     // STORY-281: thread the outer `--allow-stale-base` through so phase 3's
     // pre-flight stale-base check warns-only instead of refusing.
     allow_stale_base: bool,
@@ -533,6 +551,7 @@ pub(crate) fn handle_auto_complete(
         true,
         steal,
         force_claim,
+        over_wip,
         allow_stale_base,
         no_auto_rebase,
         // STORY-492: not a resume — start at phase 1.
@@ -558,7 +577,8 @@ pub(crate) fn guarded_execution_mode_for_drain(
         .load()
         .ok()
         .and_then(|store| store.get_requirement_by_spec_id(spec).cloned())
-        .and_then(|req| req.execution_mode)
+        // trace:STORY-2749 | ai:claude
+        .and_then(|req| crate::queue_cmd::effective_execution_mode(&req))
         .filter(|mode| {
             matches!(
                 mode,
@@ -594,8 +614,10 @@ pub(crate) fn spec_is_keyboard_only(req: &aida_core::Requirement) -> bool {
     req.tags
         .iter()
         .any(|t| t.eq_ignore_ascii_case("keyboard-only"))
+        // A `track:operator` spec is supervised whatever it groomed to.
+        // trace:STORY-2749 | ai:claude
         || matches!(
-            req.execution_mode,
+            crate::queue_cmd::effective_execution_mode(req),
             Some(aida_core::ExecutionMode::Guided)
                 | Some(aida_core::ExecutionMode::Operator)
                 | Some(aida_core::ExecutionMode::Decide)
@@ -1131,6 +1153,7 @@ mod bug_1574_unattended_git_mutation_tests {
             false,
             false,
             false,
+            false,
             None,
         );
         assert_eq!(result.failed_phase, Some(auto_complete::Phase::Implementer));
@@ -1431,6 +1454,7 @@ pub(crate) fn run_auto_complete(
     // TASK-559: pass-through of the outer `--force-claim` flag, appended to
     // phase-1 `aida queue work` subprocesses just like `--steal`.
     force_claim: bool,
+    over_wip: bool,
     // STORY-281: pass-through of the outer `--allow-stale-base` flag. When
     // true, phase 3's pre-flight check warns-only instead of refusing on a
     // stale-base + file-overlap; also propagated to the reviewer subprocess.
@@ -1512,14 +1536,20 @@ pub(crate) fn run_auto_complete(
     // Preflight: `aida queue work <spec>` can only pick up a spec that's
     // queued for the implementer. Queue it if it isn't — so a fresh
     // `aida add` flows straight into `--auto-complete`.
-    if let Err(e) = ensure_queued_for_implementer(storage, user_id, spec) {
-        eprintln!(
-            "{} {}",
-            crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
-            e
-        );
-        std::process::exit(1);
-    }
+    let admission = match find_main_worktree_root().and_then(|root| {
+        ensure_queued_for_implementer(storage, &root, user_id, spec, resume.is_some(), over_wip)
+    }) {
+        Ok(admission) => admission,
+        Err(e) => {
+            eprintln!(
+                "{} {}",
+                crate::glyph(crate::glyphs::Glyph::Cross).red().bold(),
+                e
+            );
+            // trace:TASK-3799 | ai:codex — a refusal belongs to this member.
+            return auto_complete::OrchestrationResult::failed(auto_complete::Phase::Implementer);
+        }
+    };
     // STORY-265 slice 3: the `--with-plan` PLAN PRELUDE. When `--with-plan` is
     // set (propagated as `AIDA_WITH_PLAN=1` by the dispatch arm), run a plan
     // session + Approved→Planned promote BEFORE the phase-1 status bump and the
@@ -1643,6 +1673,8 @@ pub(crate) fn run_auto_complete(
         variant,
     );
 
+    driver.over_wip = over_wip;
+
     // trace:TASK-1603 | ai:codex
     // Publish ownership before changing status or launching any phase child.
     // This is authority state, not optional telemetry: a missing/failed write
@@ -1657,6 +1689,9 @@ pub(crate) fn run_auto_complete(
         &run_token,
         driver.is_zen_run(),
         owns_drain_state,
+        resume.is_some(),
+        over_wip,
+        Some(admission),
     ) {
         Ok(bump) => bump,
         Err(e) => {
@@ -1914,6 +1949,7 @@ mod bug_2139_headless_phase_seat_tests {
                 Some(mode),
                 auto_complete::EscalateMode::Blocks,
                 true,
+                false,
                 false,
                 false,
                 false,

@@ -736,6 +736,12 @@ pub(crate) fn scan_and_route_at(
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct HeadlessLaneRecord {
+    // Snapshot the generation before spawn; exit must never release a successor.
+    // trace:BUG-2655 | ai:codex
+    #[serde(default)]
+    claim: Option<crate::coordination::Claim>,
+    #[serde(default)]
+    seat_path: Option<PathBuf>,
     lease_id: String,
     spec: String,
     vendor: String,
@@ -748,6 +754,83 @@ struct HeadlessLaneRecord {
     exited_at: Option<DateTime<Utc>>,
     #[serde(default)]
     exit_status: Option<String>,
+}
+
+// An exit stamp alone is insufficient if the PID was reused or is still live.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn claim_worker_has_exited(
+    claim: &crate::coordination::Claim,
+    now: DateTime<Utc>,
+) -> bool {
+    let Some(id) = claim
+        .lease_id
+        .as_deref()
+        .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+    else {
+        return false;
+    };
+    let Some(record) =
+        std::fs::read_to_string(headless_record_path(Path::new(&claim.clone_path), id))
+            .ok()
+            .and_then(|raw| serde_json::from_str::<HeadlessLaneRecord>(&raw).ok())
+    else {
+        return false;
+    };
+    let Ok(start) = DateTime::parse_from_rfc3339(&claim.started_at) else {
+        return false;
+    };
+    record
+        .claim
+        .as_ref()
+        .is_none_or(|captured| captured.claim_id == claim.claim_id)
+        && record.lease_id == id
+        && record.spec.eq_ignore_ascii_case(&claim.scope)
+        && record.started_at >= start
+        && record.started_at <= now
+        && record
+            .exited_at
+            .is_some_and(|exit| exit >= record.started_at && exit <= now)
+        && crate::ownership::reader::local_claim_process_is_dead(
+            record.pid,
+            record.pid_start_time.as_deref(),
+            claim.pid_namespace,
+        )
+}
+
+// A bound claim whose admission never spawned a worker: its clone is present
+// here and holds no lane record for the claim's lease. Only a confirmed absence
+// counts; an unreadable record or a missing clone is not evidence.
+// trace:BUG-2697 | ai:claude
+pub(crate) fn claim_worker_never_recorded(claim: &crate::coordination::Claim) -> bool {
+    let Some(id) = claim
+        .lease_id
+        .as_deref()
+        .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'))
+    else {
+        return false;
+    };
+    let root = Path::new(&claim.clone_path);
+    if claim.clone_path.is_empty() || !root.join(".aida").is_dir() {
+        return false;
+    }
+    matches!(
+        std::fs::symlink_metadata(headless_record_path(root, id)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    )
+}
+
+// Retained seat evidence must belong to this exact claim generation.
+// trace:BUG-2655 | ai:codex
+pub(crate) fn exited_claim_seat(claim: &crate::coordination::Claim) -> Option<PathBuf> {
+    let id = claim.lease_id.as_deref()?;
+    let record: HeadlessLaneRecord = serde_json::from_str(
+        &std::fs::read_to_string(headless_record_path(Path::new(&claim.clone_path), id)).ok()?,
+    )
+    .ok()?;
+    if record.claim.as_ref() != Some(claim) || record.lease_id != id {
+        return None;
+    }
+    record.seat_path.filter(|path| path.is_absolute())
 }
 
 fn lanes_dir(project_root: &Path) -> PathBuf {
@@ -788,7 +871,20 @@ pub(crate) fn register_headless_lane_for_child(
     else {
         return;
     };
+    let claim =
+        aida_core::store_locate::detect_distributed_store_from(&project_root).and_then(|store| {
+            crate::coordination::list_claims(&store)
+                .into_iter()
+                .find(|c| {
+                    c.lease_id.as_deref() == Some(lease_id)
+                        && c.host == crate::coordination::hostname()
+                        && Path::new(&c.clone_path).canonicalize().ok()
+                            == project_root.canonicalize().ok()
+                })
+        });
     let record = HeadlessLaneRecord {
+        seat_path: Some(lease.worktree_path.clone()),
+        claim,
         lease_id: lease_id.to_string(),
         spec: lease.scope,
         vendor: vendor.to_string(),
@@ -828,16 +924,16 @@ pub(crate) fn finish_headless_lane_for_child(
     let lease_held = crate::leases::list_leases(&project_root)
         .iter()
         .any(|l| l.id == lease_id);
-    if !lease_held {
-        let _ = std::fs::remove_file(&path);
-        return;
-    }
     let Some(mut record) = std::fs::read_to_string(&path)
         .ok()
         .and_then(|t| serde_json::from_str::<HeadlessLaneRecord>(&t).ok())
     else {
         return;
     };
+    if !lease_held && record.claim.is_none() {
+        let _ = std::fs::remove_file(&path);
+        return;
+    }
     record.exited_at = Some(Utc::now());
     record.exit_status = Some(match status {
         Some(s) => format!("exited with {s}"),
@@ -845,6 +941,45 @@ pub(crate) fn finish_headless_lane_for_child(
     });
     if let Ok(body) = serde_json::to_string_pretty(&record) {
         let _ = aida_core::write_atomic(&path, body.as_bytes());
+    }
+    // A failed or punted child has been reaped: retire only the generation
+    // captured at registration, preserving its dirty work before release.
+    // trace:BUG-2655 | ai:codex
+    if status.is_some()
+        && crate::ownership::reader::local_claim_process_is_dead(
+            record.pid,
+            record.pid_start_time.as_deref(),
+            record.claim.as_ref().and_then(|claim| claim.pid_namespace),
+        )
+    {
+        let lease = crate::leases::list_leases(&project_root)
+            .into_iter()
+            .find(|l| l.id == lease_id);
+        if let (Some(claim), Some(lease), Some(store)) = (
+            record.claim.as_ref(),
+            lease,
+            aida_core::store_locate::detect_distributed_store_from(&project_root),
+        ) {
+            let punted =
+                crate::punt::read_signal(&crate::punt::signal_path(&project_root, &record.spec))
+                    .is_some()
+                    || crate::punt::read_seat_signal(&lease.worktree_path, &record.spec)
+                        .ok()
+                        .flatten()
+                        .is_some();
+            if status.is_some_and(|s| !s.success()) || punted {
+                let result = crate::worktree_gc::salvage_worktree_patch_complete(
+                    &project_root,
+                    &record.spec,
+                    None,
+                    &lease.worktree_path,
+                )
+                .and_then(|_| crate::coordination::release_claim_receipt(&store, claim));
+                if let Err(error) = result {
+                    eprintln!("warning: exited lane shared claim retained: {error:#}");
+                }
+            }
+        }
     }
 }
 
@@ -1203,7 +1338,7 @@ fn fetch_open_prs_from_gh(project_root: &Path) -> Result<String, String> {
 /// When every check in a head's `statusCheckRollup` passed, the time the last
 /// one finished. `None` while any check is pending or failing, or when the
 /// head has no checks at all (no readiness signal). With `skip_hold_gate`,
-/// the `merge-hold-gate` check, red at every head while a hold's label is on
+/// the `merge-hold-gate` status, pending (or legacy red) while a hold's label is on
 /// the PR, is left out.
 ///
 /// `required` is the base branch's required status-check set. When it names
@@ -1234,7 +1369,10 @@ fn rollup_green_at(
     let mut latest: Option<DateTime<Utc>> = None;
     for check in rollup {
         let field = |k: &str| check.get(k).and_then(|v| v.as_str()).unwrap_or("");
-        if skip_hold_gate && field("name") == MERGE_HOLD_GATE_CHECK {
+        // trace:BUG-2492 | ai:codex — StatusContext names live in context.
+        if skip_hold_gate
+            && crate::ci_gate::check_name_eq(&check_name(check), MERGE_HOLD_GATE_CHECK)
+        {
             continue;
         }
         if required.is_some_and(|r| !r.contains(&check_name(check))) {
@@ -1330,7 +1468,7 @@ fn load_open_prs(
         }
         let head = pr.head_ref_oid.as_str();
         // A rework push past a reviewer refusal's head awaits re-review; the
-        // hold's own gate check stays red until that review, so it is not a
+        // hold's own gate stays pending until that review, so it is not a
         // readiness signal there.
         let reworked_past_refusal =
             crate::gate::merge_hold_core::read_hold_record(project_root, pr.number).is_some_and(

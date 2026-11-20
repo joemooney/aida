@@ -1,7 +1,51 @@
 //! Cleanup and awaiting reports, status hygiene/identity, fast status and dev-context CI lines (STORY-1488 slice 1)
 // trace:STORY-1488 | ai:claude
 
-use crate::*;
+#[cfg(test)]
+use crate::pending_decision_request_count;
+use crate::{
+    agent_output_mode, agent_registry, awaiting_you, branch_ahead_of, build_banner,
+    canonical_role_name, check_template_symlinks, collect_agent_briefs_inner,
+    collect_all_pr_head_branches, collect_blocked_seat_items, collect_branch_ahead_of,
+    collect_branch_facts, collect_doctor_findings, collect_local_branch_commit_times,
+    collect_open_prs, collect_orphan_project_dirs, collect_pr_attribution_disagreements,
+    collect_pr_facts, collect_recently_merged_prs, collect_remote_branch_name_set,
+    collect_unshipped_work_items_bounded, collect_user_context, coordination, criteria_coverage,
+    current_branch_at, current_user_id, detect_default_branch_ref, detect_distributed_store_from,
+    effective_role_resolved, find_aida_project_root_from, find_main_worktree_root,
+    find_project_root, findings, gather_running_work, gh_pr_is_merged, git_commits_since_tag,
+    git_describe_latest_tag, humanize_duration_secs, insert_summary_statuses, is_ancestor_commit,
+    is_standing_artifact_type, is_work_spec_branch_name, last_drain, leases, list_leases,
+    list_local_branches, list_worktrees, live_owned_branches, local_suppressed_prs,
+    mailbox_latency_warning, mailbox_store, main_worktree_root_from, maintenance_schedule,
+    orphaned_in_progress_items, output_format_is_json, parse_pr_scope,
+    parse_review_story_pr_number, pr_has_local_verdict, pr_has_merge_hold, pr_review_rows_routed,
+    pr_ship, presence, print_tiered_help, probe_clone_seat_trees, process_probe, protocol_cmd,
+    read_queue_depth, read_workspace_version, referenced_spec_ids_on_default_branch,
+    resolve_effective_role, reviewer_queue_story_ids, reviewer_route_for_pr,
+    reviewer_row_actionability, scan_completed_without_commit,
+    scan_default_branch_for_spec_landings, seat_rotation, status_cleanup, status_cmd, team,
+    truncate, worker, worktree_dirty_entries, worktree_lease, Command, MailIdentityFacts,
+    SessionLease, UserStatusContext, AGENT_BARE_QUEUE_TOPN, CLONE_PROBE_BUDGET,
+};
+use crate::{
+    empty_list_hint_line, events, git_backend_cmd, hostname, intent, is_terminal_status,
+    is_terminal_status_str, mail_wake, merge_agent_views_with_lease_fallback,
+    nearest_standard_rel_type, next_n_rework_idle_message, parse_status, questions, queue_cmd,
+    rel_type_label, relationship_phrase, resolve_queue_rework_needed, role, session,
+    status_display, terminal_why_text, toon_list_cell, validate_status_input,
+    why_headline_prefix_for, worktree, write_status_presence_consumers, QueueRow,
+    STANDARD_REL_TYPES,
+};
+use aida_core::liveness::LeaseState;
+use aida_core::DatabaseBackend;
+use aida_core::Storage;
+use aida_core::{write_atomic, RequirementStatus, RequirementType};
+use anyhow::Result;
+use colored::Colorize;
+use serde::{Deserialize, Serialize};
+use std::io::IsTerminal;
+use uuid::Uuid;
 
 /// Build the full `CleanupReport` from the live project state. Each
 /// detector is independent — when one fails (gh missing, git invocation
@@ -35,7 +79,7 @@ pub(crate) fn collect_cleanup_report_until(
     let lease_states: Vec<(SessionLease, LeaseState)> = leases
         .iter()
         // BUG-511: review-verb leases classify by creator PID, not worktree.
-        .map(|l| (l.clone(), lease_state_for(l, &live_sessions, now)))
+        .map(|l| (l.clone(), leases::lease_state_for(l, &live_sessions, now)))
         .collect();
 
     // TASK-1056: batch the per-branch git probes the detectors below need into
@@ -514,6 +558,7 @@ pub(crate) fn collect_awaiting_report_inner(
         ctx,
         no_ci,
         notice_fast,
+        None,
         crate::collect_mail_identity_facts,
     )
 }
@@ -552,6 +597,7 @@ pub(crate) fn collect_mail_channel(
     ctx_role: Option<&str>,
     facts: &MailIdentityFacts,
     limits: &aida_core::mailbox_logical::ReadLimits,
+    bind: Option<crate::mailbox_view::BindWait>,
 ) -> awaiting_you::MailChannel {
     // Registered clients report their own private handle, never an
     // inherited parent's AIDA_USER. Shell/operator reads retain BUG-767's
@@ -565,12 +611,19 @@ pub(crate) fn collect_mail_channel(
     // worktrees and the canonical store, filtered to the verified
     // audience; only mail with no read evidence counts as unread.
     // trace:STORY-1843 | ai:claude
-    let view = crate::mailbox_view::read_own_mail(
-        project_root,
-        &project_root.join(".aida-store"),
-        &audience,
-        limits,
-    );
+    // Only the per-turn notice binds queued deliveries (`bind`), within its
+    // bounded wait. trace:STORY-2745 | ai:claude
+    let store_root = project_root.join(".aida-store");
+    let view = match bind {
+        Some(wait) => crate::mailbox_view::read_own_mail_binding(
+            project_root,
+            &store_root,
+            &audience,
+            limits,
+            wait,
+        ),
+        None => crate::mailbox_view::read_own_mail(project_root, &store_root, &audience, limits),
+    };
     let unread: Vec<aida_core::mailbox::Message> = view.unread().into_iter().cloned().collect();
     // A bound handle is verified in core; an unbound reader's headline
     // is its user.
@@ -650,13 +703,20 @@ pub(crate) fn collect_mail_channel(
 /// [`collect_awaiting_report_inner`] with the mail channel's identity facts
 /// supplied, so a test asserts the operator/shared mail split from synthetic
 /// facts instead of the real session binding of whoever runs it.
+/// `mail_bind` is `Some` only for the per-turn
+/// `aida awaiting --notice` hook: that read takes the queued role and seat
+/// mail this session is eligible for (bounded, never waiting), so a session
+/// launched after mail was queued for it sees the notice before its next
+/// turn. Status, statusline and TUI views pass `None` and never bind.
 // trace:TASK-2345 | ai:claude
+// trace:STORY-2745 | ai:claude
 pub(crate) fn collect_awaiting_report_with_mail_facts(
     project_root: &std::path::Path,
     backend: &aida_core::CachedGitBackend,
     ctx: &UserStatusContext,
     no_ci: bool,
     notice_fast: bool,
+    mail_bind: Option<crate::mailbox_view::BindWait>,
     mail_facts: impl FnOnce() -> MailIdentityFacts,
 ) -> awaiting_you::AwaitingReport {
     // BUG-1288: the nightly channel performs independent forge reads. Start it
@@ -978,6 +1038,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         ctx.role.as_deref(),
         &mail_facts(),
         &crate::mailbox_view::passive_limits(),
+        mail_bind,
     );
 
     // Pending worker directives — the enqueue channel (`aida human audit`,
@@ -1202,7 +1263,7 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
     // it has a session id, all of them in the operator's shell. File reads
     // only, so cheap on the notice path too.
     // trace:STORY-B6B1278890774EF993D2EBC327862470-155 | ai:claude
-    let deputy_failed = {
+    let (deputy_failed, dead_deputies) = {
         let session = std::env::var("AIDA_SESSION_ID")
             .ok()
             .filter(|s| !s.trim().is_empty());
@@ -1214,7 +1275,22 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
             &main,
             session.as_deref(),
         ));
-        jobs
+        let dead = if notice_fast {
+            Vec::new()
+        } else {
+            crate::deputy_shell::base_dir().map_or_else(
+                |_| Vec::new(),
+                |base| {
+                    crate::deputy_shell::dead_deputies_in(
+                        &base,
+                        &main,
+                        session.as_deref(),
+                        aida_core::pid_observer::PidObserver::current(),
+                    )
+                },
+            )
+        };
+        (jobs, dead)
     };
 
     awaiting_you::AwaitingReport {
@@ -1246,11 +1322,73 @@ pub(crate) fn collect_awaiting_report_with_mail_facts(
         idle_in_progress,
         blocked_seats,
         deputy_failed,
+        dead_deputies,
         // trace:BUG-1530 | ai:claude — the seat this session reads as, so the
         // headline (render) and per-turn compact line can scope themselves
         // to channels this seat can act on.
         role: ctx.role.clone(),
     }
+}
+
+// A raw resume can recover the operator's intended seat for a notice only.
+// Neither the transcript ID nor a role label proves seat ownership.
+// trace:BUG-2625 | ai:codex
+fn resumed_claude_seat_warning(
+    project_root: &std::path::Path,
+    entry: &agent_registry::AgentRegistryEntry,
+    payload: &str,
+) -> Option<String> {
+    let vendor = crate::vendors::claude_profile();
+    if entry.agent_type != vendor.session_name || entry.seat.is_some() {
+        return None;
+    }
+    let payload: serde_json::Value = serde_json::from_str(payload).ok()?;
+    if payload.get("source")?.as_str()? != "resume" {
+        return None;
+    }
+    let canonical_role = |role: &str| {
+        let role = crate::gate::dispatch_deps::canonical_role_name(role.trim());
+        crate::seat_rotation::sanitize_seat(&role).ok()
+    };
+    let named_role = |role: &str| {
+        canonical_role(role).filter(|role| matches!(role.as_str(), "advisor" | "product"))
+    };
+    let mut previous_bindings = std::collections::BTreeSet::new();
+    if let Some(sid) = entry.claude_session_id.as_deref() {
+        for (_, row) in agent_registry::load_entries(project_root) {
+            if row.agent_type != vendor.session_name
+                || row.id == entry.id
+                || (row.claude_session_id.as_deref() != Some(sid)
+                    && row.native_session_id.as_deref() != Some(sid))
+            {
+                continue;
+            }
+            let binding = row
+                .seat
+                .as_deref()
+                .and_then(|seat| crate::seat_rotation::sanitize_seat(seat).ok())
+                .zip(row.role.as_deref().and_then(canonical_role))
+                .or_else(|| {
+                    row.role
+                        .as_deref()
+                        .and_then(named_role)
+                        .map(|role| (role.clone(), role))
+                });
+            previous_bindings.extend(binding);
+        }
+    }
+    let (seat, role) = match previous_bindings.len() {
+        0 => {
+            let role = entry.role.as_deref().and_then(named_role)?;
+            (role.clone(), role)
+        }
+        1 => previous_bindings.into_iter().next()?,
+        _ => return None,
+    };
+    let relaunch = crate::vendors::agent_new_cmd(vendor, &format!("--role {role}"), false);
+    Some(format!(
+        "Warning: this session does not hold seat:{seat}; relaunch with `{relaunch}`. To bind the mail seat, use `{relaunch} --seat {seat}`."
+    ))
 }
 
 /// Parse the hook payload (plus the event a relay named out-of-band) and, on
@@ -1261,6 +1399,7 @@ pub(crate) fn notice_hook_session(
     payload: &str,
     event: Option<&str>,
     cwd: Option<&std::path::Path>,
+    mut warn: impl FnMut(String),
 ) -> (Option<String>, bool) {
     let (session_id, is_session_start) = presence::parse_hook_payload_with_event(payload, event);
     if is_session_start {
@@ -1283,6 +1422,9 @@ pub(crate) fn notice_hook_session(
             // launch asked for. Never blocks or fails the session.
             // trace:STORY-HOME-096 | ai:claude
             if let Ok(entry) = entry {
+                if let Some(warning) = resumed_claude_seat_warning(&project_root, &entry, payload) {
+                    warn(warning);
+                }
                 arm_launch_mail_wake(&project_root, &entry);
                 // trace:STORY-2338 | ai:claude
                 agent_registry::record_grant_key(
@@ -1417,10 +1559,12 @@ pub(crate) fn emit_notice_time_line() {
     }
     // trace:BUG-1239 | ai:codex
     // trace:TASK-2253 | ai:claude — an agy relay names the event in env.
+    let mut seat_warning = None;
     let (session_id, is_session_start) = notice_hook_session(
         &hook_payload,
         event.as_deref(),
         std::env::current_dir().ok().as_deref(),
+        |warning| seat_warning = Some(warning),
     );
     let now = chrono::Local::now();
     let label = presence::stamp_turn_clock(
@@ -1431,6 +1575,9 @@ pub(crate) fn emit_notice_time_line() {
     // Local time, matching the trial hook's `%A %Y-%m-%d %H:%M %Z` shape.
     let when = now.format("%A %Y-%m-%d %H:%M %Z").to_string();
     println!("{}", format_notice_time_line(&when, &label));
+    if let Some(warning) = seat_warning {
+        println!("{warning}");
+    }
     // STORY-1464: seat rotation signal — when this session's latest model call
     // crossed the context ceiling, tell the seat to hand off and restart.
     // Tail-read of the hook's transcript only; silent below the ceiling.
@@ -1625,7 +1772,17 @@ pub(crate) fn handle_awaiting_command(
             queue_total: 0,
             agents: Vec::new(),
         };
-        let report = collect_awaiting_report_inner(&project_root, backend, &ctx, true, true);
+        // The per-turn notice takes queued role/seat mail this session is
+        // eligible for. trace:STORY-2745 | ai:claude
+        let report = collect_awaiting_report_with_mail_facts(
+            &project_root,
+            backend,
+            &ctx,
+            true,
+            true,
+            Some(crate::mailbox_view::BindWait::Notice),
+            crate::collect_mail_identity_facts,
+        );
         if let Some(line) = report.compact_line() {
             println!("{line}");
             // trace:BUG-B6B1278890774EF993D2EBC327862470-040 | ai:claude
@@ -3936,7 +4093,10 @@ fn run_awaiting(
     matches: &clap::ArgMatches,
     ctx: &crate::cmdkit::DispatchCtx,
 ) -> anyhow::Result<crate::cmdkit::Flow> {
-    use crate::*;
+    use crate::{
+        arm_notice_deadline, emit_notice_time_line, handle_awaiting_command, output_format_is_json,
+        AwaitingArgs,
+    };
     let args = <AwaitingArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => {
@@ -4054,6 +4214,7 @@ mod task_2253_agy_session_start_gc_tests {
             started_at: at,
             last_active_at: at,
             role: Some("implementer".to_string()),
+            seat: None,
             current_spec: None,
             worktree_path: worktree.to_path_buf(),
             source: "hook".to_string(),
@@ -4094,7 +4255,7 @@ mod task_2253_agy_session_start_gc_tests {
         // no event name; the relay names the event (AIDA_HOOK_EVENT).
         let payload =
             r#"{"conversationId":"agy-live-conv","workspacePaths":["/w"],"modelName":"auto"}"#;
-        let (sid, start) = notice_hook_session(payload, Some("SessionStart"), Some(&proj));
+        let (sid, start) = notice_hook_session(payload, Some("SessionStart"), Some(&proj), |_| {});
         assert_eq!(sid.as_deref(), Some("agy-live-conv"));
         assert!(start);
 
@@ -4109,6 +4270,66 @@ mod task_2253_agy_session_start_gc_tests {
         );
     }
 
+    // trace:BUG-2625 | ai:codex
+    #[test]
+    fn bug_2625_claude_resume_warns_and_keeps_the_registry_row_unseated() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let _env = crate::test_env::EnvVarsGuard::apply(&[
+            ("AIDA_AGENT_TYPE", Some("claude")),
+            ("AIDA_SESSION_ROLE", None),
+            (crate::agent_rotation::SEAT_ENV, None),
+        ]);
+        let tmp = tempfile::TempDir::new().unwrap();
+        let proj = tmp.path().canonicalize().unwrap();
+        std::fs::create_dir_all(proj.join(".aida")).unwrap();
+        std::fs::write(proj.join(".aida/config.toml"), "").unwrap();
+        assert!(crate::test_git::git_command()
+            .args(["init", "-q"])
+            .current_dir(&proj)
+            .status()
+            .unwrap()
+            .success());
+
+        let mut previous = dead_agy_row(&proj);
+        previous.agent_type = "claude".into();
+        previous.id = format!("claude-{}", previous.pid);
+        previous.native_session_id = None;
+        previous.claude_session_id = Some("resumed-thread".into());
+        previous.role = Some("advisor".into());
+        previous.seat = Some("advisor".into());
+        write_entry(&proj, &previous).unwrap();
+
+        let observe = |source: &str, sid: &str| {
+            let payload = serde_json::json!({
+                "session_id": sid,
+                "hook_event_name": "SessionStart",
+                "source": source,
+            });
+            let mut warnings = Vec::new();
+            let (_, start) = notice_hook_session(&payload.to_string(), None, Some(&proj), |line| {
+                warnings.push(line);
+            });
+            assert!(start);
+            warnings
+        };
+        assert!(observe("startup", "resumed-thread").is_empty());
+        assert!(observe("resume", "different-thread").is_empty());
+        assert_eq!(
+            observe("resume", "resumed-thread"),
+            ["Warning: this session does not hold seat:advisor; relaunch with `aida agent new claude --role advisor`. To bind the mail seat, use `aida agent new claude --role advisor --seat advisor`."]
+        );
+        let ctx = crate::build_agent_classify_context(&proj, &[]).for_display();
+        let views = agent_registry::list_agent_views(&proj, &ctx);
+        let resumed = views.iter().find(|row| row.id != previous.id).unwrap();
+        assert_eq!(resumed.native_session_id.as_deref(), Some("resumed-thread"));
+        assert_eq!(
+            serde_json::to_value(resumed).unwrap().get("seat"),
+            Some(&serde_json::Value::Null)
+        );
+    }
+
     /// The same payload on a non-start turn leaves the dead row alone.
     #[test]
     fn agy_payload_without_session_start_does_not_gc() {
@@ -4120,7 +4341,7 @@ mod task_2253_agy_session_start_gc_tests {
         write_entry(&proj, &dead_agy_row(&proj)).unwrap();
 
         let payload = r#"{"conversationId":"agy-live-conv"}"#;
-        let (_, start) = notice_hook_session(payload, None, Some(&proj));
+        let (_, start) = notice_hook_session(payload, None, Some(&proj), |_| {});
         assert!(!start);
         // A prompt-turn heartbeat may register the test's own agent client
         // beside it; the dead agy row is the one that must stay un-ended.

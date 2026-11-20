@@ -1436,6 +1436,19 @@ fn corpus_carry_over(
         if !corpus_approves {
             continue;
         }
+        // trace:STORY-2696 | ai:codex — only effective acts set carry policy.
+        let effective =
+            rv::effective_recordings_for_sha(live.iter().map(|(_, body)| body.as_str()), &sha)
+                .ok()?;
+        if effective
+            .iter()
+            .any(|recording| !rv::recording_carry_eligible(recording))
+        {
+            last = Some(Err(
+                crate::gate::review_carryover::CarryOverRefusal::ReviewerPolicy,
+            ));
+            continue;
+        }
         let refusal = crate::gate::ship::ApprovalHeadRefusal::Moved {
             reviewed_sha: sha,
             head_sha: head.to_string(),
@@ -1458,6 +1471,28 @@ pub(crate) fn corpus_gate_bodies(
     pr: u64,
     spec_hints: &[String],
 ) -> Result<Vec<(String, String)>, String> {
+    corpus_gate_bodies_at(roots, pr, spec_hints, None)
+}
+
+/// [`corpus_gate_bodies`] for a merge decision about `head`. A spec key is
+/// shared by every change that ships the spec, so its newest ledger verdict
+/// can be about another change. Read for `head`, such a verdict counts only
+/// when it was recorded at `head`, or when it is a refusal that change still
+/// stands under and its commit is part of `head`. The change's own key, this
+/// change's verdicts under any key, unbound spec records and verdict files
+/// are read as before, and with no head nothing is left out.
+// trace:BUG-2569 | ai:claude
+pub(crate) fn corpus_gate_bodies_at(
+    roots: &[&Path],
+    pr: u64,
+    spec_hints: &[String],
+    head: Option<&str>,
+) -> Result<Vec<(String, String)>, String> {
+    let head = head.map(str::trim).filter(|head| !head.is_empty());
+    let in_head = |sha: &str| match (roots.first(), head) {
+        (Some(repo), Some(head)) => crate::gate::review_carryover::commit_in_head(repo, sha, head),
+        _ => true,
+    };
     let mut keys: Vec<String> = Vec::new();
     if pr > 0 {
         keys.push(format!("PR-{pr}"));
@@ -1488,8 +1523,13 @@ pub(crate) fn corpus_gate_bodies(
             let events = stores
                 .iter()
                 .filter_map(|store| {
-                    crate::gate::ledger::project::newest_verdict_event(store, key)
-                        .map(|event| (store.clone(), event))
+                    match head {
+                        Some(_) => crate::gate::ledger::project::newest_verdict_event_for_merge(
+                            store, key, pr, head, &in_head,
+                        ),
+                        None => crate::gate::ledger::project::newest_verdict_event(store, key),
+                    }
+                    .map(|event| (store.clone(), event))
                 })
                 .collect();
             (key.clone(), events)
@@ -1636,6 +1676,19 @@ pub(crate) fn corpus_gate_decision(
         return Ok(CorpusMergeGate::Clear);
     }
     let head = head();
+    // With the head known, a spec key answers for this change at this head
+    // (the first read, with no head, only decides whether to read the head).
+    // trace:BUG-2569 | ai:claude
+    let bodies = match corpus_gate_bodies_at(&roots, pr, spec_hints, head.as_deref()) {
+        Ok(bodies) => bodies,
+        Err(why) => anyhow::bail!(
+            "PR-{pr} was not merged: {why} — the merge fails closed on an unreadable verdict \
+             artifact. Restore or repair the file, then merge again."
+        ),
+    };
+    if bodies.is_empty() {
+        return Ok(CorpusMergeGate::Clear);
+    }
     let base_branch = base_branch.map(str::trim).filter(|b| !b.is_empty());
     let site = if record_proof {
         crate::gate::review_carryover::CarryOverSite::quiet(main_root.as_path(), base_branch)
@@ -2148,6 +2201,41 @@ pub(crate) fn release_hold_under_mandate(
     mandate_id: &str,
     released_by_verdict: Option<VerdictRef>,
 ) -> std::io::Result<()> {
+    release_hold_under_mandate_inner(
+        project_root,
+        record,
+        advisor_principal,
+        mandate_id,
+        released_by_verdict,
+        None,
+    )
+}
+
+// trace:BUG-2666 | ai:codex
+pub(super) fn release_train_hold_under_mandate(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    cover: &crate::gate::mandate_ship::MandateCover,
+    head: &str,
+) -> std::io::Result<()> {
+    release_hold_under_mandate_inner(
+        project_root,
+        record,
+        &cover.principal,
+        &cover.id,
+        None,
+        Some((cover, head)),
+    )
+}
+
+fn release_hold_under_mandate_inner(
+    project_root: &Path,
+    record: &MergeHoldRecord,
+    advisor_principal: &str,
+    mandate_id: &str,
+    released_by_verdict: Option<VerdictRef>,
+    train: Option<(&crate::gate::mandate_ship::MandateCover, &str)>,
+) -> std::io::Result<()> {
     let clearance = clearance_for(
         record,
         &format!("advisor:{}", advisor_principal.trim()),
@@ -2155,6 +2243,19 @@ pub(crate) fn release_hold_under_mandate(
         Some(mandate_id.to_string()),
     )?;
     with_hold_lock(project_root, record.pr, || {
+        if read_hold_record(project_root, record.pr).as_ref() != Some(record) {
+            return Err(std::io::Error::other(
+                "merge hold changed before mandate release",
+            ));
+        }
+        if let Some((cover, head)) = train {
+            crate::gate::ledger::hold::record_train_mandate_coverage(
+                project_root,
+                record,
+                head,
+                cover,
+            )?;
+        }
         crate::gate::ledger::hold::release(project_root, record.pr, clearance)
     })?
 }

@@ -106,6 +106,10 @@ pub enum ReviewCommand {
     /// Record `--verdict approved` after a follow-up review to clear it.
     // trace:BUG-775 | ai:claude
     Record {
+        /// Keep this approval valid only for the exact reviewed head.
+        // trace:STORY-2696 | ai:codex
+        #[arg(long)]
+        no_carry: bool,
         /// Spec the verdict applies to.
         #[clap(value_parser = crate::spec_arg::spec_id)]
         spec: String,
@@ -114,8 +118,8 @@ pub enum ReviewCommand {
         #[clap(long, value_name = "VERDICT")]
         verdict: String,
 
-        /// Commit the review examined. Defaults to the branch tip
-        /// (current HEAD) at the time of recording.
+        /// Commit reviewed. Defaults to the current forge head; a supplied SHA must match.
+        // trace:BUG-2517 | ai:codex
         #[clap(long, value_name = "SHA")]
         sha: Option<String>,
 
@@ -131,7 +135,9 @@ pub enum ReviewCommand {
 
         /// Concrete review finding to hand to the rework implementer. Repeat
         /// for multiple findings; omitted findings preserve any existing
-        /// findings[] in the verdict record.
+        /// findings[] in the verdict record. Pass --finding "" to clear
+        /// carried findings once resolved before recording approved.
+        // trace:BUG-2527 | ai:codex
         // trace:TASK-1189 | ai:codex
         // Review findings routinely quote CLI flags. Treat the next argv as
         // prose even when it begins with `-`; later argv remain ordinary flags.
@@ -150,9 +156,8 @@ pub enum ReviewCommand {
         #[clap(long, value_name = "CLASS")]
         finding_class: Vec<String>,
 
-        /// Also write the orchestrator's phase-3 handshake file
-        /// (`.aida/review-verdicts/PR-<N>.json`) for this PR number, at the
-        /// drive root. This is what lets a headless drain's phase 4 proceed.
+        /// Change number. Must match the reviewer lease; otherwise the review stays spec-only.
+        // trace:BUG-2517 | ai:codex
         // trace:BUG-802 | ai:claude
         #[arg(long)]
         pr: Option<u64>,
@@ -274,6 +279,42 @@ pub enum ReviewCommand {
     Mode {
         #[clap(subcommand)]
         mode: ReviewModeCommand,
+    },
+
+    /// Show or change which review finding classes block a merge.
+    ///
+    /// Reviews read the list from the default branch's `.aida/config.toml`,
+    /// so an edit takes effect only once it lands there. Unset or invalid,
+    /// every finding blocks. Findings outside the list are approved and
+    /// filed as linked follow-up specs.
+    // trace:STORY-2913 | ai:claude
+    BlockingTiers {
+        #[clap(subcommand)]
+        action: BlockingTiersCommand,
+    },
+}
+
+/// What `aida review blocking-tiers` does.
+// trace:STORY-2913 | ai:claude
+#[derive(Subcommand, Debug)]
+pub enum BlockingTiersCommand {
+    /// Show the active list, where it came from, and the class registry.
+    Show {
+        /// Emit the policy as JSON.
+        #[clap(long)]
+        json: bool,
+    },
+    /// Write a new list to the main checkout's `.aida/config.toml`.
+    ///
+    /// Needs a human at a terminal, or the advisor seat under a mandate
+    /// that covers `review-policy`. Records who changed it, when, and under
+    /// what authority next to the list. Commit the edit and land it through
+    /// a human merge for reviews to use it.
+    Set {
+        /// Classes that block: p1, p2, p3, data-loss,
+        /// security-authority-bypass, unmet-claimed-ac, test-gap, style.
+        #[clap(required = true, num_args = 1.., value_name = "CLASS")]
+        classes: Vec<String>,
     },
 }
 

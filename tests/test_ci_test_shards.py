@@ -28,6 +28,42 @@ def target(name, kind='test'):
 
 
 class ShardsTest(unittest.TestCase):
+    # trace:BUG-2671 | ai:codex
+    def test_timing_step_reports_tests_did_not_run(self):
+        workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        steps = {step.get('name'): step for step in workflow['jobs']['build']['steps']}
+        budget = steps['Test time budget']
+        self.assertIn('touch "$RUNNER_TEMP/aida-tests-started"', steps['Run tests']['run'])
+        for started, stale_log in [(False, False), (True, False), (False, True)]:
+            with self.subTest(started=started, stale_log=stale_log), tempfile.TemporaryDirectory() as tmp:
+                root = pathlib.Path(tmp)
+                summary = root / 'summary'
+                if started:
+                    (root / 'aida-tests-started').touch()
+                if stale_log:
+                    (root / 'target').mkdir()
+                    (root / 'target/test-run.log').touch()
+                result = subprocess.run(
+                    ['bash', '-eo', 'pipefail', '-c', budget['run']],
+                    cwd=root,
+                    env={'GITHUB_STEP_SUMMARY': str(summary), 'RUNNER_TEMP': tmp},
+                    capture_output=True, text=True, check=True)
+                self.assertEqual(result.stdout, 'tests did not run\n')
+                self.assertEqual(summary.read_text(), result.stdout)
+
+    # trace:TASK-3779 | ai:codex
+    def test_terminal_glyph_ratchet_is_a_required_ci_gate(self):
+        command = 'python3 -m unittest tests/test_terminal_glyph_padding.py'
+        github = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
+        steps = github['jobs']['build']['steps']
+        matches = [step for step in steps if step.get('run') == command]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]['if'], "matrix.shard == 'gates'")
+        self.assertFalse(matches[0].get('continue-on-error', False))
+        gitlab = yaml.safe_load((ROOT / '.gitlab-ci.yml').read_text())
+        self.assertIn(command, gitlab['verify']['script'])
+        self.assertFalse(gitlab['verify'].get('allow_failure', False))
+
     def test_cli_partition_is_complete_disjoint_and_stable(self):
         targets = [target(n) for n in ['d', 'a', 'c', 'b', 'new_test']]
         budgets = {'b:tests/b.rs': 100, 'c:tests/c.rs': 70}
@@ -158,6 +194,10 @@ class ShardsTest(unittest.TestCase):
     def test_check_ci_list_labels_run_tests_with_its_real_local_command(self):
         listing = subprocess.run(['python3', 'scripts/check-ci-gates.py', '--list', '--tier', 'all'],
                                  cwd=ROOT, capture_output=True, text=True, check=True).stdout
+        # trace:STORY-b6b1278890774ef993d2ebc327862470-732.Docs | ai:codex
+        self.assertIn('Main pushes, train PRs and merge-group/schedule/manual runs are always full.', listing)
+        self.assertIn('Approved-head tier: recording an approval applies ci:full', listing)
+        self.assertIn('`aida pr train` admits a PR only once that full run is green.', listing)
         line = next(l for l in listing.splitlines() if l.startswith('PLAN  Run tests  '))
         self.assertIn('(local: python3 scripts/ci-test-shards.py --runner nextest --shard all --profile agent', line)
         self.assertNotIn('(local: cargo test --profile agent)', listing)
@@ -175,18 +215,23 @@ class ShardsTest(unittest.TestCase):
             self.assertEqual(shards.main(['--compile', '--profile', 'agent']), 19)
             self.assertEqual(call.call_args.args[0], ['cargo', 'test', '--workspace', '--no-run', '--profile', 'agent'])
 
+    # trace:STORY-2735 | ai:codex
     def test_workflow_aggregate_fails_unless_all_lanes_succeed(self):
         workflow = yaml.safe_load((ROOT / '.github/workflows/ci.yml').read_text())
         build = workflow['jobs']['build']
         self.assertEqual(build['strategy']['matrix']['shard'], [*shards.SHARDS, 'gates', 'contracts'])
         self.assertFalse(build['strategy']['fail-fast'])
         aggregate = workflow['jobs']['build-result']
-        self.assertEqual(aggregate['name'], 'Build (ubuntu-latest)')
-        self.assertEqual(aggregate['needs'], 'build')
-        self.assertEqual(aggregate['if'], '${{ always() }}')
+        # Label events that leave the tier alone report under another name.
+        # trace:BUG-2578 | ai:claude
+        self.assertTrue(aggregate['name'].endswith("|| 'Build (ubuntu-latest)' }}"))
+        self.assertEqual(set(aggregate['needs']), {'tier', 'build', 'fast-gates', 'fast-compile'})
+        self.assertTrue(aggregate['if'].startswith('${{ always() && '))
         command = aggregate['steps'][0]['run']
         for status in ('success', 'failure', 'cancelled', 'skipped'):
-            result = subprocess.run(['bash', '-c', command], env={'RESULT': status})
+            result = subprocess.run(['bash', '-e', '-c', command],
+                                    env={'TIER': 'success', 'FULL': 'true', 'BUILD': status,
+                                         'GATES': 'skipped', 'COMPILE': 'skipped'})
             self.assertEqual(result.returncode == 0, status == 'success')
         steps = {s.get('name'): s for s in build['steps']}
         source = steps['Run tests']['run']

@@ -462,6 +462,11 @@ fn rotation_context(payload: &serde_json::Value, grant: Option<&str>) -> String 
         }
         out.push('\n');
     }
+    // trace:BUG-2579 | ai:claude
+    out.push_str(&queued_deputy_jobs_section(
+        crate::deputy_shell::base_dir().ok().as_deref(),
+        grant,
+    ));
     out.push_str("\n## Processes sharing the outgoing grant\nBest-effort local procfs snapshot; processes are not rebound. Restart needed watchers under the new grant.\n");
     let Some(grant) = grant else {
         out.push_str("Grant unavailable; process inventory unknown.\n");
@@ -503,6 +508,31 @@ fn rotation_context(payload: &serde_json::Value, grant: Option<&str>) -> String 
     out
 }
 
+/// The handoff's list of deputy jobs the outgoing session queued and that
+/// have not run yet, so the successor can keep or cancel each one.
+// trace:BUG-2579 | ai:claude
+pub(crate) fn queued_deputy_jobs_section(base: Option<&Path>, grant: Option<&str>) -> String {
+    let mut out = String::from(
+        "\n## Queued deputy jobs of the outgoing session\nNot yet run. Check each with `aida deputy shell list --name <deputy>`; keep it, or cancel it with `aida deputy shell cancel <id> --name <deputy>`.\n",
+    );
+    let (Some(base), Some(grant)) = (base, grant) else {
+        out.push_str("Grant or deputy home unavailable; queued jobs unknown.\n");
+        return out;
+    };
+    let jobs = crate::deputy_shell::queued_jobs_for_grant(base, grant);
+    if jobs.is_empty() {
+        out.push_str("None.\n");
+    }
+    for (deputy, id, first) in jobs.iter().take(32) {
+        let first: String = first.chars().filter(|c| !c.is_control()).collect();
+        out.push_str(&format!("- {id} (deputy {deputy}): {first}\n"));
+    }
+    if jobs.len() > 32 {
+        out.push_str("[job list truncated]\n");
+    }
+    out
+}
+
 /// A bounded poller independent of vendor Stop decisions. It never signals a
 /// PID discovered from disk: only the pidfd-pinned child this launcher spawned.
 // trace:STORY-2653 | ai:codex
@@ -520,6 +550,10 @@ impl TurnMonitor {
         spawned_at: DateTime<Utc>,
         child_pid: u32,
         expected_session: Option<String>,
+        // The seat the relay mints for each generation, when it mints one:
+        // its grant's life is watched while the generation runs.
+        // trace:BUG-2585 | ai:claude
+        granted_seat: Option<String>,
     ) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
         let stopped = Arc::clone(&stop);
@@ -536,7 +570,18 @@ impl TurnMonitor {
             let Some(path) = turn_path(&root, &seat, &handle, generation) else {
                 return;
             };
+            // trace:BUG-2585 | ai:claude
+            let mut hold_announced = false;
+            let mut last_grant_check: Option<std::time::Instant> = None;
             while !stopped.load(Ordering::SeqCst) {
+                // Mail ahead of the relay grant's expiry, once a minute at most.
+                if let Some(granted) = granted_seat
+                    .as_deref()
+                    .filter(|_| last_grant_check.is_none_or(|at| at.elapsed().as_secs() >= 60))
+                {
+                    last_grant_check = Some(std::time::Instant::now());
+                    crate::relay_grant::warn_ahead(&root, &handle, granted, Utc::now());
+                }
                 if let Some(state) = read_turn(&path).filter(|state| {
                     state.notice >= spawned_at && state.boundary.is_some_and(|b| b > state.notice)
                 }) {
@@ -566,6 +611,26 @@ impl TurnMonitor {
                             )
                             .is_ok()
                             {
+                                // An expired relay grant cannot mint the next
+                                // generation: keep this session and say how
+                                // to renew, then look again.
+                                // trace:BUG-2585 | ai:claude
+                                if granted_seat.as_deref().is_some_and(|granted| {
+                                    crate::relay_grant::hold_before_end(
+                                        &root,
+                                        &handle,
+                                        granted,
+                                        &mut hold_announced,
+                                    )
+                                }) {
+                                    for _ in 0..100 {
+                                        if stopped.load(Ordering::SeqCst) {
+                                            return;
+                                        }
+                                        std::thread::sleep(std::time::Duration::from_millis(50));
+                                    }
+                                    continue;
+                                }
                                 eprintln!("rotation: fresh handoff at turn boundary; ending {handle} #{generation}");
                                 unsafe {
                                     libc::syscall(
@@ -632,6 +697,8 @@ pub(crate) enum RotationOutcome {
 pub(crate) struct Supervision<'a> {
     pub policy: RotationPolicy,
     pub on_gap: &'a mut dyn FnMut(u64),
+    /// Wait one second in production, or advance the hold fixture in tests.
+    pub tick: &'a mut dyn FnMut(),
 }
 
 /// PURE: the line the supervisor prints for a decision that stops it.
@@ -764,11 +831,23 @@ pub(crate) struct RotationRun {
 }
 
 impl RotationRun {
+    #[cfg(test)]
+    pub(crate) fn bind(project_root: &Path, handle: &str) -> Result<Self> {
+        Self::bind_for_role(project_root, handle, None)
+    }
+
     /// Bind `handle` as a relay run owned by this process. The launch's own
     /// unbound reservation of `handle` is released first, so the run takes
     /// the label over.
-    pub(crate) fn bind(project_root: &Path, handle: &str) -> Result<Self> {
+    // trace:BUG-2638 | ai:codex
+    pub(crate) fn bind_for_role(
+        project_root: &Path,
+        handle: &str,
+        role: Option<&str>,
+    ) -> Result<Self> {
         use fs2::FileExt;
+        // trace:BUG-2639 | ai:codex
+        crate::agent_registry::maintain_allocation_records(project_root)?;
         let pid = std::process::id();
         let dir = crate::agent_registry::agents_dir(project_root).join("rotation-locks");
         std::fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
@@ -784,12 +863,14 @@ impl RotationRun {
         {
             crate::agent_handle::release_unbound(project_root, &own)?;
         }
-        let outcome = crate::relay_mail::bind(
+        let outcome = crate::relay_mail::bind_reusing(
             project_root,
             handle,
             pid,
             &lock_path,
             crate::relay_mail::PROTOCOL,
+            None,
+            role,
         )
         .with_context(|| format!("holding handle {handle} for rotation"))?;
         Ok(Self {
@@ -804,13 +885,34 @@ impl RotationRun {
 
     /// Bind the next generation's seeded native session to the run.
     pub(crate) fn bind_child(&self, native_session_id: Option<&str>) -> Result<u64> {
-        let outcome = crate::relay_mail::child_bind(
+        // Rotate outside the namespace lock, archiving ended history automatically.
+        // trace:BUG-2639 | ai:codex
+        crate::agent_registry::maintain_allocation_records(&self.project_root)?;
+        let outcome = retry_allocation_after_gc(
+            || {
+                crate::relay_mail::child_bind(
+                    &self.project_root,
+                    &self.run_id,
+                    &self.capability,
+                    native_session_id,
+                )
+            },
+            || crate::agent_registry::maintain_allocation_records(&self.project_root),
+        )?;
+        Ok(outcome.generation)
+    }
+
+    // trace:BUG-2639 | ai:codex
+    pub(crate) fn block(&mut self, error: &anyhow::Error) -> Result<()> {
+        crate::relay_mail::end_with_detail(
             &self.project_root,
             &self.run_id,
             &self.capability,
-            native_session_id,
+            crate::relay_mail::TerminalReason::Blocked,
+            Some(format!("{error:#}")),
         )?;
-        Ok(outcome.generation)
+        self.ended = true;
+        Ok(())
     }
 
     /// Record the run's terminal generation. Idempotent.
@@ -903,3 +1005,92 @@ pub(crate) fn supervisor_test_lock() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(test)]
 #[path = "tests/agent_rotation_tests.rs"]
 mod tests;
+
+// Retry only the prescribed allocation-budget refusal, once, after safe GC.
+// trace:BUG-2639 | ai:codex
+fn retry_allocation_after_gc<T>(
+    mut attempt: impl FnMut() -> Result<T>,
+    mut gc: impl FnMut() -> Result<()>,
+) -> Result<T> {
+    match attempt() {
+        Err(error) if format!("{error:#}").contains("handle allocation record budget exceeded") => {
+            gc().with_context(|| {
+                format!("automatic agent gc after allocation refusal ({error:#})")
+            })?;
+            attempt().context("allocation retry after automatic agent gc failed")
+        }
+        result => result,
+    }
+}
+
+#[cfg(test)]
+mod allocation_retry_tests {
+    use super::*;
+
+    // trace:BUG-2639 | ai:codex
+    #[test]
+    fn bug_2639_gc_once_and_retry_once() {
+        let mut attempts = 0;
+        let mut collections = 0;
+        let result: Result<()> = retry_allocation_after_gc(
+            || {
+                attempts += 1;
+                anyhow::bail!("handle allocation record budget exceeded; run aida agent gc")
+            },
+            || {
+                collections += 1;
+                Ok(())
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(attempts, 2);
+        assert_eq!(collections, 1);
+    }
+
+    #[test]
+    fn bug_2639_retry_recovers_after_gc() {
+        let mut attempts = 0;
+        let mut collections = 0;
+        let value = retry_allocation_after_gc(
+            || {
+                attempts += 1;
+                if attempts == 1 {
+                    anyhow::bail!("handle allocation record budget exceeded");
+                }
+                Ok(42)
+            },
+            || {
+                collections += 1;
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(value, 42);
+        assert_eq!((attempts, collections), (2, 1));
+    }
+
+    #[test]
+    fn bug_2639_gc_failure_retains_both_diagnostics_without_retry() {
+        let mut attempts = 0;
+        let result: Result<()> = retry_allocation_after_gc(
+            || {
+                attempts += 1;
+                anyhow::bail!("handle allocation record budget exceeded")
+            },
+            || anyhow::bail!("archive write refused"),
+        );
+        let diagnostic = format!("{:#}", result.unwrap_err());
+        assert!(diagnostic.contains("handle allocation record budget exceeded"));
+        assert!(diagnostic.contains("archive write refused"));
+        assert_eq!(attempts, 1);
+    }
+
+    #[test]
+    fn bug_2639_unrelated_refusal_does_not_gc() {
+        let result: Result<()> = retry_allocation_after_gc(
+            || anyhow::bail!("ownership refused"),
+            || panic!("unexpected gc"),
+        );
+        assert!(result.is_err());
+    }
+}
