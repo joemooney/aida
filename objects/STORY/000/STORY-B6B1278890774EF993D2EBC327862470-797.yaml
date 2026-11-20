@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T14:26:38.102856555Z
+modified_at: 2026-11-20T14:28:04.479546267Z
 req_type: Story
 tags:
 - landing
@@ -645,6 +645,14 @@ comments:
   content: Commit 734a8839ae6 references this requirement
   created_at: 2026-11-20T14:26:38.102856555Z
   modified_at: 2026-11-20T14:26:38.102856555Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f95b-aa36-7ef2-a9f7-8b8ba43c95ce
+  author: joe
+  content: |
+    Integration seat 2026-11-20 06:4x: S3 is PR #4362 (s3-red-main-watch -> integration, head 734a8839ae6), STRICT review requested. It implements the signed sketch plus the flake-damping amendment: the episode opens with an urgent mail and one re-run of the failed jobs; the fix spec and operator notice wait for confirmation (the red survives the re-run, or 30 min); a red cleared by a green re-run is outcome=flake. Revert is recommended once per reason (unbuildable, smoke-fail, fix_window, needs-design), never performed automatically. No keep_merging gate (Q1), and a test asserts that no merge path reads the watch. It runs in both modes (Q2). The only setting is [landing] red_main.fix_window. check-ci-fast exit 0; ci:full added after the push run started.
+  created_at: 2026-11-20T14:28:04.479546267Z
+  modified_at: 2026-11-20T14:28:04.479546267Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
