@@ -60,7 +60,7 @@ Both `set` and `reconcile` change branch protection, so each needs either the op
 
 <!-- trace:STORY-2897 | ai:claude -->
 
-In both modes, AIDA watches the default branch's CI after each merge. The land loop and the auto-train worker check it on every pass, and `aida land watch` checks it once on demand.
+In both modes, AIDA watches the default branch's CI after each merge. The check runs as its own scheduled job, `land watch` every 5 minutes (enabled in this repository's `.aida/config.toml`), and `aida land watch` runs it once on demand. No landing path runs it, so the land loop and trains never wait on it.
 
 A commit is red when a check the CI-gated mode requires concludes as a failure on that commit. A cancelled check is not a failure, and neither is a check that is still running.
 
@@ -80,7 +80,7 @@ AIDA fixes forward by default. After confirmation it recommends a revert of the 
 
 A revert is an ordinary pull request with a normal review. The first green commit ends the episode, and AIDA mails that main is green again. A notice that cannot be delivered is retried on every pass until it is.
 
-Each watch call to git or the forge has a time limit, and so does the whole pass. A stalled fetch is reported, and the land loop or auto-train carries on.
+Each watch call to git or the forge has a time limit, and so does the whole pass and the scheduled job. A store write that would wait on another writer is skipped and retried on the next pass.
 
 `aida land metrics` reports, from `.aida/land/main-watch.jsonl`:
 

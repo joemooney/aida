@@ -18,8 +18,9 @@
 //!
 //! Boundedness: every git and forge call the live watch makes has null stdin
 //! and a timeout, the whole pass runs under a scoped deadline, and the watch
-//! lock is only ever tried, so a stalled fetch makes the watch report and
-//! return; it never stalls the land loop, the train tick or a dev build.
+//! lock is only ever tried. The watch runs only as its own scheduled job
+//! (`land watch`) or by hand: no landing path calls it, so nothing that
+//! merges can stall on it.
 //!
 //! State: `.aida/land/main-watch.json`; journal: `.aida/land/main-watch.jsonl`
 //! (append-only, read by `aida land metrics`).
@@ -47,8 +48,6 @@ pub(crate) const COMPILE_STEPS: &[&str] = &["Build ", "Check aida-cli"];
 pub(crate) const CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 /// The ceiling on a whole live pass (the TASK-3792 scoped deadline).
 pub(crate) const PASS_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
-/// How long the dev-build smoke hook tries for the watch lock.
-const SMOKE_LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 /// The tail of a job log the excerpt is taken from.
 const LOG_CAP: u64 = 1024 * 1024;
 
@@ -647,7 +646,9 @@ fn probe(
         let Some(run) = f.run_id.as_deref() else {
             continue;
         };
-        let key = format!("{run}:{}", f.attempt.unwrap_or(0));
+        // One key per failed job of a run attempt: sibling jobs that fail in
+        // the same run are read independently.
+        let key = format!("{run}:{}:{}", f.attempt.unwrap_or(0), f.name);
         if episode.evidence_keys.contains(&key) {
             continue;
         }
@@ -1165,7 +1166,7 @@ pub(crate) fn note_smoke_failure(root: &Path, sha: &str) -> Result<bool> {
     if !root.join(STATE).exists() {
         return Ok(false);
     }
-    let Some(_lock) = try_lock(root, SMOKE_LOCK_WAIT)? else {
+    let Some(_lock) = try_lock(root, std::time::Duration::ZERO)? else {
         anyhow::bail!("the red-main watch is busy; the smoke failure of {sha} was not recorded");
     };
     let mut state = read_state(root)?;
@@ -1704,8 +1705,9 @@ fn human_resolve_locked(storage: &aida_core::Storage, red_sha: &str) -> Result<(
     Ok(())
 }
 
-/// One pass with the production ports, for the land loop, the auto-train
-/// worker and `aida land watch`, bounded by [`PASS_BUDGET`].
+/// One pass with the production ports, for `aida land watch` (run by hand or
+/// by its own scheduled job; no landing path calls it), bounded by
+/// [`PASS_BUDGET`].
 pub(crate) fn live_pass(root: &Path) -> Result<Vec<String>> {
     crate::forge_lookup::with_forge_lookup_deadline(PASS_BUDGET, || {
         let policy = crate::landing_policy::load(root);

@@ -917,9 +917,11 @@ fn a_busy_watch_lock_is_skipped_not_awaited() {
 // Supporting pieces.
 // ---------------------------------------------------------------------------
 
-/// Merging continues while main is red: no merge decision reads the watch.
+/// Merging continues while main is red, and nothing that lands can stall
+/// on the watch: no merge decision reads it and no landing path calls it.
+/// It runs only as its own scheduled job and by hand (round-5 ruling).
 #[test]
-fn no_merge_path_reads_the_red_main_watch() {
+fn no_merge_or_landing_path_reads_or_calls_the_red_main_watch() {
     let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut offenders = Vec::new();
     let mut stack = vec![src.join("gate")];
@@ -930,10 +932,21 @@ fn no_merge_path_reads_the_red_main_watch() {
             "pr_train.rs",
             "pr_ship.rs",
             "land.rs",
+            "land_run.rs",
+            "auto_complete.rs",
+            "burndown_run.rs",
+            "upgrade_release.rs",
         ]
         .iter()
         .map(|f| src.join(f)),
     );
+    for entry in std::fs::read_dir(&src).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if name.starts_with("advisor_loop") && name.ends_with(".rs") {
+            stack.push(path);
+        }
+    }
     while let Some(path) = stack.pop() {
         if path.is_dir() {
             stack.extend(std::fs::read_dir(&path).unwrap().map(|e| e.unwrap().path()));
@@ -1193,7 +1206,7 @@ fn a_rerun_failing_again_has_its_new_attempt_probed() {
     run(dir.path(), &mut fake);
     let episode = state(dir.path()).episode.unwrap();
     assert!(
-        episode.evidence_keys.contains("20:2"),
+        episode.evidence_keys.contains("20:2:CI (lib-1)"),
         "{:?}",
         episode.evidence_keys
     );
@@ -1250,4 +1263,31 @@ fn a_torn_last_journal_line_is_skipped_and_the_replay_proceeds() {
         fake.mail_keys(),
         vec![format!("main-red-{}", sha(2)).as_str()]
     );
+}
+
+/// Round 5: sibling failed jobs of one run attempt are read independently.
+#[test]
+fn two_failing_jobs_in_one_run_both_get_their_evidence() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fake = Fake::default();
+    fake.push(1, "base (#1)", green("1"));
+    run(dir.path(), &mut fake);
+    fake.push(
+        2,
+        "two jobs fail (#2)",
+        vec![
+            check(BUILD, CheckOutcome::Failed, "77", 1),
+            check("CI (lib-0)", CheckOutcome::Failed, "77", 1),
+        ],
+    );
+    run(dir.path(), &mut fake);
+    let episode = state(dir.path()).episode.unwrap();
+    assert_eq!(episode.evidence.len(), 2, "{:?}", episode.evidence);
+    for job in [BUILD, "CI (lib-0)"] {
+        let found = episode.evidence.iter().find(|e| e.check == job).unwrap();
+        assert!(found.link.contains("77") && found.log_complete);
+        assert!(episode.evidence_keys.contains(&format!("77:1:{job}")));
+    }
+    let body = fake.mail(&format!("main-red-{}", sha(2)));
+    assert_eq!(body.matches("test foo ... FAILED").count(), 2, "{body}");
 }

@@ -1455,13 +1455,6 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
                 if let Err(error) = crate::now::write(&pass.root, &snapshot) {
                     eprintln!("the `aida now` snapshot was not written: {error:#}");
                 }
-                // trace:STORY-2897 | ai:claude
-                if !args.dry_run {
-                    match crate::main_watch::live_pass(&root) {
-                        Ok(watch) => notes.extend(watch),
-                        Err(error) => notes.push(format!("red-main watch did not run: {error:#}")),
-                    }
-                }
                 print!("{}", super::render(&pass.rows));
                 for note in &notes {
                     println!("  {note}");

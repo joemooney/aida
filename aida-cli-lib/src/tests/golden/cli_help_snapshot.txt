@@ -32000,8 +32000,8 @@ Commands:
   mode     Show or change the landing mode, keeping the forge's required checks in step with it
   watch    Check the default branch's CI once: report a red main, route a fix forward, and recommend
            a revert only when main does not build, fails the smoke test, outlasts the fix window or
-           needs a design decision. The land loop and the auto-train worker run the same check each
-           pass
+           needs a design decision. It also runs as its own scheduled job, never inside the land
+           loop or a train
   help     Print this message or the help of the given subcommand(s)
 
 Options:
@@ -32223,7 +32223,7 @@ Options:
 ===== aida land watch
 Check the default branch's CI once: report a red main, route a fix forward, and recommend a revert
 only when main does not build, fails the smoke test, outlasts the fix window or needs a design
-decision. The land loop and the auto-train worker run the same check each pass
+decision. It also runs as its own scheduled job, never inside the land loop or a train
 
 Usage: aida land watch [OPTIONS]
 
@@ -65385,7 +65385,7 @@ Working on aida itself
       "land",
       "watch"
     ],
-    "about": "Check the default branch's CI once: report a red main, route a fix forward, and recommend a revert only when main does not build, fails the smoke test, outlasts the fix window or needs a design decision. The land loop and the auto-train worker run the same check each pass",
+    "about": "Check the default branch's CI once: report a red main, route a fix forward, and recommend a revert only when main does not build, fails the smoke test, outlasts the fix window or needs a design decision. It also runs as its own scheduled job, never inside the land loop or a train",
     "flags": [
       {
         "name": "canonical-ids",
