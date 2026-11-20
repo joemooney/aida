@@ -346,6 +346,19 @@ pub fn with_store_write_lock_bounded<T>(root: &Path, f: impl FnOnce() -> Result<
     f()
 }
 
+/// [`with_store_write_lock`] that never waits: a lock another writer holds
+/// fails at once ("Busy"), so an observational caller can retry later
+/// instead of blocking its own loop.
+// trace:STORY-2897 | ai:claude
+pub fn with_store_write_lock_try<T>(root: &Path, f: impl FnOnce() -> Result<T>) -> Result<T> {
+    let guard = acquire_until(root, None, Some(Duration::ZERO))?;
+    if guard.is_outermost() {
+        crate::git_ops::ensure_store_hooks_supported(root)?;
+    }
+    crate::git_ops::ensure_store_write_safe(root)?;
+    f()
+}
+
 /// The store write lock held for a caller-scoped span, with the shared WORK
 /// transport admission entered first when this clone is enrolled (admission
 /// must precede the store and counter locks). Dropping it releases the lock,
