@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T21:42:23.178585Z
-modified_at: 2026-11-20T00:27:46.890126613Z
+modified_at: 2026-11-20T00:43:39.935196723Z
 req_type: Task
 tags:
 - fix-forward
@@ -334,6 +334,19 @@ comments:
   created_at: 2026-11-20T00:27:46.890123407Z
   modified_at: 2026-11-20T00:27:46.890123407Z
   session_id: 01a1f61e0ef3
+- id: 01a1f668-b61f-73d2-a19b-d8b919a2f70d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 35903ce883. Round 2.
+    - Finding 1 (exact-byte accounting): fixed. Every reclaim pass asserts that the overlay root holds only fixture-created entries, then that the freed bytes equal 16 x the fixture paths removed: 48, then 0 (holders live), 32, then 0 (repeat). A zeroed-accumulator mutation fails the test (left 0, right 48).
+    - Finding 2 (ci:full): the PR already has the ci:full label (added by the advisor); the full tier should run on the new head.
+    - Evidence: 20/20 lane-runner passes; fmt ok; check-store-writers ok.
+    - Residual: in this sandbox check-ci-fast fails at the Containment conformance Python gate (read-only /tmp, AF_UNIX denied). check-ratchets needs a cold build past the 60s cap. Both are left to CI. No production change.
+  created_at: 2026-11-20T00:43:39.935196723Z
+  modified_at: 2026-11-20T00:43:39.935196723Z
+  session_id: 01a1f65baa8b
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f5c3-790d-7e72-aad3-67032fd7c265
   author: joe
