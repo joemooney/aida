@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T06:20:24.786512208Z
+modified_at: 2026-11-20T13:24:25.546882318Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1191,6 +1191,13 @@ comments:
   content: 'advisor-121 23:22: REOPEN CONDITION PASSED, verified. BUG-2702 r2 (queue-rework round on the EXISTING PR #4354, dell1 binary 972c2f0) pushed 8655779c, and history shows InProgress -> Done at 23:15 with no manual call. With TASK-3161''s D4 (Done -> Completed at 21:29, no manual call), the D3+D4 lifecycle is evidenced in production for fresh and rework rounds. Manual completion calls are no longer needed for full-trailer completing pushes.'
   created_at: 2026-11-20T06:20:24.786512208Z
   modified_at: 2026-11-20T06:20:24.786512208Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f921-674e-7041-aee3-62366a23b5ae
+  author: joe
+  content: 'advisor-121 2026-11-20 06:25: D4 EDGE CASE (one occurrence, watching). BUG-2705 reached Done at its r1 push (04:03) and stayed Done; #4358 (full trailer) landed via train #4361 at ~05:49 while main was RED at 9025b1b0 (a flake, green again 06:00 at 78b43709). 30 min later it was still not Completed (manual call 06:25). It differs from tonight''s four D4 successes in two ways: (1) it merged while main was red; (2) a later rework round (r2, 04:17) pushed again after Done without a status transition. Check whether the landing scan skips or defers commits merged during a red main, or ignores a Done spec whose latest PR head came from a post-Done rework push.'
+  created_at: 2026-11-20T13:24:25.546882318Z
+  modified_at: 2026-11-20T13:24:25.546882318Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
