@@ -13,12 +13,12 @@ description: |
   2. `aida pr ship` on a busy admission waits up to a bounded time (configurable, default a few minutes) for the exclusive mode instead of failing on the first try_lock, and reports the holders and how long it waited if it gives up.
   3. Regression through the production path: with both loop workers running, an `aida pr ship` of an approved PR acquires admission within the bound. A control proves an in-progress review launch or train stack is never interrupted mid-operation.
   4. `aida advisor loops` gains a supported, audited way to drain or pause both workers' admission claims (so no operator or advisor ever needs to SIGTERM them), and `aida advisor loops status` shows each worker's claim age.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587336Z
-modified_at: 2026-11-20T15:03:08.809173588Z
+modified_at: 2026-11-20T15:03:51.315200795Z
 req_type: Bug
 tags:
 - admission
@@ -103,6 +103,13 @@ comments:
   modified_at: 2026-11-20T15:03:08.809173588Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f97c-3d13-7483-9dfc-42ddbeda7963
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: REQUEST CHANGES: three unmet claimed acceptance criteria and one additional settlement-progress defect. Read the entire 16-file pinned review diff against protected main 78b437097cbccc7025e7529f2f06ff0f092c8495 and landed tree aebfdb617fc81a21ea84b0e90baae52ab283d296; this verdict targets original PR head 36e1d02a7af0338feb8ff4c6de2f1ef92ecc5171. Used the generated review worksheet; all four criteria are claimed, with no declared slice or deferrals.. No triage reason was given.'
+  created_at: 2026-11-20T15:03:51.315196332Z
+  modified_at: 2026-11-20T15:03:51.315196332Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
@@ -134,6 +141,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1f97c-3d13-7483-9dfc-42c584da22a3
+  author: joe
+  timestamp: 2026-11-20T15:03:51.315181641Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 140977cdd550b1f043ea5a57eb4bb91e52211313
@@ -144,18 +160,3 @@ filed_at:
   vendor: claude
   session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    REQUEST CHANGES: three unmet claimed acceptance criteria and one additional settlement-progress defect. Read the entire 16-file pinned review diff against protected main 78b437097cbccc7025e7529f2f06ff0f092c8495 and landed tree aebfdb617fc81a21ea84b0e90baae52ab283d296; this verdict targets original PR head 36e1d02a7af0338feb8ff4c6de2f1ef92ecc5171. Used the generated review worksheet; all four criteria are claimed, with no declared slice or deferrals.
-    BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea: verified by source inspection of yields_to/register_intent, both workers' hold_admission/idle boundaries, and regression sources runnable with cargo test -p aida-cli-lib bug2703_waiting_exclusive_gets_in_once_shared_holders_yield and cargo test -p aida-cli-lib bug2703_ship_gets_admission_while_both_loop_workers_run. New shared claims defer to exclusive intent; existing loop claims yield between operations. This verifies the shared-claim starvation mechanism, not the missing full production-path coverage below.
-    BUG-b6b1278890774ef993d2ebc327862470-465.ac336622: unverified. Default 180-second configuration, typed retries and holder diagnostics exist and helper tests cover mode-lock contention, but blocking receipts.lock acquisitions/cleanup escape the bound (finding 1).
-    BUG-b6b1278890774ef993d2ebc327862470-465.acc625bf: unverified. Helper-thread admission tests and synthetic active-attempt controls do not exercise an approved PR through pr ship with both actual loop workers or a real in-progress review launch/train stack (finding 3).
-    BUG-b6b1278890774ef993d2ebc327862470-465.ac00712a: unverified. Drain/resume, bounded audited journal, expiration and supervisor withholding have source-level unit coverage (cargo test -p aida-cli-lib bug2703_drain); however loops status omits the train worker's age (finding 4). Finding 2 also identifies settlement maintenance suppressed while yielded/drained.
-    BUG-2703 (bug protocol): met; the diff touches aida-cli-lib/src/tests/task_1993_review_watch_tests.rs and the help snapshot, and adds inline unit tests. Supplied untraced-criteria list checked against this diff: helper coverage exists for ac6ca3ea, partial coverage for ac336622/ac00712a, and the required production regression for acc625bf is absent.
-    No local Cargo/build/test commands were run, per reviewer policy. Existing CI evidence: exact head unchanged; fast gates and merge-hold statuses succeeded, fast compilation was still running at inspection. CI pending at review time is not the reason for request-changes. All four actionable findings are retained; unmet-claimed-ac findings block under the supplied policy, and the ordinary p2 settlement finding is retained for canonical follow-up handling.
-  recovery_hint: address the review findings, move BUG-2703 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-20T15:02:47.583813675Z
