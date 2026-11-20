@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T20:00:12.636497857Z
+modified_at: 2026-11-20T20:38:04.883718894Z
 req_type: Story
 tags:
 - landing
@@ -788,6 +788,14 @@ comments:
   created_at: 2026-11-20T20:00:12.636497857Z
   modified_at: 2026-11-20T20:00:12.636497857Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1faae-6c62-77f0-a623-e9d377872633
+  author: joe
+  content: |
+    S3 #4362 final items pushed at 81cbe3ada1c, one commit (the three items only). F1: two-seat-protocol.md template master (synced; check-templates OK) gains a Landing modes section (both modes, when to choose each, red-main watch as scheduled `land watch` only); condition 3 and the merge-train/behind-main wording are now mode-conditional; docs/advanced/landing.md intro no longer says every PR goes through a train and says when to choose ci-gated. F2: `aida land watch` prints main_watch::status_line from the state file (red/confirmed/waiting with fix spec); never green while an episode is open; regression a_steady_confirmed_red_never_reports_green. F3: landing_policy::duration_text (90s -> 1m30s) used by config show; round-trip test. main_watch 45/45, story_1418_completion_seam 14/14, check-ci-fast exit 0; ci:full relabelled.
+  created_at: 2026-11-20T20:38:04.883718894Z
+  modified_at: 2026-11-20T20:38:04.883718894Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
