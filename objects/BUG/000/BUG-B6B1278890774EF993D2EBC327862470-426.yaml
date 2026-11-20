@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T19:31:52.403744108Z
+modified_at: 2026-11-20T19:32:08.045178405Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -137,6 +137,30 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes on BUG-2662. I reviewed all eight files in the landed diff against 012b95ef8904. The generated worksheet has no headed acceptance section, but the requirement description enumerates three criteria.. No triage reason was given.'
   created_at: 2026-11-20T19:31:52.403740543Z
   modified_at: 2026-11-20T19:31:52.403740543Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa71-da5d-7df1-bd38-52912b0c49fa
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2662):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ccaa61189cee
+    Recorded: 2026-11-20T19:29:10.870671984+00:00
+    Findings:
+    1. At the repeat check around line 3395, record_before is the current PR-wide body. The spec is stored on the event envelope and is never compared. On a PR covering A and B, after approving A, submitting the same summary, head and findings for B from the same reviewer can print unchanged and skip B’s first event, its binding and its follow-up delivery. Check the canonical event for the requested spec and destination, including its provenance. Add a two-spec regression.
+    2. The has_deferred_finding exception at line 3399 disables idempotence for every mixed refusal, including after successful delivery. A normal identical retry rebuilds recorded_at, so exact-body append deduplication does not help. Retry filing using the existing refusal body and preserve the single verdict event for both successful and failed first deliveries.
+    3. Even when repeat is true and the CLI prints unchanged, the requires_changes path still calls place_hold, whose placed and preserved branches both append a hold event. Reconcile missing protection on retry while skipping placement when the matching hold already stands. Assert the complete change ledger stays unchanged for a repeated refusal.
+    4. standing filters the change ledger to event.spec == spec, although PR-keyed verdict selection includes all applicable verdict labels. While A is filing follow-ups, a refusal recorded on the same PR under its change key or a sibling covered spec is invisible to append_one_standing. A can then become the newest PR verdict. Compare the effective change-wide verdict history under lock and test a concurrent differently labelled refusal.
+    5. Standing uses read_file/read_unbound, which convert read failures to empty vectors and silently discard malformed lines. Standing::admit accepts an empty or reduced final snapshot. A failed final read, including an unreadable by-spec file, can therefore authorize the stale append. Use fallible, validated snapshots and refuse if either observation is incomplete.
+    6. append_one_standing holds only the change lock while checking the unbound ledger. append_unbound_checked uses a separate by-spec lock. An unbound verdict can commit after the final read and before the approval append, defeating the new cross-ledger freshness check. Coordinate both locks in a consistent order through comparison and append, or compare a shared generation atomically.
+    7. The repeat path skips the write and subsequently tests only that some verdict is readable before clearing review markers and reporting success. A concurrent refusal after record_before was read can satisfy both presence checks, so the command reports an unchanged approval even though the standing verdict is now a refusal. Revalidate the exact current act and spec under the ledger lock before accepting a no-op.
+    8. Standing::admit does a linear Vec::contains search for each historical record, with deep JSON comparisons under the per-change writer lock. An unchanged history takes quadratic comparisons, and records themselves retain round history. Use a linear check or indexed event identities with a bounded snapshot.
+    9. At a human terminal a new persistent receipt is allocated before detecting an identical repeat. The repeat discards its ID and leaves an unreferenced receipt per invocation. Validate and reuse the standing receipt for the same act before allocating a replacement.
+    10. The human-at-TTY receipt exception in repeats_recorded_act is specific to the original operator scenario, but the new acceptance tests pass a VerifiedReviewer grant. Exercise two operator approvals with distinct generated receipt IDs, and a repeat after the standing receipt is missing or invalid. Assert event counts and which receipt remains authoritative.
+    11. The opening comment on record_verdict_at still says a pending barrier is persisted before touching the sweep and retained after failure. Update it to distinguish direct approvals from mixed refusals and launcher collection.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T19:32:07.901801218Z
+  modified_at: 2026-11-20T19:32:07.901801218Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
