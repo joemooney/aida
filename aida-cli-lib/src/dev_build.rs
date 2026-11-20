@@ -460,6 +460,13 @@ pub(crate) fn plan_promotion_at(
             state.untracked
         ));
     }
+    // A selected green commit is the only commit that may go live, whatever
+    // HEAD's distance from origin/main; `--allow-dirty` does not override it.
+    // trace:BUG-2687 | ai:claude
+    if let Some(why) = green_head_mismatch(state, green_commit) {
+        reasons.push(why);
+        return PromotionPlan::Refuse { reasons };
+    }
     if reasons.is_empty() {
         return PromotionPlan::Promote { warnings };
     }
@@ -489,6 +496,29 @@ fn green_behind_ok<'a>(state: &CheckoutState, green_commit: Option<&'a str>) -> 
         && green.len() == head.len()
         && head.eq_ignore_ascii_case(green))
     .then_some(green)
+}
+
+/// PURE: why HEAD may not be promoted as the selected green commit:
+/// `None` when no commit was selected or HEAD is exactly it (full SHA,
+/// case-insensitive).
+// trace:BUG-2687 | ai:claude
+pub(crate) fn green_head_mismatch(
+    state: &CheckoutState,
+    green_commit: Option<&str>,
+) -> Option<String> {
+    let green = green_commit?.trim();
+    let head = state.head.as_deref().map(str::trim).unwrap_or_default();
+    let matches = crate::git_arg_guard::is_hex_sha(green)
+        && green.len() >= 40
+        && green.len() == head.len()
+        && head.eq_ignore_ascii_case(green);
+    (!matches).then(|| {
+        let head = if head.is_empty() { "unreadable" } else { head };
+        format!(
+            "HEAD is {head}, not the selected green commit {}; only that commit may be promoted",
+            if green.is_empty() { "(empty)" } else { green }
+        )
+    })
 }
 
 /// The CI gate of a live promotion under `[landing] promote_live_binary_from`:
@@ -837,6 +867,22 @@ pub(crate) fn run_dev_build(
         None => {}
     }
 
+    // The build stamps whatever HEAD is when cargo starts: re-check, right
+    // before it, that HEAD is still the selected green commit.
+    // trace:BUG-2687 | ai:claude
+    if promoting {
+        let moved = match green {
+            Some(_) => green_head_mismatch(&steps.probe(&layout.repo)?, green),
+            None => None,
+        };
+        if let Some(why) = moved {
+            return Err(PromotionRefused(format!(
+                "the checkout moved before the build started, so nothing was built or \
+                 promoted: {why}"
+            ))
+            .into());
+        }
+    }
     steps.build(layout).map_err(|e| {
         anyhow!("build failed: {e:#}\nThe live binaries were not touched.\nHint: {CLEAN_HINT}")
     })?;
@@ -960,9 +1006,12 @@ pub(crate) fn run_dev_build(
             }
             // trace:STORY-1646 | ai:claude
             let head = state.head.clone().unwrap_or_default();
+            // The staged build must be the selected green commit itself, not
+            // merely whatever HEAD became. trace:BUG-2687 | ai:claude
+            let expected = green.map_or_else(|| head.clone(), |g| g.trim().to_ascii_lowercase());
             if !opts.allow_dirty {
                 let staged = steps.version_sha(&incoming.join("aida"));
-                if let Err(why) = check_staged_sha(staged.as_deref(), &head) {
+                if let Err(why) = check_staged_sha(staged.as_deref(), &expected) {
                     let _ = std::fs::remove_dir_all(&incoming);
                     bail!(
                         "the staged build does not match HEAD, so it was not promoted: {why}.\n\
@@ -978,7 +1027,7 @@ pub(crate) fn run_dev_build(
             let policy = steps.promote_from(&layout.repo);
             if policy != crate::landing_policy::PromoteFrom::CleanMain {
                 let staged = steps.version_sha(&incoming.join("aida"));
-                if let Some(why) = green_main_staged_refusal(staged.as_deref(), &head) {
+                if let Some(why) = green_main_staged_refusal(staged.as_deref(), &expected) {
                     let _ = std::fs::remove_dir_all(&incoming);
                     return Err(PromotionRefused(format!(
                         "{why}; the live binaries were not touched (`--allow-dirty` does not \

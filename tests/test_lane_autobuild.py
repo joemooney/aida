@@ -150,6 +150,35 @@ class AutobuildTest(unittest.TestCase):
         self.assertEqual(self.git(self.repo, "rev-parse", "HEAD"), green)
         self.assertNotIn(older, self.queried())
 
+    def fail_query(self, sha):
+        # The query prints a green-looking answer, then exits nonzero: an
+        # unreadable result is never taken as green. trace:BUG-2687 | ai:claude
+        (self.home / "hook").mkdir(exist_ok=True)
+        (self.home / "hook" / sha).write_text("echo 'completed success'\nexit 1\n")
+
+    def test_unreadable_tip_ci_passes_over_to_the_older_green_commit(self):
+        green = self.advance("policy = 1", "policy = 2")
+        tip = self.advance("policy = 2", "policy = 3")
+        self.fail_query(tip)
+        log = self.run_cron()
+        self.assertIn(f"promoted and verified: {green}", log)
+        self.assertIn(f"passed over: {tip[:12]} CI unknown (query failed, exit 1)", log)
+        self.assertEqual(self.git(self.repo, "rev-parse", "HEAD"), green)
+        self.assertEqual((self.home / "live").read_text().strip(), green)
+        self.assertEqual(self.queried(), [tip, green])
+
+    def test_unreadable_ci_everywhere_promotes_nothing(self):
+        mid = self.advance("policy = 1", "policy = 2")
+        tip = self.advance("policy = 2", "policy = 3")
+        self.fail_query(tip)
+        self.fail_query(mid)
+        log = self.run_cron()
+        self.assertIn("no green commit newer than live", log)
+        self.assertIn(f"{mid[:12]} CI unknown", log)
+        self.assertEqual(self.git(self.repo, "rev-parse", "HEAD"), self.head)
+        self.assertEqual((self.home / "live").read_text(), self.head)
+        self.assertFalse((self.home / "calls").exists())
+
     def test_nothing_green_newer_than_live_skips(self):
         mid = self.advance("policy = 1", "policy = 2")
         tip = self.advance("policy = 2", "policy = 3")

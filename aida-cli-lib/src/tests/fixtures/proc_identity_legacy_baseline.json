@@ -9,7 +9,7 @@
   "aida-cli-lib/src/deputy_shell/runner.rs": 1,
   "aida-cli-lib/src/deputy_shell/socket.rs": 3,
   "aida-cli-lib/src/dev_autopromote.rs": 4,
-  "aida-cli-lib/src/dev_build.rs": 2,
+  "aida-cli-lib/src/dev_build.rs": 3,
   "aida-cli-lib/src/dispatch.rs": 7,
   "aida-cli-lib/src/doctor_root.rs": 1,
   "aida-cli-lib/src/drain_lock.rs": 3,

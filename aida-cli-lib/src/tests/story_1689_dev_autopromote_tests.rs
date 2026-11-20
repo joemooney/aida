@@ -1675,3 +1675,171 @@ fn the_cron_green_commit_must_be_a_full_sha() {
         assert!(cron_green_commit(Some(OsStr::new(bad))).is_err(), "{bad}");
     }
 }
+
+/// Fake build steps whose HEAD moves to `to` (still level with origin/main)
+/// after `stay_for` probes, or once the build has run; the staged build
+/// reports whatever HEAD was when cargo ran (BUG-2687).
+struct MovesTo {
+    inner: FakeBuild,
+    to: &'static str,
+    stay_for: Option<usize>,
+    probes: usize,
+    built_at: Option<String>,
+}
+
+impl MovesTo {
+    fn head(&self) -> String {
+        let moved = match self.stay_for {
+            Some(n) => self.probes > n,
+            None => self.inner.built,
+        };
+        if moved {
+            self.to.into()
+        } else {
+            self.inner.head.clone()
+        }
+    }
+}
+
+impl BuildSteps for MovesTo {
+    fn probe(&mut self, repo: &Path) -> Result<CheckoutState> {
+        self.probes += 1;
+        let mut s = self.inner.probe(repo)?;
+        s.head = Some(self.head());
+        Ok(s)
+    }
+    fn guard(&mut self, r: &Path, b: &Path, w: bool) -> Result<()> {
+        self.inner.guard(r, b, w)
+    }
+    fn path_aida(&mut self) -> Option<PathBuf> {
+        None
+    }
+    fn clean_full(&mut self, l: &DevLayout) -> Result<()> {
+        self.inner.clean_full(l)
+    }
+    fn build(&mut self, l: &DevLayout) -> Result<()> {
+        if self.built_at.is_none() {
+            self.built_at = Some(self.head());
+        }
+        self.inner.build(l)
+    }
+    fn smoke(&mut self, r: &Path, a: &Path, s: &Path) -> Result<()> {
+        self.inner.smoke(r, a, s)
+    }
+    fn version_sha(&mut self, _a: &Path) -> Option<String> {
+        self.built_at.as_deref().map(|h| h[..12].to_string())
+    }
+    fn restart_mcp(&mut self, l: &DevLayout) -> Result<()> {
+        self.inner.restart_mcp(l)
+    }
+    fn restart_mail_wake(&mut self, o: &mut dyn std::io::Write) -> Result<()> {
+        self.inner.restart_mail_wake(o)
+    }
+    fn rerecord_retention(&mut self, l: &DevLayout) -> RetentionRerecord {
+        self.inner.rerecord_retention(l)
+    }
+    fn confirm(&mut self, p: &str) -> bool {
+        self.inner.confirm(p)
+    }
+}
+
+fn launched_older(f: &Fixture) {
+    put_state(
+        f,
+        Phase::Running,
+        None,
+        false,
+        &chrono::Utc::now().to_rfc3339(),
+    );
+    let mut state = read_state(&f.layout.live_dir).unwrap();
+    state.sha = OLDER.into();
+    write_state(&f.layout.live_dir, &state).unwrap();
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn a_clean_head_level_with_origin_main_must_still_be_the_chosen_green_commit() {
+    use crate::dev_build::{plan_promotion_at, PromotionPlan};
+    // HEAD is TARGET == origin/main (0 ahead, 0 behind), but OLDER was chosen.
+    let level = CheckoutState {
+        head: Some(TARGET.into()),
+        ..clean_main()
+    };
+    for allow_dirty in [false, true] {
+        let PromotionPlan::Refuse { reasons } =
+            plan_promotion_at(&level, false, allow_dirty, Some(OLDER))
+        else {
+            panic!("HEAD {TARGET} promoted for chosen {OLDER} (allow_dirty={allow_dirty})");
+        };
+        assert!(
+            reasons
+                .iter()
+                .any(|r| r.contains(TARGET) && r.contains(OLDER)),
+            "{reasons:?}"
+        );
+    }
+    // HEAD exactly the chosen commit, level with origin/main, promotes.
+    let chosen = CheckoutState {
+        head: Some(OLDER.into()),
+        ..clean_main()
+    };
+    assert!(matches!(
+        plan_promotion_at(&chosen, false, false, Some(OLDER)),
+        PromotionPlan::Promote { .. }
+    ));
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn head_fast_forwarded_before_the_build_refuses_without_building() {
+    let f = fixture();
+    launched_older(&f);
+    // The child's own check and the build's first probe see OLDER; the
+    // checkout is fast-forwarded to TARGET (== origin/main) before cargo runs.
+    let mut steps = MovesTo {
+        inner: FakeBuild::at(OLDER, false),
+        to: TARGET,
+        stay_for: Some(2),
+        probes: 0,
+        built_at: None,
+    };
+    let e = run_child(&f.layout, OLDER, 99, &mut steps, &mut Vec::new()).unwrap_err();
+    assert!(is_refusal(&e), "{e:#}");
+    let msg = format!("{e:#}");
+    assert!(msg.contains(OLDER) && msg.contains(TARGET), "{msg}");
+    assert!(
+        steps.built_at.is_none(),
+        "the build ran at {:?}",
+        steps.built_at
+    );
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+        LIVE_SHA
+    );
+}
+
+// trace:BUG-2687 | ai:claude
+#[test]
+fn head_fast_forwarded_during_the_build_refuses_a_matching_staged_tip() {
+    let f = fixture();
+    launched_older(&f);
+    // Cargo stamps TARGET, and the final probe agrees on TARGET (level with
+    // origin/main): the swap still refuses because TARGET was not chosen.
+    let mut steps = MovesTo {
+        inner: FakeBuild::at(OLDER, false),
+        to: TARGET,
+        stay_for: None,
+        probes: 0,
+        // Cargo started just after the move, so the staged build is TARGET.
+        built_at: Some(TARGET.into()),
+    };
+    let e = run_child(&f.layout, OLDER, 99, &mut steps, &mut Vec::new()).unwrap_err();
+    assert!(is_refusal(&e), "{e:#}");
+    let msg = format!("{e:#}");
+    assert!(msg.contains(OLDER) && msg.contains(TARGET), "{msg}");
+    assert_eq!(
+        read_promotion_meta(&f.layout.live_dir).unwrap().sha,
+        LIVE_SHA
+    );
+    assert!(!f.layout.live_dir.join(".incoming").exists());
+}

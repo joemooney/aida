@@ -91,9 +91,18 @@ for commit in "${line[@]}"; do
         if (( ${#passed[@]} == 0 )); then target=$live; fi
         break
     fi
-    ci=$(timeout -k 5 30 gh run list -R "$gh_repo" --branch main --workflow CI --commit "$commit" \
+    # An unreadable CI result (query error or timeout) is unknown: passed
+    # over like a red one, and the walk goes on to the next older commit.
+    # Only a successful query reporting success selects a commit.
+    # trace:BUG-2687 | ai:claude
+    if ci=$(timeout -k 5 30 gh run list -R "$gh_repo" --branch main --workflow CI --commit "$commit" \
         --limit 1 --json status,conclusion --jq '.[0] // empty | [.status,.conclusion] | join(" ")' \
-        2>>"$log_file") || fail "CI query failed for $commit"
+        2>>"$log_file"); then
+        :
+    else
+        rc=$?
+        ci="CI unknown (query failed, exit $rc)"
+    fi
     if [[ "$ci" == 'completed success' ]]; then
         target=$commit
         break
