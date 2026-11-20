@@ -12,7 +12,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T16:26:44.973890478Z
-modified_at: 2026-11-20T02:20:40.927570824Z
+modified_at: 2026-11-20T02:23:41.457390800Z
 req_type: Task
 tags:
 - carried-from:BUG-2696
@@ -29,6 +29,21 @@ comments:
   created_at: 2026-11-20T02:20:13.093086245Z
   modified_at: 2026-11-20T02:20:13.093086245Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6c4-7829-7ee3-82f3-a90d57004f44
+  author: joe
+  content: |-
+    Product 19:22: codex fresh-start lane queued on dell1, brief:
+    # Brief: TASK-3161 (fresh start; advisor-121 19:21: APPROVED, drain, codex OK)
+
+    Make scripts/check-doc-paths.py (STORY-1651) ignore doc-path references inside Rust test-only code: files under src/**/tests/** and tests/**, and #[cfg(test)] modules. Production code and docs must still be checked.
+    Motivation: two false fast-gate failures today ("docs/plans/p.md" in BUG-2696 r4, "docs/x.md" in STORY-2884 #4347), each costing a fix lane.
+    Regressions BOTH ways: a docs/ literal inside a test module is ignored, and the same literal in production code is still flagged.
+    Implement only unmet ACs in the spec description. Trailer (TASK-3161) if complete, otherwise (Refs TASK-3161).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T02:23:41.457390800Z
+  modified_at: 2026-11-20T02:23:41.457390800Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f594-1a3f-7ca0-9d49-1718e585e981
