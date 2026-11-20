@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T23:33:38.175003298Z
-modified_at: 2026-11-20T23:35:28.821448430Z
+modified_at: 2026-11-20T23:35:43.633584733Z
 req_type: Bug
 tags:
 - cargo-wrapper
@@ -23,6 +23,14 @@ tags:
 - linked:TASK-1780
 - linked:TASK-3133
 - testing
+comments:
+- id: 01a1fb51-0ec3-73b2-b4b7-395b0e599c80
+  author: joe
+  content: 'advisor-121 16:50: APPROVED, drain, codex (gpt-6.2-astra). Keep the skip''s default (TASK-1780 wanted it) but make it unmistakable: a distinct exit code, a stderr banner naming AIDA_CARGO_FORCE_BUILD=1, and callers that rely on exit 0 updated in the same PR.'
+  created_at: 2026-11-20T23:35:43.633584733Z
+  modified_at: 2026-11-20T23:35:43.633584733Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fb50-9cb2-7cb1-a49c-94ac147e2401
   author: joe
