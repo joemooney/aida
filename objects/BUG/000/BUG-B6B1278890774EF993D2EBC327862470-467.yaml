@@ -2,29 +2,14 @@ id: 01a1f873-4929-7be2-8bde-20874c4661ce
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-467
 agreed_id: BUG-2705
 title: 'Seat-clone lanes exit unpublished: ''fast gate needs a clean committed seat'' because the host post-exit commit of the lane''s uncommitted edits did not run'
-description: |
-  Seat-clone lanes exit unpublished with "fast_gate=fail: fast gate needs a clean committed seat": the host post-exit commit did not run.
-
-  Evidence (product seat, 2026-11-19/20): three lane rounds lost to the same cause: STORY-2884 DOCFIX (19:19), STORY-2884 r4 (02:03, +24/-31
-  uncommitted), BUG-2697 r2 (02:04, +225/-38 uncommitted). Lanes are instructed to leave edits uncommitted for host publication
-  ("Native seats must leave edits uncommitted for host publication", lane_fast_gate.rs:779); the host is meant to commit them after exit via
-  ship_from_seat::post_exit_commit_reported (lane_fast_gate.rs:~500) before snapshot() requires a clean committed seat (:509-525). In these
-  seat-clone lanes that commit did not happen, so the gate refused, and the lane log shows only "fast_gate=fail" with no reason.
-
-  Acceptance:
-  1. When a lane exits with uncommitted edits in its seat, the host post-exit commit runs before the clean-seat check; if it is skipped or
-     fails, the gate reports the exact reason (which condition skipped it, or the git error) in the lane log and the publication record,
-     not a bare fast_gate=fail.
-  2. Root-cause the skipped commit in these runs (e.g. the `clean` argument, lease/spec mismatch, a seat-clone path that bypasses it) and fix it.
-  3. Regression through the real lane exit path (scripts/lane-run.sh-driven or its Rust entry): a seat-clone lane exits with uncommitted
-     edits, the host commits them, the fast gate runs on the committed tree, and the head publishes.
-  Lane-publication path: Claude lane, STRICT review. High priority (costs a lane round per occurrence).
+description: "Seat-clone lanes exit unpublished with \"fast_gate=fail: fast gate needs a clean committed seat\": the host post-exit commit did not run.\n\nEvidence (product seat, 2026-11-19/20): three lane rounds lost to the same cause: STORY-2884 DOCFIX (19:19), STORY-2884 r4 (02:03, +24/-31\nuncommitted), BUG-2697 r2 (02:04, +225/-38 uncommitted). Lanes are instructed to leave edits uncommitted for host publication\n(\"Native seats must leave edits uncommitted for host publication\", lane_fast_gate.rs:779); the host is meant to commit them after exit via\nship_from_seat::post_exit_commit_reported (lane_fast_gate.rs:~500) before snapshot() requires a clean committed seat (:509-525). In these\nseat-clone lanes that commit did not happen, so the gate refused, and the lane log shows only \"fast_gate=fail\" with no reason.\n\nAcceptance:\n1. When a lane exits with uncommitted edits in its seat, the host post-exit commit runs before the clean-seat check; if it is skipped or\n   fails, the gate\
+  \ reports the exact reason (which condition skipped it, or the git error) in the lane log and the publication record,\n   not a bare fast_gate=fail.\n2. Root-cause the skipped commit in these runs (e.g. the `clean` argument, lease/spec mismatch, a seat-clone path that bypasses it) and fix it.\n3. Regression through the real lane exit path (scripts/lane-run.sh-driven or its Rust entry): a seat-clone lane exits with uncommitted\n   edits, the host commits them, the fast gate runs on the committed tree, and the head publishes.\nLane-publication path: Claude lane, STRICT review. High priority (costs a lane round per occurrence).\n"
 status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-20T10:14:27.369204398Z
-modified_at: 2026-11-20T11:03:13.475016786Z
+created_at: 2026-11-20 10:14:27.369204+00:00
+modified_at: 2026-11-20 11:03:13.475016+00:00
 req_type: Bug
 tags:
 - fast-gate
@@ -34,164 +19,191 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1f89f-d9bf-7bf2-8102-caf320823aa7
-  created_at: 2026-11-20T11:03:13.474986297Z
+  created_at: 2026-11-20 11:03:13.474986+00:00
   created_by: dirtlab
 comments:
 - id: 01a1f877-3d4a-7661-b523-906098f76e0a
   author: joe
-  content: |-
-    Product 03:18: Claude fresh-start lane queued on dell1, brief:
+  content: 'Product 03:18: Claude fresh-start lane queued on dell1, brief:
+
     # Brief: BUG-2705 (fresh start; advisor-121 03:16: APPROVED, drain, HIGH, Claude, STRICT)
 
+
     Seat-clone lanes leave edits uncommitted, as instructed ("Native seats must leave edits uncommitted for host publication", lane_fast_gate.rs:779), and the host is meant to commit them after exit (ship_from_seat::post_exit_commit_reported, called around lane_fast_gate.rs:500) before snapshot() requires a clean seat (lane_fast_gate.rs:509-525). Tonight that post-exit commit did NOT run in three seat-clone lanes (STORY-2884 docfix 19:19, STORY-2884 r4 02:03, BUG-2697 r2 02:04). Each ended "fast_gate=fail: fast gate needs a clean committed seat", and each lost a round. Evidence and seat paths are in the spec comments and on STORY-2884/BUG-2697.
+
     Implement the acceptance criteria in the spec description:
-    (1) Root-cause and fix why post_exit_commit_reported is skipped or returns NotASeat/Failed for seat-clone (host_recorded_clone) seats, so the lane's uncommitted edits are committed before the clean-seat check.
+
+    (1) Root-cause and fix why post_exit_commit_reported is skipped or returns NotASeat/Failed for seat-clone (host_recorded_clone) seats, so the lane''s uncommitted edits are committed before the clean-seat check.
+
     (2) When the post-exit commit is skipped or fails, the gate reports the exact reason (in the lane log and implementer exit line), never just "fast_gate=fail".
-    (3) Regression through the REAL lane exit path for a seat-clone lane that leaves edits uncommitted: they're committed, the fast gate runs on the committed head, and publication proceeds.
+
+    (3) Regression through the REAL lane exit path for a seat-clone lane that leaves edits uncommitted: they''re committed, the fast gate runs on the committed head, and publication proceeds.
+
     Trailer (BUG-2705) if complete, otherwise (Refs BUG-2705).
+
     IMPORTANT until this lands: COMMIT your own work before finishing, so your seat is clean for the host gate.
-    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
-  created_at: 2026-11-20T10:18:34.436577267Z
-  modified_at: 2026-11-20T10:18:34.436577267Z
+
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.'
+  created_at: 2026-11-20 10:18:34.436577+00:00
+  modified_at: 2026-11-20 10:18:34.436577+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f87e-4584-7f81-bb39-80b844247ccb
   author: dirtlab
-  content: |-
-    ## Implementer approach
+  content: '## Implementer approach
+
 
     ### Root cause (from code + lane-results cf10881d / 72f44b2d)
+
     The failing lanes were Claude lanes. `vendors::headless::host_publishes_implementer` is Codex-only, so for Claude, `standalone_implementer` never calls `lane_fast_gate::native` and so never calls `post_exit_commit_reported`. These lanes self-publish. On a fast-gate repair round, the queued repair brief (`lane_fast_gate::repair_prompt`, used by `pushed_inner` too) tells every lane "Native seats must leave edits uncommitted for host publication". The Claude lane obeyed, nothing committed its edits, and `pushed_inner` → `snapshot()` errored. `infrastructure()` then printed `fast_gate=fail: fast gate needs a clean committed seat` (marker stays `fail` because repair_used). The final lane line and the lane-result detail ("lane did not publish a new head") carried no reason.
 
+
     ### Acceptance criteria and evidence
+
     - AC2 (fix), **unit**: `repair_prompt` is lane-aware. Host-published lanes are told to leave edits uncommitted; self-published lanes are told to commit (and publish) their fix. Test in `lane_fast_gate` tests.
+
     - AC1/AC3 (host commit), **command-level/unit through the real exit helper**: a self-published seat-clone lane that exits cleanly with uncommitted edits gets the host post-exit commit (`post_exit_commit_reported`, with a vendor-correct `[AI:<tool>]` tag) before `publish_unpushed` and the pushed fast gate. The work is published, and the gate runs on the committed head. Tested via a factored exit-step helper using `with_post_exit_step`, plus a real seat-clone fixture where the existing harness allows it.
+
     - AC1 (reason), **unit**: the fast-gate receipt records the infrastructure reason. `result_line` appends it, the dirty-seat error names the dirty paths and says the host commit did not run, a NotASeat skip in `native` prints why, and the lane-result `detail` gets the reason appended.
 
+
     ### Expected files
+
     - `aida-cli-lib/src/lane_fast_gate.rs`
+
     - `aida-cli-lib/src/ship_from_seat.rs`
+
     - `aida-cli-lib/src/standalone_implementer.rs`
+
     - `aida-cli-lib/src/lane_result.rs`
+
     - tests under `aida-cli-lib/src/tests/`
 
+
     ### Ambiguities / conflicts as questions
-    - Should a self-published lane whose child exited non-zero also get a host salvage commit? Proposed: no. Keep the uncommitted-seat stall and report its reason (a failed exit must not publish).
-  created_at: 2026-11-20T10:26:27.332086018Z
-  modified_at: 2026-11-20T10:26:27.332086018Z
+
+    - Should a self-published lane whose child exited non-zero also get a host salvage commit? Proposed: no. Keep the uncommitted-seat stall and report its reason (a failed exit must not publish).'
+  created_at: 2026-11-20 10:26:27.332086+00:00
+  modified_at: 2026-11-20 10:26:27.332086+00:00
   session_id: 01a1f87af1a2
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f89f-05fa-7ef2-b131-c1c62b618a29
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: f2b9e1b344 (diff origin/main...HEAD, 10 files)
 
+
     ### Acceptance evidence
+
     - AC2 root cause: Claude lanes self-publish (`vendors::headless::host_publishes_implementer` is Codex-only), so `lane_fast_gate::native` and `post_exit_commit_reported` never ran for them. The repair brief queued by `pushed_inner` still said "Native seats must leave edits uncommitted". The repair round obeyed, and `pushed_inner` → `snapshot` → `infrastructure` printed `fast_gate=fail: fast gate needs a clean committed seat` (marker `fail` because repair_used). Lane results cf10881d (461, BUG-2697 r2) and 72f44b2d (791, STORY-2884 r4) match: "lane did not publish a new head".
+
     - Fix: `repair_prompt(output, host_published)`. Self-published lanes are told to commit and publish. Test: `fast_gate_repair_prompt_tells_only_host_published_lanes_to_leave_edits_uncommitted`.
-    - AC1/AC3: `standalone_implementer::self_published_seat_exit` is now the function the lane's exit calls. It runs `commit_leftovers` (the host post-exit commit, tagged with the lane's vendor) before `publish_unpushed` and the pushed fast gate. Test `bug_2705_claude_seat_clone_leftovers_are_committed_published_and_gated` uses a real recorded seat clone with a pending edit: the host commit is `[AI:claude] … (BUG-1)`, the tree is clean, run_from pushes the branch to origin and opens the PR, and `pushed_head_attempt` gates the committed head.
+
+    - AC1/AC3: `standalone_implementer::self_published_seat_exit` is now the function the lane''s exit calls. It runs `commit_leftovers` (the host post-exit commit, tagged with the lane''s vendor) before `publish_unpushed` and the pushed fast gate. Test `bug_2705_claude_seat_clone_leftovers_are_committed_published_and_gated` uses a real recorded seat clone with a pending edit: the host commit is `[AI:claude] … (BUG-1)`, the tree is clean, run_from pushes the branch to origin and opens the PR, and `pushed_head_attempt` gates the committed head.
+
     - AC1 reasons: the fast-gate receipt records `reason`. `result_line` appends `(reason: …)`, and the drain prints it via `marker_with_reason`. The dirty-seat refusal lists the paths. A NotASeat skip prints why. The lane-result `detail` and the exit line carry the host-commit skip/failure reason. Tests: `fast_gate_refusal_reason_reaches_the_result_line_until_the_next_reservation`, `fast_gate_dirty_seat_refusal_names_a_bounded_list_of_paths`, `bug_2705_leftovers_the_host_does_not_commit_carry_their_reason`, `bug_2705_failed_host_commit_reason_reaches_the_exit`.
 
+
     ### Probes
+
     - Cross-reference: the retag strips any leading `[AI:…]` generically. A declared (`aida ship -m`) message is never retagged.
+
     - Multiplicity: 0 dirty paths means NotNeeded. N paths: the list is capped at 5 plus "and N more". An unreadable seat state is a reason, not a commit.
+
     - Adversarial: multi-line git errors are collapsed to one line on the result line (tested). A lane that pushed this round and then left stray edits is not committed (reason given), so no unpublished host commit can appear behind a published head.
+
     - Authority: the host commit still goes through `pending_commit_preflight` (recorded seat, lease, live-pid, punt/hold veto, trailer check). Punt, hold, no-change and failed exits never commit (tested). No test was weakened.
 
+
     ### Validation
+
     - Targeted (lane runner): `story_2539`, `bug_2705`, `fast_gate_`, `task_2712_lane`, `task_2712_post_exit`, `task_2902`: all ok (3 + 59).
+
     - `make check-ci-fast` via lane runner: rc=0. `check-store-writers.py`: ok (new `append_detail` row classified host_only like its siblings).
+
     - Fix made during review: the vendor-literal ratchet rejected `"codex"` literals in ship_from_seat. The retag is now vendor-agnostic.
 
+
     ### Residual risks
+
     - Drain paths (`queue_cmd/work.rs`, `session/headless.rs`) gain the reason, but not the host leftover commit. The failing runs were standalone lanes.
-    - `task_2712_bg_lane_commits_pending_work_after_clean_exit` and `…failed_exit_commits_salvage_with_refs` failed in the lane runner. Their post-exit step never ran because `exit_clear` was false, which looks environment-dependent (the process scan under bwrap), and that code path is unchanged. I did not confirm they also fail on main.
-  created_at: 2026-11-20T11:02:13.754136421Z
-  modified_at: 2026-11-20T11:02:13.754136421Z
+
+    - `task_2712_bg_lane_commits_pending_work_after_clean_exit` and `…failed_exit_commits_salvage_with_refs` failed in the lane runner. Their post-exit step never ran because `exit_clear` was false, which looks environment-dependent (the process scan under bwrap), and that code path is unchanged. I did not confirm they also fail on main.'
+  created_at: 2026-11-20 11:02:13.754136+00:00
+  modified_at: 2026-11-20 11:02:13.754136+00:00
   session_id: 01a1f87af1a2
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f89f-9513-7142-8710-e29716bd093a
   author: aida-publication-done
   content: Implementer push a12563e598a3 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20T11:02:50.387206141Z
-  modified_at: 2026-11-20T11:02:50.387206141Z
+  created_at: 2026-11-20 11:02:50.387206+00:00
+  modified_at: 2026-11-20 11:02:50.387206+00:00
   session_id: 01a1f87af1a2
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1f8aa-5d44-7c60-bf91-258c757464fd
   author: joe
-  content: |-
-    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 04:20): two unmet ACs at a12563e (diagnostics lost on early-return and pushed-then-failed paths; the regression bypasses the real exit driver and gate). Claude, gated on the live lane exiting.
-
-    # Rework brief: BUG-2705 / PR #4358, round 2 of 4
-
-    Advisor: claude-advisor-121, 2026-11-20 04:20 MST. Head reviewed: a12563e. Lane: CLAUDE, STRICT. COMMIT YOUR OWN WORK BEFORE FINISHING.
-    1. [unmet AC] standalone_implementer.rs:1929-1978: the post-exit skip/failure diagnostics (leftover_note, gate reason) are appended only after
-       empty_rework::inspect/route and only for Kind::FailedAfterStart. Persist them on EVERY terminal publication path, including when
-       empty_rework returns early because the old PR head is still blocked (review/check/conflict, lines ~1959-1965) and when a lane pushed and
-       then failed. Regression: a refused host commit plus a blocked old PR, with the reason present in the lane log and the publication record.
-    2. [unmet AC, test gap] bug_2705_seat_clone_leftover_tests.rs:50-146 injects post_exit/publish/republished closures and a hard-coded gate pass.
-       Add a regression through the ACTUAL exit driver (standalone_implementer::run or the entry lane-run.sh uses) with a real seat that has
-       uncommitted edits and the configured fast gate (pushed()/snapshot()): the host commits the edits, the gate runs on the committed tree, and
-       the head publishes; plus a case where the commit is refused and the reason is reported.
-    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
-  created_at: 2026-11-20T11:14:24.762008663Z
-  modified_at: 2026-11-20T11:14:24.762008663Z
+  content: "AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 04:20): two unmet ACs at a12563e (diagnostics lost on early-return and pushed-then-failed paths; the regression bypasses the real exit driver and gate). Claude, gated on the live lane exiting.\n\n# Rework brief: BUG-2705 / PR #4358, round 2 of 4\n\nAdvisor: claude-advisor-121, 2026-11-20 04:20 MST. Head reviewed: a12563e. Lane: CLAUDE, STRICT. COMMIT YOUR OWN WORK BEFORE FINISHING.\n1. [unmet AC] standalone_implementer.rs:1929-1978: the post-exit skip/failure diagnostics (leftover_note, gate reason) are appended only after\n   empty_rework::inspect/route and only for Kind::FailedAfterStart. Persist them on EVERY terminal publication path, including when\n   empty_rework returns early because the old PR head is still blocked (review/check/conflict, lines ~1959-1965) and when a lane pushed and\n   then failed. Regression: a refused host commit plus a blocked old PR, with the reason present in the lane log and the publication record.\n2.\
+    \ [unmet AC, test gap] bug_2705_seat_clone_leftover_tests.rs:50-146 injects post_exit/publish/republished closures and a hard-coded gate pass.\n   Add a regression through the ACTUAL exit driver (standalone_implementer::run or the entry lane-run.sh uses) with a real seat that has\n   uncommitted edits and the configured fast gate (pushed()/snapshot()): the host commits the edits, the gate runs on the committed tree, and\n   the head publishes; plus a case where the commit is refused and the reason is reported.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push."
+  created_at: 2026-11-20 11:14:24.762008+00:00
+  modified_at: 2026-11-20 11:14:24.762008+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f8aa-d29e-7112-a197-42de5e662d9b
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full sweep: inspected all 10 files and the complete 1,032-line diff as landed on protected base b41fd684a30a08a22ee1ac9d315ec965f5a3c9d1 (landed tree f761590ac6696af343a63ad61f9b0957afef9202), attesting original head a12563e598a3365aade386ef54b04118db3aa6e8. Request changes for two unmet claimed acceptance criteria. No local test/build commands ran, per reviewer policy. CI pending at review time: fast gates passed, fast compile running; pending CI is not the reason for this verdict.. No triage reason was given.'
-  created_at: 2026-11-20T11:15:07.038253365Z
-  modified_at: 2026-11-20T11:15:07.038253365Z
+  created_at: 2026-11-20 11:15:07.038253+00:00
+  modified_at: 2026-11-20 11:15:07.038253+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f8ab-0b6e-7b30-818f-412b3614222b
   author: joe
-  content: |-
-    REVIEW FINDINGS TO ADDRESS (BUG-2705):
+  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2705):
+
     Verdict: CHANGES REQUESTED
+
     Reviewed commit: a12563e598a3
+
     Recorded: 2026-11-20T11:13:57.309708186+00:00
+
     Findings:
-    1. [P2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/standalone_implementer.rs; lines=1929-1978] Persist post-exit skip/failure diagnostics on every terminal publication path (BUG-2705/ac5c461a). The new append_detail loop executes only after empty_rework::inspect/route and only for Kind::FailedAfterStart. In the motivating rework case, a refused host commit leaves the old PR head and dirty seat; when that PR still has a blocking review, failed required check, or conflict, empty_rework returns at lines 1959-1965 with a record containing only the old PR blockage, losing leftover_note and the gate reason. Separately, a lane that pushed and then left dirty edits explicitly receives the already-published skip note, but settle_outcome/finish_outcome classify it Pushed, so that record also omits the note. The text on stderr/result lines does not satisfy the required durable publication record. Attach both host and gate diagnostics before every terminal return, independently of result kind, and cover these cases by asserting the persisted receipt details.
-    2. [P2; blocking_tier=unmet-claimed-ac; class=test-gap; file=aida-cli-lib/src/tests/bug_2705_seat_clone_leftover_tests.rs; lines=50-146] Add the required regression through the actual lane exit driver and gate (BUG-2705/ac6038cd). bug_2705_claude_seat_clone_leftovers_are_committed_published_and_gated directly calls self_published_seat_exit with independently injected post_exit/publish/republished closures, bypassing standalone_implementer::run and its production wiring. After publication it separately calls pushed_head_attempt with a closure that merely reads HEAD and returns a hard-coded pass; neither pushed()/snapshot() nor the configured fast-check command runs. Thus deleting the production helper call, moving it after the gate, or breaking the gate snapshot would leave this regression passing. Exercise scripts/lane-run.sh or its real Rust entry with a child leaving edits uncommitted, observe the production host commit, have a real controlled fast-check inspect the committed tree/head, and assert publication and the terminal receipt. The other helper tests can remain, but do not establish this completing criterion.
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-20T11:15:21.582659077Z
-  modified_at: 2026-11-20T11:15:21.582659077Z
+
+    1. [P2; blocking_tier=unmet-claimed-ac; file=aida-cli-lib/src/standalone_implementer.rs; lines=1929-1978] Persist post-exit skip/failure diagnostics on every terminal publication path (BUG-2705/ac5c461a). The new append_detail loop executes only after empty_rework::inspect/route and only for Kind::FailedAfterStart. In the motivating rework case, a refused host commit leaves the old PR head and dirty seat; when that PR still has a blocking review, failed required check, or conflict, empty_rework returns at lines 1959-1965 with a record containing only the old PR blockage, losing leftover_note and the gate reason. Separately, a lane that pushed and then left dirty edits explicitly receives the already-published skip note, but settle_outcome/finish_outcome classify it Pushed, so that record also omits the note. The text on stderr/result lines does not satisfy the required durable publication record. Attach both host and gate diagnostics before every terminal return, independently of result
+    kind, and cover these cases by asserting the persisted receipt details.
+
+    2. [P2; blocking_tier=unmet-claimed-ac; class=test-gap; file=aida-cli-lib/src/tests/bug_2705_seat_clone_leftover_tests.rs; lines=50-146] Add the required regression through the actual lane exit driver and gate (BUG-2705/ac6038cd). bug_2705_claude_seat_clone_leftovers_are_committed_published_and_gated directly calls self_published_seat_exit with independently injected post_exit/publish/republished closures, bypassing standalone_implementer::run and its production wiring. After publication it separately calls pushed_head_attempt with a closure that merely reads HEAD and returns a hard-coded pass; neither pushed()/snapshot() nor the configured fast-check command runs. Thus deleting the production helper call, moving it after the gate, or breaking the gate snapshot would leave this regression passing. Exercise scripts/lane-run.sh or its real Rust entry with a child leaving edits uncommitted, observe the production host commit, have a real controlled fast-check inspect the committed tree/head,
+    and assert publication and the terminal receipt. The other helper tests can remain, but do not establish this completing criterion.
+
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
+  created_at: 2026-11-20 11:15:21.582659+00:00
+  modified_at: 2026-11-20 11:15:21.582659+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f8ab-60b8-7f20-b014-d51eca7a21f6
   author: joe
-  content: |-
-    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 04:15):
-    # Rework brief: BUG-2705 / PR #4358, round 2 of 4
-
-    Advisor: claude-advisor-121, 2026-11-20 04:20 MST. Head reviewed: a12563e. Lane: CLAUDE, STRICT. COMMIT YOUR OWN WORK BEFORE FINISHING.
-    1. [unmet AC] standalone_implementer.rs:1929-1978: the post-exit skip/failure diagnostics (leftover_note, gate reason) are appended only after
-       empty_rework::inspect/route and only for Kind::FailedAfterStart. Persist them on EVERY terminal publication path, including when
-       empty_rework returns early because the old PR head is still blocked (review/check/conflict, lines ~1959-1965) and when a lane pushed and
-       then failed. Regression: a refused host commit plus a blocked old PR, with the reason present in the lane log and the publication record.
-    2. [unmet AC, test gap] bug_2705_seat_clone_leftover_tests.rs:50-146 injects post_exit/publish/republished closures and a hard-coded gate pass.
-       Add a regression through the ACTUAL exit driver (standalone_implementer::run or the entry lane-run.sh uses) with a real seat that has
-       uncommitted edits and the configured fast gate (pushed()/snapshot()): the host commits the edits, the gate runs on the committed tree, and
-       the head publishes; plus a case where the commit is refused and the reason is reported.
-    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
-  created_at: 2026-11-20T11:15:31.170222863Z
-  modified_at: 2026-11-20T11:15:31.170222863Z
+  content: "AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 04:15):\n# Rework brief: BUG-2705 / PR #4358, round 2 of 4\n\nAdvisor: claude-advisor-121, 2026-11-20 04:20 MST. Head reviewed: a12563e. Lane: CLAUDE, STRICT. COMMIT YOUR OWN WORK BEFORE FINISHING.\n1. [unmet AC] standalone_implementer.rs:1929-1978: the post-exit skip/failure diagnostics (leftover_note, gate reason) are appended only after\n   empty_rework::inspect/route and only for Kind::FailedAfterStart. Persist them on EVERY terminal publication path, including when\n   empty_rework returns early because the old PR head is still blocked (review/check/conflict, lines ~1959-1965) and when a lane pushed and\n   then failed. Regression: a refused host commit plus a blocked old PR, with the reason present in the lane log and the publication record.\n2. [unmet AC, test gap] bug_2705_seat_clone_leftover_tests.rs:50-146 injects post_exit/publish/republished closures and a hard-coded gate pass.\n   Add a regression through the\
+    \ ACTUAL exit driver (standalone_implementer::run or the entry lane-run.sh uses) with a real seat that has\n   uncommitted edits and the configured fast gate (pushed()/snapshot()): the host commits the edits, the gate runs on the committed tree, and\n   the head publishes; plus a case where the commit is refused and the reason is reported.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push."
+  created_at: 2026-11-20 11:15:31.170222+00:00
+  modified_at: 2026-11-20 11:15:31.170222+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f8ab-971e-70f2-bbcc-77e15f9dd22d
   author: joe
   content: 'Product 04:15: R2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-467. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
-  created_at: 2026-11-20T11:15:45.202126105Z
-  modified_at: 2026-11-20T11:15:45.202126105Z
+  created_at: 2026-11-20 11:15:45.202126+00:00
+  modified_at: 2026-11-20 11:15:45.202126+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f8ab-a8c2-7061-97ea-156f8a413cd8
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-467` at head `a12563e598a3365aade386ef54b04118db3aa6e8`.'
+  created_at: 2026-11-20 11:16:01.858572+00:00
+  modified_at: 2026-11-20 11:16:01.858572+00:00
+  session_id: 01a1f87af1a2
 history:
 - id: 01a1f874-487d-7913-ba35-94353334404c
   author: joe
-  timestamp: 2026-11-20T10:15:32.733524756Z
+  timestamp: 2026-11-20 10:15:32.733524+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
@@ -200,20 +212,20 @@ history:
     new_value: Approved
 - id: 01a1f874-9192-77a3-ac4d-71cbe1165791
   author: joe
-  timestamp: 2026-11-20T10:15:51.442754690Z
+  timestamp: 2026-11-20 10:15:51.442754+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
 - id: 01a1f87b-2acf-7480-8599-14755ee23bb9
   author: aida-session-start
-  timestamp: 2026-11-20T10:23:03.887368858Z
+  timestamp: 2026-11-20 10:23:03.887368+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f89f-9513-7142-8710-e28eadd4cb19
   author: aida-publication-done
-  timestamp: 2026-11-20T11:02:50.387204601Z
+  timestamp: 2026-11-20 11:02:50.387204+00:00
   session_id: 01a1f87af1a2
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -222,13 +234,13 @@ history:
     new_value: Done
 - id: 01a1f89f-f610-7590-a2f4-59d265dbf122
   author: dirtlab
-  timestamp: 2026-11-20T11:03:15.216832261Z
+  timestamp: 2026-11-20 11:03:15.216832+00:00
   session_id: 01a1f87af1a2
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1f8a9-d7ef-7571-9e4d-46b3aac934a2
   author: aida-orchestrator
-  timestamp: 2026-11-20T11:14:02.863603857Z
+  timestamp: 2026-11-20 11:14:02.863603+00:00
   session_id: 01a1f8a68013
   changes:
   - field_name: status
@@ -236,7 +248,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1f8aa-d29e-7112-a197-42c53c62969f
   author: joe
-  timestamp: 2026-11-20T11:15:07.038234522Z
+  timestamp: 2026-11-20 11:15:07.038234+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
