@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:25:22.503984255Z
-modified_at: 2026-11-20T05:42:31.664091470Z
+modified_at: 2026-11-20T06:01:27.624933140Z
 req_type: Bug
 tags:
 - landing
@@ -179,6 +179,19 @@ comments:
   created_at: 2026-11-20T05:40:48.709195871Z
   modified_at: 2026-11-20T05:40:48.709195871Z
   session_id: 01a1f73a92b0
+- id: 01a1f78b-a948-7772-8cd9-420c1bffabd0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8655779c70 (round 2, advisor-narrowed design).
+    Findings addressed: P1 x2 (commit-range provenance, numeric aliases): the branch-ID demotion and the PrGateSubject provenance plumbing are removed outright; mandate_ship.rs, approval.rs, gate_state_cmd.rs, review_launch.rs match main except the test module. No commit-range or alias logic changes. P2: regression bug_2702_promotion_pr_is_covered_and_unknown_spec_ids_still_refuse runs mandate_ship_cover_for_ship (the ship entry) with the production forge transport (review_pr_transport_fixture, path-isolated) over real fixture commits, a re-validated reviewer-seat grant approval at head, an anchored advisor shipper and the active mandate.
+    Acceptance: AC1 [behavioral-test] extract_branch_spec_ids filters to built-in spec-type prefixes (pr_ship.rs:204); used by pr_gate_subject, ship_gate_known_ids, corpus hints, pr_train, release (bug_2702_branch_spec_ids_tests). AC2 [behavioral-test] satisfied as narrowed: a branch token that is not spec-typed is never extracted; every extracted id keeps SpecsUnresolved (case b: story-998-promo refuses). AC3 [behavioral-test] case a returns the real mandate ID; case c (title STORY-999) refuses SpecsUnresolved. Sensitivity: a run built before the pr_service fix failed case a with SpecsUnresolved.
+    Validation: cargo test -p aida-cli-lib --lib bug_2702 (4 passed); filters mandate/pr_train/trailer_coverage/ship_gate (715 passed); aida-ci-guards (51 passed); fmt, store-writers, portability, crate-glob, gate-dependency, exec-context, trace-header, executable-fixture, structural guards all clean. make check-ci-fast not run as one call (exceeds the 60s lane cap); its relevant gates were run individually.
+    Residual risk: projects with custom (non-built-in) type prefixes no longer get spec IDs from branch names; title/trailer/trace still name them, and a PR naming no spec still refuses SpecsUnresolved (fail closed).
+  created_at: 2026-11-20T06:01:27.624933140Z
+  modified_at: 2026-11-20T06:01:27.624933140Z
+  session_id: 01a1f77a1ea9
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f73a-c324-7321-9f94-4127ab5cc9cb
   author: aida-session-start
