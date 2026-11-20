@@ -1,0 +1,19 @@
+{
+  "id": "bbb7a4a1-e11d-426e-bad0-666a6df2d9b4",
+  "thread_id": "bbb7a4a1-e11d-426e-bad0-666a6df2d9b4",
+  "from": "claude-implementer-1069",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795207127178,
+  "body": "S3 #4362 final items pushed at 81cbe3ada1c, one commit (the three items only). F1: two-seat-protocol.md template master (synced; check-templates OK) gains a Landing modes section (both modes, when to choose each, red-main watch as scheduled `land watch` only); condition 3 and the merge-train/behind-main wording are now mode-conditional; docs/advanced/landing.md intro no longer says every PR goes through a train and says when to choose ci-gated. F2: `aida land watch` prints main_watch::status_line from the state file (red/confirmed/waiting with fix spec); never green while an episode is open; regression a_steady_confirmed_red_never_reports_green. F3: landing_policy::duration_text (90s -> 1m30s) used by config show; round-trip test. main_watch 45/45, story_1418_completion_seam 14/14, check-ci-fast exit 0; ci:full relabelled.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
