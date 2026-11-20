@@ -12,12 +12,12 @@ description: |
   2. Every class (a) test is made hermetic: it builds its own temp AIDA home, grant store, mailbox and git roots, and never reads the operator's live ones. The test asserts nothing about the invoking host's seats or grants.
   3. After the fix, the same filtered command passes 3 consecutive runs in a dell1 lane job and 3 on the primary host, with no class (a) failures. Post the job ids here.
   4. Class (b) failures are linked to BUG-2623, not fixed here.
-status: InProgress
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T19:07:49.547444237Z
+modified_at: 2026-11-20T19:08:19.682530318Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -311,6 +311,15 @@ history:
 - id: 01a1f997-5bcb-7433-8b2b-8c183d6f063d
   author: joe
   timestamp: 2026-11-20T15:33:28.651304474Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
+- id: 01a1fa5c-4879-7c03-a836-ffdd29777a4a
+  author: joe
+  timestamp: 2026-11-20T19:08:34.297298227Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
   changes:
   - field_name: status
     old_value: InProgress
