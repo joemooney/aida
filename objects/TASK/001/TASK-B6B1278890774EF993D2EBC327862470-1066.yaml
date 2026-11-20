@@ -8,7 +8,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-11T12:18:24.079664768Z
-modified_at: 2026-11-19T21:45:28.260804566Z
+modified_at: 2026-11-20T14:16:00.217132728Z
 req_type: Task
 relationships:
 - rel_type: BlockedBy
@@ -181,6 +181,20 @@ comments:
     A reference merge (commit b82066836029, `(Refs TASK-3786)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-19T21:45:28.260795801Z
   modified_at: 2026-11-19T21:45:28.260795801Z
+- id: 01a1f950-a4a1-7290-a369-db31ce8d481b
+  author: joe
+  content: |-
+    Product 07:16: codex lane queued on dell1 (advisor 07:15 scope), brief:
+    # Brief: TASK-3786 (advisor-121 07:15: scoped remainder, approved + drain; codex)
+
+    Scope (advisor 07:15): the pr_cmd/ directory split. #4309 extracted only pr_service. Mechanical move; no behaviour change; keep the public paths and trace comments; update scripts/store-writers.toml for moved writer sites. Trailer (TASK-3786) if it completes the spec, else (Refs TASK-3786).
+
+    Implement ONLY this remaining scope; earlier slices are on main (9025b1b0fe4  b8206683602  ).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T14:16:00.217132728Z
+  modified_at: 2026-11-20T14:16:00.217132728Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ca8b-aa1b-7b03-af0b-8473eae5689d
   author: joe
