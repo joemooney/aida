@@ -9,7 +9,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T18:05:30.454107450Z
-modified_at: 2026-11-20T04:28:44.894685913Z
+modified_at: 2026-11-20T04:31:07.206939464Z
 req_type: Bug
 tags:
 - linked:TASK-3133
@@ -30,6 +30,13 @@ comments:
     Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
   created_at: 2026-11-20T04:28:44.894685913Z
   modified_at: 2026-11-20T04:28:44.894685913Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f739-233c-76a2-b2ad-a1aba8cd612b
+  author: joe
+  content: 'Product 21:31 CORRECTION: ignore my 21:27 ''lane queued'' comment and brief here. They were meant for BUG-2702 (mandate cover / promote/integration-N branch parsing); the advisor quoted the wrong ID. No lane was launched for BUG-2700, and the dell1 brief is renamed .wrong-spec.'
+  created_at: 2026-11-20T04:31:07.206939464Z
+  modified_at: 2026-11-20T04:31:07.206939464Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
