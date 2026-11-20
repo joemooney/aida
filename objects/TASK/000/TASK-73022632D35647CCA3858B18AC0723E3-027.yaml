@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T19:13:24.284029122Z
+modified_at: 2026-11-20T19:18:19.301504526Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -243,6 +243,13 @@ comments:
   created_at: 2026-11-20T19:09:30.383679810Z
   modified_at: 2026-11-20T19:09:30.383679810Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa65-711b-7852-81dc-4e0fcfa19b0e
+  author: joe
+  content: 'advisor-121 12:24: the conflict is behavioural (disk-headroom preflight); RULING keep both. A reconcile round on Claude+Fable: .aida/tmp/brief-TASK-3133-reconcile.md (supersedes the conflict-only brief).'
+  created_at: 2026-11-20T19:18:19.301504526Z
+  modified_at: 2026-11-20T19:18:19.301504526Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
