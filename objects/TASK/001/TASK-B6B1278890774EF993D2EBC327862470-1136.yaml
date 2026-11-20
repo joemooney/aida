@@ -8,17 +8,27 @@ description: |
   - AC7c LANE-OUTCOME: treat an explicit post-exit routing event or queued work as follow-up, so no false "nothing routed it" (F6).
   - AC7d STALE-CLAIM: inventory all admission-blocking shared records (coordination leases plus drain/solo lock claims via list_lock_claims), and do not drop an unresolved blocker just for age (F7).
   Each comes with regressions. Builds on the STORY-2906 guard once #4372 lands. Vendor-neutral. Claude lane, standard review.
-status: Draft
+status: Approved
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T17:17:45.032744607Z
+modified_at: 2026-11-20T17:19:07.363168719Z
 req_type: Task
 tags:
 - landing
 - linked:STORY-2906
 - throughput
+history:
+- id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
+  author: joe
+  timestamp: 2026-11-20T17:19:07.363160802Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
   branch: main
