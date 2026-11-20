@@ -19,17 +19,23 @@ description: |
   3. Regression through the real lane exit path (scripts/lane-run.sh-driven or its Rust entry): a seat-clone lane exits with uncommitted
      edits, the host commits them, the fast gate runs on the committed tree, and the head publishes.
   Lane-publication path: Claude lane, STRICT review. High priority (costs a lane round per occurrence).
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T10:14:27.369204398Z
-modified_at: 2026-11-20T10:26:27.332086018Z
+modified_at: 2026-11-20T11:03:13.475016786Z
 req_type: Bug
 tags:
 - fast-gate
 - lanes
 - publication
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f89f-d9bf-7bf2-8102-caf320823aa7
+  created_at: 2026-11-20T11:03:13.474986297Z
+  created_by: dirtlab
 comments:
 - id: 01a1f877-3d4a-7661-b523-906098f76e0a
   author: joe
@@ -75,6 +81,43 @@ comments:
   modified_at: 2026-11-20T10:26:27.332086018Z
   session_id: 01a1f87af1a2
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f89f-05fa-7ef2-b131-c1c62b618a29
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f2b9e1b344 (diff origin/main...HEAD, 10 files)
+
+    ### Acceptance evidence
+    - AC2 root cause: Claude lanes self-publish (`vendors::headless::host_publishes_implementer` is Codex-only), so `lane_fast_gate::native` and `post_exit_commit_reported` never ran for them. The repair brief queued by `pushed_inner` still said "Native seats must leave edits uncommitted". The repair round obeyed, and `pushed_inner` → `snapshot` → `infrastructure` printed `fast_gate=fail: fast gate needs a clean committed seat` (marker `fail` because repair_used). Lane results cf10881d (461, BUG-2697 r2) and 72f44b2d (791, STORY-2884 r4) match: "lane did not publish a new head".
+    - Fix: `repair_prompt(output, host_published)`. Self-published lanes are told to commit and publish. Test: `fast_gate_repair_prompt_tells_only_host_published_lanes_to_leave_edits_uncommitted`.
+    - AC1/AC3: `standalone_implementer::self_published_seat_exit` is now the function the lane's exit calls. It runs `commit_leftovers` (the host post-exit commit, tagged with the lane's vendor) before `publish_unpushed` and the pushed fast gate. Test `bug_2705_claude_seat_clone_leftovers_are_committed_published_and_gated` uses a real recorded seat clone with a pending edit: the host commit is `[AI:claude] … (BUG-1)`, the tree is clean, run_from pushes the branch to origin and opens the PR, and `pushed_head_attempt` gates the committed head.
+    - AC1 reasons: the fast-gate receipt records `reason`. `result_line` appends `(reason: …)`, and the drain prints it via `marker_with_reason`. The dirty-seat refusal lists the paths. A NotASeat skip prints why. The lane-result `detail` and the exit line carry the host-commit skip/failure reason. Tests: `fast_gate_refusal_reason_reaches_the_result_line_until_the_next_reservation`, `fast_gate_dirty_seat_refusal_names_a_bounded_list_of_paths`, `bug_2705_leftovers_the_host_does_not_commit_carry_their_reason`, `bug_2705_failed_host_commit_reason_reaches_the_exit`.
+
+    ### Probes
+    - Cross-reference: the retag strips any leading `[AI:…]` generically. A declared (`aida ship -m`) message is never retagged.
+    - Multiplicity: 0 dirty paths means NotNeeded. N paths: the list is capped at 5 plus "and N more". An unreadable seat state is a reason, not a commit.
+    - Adversarial: multi-line git errors are collapsed to one line on the result line (tested). A lane that pushed this round and then left stray edits is not committed (reason given), so no unpublished host commit can appear behind a published head.
+    - Authority: the host commit still goes through `pending_commit_preflight` (recorded seat, lease, live-pid, punt/hold veto, trailer check). Punt, hold, no-change and failed exits never commit (tested). No test was weakened.
+
+    ### Validation
+    - Targeted (lane runner): `story_2539`, `bug_2705`, `fast_gate_`, `task_2712_lane`, `task_2712_post_exit`, `task_2902`: all ok (3 + 59).
+    - `make check-ci-fast` via lane runner: rc=0. `check-store-writers.py`: ok (new `append_detail` row classified host_only like its siblings).
+    - Fix made during review: the vendor-literal ratchet rejected `"codex"` literals in ship_from_seat. The retag is now vendor-agnostic.
+
+    ### Residual risks
+    - Drain paths (`queue_cmd/work.rs`, `session/headless.rs`) gain the reason, but not the host leftover commit. The failing runs were standalone lanes.
+    - `task_2712_bg_lane_commits_pending_work_after_clean_exit` and `…failed_exit_commits_salvage_with_refs` failed in the lane runner. Their post-exit step never ran because `exit_clear` was false, which looks environment-dependent (the process scan under bwrap), and that code path is unchanged. I did not confirm they also fail on main.
+  created_at: 2026-11-20T11:02:13.754136421Z
+  modified_at: 2026-11-20T11:02:13.754136421Z
+  session_id: 01a1f87af1a2
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f89f-9513-7142-8710-e29716bd093a
+  author: aida-publication-done
+  content: Implementer push a12563e598a3 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T11:02:50.387206141Z
+  modified_at: 2026-11-20T11:02:50.387206141Z
+  session_id: 01a1f87af1a2
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f874-487d-7913-ba35-94353334404c
   author: joe
@@ -98,6 +141,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f89f-9513-7142-8710-e28eadd4cb19
+  author: aida-publication-done
+  timestamp: 2026-11-20T11:02:50.387204601Z
+  session_id: 01a1f87af1a2
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a1f89f-f610-7590-a2f4-59d265dbf122
+  author: dirtlab
+  timestamp: 2026-11-20T11:03:15.216832261Z
+  session_id: 01a1f87af1a2
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 888f8b76a6d53dfb64f5d852d4490682608f7b6a

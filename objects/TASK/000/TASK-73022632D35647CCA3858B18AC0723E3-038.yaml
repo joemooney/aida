@@ -1,0 +1,29 @@
+id: 01a1f89f-3f8c-7963-9ef5-b12c4fa230ad
+spec_id: TASK-73022632d35647cca3858b18ac0723e3-038
+title: task_2712 codex bg post-exit tests fail inside the lane job runner (exit scan never clears)
+description: |
+  In the lane job runner (cargo test inside bubblewrap), story_2254_codex_bg_supervisor_tests::task_2712_bg_lane_commits_pending_work_after_clean_exit and task_2712_bg_lane_failed_exit_commits_salvage_with_refs fail with "the post-exit step ran once: left 0". agent_codex_background::post_exit_seat_commit returns before the step because exit_clear is false: the process-group exit scan cannot prove the lane over. That is likely PID-namespace visibility under bwrap. BUG-2705 did not touch that path (the hook still runs first in post_exit_commit_reported_as), but the implementer did not confirm the tests also fail on main. If they do, mark them environment-gated or fix the scan for lane runners so they can't hide regressions.
+
+  Raised by the implementer while working BUG-2705.
+  Branch: bug-b6b1278890774ef993d2ebc327862470-467  ·  Commit: f2b9e1b344  (PR link added on merge)
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T11:02:28.492620503Z
+modified_at: 2026-11-20T11:02:28.492620503Z
+req_type: Task
+tags:
+- from-implementer:BUG-2705
+- kind:bug-spotted
+- severity:minor
+- tests
+filed_at:
+  code_sha: f2b9e1b344592e301fa1910b8f0a5f865430f8ae
+  branch: bug-b6b1278890774ef993d2ebc327862470-467
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 888f8b76a6
+  vendor: claude
+  session: 01a1f87af1a2
+  harness_version: 2.1.319 (Claude Code)

@@ -1,0 +1,47 @@
+id: 01a1f89f-d9bf-7bf2-8102-caf320823aa7
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-178
+title: 'Review PR-4358: [AI:claude] fix(lanes): host-commit a self-publishing seat lane''s leftover edits and name every fast-gate refusal (BUG-2705)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f87a`) for branch `bug-b6b1278890774ef993d2ebc327862470-467`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4358>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-467` → `main`
+
+  ## Covers
+
+  - BUG-2705
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4358` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T11:03:07.967120643Z
+modified_at: 2026-11-20T11:03:10.753561499Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1f873-4929-7be2-8bde-20874c4661ce
+  created_at: 2026-11-20T11:03:10.753527691Z
+  created_by: dirtlab
+history:
+- id: 01a1f89f-eb88-76c2-8a53-28b1795bedfe
+  author: dirtlab
+  timestamp: 2026-11-20T11:03:12.520613746Z
+  session_id: 01a1f87af1a2
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: a12563e598a3365aade386ef54b04118db3aa6e8
+  branch: bug-b6b1278890774ef993d2ebc327862470-467
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 888f8b76a6
+  vendor: claude
+  session: 01a1f87af1a2
+  harness_version: 2.1.319 (Claude Code)
