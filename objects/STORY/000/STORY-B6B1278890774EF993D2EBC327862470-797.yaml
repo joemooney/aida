@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T17:44:17.163253372Z
+modified_at: 2026-11-20T17:44:41.275731876Z
 req_type: Story
 tags:
 - landing
@@ -735,6 +735,29 @@ comments:
   created_at: 2026-11-20T17:37:42.122579452Z
   modified_at: 2026-11-20T17:37:42.122579452Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa0f-ac0a-7243-80c1-c70263082dd5
+  author: joe
+  content: |-
+    CAP EXCEPTION + DESIGN RULING (advisor-121, 10:50): S3 round 4 at 2513492 left two items. Round 5 is granted for EXACTLY these: (1) decouple the watch from every landing path, so it runs only as its own scheduled job plus manual  (removes the P1 stall class by construction; supersedes the sketch's per-land_run-pass trigger); (2) add the job id to the evidence key. If not clean, PARK.
+
+    # CAP EXCEPTION brief: STORY-2897 S3 / PR #4362, round 5 (FINAL; exactly two items)
+
+    Advisor: claude-advisor-121, 2026-11-20 10:50 MST. Head reviewed: 2513492. Round 4 closed 3 of 5; two remain. DESIGN RULING for the P1 (supersedes
+    the "runs once per land_run pass" line of the signed sketch):
+    1. [P1] DECOUPLE the watch from every landing path. Remove the main_watch calls from land_run and from the supervised train tick (and anywhere
+       else a merge or landing path calls it). The watch runs ONLY as its own scheduled substrate job (a [[schedule.jobs]] entry running
+       `aida land watch --once` every 5 min, enabled in this project's config, with the code default preserving current behaviour) plus the manual
+       `aida land watch`. With no landing caller, an unbounded store or git operation inside a watch pass can never stall landing; the scheduler's
+       own job timeout bounds the pass. Keep the zero-wait store-lock try and pending retry. Update the test that no merge path reads the watch
+       so it asserts no landing path CALLS it either. dev_build's note_smoke_failure must use a bounded try for the watch lock (never wait).
+    2. [P2] main_watch.rs:650-670: evidence freshness key = (run_id, attempt, JOB id); a sibling failing job in the same run is probed
+       independently. Regression: two failing jobs in one run, so both get links and excerpts.
+    Nothing else. cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. COMMIT. Push. A STRICT review of the delta only.
+    If this is not clean, the advisor PARKS S3 and files the remainder.
+  created_at: 2026-11-20T17:44:41.275731876Z
+  modified_at: 2026-11-20T17:44:41.275731876Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
