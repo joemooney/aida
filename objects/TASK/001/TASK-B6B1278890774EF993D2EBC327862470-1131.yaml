@@ -15,12 +15,18 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:16:46.260567298Z
-modified_at: 2026-11-20T16:14:05.655442783Z
+modified_at: 2026-11-20T16:14:49.823799190Z
 req_type: Task
 tags:
 - crate-split
 - linked:TASK-3786
 - refactor
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f9bc-ec72-7843-8190-c6e20ba9dafa
+  created_at: 2026-11-20T16:14:49.823780647Z
+  created_by: dirtlab
 comments:
 - id: 01a1f98c-1265-7300-838b-1db5f364ab20
   author: joe
@@ -98,6 +104,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1f9bd-42eb-7c92-b15b-207bc33c30df
+  author: dirtlab
+  timestamp: 2026-11-20T16:14:52.651019320Z
+  session_id: 01a1f98f2065
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
