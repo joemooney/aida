@@ -136,6 +136,21 @@ An approved, green PR whose head is behind main is shelved with the
 `aida pr train N...` (or `--all-ready`); it does not update the branch and
 re-run the drain.
 
+**Unset execution mode.** <!-- trace:STORY-2884 | ai:claude --> A spec with
+no `execution_mode` is supervised: `aida pr ship` and `aida pr train` hold its
+merge for a human or a mandate. A project can change that with
+`[gate.unset_mode]` in `.aida/config.toml` (see the configuration guide).
+With `default = "drain"`, an unset spec of a type listed in `drain_types` gates
+as `drain`. That never applies to a spec that sets its own mode, to a
+sensitive spec (keystone, security, authority, containment or
+`operator-only`), or to a PR that touches a protected gate path. Every other
+gate still applies: an independent approval at the head, green CI and no
+holds. The refusal text names the effective mode and its source, for example
+`unset (supervised: not defaulted, the change touches ...)`, and `aida show`
+prints `Effective mode: drain (project default for unset bug)`. The default
+stays `supervised`. Turning the setting on for a project is the operator's
+decision, made and recorded on its own, not as part of a feature PR.
+
 Mechanical enforcement is still pending. It arrives with the identity-bound
 approval gate in `aida pr ship` (BUG-1918). Until then, ADR-73 is policy, not
 a control: the advisor must check the authorship ledger honestly. The

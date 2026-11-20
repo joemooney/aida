@@ -78,7 +78,7 @@ fn each_refusal_names_the_gate_that_stopped_it() {
         ("approval", "no approval is recorded", |c| c.pin = None),
         ("approval", "pinned to", |c| c.pin = Some("c".repeat(40))),
         ("spec-policy", "never auto-merges a supervised spec", |c| {
-            c.records = vec![("TASK-9".into(), Vec::new(), None)]
+            c.records = vec![("TASK-9".into(), Vec::new(), None.into())]
         }),
     ];
     for (gate, reason, setup) in cases {

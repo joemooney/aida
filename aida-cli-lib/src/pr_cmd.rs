@@ -2768,12 +2768,21 @@ pub(crate) fn pr_ship_with_method_and_dispatch_ctx(
         // advisor merge this gate waits for (operator-only specs never are:
         // the mandate refuses them). trace:STORY-1698 | ai:claude
         let allowed = interactive_tty || mandate_cover.is_ok();
-        let mut holds = supervised_specs_for_ship(&project_root, allowed);
+        // STORY-2884: the files this PR changes, against its base — read only
+        // when a spec takes the project's unset-mode default.
+        let change_paths = || {
+            let head = pr_head_sha_for_merge_gate(&project_root, pr_number, &ship_branch)?;
+            crate::gate::unset_mode::changed_paths(
+                &project_root,
+                &format!("origin/{retarget_base}"),
+                &head,
+            )
+        };
+        let mut holds = supervised_specs_for_ship(&project_root, allowed, change_paths);
         if pr_number > 0 && !allowed {
-            holds.extend(supervised_specs_in(
-                ship_gate_spec_records_for_ids(&project_root, mandate_ids()),
-                false,
-            ));
+            let mut records = ship_gate_spec_records_for_ids(&project_root, mandate_ids());
+            withdraw_unset_defaults(&mut records, &project_root, change_paths);
+            holds.extend(supervised_specs_in(records, false));
             holds.sort();
             holds.dedup();
         }

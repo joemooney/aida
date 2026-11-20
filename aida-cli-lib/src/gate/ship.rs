@@ -553,6 +553,25 @@ pub fn supervised_merge_holds(
         .collect()
 }
 
+/// STORY-2884: [`supervised_merge_holds`] over effective modes — the
+/// `(spec-id, mode-label)` pairs whose effective mode holds the merge. The
+/// label names the effective mode and its source, e.g.
+/// `unset (supervised: not defaulted, the change touches ...)`.
+// trace:STORY-2884 | ai:claude
+pub(crate) fn effective_supervised_merge_holds(
+    specs: &[(String, Vec<String>, crate::gate::unset_mode::EffectiveMode)],
+    interactive_tty: bool,
+) -> Vec<(String, String)> {
+    if interactive_tty {
+        return Vec::new();
+    }
+    specs
+        .iter()
+        .filter(|(_, _, mode)| mode.requires_supervision())
+        .map(|(id, _, mode)| (id.clone(), mode.label()))
+        .collect()
+}
+
 /// Why a merge path refuses a PR whose newest recorded APPROVAL does not
 /// provably cover the PR's current head (PRIN-5: an approval that cannot be
 /// placed against the head is not evidence the head was reviewed).

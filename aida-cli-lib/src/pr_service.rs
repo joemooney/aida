@@ -169,8 +169,10 @@ pub(crate) fn fetch_pr_info_via_gh_bin(
 /// `(id, tags, execution_mode)`. Reuses the trailer-gate machinery (range →
 /// commits → store) so the ship gates see the same specs the trailer guard
 /// validates. Empty when no store/commits resolve or nothing matches.
-// trace:STORY-529 trace:BUG-727 | ai:claude
-pub(crate) type ShipGateSpecRecord = (String, Vec<String>, Option<aida_core::ExecutionMode>);
+/// STORY-2884: the mode is the effective one — a set mode as before, or the
+/// project's `[gate.unset_mode]` default for an unset one, with its source.
+// trace:STORY-529 trace:BUG-727 trace:STORY-2884 | ai:claude
+pub(crate) type ShipGateSpecRecord = (String, Vec<String>, crate::gate::unset_mode::EffectiveMode);
 pub(crate) fn ship_gate_spec_records(project_root: &std::path::Path) -> Vec<ShipGateSpecRecord> {
     let range = resolve_gate_range(project_root, None);
     let Ok(commits) = read_commits_in_range(project_root, &range) else {
@@ -196,6 +198,8 @@ pub(crate) fn ship_gate_spec_records_for_ids(
     };
     ids.sort();
     ids.dedup();
+    // STORY-2884: read from the default branch's config, once per lookup.
+    let unset_mode = crate::gate::unset_mode::UnsetModePolicy::load(project_root);
     let mut out = Vec::new();
     for id in ids {
         let want = id.to_ascii_uppercase();
@@ -211,11 +215,8 @@ pub(crate) fn ship_gate_spec_records_for_ids(
         });
         if let Some(req) = found {
             let tags: Vec<String> = req.tags.iter().cloned().collect();
-            out.push((
-                id,
-                tags,
-                crate::gate::ship::gating_execution_mode(&store.requirements, req),
-            ));
+            let gating = crate::gate::ship::gating_execution_mode(&store.requirements, req);
+            out.push((id, tags, unset_mode.resolve(gating, req)));
         }
     }
     out
@@ -241,13 +242,35 @@ pub(crate) fn draft_only_specs_in(records: &[ShipGateSpecRecord]) -> Vec<String>
 /// The specs behind the commits about to ship whose `execution_mode` holds
 /// the auto-merge, as `(spec-id, mode-label)` pairs — the supervised-merge
 /// gate's input. Empty when the merge may proceed (all specs are `drain`, or
-/// the caller is an interactive human at a TTY).
-// trace:BUG-727 | ai:claude
+/// the caller is an interactive human at a TTY). STORY-2884: `change_paths`
+/// (the files the PR changes) is read only when a spec takes the project's
+/// unset-mode default, which a protected path withdraws.
+// trace:BUG-727 trace:STORY-2884 | ai:claude
 pub(crate) fn supervised_specs_for_ship(
     project_root: &std::path::Path,
     interactive_tty: bool,
+    change_paths: impl FnOnce() -> Option<Vec<String>>,
 ) -> Vec<(String, String)> {
-    supervised_specs_in(ship_gate_spec_records(project_root), interactive_tty)
+    let mut records = ship_gate_spec_records(project_root);
+    if !interactive_tty {
+        withdraw_unset_defaults(&mut records, project_root, change_paths);
+    }
+    supervised_specs_in(records, interactive_tty)
+}
+
+/// STORY-2884: withdraw the project's unset-mode drain default from `records`
+/// when the change touches a protected gate path or its files are unknown.
+// trace:STORY-2884 | ai:claude
+pub(crate) fn withdraw_unset_defaults(
+    records: &mut [ShipGateSpecRecord],
+    project_root: &std::path::Path,
+    change_paths: impl FnOnce() -> Option<Vec<String>>,
+) {
+    crate::gate::unset_mode::withdraw_defaults_for_change(
+        records.iter_mut().map(|(_, _, mode)| mode),
+        project_root,
+        change_paths,
+    );
 }
 
 /// The BUG-727 supervised-merge filter over already-read spec records.
@@ -262,15 +285,11 @@ pub(crate) fn supervised_specs_in(
         for (id, tags, mode) in &records {
             let mut req = aida_core::Requirement::new(String::new(), String::new());
             req.tags = tags.iter().cloned().collect();
-            req.execution_mode = *mode;
+            req.execution_mode = mode.mode;
             crate::gate::mandate::note_exclusions(&dir, id, [&req]);
         }
     }
-    let specs: Vec<(String, Option<aida_core::ExecutionMode>)> = records
-        .into_iter()
-        .map(|(id, _, mode)| (id, mode))
-        .collect();
-    crate::gate::ship::supervised_merge_holds(&specs, interactive_tty)
+    crate::gate::ship::effective_supervised_merge_holds(&records, interactive_tty)
 }
 // why: command-dispatch fn whose params mirror distinct CLI flags; bundling into a struct adds indirection without clarifying the call sites.
 #[allow(clippy::too_many_arguments)]

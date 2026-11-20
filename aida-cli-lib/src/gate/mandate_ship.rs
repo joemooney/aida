@@ -712,6 +712,15 @@ fn collect_mandate_cover(
             let scope = collection_evidence_scope(*loaded && !reads_carrier, specs);
             crate::gate::mandate_traces::store_snapshot_stable(&store_root, before, after, &scope)
         };
+    // STORY-2884: the effective mode decides whether a spec needs the
+    // mandate's supervised cover: the project's unset-mode drain default,
+    // withdrawn for a diff that touches a protected gate path.
+    // trace:STORY-2884 | ai:claude
+    let unset_mode = crate::gate::unset_mode::UnsetModePolicy::load(main_worktree);
+    let unset_withheld = crate::gate::unset_mode::protected_path_reason(
+        Some(changed_paths.as_slice()),
+        &crate::gate::mandate_gates::ProtectedPaths::of(&gates),
+    );
     let (_, specs, ledger, supervised, _) = collect_on_stable_store(
         snapshot,
         stable,
@@ -781,7 +790,11 @@ fn collect_mandate_cover(
                                 class: class.into(),
                             });
                         }
-                        Ok(found || crate::gate::ship::merge_requires_supervision(mode))
+                        let mut effective = unset_mode.resolve(mode, req);
+                        if let Some(why) = &unset_withheld {
+                            effective.withdraw(why.clone());
+                        }
+                        Ok(found || effective.requires_supervision())
                     })
             });
             (store.is_some(), specs, ledger, supervised, reads_carrier)
