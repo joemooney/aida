@@ -1,0 +1,60 @@
+id: 01a1f6b4-779d-7683-8249-8da669d47097
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-172
+title: 'Review PR-4347: [AI:claude] feat(gate): project default for an unset execution mode (STORY-2884)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1f686`) for branch `story-b6b1278890774ef993d2ebc327862470-791`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4347>
+  - Branch: `story-b6b1278890774ef993d2ebc327862470-791` → `main`
+
+  ## Covers
+
+  - STORY-2884
+  - TASK-3821
+  - TASK-3792
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4347` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T02:06:24.669834482Z
+modified_at: 2026-11-20T02:06:46.036762436Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1eaa9-ac38-71b2-9fa2-43c1105fe5c5
+  created_at: 2026-11-20T02:06:32.279879433Z
+  created_by: dirtlab
+- rel_type:
+    custom: implements
+  target_id: 01a1f5c2-beca-7222-959d-3870de1bf6f2
+  created_at: 2026-11-20T02:06:46.036684476Z
+  created_by: dirtlab
+history:
+- id: 01a1f6b4-a32d-7112-973b-5572ff378e4d
+  author: dirtlab
+  timestamp: 2026-11-20T02:06:35.821282141Z
+  session_id: 01a1f68604db
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1f6b4-d9f6-7670-b758-b130e699dae7
+  author: dirtlab
+  timestamp: 2026-11-20T02:06:49.846891891Z
+  session_id: 01a1f68604db
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 5993f598551f94fd8ebbebedd0a8214b1fe9c4fb
+  branch: story-b6b1278890774ef993d2ebc327862470-791
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6ff4b5c4f9
+  vendor: claude
+  session: 01a1f68604db
+  harness_version: 2.1.319 (Claude Code)

@@ -20,16 +20,22 @@ description: |
   2. With `default = "drain"` and a type list, an unattended `aida pr ship`/train ships a PR whose specs are all unset-mode, of a listed type, not sensitive, and not touching protected paths. Every other gate (independent APPROVE at head, green pinned CI, no holds) still applies. A test covers the matrix: type in or out of the list × sensitive or not × protected path or not × explicit mode.
   3. The refusal text and `aida show` name the effective mode and where it came from, for example `drain (project default for unset bug)`.
   4. The knob is documented in the config reference and the two-seat protocol. Setting it for this repository is the operator's call and is recorded separately.
-status: Approved
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T01:06:59.599216032Z
+modified_at: 2026-11-20T02:06:39.221133869Z
 req_type: Story
 tags:
 - landing
 - process-policy
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1f6b4-779d-7683-8249-8da669d47097
+  created_at: 2026-11-20T02:06:39.221072204Z
+  created_by: dirtlab
 comments:
 - id: 01a1f67a-c11c-70b3-8e6c-5fadd9f8c035
   author: joe
@@ -51,6 +57,33 @@ comments:
   modified_at: 2026-11-20T01:06:59.599216032Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6b2-d2b1-7771-bed3-d48e4c70657e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3bbbb9987c
+
+    Acceptance evidence:
+    - AC1 [behavioral-test]: knob absent / default=supervised leaves unset supervised and set modes untouched: gate::unset_mode::tests::absent_or_supervised_setting_leaves_unset_supervised; malformed values stay supervised: malformed_setting_stays_supervised_with_a_warning. Existing truth-table tests (gate::ship supervised_merge_holds_*, live_gate_refuses_a_supervised_spec_*, bug_2413_*) pass unchanged.
+    - AC2 [behavioral-test]: drain_default_matrix covers type in/out of drain_types x sensitive (keystone/security/authority/containment/operator-only) or not x protected path (gate code, .aida/config.toml, unreadable files) or not x explicit mode (drain/drive/guided/operator/decide). Train member gate: pr_train::tests::live_gate_lands_a_project_default_drain_spec_only_off_protected_paths. Ship: ship_holds_name_the_effective_mode. Only the supervision gate changes; approval-at-head, CI, holds, draft-only still run.
+    - AC3 [behavioral-test]: refusal label 'drain (project default for unset bug)' / 'unset (supervised: <why>)'; aida show prints effective_mode / 'Effective mode:' when a drain default is configured (only_the_default_branch_config_counts).
+    - AC4 [documentation-inspection]: docs/configuration-guide.md 'Unset execution mode'; two-seat-protocol.md 'Unset execution mode' paragraph (template + mirror). Default stays supervised; this repo's config is NOT changed.
+
+    Probe findings / fixes during self-review: test used raw git (maintenance ratchet) -> crate::test_git; test reached pr_cmd from gate/ (dependency ratchet) -> gate-level fn; new gate module registered as orchestrator (story_1888 ratchet).
+    Security: setting read from the trusted default branch only (a branch editing .aida/config.toml also touches a protected path). Unknown paths fail safe (withdraw default).
+
+    Residual risks: the drain's own merge phase (phase_driver merge_supervision_hold) and burndown wave merge still treat unset as supervised (they merge directly without the protected-path check); such PRs land via aida pr train. Train verified evidence 'policy_specs' records the effective mode before path withdrawal (evidence only; the member gate re-checks). Local check-ci-fast: 3 gates (containment conformance, store mutation channel, self-hosted routing fixtures) fail only on sandbox AF_UNIX denial; all others pass.
+  created_at: 2026-11-20T02:04:36.912997634Z
+  modified_at: 2026-11-20T02:04:36.912997634Z
+  session_id: 01a1f68604db
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1f6b4-2067-7ef1-b0fe-3f80f5745a6b
+  author: aida-publication-done
+  content: Implementer push 5993f598551f declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T02:06:02.343217843Z
+  modified_at: 2026-11-20T02:06:02.343217843Z
+  session_id: 01a1f68604db
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
   author: joe
@@ -74,6 +107,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f6b4-2067-7ef1-b0fe-3f7cc8d6ff3f
+  author: aida-publication-done
+  timestamp: 2026-11-20T02:06:02.343215981Z
+  session_id: 01a1f68604db
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
+- id: 01a1f6b4-bf0b-7810-abcd-ae715b166644
+  author: dirtlab
+  timestamp: 2026-11-20T02:06:42.955790555Z
+  session_id: 01a1f68604db
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 56e8400a2d6ae98df4125c9a65b8563449f508c6
