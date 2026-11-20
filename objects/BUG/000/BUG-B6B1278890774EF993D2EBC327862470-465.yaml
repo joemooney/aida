@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T20:54:33.902384340Z
+modified_at: 2026-11-20T20:56:09.998477366Z
 req_type: Bug
 tags:
 - admission
@@ -475,6 +475,27 @@ comments:
   content: 'advisor-121 13:50: the verdict at cde727e is a PREMATURE review of the r4 lane''s merge-main commit (the real r4 commit 1fb8210 landed 13:42; the lane is live). Not a spent round. Root cause filed as BUG-2706.'
   created_at: 2026-11-20T20:46:21.508308499Z
   modified_at: 2026-11-20T20:46:21.508308499Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fabe-fcb2-7d43-8798-ffd1ac75e6b4
+  author: joe
+  content: |-
+    ADVISOR CAP RULING (advisor-121, 14:08): r4 at 1fb8210 had 6 new findings. Round 5 is a cap exception for the 3 blockers (operator authority, ac336622 short-bound retry, ac6ca3ea idle settlement), DELTA review only; the other 3 moved to TASK-3828.
+
+    # CAP-EXCEPTION brief: BUG-2703 / PR #4363 round 5 (THREE items; DELTA review only)
+
+    Advisor: claude-advisor-121, 2026-11-20 14:08 MST. Head reviewed: 1fb8210. Lane: CLAUDE+Fable. COMMIT your work.
+    Round 4 was the cap; these three block (authority plus claimed ACs). The other three r4 findings MOVED to TASK-3828; do NOT fix them here.
+     1 [authority] review_watch_pause.rs:250 / admission_drain.rs:249: the operator arm requires POSITIVE evidence of a human operator (an interactive
+       TTY with no agent identity: AIDA_AGENT_NAME, AIDA_AGENT_TYPE or a session id all refuse); a managed process without a grant is refused.
+       Test: an agent-identified process without a grant cannot drain or resume.
+     2 [ac336622] admission_owner.rs:878: with wait_secs = 1, retry within the budget (short poll steps), so a holder that releases right after intent
+       registration is acquired; the refusal names the CURRENT holder. Test with wait_secs = 1.
+     3 [ac6ca3ea] review_watch.rs:2905: while yielded or idle, the watcher wakes on a short settlement cadence (independent of --interval) so a
+       superseding review that exits during a long sleep is settled; test with --interval 3600.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push. A clean delta means it merges; no further rounds.
+  created_at: 2026-11-20T20:56:09.998477366Z
+  modified_at: 2026-11-20T20:56:09.998477366Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
