@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'advisor-121 20:58: aida-store re-diverges within minutes under heavy multi-writer load (3 reconciles today); union-reconciled again; main in sync. Expected churn, not a fault; the hourly bridge covers steady state.'
+due_since: 2026-11-20T10:09:01.064871693Z
+due_reason: on CronJobFailed:hub-drift-guard
+due_failure:
+  trip_id: hub-drift-guard@2026-11-20T09:53:59.926269757Z
+  job: hub-drift-guard
+  error: 'exit 1: '
