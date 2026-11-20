@@ -2,35 +2,25 @@ id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-468
 agreed_id: BUG-2706
 title: Review-watch reviews merge-only heads while a dell1 rework lane is still live (STORY-2705 deferral misses foreign lane hosts)
-description: 'Regression / gap of STORY-2705 ("Review-watch defers reviewing a PR head while an implementer lane for its spec is live"): the deferral does not see implementer lanes running on a FOREIGN lane host (dell1). Rework lanes merge origin/main first and push that merge commit, so review-watch on the operator host reviews the merge-only head while the lane is still working, wasting a full (often STRICT, Fable) review and placing a hold on a head that is about to move.
-
+description: |
+  Regression / gap of STORY-2705 ("Review-watch defers reviewing a PR head while an implementer lane for its spec is live"): the deferral does not see implementer lanes running on a FOREIGN lane host (dell1). Rework lanes merge origin/main first and push that merge commit, so review-watch on the operator host reviews the merge-only head while the lane is still working, wasting a full (often STRICT, Fable) review and placing a hold on a head that is about to move.
 
   Evidence 2026-11-20 (lane-run.sh live on dell1 at review time):
-
   - #4364 BUG-2684 r3: review of merge-only 778dc38 (pushed 12:45) recorded about 13:25; the lane pushed its real fix later.
-
   - #4363 BUG-2703 r4: review of merge-only cde727e (pushed 13:02) recorded 13:43; the real r4 commit 1fb8210 landed 13:42.
-
   - Earlier the same day: #4347 (d728fb7) premature approval lifted a hold while CI was red.
 
-
   Acceptance:
-
-  - AC1: review-watch defers a head while an implementer lane for the PR''s spec is live on ANY registered lane host (dell1 included), using the lane-host records or relay status the lane relay and the throughput guard already read, not only local leases.
-
+  - AC1: review-watch defers a head while an implementer lane for the PR's spec is live on ANY registered lane host (dell1 included), using the lane-host records or relay status the lane relay and the throughput guard already read, not only local leases.
   - AC2: a head whose only new commit is a merge of the base, while such a lane is live, is never reviewed; once the lane exits, the newest head is reviewed.
-
   - AC3: when the lane-host state cannot be read, review-watch defers for a bounded time (a setting, default 20 min) and then reviews, logging why.
-
   - Regressions for AC1-AC3 with a fake foreign lane host.
-
-  '
 status: Done
 priority: High
 owner: ''
 feature: Uncategorized
-created_at: 2026-11-20 20:43:55.025623+00:00
-modified_at: 2026-11-20 22:31:23.718811+00:00
+created_at: 2026-11-20T20:43:55.025623Z
+modified_at: 2026-11-20T22:38:32.625176630Z
 req_type: Bug
 tags:
 - lanes
@@ -41,240 +31,240 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a1faed-a9e7-7a81-a898-d263611cbfae
-  created_at: 2026-11-20 21:47:34.146902+00:00
+  created_at: 2026-11-20T21:47:34.146902Z
   created_by: dirtlab
 comments:
 - id: 01a1fab9-02e6-7182-8ee3-a12a38436644
   author: joe
-  content: 'Product 13:48: Claude (Fable) fresh-start lane queued on dell1, brief:
-
+  content: |-
+    Product 13:48: Claude (Fable) fresh-start lane queued on dell1, brief:
     # Brief: BUG-2706 (fresh start; advisor-121 13:47: approved, drain, high; Claude+Fable)
 
-
-    Review-watch reviewed MERGE-ONLY heads while a rework lane on a FOREIGN lane host (dell1) was live and still working on that PR: twice this hour (#4364 at 778dc38, #4363 at cde727e). Each produced a premature CHANGES REQUESTED that isn''t a spent round. Cause: STORY-2705''s "defer review while a rework lane is live" check only sees lanes on the local host, not foreign lane hosts.
-
-    Implement the spec''s ACs: review-watch defers a review while a live rework lane exists for the PR''s spec on ANY registered lane host (use the existing lane/lease visibility for foreign hosts; don''t add an ad-hoc ssh probe in review-watch). Regression: a foreign-host live lane defers the review; after the lane exits, the new head is reviewed.
-
+    Review-watch reviewed MERGE-ONLY heads while a rework lane on a FOREIGN lane host (dell1) was live and still working on that PR: twice this hour (#4364 at 778dc38, #4363 at cde727e). Each produced a premature CHANGES REQUESTED that isn't a spent round. Cause: STORY-2705's "defer review while a rework lane is live" check only sees lanes on the local host, not foreign lane hosts.
+    Implement the spec's ACs: review-watch defers a review while a live rework lane exists for the PR's spec on ANY registered lane host (use the existing lane/lease visibility for foreign hosts; don't add an ad-hoc ssh probe in review-watch). Regression: a foreign-host live lane defers the review; after the lane exits, the new head is reviewed.
     Trailer (BUG-2706) if every AC is met; otherwise (Refs BUG-2706).
-
-    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.'
-  created_at: 2026-11-20 20:49:38.682949+00:00
-  modified_at: 2026-11-20 20:49:38.682949+00:00
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T20:49:38.682949Z
+  modified_at: 2026-11-20T20:49:38.682949Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fac1-1d2c-7502-b7b9-05afb5990beb
   author: dirtlab
-  content: '## Implementer approach
+  content: |-
+    ## Implementer approach
 
-
-    Root cause (store history, 2026-11-20): the foreign-host deferral does see dell1 claims, but a session claim''s heartbeat is written once at claim time and never refreshed (`coordination.rs` build_claim: "Slice 2 refreshes periodically" was never built). A watcher on another host can only judge such a claim by TTL (1800s), so the deferral lapses 30 min after the lane starts: BUG-2684 claimed 12:45:07, PR-4364 review claimed 13:22:27; BUG-2703 claimed 13:02:17, PR-4363 review claimed 13:40:04.
-
+    Root cause (store history, 2026-11-20): the foreign-host deferral does see dell1 claims, but a session claim's heartbeat is written once at claim time and never refreshed (`coordination.rs` build_claim: "Slice 2 refreshes periodically" was never built). A watcher on another host can only judge such a claim by TTL (1800s), so the deferral lapses 30 min after the lane starts: BUG-2684 claimed 12:45:07, PR-4364 review claimed 13:22:27; BUG-2703 claimed 13:02:17, PR-4363 review claimed 13:40:04.
 
     ### Acceptance criteria and evidence
-
-    - **AC1 [behavioral-test, unit]:** the lane launcher refreshes its own session claim''s heartbeat on the shared store while the lane runs (`coordination` heartbeat test against a real origin store: only the claim bound to this lease on this host is refreshed, committed and pushed). Gate test with a fake foreign lane host: a claim started 45 min ago with a fresh heartbeat defers.
-
+    - **AC1 [behavioral-test, unit]:** the lane launcher refreshes its own session claim's heartbeat on the shared store while the lane runs (`coordination` heartbeat test against a real origin store: only the claim bound to this lease on this host is refreshed, committed and pushed). Gate test with a fake foreign lane host: a claim started 45 min ago with a fresh heartbeat defers.
     - **AC2 [behavioral-test, unit]:** same fake foreign host: head deferred while the heartbeat is fresh regardless of what the head is; after the claim is released the gate returns no deferral, and the existing review-watch test shows the then-current head is admitted once.
-
     - **AC3 [behavioral-test, unit]:** a foreign implementer claim that is still present but whose heartbeat is past its TTL is "state unknown": deferred until expiry + `[review] lane_unknown_defer_mins` (default 20), then reviewed with a logged reason. Tests for the default, a configured value, and the lapse.
 
-
     ### Expected files
-
     - `aida-cli-lib/src/review_implementer_gate.rs`
-
     - `aida-cli-lib/src/coordination.rs`, new `aida-cli-lib/src/coordination_heartbeat.rs`
-
     - `aida-cli-lib/src/standalone_implementer.rs` (start/stop the heartbeat around the lane)
-
     - `docs/cli/07-project-setup.md`, `scripts/store-writers.toml`
 
-
     ### Ambiguities / conflicts as questions
-
-    - AC3 "lane-host state cannot be read": no separate lane-host record exists on main (aida lane relay, TASK-3826, is unmerged); I read it as "the host''s claim is present but its heartbeat stopped". Is that the intended meaning? Proceeding on that reading.'
-  created_at: 2026-11-20 20:58:42.348657+00:00
-  modified_at: 2026-11-20 20:58:42.348657+00:00
+    - AC3 "lane-host state cannot be read": no separate lane-host record exists on main (aida lane relay, TASK-3826, is unmerged); I read it as "the host's claim is present but its heartbeat stopped". Is that the intended meaning? Proceeding on that reading.
+  created_at: 2026-11-20T20:58:42.348657Z
+  modified_at: 2026-11-20T20:58:42.348657Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1faca-c362-7502-a03d-d0109db7ee08
   author: joe
   content: 'advisor-121 14:14: the throughput guard shows the same foreign-lane blindness (2 lanes reported vs 7 live on dell1; a false STUCK-REWORK on #4376 with its lane live). One shared lane-host visibility source should serve both; coordinate with TASK-3827.'
-  created_at: 2026-11-20 21:09:02.346140+00:00
-  modified_at: 2026-11-20 21:09:02.346140+00:00
+  created_at: 2026-11-20T21:09:02.346140Z
+  modified_at: 2026-11-20T21:09:02.346140Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fae4-5afb-7c71-b958-9778cdf80794
   author: joe
   content: 'advisor-121 14:45: TASK-3827 PR-A (#4381 r2) builds a shared foreign-host lane-visibility reader (a fresh lane-host record with age). BUG-2706 must use the SAME module: whichever lands first owns it, the other rebases.'
-  created_at: 2026-11-20 21:36:59.593147+00:00
-  modified_at: 2026-11-20 21:36:59.593147+00:00
+  created_at: 2026-11-20T21:36:59.593147Z
+  modified_at: 2026-11-20T21:36:59.593147Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fae6-db3b-7ca2-8000-7c11e4dd02b4
   author: joe
-  content: 'Product 14:40 (relaying advisor-121): ## Coordination note (product, relaying advisor-121 14:38)
-
-    The foreign-host lane-visibility reader (live lanes on registered lane hosts, with age) is being built in TASK-3827''s PR-A (#4381 r2). BUG-2706''s review deferral must REUSE that reader, not add a parallel one. If PR-A hasn''t landed when you start, build against its interface as described on TASK-3827, or coordinate via the spec comments; don''t fork the reader.'
-  created_at: 2026-11-20 21:39:43.446462+00:00
-  modified_at: 2026-11-20 21:39:43.446462+00:00
+  content: |-
+    Product 14:40 (relaying advisor-121): ## Coordination note (product, relaying advisor-121 14:38)
+    The foreign-host lane-visibility reader (live lanes on registered lane hosts, with age) is being built in TASK-3827's PR-A (#4381 r2). BUG-2706's review deferral must REUSE that reader, not add a parallel one. If PR-A hasn't landed when you start, build against its interface as described on TASK-3827, or coordinate via the spec comments; don't fork the reader.
+  created_at: 2026-11-20T21:39:43.446462Z
+  modified_at: 2026-11-20T21:39:43.446462Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faec-dff9-7a12-86df-f590d4b8bdd4
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: 9a5565b17c (git diff origin/main...HEAD; 7 files).
 
-
     Acceptance evidence
-
-    - AC1 [evidence: behavioral-test] coordination::heartbeat::tests::bug2706_heartbeat_refreshes_and_publishes_only_the_lanes_own_claim (real bare-origin store: a 45-min-old claim is refreshed, committed and pushed; a second lane''s claim is untouched), bug2706_guard_beats_while_held_and_stops_on_drop, and review_implementer_gate::tests::bug2706_foreign_lane_defers_past_claim_ttl_until_it_exits (fake host lane-host-fixture, live at 45 min and 4 h). Launcher wiring: standalone_implementer.rs run().
-
+    - AC1 [evidence: behavioral-test] coordination::heartbeat::tests::bug2706_heartbeat_refreshes_and_publishes_only_the_lanes_own_claim (real bare-origin store: a 45-min-old claim is refreshed, committed and pushed; a second lane's claim is untouched), bug2706_guard_beats_while_held_and_stops_on_drop, and review_implementer_gate::tests::bug2706_foreign_lane_defers_past_claim_ttl_until_it_exits (fake host lane-host-fixture, live at 45 min and 4 h). Launcher wiring: standalone_implementer.rs run().
     - AC2 [evidence: behavioral-test] same gate test: deferral is independent of the head; after the claim is released nothing defers and no forge lookup is made. review_watch::tests::story2705_parked_merge_head_is_unreserved_then_admitted_once_after_lease_ends covers admitting the then-current head once.
-
     - AC3 [evidence: behavioral-test] bug2706_unreadable_foreign_lane_defers_for_the_bound_then_reviews_with_a_reason and bug2706_unknown_defer_setting_defaults_to_twenty_minutes_and_bounds_the_wait.
-
     - Runs: lane job j20261120T211638426-3-0, 155 passed 0 failed (filters bug2706 story2705 standalone_implementer session_start_default_role_claim coordination::). make check-ci-fast via lane job j20261120T212324044-11-0 exit 0. check-store-writers.py passes (6 new sink rows, all blocked like their heartbeat_lock_claim siblings).
 
-
     Probe findings
-
     - Consistency: claim matched by lease id + host + not-review; spec match stays case-insensitive. No mismatch found.
-
     - Format: heartbeat RFC 3339; unparseable or more than 5 min in the future is no evidence (unchanged intent, skew tolerance added). Setting accepts integers 0..=1440 only; anything else keeps 20.
-
     - Multiplicity: several lanes on one change: live outranks unknown, longest unknown bound is named; zero claims short-circuits before the forge lookup.
-
     - Authority/fail-open: an unreadable config keeps the 20-min bound rather than 0. One existing assertion changed on purpose (story2705_cross_host...: an expired unreleased claim now defers for the bound before it stops deferring, per AC3); no test removed or ignored.
-
 
     Fixes during review: heartbeat guard now stops at once on drop (was up to 1 s per launcher exit); lapse log is once per change and lane, not once per pass.
 
-
     Residual risks
-
     - Both hosts need this build: the lane host to send heartbeats, the watcher host for the bounded unknown state. With only the watcher updated a long lane is deferred 50 min instead of 30.
-
     - Drain-driven implementers (phase driver) do not heartbeat: their lease id is unknown until the child exits. They get the bounded deferral only.
-
     - Each running lane adds one store commit per 10 minutes.
-
-    - AC3 read as ''claim present, heartbeat stopped''; no separate lane-host record exists on main.'
-  created_at: 2026-11-20 21:46:30.265841+00:00
-  modified_at: 2026-11-20 21:46:30.265841+00:00
+    - AC3 read as 'claim present, heartbeat stopped'; no separate lane-host record exists on main.
+  created_at: 2026-11-20T21:46:30.265841Z
+  modified_at: 2026-11-20T21:46:30.265841Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1faed-5d36-7bf3-984d-abe1e8c4974a
   author: aida-publication-done
   content: Implementer push 9a5565b17c85 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20 21:47:02.326105+00:00
-  modified_at: 2026-11-20 21:47:02.326105+00:00
+  created_at: 2026-11-20T21:47:02.326105Z
+  modified_at: 2026-11-20T21:47:02.326105Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1faef-a796-7e01-82ac-a562026d9fb7
   author: joe
   content: 'advisor-121 14:55: #4382''s claim heartbeat is ruled the SHARED foreign-lane visibility source; TASK-3827 PR-A will consume it. Keep the helper''s API small and documented (claim -> holder, host, heartbeat age).'
-  created_at: 2026-11-20 21:49:19.748745+00:00
-  modified_at: 2026-11-20 21:49:19.748745+00:00
+  created_at: 2026-11-20T21:49:19.748745Z
+  modified_at: 2026-11-20T21:49:19.748745Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf6-02aa-7b11-88f8-667aeb6acd74
   author: joe
-  content: "AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 15:08): 9 findings at 9a5565b. Claude+Fable, gated on the live lane exiting.\n\n# Rework brief: BUG-2706 / PR #4382, round 2 of 4\n\nAdvisor: claude-advisor-121, 2026-11-20 15:08 MST. Head reviewed: 9a5565b. Lane: CLAUDE+Fable. COMMIT your work.\nThis is the SHARED foreign-lane visibility source (TASK-3827 PR-A consumes it). Fix all 9:\n 1 heartbeat binds to the LIVE LEASE for every implementer launch path (drain-driven lanes too), not only standalone_implementer::run.\n 2 store freshness: a watcher behind origin must not see \"no holder\" or a false expiry. Pull or verify snapshot freshness (bounded), otherwise\n   bounded-unknown handling (defer within the AC3 bound and log why).\n 3 unreadable is not absent: list_claims and remote_standing propagate directory, entry, parse and timestamp errors as UNKNOWN; track a\n   bounded unknown interval that survives restarts.\n 4 lapse reporting: do not discard a lapse after a fixed window; report\
-    \ a lapse once per lane episode (a second lapse after recovery reports\n   again); prune keys for ended lanes.\n 5 a test with a merge-only head then a distinct fix SHA while the foreign lane is live, then the lane released, so the fix SHA is reviewed.\n 6 bound_claim: pin the claim directory, no-follow, regular files only (no FIFOs or symlinks); heartbeat writes stay inside it.\n 7 heartbeat writes are atomic: a complete temp sibling, then rename (never truncate the live claim).\n 8 bound the heartbeat refresh I/O (git fetch and push timeouts); Drop joins within a deadline; never hold the writer lock during a stalled pull.\n 9 EXPOSE the shared observation from coordination as a small documented API: claim -> holder, host, heartbeat age, freshness\n   (live, lapsed, unknown); the review gate and the throughput guard both use it.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push."
-  created_at: 2026-11-20 21:56:16.503142+00:00
-  modified_at: 2026-11-20 21:56:16.503142+00:00
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 15:08): 9 findings at 9a5565b. Claude+Fable, gated on the live lane exiting.
+
+    # Rework brief: BUG-2706 / PR #4382, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 15:08 MST. Head reviewed: 9a5565b. Lane: CLAUDE+Fable. COMMIT your work.
+    This is the SHARED foreign-lane visibility source (TASK-3827 PR-A consumes it). Fix all 9:
+     1 heartbeat binds to the LIVE LEASE for every implementer launch path (drain-driven lanes too), not only standalone_implementer::run.
+     2 store freshness: a watcher behind origin must not see "no holder" or a false expiry. Pull or verify snapshot freshness (bounded), otherwise
+       bounded-unknown handling (defer within the AC3 bound and log why).
+     3 unreadable is not absent: list_claims and remote_standing propagate directory, entry, parse and timestamp errors as UNKNOWN; track a
+       bounded unknown interval that survives restarts.
+     4 lapse reporting: do not discard a lapse after a fixed window; report a lapse once per lane episode (a second lapse after recovery reports
+       again); prune keys for ended lanes.
+     5 a test with a merge-only head then a distinct fix SHA while the foreign lane is live, then the lane released, so the fix SHA is reviewed.
+     6 bound_claim: pin the claim directory, no-follow, regular files only (no FIFOs or symlinks); heartbeat writes stay inside it.
+     7 heartbeat writes are atomic: a complete temp sibling, then rename (never truncate the live claim).
+     8 bound the heartbeat refresh I/O (git fetch and push timeouts); Drop joins within a deadline; never hold the writer lock during a stalled pull.
+     9 EXPOSE the shared observation from coordination as a small documented API: claim -> holder, host, heartbeat age, freshness
+       (live, lapsed, unknown); the review gate and the throughput guard both use it.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-20T21:56:16.503142Z
+  modified_at: 2026-11-20T21:56:16.503142Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf6-7938-76c0-9737-30296e514d87
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes on BUG-2706. Reviewed the entire landed diff against pinned main 719aa4947d06. CI pending at review time (fast gates passed, fast compile pending). BUG-2706 bug protocol, the PR touches at least one test file: met by changed inline Rust test modules in coordination_heartbeat.rs and review_implementer_gate.rs.. No triage reason was given.'
-  created_at: 2026-11-20 21:56:59.320040+00:00
-  modified_at: 2026-11-20 21:56:59.320040+00:00
+  created_at: 2026-11-20T21:56:59.320040Z
+  modified_at: 2026-11-20T21:56:59.320040Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf6-b35f-7ff2-8e75-623709757822
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (BUG-2706):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2706):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 9a5565b17c85
-
     Recorded: 2026-11-20T21:55:03.451033420+00:00
-
     Findings:
-
     1. BUG-2706 AC1/AC2: Only standalone_implementer::run starts the heartbeat. Drain-driven implementer lanes bypass that launcher. With the default settings their shared claim stops deferring after 50 minutes even if the lane is still working on a merge-only head. Bind refresh to the live lease across supported implementer launch paths and cover a long-running drain lane.
-
-    2. BUG-2706 AC1/AC2: decide reads only the watcher''s local store checkout. Publishing a claim or heartbeat to origin does not update that checkout. A watcher behind the first claim sees no holder, and one behind subsequent heartbeats sees a falsely expired holder. Establish snapshot freshness or use bounded unknown handling when it cannot be established. Verify with separate publisher and observer checkouts.
-
+    2. BUG-2706 AC1/AC2: decide reads only the watcher's local store checkout. Publishing a claim or heartbeat to origin does not update that checkout. A watcher behind the first claim sees no holder, and one behind subsequent heartbeats sees a falsely expired holder. Establish snapshot freshness or use bounded unknown handling when it cannot be established. Verify with separate publisher and observer checkouts.
     3. BUG-2706 AC3: list_claims silently drops directory, entry and parse errors, and remote_standing drops invalid heartbeat timestamps. A temporarily unreadable claim can therefore produce an empty holder list and immediate review. Distinguish unreadable evidence from confirmed absence and track a bounded unknown interval that survives repeated passes.
-
     4. BUG-2706 AC3: remote_standing discards the lapse 30 minutes after the grace deadline. If the watcher was stopped or delayed past that window, it reviews a previously deferred head without the required reason. REPORTED also suppresses a second lapse after recovery of the same lane and retains branch/lane keys indefinitely. Track the outstanding deferral episode and log its release once.
-
     5. BUG-2706.ace1c795: The fake foreign-host test replaces the observer with a fresh empty directory on release and never supplies a changing head. The existing watch test injects a skip string and later selects the same SHA. Exercise a merge-only head followed by a distinct fix SHA with the foreign lane still live, release the lane, and assert only the fix SHA is dispatched once. Include actual unreadable claim evidence.
-
     6. bound_claim reads arbitrary .toml paths in the shared store, follows links and accepts special files. heartbeat_session_claim later reopens the matched path with fs::write under host permissions. A linked or replaced entry can redirect that write outside the claim directory, and a FIFO can stall the host store lock. Pin the directory, read bounded regular files without following links, and replace only the verified claim inside it.
-
     7. fs::write truncates the live claim before completing the replacement. A short write, disk error or launcher termination can destroy the previous parseable ownership record. Concurrent unlocked gate readers can also see the empty or partial file and admit the head. Write a complete temporary sibling and atomically replace the validated claim.
-
     8. SessionClaimHeartbeat::drop joins a thread that may be inside a fetch or push using an unbounded Git subprocess. A stalled remote during a refresh can keep an otherwise finished launcher from returning, and a stalled pull holds the shared writer lock. Bound or cancel the refresh I/O and join on shutdown within a defined deadline.
-
-    9. The spec''s advisor selected the claim heartbeat as the shared visibility source for TASK-3827 and requested a documented claim-to-holder/host/age API. The new remote_standing and Standing are private to the review gate and the live result omits age. Expose the shared observation from coordination so the throughput reader can reuse the interpretation without duplicating review policy.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-20 21:57:14.207146+00:00
-  modified_at: 2026-11-20 21:57:14.207146+00:00
+    9. The spec's advisor selected the claim heartbeat as the shared visibility source for TASK-3827 and requested a documented claim-to-holder/host/age API. The new remote_standing and Standing are private to the review gate and the live result omits age. Expose the shared observation from coordination so the throughput reader can reuse the interpretation without duplicating review policy.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T21:57:14.207146Z
+  modified_at: 2026-11-20T21:57:14.207146Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf7-1275-7913-b1b2-5ac21a295cdf
   author: joe
-  content: "AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 14:57):\n# Rework brief: BUG-2706 / PR #4382, round 2 of 4\n\nAdvisor: claude-advisor-121, 2026-11-20 15:08 MST. Head reviewed: 9a5565b. Lane: CLAUDE+Fable. COMMIT your work.\nThis is the SHARED foreign-lane visibility source (TASK-3827 PR-A consumes it). Fix all 9:\n 1 heartbeat binds to the LIVE LEASE for every implementer launch path (drain-driven lanes too), not only standalone_implementer::run.\n 2 store freshness: a watcher behind origin must not see \"no holder\" or a false expiry. Pull or verify snapshot freshness (bounded), otherwise\n   bounded-unknown handling (defer within the AC3 bound and log why).\n 3 unreadable is not absent: list_claims and remote_standing propagate directory, entry, parse and timestamp errors as UNKNOWN; track a\n   bounded unknown interval that survives restarts.\n 4 lapse reporting: do not discard a lapse after a fixed window; report a lapse once per lane episode (a second lapse after\
-    \ recovery reports\n   again); prune keys for ended lanes.\n 5 a test with a merge-only head then a distinct fix SHA while the foreign lane is live, then the lane released, so the fix SHA is reviewed.\n 6 bound_claim: pin the claim directory, no-follow, regular files only (no FIFOs or symlinks); heartbeat writes stay inside it.\n 7 heartbeat writes are atomic: a complete temp sibling, then rename (never truncate the live claim).\n 8 bound the heartbeat refresh I/O (git fetch and push timeouts); Drop joins within a deadline; never hold the writer lock during a stalled pull.\n 9 EXPOSE the shared observation from coordination as a small documented API: claim -> holder, host, heartbeat age, freshness\n   (live, lapsed, unknown); the review gate and the throughput guard both use it.\ncargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.\n\n## Coordination note (product, relaying advisor-121 14:38)\nThe foreign-host lane-visibility reader (live lanes on registered\
-    \ lane hosts, with age) is being built in TASK-3827's PR-A (#4381 r2). BUG-2706's review deferral must REUSE that reader, not add a parallel one. If PR-A hasn't landed when you start, build against its interface as described on TASK-3827, or coordinate via the spec comments; don't fork the reader."
-  created_at: 2026-11-20 21:57:25.936424+00:00
-  modified_at: 2026-11-20 21:57:25.936424+00:00
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 14:57):
+    # Rework brief: BUG-2706 / PR #4382, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 15:08 MST. Head reviewed: 9a5565b. Lane: CLAUDE+Fable. COMMIT your work.
+    This is the SHARED foreign-lane visibility source (TASK-3827 PR-A consumes it). Fix all 9:
+     1 heartbeat binds to the LIVE LEASE for every implementer launch path (drain-driven lanes too), not only standalone_implementer::run.
+     2 store freshness: a watcher behind origin must not see "no holder" or a false expiry. Pull or verify snapshot freshness (bounded), otherwise
+       bounded-unknown handling (defer within the AC3 bound and log why).
+     3 unreadable is not absent: list_claims and remote_standing propagate directory, entry, parse and timestamp errors as UNKNOWN; track a
+       bounded unknown interval that survives restarts.
+     4 lapse reporting: do not discard a lapse after a fixed window; report a lapse once per lane episode (a second lapse after recovery reports
+       again); prune keys for ended lanes.
+     5 a test with a merge-only head then a distinct fix SHA while the foreign lane is live, then the lane released, so the fix SHA is reviewed.
+     6 bound_claim: pin the claim directory, no-follow, regular files only (no FIFOs or symlinks); heartbeat writes stay inside it.
+     7 heartbeat writes are atomic: a complete temp sibling, then rename (never truncate the live claim).
+     8 bound the heartbeat refresh I/O (git fetch and push timeouts); Drop joins within a deadline; never hold the writer lock during a stalled pull.
+     9 EXPOSE the shared observation from coordination as a small documented API: claim -> holder, host, heartbeat age, freshness
+       (live, lapsed, unknown); the review gate and the throughput guard both use it.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+
+    ## Coordination note (product, relaying advisor-121 14:38)
+    The foreign-host lane-visibility reader (live lanes on registered lane hosts, with age) is being built in TASK-3827's PR-A (#4381 r2). BUG-2706's review deferral must REUSE that reader, not add a parallel one. If PR-A hasn't landed when you start, build against its interface as described on TASK-3827, or coordinate via the spec comments; don't fork the reader.
+  created_at: 2026-11-20T21:57:25.936424Z
+  modified_at: 2026-11-20T21:57:25.936424Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf7-4acc-7f92-b832-2dc701c4cdf3
   author: joe
   content: 'Product 14:57: R2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-468. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
-  created_at: 2026-11-20 21:57:40.367094+00:00
-  modified_at: 2026-11-20 21:57:40.367094+00:00
+  created_at: 2026-11-20T21:57:40.367094Z
+  modified_at: 2026-11-20T21:57:40.367094Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fafc-08f3-7322-9998-c3bd02ff62d1
   author: joe
   content: 'advisor-121 15:15: third occurrence today: #4378 BUG-2662, merge-only b3225b3 (14:27) reviewed while the r3 lane was live on dell1.'
-  created_at: 2026-11-20 22:02:49.867381+00:00
-  modified_at: 2026-11-20 22:02:49.867381+00:00
+  created_at: 2026-11-20T22:02:49.867381Z
+  modified_at: 2026-11-20T22:02:49.867381Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fafe-236d-7422-827c-6a2551b76c96
   author: aida-publication-done
   content: Implementer push 9a5565b17c85 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20 22:05:21.645688+00:00
-  modified_at: 2026-11-20 22:05:21.645688+00:00
+  created_at: 2026-11-20T22:05:21.645688Z
+  modified_at: 2026-11-20T22:05:21.645688Z
   session_id: 01a1fabbb213
 - id: 01a1faff-19af-7e22-80be-343f46930b4e
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-468` at head `unavailable`.'
-  created_at: 2026-11-20 22:06:24.687895+00:00
-  modified_at: 2026-11-20 22:06:24.687895+00:00
+  created_at: 2026-11-20T22:06:24.687895Z
+  modified_at: 2026-11-20T22:06:24.687895Z
   session_id: 01a1fabbb213
 - id: 01a1fb16-34e1-7d90-abe4-e9349eb0483f
   author: joe
   content: 'advisor-121 15:34: fourth occurrence today: #4380 BUG-2629, merge-only 45d57bc reviewed while the r2 lane was live. Four full Fable reviews wasted today.'
-  created_at: 2026-11-20 22:31:23.718811+00:00
-  modified_at: 2026-11-20 22:31:23.718811+00:00
+  created_at: 2026-11-20T22:31:23.718811Z
+  modified_at: 2026-11-20T22:31:23.718811Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb1c-84b1-7592-b6f0-dd283cf91ea2
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-468` at head `9a5565b17c8552116a9ba459a9f8a31a7011af43`.'
+  created_at: 2026-11-20T22:38:32.625172262Z
+  modified_at: 2026-11-20T22:38:32.625172262Z
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
-  timestamp: 2026-11-20 20:45:48.127870+00:00
+  timestamp: 2026-11-20T20:45:48.127870Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
@@ -283,20 +273,20 @@ history:
     new_value: Approved
 - id: 01a1fab5-c20b-7b20-a263-c2de8dd0986d
   author: joe
-  timestamp: 2026-11-20 20:46:18.123489+00:00
+  timestamp: 2026-11-20T20:46:18.123489Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
 - id: 01a1fabb-f2f6-76e2-bdf6-f04fa9bc8927
   author: aida-session-start
-  timestamp: 2026-11-20 20:53:03.862241+00:00
+  timestamp: 2026-11-20T20:53:03.862241Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1faed-5d36-7bf3-984d-abddc68d2ff0
   author: aida-publication-done
-  timestamp: 2026-11-20 21:47:02.326103+00:00
+  timestamp: 2026-11-20T21:47:02.326103Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -305,19 +295,19 @@ history:
     new_value: Done
 - id: 01a1faed-e115-7623-a542-b2ffd6961aff
   author: dirtlab
-  timestamp: 2026-11-20 21:47:36.085504+00:00
+  timestamp: 2026-11-20T21:47:36.085504Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1faee-139b-70c0-a851-944537e604c8
   author: dirtlab
-  timestamp: 2026-11-20 21:47:49.019909+00:00
+  timestamp: 2026-11-20T21:47:49.019909Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1faf5-5be2-7610-8755-f15d2ebbb5d2
   author: aida-orchestrator
-  timestamp: 2026-11-20 21:55:46.274731+00:00
+  timestamp: 2026-11-20T21:55:46.274731Z
   session_id: 01a1faf2763e
   changes:
   - field_name: status
@@ -325,7 +315,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1faf6-7938-76c0-9737-301bb1436e13
   author: joe
-  timestamp: 2026-11-20 21:56:59.320019+00:00
+  timestamp: 2026-11-20T21:56:59.320019Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
@@ -334,7 +324,7 @@ history:
     new_value: Approved
 - id: 01a1fafe-236d-7422-827c-6a17be1568fe
   author: aida-publication-done
-  timestamp: 2026-11-20 22:05:21.645685+00:00
+  timestamp: 2026-11-20T22:05:21.645685Z
   session_id: 01a1fabbb213
   changes:
   - field_name: status
@@ -342,7 +332,7 @@ history:
     new_value: Done
 - id: 01a1fb01-125c-71d1-af4f-4a2e123ebd41
   author: dirtlab
-  timestamp: 2026-11-20 22:08:33.884747+00:00
+  timestamp: 2026-11-20T22:08:33.884747Z
   session_id: 01a1fb008c4e
   changes: []
 execution_mode: drain
@@ -357,5 +347,5 @@ filed_at:
   harness_version: 2.1.328 (Claude Code)
 implementation_info:
   implemented: true
-  implemented_at: 2026-11-20 21:47:47.832017+00:00
+  implemented_at: 2026-11-20T21:47:47.832017Z
   implemented_by: dirtlab
