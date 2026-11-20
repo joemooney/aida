@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T04:10:17.727534393Z
+modified_at: 2026-11-20T05:05:45.373205234Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1172,6 +1172,13 @@ comments:
   content: 'advisor-121 21:12: product''s discriminator for D3: TASK-3161 (fresh lane, NEW PR #4349) reached InProgress -> Done at its push; TASK-3821 r2 (queue-rework round pushing to an EXISTING PR #4340) got no Done. So the miss is rework/update pushes to an existing PR, not the InProgress state as such. #4348 r2''s table tests are at the helper level; the confirmation after landing must be a real rework push to an existing PR. If #4348 lands and that still misses, this is the scope.'
   created_at: 2026-11-20T04:10:17.727534393Z
   modified_at: 2026-11-20T04:10:17.727534393Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f758-d939-7520-a355-9abd309f2c04
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 22:08): COMPLETE. #4348 landed as 972c2f0 via train #4353: a self-publishing lane''s completing push sets Done from InProgress/Approved for fresh and rework rounds, with the declaration bounded to launch_head..tip, plus runner tests for the resume and vendor-headless exits (r2 approved at d882ff9). D4 (landing completes Done specs) was confirmed positive by TASK-3161 at 21:29 with no manual call. Manual call because this fix''s own rework push predates it. REOPEN if, after the live and dell1 binaries include 972c2f0, a rework push to an EXISTING PR with a completing trailer does not set Done.'
+  created_at: 2026-11-20T05:05:45.373205234Z
+  modified_at: 2026-11-20T05:05:45.373205234Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
