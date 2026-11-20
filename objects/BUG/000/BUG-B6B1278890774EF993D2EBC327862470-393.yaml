@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T20:28:17.812122841Z
+modified_at: 2026-11-20T20:30:40.007911180Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -29,6 +29,11 @@ relationships:
   target_id: 01a1e7c6-125f-73c3-beb2-1217a4e4d0a9
   created_at: 2026-11-20T19:16:26.210631718Z
   created_by: joe
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1faa7-0e8c-7681-8ec5-774d43c05540
+  created_at: 2026-11-20T20:30:40.007886489Z
+  created_by: dirtlab
 comments:
 - id: 01a1e372-09ba-78d2-b17b-0b34c7114bbc
   author: joe
@@ -598,6 +603,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a1faa7-98d9-7070-813f-08a442304a70
+  author: dirtlab
+  timestamp: 2026-11-20T20:30:50.073328562Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
