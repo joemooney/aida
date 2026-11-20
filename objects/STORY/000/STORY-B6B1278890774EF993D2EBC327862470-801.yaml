@@ -11,12 +11,12 @@ description: |
   1. Every production merge path honours `[landing]`: the drain (phase_driver_trait / auto_complete), burndown_run and upgrade_release. That covers merger authority (advisor-only, plus the C2 author exclusion under both values), mode (no CI wait in review-gated), and routing (use_train never/always/when-behind). Enforcement sits at one shared merge boundary that all of them pass through, so a new caller cannot skip it. Regressions cover each caller.
   2. `aida land run` with `use_train = "never"`: when this caller may merge (merger rule plus authorship), a READY main-track change gets a Ship action that runs the ordinary gated `aida pr ship` once. A caller that may not merge only reports readiness. Regressions cover an authorized loop shipping once and an unauthorized loop staying report-only.
   3. Docs: the landing page lists which commands honour `[landing]`.
-status: InProgress
+status: Completed
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:26:06.757643260Z
-modified_at: 2026-11-20T12:22:52.555506154Z
+modified_at: 2026-11-20T12:23:20.987775045Z
 req_type: Story
 relationships:
 - rel_type: Child
@@ -216,6 +216,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1f8e9-4a9b-7fc0-915d-014af5f2669e
+  author: joe
+  timestamp: 2026-11-20T12:23:20.987767556Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Completed
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main
@@ -225,3 +234,6 @@ filed_at:
   vendor: claude
   session: 01a1ea40-320e-7e11-91a7-51ba2a02a91f
   harness_version: 2.1.326 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-20T12:23:08.755268440Z
