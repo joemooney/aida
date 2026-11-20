@@ -86,8 +86,8 @@ comments:
 - id: 01a1fae4-5afb-7c71-b958-9778cdf80794
   author: joe
   content: 'advisor-121 14:45: TASK-3827 PR-A (#4381 r2) builds a shared foreign-host lane-visibility reader (a fresh lane-host record with age). BUG-2706 must use the SAME module: whichever lands first owns it, the other rebases.'
-  created_at: 2026-11-20T21:36:59.593147Z
-  modified_at: 2026-11-20T21:36:59.593147Z
+  created_at: 2026-11-20T21:36:59.593147265Z
+  modified_at: 2026-11-20T21:36:59.593147265Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fae6-db3b-7ca2-8000-7c11e4dd02b4
@@ -95,8 +95,8 @@ comments:
   content: |-
     Product 14:40 (relaying advisor-121): ## Coordination note (product, relaying advisor-121 14:38)
     The foreign-host lane-visibility reader (live lanes on registered lane hosts, with age) is being built in TASK-3827's PR-A (#4381 r2). BUG-2706's review deferral must REUSE that reader, not add a parallel one. If PR-A hasn't landed when you start, build against its interface as described on TASK-3827, or coordinate via the spec comments; don't fork the reader.
-  created_at: 2026-11-20T21:39:43.446462Z
-  modified_at: 2026-11-20T21:39:43.446462Z
+  created_at: 2026-11-20T21:39:43.446462002Z
+  modified_at: 2026-11-20T21:39:43.446462002Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faec-dff9-7a12-86df-f590d4b8bdd4
@@ -124,22 +124,22 @@ comments:
     - Drain-driven implementers (phase driver) do not heartbeat: their lease id is unknown until the child exits. They get the bounded deferral only.
     - Each running lane adds one store commit per 10 minutes.
     - AC3 read as 'claim present, heartbeat stopped'; no separate lane-host record exists on main.
-  created_at: 2026-11-20T21:46:30.265841Z
-  modified_at: 2026-11-20T21:46:30.265841Z
+  created_at: 2026-11-20T21:46:30.265841688Z
+  modified_at: 2026-11-20T21:46:30.265841688Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1faed-5d36-7bf3-984d-abe1e8c4974a
   author: aida-publication-done
   content: Implementer push 9a5565b17c85 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20T21:47:02.326105Z
-  modified_at: 2026-11-20T21:47:02.326105Z
+  created_at: 2026-11-20T21:47:02.326105552Z
+  modified_at: 2026-11-20T21:47:02.326105552Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1faef-a796-7e01-82ac-a562026d9fb7
   author: joe
   content: 'advisor-121 14:55: #4382''s claim heartbeat is ruled the SHARED foreign-lane visibility source; TASK-3827 PR-A will consume it. Keep the helper''s API small and documented (claim -> holder, host, heartbeat age).'
-  created_at: 2026-11-20T21:49:19.748745Z
-  modified_at: 2026-11-20T21:49:19.748745Z
+  created_at: 2026-11-20T21:49:19.748745939Z
+  modified_at: 2026-11-20T21:49:19.748745939Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf6-02aa-7b11-88f8-667aeb6acd74
@@ -165,15 +165,15 @@ comments:
      9 EXPOSE the shared observation from coordination as a small documented API: claim -> holder, host, heartbeat age, freshness
        (live, lapsed, unknown); the review gate and the throughput guard both use it.
     cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
-  created_at: 2026-11-20T21:56:16.503142Z
-  modified_at: 2026-11-20T21:56:16.503142Z
+  created_at: 2026-11-20T21:56:16.503142159Z
+  modified_at: 2026-11-20T21:56:16.503142159Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf6-7938-76c0-9737-30296e514d87
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes on BUG-2706. Reviewed the entire landed diff against pinned main 719aa4947d06. CI pending at review time (fast gates passed, fast compile pending). BUG-2706 bug protocol, the PR touches at least one test file: met by changed inline Rust test modules in coordination_heartbeat.rs and review_implementer_gate.rs.. No triage reason was given.'
-  created_at: 2026-11-20T21:56:59.320040Z
-  modified_at: 2026-11-20T21:56:59.320040Z
+  created_at: 2026-11-20T21:56:59.320040189Z
+  modified_at: 2026-11-20T21:56:59.320040189Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf6-b35f-7ff2-8e75-623709757822
@@ -194,8 +194,8 @@ comments:
     8. SessionClaimHeartbeat::drop joins a thread that may be inside a fetch or push using an unbounded Git subprocess. A stalled remote during a refresh can keep an otherwise finished launcher from returning, and a stalled pull holds the shared writer lock. Bound or cancel the refresh I/O and join on shutdown within a defined deadline.
     9. The spec's advisor selected the claim heartbeat as the shared visibility source for TASK-3827 and requested a documented claim-to-holder/host/age API. The new remote_standing and Standing are private to the review gate and the live result omits age. Expose the shared observation from coordination so the throughput reader can reuse the interpretation without duplicating review policy.
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
-  created_at: 2026-11-20T21:57:14.207146Z
-  modified_at: 2026-11-20T21:57:14.207146Z
+  created_at: 2026-11-20T21:57:14.207146472Z
+  modified_at: 2026-11-20T21:57:14.207146472Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf7-1275-7913-b1b2-5ac21a295cdf
@@ -223,15 +223,15 @@ comments:
 
     ## Coordination note (product, relaying advisor-121 14:38)
     The foreign-host lane-visibility reader (live lanes on registered lane hosts, with age) is being built in TASK-3827's PR-A (#4381 r2). BUG-2706's review deferral must REUSE that reader, not add a parallel one. If PR-A hasn't landed when you start, build against its interface as described on TASK-3827, or coordinate via the spec comments; don't fork the reader.
-  created_at: 2026-11-20T21:57:25.936424Z
-  modified_at: 2026-11-20T21:57:25.936424Z
+  created_at: 2026-11-20T21:57:25.936424870Z
+  modified_at: 2026-11-20T21:57:25.936424870Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1faf7-4acc-7f92-b832-2dc701c4cdf3
   author: joe
   content: 'Product 14:57: R2 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-468. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
-  created_at: 2026-11-20T21:57:40.367094Z
-  modified_at: 2026-11-20T21:57:40.367094Z
+  created_at: 2026-11-20T21:57:40.367094550Z
+  modified_at: 2026-11-20T21:57:40.367094550Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fafc-08f3-7322-9998-c3bd02ff62d1
@@ -244,14 +244,14 @@ comments:
 - id: 01a1fafe-236d-7422-827c-6a2551b76c96
   author: aida-publication-done
   content: Implementer push 9a5565b17c85 declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-20T22:05:21.645688Z
-  modified_at: 2026-11-20T22:05:21.645688Z
+  created_at: 2026-11-20T22:05:21.645688044Z
+  modified_at: 2026-11-20T22:05:21.645688044Z
   session_id: 01a1fabbb213
 - id: 01a1faff-19af-7e22-80be-343f46930b4e
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-468` at head `unavailable`.'
-  created_at: 2026-11-20T22:06:24.687895Z
-  modified_at: 2026-11-20T22:06:24.687895Z
+  created_at: 2026-11-20T22:06:24.687895031Z
+  modified_at: 2026-11-20T22:06:24.687895031Z
   session_id: 01a1fabbb213
 - id: 01a1fb16-34e1-7d90-abe4-e9349eb0483f
   author: joe
@@ -321,7 +321,7 @@ history:
     new_value: InProgress
 - id: 01a1faed-5d36-7bf3-984d-abddc68d2ff0
   author: aida-publication-done
-  timestamp: 2026-11-20T21:47:02.326103Z
+  timestamp: 2026-11-20T21:47:02.326103592Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -330,19 +330,19 @@ history:
     new_value: Done
 - id: 01a1faed-e115-7623-a542-b2ffd6961aff
   author: dirtlab
-  timestamp: 2026-11-20T21:47:36.085504Z
+  timestamp: 2026-11-20T21:47:36.085504835Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1faee-139b-70c0-a851-944537e604c8
   author: dirtlab
-  timestamp: 2026-11-20T21:47:49.019909Z
+  timestamp: 2026-11-20T21:47:49.019909506Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1faf5-5be2-7610-8755-f15d2ebbb5d2
   author: aida-orchestrator
-  timestamp: 2026-11-20T21:55:46.274731Z
+  timestamp: 2026-11-20T21:55:46.274731385Z
   session_id: 01a1faf2763e
   changes:
   - field_name: status
@@ -350,7 +350,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1faf6-7938-76c0-9737-301bb1436e13
   author: joe
-  timestamp: 2026-11-20T21:56:59.320019Z
+  timestamp: 2026-11-20T21:56:59.320019033Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
@@ -359,7 +359,7 @@ history:
     new_value: Approved
 - id: 01a1fafe-236d-7422-827c-6a17be1568fe
   author: aida-publication-done
-  timestamp: 2026-11-20T22:05:21.645685Z
+  timestamp: 2026-11-20T22:05:21.645685363Z
   session_id: 01a1fabbb213
   changes:
   - field_name: status
