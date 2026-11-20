@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T01:28:49.259705408Z
+modified_at: 2026-11-20T01:51:38.962846113Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -992,6 +992,13 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-460` at head `unavailable`.'
   created_at: 2026-11-20T01:28:21.954377310Z
   modified_at: 2026-11-20T01:28:21.954377310Z
+- id: 01a1f6a7-2514-7092-abb3-6cf58bafaab0
+  author: joe
+  content: 'advisor-121 18:56: D4 OBSERVATION (clean, no manual call for 10 min): #4330 TASK-3792 and #4340 TASK-3821 both landed with FULL trailers via train #4343 on live fd4018a+; 10 min later both are still In Progress, with no transition after their lanes started. Consistent with D3 not firing (never Done, so D4 has nothing to complete). D3 is the root; the reopened lane''s scope stands. Also consider: should a full-trailer landing of an In Progress spec with an approved, completes_spec declaration complete it directly?'
+  created_at: 2026-11-20T01:51:38.962846113Z
+  modified_at: 2026-11-20T01:51:38.962846113Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
