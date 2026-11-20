@@ -13,12 +13,12 @@ description: |
   2. `aida pr ship` on a busy admission waits up to a bounded time (configurable, default a few minutes) for the exclusive mode instead of failing on the first try_lock, and reports the holders and how long it waited if it gives up.
   3. Regression through the production path: with both loop workers running, an `aida pr ship` of an approved PR acquires admission within the bound. A control proves an in-progress review launch or train stack is never interrupted mid-operation.
   4. `aida advisor loops` gains a supported, audited way to drain or pause both workers' admission claims (so no operator or advisor ever needs to SIGTERM them), and `aida advisor loops status` shows each worker's claim age.
-status: Approved
+status: InProgress
 priority: High
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587336Z
-modified_at: 2026-11-20T04:46:26.901681061Z
+modified_at: 2026-11-20T14:15:10.267008905Z
 req_type: Bug
 tags:
 - admission
@@ -78,6 +78,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1f94f-aabb-7151-9f29-b7299517bb61
+  author: aida-session-start
+  timestamp: 2026-11-20T14:15:10.267007646Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 140977cdd550b1f043ea5a57eb4bb91e52211313
