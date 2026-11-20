@@ -19,7 +19,7 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-19T08:10:22.337973035Z
-modified_at: 2026-11-20T01:36:02.951070827Z
+modified_at: 2026-11-20T01:36:27.984987004Z
 req_type: Task
 tags:
 - from-advisor:TASK-3812
@@ -47,6 +47,13 @@ comments:
   created_at: 2026-11-20T01:36:02.951070827Z
   modified_at: 2026-11-20T01:36:02.951070827Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f699-3c2d-7d43-9599-3390251de02f
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 18:40): COMPLETE. The dell1 autobuild promoted on its own at 18:32:02 (''promoted and verified: 6ff4b5c4f9''), lanes launch on 6ff4b5c, and the skip-worktree override is intact (AC1, AC3). AC2 (override survives a config.toml-CHANGING ff) is a WATCH item: the next merge touching .aida/config.toml (likely promotion 23) proves it. REOPEN with the autobuild log line if that ff fails or drops the override.'
+  created_at: 2026-11-20T01:36:27.984987004Z
+  modified_at: 2026-11-20T01:36:27.984987004Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f2f1-adf7-7901-8f89-288863688baa
