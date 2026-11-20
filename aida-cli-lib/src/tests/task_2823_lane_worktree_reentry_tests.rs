@@ -39,6 +39,7 @@ fn start(
         reentry,
         None,
         /* done_rework_admitted */ false,
+        /* no_human */ false,
     )
     .map(|mut receipt| receipt.disarm())
 }

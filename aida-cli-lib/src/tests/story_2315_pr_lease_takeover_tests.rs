@@ -779,6 +779,106 @@ fn bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease() {
     }
 }
 
+/// BUG-2684: this invocation's `--no-human` decides a review lease conflict
+/// from the substrate even at an attended terminal, and the persistent
+/// no-human acknowledgement alone does not take the prompt away from an
+/// attended pickup. Driven through session start's conflict loop: a prompt
+/// here would read stdin and exit the process.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_no_human_review_conflict_is_decided_without_a_prompt() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = shipped_lane();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_and(
+        &fx.main,
+        None,
+        &[
+            ("AIDA_TRUST_PID_NAMESPACE", Some("1")),
+            ("AIDA_NO_HUMAN_ACKNOWLEDGED", Some("1")),
+        ],
+    );
+    let _attended = crate::session_start::test_attended_terminal::force();
+    std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
+    std::fs::write(
+        fx.main.join(".aida/config.toml"),
+        "[worktree_pool]\nenabled = false\n",
+    )
+    .unwrap();
+    std::fs::write(fx.main.join(".aida/no-human-acknowledged"), "").unwrap();
+    let bin = fx._tmp.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    crate::test_exec::write_executable(&bin.join("gh"), "#!/bin/sh\nprintf 'feat\\n'\n");
+    let path = format!("{}:{}", bin.display(), std::env::var("PATH").unwrap());
+    ambient.set_key("PATH", path);
+
+    // The acknowledgement is on record, yet an attended pickup that did not
+    // pass `--no-human` may still be asked.
+    assert!(crate::drain_gate::no_human_ack_source().is_some());
+    assert!(!crate::session_start::review_conflict_cannot_prompt(false));
+    assert!(crate::session_start::review_conflict_cannot_prompt(true));
+
+    std::fs::write(fx.seat.join("precious.txt"), "keep dirty work").unwrap();
+    let lease = exited_lease(&fx);
+    let path = crate::lease_path(&fx.main, &lease.id);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let original = toml::to_string(&lease).unwrap();
+    std::fs::write(&path, &original).unwrap();
+    let error = crate::session_start::session_start_with_receipt(
+        "PR-42",
+        None,
+        None,
+        false,
+        None,
+        Some("github"),
+        "plain",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        Some("reviewer".into()),
+        /* force_claim */ false,
+        /* use_pool */ Some(false),
+        /* self_claim */ false,
+        /* review_coexistence */ None,
+        /* contained_seat */ false,
+        /* rollback_failed_setup */ false,
+        crate::session_start::PathReentry::None,
+        None,
+        /* done_rework_admitted */ false,
+        /* no_human */ true,
+    )
+    .err()
+    .expect("the unsafe exited lease is retained, not prompted over");
+    // The dead-lease end was planned and refused for the dirty seat: the
+    // substrate decision, with the same advisor notice a headless run sends.
+    assert!(format!("{error:#}").contains(&lease.id), "{error:#}");
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+    assert!(fx.seat.join("precious.txt").exists());
+    let messages = aida_core::mailbox::read_local_messages(&fx.main).unwrap();
+    assert_eq!(messages.len(), 1);
+    assert!(messages[0].body.contains(&lease.id));
+}
+
+/// BUG-2684: `aida queue work --no-human` hands its flag to session start as
+/// an argument; nothing process-wide carries it.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_queue_work_passes_no_human_to_session_start() {
+    let src = include_str!("../queue_cmd/work.rs");
+    let body = &src[src.find("pub(crate) fn handle_queue_work(").unwrap()..];
+    let call = &body[body
+        .find("crate::session_start::session_start_with_receipt(")
+        .unwrap()..];
+    let call = &call[..call.find("let setup_receipt").unwrap()];
+    let flat: String = call.split_whitespace().collect();
+    assert!(flat.ends_with("/*no_human*/no_human,)};"), "{flat}");
+    assert!(!include_str!("../session_start.rs").contains(&["static NO_", "HUMAN"].concat()));
+}
+
 // trace:STORY-2325 | ai:codex
 #[test]
 fn prc_safe_end_retires_dead_pushed_seat_without_force() {

@@ -6336,12 +6336,6 @@ pub(crate) fn handle_queue_work(
                 }
             );
         }
-        // A `--no-human` pickup's setup must never stop at a prompt.
-        // trace:BUG-2684 | ai:claude
-        if no_human {
-            crate::session_start::mark_no_human_setup();
-        }
-
         // session_start handles worktree creation, lease persistence, env
         // shim, conflict detection. We always pass launch=false so we can
         // (a) write the cluster manifest from the new lease and (b) emit
@@ -6405,6 +6399,10 @@ pub(crate) fn handle_queue_work(
                 // trace:STORY-2690 | ai:claude
                 /* done_rework_admitted */
                 plan.done_rework_change.is_some(),
+                // A `--no-human` pickup's setup must never stop at a prompt.
+                // trace:BUG-2684 | ai:claude
+                /* no_human */
+                no_human,
             )
         };
         let setup_receipt = if no_launch {

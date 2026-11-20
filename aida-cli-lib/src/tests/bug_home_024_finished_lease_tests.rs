@@ -679,37 +679,151 @@ fn bug_2684_stale_review_lease_with_gone_tree_is_released_without_prompt() {
     assert!(lease_path(repo.path(), &implementer.id).exists());
 }
 
+/// BUG-2684: a reviewer lease whose holder cannot be verified is never
+/// proven dead. A pid-less lease in a pid namespace this host cannot observe
+/// is kept whatever its age, a live recorded holder naming this session is
+/// kept, and an unreadable ownership record is kept; none is released even
+/// with its tree gone.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_unverifiable_review_holder_is_never_proven_dead() {
+    use crate::ownership::{dual, store::Expect, Ownership, Phase, WorkKey};
+    let repo = committed_repo();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(repo.path(), "reviewer", &[]);
+    let holder = tempfile::tempdir().unwrap();
+    let head = String::from_utf8(git(repo.path(), &["rev-parse", "HEAD"]).stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    let kept = |lease: &SessionLease, expect: &str| {
+        let why =
+            crate::ownership::reader::review_holder_proven_dead(repo.path(), lease).unwrap_err();
+        assert!(why.contains(expect), "{why}");
+        assert!(!crate::ownership::reader::stale_review_lease_ended(
+            repo.path(),
+            lease
+        ));
+        assert!(!crate::session_start::release_dead_gone_tree_conflict(
+            repo.path(),
+            lease
+        ));
+        assert!(lease_path(repo.path(), &lease.id).exists());
+    };
+    let record = |key: &WorkKey, lease: &SessionLease| {
+        let owner = dual::holder_for_lease(lease, &dual::WriterFacts::here(), chrono::Utc::now());
+        crate::ownership::store::OwnershipStore::for_project(repo.path())
+            .unwrap()
+            .unwrap()
+            .update(key, "fixture", Expect::Any, |_| {
+                Some((
+                    Ownership {
+                        key: key.clone(),
+                        generation: 0,
+                        phase: Phase::Reviewing { head: head.clone() },
+                        holder: Some(owner.clone()),
+                    },
+                    None,
+                ))
+            })
+            .unwrap();
+    };
+
+    // A pid-less legacy lease stamped in a foreign pid namespace, a month
+    // old: the age backstop alone calls its owner gone, and that is not proof.
+    let gone = deleted_worktree(repo.path(), holder.path(), "pr-4401");
+    let mut foreign = lease_at("01a1f76fce01", "PR-4401", &gone, "pr-4401", None);
+    foreign.review_verb = true;
+    foreign.pid_namespace =
+        Some(crate::agent_registry::current_pid_namespace().map_or(7, |ns| ns ^ 1));
+    foreign.started_at = chrono::Utc::now() - chrono::Duration::days(30);
+    write_lease(repo.path(), &foreign);
+    assert!(
+        crate::ownership::reader::lease_record(repo.path(), &foreign)
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        crate::leases::lease_owner_gone(&foreign),
+        Some(true),
+        "the age backstop alone presumes this owner gone"
+    );
+    kept(&foreign, "pid namespace this host cannot observe");
+
+    // A record naming this session whose admitted worker is alive.
+    let gone = deleted_worktree(repo.path(), holder.path(), "pr-4403");
+    let mut live = lease_at("01a1f76fce03", "PR-4403", &gone, "pr-4403", None);
+    live.review_verb = true;
+    live.pr_head_sha = Some(head.clone());
+    let mut command = std::process::Command::new("sleep");
+    command.arg("30");
+    let capture = aida_core::proc_identity::prepare_command(&mut command).unwrap();
+    let mut child = command.spawn().unwrap();
+    let admission = capture.finish(&mut child);
+    live.active_pid = Some(child.id());
+    live.active_pid_start_time = crate::process_probe::process_start_identity(child.id());
+    live.hostname = crate::coordination::hostname();
+    live.pid_namespace = dual::WriterFacts::here().pid_ns;
+    live.holder_record = Some(serde_json::to_string(&admission).unwrap());
+    write_lease(repo.path(), &live);
+    let live_key = WorkKey::Review {
+        change: dual::change(4403),
+        head: head.clone(),
+    };
+    record(&live_key, &live);
+    let verdict = crate::ownership::reader::lease_owner(repo.path(), &live);
+    let why = crate::ownership::reader::review_holder_proven_dead(repo.path(), &live);
+    let released = crate::session_start::release_dead_gone_tree_conflict(repo.path(), &live);
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(
+        matches!(verdict, crate::ownership::OwnerVerdict::Alive { .. }),
+        "{verdict:?}"
+    );
+    let why = why.unwrap_err();
+    assert!(why.contains("still alive"), "{why}");
+    assert!(!released);
+    assert!(lease_path(repo.path(), &live.id).exists());
+
+    // An unreadable ownership record: every recorded process is positively
+    // dead, but the evidence of who holds the key cannot be read.
+    let gone = deleted_worktree(repo.path(), holder.path(), "pr-4402");
+    let mut unreadable = lease_at("01a1f76fce02", "PR-4402", &gone, "pr-4402", None);
+    unreadable.review_verb = true;
+    unreadable.active_pid = Some(reaped_pid());
+    unreadable.pr_head_sha = Some(head.clone());
+    write_lease(repo.path(), &unreadable);
+    let key = WorkKey::Review {
+        change: dual::change(4402),
+        head: head.clone(),
+    };
+    record(&key, &unreadable);
+    assert!(crate::ownership::reader::lease_record(repo.path(), &unreadable).is_ok());
+    let store = crate::ownership::store::OwnershipStore::for_project(repo.path())
+        .unwrap()
+        .unwrap();
+    std::fs::write(store.path_for(&key), "{ not an ownership record").unwrap();
+    assert!(crate::ownership::reader::lease_record(repo.path(), &unreadable).is_err());
+    kept(&unreadable, "ownership evidence unreadable");
+}
+
 /// BUG-2684: the review lease-conflict prompt is never offered to a
-/// `--no-human` pickup or a headless/no-human/agent environment, even when a
-/// terminal is attached.
+/// `--no-human` pickup, a headless environment, or a caller with no terminal
+/// on stdin; an attended terminal may prompt.
 // trace:BUG-2684 | ai:claude
 #[test]
 fn bug_2684_no_human_review_pickup_never_prompts() {
     use crate::session_start::review_conflict_cannot_prompt_from as cannot;
     assert!(
-        !cannot(false, false, false, false),
+        !cannot(false, false, true),
         "an attended terminal may prompt"
     );
-    assert!(
-        cannot(true, false, false, false),
-        "--no-human never prompts"
-    );
-    assert!(
-        cannot(false, true, false, false),
-        "AIDA_HEADLESS never prompts"
-    );
-    assert!(
-        cannot(false, false, true, false),
-        "an acknowledged no-human run never prompts"
-    );
-    assert!(
-        cannot(false, false, false, true),
-        "agent mode or no TTY never prompts"
-    );
+    assert!(cannot(true, false, true), "--no-human never prompts");
+    assert!(cannot(false, true, true), "AIDA_HEADLESS never prompts");
+    assert!(cannot(false, false, false), "no TTY never prompts");
     // A no-human decision for a live reviewer lease refuses; a dead one ends.
     assert_eq!(
         crate::leases::review_source_branch_conflict_decision(
-            cannot(true, false, false, false),
+            cannot(true, false, true),
             true,
             Some("reviewer"),
             Some("reviewer"),
@@ -719,7 +833,7 @@ fn bug_2684_no_human_review_pickup_never_prompts() {
     );
     assert_eq!(
         crate::leases::review_source_branch_conflict_decision(
-            cannot(true, false, false, false),
+            cannot(true, false, true),
             false,
             Some("reviewer"),
             Some("reviewer"),

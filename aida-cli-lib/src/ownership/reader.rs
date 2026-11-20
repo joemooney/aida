@@ -577,9 +577,14 @@ pub(crate) fn review_holder_proven_dead(
 /// ([`finished_review_worker_is_gone`]), the owner by its liveness probe,
 /// and the creator by pid plus recorded start identity. A legacy lease
 /// whose live creator sits outside the tree is therefore never finished,
-/// and a lease recording no process at all has no proof.
+/// and a lease recording no process at all has no proof. Processes in a pid
+/// namespace this observer cannot see are unverifiable, whatever the lease's
+/// age: the heartbeat backstop is not a death proof here.
 // trace:BUG-2684 | ai:claude
 fn lease_processes_proven_gone(lease: &crate::SessionLease) -> std::result::Result<(), String> {
+    if !aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace) {
+        return Err("its processes are in a pid namespace this host cannot observe".into());
+    }
     if !finished_review_worker_is_gone(lease) {
         return Err("its recorded worker is alive or unverifiable".into());
     }
