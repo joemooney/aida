@@ -34,6 +34,10 @@ relationships:
   target_id: 01a1faa7-0e8c-7681-8ec5-774d43c05540
   created_at: 2026-11-20T20:30:40.007886489Z
   created_by: dirtlab
+- rel_type: Blocks
+  target_id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
+  created_at: 2026-11-20T22:50:34.750661557Z
+  created_by: joe
 comments:
 - id: 01a1e372-09ba-78d2-b17b-0b34c7114bbc
   author: joe
@@ -851,6 +855,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fb27-f042-7143-a943-334d54f015ee
+  author: joe
+  timestamp: 2026-11-20T22:51:01.058750360Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
