@@ -20,13 +20,19 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T21:47:02.326106144Z
+modified_at: 2026-11-20T21:47:34.146955334Z
 req_type: Bug
 tags:
 - lanes
 - linked:STORY-2705
 - review-watch
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1faed-a9e7-7a81-a898-d263611cbfae
+  created_at: 2026-11-20T21:47:34.146902998Z
+  created_by: dirtlab
 comments:
 - id: 01a1fab9-02e6-7182-8ee3-a12a38436644
   author: joe
@@ -157,6 +163,12 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a1faed-e115-7623-a542-b2ffd6961aff
+  author: dirtlab
+  timestamp: 2026-11-20T21:47:36.085504835Z
+  session_id: 01a1fabbb213
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
