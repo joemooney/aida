@@ -1616,10 +1616,11 @@ pub(crate) fn handle_release(
             .ok()
             .map(|status| status.head_sha.trim().to_string())
             .filter(|sha| !sha.is_empty());
-        let mut after_pr_ids = pr_ship::extract_spec_ids_from_text(&change_ref.branch);
-        if let Some(title) = &change_ref.title {
-            after_pr_ids.extend(pr_ship::extract_spec_ids_from_text(title));
-        }
+        // BUG-2702: the branch by convention only. trace:BUG-2702 | ai:claude
+        let after_pr_ids = pr_ship::extract_pr_spec_ids(
+            &change_ref.branch,
+            change_ref.title.as_deref().unwrap_or(""),
+        );
         let after_pr_match_head = crate::gate::approval::merge_path_approval_gate(
             &merge_root,
             n,

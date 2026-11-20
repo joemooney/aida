@@ -1770,6 +1770,19 @@ fn run(
                 *pr,
                 launch.vendor.as_str(),
             )?;
+            // D3 (BUG-2696 reopen): the child pushed its own branch, so no
+            // host publication ran; a completing push of this run sets Done.
+            // trace:BUG-2696 | ai:claude
+            if !fast_rework {
+                crate::ship_from_seat::mark_done_after_self_published_round(
+                    &main_root,
+                    &worktree,
+                    launch.spec,
+                    launch.branch,
+                    launch_seat.head,
+                    status.success(),
+                );
+            }
         }
     }
     // trace:BUG-B6B1278890774EF993D2EBC327862470-044 | ai:claude

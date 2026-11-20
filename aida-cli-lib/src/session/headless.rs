@@ -2052,6 +2052,16 @@ pub(crate) fn run_vendor_headless_to_exit(
             // standalone launch's resume safety net, through the same loop: a lane
             // that parks on its own build is waited for and resumed, bounded.
             // trace:BUG-B6B1278890774EF993D2EBC327862470-050 | ai:claude
+            // D3 (BUG-2696 reopen): a self-published round sets Done only for
+            // its own push; remember the seat head before the child runs.
+            // trace:BUG-2696 | ai:claude
+            let launch_head = if host_published {
+                None
+            } else {
+                implementer_job_lane(seat, lease_id, lane_tree).and_then(|(_, (tree, _))| {
+                    crate::standalone_implementer::implementer_launch_head(&main_root, tree)
+                })
+            };
             let result = match drain_lane {
                 None => run_once(prompt, log_path, false, None),
                 Some((lease, (worktree, branch))) => drain_lane_with_resume(
@@ -2119,6 +2129,15 @@ pub(crate) fn run_vendor_headless_to_exit(
                         anyhow::ensure!(
                             !queued,
                             "fast gate failed; one rework round queued before review"
+                        );
+                        // trace:BUG-2696 | ai:claude
+                        crate::ship_from_seat::mark_done_after_self_published_round(
+                            &main_root,
+                            tree,
+                            &scope,
+                            branch,
+                            launch_head.as_deref(),
+                            status.success(),
                         );
                     }
                 }

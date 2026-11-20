@@ -1421,7 +1421,7 @@ pub(crate) trait MemberChecks {
         self.covered_ids(
             pr,
             head_ref,
-            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+            crate::pr_ship::extract_pr_spec_ids(head_ref, title),
         )
     }
     /// The local merge-hold marker's reason, if any.
@@ -1664,7 +1664,7 @@ pub(crate) fn member_spec_ids(
     subject: &str,
     body: &str,
 ) -> Vec<String> {
-    let mut ids = crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}"));
+    let mut ids = crate::pr_ship::extract_pr_spec_ids(head_ref, title);
     for line in std::iter::once(subject).chain(body.lines()) {
         // Policy reads every constituent claim and reference; only the landed
         // completion body is narrowed to the PR's completing claims.
@@ -2018,7 +2018,7 @@ impl MemberChecks for LiveChecks<'_> {
         let mut ids = self.covered_ids(
             pr,
             head_ref,
-            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+            crate::pr_ship::extract_pr_spec_ids(head_ref, title),
         );
         if let Ok(merge_step) =
             verified::merge_step_spec_ids(self.project_root, pr, head_ref, title, subject, body)

@@ -1157,3 +1157,7 @@ mod bug_2214_cleared_hold_tests;
 #[cfg(test)]
 #[path = "tests/task_2067_trace_resolution_tests.rs"]
 mod task_2067_trace_resolution_tests;
+
+#[cfg(test)]
+#[path = "tests/bug_2702_promotion_cover_tests.rs"]
+mod bug_2702_promotion_cover_tests;
