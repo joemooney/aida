@@ -9,12 +9,12 @@ description: |-
   1. aida queue rework finishes in under 10s on this repo's current gate ledger (658 PR ledgers), or prints progress and names the slow phase.
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
-status: Approved
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T23:43:40.786745939Z
+modified_at: 2026-11-20T23:57:15.997288622Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -747,6 +747,12 @@ comments:
   modified_at: 2026-11-20T23:43:40.786745939Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb64-975d-7341-8508-22bfcdbcc0fb
+  author: aida-publication-done
+  content: Implementer push fb1e88018a70 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T23:57:15.997287807Z
+  modified_at: 2026-11-20T23:57:15.997287807Z
+  session_id: 01a1fb27787b
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
@@ -999,6 +1005,14 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1fb64-975d-7341-8508-22aa91c55e30
+  author: aida-publication-done
+  timestamp: 2026-11-20T23:57:15.997284593Z
+  session_id: 01a1fb27787b
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
