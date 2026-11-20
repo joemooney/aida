@@ -434,9 +434,14 @@ fn review_finished_reason(lease: &crate::SessionLease) -> Result<String> {
 // the supervisor receipt; foreign/unreadable recorded workers remain protected.
 // trace:BUG-2498 | ai:codex
 fn review_completion_matches(lease: &crate::SessionLease, why: &str) -> bool {
-    if !review_finished_reason(lease).is_ok_and(|expected| why == expected) {
-        return false;
-    }
+    review_finished_reason(lease).is_ok_and(|expected| why == expected)
+        && finished_review_worker_is_gone(lease)
+}
+
+/// After supervised exit, veto cleanup when the recorded worker remains
+/// alive or its identity cannot be verified.
+// trace:BUG-2498 BUG-2684 | ai:codex
+pub(crate) fn finished_review_worker_is_gone(lease: &crate::SessionLease) -> bool {
     if crate::leases::lease_holder_record(lease).is_some() {
         return matches!(
             crate::leases::lease_process_verdict(lease),

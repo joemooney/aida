@@ -1215,13 +1215,22 @@ fn reap_one_with_clear_hooks(
         // the tree is kept. trace:TASK-1955 | ai:claude (BUG-2206)
         // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
         if let Some(pr) = crate::gate::review_authority::review_lease_pr(lease) {
-            if let Err(e) = crate::merge_hold::adopt_worktree_hold(
+            // An unrecorded reviewer draft lives only in this gitignored
+            // tree; removing the tree would delete its findings.
+            // trace:BUG-2684 | ai:claude
+            if let Some(why) = crate::review_draft::unconsumed_draft_retention(&lease.worktree_path)
+            {
+                return format!("skipped — {why}");
+            }
+            match crate::merge_hold::preserve_review_worktree_holds(
                 project_root,
                 &lease.worktree_path,
                 pr,
                 lease.started_at.into(),
             ) {
-                return format!("skipped — could not adopt the PR-{pr} merge-hold marker ({e})");
+                Ok(true) => {}
+                Ok(false) => return format!("skipped — review tree still contains merge-hold markers for inspection (PR-{pr})"),
+                Err(e) => return format!("skipped — could not preserve the PR-{pr} merge-hold marker ({e})"),
             }
         }
         if let Err(e) = aida_core::worktree_pool_destroy::teardown_worktree_path(
@@ -1713,8 +1722,8 @@ pub(crate) fn release_gone_worktree_leases(
         .collect()
 }
 
-/// Reap a standalone review the moment its reviewer exits with its verdict
-/// collected: the review tree, its lease, and its local review branch go
+/// Reap an eligible standalone review after its reviewer exits:
+/// the review tree, its lease, and its local review branch go
 /// together, through the same [`reap_one`] the post-merge reap uses. A tree
 /// that is dirty, unreadable, in use, or whose branch holds a commit neither
 /// the PR head nor `origin` has is kept WITH its lease, so the dead-reviewer
@@ -1732,6 +1741,13 @@ pub(crate) fn reap_finished_review(
     if lease.worktree_path.as_os_str().is_empty() || !lease.worktree_path.exists() {
         return Err("its review tree is not on disk".to_string());
     }
+    if worktree_is_locked(project_root, &lease.worktree_path) {
+        return Err("its review tree is locked".to_string());
+    }
+    // trace:BUG-2684 | ai:claude
+    if let Some(why) = crate::review_draft::unconsumed_draft_retention(&lease.worktree_path) {
+        return Err(why);
+    }
     if worktree_status_dirty(&lease.worktree_path) {
         return Err("its review tree has uncommitted changes".to_string());
     }
@@ -1741,10 +1757,48 @@ pub(crate) fn reap_finished_review(
             "its review branch `{branch}` could not be resolved"
         ));
     };
-    if !review_branch_within_pr_head(project_root, Some(&tip), lease) {
+    // Pickup may have fetched the review ref successfully while the
+    // forge metadata command failed, leaving no head SHA on the lease.
+    // Reconfirm the remote head before treating such a branch as disposable.
+    // trace:BUG-2684 | ai:codex
+    let fetched_head;
+    let review_head = if review_branch_within_pr_head(project_root, Some(&tip), lease) {
+        lease.pr_head_sha.as_deref()
+    } else if let Some((forge, n)) = crate::pr_lease_takeover::reviewer_target(lease) {
+        fetched_head = crate::pr_lease_takeover::fetch_review_head(project_root, forge, n)
+            .map_err(|error| format!("could not confirm the review branch on origin: {error:#}"))?;
+        if !aida_core::git_ops::is_ancestor(project_root, &tip, &fetched_head).unwrap_or(false) {
+            return Err(format!(
+                "its review branch `{branch}` holds commits the PR does not"
+            ));
+        }
+        Some(fetched_head.as_str())
+    } else {
         return Err(format!(
             "its review branch `{branch}` holds commits the PR does not"
         ));
+    };
+    if lease.tree_kind == crate::seat_clone::TreeKind::Worktree
+        && crate::seat_clone::seat_clone_root(&lease.worktree_path).is_none()
+    {
+        // Also check the checkout's actual HEAD. It may be detached or switched
+        // away from the lease branch, which by itself cannot cover those commits.
+        // trace:BUG-2684 | ai:codex
+        match crate::seat_clone::remote_missing_commits_with_review_head(
+            project_root,
+            &lease.worktree_path,
+            false,
+            branch,
+            review_head,
+        ) {
+            Ok(0) => {}
+            Ok(_) => return Err("its review checkout holds unpublished commits".to_string()),
+            Err(error) => {
+                return Err(format!(
+                    "its review checkout could not be verified: {error:#}"
+                ))
+            }
+        }
     }
     let outcome = reap_one(project_root, lease, Some(&tip));
     if outcome.starts_with("reaped") {
