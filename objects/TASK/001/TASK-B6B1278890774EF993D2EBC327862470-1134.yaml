@@ -15,12 +15,12 @@ description: |
   2. Assertions keep their meaning: an unbounded or unkilled child still fails the test (state the mutation in a comment).
   3. No production changes. Loop each test 20/20 locally.
   Test-only, codex (gpt-6.2-astra), FASTTRACK review.
-status: Done
+status: Completed
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:56:38.591487997Z
-modified_at: 2026-11-20T16:57:29.371637677Z
+modified_at: 2026-11-20T18:23:04.106652146Z
 req_type: Task
 tags:
 - fix-forward
@@ -117,6 +117,20 @@ history:
   timestamp: 2026-11-20T16:56:29.792090278Z
   session_id: 01a1f9b31fae
   changes: []
+- id: 01a1fa32-9f5b-7b30-bedb-3942b26c1bab
+  author: aida-auto-bump
+  timestamp: 2026-11-20T18:23:04.027121672Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a1fa32-9faa-7652-b116-14d494aadfac
+  timestamp: 2026-11-20T18:23:04.106647438Z
+  agent: aida
+  commit_sha: 58b086965871a6966c7f18fed2faccdc22b68669
+  summary: '## Round 1 full-sweep assessment Scope: completing TASK-3825 (origin TASK-b6b1278890774ef993d2ebc327862470-1134). The task brief explicitly names task_3792_train_check_bounds_discovery_and_member_subprocesses and task_3792_approval_local_git_reads_share_the_deadline. Read the entire supplied protected-base/landed-tree diff and surrounding fixtures, all shared-helper callers, and the full spec with comments. The reviewed test file is identical between original head and landed tree. - ac04be46: verified by source evidence at story_2824_train_check_tests.rs:583, :591, :830 and :974. Both named tests use timeout + 5 seconds (6 seconds for a 1-second deadline), far below the 20-second stalled fixtures; descendant checks poll every 10 ms for up to 5 seconds. Missing/ESRCH processes and zombies mean stopped, while other procfs errors fail. No new traced test is necessary for these changes to the existing behavioral tests. - ac46ad41: verified by source evidence at story_2824_train_check_tests.rs:819 and the two tests'' fixtures/assertions. The comment explicitly states the deadline-removal and group-kill-removal mutations. A 20-second unbounded stall exceeds the 6-second elapsed bound; a surviving sleeper exceeds the 5-second exit poll. Unknown-evidence assertions, positive controls, zero-budget checks and spawn-deadline checks remain. This is source reasoning, not an independently executed mutation test. - ac444b0f: verified by the complete diff (one test-only file; no production changes) and the persisted TASK-3825 implementer self-review dated 2026-11-20T16:32:00Z, reporting 20 consecutive final rounds for each named test (40 passes) and passes for the other two shared-helper callers. Existing run evidence was reused; no local tests/builds were run by this reviewer, per operator policy. Verdict: APPROVED. No actionable defects found across the complete diff. CI pending at review time: fast gates succeeded, fast compile running. Original reviewed SHA d7afb5a2aeb9e2bc9fc81a022e192f0ba0537e03; evaluated as landing on protected main 861eb515765aac3c9248675df0b8d1d50acfc5f8 using landed tree 8f6bcefff7aef6bfd592f6743a0a1e519389969c. No finding depends on the intervening base commit. The supplied untraced-criteria list was checked against the modified tests and recorded run evidence; no covered criterion remains untested within the declared two-test scope.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
@@ -127,3 +141,7 @@ filed_at:
   vendor: claude
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-20T18:23:04.027104079Z
+  completion_sha: 58b086965871a6966c7f18fed2faccdc22b68669
