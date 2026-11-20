@@ -15,12 +15,20 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-20T23:13:35.072455044Z
+modified_at: 2026-11-20T23:13:58.838549242Z
 req_type: Bug
 tags:
 - review
 - reviewer-skill
 - throughput
+history:
+- id: 01a1fb3d-289e-7142-82c4-554327403553
+  author: joe
+  timestamp: 2026-11-20T23:14:11.742546437Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
+execution_mode: decide
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
   branch: main
