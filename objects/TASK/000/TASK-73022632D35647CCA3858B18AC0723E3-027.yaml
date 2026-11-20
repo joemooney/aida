@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T14:26:27.457633299Z
+modified_at: 2026-11-20T15:15:11.776918651Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -173,6 +173,34 @@ comments:
   content: 'Lane recovery: no open PR; retained branch `task-73022632d35647cca3858b18ac0723e3-027` at head `unavailable`.'
   created_at: 2026-11-20T14:26:00.168689266Z
   modified_at: 2026-11-20T14:26:00.168689266Z
+- id: 01a1f986-a035-7d21-80ab-90521e142005
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 3628db3d36122aa80a4742136e38f7ede9b0c8f9. Reviewed `git diff origin/main...HEAD` for the earlier mail and disk slice, then `git diff HEAD` for the three native edits. No untracked additions. Exact PR-head CI awaits host publication.
+
+    AC1: [evidence: behavioral-test] The recorded unmodified dell1 baseline, j20261119T175135035-2-0, had 334 passed, 22 failed and 3 ignored. Matched all 22 distinct failure names against each new job. The pre-fix diagnostic j20261120T143457640-2-0 reproduced the six outstanding failures at lane HEAD (350 passed, 6 failed, 3 ignored).
+
+    AC2: [evidence: behavioral-test] The 14 mail-admission fixtures supply per-test writer evidence against temporary Git roots and fixture mailboxes (task_2053_seat_clone_lifecycle_tests.rs:420, task_2053_s4_host_git_tests.rs:381 and bug_2223_orphan_seat_reentry_tests.rs:1255). Both disk-sensitive tests supply a fixed measurement to the normal threshold checks (machine_readiness.rs:110, bug_home_038_seat_publish_tests.rs:3025 and :3414). Four live Bubblewrap cases use the fixture-only read-only bind (bug_2169_contained_clone_bwrap_tests.rs:393), and the resume case changes into the fixture in an isolated test child (same file:1688). All 22 baseline rows reported ok in all three broad runs. For TASK-2712, targeted job j20261120T151045439-2-0 confirmed the already-landed capability skip. Codex :workspace could write outside its explicit roots in the temporary fixture, so the live denial assertions remain unverified on this runner. Required-live mode still rejects the skip in the upstream fixture.
+
+    AC3: [evidence: behavioral-test] Three consecutive dell1 jobs ran `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`. Each exited 0 with 356 passed, 0 failed and 3 ignored.
+    - j20261120T143625989-2-0 (128.37s)
+    - j20261120T144612064-2-0 (104.05s)
+    - j20261120T144613231-2-0 (121.43s)
+
+    The primary-host runs belong to product. The validation tree included the exact #4316 Codex fixture already on origin/main, because the retained lane HEAD predates it. Removed that temporary overlay for host handoff and verified each of the three edited files merges cleanly onto origin/main using lane HEAD as the patch base. FAST job j20261120T143625976-2-0, the standalone store-writer inventory, rustfmt and both Git diff whitespace checks passed.
+
+    AC4: [evidence: manual-inspection] TASK-3133 references BUG-2623. This patch leaves its parallel-load fixtures alone.
+
+    Adversarial review:
+    - Bubblewrap and resume fixtures. The mount uses a canonical private fixture path and component-based /tmp matching. The shell receives MAIN as an environment value, including paths with spaces or quotes. Both sandbox layers retain their writable-child and denial assertions, and only the isolated child changes cwd. The read-only overlay does not expose sibling temporary directories. T1 and T2 retain their legacy positive controls, and T3 and T5 retain seat and origin controls.
+    - Disk preflight and publication fixtures. The override is test-only and thread-local, is restored on scope exit, and supplies bytes without changing threshold semantics. All three requested locations still use the same floor check. Production continues to refuse missing or insufficient measurements. The original launch refusal and reservation-cleanup assertions executed.
+    - Earlier mail fixtures. Reviewed the orphan-reentry, S4 and lifecycle hunks. Writer evidence remains thread-local for the lifetime of each fixture, with no change to branch/lease matching or Git and config formats. Removal, busy/dirty preservation, unpublished-work and unsafe-path assertions remain. No production authority path changed and no tests were newly ignored.
+  created_at: 2026-11-20T15:15:11.776918651Z
+  modified_at: 2026-11-20T15:15:11.776918651Z
+  session_id: 01a1f959d1a3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
