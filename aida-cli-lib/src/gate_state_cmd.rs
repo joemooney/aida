@@ -199,15 +199,19 @@ fn today_answer(
     let verdict = today_verdict(&candidates, head, |refusal| {
         crate::gate::review_carryover::carry_over_for_refusal(&site, pr, refusal).map(|r| r.is_ok())
     });
-    let records = crate::pr_cmd::ship_gate_spec_records_for_ids(main, ids.to_vec());
-    let modes: Vec<(String, Option<aida_core::ExecutionMode>)> = records
-        .iter()
-        .map(|(id, _, mode)| (id.clone(), *mode))
-        .collect();
+    let mut records = crate::pr_cmd::ship_gate_spec_records_for_ids(main, ids.to_vec());
+    // STORY-2884: as ship reads them, with the unset-mode default withdrawn
+    // for a change that touches a protected gate path. trace:STORY-2884 | ai:claude
+    let head_ref = head.to_string();
+    crate::pr_cmd::withdraw_unset_defaults(&mut records, || {
+        base.and_then(|b| {
+            crate::gate::unset_mode::changed_paths(main, &format!("origin/{b}"), &head_ref)
+        })
+    });
     Today {
         verdict: verdict.to_string(),
         hold_open: crate::gate::ledger::hold::state(main, pr).open.is_some(),
-        supervised: ship::supervised_merge_holds(&modes, false),
+        supervised: ship::effective_supervised_merge_holds(&records, false),
         draft_only: crate::pr_cmd::draft_only_specs_in(&records),
     }
 }
