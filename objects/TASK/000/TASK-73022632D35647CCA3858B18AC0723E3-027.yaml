@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T14:14:50.233814427Z
+modified_at: 2026-11-20T14:16:36.082042959Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -153,6 +153,20 @@ comments:
   created_at: 2026-11-20T14:14:50.233814427Z
   modified_at: 2026-11-20T14:14:50.233814427Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f951-32c9-7cc2-bed7-a54fc77c42c1
+  author: joe
+  content: |-
+    Product 07:16: codex lane queued on dell1 (advisor 07:15 scope), brief:
+    # Brief: TASK-3133 (advisor-121 07:15: scoped remainder, approved + drain; codex)
+
+    Scope (advisor 07:15): AC2's hermeticity check (the seat-clone broad suite must not depend on host lifecycle or containment state), plus the dell1 3-run evidence (run the suite 3 times on dell1 and quote the results in the PR body). The 3 primary-host runs are a separate evidence task owned by product, not this lane. Trailer (Refs TASK-3133).
+
+    Implement ONLY this remaining scope; earlier slices are on main (7d36925c193  ).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T14:16:36.082042959Z
+  modified_at: 2026-11-20T14:16:36.082042959Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
