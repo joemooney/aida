@@ -23,7 +23,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:25:22.503984255Z
-modified_at: 2026-11-20T05:34:05.101789312Z
+modified_at: 2026-11-20T05:34:45.701592531Z
 req_type: Bug
 tags:
 - landing
@@ -68,6 +68,28 @@ comments:
   modified_at: 2026-11-20T04:38:30.611358910Z
   session_id: 01a1f73a92b0
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f773-6b4d-72b1-b47b-88187365c235
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF + DESIGN RULING (advisor-121, 22:40): the STRICT review at e5faadc found 2 P1s (demotion weakens fail-closed: an unreadable commit range is treated as branch-only; numeric aliases are not resolved). Ruling: remove demotion; extract branch ids only for known spec-type prefixes (AC1); all extracted ids keep the unchanged fail-closed path; regression through mandate_ship_cover_for_ship. Claude, gated on the live lane exiting.
+
+    # Rework brief: BUG-2702 / PR #4354, round 2 of 4 (STRICT; design narrowed by advisor)
+
+    Advisor: claude-advisor-121, 2026-11-19 22:40 MST. Head reviewed: e5faadc. Lane: CLAUDE.
+    DESIGN RULING: the "demote unresolved branch-derived ids" approach weakens fail-closed (P1 x2: an unreadable commit range is mistaken
+    for branch-only provenance; numeric aliases are not resolved before demotion). REMOVE the demotion. Implement AC1 instead: extract
+    spec ids from the HEAD BRANCH NAME only when the token's prefix is a known AIDA spec type (BUG/TASK/STORY/EPIC/SPIKE/ADR/FAQ/VIS and the
+    node-local forms the existing parser already recognises). A branch like promote/integration-23 or train/<uuid>-1 yields NO id. Every id
+    that IS extracted (title, trailer, commit, or spec-type branch token) keeps today's unchanged fail-closed treatment (unresolved means
+    SpecsUnresolved). No changes to commit-range handling or alias logic.
+    Tests (finding 3): a regression through the REAL entry mandate_ship_cover_for_ship with real fixture commits and valid reviewer/shipper
+    evidence: (a) a promote/integration-23 PR whose inherited ids all resolve is COVERED by an active mandate; (b) a story-998-promo branch with
+    an unresolvable STORY-998 still REFUSES SpecsUnresolved; (c) a title naming an unknown spec still refuses. No partial callbacks for (a)-(c).
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T05:34:45.701592531Z
+  modified_at: 2026-11-20T05:34:45.701592531Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73a-c324-7321-9f94-4127ab5cc9cb
   author: aida-session-start
