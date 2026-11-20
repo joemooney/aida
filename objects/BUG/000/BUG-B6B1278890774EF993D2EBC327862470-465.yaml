@@ -18,7 +18,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587336Z
-modified_at: 2026-11-20T04:37:30.531257963Z
+modified_at: 2026-11-20T04:41:10.189483164Z
 req_type: Bug
 tags:
 - admission
@@ -33,6 +33,13 @@ comments:
   created_at: 2026-11-20T04:37:30.531257963Z
   modified_at: 2026-11-20T04:37:30.531257963Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f742-561e-7fe0-b7e9-89303919567c
+  author: joe
+  content: 'Product 21:42: stopping the workers is not durable. After the advisor''s SIGTERM at ~21:35, both ''aida advisor loops'' workers respawned within minutes (train-worker pid 2910319, review-watch pid 2921307) with fresh shared receipts, and train #4353 started, so the exclusive ship is blocked again. AC4 (a supported drain/pause) must also hold the supervisor''s respawn, not just the current worker processes.'
+  created_at: 2026-11-20T04:41:10.189483164Z
+  modified_at: 2026-11-20T04:41:10.189483164Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
