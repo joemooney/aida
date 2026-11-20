@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T22:02:07.641037020Z
+modified_at: 2026-11-20T22:02:34.767946199Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -331,6 +331,13 @@ comments:
   created_at: 2026-11-20T21:23:09.975921035Z
   modified_at: 2026-11-20T21:23:09.975921035Z
   session_id: 01a1fa82d1b0
+- id: 01a1fafb-cafb-71d1-86da-7c2cc6217a39
+  author: joe
+  content: 'advisor-121 15:15: the verdict at b3225b3 is a PREMATURE review of the r3 lane''s merge-main commit (the lane is live); its 5 findings repeat r2''s. Not a spent round.'
+  created_at: 2026-11-20T22:02:34.767946199Z
+  modified_at: 2026-11-20T22:02:34.767946199Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
