@@ -2,59 +2,38 @@ id: 01a1c128-b15f-7a41-93b8-94877cd89088
 spec_id: STORY-b6b1278890774ef993d2ebc327862470-618
 agreed_id: STORY-2695
 title: 'dell1 CI runner: pass all shards, run parallel slots, and persist per-slot incremental builds with a PR/main cache split'
-description: '## Evidence (smoke run 42650619081, 2026-11-09, one PR routed to dell1, routing then turned off)
-
+description: |
+  ## Evidence (smoke run 42650619081, 2026-11-09, one PR routed to dell1, routing then turned off)
   Dell1 shard wall time versus six recent hosted runs: cli-0 275s (hosted 407-595s), cli-1 236s (375-492s), lib-0 784s (762-1116s), lib-1 459s (731-1158s). Compile is about 4.5 minutes of every lib shard: 36% of lib-0 and 58% of lib-1. Serial execution took 29.5 minutes for four shards.
-
   Baseline hosted queue: median 378s per heavy shard.
 
-
   ## Blockers before routing can stay on
-
   Seven tests pass on hosted and fail under the hardened runner unit, all environmental (for example `Operation not permitted`):
-
   - contained_boundary::bug_2418_task_2772_lane_cargo_tests (2: lane_build_paths_never_reach_cargo_home, lane_build_paths_are_only_the_slot_pair)
-
   - seat_clone::lifecycle_tests::task_2053_bwrap_probe_runs_no_seat_filter_and_reads_only_the_seat_view
-
   - gate::mandate::story_1698_mandate_tests (2: exclusion_writer_refuses_invalid_ledger_without_appending, task_1790_exclusions_require_private_owned_regular_file)
-
   - regen::score::tests::confined_environment_hides_original_source_and_refuses_exposed_system_roots
-
   - launch::contained::tests::task_2708_live_host_udp_named_send_refused
-
   Fix the unit, the test assumptions or both. Do not weaken or skip a containment test to get green.
 
-
   ## Scope, one PR touching scripts/runner/one-job.sh and ci.yml
-
   1. Parallel slots: 2 or 3 concurrent one-job runners, each with its own job directory, lock and rearm loop, inside the shared aida-ci.slice core budget.
-
   2. Persistent per-slot incremental Rust build cache, owned by aida-ci and never holding credentials.
-
   3. Cache trust split: same-repository PR jobs use a PR cache; main pushes and merge-train runs never read it and use a separate cache or build clean. A job must not be able to influence what a main or train build compiles.
-
 
   This deliberately amends the runner rule that no previous job files survive locally. The operator accepted that risk on 2026-11-09 with the separation above. Fork PRs remain on hosted runners.
 
-
   ## Acceptance
-
   - All heavy shards pass on dell1 with AIDA_REQUIRE_BWRAP_LIVE=1, with no containment test removed or skipped.
-
   - Two jobs run concurrently without sharing a job directory or cache slot; the slot cap holds.
-
   - A test proves a PR job cannot write to the main/train cache.
-
   - Runbook updated. After activation, compare queue time and end-to-end run time against this baseline, and roll back the variable if wait increases.
-
-  '
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-09 16:33:51.967266+00:00
-modified_at: 2026-11-20 19:41:04.159734+00:00
+created_at: 2026-11-09T16:33:51.967266Z
+modified_at: 2026-11-20T19:44:33.076539143Z
 req_type: Story
 tags:
 - area:ci
@@ -62,394 +41,405 @@ tags:
 relationships:
 - rel_type: Supersedes
   target_id: 01a1bd08-3de9-7321-a3ce-1c3774297e09
-  created_at: 2026-11-10 14:28:51.484317+00:00
+  created_at: 2026-11-10T14:28:51.484317Z
   created_by: joe
 - rel_type: Supersedes
   target_id: 01a1b99e-bceb-7fb0-bd1a-965c2f20f437
-  created_at: 2026-11-10 14:39:48.541930+00:00
+  created_at: 2026-11-10T14:39:48.541930Z
   created_by: joe
 comments:
 - id: 01a1c325-9481-79d1-ba5f-7a7f35a4b8ce
   author: joe
-  content: 'ADVISOR BRIEF (2026-11-10 01:55 UTC): SKETCH ONLY in this lane. Deliver docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md as a docs-only PR titled with (Refs STORY-2695); no code changes. The goal is end-to-end merge-train latency (today 40-50 min of serial hosted CI per train), so the sketch must answer with evidence from scripts/runner/one-job.sh, rearm.sh, the aida-ci.slice unit, .github/workflows/ci.yml and docs/internal/testing/dell1-runner.md: (1) slot model: 2 or 3 concurrent one-job runners, per-slot job dir, lock and rearm loop, the core and memory budget inside aida-ci.slice, and how GitHub labels route heavy shards to dell1 while fork PRs stay hosted. (2) Cache trust: how merge-train and main-push builds get incremental-cache benefit WITHOUT any PR job being able to influence what they compile. State who may write each cache (for example main pushes only write a trusted cache that trains read but never write), and how a train''s own compiles of not-yet-landed
-    code avoid poisoning it. (3) A plan for each of the 7 environment-failing tests listed in the description: root cause hypothesis and fix in the unit or the test assumption; no containment test weakened or skipped. (4) Expected per-shard and per-train wall time against the baseline in the description, the rollout switch (AIDA_DELL1_CI) and the rollback trigger. Registration credentials stay an operator act and never run from the lane. Keep it under about 250 lines.'
-  created_at: 2026-11-10 01:49:42.401488+00:00
-  modified_at: 2026-11-10 01:49:42.401488+00:00
+  content: 'ADVISOR BRIEF (2026-11-10 01:55 UTC): SKETCH ONLY in this lane. Deliver docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md as a docs-only PR titled with (Refs STORY-2695); no code changes. The goal is end-to-end merge-train latency (today 40-50 min of serial hosted CI per train), so the sketch must answer with evidence from scripts/runner/one-job.sh, rearm.sh, the aida-ci.slice unit, .github/workflows/ci.yml and docs/internal/testing/dell1-runner.md: (1) slot model: 2 or 3 concurrent one-job runners, per-slot job dir, lock and rearm loop, the core and memory budget inside aida-ci.slice, and how GitHub labels route heavy shards to dell1 while fork PRs stay hosted. (2) Cache trust: how merge-train and main-push builds get incremental-cache benefit WITHOUT any PR job being able to influence what they compile. State who may write each cache (for example main pushes only write a trusted cache that trains read but never write), and how a train''s own compiles of not-yet-landed code avoid poisoning it. (3) A plan for each of the 7 environment-failing tests listed in the description: root cause hypothesis and fix in the unit or the test assumption; no containment test weakened or skipped. (4) Expected per-shard and per-train wall time against the baseline in the description, the rollout switch (AIDA_DELL1_CI) and the rollback trigger. Registration credentials stay an operator act and never run from the lane. Keep it under about 250 lines.'
+  created_at: 2026-11-10T01:49:42.401488Z
+  modified_at: 2026-11-10T01:49:42.401488Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1c330-a919-72f2-a8be-744ee9984c05
   author: joe
-  content: 'ADVISOR SIGNOFF WITH CHANGES (2026-11-10 02:15 UTC) on the sketch in PR #3754 (docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md). Binding changes: (1) AIDA merge trains are pull_request runs on host-created train/ branches (aida pr train), not GitHub merge_group runs. The admission controller classifies a run as TRAIN only by matching the run''s repository, PR, head SHA and train/ branch against the host''s own train record; a branch name alone never grants the train class. (2) v1 classes are TRAIN and MAIN only. Ordinary same-repo and fork PR CI stays on hosted runners; the PR cache class is deferred until v1 is measured. (3) Slices: S1 = repair the seven environment-failing tests per the sketch''s table under the installed unit, no routing or runner changes, no containment test weakened or skipped (Refs STORY-2695). S2 = two slots, distinct uid per slot and class, trusted main generations, disposable train copies, admission controller, memory and CPU budget,
-    runbook (Refs STORY-2695). S3 = operator installation, activation and the matched ten-train measurement with the stated rollback triggers (completes). (4) The memory and CPU budget must account for concurrent Codex lanes building on dell1 (up to 8, cold builds), not only CI units. Everything else in the sketch, including the cache trust table, cross-slot denial tests and rollback triggers, is approved as written.'
-  created_at: 2026-11-10 02:01:48.569247+00:00
-  modified_at: 2026-11-10 02:01:48.569247+00:00
+  content: 'ADVISOR SIGNOFF WITH CHANGES (2026-11-10 02:15 UTC) on the sketch in PR #3754 (docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md). Binding changes: (1) AIDA merge trains are pull_request runs on host-created train/ branches (aida pr train), not GitHub merge_group runs. The admission controller classifies a run as TRAIN only by matching the run''s repository, PR, head SHA and train/ branch against the host''s own train record; a branch name alone never grants the train class. (2) v1 classes are TRAIN and MAIN only. Ordinary same-repo and fork PR CI stays on hosted runners; the PR cache class is deferred until v1 is measured. (3) Slices: S1 = repair the seven environment-failing tests per the sketch''s table under the installed unit, no routing or runner changes, no containment test weakened or skipped (Refs STORY-2695). S2 = two slots, distinct uid per slot and class, trusted main generations, disposable train copies, admission controller, memory and CPU budget, runbook (Refs STORY-2695). S3 = operator installation, activation and the matched ten-train measurement with the stated rollback triggers (completes). (4) The memory and CPU budget must account for concurrent Codex lanes building on dell1 (up to 8, cold builds), not only CI units. Everything else in the sketch, including the cache trust table, cross-slot denial tests and rollback triggers, is approved as written.'
+  created_at: 2026-11-10T02:01:48.569247Z
+  modified_at: 2026-11-10T02:01:48.569247Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1c330-b10c-7d01-99a9-45a1fc4a21c4
   author: joe
   content: 'ADVISOR RULING (2026-11-10 02:15 UTC): next lane = SLICE S1 only. Repair the seven environment-failing tests listed in the description, following the hypothesis table in the signed sketch: first capture each test''s exact failing operation and errno by running it on dell1 under the installed aida-ci unit configuration (scripts/runner/aida-ci.slice and one-job.sh properties; reproduce with systemd-run using the same properties if you cannot use the runner), then fix the test fixture assumptions (hardcoded /home/u and /run/user/1000, compile-time CARGO_MANIFEST_DIR, 04600 chmod under RestrictSUIDSGID) or document a unit change for operator review. Keep AIDA_REQUIRE_BWRAP_LIVE=1 semantics, every positive control and denial assertion; no test removed, skipped or weakened. No routing, workflow or runner changes. Use (Refs STORY-2695).'
-  created_at: 2026-11-10 02:01:50.604867+00:00
-  modified_at: 2026-11-10 02:01:50.604867+00:00
+  created_at: 2026-11-10T02:01:50.604867Z
+  modified_at: 2026-11-10T02:01:50.604867Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1c4b4-576f-7081-8fef-54d2c1111b1e
   author: joe
-  content: 'ADVISOR RULING (2026-11-10 09:05 UTC) — binding for PR #3754 sketch rework at head a9e8d2ab72 (docs only; edit docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md, nothing else). Apply exactly the four review findings, which restate the advisor signoff: (1) lines 83-100: TRAIN runs are pull_request runs on host-created train/ branches; admission matches repository, PR, exact head SHA and branch against the host train record (no merge_group, no branch-name-only evidence). (2) lines 62-108: v1 = TRAIN and MAIN only; ordinary same-repo and fork PR CI stays hosted; PR cache/class explicitly deferred in routing, uid, cache table and acceptance. (3) lines 143-202: add binding slices: S1 captures exact failures under installed unit properties and repairs the seven env tests with no runner/workflow/routing change; S2 owns two slots, cache, admission, budgets and runbook; S3 owns operator installation, activation and the matched ten-train measurement, and alone completes
-    STORY-2695. (4) lines 69-81: the CPU/memory gate accounts for CI plus up to eight concurrent Codex cold-build lanes; measure that combined load and reserve headroom before accepting CI limits. Title unchanged (Refs STORY-2695). FASTTRACK gate: make check-ci-fast only.'
-  created_at: 2026-11-10 09:05:15.631153+00:00
-  modified_at: 2026-11-10 09:05:15.631153+00:00
+  content: 'ADVISOR RULING (2026-11-10 09:05 UTC) — binding for PR #3754 sketch rework at head a9e8d2ab72 (docs only; edit docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md, nothing else). Apply exactly the four review findings, which restate the advisor signoff: (1) lines 83-100: TRAIN runs are pull_request runs on host-created train/ branches; admission matches repository, PR, exact head SHA and branch against the host train record (no merge_group, no branch-name-only evidence). (2) lines 62-108: v1 = TRAIN and MAIN only; ordinary same-repo and fork PR CI stays hosted; PR cache/class explicitly deferred in routing, uid, cache table and acceptance. (3) lines 143-202: add binding slices: S1 captures exact failures under installed unit properties and repairs the seven env tests with no runner/workflow/routing change; S2 owns two slots, cache, admission, budgets and runbook; S3 owns operator installation, activation and the matched ten-train measurement, and alone completes STORY-2695. (4) lines 69-81: the CPU/memory gate accounts for CI plus up to eight concurrent Codex cold-build lanes; measure that combined load and reserve headroom before accepting CI limits. Title unchanged (Refs STORY-2695). FASTTRACK gate: make check-ci-fast only.'
+  created_at: 2026-11-10T09:05:15.631153Z
+  modified_at: 2026-11-10T09:05:15.631153Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 - id: 01a1c4ba-08a0-7160-ba1c-8ed4d9a429eb
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Docs-only sketch misses four binding advisor changes: TRAIN admission, v1 classes, S1-S3 boundaries, and eight-lane resource budgeting; required CI is green.. No triage reason was given.'
-  created_at: 2026-11-10 09:11:28.672378+00:00
-  modified_at: 2026-11-10 09:11:28.672378+00:00
+  created_at: 2026-11-10T09:11:28.672378Z
+  modified_at: 2026-11-10T09:11:28.672378Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 - id: 01a1c4ba-1258-7a13-8f07-ee6511c6c770
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2695):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2695):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: a9e8d2ab72e5
-
     Recorded: 2026-11-10T09:03:44.303331232+00:00
-
     Findings:
-
     1. [P2] docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md:83-100: Replace merge_group train routing with pull_request runs on host-created train/ branches. TRAIN admission must match repository, PR, exact head SHA and branch against the host train record; branch name or generic forge evidence alone is insufficient under the binding advisor signoff.
-
     2. [P2] docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md:62-108: Restrict v1 to TRAIN and MAIN. Keep ordinary same-repository and fork PR CI hosted and explicitly defer PR cache/class throughout the routing, uid, cache table and acceptance design, as required by the binding advisor signoff.
-
     3. [P2] docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md:143-202: Add binding S1/S2/S3 boundaries: S1 first captures exact failures under installed unit properties and repairs seven tests without runner/workflow/routing changes; S2 owns two slots, cache, admission, budgets and runbook; S3 owns operator installation, activation and matched ten-train measurement and alone completes STORY-2695. Current undivided rollout omits these constraints for the next lane.
-
     4. [P2] docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md:69-81: Account explicitly for CI plus up to eight concurrent Codex cold-build lanes in the CPU/memory capacity gate. Measure that combined workload and reserve host headroom before accepting CI limits; unspecified lane peak usage and later load recording do not satisfy the binding advisor concurrency requirement.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-10 09:11:31.160839+00:00
-  modified_at: 2026-11-10 09:11:31.160839+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-10T09:11:31.160839Z
+  modified_at: 2026-11-10T09:11:31.160839Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 - id: 01a1c4eb-0d01-73d3-b29a-42a9edd0930a
   author: joe
-  content: 'ADVISOR RULING (2026-11-10 10:05 UTC) — binding brief for STORY-2695 S1 (sketch #3754 landed). Amendment to S1: the runner unit is not installed until S3 and a contained lane cannot run systemd-run, so S1 makes the seven tests independent of host layout and privileges using the plan''s repairs, and the under-the-unit capture moves to S3''s operator acceptance. Do: (1) bug_2418_task_2772 lane_build_paths_* : private temp HOME/runtime dirs instead of /home/u and /run/user/1000, keep every CARGO_HOME refusal; (2) task_2053 bwrap probe: outside_file from a runtime temp path, not compile-time CARGO_MANIFEST_DIR; (3) story_1698 / task_1790 mandate exclusions: factor mode validation so 04600 is checked without creating a setuid file, real-file tests for the allowed modes and uid mismatch; (4) regen::score confined_environment: controlled temp source with .git and a separate trial root; (5) task_2708 UDP: make the positive control explicit (bind UDP, pass SCM_RIGHTS) before asserting
-    EACCES, and report an unmet precondition as a failure with a clear message, never a skip. No production code changes except the factored mode-validation helper; no runner/workflow/routing changes; no test weakened or skipped. Title: [AI:codex] test(ci): make seven containment tests host-independent (Refs STORY-2695). LIGHT gate: one cargo test -p aida-cli-lib --lib run filtered to those modules, then make check-ci-fast.'
-  created_at: 2026-11-10 10:05:01.057399+00:00
-  modified_at: 2026-11-10 10:05:01.057399+00:00
+  content: 'ADVISOR RULING (2026-11-10 10:05 UTC) — binding brief for STORY-2695 S1 (sketch #3754 landed). Amendment to S1: the runner unit is not installed until S3 and a contained lane cannot run systemd-run, so S1 makes the seven tests independent of host layout and privileges using the plan''s repairs, and the under-the-unit capture moves to S3''s operator acceptance. Do: (1) bug_2418_task_2772 lane_build_paths_* : private temp HOME/runtime dirs instead of /home/u and /run/user/1000, keep every CARGO_HOME refusal; (2) task_2053 bwrap probe: outside_file from a runtime temp path, not compile-time CARGO_MANIFEST_DIR; (3) story_1698 / task_1790 mandate exclusions: factor mode validation so 04600 is checked without creating a setuid file, real-file tests for the allowed modes and uid mismatch; (4) regen::score confined_environment: controlled temp source with .git and a separate trial root; (5) task_2708 UDP: make the positive control explicit (bind UDP, pass SCM_RIGHTS) before asserting EACCES, and report an unmet precondition as a failure with a clear message, never a skip. No production code changes except the factored mode-validation helper; no runner/workflow/routing changes; no test weakened or skipped. Title: [AI:codex] test(ci): make seven containment tests host-independent (Refs STORY-2695). LIGHT gate: one cargo test -p aida-cli-lib --lib run filtered to those modules, then make check-ci-fast.'
+  created_at: 2026-11-10T10:05:01.057399Z
+  modified_at: 2026-11-10T10:05:01.057399Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
 - id: 01a1c4f7-50a9-7e03-9c1f-009df86a3875
   author: dirtlab
-  content: 'Changed files:
-
+  content: |
+    Changed files:
     aida-cli-lib/src/tests/bug_2418_task_2772_lane_cargo_tests.rs
-
     aida-cli-lib/src/tests/task_2053_seat_clone_lifecycle_tests.rs
-
     aida-cli-lib/src/gate/mandate.rs
-
     aida-cli-lib/src/gate/tests/story_1698_mandate_tests.rs
-
     aida-cli-lib/src/regen/score.rs
-
     aida-cli-lib/src/containment/tests/launch_tests.rs
-
 
     S1 repairs the seven containment regressions with runtime-owned HOME/runtime and outside-file fixtures, a controlled regeneration source/trial pair, direct special-mode validation, and an explicitly bound UDP descriptor positive control. The only production change factors the existing exact-0600 predicate; runner, workflow and routing files are unchanged.
 
-
     Validation:
-
     - Final seven-test lane run j20261110T101458155-2-0: 6 passed, 1 failed, 0 ignored. Regen confined_environment fails before the repaired assertions because the existing cfg(test) ScoreEnv guard cache uses read-only /var/tmp (EROFS). No refusal or assertion was weakened.
-
     - Affected-module lane run j20261110T101036788-2-0: 240 passed, 19 failed, 1 pre-existing ignored. Failures include read-only /var/tmp fixtures and an unrelated task_3219 child-grant refusal. This run preceded the final runtime-checkout outside-file repair; that test passed in the final seven-test run.
-
     - make check-ci-fast: exit 2 at Codex mail wake fixtures (4 failures, 17 errors, 1 skipped), including health project ownership/shared-write refusals. Log: /tmp/story-2695-check-ci-fast.log.
-
     - rustfmt and git diff --check pass.
 
-
     Operator under-unit acceptance remains in S3 under the 2026-11-10 10:05 UTC ruling. No systemd-run, runner/workflow/routing changes, commits, pushes or PR actions were performed in this seat. Re-run validation in a host environment satisfying the existing test prerequisites before accepting S1.
-
-    '
-  created_at: 2026-11-10 10:18:24.809214+00:00
-  modified_at: 2026-11-10 10:18:24.809214+00:00
+  created_at: 2026-11-10T10:18:24.809214Z
+  modified_at: 2026-11-10T10:18:24.809214Z
   session_id: 01a1c4ed864b
   harness_version: codex-cli 0.167.0
 - id: 01a1c5e8-5744-7871-87d9-c221f11c4732
   author: joe
   content: 'ADVISOR BRIEF S2 (2026-11-10): S1 landed (#3779). Implement S2 exactly per the binding plan docs/plans/2026-11-10-story-2695-dell1-parallel-cached-runner.md: two runner slots, per-slot persistent incremental cache with the cache-trust rules, TRAIN/MAIN admission (a TRAIN match requires repository + PR + exact head SHA + train/ branch against the host train record), budgets, and the runbook. ROUTING STAYS OFF: no workflow change routes jobs to dell1 in S2. S3 (operator install, activation, ten-train measurement) is separate and completes the story. Title: [AI:codex] feat(ci): dell1 two-slot cached runner with train admission (Refs STORY-2695). Gate: LIGHT (targeted python/shell tests for the admission controller + make check-ci-fast).'
-  created_at: 2026-11-10 14:41:40.676872+00:00
-  modified_at: 2026-11-10 14:41:40.676872+00:00
+  created_at: 2026-11-10T14:41:40.676872Z
+  modified_at: 2026-11-10T14:41:40.676872Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c5fc-d094-75e2-a9ea-cceb12ef9fe5
   author: dirtlab
-  content: "S2 handoff — STORY-2695\n\nImplemented two fixed runner slots with four distinct slot/class identities,\nroot-controlled host admission and job-start gating, TRAIN record matching,\nMAIN-only cache publication, disposable TRAIN copies, persistent target/incremental\nand Cargo registry/git downloads, CPU/memory/thread budgets, and the S3 runbook.\nThe hook blocks until the host authorizes the actual runner/job; refusals stop\nthe whole cgroup so if: always() cannot continue a refused job. Compiler output\ncopies retain mtimes/execute bits without future timestamps masking source changes.\nNo workflow/routing, installed service, account, registration or repository setting\nwas changed. All checkout edits remain uncommitted for the host launcher.\n\nChanged files:\n- scripts/runner/controller.py (new)\n- scripts/runner/job-gate.py (new)\n- scripts/runner/job-gate.sh (new)\n- scripts/runner/select-job.py (new)\n- scripts/runner/one-job.sh\n- scripts/runner/rearm.sh\n- scripts/runner/aida-ci.slice\n\
-    - scripts/store-writers.toml (reconciled host-only non-store writers)\n- tests/test_dell1_controller.py (new)\n- tests/test_self_hosted_runner.py (existing CI entry point includes new fixtures)\n- docs/internal/testing/dell1-runner.md\n\nValidation:\n- python3 -m unittest tests.test_self_hosted_runner: 35 executed tests passed.\n- bash syntax, actual hook socket and mocked operator rearm exercised by tests.\n- store-writer inventory reconciliation/check passed (3488 sites).\n- git diff --check passed.\n- make check-ci-fast: blocked. Inherited umask 0002 caused unrelated mail-wake\n  fixture failures. With umask 022, mail-wake passed; containment conformance\n  then failed six fixture operations trying to write read-only /home/dirtlab/.aida.\n  Log: /tmp/story-2695-check-ci-fast-022.log. Full fast gate is not green.\n\nS3 still owns operator install and actual-unit cross-slot file/signal/proc,\nnamespace, cache-mutation/clean-build-equivalence and combined eight-cold-lane\ncapacity acceptance;\
-    \ reviewed workflow integration and activation; ten matched\ntrain measurements. The current historical workflow must NOT be activated.\nThe operator must export actual host train journal attestations to protected\ntrains.json, install reviewed policy and the pinned compiler, and use a separate\nread-only forge token for sustained API throughput. No live isolation or speedup\nis claimed by the host-independent S2 fixtures. No Rust files changed or Cargo\nruns required for this LIGHT gate.\n"
-  created_at: 2026-11-10 15:04:02.452195+00:00
-  modified_at: 2026-11-10 15:04:02.452195+00:00
+  content: |
+    S2 handoff — STORY-2695
+
+    Implemented two fixed runner slots with four distinct slot/class identities,
+    root-controlled host admission and job-start gating, TRAIN record matching,
+    MAIN-only cache publication, disposable TRAIN copies, persistent target/incremental
+    and Cargo registry/git downloads, CPU/memory/thread budgets, and the S3 runbook.
+    The hook blocks until the host authorizes the actual runner/job; refusals stop
+    the whole cgroup so if: always() cannot continue a refused job. Compiler output
+    copies retain mtimes/execute bits without future timestamps masking source changes.
+    No workflow/routing, installed service, account, registration or repository setting
+    was changed. All checkout edits remain uncommitted for the host launcher.
+
+    Changed files:
+    - scripts/runner/controller.py (new)
+    - scripts/runner/job-gate.py (new)
+    - scripts/runner/job-gate.sh (new)
+    - scripts/runner/select-job.py (new)
+    - scripts/runner/one-job.sh
+    - scripts/runner/rearm.sh
+    - scripts/runner/aida-ci.slice
+    - scripts/store-writers.toml (reconciled host-only non-store writers)
+    - tests/test_dell1_controller.py (new)
+    - tests/test_self_hosted_runner.py (existing CI entry point includes new fixtures)
+    - docs/internal/testing/dell1-runner.md
+
+    Validation:
+    - python3 -m unittest tests.test_self_hosted_runner: 35 executed tests passed.
+    - bash syntax, actual hook socket and mocked operator rearm exercised by tests.
+    - store-writer inventory reconciliation/check passed (3488 sites).
+    - git diff --check passed.
+    - make check-ci-fast: blocked. Inherited umask 0002 caused unrelated mail-wake
+      fixture failures. With umask 022, mail-wake passed; containment conformance
+      then failed six fixture operations trying to write read-only /home/dirtlab/.aida.
+      Log: /tmp/story-2695-check-ci-fast-022.log. Full fast gate is not green.
+
+    S3 still owns operator install and actual-unit cross-slot file/signal/proc,
+    namespace, cache-mutation/clean-build-equivalence and combined eight-cold-lane
+    capacity acceptance; reviewed workflow integration and activation; ten matched
+    train measurements. The current historical workflow must NOT be activated.
+    The operator must export actual host train journal attestations to protected
+    trains.json, install reviewed policy and the pinned compiler, and use a separate
+    read-only forge token for sustained API throughput. No live isolation or speedup
+    is claimed by the host-independent S2 fixtures. No Rust files changed or Cargo
+    runs required for this LIGHT gate.
+  created_at: 2026-11-10T15:04:02.452195Z
+  modified_at: 2026-11-10T15:04:02.452195Z
   session_id: 01a1c5eafaba
   harness_version: codex-cli 0.167.0
 - id: 01a1c873-a32a-73b1-a7a3-d45206616a00
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S2 runner controller is well-fenced on trust (admission, gate, MAIN-only publish) but cannot run as written: source extraction refuses the repo''s 135 tracked symlinks, the gate kills legitimately assigned jobs because JIT labels do not pin the proposed job, routine outcomes wedge slots, and cache generations grow without bound. CI green at head.. No triage reason was given.'
-  created_at: 2026-11-11 02:33:04.042390+00:00
-  modified_at: 2026-11-11 02:33:04.042390+00:00
+  created_at: 2026-11-11T02:33:04.042390Z
+  modified_at: 2026-11-11T02:33:04.042390Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c873-a791-7df2-94a9-16d360dbd6c1
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (PR #3791):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #3791):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: e7f8b2fa00fd
-
     Recorded: 2026-11-11T01:16:47.720726258+00:00
-
     Findings:
-
     1. [P1] scripts/runner/controller.py:234 source_tree requires every archive member to be a dir or regular file, but the repository tracks 135 symlinks (git ls-files -s mode 120000, e.g. .claude/commands/*.md template mirrors). codeload tarballs carry them as symlink members, so every admitted MAIN/TRAIN launch raises "source archive link/special file" before the runner starts; tests/test_dell1_controller.py Source fixture codifies the refusal with a synthetic archive and never exercises a real-repo-shaped tree. Accept in-tree relative symlinks safely (create with os.symlink, refuse absolute/escaping targets), and when doing so make the os.walk chown at controller.py:412-415 use follow_symlinks=False and key_for (controller.py:171-175) skip/lstat links, otherwise root would chown or hash link targets chosen by unlanded train code.
-
     2. [P1] scripts/runner/rearm.sh:21-25 + controller.py:421-427 job binding: the JIT runner carries only aida-dell1/<class>/<name> labels, so GitHub may hand it ANY queued same-class heavy job (the other slot family, another train shard), not the proposed envelope job. verify_job then sees the envelope job runner_name != name, refuse() stops the unit, the innocent legitimately routed job fails, and launch raises leaving a stale reservation (see next finding). With two slots and four train shards queued at once this is the expected case, not an edge case; the runbook (dell1-runner.md:56-63) acknowledges labels do not bind but treats every mismatch as hostile. Fix: at the gate, discover the job actually assigned to this runner name and run full admit() on it (repository/PR/SHA/branch/train record/workflow digest), seeding/keying/publishing for the actual shard, or otherwise bind job to runner; add a LaunchIntegration fixture where the runner picks a different valid queued job.
-
-    3. [P2] scripts/runner/controller.py:456-470 + rearm.sh:4,27-31 routine outcomes wedge a slot or stop its loop: (a) a MAIN job whose tests fail (JIT runner still exits 0) or whose forge job is not yet marked completed when the runner exits makes admit(completed=True) raise, so reservation.unlink() (outside the finally) is skipped and every later launch on that slot refuses "stale slot reservation" until manual reconciliation; (b) MAIN refused for TRAIN priority exits 1 and set -e/pipefail ends the rearm loop, after a JIT registration was already generated (orphaned); train_waiting (controller.py:324-335) counts queued train jobs of every shard, including the other slot family this slot never proposes, so MAIN on s0 is refused for s1 work. Treat failed-MAIN non-publication and priority deferral as normal outcomes (release reservation, exit a distinct code the loop continues on, generate JIT only after admission), restrict priority to jobs this slot can take, and assert reservation state
-    in the LaunchIntegration failure fixtures.
-
+    3. [P2] scripts/runner/controller.py:456-470 + rearm.sh:4,27-31 routine outcomes wedge a slot or stop its loop: (a) a MAIN job whose tests fail (JIT runner still exits 0) or whose forge job is not yet marked completed when the runner exits makes admit(completed=True) raise, so reservation.unlink() (outside the finally) is skipped and every later launch on that slot refuses "stale slot reservation" until manual reconciliation; (b) MAIN refused for TRAIN priority exits 1 and set -e/pipefail ends the rearm loop, after a JIT registration was already generated (orphaned); train_waiting (controller.py:324-335) counts queued train jobs of every shard, including the other slot family this slot never proposes, so MAIN on s0 is refused for s1 work. Treat failed-MAIN non-publication and priority deferral as normal outcomes (release reservation, exit a distinct code the loop continues on, generate JIT only after admission), restrict priority to jobs this slot can take, and assert reservation state in the LaunchIntegration failure fixtures.
     4. [P2] scripts/runner/controller.py:197-219 publish never removes superseded generations, and controller.py:403 creates a new CACHE/slot/shard/KEY directory whenever any Cargo.toml, build.rs, .github or scripts/ file changes, with no pruning of old keys. Every successful main push writes a fresh full target+registry copy per heavy shard, so disk use grows without bound on a host shared with up to eight Codex lanes; the runbook (dell1-runner.md:159-160,216-217) leaves this to manual offline pruning with loops stopped. Since the slot lock serializes all readers of a slot cache, delete the previous generation after the manifest swap and bound/prune stale key directories, with a fixture asserting only the manifest generation remains.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-11 02:33:05.169040+00:00
-  modified_at: 2026-11-11 02:33:05.169040+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T02:33:05.169040Z
+  modified_at: 2026-11-11T02:33:05.169040Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c97e-c923-7191-8b12-dd126b51f37e
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S2 has four actionable defects: fresh-slot namespace bootstrap, premature trusted-cache deletion, umask-dependent startup and omitted regression tests; CI pending at review time.. No triage reason was given.'
-  created_at: 2026-11-11 07:24:51.875306+00:00
-  modified_at: 2026-11-11 07:24:51.875306+00:00
+  created_at: 2026-11-11T07:24:51.875306Z
+  modified_at: 2026-11-11T07:24:51.875306Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c97e-e1bf-7820-ae65-ade869e48337
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2695):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2695):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: 2d1b6554af63
-
     Recorded: 2026-11-11T07:20:50.079834456+00:00
-
     Findings:
-
     1. [P1] scripts/runner/controller.py:496-497 (setup 439-443): Fresh single-slot startup includes the absent sibling JOBS/sN directory in mandatory InaccessiblePaths, but creates only its own parent. systemd namespace setup fails before the job gate. Create and validate both root-owned slot parents before starting either unit; retain effective sibling hiding when the other slot later starts. Add fresh-install single-slot startup coverage.
-
     2. [P2] scripts/runner/controller.py:475-477: Preparation prunes every other compatibility key before the job succeeds, including on TRAIN and failed MAIN. Changing Cargo.lock/scripts therefore deletes the previous trusted MAIN generation and manifest, violating failed-main preservation and disposable TRAIN semantics. Retain published keys through preparation and prune only after successful MAIN publication under a bounded retention policy. Cover changed-key TRAIN and failed-MAIN preservation; current integration fixtures assert deletion.
-
     3. [P2] scripts/runner/controller.py:439-447,457-458: mkdir modes are masked by inherited operator/sudo umask. With umask 077 the root-owned current (requested 0711), slot/job/runtime parents become 0700, preventing the service uid from traversing to WorkingDirectory or the gate socket. Enforce exact traversal modes on validated root-owned directories or set an explicit launcher umask, preserve cache/work privacy, and add restrictive-umask startup coverage.
-
     4. [P2] tests/test_self_hosted_runner.py:117: The CI entry point selectively imports controller test classes but omits RoundThree. Thus the real-repository tracked-symlink regression, safe ownership/key regression, and slot-family priority regression are never run by the only configured CI command. Import RoundThree or explicitly schedule test_dell1_controller.py so all three regressions execute.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-11 07:24:58.175121+00:00
-  modified_at: 2026-11-11 07:24:58.175121+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T07:24:58.175121Z
+  modified_at: 2026-11-11T07:24:58.175121Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c9b3-bbb6-7760-a5da-16ceab5d8e5f
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Full S2 sweep: no actionable defects; 45 runner fixtures and all seven exact-head CI lanes pass. Routing stays off; S3 owns operator installation, live acceptance, activation and completion. Merge-hold clearance remains with the authorized actor.. No triage reason was given.'
-  created_at: 2026-11-11 08:22:41.846639+00:00
-  modified_at: 2026-11-11 08:22:41.846639+00:00
+  created_at: 2026-11-11T08:22:41.846639Z
+  modified_at: 2026-11-11T08:22:41.846639Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c9b8-2e7a-7eb0-a2a0-1736e41c7a9d
   author: dirtlab
   content: 'Round 4: current HEAD already includes all four requested fixes from a56ed3e2bc. Added new regression evidence for fresh startup in either slot with umask 077, traversal validation before chmod and symlink refusal, preservation of the previous compatibility key on copy/manifest publication failures, and automatic CI-entry-point coverage of every controller test class (including RoundThree). Updated runner runbook with exact traversal and successful-MAIN-only retention rules. Validation: python3 -m unittest tests.test_self_hosted_runner passed 48 tests; git diff --check passed. make check-ci-fast failed in unrelated Codex mail wake fixtures (4 failures, 17 errors, health project directory must be owned without shared writes); log /tmp/story2695-fast.log. Native seat leaves changes uncommitted for host publication. S3 operator namespace acceptance remains separate; routing stays off.'
-  created_at: 2026-11-11 08:27:33.370358+00:00
-  modified_at: 2026-11-11 08:27:33.370358+00:00
+  created_at: 2026-11-11T08:27:33.370358Z
+  modified_at: 2026-11-11T08:27:33.370358Z
   session_id: 01a1c9b5c70b
   harness_version: codex-cli 0.167.0
 - id: 01a1c9d0-81d1-7072-9fe3-b18a511be8d4
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: S2 full sweep: runner cannot start because root-owned current is 0711; upstream ancestor enumeration requires read access. CI pending at review time; S3 acceptance remains separate.. No triage reason was given.'
-  created_at: 2026-11-11 08:54:07.569373+00:00
-  modified_at: 2026-11-11 08:54:07.569373+00:00
+  created_at: 2026-11-11T08:54:07.569373Z
+  modified_at: 2026-11-11T08:54:07.569373Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1c9d0-8956-7330-a57a-91d553042ab4
   author: joe
-  content: 'REVIEW FINDINGS TO ADDRESS (STORY-2695):
-
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (STORY-2695):
     Verdict: CHANGES REQUESTED
-
     Reviewed commit: ba579362b4cc
-
     Recorded: 2026-11-11T08:41:28.626047883+00:00
-
     Findings:
-
     1. [P1] scripts/runner/controller.py:458: current is root-owned mode 0711, while every runner uid is non-root and the runner root is current/runner. Runner.Listener Program.cs calls IOUtil.ValidateExecutePermission before parsing arguments; IOUtil.cs:431-463 enumerates every ancestor and throws UnauthorizedAccessException when directory contents cannot be read. Thus every slot fails startup before job pickup/gate. Make current readable to its service uid (e.g. validated root-owned 0755, keeping work trees 0700), correct runbook guidance, and add a regression modeling actual ancestor enumeration: LaunchIntegration currently mocks the runner and asserts the broken 0711 mode. Upstream evidence at actions/runner commit 5f626f109076e392150ac367cf67db5deea65033, src/Runner.Listener/Program.cs:88-100 and src/Runner.Sdk/Util/IOUtil.cs:431-463.
-
-    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.'
-  created_at: 2026-11-11 08:54:09.494413+00:00
-  modified_at: 2026-11-11 08:54:09.494413+00:00
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-11T08:54:09.494413Z
+  modified_at: 2026-11-11T08:54:09.494413Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1cba1-97b2-70b3-b034-5914bfa89ff0
   author: joe
   content: '2026-11-11 10:25 MST advisor: operator authorized the S3 root install on dell1 (passwordless sudo confirmed). Paused before any change: (1) main''s ci.yml has no S3 contract (AIDA_CI_WORKSPACE / exact checkout / TRAIN-MAIN cache split), so the controller''s policy.json workflow_sha256 cannot pin a conforming workflow and every job would be refused; (2) the seven hardened-unit containment failures listed in the description are unverified as fixed; (3) the legacy single-slot one-job (fixed unit aida-ci-current) cannot run twice. Next: implement the S3 workflow slice + the seven test fixes as one PR, then root install per docs/internal/testing/dell1-runner.md S3 steps 1-8. Operator must mint a fine-grained read-only token for /etc/aida-ci/forge-read-token; the gh OAuth token is full-scope and must not be copied there. AIDA_DELL1_CI stays unset until S3 lands.'
-  created_at: 2026-11-11 17:22:07.410269+00:00
-  modified_at: 2026-11-11 17:22:07.410269+00:00
+  created_at: 2026-11-11T17:22:07.410269Z
+  modified_at: 2026-11-11T17:22:07.410269Z
   session_id: 01a1cb56-f02b-7652-869e-3788560cbf1b
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1cba1-a0dc-7d02-8cd6-08ec94469d1f
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full S2 sweep: no actionable defects; prior findings addressed. CI pending at review time. Routing stays off; S3 owns operator installation, live acceptance, activation and story completion. Hold clearance remains with the authorized actor.. No triage reason was given.'
-  created_at: 2026-11-11 17:22:09.756029+00:00
-  modified_at: 2026-11-11 17:22:09.756029+00:00
+  created_at: 2026-11-11T17:22:09.756029Z
+  modified_at: 2026-11-11T17:22:09.756029Z
   session_id: 01a1cb56-f02b-7652-869e-3788560cbf1b
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1cbe3-70e8-7893-86d5-a3aae04fa76f
   author: joe
   content: 'Round 5: checkout already includes validated root-owned current 0755 and modeled listener enumeration. Added kernel-backed non-root subprocess regression for each jobs/slot/current ancestor: execute-only denies readdir, 0755 succeeds, work remains 0700. Updated controller explanation and S3 runbook acceptance. Targeted controller and runner suites passed 95 executed tests; fast gate result follows in publication handoff. Routing remains off; S3 still owns deployment and story completion.'
-  created_at: 2026-11-11 18:34:02.856229+00:00
-  modified_at: 2026-11-11 18:34:02.856229+00:00
+  created_at: 2026-11-11T18:34:02.856229Z
+  modified_at: 2026-11-11T18:34:02.856229Z
   session_id: 01a1cbe100f7
 - id: 01a1cbe3-f266-76a2-b998-54429f6b33a7
   author: joe
   content: 'Round-5 final validation: 95 targeted Python tests passed and git diff --check passed. Full make check-ci-fast is NOT complete: stopped after discovering fast TUI seam guard invokes direct cargo check (which completed successfully); native seat requires builds via host lane runner. Host must run the complete fast gate before publication. Publication declaration uses Refs STORY-2695; edits remain uncommitted per native-seat contract.'
-  created_at: 2026-11-11 18:34:36.006477+00:00
-  modified_at: 2026-11-11 18:34:36.006477+00:00
+  created_at: 2026-11-11T18:34:36.006477Z
+  modified_at: 2026-11-11T18:34:36.006477Z
   session_id: 01a1cbe100f7
 - id: 01a1cf14-491f-73b2-9834-7bf2993a9a44
   author: joe
   content: 'Advisor diagnosis 2026-11-12 02:30 MST for #3869 red CI (gates, ''Self-hosted routing security fixtures''): 13 errors in tests/test_dell1_controller.py LaunchIntegration. CI runs the fixture as ROOT (os.geteuid()==0), so subprocess.run(..., preexec_fn=unprivileged) runs, and ''unprivileged'' raises inside the child (SubprocessError: Exception occurred in preexec_fn). Locally/dell1 you are not root so the branch never runs, which is why the previous lanes reported nothing to fix. Fix: make ''unprivileged'' work in the CI container (e.g. call os.setgroups([]) before setgid/setuid, use an existing uid such as 65534 and handle missing CAP_SETUID by skipTest), or run that fixture via a pre-dropped user. Reproduce locally with: sudo -E python3 -m unittest tests.test_dell1_controller.LaunchIntegration. Log: gh run view 43185760473 --job 131072381103 --log-failed'
-  created_at: 2026-11-12 09:26:15.583635+00:00
-  modified_at: 2026-11-12 09:26:15.583635+00:00
+  created_at: 2026-11-12T09:26:15.583635Z
+  modified_at: 2026-11-12T09:26:15.583635Z
   session_id: 01a1ceeb-e827-7832-8991-e83d9eb95cef
   harness_version: 2.1.322 (Claude Code)
 - id: 01a1d2d7-b84e-71d0-ba5d-2e47e3d8417c
   author: joe
   content: 'advisor 19:58 (operator-approved): reset In Progress -> Approved. No lease on primary or dell1 and no open PR held it (orphaned after a lane exit). Dispatching to dell1. trace:STORY-2737'
-  created_at: 2026-11-13 02:58:35.214163+00:00
-  modified_at: 2026-11-13 02:58:35.214163+00:00
+  created_at: 2026-11-13T02:58:35.214163Z
+  modified_at: 2026-11-13T02:58:35.214163Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
 - id: 01a1d2d9-bc78-7052-9a38-adb8ef9896f2
   author: joe
   content: 'advisor 20:02: preserved unpushed commits from stale local seat story-b6b1278890774ef993d2ebc327862470-618 (branch story-2695-s3) as origin/wip/story-2695-618-1112 (7e09e1e9dad). New lane starts from main; reuse that branch only if its work is still relevant. trace:STORY-2737'
-  created_at: 2026-11-13 03:00:47.352520+00:00
-  modified_at: 2026-11-13 03:00:47.352520+00:00
+  created_at: 2026-11-13T03:00:47.352520Z
+  modified_at: 2026-11-13T03:00:47.352520Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
 - id: 01a1f17a-a1ed-7481-ba25-6f27cd5c06f2
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: Round 5 P1 finding at scripts/runner/controller.py:458 is accepted, not disputed. This native seat is on sketch HEAD b39d82ae3c, where controller.py and tests/test_dell1_controller.py do not exist. Reviewed ba579362b4cc is on origin/story-2695-s2; that ref now points to d56bf76071 (fix(ci): allow runner startup ancestor enumeration). Git metadata is read-only in this seat. Re-launch against the current S2 PR branch so a new round-specific change can be made and tested without importing the implementation into the obsolete sketch branch. No production edits or publication declaration made; untested=true.. Triage reason: Advisor 18:46 hygiene re-dispatch (stale needs-attention note): resume the concrete remaining work per the 2026-11-18 Refs-landed sweep (.aida/tmp/refs-sweep-2026-11-18.md, group D) from current main. Lane: codex unless STRICT.'
-  created_at: 2026-11-19 01:45:08.333966+00:00
-  modified_at: 2026-11-19 01:45:08.333966+00:00
+  created_at: 2026-11-19T01:45:08.333966Z
+  modified_at: 2026-11-19T01:45:08.333966Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
 - id: 01a1f8fc-7d66-7f71-9548-1b44ee61d7a6
   author: joe
   content: 'Product 2026-11-20 05:45 (advisor-121 asked for this note): CI-LOAD PATTERN. 4 load-timeout flakes on main in ~24h, each green on rerun: bug_2684_floor_reclaims_ended_overlays_by_ownership (2x, 11-19 10:23 and 14:41; fixed by TASK-3821), task_3219_live_claude_interactive_private_pty (SIGALRM, 15:45), task_3792_train_check_bounds_discovery_and_member_subprocesses (descendant still running, 11-20 03:59), bug_2403_snapshot_identity_is_bound_to_the_committed_mappings (''store snapshot: git status: timed out'', 11-20 05:40, on a run with many >20-30s SLOW tests in lib-0). Each costs a red-main window plus a rerun, and they cluster in lib-0. Rather than patching each test''s timeout, look at shard balancing and lib-0 load: move the slow gate::review_publication/admission tests off lib-0, or add a shard. This spec (CI runner, shards, parallel slots) is the closest open owner. Re-home it if a hosted-CI shard spec exists.'
-  created_at: 2026-11-20 12:44:07.195582+00:00
-  modified_at: 2026-11-20 12:44:07.195582+00:00
+  created_at: 2026-11-20T12:44:07.195582Z
+  modified_at: 2026-11-20T12:44:07.195582Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa3d-0fd7-7e60-b533-feaacc64090a
   author: joe
   content: "Product 11:33: claude lane queued on dell1 (advisor 11:19 batch), brief:\n# Brief: STORY-2695 (fresh start; advisor-121 11:19 batch: approved, drain; claude)\n\nScope: dell1 CI runner: pass all shards, parallel slots, persisted per-slot incremental builds with a PR/main cache split. Context: 4 CI-load timeout flakes in ~24h clustered in lib-0 (see the STORY-2695 comment of 11-20 05:45); shard balancing is part of the structural fix.\n\nImplement ONLY the still-unmet acceptance criteria on origin/main; earlier slices on main: cc7fbc58243  d8b778daec2  e4adcf93fdc  2c6394e569a  0f2b06b24bd  af0288e60a2  \nTrailer (STORY-2695) only if your PR plus main meets every AC; otherwise (Refs STORY-2695). If every AC is already met, make no change: punt with per-AC evidence.\nBefore pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`."
-  created_at: 2026-11-20 18:34:15.641034+00:00
-  modified_at: 2026-11-20 18:34:15.641034+00:00
+  created_at: 2026-11-20T18:34:15.641034Z
+  modified_at: 2026-11-20T18:34:15.641034Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa49-4165-7113-ae87-442d90ab3fdf
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-618` at head `b39d82ae3c102d38531c4a760f550ff80b24e9ba`.'
-  created_at: 2026-11-20 18:47:47.301253+00:00
-  modified_at: 2026-11-20 18:47:47.301253+00:00
+  created_at: 2026-11-20T18:47:47.301253Z
+  modified_at: 2026-11-20T18:47:47.301253Z
 - id: 01a1fa49-7040-7ee0-b206-412a0f7196cf
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-618` at head `b39d82ae3c102d38531c4a760f550ff80b24e9ba`.'
-  created_at: 2026-11-20 18:47:59.296094+00:00
-  modified_at: 2026-11-20 18:47:59.296094+00:00
+  created_at: 2026-11-20T18:47:59.296094Z
+  modified_at: 2026-11-20T18:47:59.296094Z
 - id: 01a1fa5f-260d-7fd0-9200-c5c748328b44
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: bc0dcbffdb (Refs slice: workflow contract for the two-slot controller; routing stays off).
 
-
-    What this slice adds on top of main: ci.yml now matches the contract controller.py and policy.json expect. (1) Routing: heavy shards go to dell1 only for a main push or a same-repo train/ PR into main; ordinary PRs were previously routed and would have queued unadmitted. (2) dell1 runs no checkout: the first step verifies AIDA_CI_WORKSPACE HEAD == job head SHA and a clean tree, then links the runner workspace to it and target to CARGO_TARGET_DIR; fails closed. (3) rustup steps, Swatinem/rust-cache and the docs-only path filter are hosted-only. GitLab adapter (ci/gdma/run-upstream.py) updated for the new expression and selection step. Runbook has a new ''Workflow contract'' section and the digest re-pin procedure.
-
+    What this slice adds on top of main: ci.yml now matches the contract controller.py and policy.json expect. (1) Routing: heavy shards go to dell1 only for a main push or a same-repo train/ PR into main; ordinary PRs were previously routed and would have queued unadmitted. (2) dell1 runs no checkout: the first step verifies AIDA_CI_WORKSPACE HEAD == job head SHA and a clean tree, then links the runner workspace to it and target to CARGO_TARGET_DIR; fails closed. (3) rustup steps, Swatinem/rust-cache and the docs-only path filter are hosted-only. GitLab adapter (ci/gdma/run-upstream.py) updated for the new expression and selection step. Runbook has a new 'Workflow contract' section and the digest re-pin procedure.
 
     Acceptance evidence:
-
     - AC1 (all heavy shards pass on dell1 with AIDA_REQUIRE_BWRAP_LIVE=1): [evidence: manual-inspection] NOT MET. Needs the operator root install and a live run; nothing in a lane can show it.
-
     - AC2 (two concurrent jobs, no shared dir/cache slot, cap holds): [evidence: behavioral-test] on main since #3791 (tests/test_dell1_controller.py LaunchIntegration/Selection); unchanged here.
-
     - AC3 (PR job cannot write main/train cache): [evidence: behavioral-test] controller side on main (test_successful_train_never_publishes, ordinary-PR admission refusals). This slice adds the workflow side: tests/test_self_hosted_runner.py routing matrix (ordinary/fork/integration PRs never reach dell1) and test_self_hosted_runs_no_checkout_toolchain_or_remote_cache_action.
-
     - AC4 (runbook; post-activation comparison): [evidence: documentation-inspection] runbook updated (docs/internal/testing/dell1-runner.md). The comparison is an operator step after activation: NOT MET.
 
-
-    Validation: python3 -m unittest tests.test_self_hosted_runner.Routing tests.test_ci_tiers tests.test_ci_test_shards tests.test_gdma_ci tests.test_ci_structural_guards: 81 passed. Fast gate run gate-by-gate: 42 passed; 3 not run (they invoke cargo: cargo-timeout hook test, Check formatting, Rust structural ratchets; no Rust changed); 3 failed only on this seat''s AF_UNIX denial (Containment conformance evidence, Store mutation channel, and the tests.test_dell1_controller half of Self-hosted routing security fixtures: 15 PermissionError on socket(AF_UNIX)). check-store-writers.py passed. Simulated the controller''s archive + fetch + reset --mixed preparation on this repo: git status is clean, so the new clean-tree check does not refuse a correct tree.
-
+    Validation: python3 -m unittest tests.test_self_hosted_runner.Routing tests.test_ci_tiers tests.test_ci_test_shards tests.test_gdma_ci tests.test_ci_structural_guards: 81 passed. Fast gate run gate-by-gate: 42 passed; 3 not run (they invoke cargo: cargo-timeout hook test, Check formatting, Rust structural ratchets; no Rust changed); 3 failed only on this seat's AF_UNIX denial (Containment conformance evidence, Store mutation channel, and the tests.test_dell1_controller half of Self-hosted routing security fixtures: 15 PermissionError on socket(AF_UNIX)). check-store-writers.py passed. Simulated the controller's archive + fetch + reset --mixed preparation on this repo: git status is clean, so the new clean-tree check does not refuse a correct tree.
 
     Probe findings / residual risks:
-
     - Actions startsWith is case-insensitive, the controller is not: a same-repo head named Train/... would queue for dell1 and never be admitted. Documented in the runbook; not fixed.
-
     - Three behaviours depend on the real runner and are listed in the runbook for acceptance: later steps honouring the workspace link, cargo-nextest installing into CARGO_HOME/bin, upload-artifact following the target link.
-
     - dell1 heavy shards always run in full and the test-time budget is strict there (no parent commit to diff).
-
     - Any ci.yml merge changes the pinned digest; with routing on, routed jobs wait until the operator re-pins.
 
-
-    Shard balancing (11-20 05:45 note): no change made. On main run 44793210988 lib-0 and lib-1 both took about 15 min (18:29:24 to 18:44:34 and 18:44:25), so the halves are already balanced in wall time; the flakes look like host load, not skew. Splitting finer needs the per-test JUnit artifacts, which this seat''s network policy blocked (artifact blob host denied).'
-  created_at: 2026-11-20 19:11:42.093257+00:00
-  modified_at: 2026-11-20 19:11:42.093257+00:00
+    Shard balancing (11-20 05:45 note): no change made. On main run 44793210988 lib-0 and lib-1 both took about 15 min (18:29:24 to 18:44:34 and 18:44:25), so the halves are already balanced in wall time; the flakes look like host load, not skew. Splitting finer needs the per-test JUnit artifacts, which this seat's network policy blocked (artifact blob host denied).
+  created_at: 2026-11-20T19:11:42.093257Z
+  modified_at: 2026-11-20T19:11:42.093257Z
   session_id: 01a1fa4a92e2
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1fa77-5871-7e21-a319-ab39e8b9f15f
   author: joe
-  content: "AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 12:42): 7 findings at bc0dcbf. Claude+Fable, gated on the live lane exiting.\n\n# Rework brief: STORY-2695 / PR #4377 (dell1 CI runner routing), round 2 of 4\n\nAdvisor: claude-advisor-121, 2026-11-20 12:42 MST. Head reviewed: bc0dcbf. Lane: CLAUDE+Fable. COMMIT your work.\nCI infrastructure change: every item needs a fixture or test. Fix all 7:\n 1 ci.yml:153 request the per-route CLASS label (MAIN vs TRAIN), per the binding plan; a train must never dispatch to a MAIN-registering runner.\n 2 ci.yml:153 routing is CASE-SENSITIVE (no startsWith case folding): compute the route before the matrix; add a Train/x hosted fixture.\n 3 ci.yml:225 never expose stale reports: clear or exclude test-run.log, test-timings.json and nextest junit XML before exposing the target;\n   a failed warm job cannot publish the previous run's reports.\n 4 ci.yml:220 the exact-source check refuses ignored AND untracked files (git status --ignored), with an ignored-.env\
-    \ refusal fixture.\n 5 nextest install location: align the workflow, fixture and operator acceptance check with where install-action actually puts it.\n 6 test_self_hosted_runner.py:97 evaluate the FULL condition for the four self-hosted shards; cover the OR-branch mutation.\n 7 run-upstream.py:276 require exactly one validated producer for the paths and changes outputs in dependency order; test a removed selector.\nRun the CI gates locally (make check-ci-fast plus the self-hosted runner tests). Push."
-  created_at: 2026-11-20 19:37:55.437212+00:00
-  modified_at: 2026-11-20 19:37:55.437212+00:00
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 12:42): 7 findings at bc0dcbf. Claude+Fable, gated on the live lane exiting.
+
+    # Rework brief: STORY-2695 / PR #4377 (dell1 CI runner routing), round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 12:42 MST. Head reviewed: bc0dcbf. Lane: CLAUDE+Fable. COMMIT your work.
+    CI infrastructure change: every item needs a fixture or test. Fix all 7:
+     1 ci.yml:153 request the per-route CLASS label (MAIN vs TRAIN), per the binding plan; a train must never dispatch to a MAIN-registering runner.
+     2 ci.yml:153 routing is CASE-SENSITIVE (no startsWith case folding): compute the route before the matrix; add a Train/x hosted fixture.
+     3 ci.yml:225 never expose stale reports: clear or exclude test-run.log, test-timings.json and nextest junit XML before exposing the target;
+       a failed warm job cannot publish the previous run's reports.
+     4 ci.yml:220 the exact-source check refuses ignored AND untracked files (git status --ignored), with an ignored-.env refusal fixture.
+     5 nextest install location: align the workflow, fixture and operator acceptance check with where install-action actually puts it.
+     6 test_self_hosted_runner.py:97 evaluate the FULL condition for the four self-hosted shards; cover the OR-branch mutation.
+     7 run-upstream.py:276 require exactly one validated producer for the paths and changes outputs in dependency order; test a removed selector.
+    Run the CI gates locally (make check-ci-fast plus the self-hosted runner tests). Push.
+  created_at: 2026-11-20T19:37:55.437212Z
+  modified_at: 2026-11-20T19:37:55.437212Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa79-ff8d-7f70-99cc-d284413c8a05
   author: joe
-  content: "AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 12:40):\n# Rework brief: STORY-2695 / PR #4377 (dell1 CI runner routing), round 2 of 4\n\nAdvisor: claude-advisor-121, 2026-11-20 12:42 MST. Head reviewed: bc0dcbf. Lane: CLAUDE+Fable. COMMIT your work.\nCI infrastructure change: every item needs a fixture or test. Fix all 7:\n 1 ci.yml:153 request the per-route CLASS label (MAIN vs TRAIN), per the binding plan; a train must never dispatch to a MAIN-registering runner.\n 2 ci.yml:153 routing is CASE-SENSITIVE (no startsWith case folding): compute the route before the matrix; add a Train/x hosted fixture.\n 3 ci.yml:225 never expose stale reports: clear or exclude test-run.log, test-timings.json and nextest junit XML before exposing the target;\n   a failed warm job cannot publish the previous run's reports.\n 4 ci.yml:220 the exact-source check refuses ignored AND untracked files (git status --ignored), with an ignored-.env refusal fixture.\n 5 nextest install location:\
-    \ align the workflow, fixture and operator acceptance check with where install-action actually puts it.\n 6 test_self_hosted_runner.py:97 evaluate the FULL condition for the four self-hosted shards; cover the OR-branch mutation.\n 7 run-upstream.py:276 require exactly one validated producer for the paths and changes outputs in dependency order; test a removed selector.\nRun the CI gates locally (make check-ci-fast plus the self-hosted runner tests). Push.\n\n## Before pushing (product, per advisor 21:40)\nRun `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml."
-  created_at: 2026-11-20 19:40:49.281022+00:00
-  modified_at: 2026-11-20 19:40:49.281022+00:00
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 12:40):
+    # Rework brief: STORY-2695 / PR #4377 (dell1 CI runner routing), round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 12:42 MST. Head reviewed: bc0dcbf. Lane: CLAUDE+Fable. COMMIT your work.
+    CI infrastructure change: every item needs a fixture or test. Fix all 7:
+     1 ci.yml:153 request the per-route CLASS label (MAIN vs TRAIN), per the binding plan; a train must never dispatch to a MAIN-registering runner.
+     2 ci.yml:153 routing is CASE-SENSITIVE (no startsWith case folding): compute the route before the matrix; add a Train/x hosted fixture.
+     3 ci.yml:225 never expose stale reports: clear or exclude test-run.log, test-timings.json and nextest junit XML before exposing the target;
+       a failed warm job cannot publish the previous run's reports.
+     4 ci.yml:220 the exact-source check refuses ignored AND untracked files (git status --ignored), with an ignored-.env refusal fixture.
+     5 nextest install location: align the workflow, fixture and operator acceptance check with where install-action actually puts it.
+     6 test_self_hosted_runner.py:97 evaluate the FULL condition for the four self-hosted shards; cover the OR-branch mutation.
+     7 run-upstream.py:276 require exactly one validated producer for the paths and changes outputs in dependency order; test a removed selector.
+    Run the CI gates locally (make check-ci-fast plus the self-hosted runner tests). Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T19:40:49.281022Z
+  modified_at: 2026-11-20T19:40:49.281022Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa7a-3b91-7141-a909-1d9ad501515c
   author: joe
   content: 'Product 12:41: R2 lane queued on dell1 (claude), branch story-b6b1278890774ef993d2ebc327862470-618. Scope = the AUTHORITATIVE R2 BRIEF in the previous comment.'
-  created_at: 2026-11-20 19:41:04.159734+00:00
-  modified_at: 2026-11-20 19:41:04.159734+00:00
+  created_at: 2026-11-20T19:41:04.159734Z
+  modified_at: 2026-11-20T19:41:04.159734Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa7a-7197-7182-98bd-60ea4d566c56
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-618` at head `bc0dcbffdb18146fc817eb7528eca2722002d068`.'
-  created_at: 2026-11-20 19:41:30.903369+00:00
-  modified_at: 2026-11-20 19:41:30.903369+00:00
+  created_at: 2026-11-20T19:41:30.903369Z
+  modified_at: 2026-11-20T19:41:30.903369Z
   session_id: 01a1fa4a92e2
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
-  timestamp: 2026-11-10 01:49:44.539134+00:00
+  timestamp: 2026-11-10T01:49:44.539134Z
   session_id: 01a1beff-fc3b-78e2-93e2-9b0c283b0339
   harness_version: 2.1.319 (Claude Code)
   changes:
@@ -458,21 +448,21 @@ history:
     new_value: Approved
 - id: 01a1c326-f6dd-76a3-ac99-bc94ec78e4ac
   author: aida-session-start
-  timestamp: 2026-11-10 01:51:13.117424+00:00
+  timestamp: 2026-11-10T01:51:13.117424Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c4b3-06c7-7010-ba35-58ed2dd667b7
   author: aida-orchestrator
-  timestamp: 2026-11-10 09:03:49.447905+00:00
+  timestamp: 2026-11-10T09:03:49.447905Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
 - id: 01a1c4ba-08a0-7160-ba1c-8ec2f66a2161
   author: joe
-  timestamp: 2026-11-10 09:11:28.672366+00:00
+  timestamp: 2026-11-10T09:11:28.672366Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
   changes:
@@ -481,53 +471,53 @@ history:
     new_value: Approved
 - id: 01a1c4ba-31c3-77a1-9770-b737f4093175
   author: joe
-  timestamp: 2026-11-10 09:11:39.203077+00:00
+  timestamp: 2026-11-10T09:11:39.203077Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
   changes: []
 - id: 01a1c4bb-8505-7b13-a495-beed953d132a
   author: aida-session-start
-  timestamp: 2026-11-10 09:13:06.053501+00:00
+  timestamp: 2026-11-10T09:13:06.053501Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c4bf-615c-7a02-b17c-531586761e6d
   author: joe
-  timestamp: 2026-11-10 09:17:19.068754+00:00
+  timestamp: 2026-11-10T09:17:19.068754Z
   changes: []
 - id: 01a1c4eb-192d-7a61-9297-ec46f64a8f70
   author: joe
-  timestamp: 2026-11-10 10:05:04.173914+00:00
+  timestamp: 2026-11-10T10:05:04.173914Z
   session_id: 01a1c39a-801a-7bd1-8da9-c955a6707f0b
   harness_version: 2.1.321 (Claude Code)
   changes: []
 - id: 01a1c4ed-902b-7183-b498-ac788b1be61e
   author: aida-session-start
-  timestamp: 2026-11-10 10:07:45.707838+00:00
+  timestamp: 2026-11-10T10:07:45.707838Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c5dc-9f71-7ee1-953d-832e11dd1d14
   author: joe
-  timestamp: 2026-11-10 14:28:52.721941+00:00
+  timestamp: 2026-11-10T14:28:52.721941Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c5e6-a5f6-7e43-b0dc-2ccf224b4da4
   author: joe
-  timestamp: 2026-11-10 14:39:49.750802+00:00
+  timestamp: 2026-11-10T14:39:49.750802Z
   session_id: 01a1c530-c917-7f13-ab81-f6b5e1d1cd30
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c77a-9ec5-76a0-b950-c70df7ab2315
   author: joe
-  timestamp: 2026-11-10 22:01:04.453333+00:00
+  timestamp: 2026-11-10T22:01:04.453333Z
   changes: []
 - id: 01a1c82d-d236-70b1-88ef-c7d09698e8f0
   author: aida-orchestrator
-  timestamp: 2026-11-11 01:16:48.566560+00:00
+  timestamp: 2026-11-11T01:16:48.566560Z
   session_id: 01a1c82b03fb
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -536,7 +526,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1c873-a32a-73b1-a7a3-d44709e00bf4
   author: joe
-  timestamp: 2026-11-11 02:33:04.042367+00:00
+  timestamp: 2026-11-11T02:33:04.042367Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -545,27 +535,27 @@ history:
     new_value: Approved
 - id: 01a1c873-bc14-7ce2-9265-bc112e74ee88
   author: joe
-  timestamp: 2026-11-11 02:33:10.420242+00:00
+  timestamp: 2026-11-11T02:33:10.420242Z
   session_id: 01a1c70f-d731-7b70-acf8-e9ab3d288fca
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c875-a937-7870-adf8-113e67ae332b
   author: aida-session-start
-  timestamp: 2026-11-11 02:35:16.663293+00:00
+  timestamp: 2026-11-11T02:35:16.663293Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c97b-2c95-75b0-91e7-9d13e7b9ad15
   author: aida-orchestrator
-  timestamp: 2026-11-11 07:20:55.189046+00:00
+  timestamp: 2026-11-11T07:20:55.189046Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
 - id: 01a1c97e-c923-7191-8b12-dd0382f56793
   author: joe
-  timestamp: 2026-11-11 07:24:51.875288+00:00
+  timestamp: 2026-11-11T07:24:51.875288Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -574,27 +564,27 @@ history:
     new_value: Approved
 - id: 01a1c97e-f470-7a70-ad58-a365f672aca1
   author: joe
-  timestamp: 2026-11-11 07:25:02.960283+00:00
+  timestamp: 2026-11-11T07:25:02.960283Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c980-ded2-7832-b170-b03923f6f506
   author: aida-session-start
-  timestamp: 2026-11-11 07:27:08.498720+00:00
+  timestamp: 2026-11-11T07:27:08.498720Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c9b3-4192-7c60-9a53-f67e0d82e411
   author: aida-orchestrator
-  timestamp: 2026-11-11 08:22:10.578720+00:00
+  timestamp: 2026-11-11T08:22:10.578720Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
 - id: 01a1c9b3-bbb6-7760-a5da-16bd5bcc1903
   author: joe
-  timestamp: 2026-11-11 08:22:41.846615+00:00
+  timestamp: 2026-11-11T08:22:41.846615Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -603,27 +593,27 @@ history:
     new_value: Approved
 - id: 01a1c9b3-dd89-7013-9e19-a54b957602f0
   author: joe
-  timestamp: 2026-11-11 08:22:50.505900+00:00
+  timestamp: 2026-11-11T08:22:50.505900Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c9b5-cd4c-7f31-9f83-8f884bdaac6f
   author: aida-session-start
-  timestamp: 2026-11-11 08:24:57.420447+00:00
+  timestamp: 2026-11-11T08:24:57.420447Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c9c4-fb2d-79e2-abbf-4b64568e883d
   author: aida-orchestrator
-  timestamp: 2026-11-11 08:41:32.205581+00:00
+  timestamp: 2026-11-11T08:41:32.205581Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
 - id: 01a1c9d0-81d1-7072-9fe3-b178c8c35d9c
   author: joe
-  timestamp: 2026-11-11 08:54:07.569360+00:00
+  timestamp: 2026-11-11T08:54:07.569360Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -632,27 +622,27 @@ history:
     new_value: Approved
 - id: 01a1c9d0-9a34-72a1-8189-2a38bed3cb8c
   author: joe
-  timestamp: 2026-11-11 08:54:13.812976+00:00
+  timestamp: 2026-11-11T08:54:13.812976Z
   session_id: 01a1c87f-970d-7ce0-9351-e4e75a87731e
   harness_version: 2.1.322 (Claude Code)
   changes: []
 - id: 01a1c9d2-fa3d-7a70-bded-2c18c6488659
   author: aida-session-start
-  timestamp: 2026-11-11 08:56:49.469716+00:00
+  timestamp: 2026-11-11T08:56:49.469716Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1c9e7-6eed-7961-8344-a61ad6f3b62a
   author: aida-orchestrator
-  timestamp: 2026-11-11 09:19:10.061924+00:00
+  timestamp: 2026-11-11T09:19:10.061924Z
   changes:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
 - id: 01a1cba1-a0dc-7d02-8cd6-08d5f3fffc89
   author: joe
-  timestamp: 2026-11-11 17:22:09.756021+00:00
+  timestamp: 2026-11-11T17:22:09.756021Z
   session_id: 01a1cb56-f02b-7652-869e-3788560cbf1b
   harness_version: 2.1.322 (Claude Code)
   changes:
@@ -661,14 +651,14 @@ history:
     new_value: Approved
 - id: 01a1cbe1-0a92-7e71-b805-aadd8f4f0973
   author: aida-session-start
-  timestamp: 2026-11-11 18:31:25.586182+00:00
+  timestamp: 2026-11-11T18:31:25.586182Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1d2d7-b015-7fc3-919f-f31101f7ef04
   author: joe
-  timestamp: 2026-11-13 02:58:33.109758+00:00
+  timestamp: 2026-11-13T02:58:33.109758Z
   session_id: 01a1d240-c397-7b61-b29f-bb337c138943
   harness_version: 2.1.323 (Claude Code)
   changes:
@@ -677,14 +667,14 @@ history:
     new_value: Approved
 - id: 01a1d2e7-a442-7340-8bf9-f3aa926d91ba
   author: aida-session-start
-  timestamp: 2026-11-13 03:15:58.658299+00:00
+  timestamp: 2026-11-13T03:15:58.658299Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1d2e8-8ebf-7be3-8c50-93011cabcee1
   author: dirtlab
-  timestamp: 2026-11-13 03:16:58.687966+00:00
+  timestamp: 2026-11-13T03:16:58.687966Z
   session_id: 01a1d2e78a00
   harness_version: codex-cli 0.167.0
   changes:
@@ -693,7 +683,7 @@ history:
     new_value: NeedsAttention
 - id: 01a1f17a-a1ed-7481-ba25-6f105d2a43ab
   author: joe
-  timestamp: 2026-11-19 01:45:08.333949+00:00
+  timestamp: 2026-11-19T01:45:08.333949Z
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes:
@@ -702,20 +692,27 @@ history:
     new_value: Approved
 - id: 01a1fa4a-bf53-77c0-8f61-53b61daaf95c
   author: aida-session-start
-  timestamp: 2026-11-20 18:49:25.075397+00:00
+  timestamp: 2026-11-20T18:49:25.075397Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1fa77-bde3-7ba3-aca1-51eba4794906
   author: joe
-  timestamp: 2026-11-20 19:38:33.827262+00:00
+  timestamp: 2026-11-20T19:38:33.827262Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1fa7d-3934-7fe3-8b27-1e12577fa36f
+  author: aida-session-start
+  timestamp: 2026-11-20T19:44:33.076536184Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
