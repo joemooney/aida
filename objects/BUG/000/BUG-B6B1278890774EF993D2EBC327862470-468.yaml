@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623325Z
-modified_at: 2026-11-20T20:49:38.682949830Z
+modified_at: 2026-11-20T21:09:02.346140491Z
 req_type: Bug
 tags:
 - lanes
@@ -41,6 +41,13 @@ comments:
   created_at: 2026-11-20T20:49:38.682949830Z
   modified_at: 2026-11-20T20:49:38.682949830Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1faca-c362-7502-a03d-d0109db7ee08
+  author: joe
+  content: 'advisor-121 14:14: the throughput guard shows the same foreign-lane blindness (2 lanes reported vs 7 live on dell1; a false STUCK-REWORK on #4376 with its lane live). One shared lane-host visibility source should serve both; coordinate with TASK-3827.'
+  created_at: 2026-11-20T21:09:02.346140491Z
+  modified_at: 2026-11-20T21:09:02.346140491Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
