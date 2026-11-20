@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T21:42:23.178585Z
-modified_at: 2026-11-20T00:13:36.990479910Z
+modified_at: 2026-11-20T00:13:51.814346186Z
 req_type: Task
 tags:
 - fix-forward
@@ -278,6 +278,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the entire 6690-byte landed diff against protected base be435bcf3807a9e0c892e2d7def934a25c4b1942, attesting original head 21f4982d70e0191186824e76e39026e06b50cd35. Covered spec TASK-3821 (origin TASK-b6b1278890774ef993d2ebc327862470-1127). Acceptance checklist: acb958e7 (fixture-only removal and exact byte accounting): unverified; exact paths, removal and scan estimates are asserted, but successful reclaim accounting is never asserted. ac80e1e2 (unchanged ownership semantics, no production changes): verified by full diff inspection, test-only cfg boundaries and retained ownership/refusal/salvage assertions. acd5e75b (20/20 local loop and green full-tier PR CI): unverified; PR body and canonical spec comment report 20/20 locally and 30/30 module tests, but exact-head CI run 44642824230 selected fast and skipped the full shards. CI pending at review time; pending status alone is not the reason for this verdict. Two blocking unmet-claimed-ac findings. No local tests or builds run.. No triage reason was given.'
   created_at: 2026-11-20T00:13:36.990478506Z
   modified_at: 2026-11-20T00:13:36.990478506Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f64d-6cb6-7ff0-9b5b-d0e03df78a3d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3821):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 21f4982d70e0
+    Recorded: 2026-11-20T00:11:58.289314649+00:00
+    Findings:
+    1. [P2; blocking_tier=unmet-claimed-ac] aida-cli-lib/src/worktree_lifecycle_gc.rs:2433,2487 (TASK-3821.acb958e7, origin TASK-b6b1278890774ef993d2ebc327862470-1127.acb958e7): The successful reclaim_lane_overlays return values are now discarded, including the repeated cleanup call. The row.bytes assertions at lines 2472 and 2484 exercise orphan_targets scan estimates, not the bytes actually credited by reclamation. Replacing the reclamation accumulator with zero while retaining deletion would pass this test, violating the claimed exact-byte-accounting criterion and losing the former freed-byte/idempotence coverage. Add a test-only way to verify bytes credited for exactly this fixture's removed paths (including zero on a repeated pass), without comparing an unrelated host-wide total or changing production ownership semantics.
+    2. [P2; blocking_tier=unmet-claimed-ac] PR #4340 CI selection (TASK-3821.acd5e75b, origin TASK-b6b1278890774ef993d2ebc327862470-1127.acd5e75b): AC3 explicitly requires the PR's full tier, but exact-head CI run 44642824230 reports successful ci-tier: fast and skipped CI (${{ matrix.shard }}); the PR has no ci:full label. Completion of the running fast gates/compile jobs cannot supply the required full-tier test execution. Select full CI for the reviewed head using the supported ci:full mechanism and provide its result, retaining the reported local 20/20 evidence. This is a missing required CI selection, not a request to block merely because CI is pending.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-20T00:13:51.670684579Z
+  modified_at: 2026-11-20T00:13:51.670684579Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
