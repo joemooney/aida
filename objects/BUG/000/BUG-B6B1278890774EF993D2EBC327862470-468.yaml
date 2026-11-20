@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T22:05:21.645688581Z
+modified_at: 2026-11-20T22:06:24.687901903Z
 req_type: Bug
 tags:
 - lanes
@@ -235,6 +235,12 @@ comments:
   content: Implementer push 9a5565b17c85 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-20T22:05:21.645688044Z
   modified_at: 2026-11-20T22:05:21.645688044Z
+  session_id: 01a1fabbb213
+- id: 01a1faff-19af-7e22-80be-343f46930b4e
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-468` at head `unavailable`.'
+  created_at: 2026-11-20T22:06:24.687895031Z
+  modified_at: 2026-11-20T22:06:24.687895031Z
   session_id: 01a1fabbb213
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
