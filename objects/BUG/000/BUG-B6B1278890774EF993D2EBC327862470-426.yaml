@@ -14,16 +14,22 @@ description: |
   Impact: anything that reads the ledger before the last write lands sees request-changes for an approval the operator recorded, and the round counter inflates ("round 6").
 
   Acceptance: (1) one `review record --verdict approved` produces exactly one verdict ledger event for the spec. (2) A no-op "unchanged" record writes no ledger event. (3) Regression test covering a prior sweep_pending barrier.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134645Z
-modified_at: 2026-11-20T18:42:03.584677088Z
+modified_at: 2026-11-20T19:18:22.672524380Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
 - linked:BUG-2564
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1fa65-24c3-7100-a455-b9b92403f792
+  created_at: 2026-11-20T19:18:22.672454516Z
+  created_by: dirtlab
 comments:
 - id: 01a1ebd8-b3bc-7cd1-aa92-e6eecc444ee9
   author: joe
@@ -60,6 +66,45 @@ comments:
   modified_at: 2026-11-20T18:33:44.931632141Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa64-60ce-7880-9e34-f0f2e92b4548
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: ccaa61189c (diff vs origin/main: gate/ledger/{mod,store}.rs, gate/review_verdict.rs, review_commands.rs, review_draft.rs tests, story_1421 tests, aida-review skill master, store-writers.toml).
+
+    Root cause: one approval went through two writers that each wrote twice. (a) The ledger writer persisted a request-changes sweep_pending barrier before filing deferred findings, then the approval. (b) With --pr the handler wrote the spec record and then a second 'handshake' record at the same PR key. 2 x 2 = the four alternating events on PR-4218. A failed filing left the barrier behind (the PR-4290 repro), and agent-mode output showed only the top context line.
+
+    Acceptance evidence:
+    - AC1 [evidence: behavioral-test] review_draft.rs bug_2662_one_approval_is_one_verdict_event_and_a_repeat_adds_none (plain approval: 1 event, carries phase-3 mode and receipt).
+    - AC2 [evidence: behavioral-test] same test plus bug_2662_approval_over_pending_barrier_writes_one_approved_event: an identical repeat leaves the ledger events byte-equal.
+    - AC3 [evidence: behavioral-test] bug_2662_approval_over_pending_barrier_writes_one_approved_event: prior sweep_pending barrier with a deferred finding, one approval appends exactly one approved event and no request-changes event.
+    - Brief (failed approve writes nothing, error names cause) [evidence: behavioral-test] bug_2662_refused_approval_over_standing_refusal_writes_nothing, bug_2662_failed_approval_delivery_records_nothing, and the updated standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery.
+    - Stale-approval race kept fail-closed [evidence: behavioral-test] bug_2662_approval_is_refused_when_another_review_lands_during_delivery (change ledger and unbound ledger).
+
+    Probe findings and fixes:
+    - Dropping the barrier would have dropped its 'review changed during delivery' check; replaced with a standing-records snapshot compared under the ledger lock (records copied by bind_unbound are in the snapshot, so binding cannot trip it).
+    - 'Unchanged' by recording_key alone would have swallowed a re-record that changes summary or authority; the no-op requires every field equal except timestamp, round history, inherited/delivered markers and a human receipt id whose prior receipt still verifies. Otherwise it is recorded as a new round and says so.
+    - A refusal with deferred follow-ups always writes through, so a failed follow-up filing is still retried by repeating the command.
+    - Refusal paths tested, not only happy paths. No existing test weakened: two tests that asserted the barrier on the direct record path now assert that nothing is recorded.
+
+    Validation: cargo test --profile agent -p aida-cli-lib --lib with filters 'gate:: review verdict handshake' (2850 passed, 28 failed) and the queue/findings/awaiting set (1227 passed, 3 failed). All 31 failures are lane-environment failures unrelated to the diff (no built CLI binary for process fixtures, mail-retention writer scan, contained-launch refusal, deleted cwd, inherited seat env). aida-ci-guards 51 passed. check-store-writers passes after regenerating the inventory.
+
+    Residual risks:
+    - make check-ci-fast could not run whole inside this lane's 60 s tool cap; ran individually: formatting, gate downward dependency, store-writer inventory, glyph lint, trace stranding, ExecContext, crate glob, test portability, executable fixture, help golden, glyph padding, structural guards, check-templates. Clippy and check-ratchets not run locally.
+    - Launcher collection (record_collected_verdict) still writes barrier then approval; out of scope for 'review record'.
+    - The stale legacy .aida/review-verdicts/<SPEC>.json shadowing noted by advisor-121 (2026-11-19) is not addressed here.
+    - A human-at-TTY repeat still writes a fresh receipt file in the AIDA home before the no-op is detected (no ledger event).
+  created_at: 2026-11-20T19:17:24.814765594Z
+  modified_at: 2026-11-20T19:17:24.814765594Z
+  session_id: 01a1fa43d4bc
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1fa64-b001-72d1-ab06-1e12da6c0563
+  author: aida-publication-done
+  content: Implementer push ccaa61189cee declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-20T19:17:45.089087773Z
+  modified_at: 2026-11-20T19:17:45.089087773Z
+  session_id: 01a1fa43d4bc
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
@@ -83,6 +128,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fa64-b001-72d1-ab06-1e06194664ff
+  author: aida-publication-done
+  timestamp: 2026-11-20T19:17:45.089084465Z
+  session_id: 01a1fa43d4bc
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a1fa65-5143-7d33-9205-e842b8534ab8
+  author: dirtlab
+  timestamp: 2026-11-20T19:18:26.371801411Z
+  session_id: 01a1fa43d4bc
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2

@@ -1,0 +1,47 @@
+id: 01a1fa65-24c3-7100-a455-b9b92403f792
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-188
+title: 'Review PR-4378: [AI:claude] fix(review): one approval writes one verdict event; a refused approval writes none (BUG-2662)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1fa43`) for branch `bug-b6b1278890774ef993d2ebc327862470-426`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4378>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-426` → `main`
+
+  ## Covers
+
+  - BUG-2662
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4378` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T19:18:14.979856755Z
+modified_at: 2026-11-20T19:18:18.809836630Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-20T19:18:18.809803883Z
+  created_by: dirtlab
+history:
+- id: 01a1fa65-3b96-7e23-9fd6-f18978afd7f8
+  author: dirtlab
+  timestamp: 2026-11-20T19:18:20.822935887Z
+  session_id: 01a1fa43d4bc
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: ccaa61189ceee258f860e576bd59e662a859f618
+  branch: bug-b6b1278890774ef993d2ebc327862470-426
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 012b95ef89
+  vendor: claude
+  session: 01a1fa43d4bc
+  harness_version: 2.1.319 (Claude Code)

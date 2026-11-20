@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T10:46:16.888539142Z
-modified_at: 2026-11-20T18:54:13.498802794Z
+modified_at: 2026-11-20T19:18:02.384355879Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -115,6 +115,18 @@ comments:
   modified_at: 2026-11-20T18:52:15.304026350Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa64-f661-7590-aa73-a9ec0a08ddb2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: afdaec6750; also inspected git diff origin/main...HEAD, git diff HEAD and the untracked S5 inventory. Refs-only artifact reader slice.
+    AC1: [evidence: behavioral-test] cache_location.rs:274 and review_watch_forge.rs:557 consume shared observation. Cache suite 14 passed, including versioned_migration_temp_rejects_foreign_owner_and_detects_reuse. Chose a breaking cache-temp filename rewrite because old readers skip its nonnumeric first field. Confirmed age floor, regular-file check, namespace, node, PID reuse, missing capture and simultaneous writer uniqueness. Unknown owners retain files; failed capture followed by crash may leave an orphan.
+    AC2: [evidence: behavioral-test] TASK-1750 guards 4 passed and Python ownership guard 2 passed; removed two production allowances. Zero-legacy remains open: 56 paths/113 syntax allowances on this checkout, projected 57/116 on origin/main at 012b95ef89. Inline test modules can hide later production items; see docs/internal/testing/proc-identity-s5-inventory.md.
+    AC3: [evidence: behavioral-test] proc_identity matrix including namespace/reuse and cooperative subreaper 6 passed. No owner, signaling or grant authority introduced. Store writer inventory passed. Fast gate failed on four containment test fixture temp-directory creations under read-only ~/.aida. Host PR-head CI unavailable before publication.
+  created_at: 2026-11-20T19:18:02.384355879Z
+  modified_at: 2026-11-20T19:18:02.384355879Z
+  session_id: 01a1fa4eeaa4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1b59d-e453-77c2-9141-8b9b3f4b1fba
   author: joe
