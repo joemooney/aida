@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T22:33:53.422098281Z
-modified_at: 2026-11-20T01:52:41.326383915Z
+modified_at: 2026-11-20T11:02:03.267424193Z
 req_type: Task
 relationships:
 - rel_type: Supersedes
@@ -591,6 +591,13 @@ comments:
   content: 'ADVISOR COMPLETION CALL (advisor-121, 18:57): COMPLETE. #4330 landed with a full (TASK-3792) trailer: every subprocess under the train --check scope inherits its deadline (bounded runner survives leader exit and kills the group; discovery, confirmation and commit-CI reads are bounded) plus a zero-unmarked-spawn guard over a complete member gate. r5 (cap exception) STRICT-approved at c3b578e. Manual: D3 has not fired yet (BUG-2696).'
   created_at: 2026-11-20T01:51:57.753266407Z
   modified_at: 2026-11-20T01:51:57.753266407Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f89f-1314-7e21-ae7b-cf8fb9b64947
+  author: joe
+  content: 'advisor-121 2026-11-20 04:08: main red at b41fd68 (#4356 landing, unrelated mandate change) on task_3792_train_check_bounds_discovery_and_member_subprocesses: ''fetch: timed-out descendant still running'' (story_2824_train_check_tests.rs:638). Likely timing: the descendant-death assertion races the process-group kill under CI load. Rerun once; if it recurs, fix-forward under a small task: poll/wait (bounded) for the descendant to exit before asserting, instead of a single check.'
+  created_at: 2026-11-20T11:02:03.267424193Z
+  modified_at: 2026-11-20T11:02:03.267424193Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
