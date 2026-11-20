@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T15:15:40.640396386Z
+modified_at: 2026-11-20T15:56:34.159315546Z
 req_type: Bug
 tags:
 - admission
@@ -214,6 +214,13 @@ comments:
   created_at: 2026-11-20T15:15:40.640393201Z
   modified_at: 2026-11-20T15:15:40.640393201Z
   session_id: 01a1f94f7ef5
+- id: 01a1f9ac-b4ae-7da1-b7e3-5086466f30f2
+  author: joe
+  content: 'Product 08:58 (Joe approved, 2026-11-20 08:41): add to AC4''s status work: `aida advisor loops status` (or review-watch status) shows the vendor AND model of each review attempt it launched, and review-watch logs the resolved model per launch. Motivation: TASK-3823 sets reviewer models via [agents.*.seats] reviewer, and today nothing shows whether a review actually ran on that model.'
+  created_at: 2026-11-20T15:56:34.159315546Z
+  modified_at: 2026-11-20T15:56:34.159315546Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
