@@ -6,3 +6,9 @@ last_by:
   vendor: claude
 result: done
 note: 'advisor-121 05:52: stale mail-poll-setup on 01a1f4a0; the seat confirmed nothing armed; noted as a false positive on FAQ-50'
+due_since: 2026-11-20T13:00:55.721588579Z
+due_reason: on CronJobFailed:watchdog
+due_failure:
+  trip_id: watchdog@2026-11-20T12:44:59.923075912Z
+  job: watchdog
+  error: 'exit 1: '
