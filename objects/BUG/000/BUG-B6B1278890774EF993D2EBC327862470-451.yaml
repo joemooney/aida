@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:16:33.897382423Z
-modified_at: 2026-11-20T01:09:58.458427421Z
+modified_at: 2026-11-20T01:35:05.791267917Z
 req_type: Bug
 tags:
 - landing
@@ -57,6 +57,25 @@ comments:
   modified_at: 2026-11-20T01:06:21.554979202Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f697-cc3f-7b51-a2ab-af8f1545d800
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 99b17edc33 (diff origin/main...HEAD, 12 files).
+    Acceptance evidence:
+    - AC1 [behavioral-test]: newest_green walk + run_tick (dev_autopromote.rs); tests an_in_progress_tip_promotes_the_older_green_commit, a_red_tip_promotes_the_newest_green_commit_before_it, the_walk_is_bounded_to_twenty_commits, the_walk_stops_after_head..., a_green_commit_that_does_not_contain_live_is_never_a_downgrade.
+    - AC2 [behavioral-test]: plan_promotion_at/green_behind_ok (dev_build.rs) — behind allowed only on main, HEAD == chosen full SHA, ahead == 0; tests the_behind_guard_admits_only_the_chosen_green_commit_on_main, the_child_refuses_when_head_is_behind_but_not_the_chosen_commit.
+    - AC3 [behavioral-test]: Launched.passed_over + launch_line in the log/stdout; autopromote-scan.json + behind_main_line in aida dev status; tests dev_status_reports_the_distance_and_the_newest_green_commit, in-progress test asserts the launch line.
+    - AC4 [behavioral-test]: no_green_commit_newer_than_live_skips (NoChecks = not green), red_and_unreadable_commits_are_never_promoted.
+    - AC5 [behavioral-test]: scripts/aida-autobuild.sh walks first-parent (20), passes over pending/red/missing, keeps skip-worktree override rebasing onto the chosen commit, passes AIDA_AUTOBUILD_TARGET (honoured only with verified cron lock fd); tests/test_lane_autobuild.py 16/16 (5 new).
+    - AC6 [behavioral-test]: tip in-progress / tip red / nothing newer green / origin/main moves mid-check, in both Rust (origin_main_moving_mid_check_still_promotes_the_chosen_green_commit) and script tests.
+    Validation: lane cargo tests dev_autopromote 59/59, dev_build+dev_cmd 106/106, ratchet groups 90/90, story_2326 57/57, help golden ok; store-writers check ok; fmt, exec-context, trace-headers, glyph, portability, crate-globs, doc links/paths/audiences, verify-manual static all ok.
+    Probe findings/fixes: script inline gh call to keep the existing inventory row; write_scan rows added; stale 'exact-tip CI' gate text updated; help text + goldens + docs/cli/11-dev.md + repository guide updated.
+    Residual risks: (1) Transitional: until a binary with this change is live, the cron's 'aida dev build' (old binary) still refuses HEAD-behind-origin/main, so the cron promotes only when the chosen commit is the tip; the scheduled tick's child is the new binary only after first promotion too — first promotion still needs a green tip once (or a manual 'aida dev build'). (2) Walk stops at a failed/rolled-back commit rather than promoting older commits below it (conservative). (3) make check-ci-fast could not complete in this sandbox: the Containment conformance gate errors on read-only /tmp + EPERM (environmental, unrelated); its remaining relevant gates were run individually. (4) cargo clippy not run locally (lane runner accepts test/check/build only); CI covers it.
+  created_at: 2026-11-20T01:35:05.791267917Z
+  modified_at: 2026-11-20T01:35:05.791267917Z
+  session_id: 01a1f6802f0e
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f677-27f6-73c2-83dc-dc7ef45e7218
   author: joe
