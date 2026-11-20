@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T18:16:50.342461125Z
+modified_at: 2026-11-20T18:18:02.833476858Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -36,6 +36,13 @@ comments:
   modified_at: 2026-11-18T01:33:32.572346976Z
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
+- id: 01a1fa2e-403c-79a3-ba55-6c83f5e8f5f1
+  author: joe
+  content: 'advisor-121 11:22: drain, Claude+Fable. Priority: tonight #4347''s r3 reviewer died and left an UNCOLLECTED APPROVED draft in a stale aida-pr-4347 tree (caught by hand). A retained draft must be replayable and recordable after the launcher exits.'
+  created_at: 2026-11-20T18:18:02.833476858Z
+  modified_at: 2026-11-20T18:18:02.833476858Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
