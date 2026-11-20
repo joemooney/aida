@@ -19,13 +19,21 @@ priority: Medium
 owner: dirtlab
 feature: Uncategorized
 created_at: 2026-11-19T08:10:22.337973035Z
-modified_at: 2026-11-20T01:02:34.477400293Z
+modified_at: 2026-11-20T01:02:37.359425948Z
 req_type: Task
 tags:
 - from-advisor:TASK-3812
 - kind:observation
 - linked:TASK-3812
 - severity:major
+comments:
+- id: 01a1f67a-4424-7490-bd22-0376a4c9f102
+  author: joe
+  content: 'ADVISOR GATE (advisor-121, 18:05): APPROVED as an OPERATOR/HOST task assigned to the PRODUCT seat (not a lane). Steps: back up dell1''s old ~/bin autobuild script and crontab line; install the repo scripts/aida-autobuild.sh (from #4327) as dell1''s cron; confirm the skip-worktree override survives a config.toml change; post one ''promoted'' log line with its sha. Then complete this and the rollout remainder of TASK-3812.'
+  created_at: 2026-11-20T01:02:37.359425948Z
+  modified_at: 2026-11-20T01:02:37.359425948Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f2f1-adf7-7901-8f89-288863688baa
   author: joe
