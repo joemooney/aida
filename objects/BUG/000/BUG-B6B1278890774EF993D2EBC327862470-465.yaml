@@ -13,12 +13,12 @@ description: |
   2. `aida pr ship` on a busy admission waits up to a bounded time (configurable, default a few minutes) for the exclusive mode instead of failing on the first try_lock, and reports the holders and how long it waited if it gives up.
   3. Regression through the production path: with both loop workers running, an `aida pr ship` of an approved PR acquires admission within the bound. A control proves an in-progress review launch or train stack is never interrupted mid-operation.
   4. `aida advisor loops` gains a supported, audited way to drain or pause both workers' admission claims (so no operator or advisor ever needs to SIGTERM them), and `aida advisor loops status` shows each worker's claim age.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T20:46:21.508308499Z
+modified_at: 2026-11-20T20:54:33.902384340Z
 req_type: Bug
 tags:
 - admission
@@ -596,6 +596,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1fabd-52ae-7091-9194-8cecf2df9d22
+  author: aida-orchestrator
+  timestamp: 2026-11-20T20:54:33.902398070Z
+  session_id: 01a1fab9c85e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 140977cdd550b1f043ea5a57eb4bb91e52211313
@@ -606,3 +614,11 @@ filed_at:
   vendor: claude
   session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2703 adds writer preference, a production ship-handler regression, and both claim ages. Operator identification, retries at the shortest supported bound, and settlement at long discovery intervals require changes. Fast gates passed and fast compilation was pending at review time. Review used source and existing CI evidence.
+  recovery_hint: address the review findings, move BUG-2703 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-20T20:54:33.902384340Z
