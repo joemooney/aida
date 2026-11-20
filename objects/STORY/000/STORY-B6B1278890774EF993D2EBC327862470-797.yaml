@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T17:44:41.275731876Z
+modified_at: 2026-11-20T18:27:23.795061260Z
 req_type: Story
 tags:
 - landing
@@ -758,6 +758,14 @@ comments:
   created_at: 2026-11-20T17:44:41.275731876Z
   modified_at: 2026-11-20T17:44:41.275731876Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa36-c9f7-70f2-afdc-1a680281f759
+  author: joe
+  content: |
+    S3 #4362 round 5 (cap exception) pushed at 8d0dcafe9c9, the two ruled items only. P1: main_watch calls removed from land_run and the supervised train tick; the watch runs only as its own scheduled job (schedule command table entry "land watch", job red-main-watch every 5m enabled in .aida/config.toml; no job without config) plus the manual command; scheduler job timeout bounds a pass; zero-wait store-lock try kept; note_smoke_failure tries the watch lock with zero wait. Test now asserts no merge path reads and no landing path (land_run, advisor_loop*, pr_*, gate/, auto_complete, burndown_run, upgrade_release) calls the watch. Note: the job command is `land watch` (it already runs exactly one pass; I did not add a no-op --once flag). P2: evidence key = run:attempt:job; regression with two failing jobs in one run. 43 watch tests; check-ci-fast exit 0; ci:full relabelled.
+  created_at: 2026-11-20T18:27:23.795061260Z
+  modified_at: 2026-11-20T18:27:23.795061260Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
