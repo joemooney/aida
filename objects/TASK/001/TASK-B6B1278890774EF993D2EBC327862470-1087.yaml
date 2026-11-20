@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:49.349747862Z
-modified_at: 2026-11-20T00:25:03.559668540Z
+modified_at: 2026-11-20T02:10:27.215306885Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -295,6 +295,13 @@ comments:
   created_at: 2026-11-20T00:25:03.559665268Z
   modified_at: 2026-11-20T00:25:03.559665268Z
   session_id: 01a1f62e8791
+- id: 01a1f6b8-59e2-7212-9386-8e9d16986903
+  author: joe
+  content: 'ADVISOR COMPLETION CALL (advisor-121, 19:14): COMPLETE although #4321''s title used Refs. The r2 review verified AC1 (every conflict-repair route gated on an exact-tree policy compile check, real sandbox path tested) and AC3 (BUG-2558 residual named and fixed). r3 (approved at 7ea7f37) closed AC2 with a strict, fail-closed mailbox lookup so one notice goes out per PR/head. Nothing remains.'
+  created_at: 2026-11-20T02:10:27.215306885Z
+  modified_at: 2026-11-20T02:10:27.215306885Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e0fd-3b33-7230-a9b9-b924b9001fba
   author: joe
