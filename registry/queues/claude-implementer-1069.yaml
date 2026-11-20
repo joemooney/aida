@@ -6,3 +6,11 @@
   added_at: 2026-11-20T01:25:01.816615901Z
   for_role: reviewer
   added_by_machine: imac
+- user_id: claude-implementer-1069
+  requirement_id: 01a1fb3f-678e-7d73-abdd-dd5dcebab408
+  position: 2000
+  added_by: claude-implementer-1069
+  note: auto-queue retry reused canonical review story; covers 0 specs
+  added_at: 2026-11-20T23:18:14.023351871Z
+  for_role: reviewer
+  added_by_machine: imac
