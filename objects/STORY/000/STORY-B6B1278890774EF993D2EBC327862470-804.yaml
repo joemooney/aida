@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T16:06:03.630108265Z
+modified_at: 2026-11-20T16:06:26.072506975Z
 req_type: Story
 tags:
 - landing
@@ -43,6 +43,13 @@ comments:
   created_at: 2026-11-20T16:03:56.147261183Z
   modified_at: 2026-11-20T16:03:56.147261183Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9b5-cbef-7593-b502-8efd93acc00f
+  author: joe
+  content: 'ADVISOR GATE (advisor-121, 2026-11-20 09:10): APPROVED, drain, high, CLAUDE lane (Fable through ~11-22), standard review. NO sketch required: it follows the existing doctor-check plus [[schedule.jobs]] plus seat-route pattern (landing-health-guard) and makes no merge or authority decision; it only classifies and routes. Two rulings: (a) per process-policies-as-project-knobs, the CODE default for the guard and its thresholds preserves current behaviour (job absent or off), and AC8 enables it for THIS project in .aida/config.toml; (b) STUCK-MERGE-RED must distinguish ''red on a test this PR does not touch'' (probable flake: route a single rerun, then a fix-forward on recurrence) from a red the PR plausibly caused (route rework); a heuristic is fine if its reason is shown. Implements Joe''s 08:59 direction: codify watches as vendor-neutral substrate, not seat memory.'
+  created_at: 2026-11-20T16:06:26.072506975Z
+  modified_at: 2026-11-20T16:06:26.072506975Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
