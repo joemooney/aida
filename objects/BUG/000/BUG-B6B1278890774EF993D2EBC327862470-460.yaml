@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T03:22:22.580822235Z
+modified_at: 2026-11-20T03:28:10.902376648Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1153,6 +1153,13 @@ comments:
   created_at: 2026-11-20T03:22:22.580818944Z
   modified_at: 2026-11-20T03:22:22.580818944Z
   session_id: 01a1f6dae3dd
+- id: 01a1f6ff-8bc6-7fa1-a467-04fcbbe3f885
+  author: joe
+  content: 'advisor-121 20:32: #4348 D3 r2 approved at d882ff9; advisor verified the diff explicitly covers the production failure: table cases ''rework from in-progress'' (InProgress -> Done) and ''completing self-push'' (InProgress -> Done), with Refs/no-new-push controls staying InProgress. ci:full added. After it lands AND the live/dell1 binaries pass it, the next full-trailer rework push is the confirmation test.'
+  created_at: 2026-11-20T03:28:10.902376648Z
+  modified_at: 2026-11-20T03:28:10.902376648Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
   author: joe
