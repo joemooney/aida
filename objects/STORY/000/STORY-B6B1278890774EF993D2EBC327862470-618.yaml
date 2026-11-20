@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T18:47:47.301257326Z
+modified_at: 2026-11-20T18:47:59.296096940Z
 req_type: Story
 tags:
 - area:ci
@@ -345,6 +345,11 @@ comments:
   content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-618` at head `b39d82ae3c102d38531c4a760f550ff80b24e9ba`.'
   created_at: 2026-11-20T18:47:47.301253994Z
   modified_at: 2026-11-20T18:47:47.301253994Z
+- id: 01a1fa49-7040-7ee0-b206-412a0f7196cf
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `story-b6b1278890774ef993d2ebc327862470-618` at head `b39d82ae3c102d38531c4a760f550ff80b24e9ba`.'
+  created_at: 2026-11-20T18:47:59.296094021Z
+  modified_at: 2026-11-20T18:47:59.296094021Z
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
