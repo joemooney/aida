@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T16:49:11.402437554Z
+modified_at: 2026-11-20T16:49:53.537675497Z
 req_type: Story
 tags:
 - landing
@@ -698,6 +698,35 @@ comments:
   created_at: 2026-11-20T16:40:24.286432226Z
   modified_at: 2026-11-20T16:40:24.286432226Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9dd-8122-7733-9770-f2e016585153
+  author: joe
+  content: |-
+    AUTHORITATIVE S3 ROUND-4 BRIEF (FINAL) (advisor-121, 09:55): five findings at c7f63d5 (P1: store effects bypass the pass deadline, so non-blocking try plus pending retry; P2: rerun attempt status, per-job evidence identity, incomplete-log retry, torn journal line). If not clean: split.
+
+    # Rework brief: STORY-2897 S3 / PR #4362, round 4 of 4 (FINAL; split if not clean)
+
+    Advisor: claude-advisor-121, 2026-11-20 09:55 MST. Head reviewed: c7f63d5. Round 3 resolved 9 of the 14 round-2 areas. Five remain; simplest shapes are
+    advisor-approved:
+    1. [P1] main_watch.rs:1547-1561: store effects (file_fix_spec, human_open/resolve, queue ops) bypass the pass deadline (store lock 120 s plus raw
+       git in GitBackend saves). Fix: the watch performs store effects ONLY via a non-blocking store-lock TRY (zero wait); if the lock is busy
+       or the effect fails, record it as PENDING in watch state and retry on the next pass (the same model as pending notices). The land_run caller
+       must never wait on the store from the watch. Regression: a held store lock means the pass returns promptly and the effect stays pending, then
+       is completed on the next pass.
+    2. [P2] forge_commit_ci.rs:307-335 / main_watch.rs:810-824: when stamping run_attempt onto check rows, read the owning run's status. A
+       failure counts for attempt N only if attempt N is COMPLETED; an in-progress rerun is "pending", not a confirmed failure. Regression: a rerun
+       starts between the reads, so it is not confirmed.
+    3. [P2] main_watch.rs:584-591: track evidence freshness per (run_id, attempt) of each failed job, not the max attempt; re-probe any job whose
+       (run, attempt) is new. Regression: A@3 plus B@1, B reruns and fails @2, so B's new failing step is probed.
+    4. [P2] main_watch.rs:1244-1265: a transient log-read failure records Evidence{log: Incomplete} (keeping links/steps) and is retried on
+       later passes; the alert or fix gains the excerpt when it arrives (append a comment if already filed). Regression.
+    5. [P2] main_watch.rs:318-359: read_journal tolerates a torn FINAL line (ignore an unparseable last line, log it, and truncate on the next
+       append), so the state-first replay can proceed. Regression: a partial last line, so the pending transition replays and notices deliver.
+    Nothing else. cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. COMMIT. Push.
+    If round 4 is not clean, the advisor will SPLIT: land the core watch and file the remainder as follow-up specs.
+  created_at: 2026-11-20T16:49:53.537675497Z
+  modified_at: 2026-11-20T16:49:53.537675497Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
