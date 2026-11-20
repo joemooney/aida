@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T21:16:17.482799119Z
+modified_at: 2026-11-20T21:53:30.822404357Z
 req_type: Bug
 tags:
 - admission
@@ -563,6 +563,26 @@ comments:
   created_at: 2026-11-20T21:16:17.482793578Z
   modified_at: 2026-11-20T21:16:17.482793578Z
   session_id: 01a1fa8d6880
+- id: 01a1faf3-4ac6-7b63-9d7d-25612488755c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 3299d3f57e (round 5 cap exception, delta over 1fb8210; three items only, the other r4 findings left to TASK-3828)
+
+    Acceptance evidence
+    - [authority] [evidence: behavioral-test] review_watch_pause.rs control_actor/human_operator: the operator arm needs stdin+stderr on a terminal and no AIDA_SESSION_ROLE, AIDA_AGENT_NAME, AIDA_AGENT_TYPE, AIDA_SESSION_ID or AIDA_HEADLESS (set at all counts). Pause control now checks authority under pause.lock. Tests: admission_drain bug2703_drain_and_resume_refuse_without_advisor_authority case (d) (no terminal; each managed variable at a terminal; journal bytes unchanged; operator at a terminal and advisor grant still succeed), review_watch bug2703_pause_control_refuses_a_managed_process_without_a_grant.
+    - ac336622 [evidence: behavioral-test] admission_owner.rs acquire_waiting/poll_step: retry every bound/10 (50 ms..1 s), immediate retry after intent registration, last attempt within 50 ms of the deadline, none after it. Tests with wait_secs = 1 through ship_admission: bug2703_one_second_bound_acquires_a_holder_released_after_registration, bug2703_one_second_bound_refusal_names_the_current_holder.
+    - ac6ca3ea [evidence: behavioral-test] review_watch.rs idle_yielding: settles when the claim is given up and every 5 s of the idle sleep, independent of --interval. Test: bug2703_idle_watcher_with_an_hour_interval_settles_a_review_that_exits (interval 3600, bound 60).
+
+    Probe findings: no fail-open found (the terminal seam is cfg(test) only; an empty identity variable still refuses). No existing test weakened; two refusal-message assertions updated to the new wording.
+
+    Validation: cargo test -p aida-cli-lib --lib (filters review_watch admission_ advisor_loop gate::test_support seat_authority) 493 passed; ratchet groups 91 passed; aida-ci-guards 51 passed; cargo fmt, check-store-writers.py and the fast-tier source gates pass, except three Python gates that cannot open AF_UNIX sockets or write /tmp inside this seat's sandbox (Containment conformance evidence, Store mutation channel, Self-hosted routing security fixtures), none of which touch this diff.
+
+    Residual risks: an operator whose shell exports AIDA_SESSION_ID or who redirects stdin is now refused and needs an advisor grant; the refusal at the bound can be up to 50 ms old; an idle watcher now reads its state every 5 s.
+  created_at: 2026-11-20T21:53:30.822404357Z
+  modified_at: 2026-11-20T21:53:30.822404357Z
+  session_id: 01a1fad87977
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
   author: joe
