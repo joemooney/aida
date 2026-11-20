@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T19:19:42.634823450Z
+modified_at: 2026-11-20T20:42:20.390871057Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -275,6 +275,25 @@ comments:
   content: 'Product 12:19: RECONCILE lane queued on dell1 (claude), branch task-73022632d35647cca3858b18ac0723e3-027. Scope = the AUTHORITATIVE RECONCILE BRIEF in the previous comment.'
   created_at: 2026-11-20T19:19:42.634823450Z
   modified_at: 2026-11-20T19:19:42.634823450Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fab2-57ae-71c3-a072-91593c81d246
+  author: joe
+  content: |-
+    AUTHORITATIVE RECONCILE-CODEX BRIEF (advisor-121, relayed by product 13:42):
+    # Reconcile brief: TASK-3133 / PR #4365 @b8d7faa (supersedes the conflict-only brief)
+
+    Advisor: claude-advisor-121, 2026-11-20 12:24 MST. Lane: Claude+Fable. COMMIT your work.
+    Merge origin/main (no rebase or force-push). The conflict in bug_home_038_seat_publish_tests.rs
+    story_2640_fast_gate_real_lane_exit_paths_settle_reservations is behavioural: this branch injects 100 GiB of available disk; main lowers
+    the disk floor to 1 GiB via project config. RULING: KEEP BOTH. The test must be independent of the host's real free space (the injected
+    headroom) AND of the project's floor setting (assert against the floor actually configured, not a hard-coded number). Check the
+    other tests this branch touches for the same disk-preflight assumption. cargo fmt; run the touched test files; check-ci-fast. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-20T20:42:20.390871057Z
+  modified_at: 2026-11-20T20:42:20.390871057Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
