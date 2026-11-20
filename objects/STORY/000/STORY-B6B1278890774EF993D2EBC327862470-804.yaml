@@ -28,7 +28,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-20T16:06:26.072506975Z
+modified_at: 2026-11-20T16:08:44.080438046Z
 req_type: Story
 tags:
 - landing
@@ -50,6 +50,23 @@ comments:
   created_at: 2026-11-20T16:06:26.072506975Z
   modified_at: 2026-11-20T16:06:26.072506975Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f9b8-006e-7ae1-b0d1-b23fb0c4d74f
+  author: joe
+  content: |-
+    Product 09:08: Claude (Fable 5.2) fresh-start lane queued on dell1, brief:
+    # Brief: STORY-2906 throughput-guard (fresh start; advisor-121 09:06: APPROVED, drain, high; Claude+Fable; standard review; no sketch needed)
+
+    Implement ACs 1-8 in the spec description. Rulings are on the spec:
+    - Reuse the existing pattern: an `aida doctor check` plus a `[[schedule.jobs]]` entry plus seat-routed due jobs (see landing-health-guard / landing-health-guard-route in .aida/config.toml). No new authority decisions.
+    - The code default preserves current behaviour (OFF). AC8 enables it in THIS project's .aida/config.toml.
+    - STUCK-MERGE-RED must tell an untouched-test flake (the failing tests pass on main; route as one rerun then a fix-forward) from a PR-caused red (route as rework), and show the reason in the routed item.
+    - Vendor-neutral by construction (AC6): findings reach seats only as due jobs and mail.
+    Trailer (STORY-2906) only if every AC is met; otherwise (Refs STORY-2906).
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-20T16:08:44.080438046Z
+  modified_at: 2026-11-20T16:08:44.080438046Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
