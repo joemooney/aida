@@ -4698,8 +4698,9 @@ fn story_2710_preparation_failure_cannot_admit_a_launch() {
     .is_empty());
 }
 
-/// Real Git host preparation keeps the configured vendor/model, retains a
-/// conflicted merge and appends the host journal paths for both launch modes.
+/// Real Git host preparation keeps the configured vendor/model and publishes a
+/// clean merge. A conflicted merge is retained, and its self-publishing
+/// (uncontained) route is refused before launch in both launch modes.
 // trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:claude
 // trace:BUG-2456 | ai:codex
@@ -4802,7 +4803,7 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                 3398,
                 "test-lane",
             );
-            let vendor = apply_rework_conflict_route(
+            let routed = apply_rework_conflict_route(
                 &project,
                 prepared,
                 ReworkConflictLaunch {
@@ -4821,8 +4822,7 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                     assert!(body.contains("shared.rs"), "{body}");
                     Ok(())
                 },
-            )
-            .unwrap_or_else(|e| panic!("{branch} interactive={interactive}: {e:#}"));
+            );
             assert_eq!(
                 git(&seat, &["status", "--porcelain"]).is_empty(),
                 !conflicts
@@ -4836,16 +4836,23 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
             // Remote evidence must agree before a vendor can be started.
             let remote = git(&origin, &["rev-parse", &format!("refs/heads/{branch}")]);
             if conflicts {
+                // An uncontained lane would commit and ship its own merge,
+                // skipping the host compile check: refused before launch.
+                // trace:TASK-3804 | ai:claude
+                let error = routed.expect_err("a self-publishing repair route must be refused");
+                let refusal = error
+                    .downcast_ref::<crate::repair_journal::UnvalidatedRepairPublication>()
+                    .unwrap_or_else(|| panic!("untyped refusal: {error:#}"));
+                assert_eq!(refusal.pr, 3398);
+                assert_eq!(refusal.route, "self-published uncontained codex lane");
+                assert!(
+                    error.to_string().contains("nothing was published"),
+                    "{error}"
+                );
                 assert_eq!(remote, head, "conflicts must not publish");
-                assert_eq!(vendor, HeadlessVendor::Codex);
                 assert_eq!(mailed.get(), 0);
                 assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge retained");
-                assert!(prompt.contains("conflicting files: shared.rs"), "{prompt}");
-                assert!(
-                    prompt.contains("commit the merge before ending your turn"),
-                    "{prompt}"
-                );
-                assert!(prompt.contains("name the unresolved files"), "{prompt}");
+                assert_eq!(prompt, "/aida-pickup STORY-2475", "no lane task appended");
                 assert_eq!(model.as_deref(), Some("gpt-codex"));
                 assert_eq!(std::env::var("AIDA_AGENT_MODEL").unwrap(), "gpt-codex");
                 assert_eq!(
@@ -4853,6 +4860,8 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                     HeadlessVendor::Codex
                 );
             } else {
+                let vendor =
+                    routed.unwrap_or_else(|e| panic!("{branch} interactive={interactive}: {e:#}"));
                 assert_eq!(
                     remote,
                     git(&seat, &["rev-parse", "HEAD"]),
