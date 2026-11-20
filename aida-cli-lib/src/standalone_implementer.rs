@@ -1565,6 +1565,13 @@ fn run(
 ) -> Result<()> {
     let child_grant_guard = ChildGrantGuard(launch.child_grant);
     let main_root = crate::main_worktree_root_from(launch.project_root);
+    // Other hosts judge this lane by its shared claim's heartbeat alone, so
+    // it is refreshed from here until the launcher returns, queueing for a
+    // start slot included. trace:BUG-2706 | ai:claude
+    let _claim_heartbeat = crate::coordination::SessionClaimHeartbeat::start(
+        main_root.join(".aida-store"),
+        launch.lease_id.to_string(),
+    );
     // A refusal below the floor starts no agent: the pickup rolls back and
     // defers the spec (`lane_disk_deferral`). trace:BUG-2684 | ai:claude
     crate::machine_readiness::lane_disk_preflight(&main_root)?;
