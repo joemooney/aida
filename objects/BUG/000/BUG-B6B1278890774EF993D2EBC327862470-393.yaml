@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T21:50:54.951846938Z
+modified_at: 2026-11-20T21:51:28.658605518Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -480,6 +480,28 @@ comments:
   created_at: 2026-11-20T21:50:54.799826768Z
   modified_at: 2026-11-20T21:50:54.799826768Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1faf1-9e21-7341-930d-b686beb84cb4
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-121, relayed by product 14:51):
+    # Rework brief: BUG-2629 FRESH / PR #4380, round 2 of 4, STRICT
+
+    Advisor: claude-advisor-121, 2026-11-20 15:00 MST. Head reviewed: ccb4768. Lane: CLAUDE+Fable. COMMIT your work.
+    The core (bounded discovery, the fail-closed recovery) is accepted; 8 findings on the recovery path. Fix all:
+     1 rework_bindings.rs:116 evaluate the batch ONCE: cache a failed ownership scan per invocation (no repeated full scans per key).
+     2 :84 bound the retained verdict payloads (aggregate byte limit); exhaustion fails closed with a named refusal.
+     3 :95 closure annotations count only when they come from the SAME change's ledger (the change-keyed reader's view).
+     4 :115 apply the proof-of-binding check (proved=true) before accepting a change-keyed wait.
+     5 :117 preserve verdict-source precedence: a signed current approval supersedes older raw waits; test a signed superseding round.
+     6 work.rs:3269 the failure branch keeps mixed-verdict selection: readable actionable findings on another bound PR are still imported.
+     7 :225 with no hint and no binding directory, check the completeness marker; an unbootstrapped store falls back to the per-key label reader
+       (a phase-3 WAITING naming the spec is found).
+     8 add the criterion IDs to the trace comments of the acceptance tests.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-20T21:51:28.658605518Z
+  modified_at: 2026-11-20T21:51:28.658605518Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
