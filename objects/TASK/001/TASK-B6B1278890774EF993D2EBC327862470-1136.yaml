@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T23:18:42.362640264Z
+modified_at: 2026-11-20T23:19:30.689803639Z
 req_type: Task
 tags:
 - landing
@@ -375,6 +375,13 @@ comments:
     #4382 (BUG-2706)'s coordination-claim HEARTBEAT is the single shared lane-visibility source, and it lands first. TASK-3827 PR-A must derive per-host lane count, ownership and age from coordination claims plus heartbeat age: no separate reader, and no SSH lane count (SSH only for memory). If an earlier round built its own reader, rebase onto #4382 once it lands and DELETE that reader.
   created_at: 2026-11-20T23:18:42.362640264Z
   modified_at: 2026-11-20T23:18:42.362640264Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb42-3844-77b2-adb1-bc640c93611c
+  author: joe
+  content: 'Product 16:19: PR-A-R3 lane queued on dell1 (claude), branch task-b6b1278890774ef993d2ebc327862470-1136. Scope = the AUTHORITATIVE PR-A-R3 BRIEF in the previous comment.'
+  created_at: 2026-11-20T23:19:30.689803639Z
+  modified_at: 2026-11-20T23:19:30.689803639Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
