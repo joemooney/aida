@@ -2471,3 +2471,101 @@ mod story_2905_enforce {
         });
     }
 }
+
+/// TASK-3792: a complete, eligible member gate run by `aida pr train --check`
+/// spawns nothing outside the check's deadline. The fixture member has a
+/// fetchable head, an attested approval and green commit CI, so the report
+/// runs every member stage (head, approval, full-ci, message, corpus, spec
+/// policy) through the real forge and git; a wrapper in front of both binaries
+/// records any spawn that lacks the scoped-deadline marker.
+// trace:TASK-3792 | ai:claude
+#[test]
+#[cfg(target_os = "linux")]
+fn task_3792_complete_member_gate_spawns_nothing_outside_the_deadline() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::pr_train::check::{collect_report, CheckOptions, Evidence};
+    use std::time::Duration;
+
+    let mut f = Fixture::new(true);
+    let root = f.root().to_path_buf();
+    let fixture_bin = root.join("bin");
+    let guard_bin = root.join("bin/guard");
+    fs::create_dir_all(&guard_bin).unwrap();
+    // aida-core bounds its stored-URL read with its own deadline transport;
+    // every other spawn must carry the marker. The fixture forge has no
+    // live-train listing, so the guard answers it: no train is open.
+    for tool in ["git", "gh"] {
+        crate::test_exec::write_executable(
+            &guard_bin.join(tool),
+            r#"#!/bin/sh
+case "$*" in
+  *'config --get-regexp ^remote'*) ;;
+  *) [ -n "$@G@" ] || echo "@T@ $*" >> '@R@/transport-unbounded' ;;
+esac
+echo "@T@ $*" >> '@R@/transport-all'
+# The live-train listing (discovery): no train is open.
+case "@T@ $*" in
+  'gh pr list'*'number,headRefName,body'*) echo '[]'; exit 0 ;;
+esac
+exec '@B@/@T@' "$@"
+"#
+            .replace(
+                "@G@",
+                crate::bounded_process::test_hooks::SCOPED_DEADLINE_SPAWN_ENV,
+            )
+            .replace("@T@", tool)
+            .replace("@R@", &root.display().to_string())
+            .replace("@B@", &fixture_bin.display().to_string()),
+        );
+    }
+    f.path = format!("{}:{}", guard_bin.display(), f.path);
+    f.reenv(&[]);
+    let _ = fs::remove_file(root.join("transport-calls"));
+
+    let opts = CheckOptions {
+        prs: &[11],
+        all_open: false,
+        skip_full_check: false,
+        json: true,
+        timeout: Duration::from_secs(60),
+    };
+    let (base, rows) = collect_report(&opts, || Ok((root.clone(), root.clone()))).unwrap();
+    assert_eq!(base.as_deref(), Some("main"));
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let row = &rows[0];
+    assert!(row.eligible, "the complete member gate refused: {row:?}");
+    assert_eq!(row.gate, None, "{row:?}");
+    assert_eq!(row.evidence, Evidence::Read);
+    assert_eq!(
+        row.head.as_deref(),
+        f.records[0]["reviewed_sha"].as_str(),
+        "{row:?}"
+    );
+
+    // The late member stages really ran under the scope: the head fetch,
+    // the full-ci commit read and the message's title/body read.
+    let all = fs::read_to_string(root.join("transport-all")).unwrap();
+    let forge_calls = fs::read_to_string(root.join("transport-calls")).unwrap();
+    assert!(
+        all.lines()
+            .any(|l| l.starts_with("git ") && l.contains("fetch --quiet --no-tags origin")),
+        "head fetch never ran:\n{all}"
+    );
+    assert!(
+        forge_calls.lines().any(|l| l.contains("/check-runs")),
+        "full-ci commit read never ran:\n{forge_calls}"
+    );
+    assert!(
+        forge_calls
+            .lines()
+            .any(|l| l.starts_with("pr view 11") || l.contains("/pulls/11")),
+        "member title/body read never ran:\n{forge_calls}"
+    );
+    let unbounded = fs::read_to_string(root.join("transport-unbounded")).unwrap_or_default();
+    assert!(
+        unbounded.is_empty(),
+        "spawned without the check's deadline:\n{unbounded}"
+    );
+}

@@ -1,4 +1,5 @@
 // trace:TASK-3428 | ai:codex
+use crate::bounded_process::{command_output_with_timeout_detail, BoundedCommandOutput};
 use crate::{command_output_with_timeout, resolve_forge_binary, RetryEtxtbsy};
 use std::time::{Duration, Instant};
 
@@ -28,9 +29,11 @@ pub(crate) fn forge_lookup_deadline() -> Option<Instant> {
 // rework lookup. Existing per-command ceilings can further tighten it.
 // trace:STORY-2690 | ai:codex
 pub(crate) fn with_forge_lookup_deadline<T>(budget: Duration, read: impl FnOnce() -> T) -> T {
-    let deadline = Instant::now() + budget;
-    let deadline = forge_lookup_deadline().map_or(deadline, |outer| outer.min(deadline));
-    let previous = FORGE_LOOKUP_DEADLINE.with(|cell| cell.replace(Some(deadline)));
+    let deadline = match (Instant::now().checked_add(budget), forge_lookup_deadline()) {
+        (Some(inner), Some(outer)) => Some(inner.min(outer)),
+        (inner, outer) => inner.or(outer),
+    };
+    let previous = FORGE_LOOKUP_DEADLINE.with(|cell| cell.replace(deadline));
     struct Restore(Option<Instant>);
     impl Drop for Restore {
         fn drop(&mut self) {
@@ -38,7 +41,9 @@ pub(crate) fn with_forge_lookup_deadline<T>(budget: Duration, read: impl FnOnce(
         }
     }
     let _restore = Restore(previous);
-    read()
+    // The stored-credential `git config` read a remote command makes before
+    // it runs shares the same deadline. trace:TASK-3792 | ai:claude
+    aida_core::git_ops::with_config_read_deadline(deadline, read)
 }
 
 /// BUG-1594: run `f` with every open-change forge lookup it makes (`gh pr
@@ -60,6 +65,46 @@ pub(crate) fn with_forge_lookup_timeout<T>(
     }
     let _restore = Restore(prev);
     f()
+}
+
+/// Run a subprocess reached by a scoped read, keeping ordinary output
+/// semantics for callers outside the deadline.
+// trace:TASK-3792 | ai:codex
+pub(crate) fn deadline_output(
+    mut cmd: std::process::Command,
+    unbounded: impl FnOnce(&mut std::process::Command) -> std::io::Result<std::process::Output>,
+) -> std::io::Result<std::process::Output> {
+    let Some(deadline) = forge_lookup_deadline() else {
+        return unbounded(&mut cmd);
+    };
+    output_before(cmd, deadline)
+}
+
+/// Run `cmd` killing its process group at `deadline`; an expired deadline
+/// never spawns it.
+// trace:TASK-3792 | ai:claude
+fn output_before(
+    mut cmd: std::process::Command,
+    deadline: Instant,
+) -> std::io::Result<std::process::Output> {
+    let remaining = deadline.saturating_duration_since(Instant::now());
+    if remaining.is_zero() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "read deadline expired",
+        ));
+    }
+    cmd.stdin(std::process::Stdio::null());
+    match command_output_with_timeout_detail(cmd, remaining) {
+        BoundedCommandOutput::Completed(out) => Ok(out),
+        BoundedCommandOutput::TimedOut => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            "read deadline expired",
+        )),
+        BoundedCommandOutput::SpawnFailed => {
+            Err(std::io::Error::other("could not spawn subprocess"))
+        }
+    }
 }
 
 /// BUG-1594: spawn a forge-CLI lookup honoring the scoped

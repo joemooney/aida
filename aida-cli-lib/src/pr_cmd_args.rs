@@ -401,9 +401,8 @@ pub enum PrCommand {
         #[clap(long, requires = "check", conflicts_with = "prs")]
         all_open: bool,
 
-        /// With --check: stop starting new PR checks after this many
-        /// seconds, checked between candidates (not during subprocesses);
-        /// the PRs not reached are reported as not checked.
+        /// With --check, discovery and member checks share this budget.
+        /// Unfinished PR checks are reported as not checked
         // trace:STORY-2824 | ai:claude
         #[clap(long, value_name = "SECS", default_value_t = 45, requires = "check")]
         timeout: u64,

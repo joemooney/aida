@@ -39,7 +39,7 @@ pub(crate) fn pr_head_sha_best_effort(driver: &RealPhaseDriver, pr: u32) -> Opti
 
 /// The project's `.aida/config.toml` text: the one read behind every
 /// `[review]` policy value in this file.
-fn project_config_text(project_root: &std::path::Path) -> std::io::Result<String> {
+pub(crate) fn project_config_text(project_root: &std::path::Path) -> std::io::Result<String> {
     std::fs::read_to_string(project_root.join(".aida").join("config.toml"))
 }
 
