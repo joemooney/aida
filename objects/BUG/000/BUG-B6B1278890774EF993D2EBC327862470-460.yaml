@@ -23,7 +23,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T01:02:31.342527150Z
-modified_at: 2026-11-20T02:16:53.587880115Z
+modified_at: 2026-11-20T02:17:58.408671478Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -1012,6 +1012,13 @@ comments:
   created_at: 2026-11-20T02:16:53.587880115Z
   modified_at: 2026-11-20T02:16:53.587880115Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f6bf-3ce0-76a3-ad52-2f050be621ec
+  author: joe
+  content: 'advisor-121 19:25: D3 narrowed with actor evidence. (1) STORY-2884 fresh lane: D3 FIRED (Approved -> Done 19:07); the 19:09 Done -> Approved reset was written by author ''fast-gate'' (session 01a1f68604db, store commit 99415efec85) because #4347 recorded fast_gate=fail at 5993f59, which is correct behaviour, not the bug. (2) TASK-3821 r2: the fast gate PASSED, but the spec was InProgress (set by queue rework at 17:27) and never became Done. So D3 evidently transitions only from Approved and misses every rework round (InProgress at push). Fix scope for the running/next D3 lane: a completes_spec=true push sets Done from InProgress (and Approved/NeedsAttention), never from terminal states, with a regression for the rework path (queue rework -> InProgress -> push -> Done). Keep fast-gate''s reset-on-fail.'
+  created_at: 2026-11-20T02:17:58.408671478Z
+  modified_at: 2026-11-20T02:17:58.408671478Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f155-36ea-7163-8add-9c970f4b454a
