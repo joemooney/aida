@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T19:00:48.615191543Z
+modified_at: 2026-11-20T19:01:00.172222572Z
 req_type: Bug
 tags:
 - admission
@@ -310,6 +310,30 @@ comments:
   created_at: 2026-11-20T19:00:48.448048108Z
   modified_at: 2026-11-20T19:00:48.448048108Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa55-9015-70b0-9dc8-f1d9e013feae
+  author: joe
+  content: |-
+    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 12:00):
+    # Rework brief: BUG-2703 / PR #4363, round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 12:16 MST. Head reviewed: 634d82e. Lane: CLAUDE+Fable. COMMIT your work.
+    Nine findings, all minor or cosmetic; fix all in one pass. Context: today review-watch logged "watcher admission is busy" 50 times and
+    starved #4365, #4363 and #4364 for 2-3h; this fix must make the review path yield and RE-ACQUIRE reliably.
+     P2 intent file: write .intent atomically (temp file plus rename) and build the IntentGuard before the write; an empty or truncated .intent
+        is treated as stale (ignored and removed after a grace period), never a wedge. Regression: a zero-length .intent does not block admission.
+     P2 BUG-2650 coexistence: after yielding to an exclusive intent that then gives up, review-watch re-acquires its shared claim and keeps
+        coexisting with a manual cooperative train. Regression covering yield, the intent abandoned, re-acquire, and train coexistence.
+     P3 receipts()/intents(): a NotFound on remove_file is success (racing cleanup), not an error.
+     P3 holders(): tolerate a mid-write empty file (skip it, or retry once), so `advisor loops status` never shows all as unreadable.
+     test-gap: refusal test for `aida advisor loops drain` and `resume` by a non-advisor actor (control_actor path).
+     cosmetic: the PID-from-/proc/locks assertion is conditional (best effort); the yielded auto-train pass is logged as "yielded admission
+        to <holder>", not "landing policy unknown"; run sweep_probe_refs the first time the claim is taken; add the criterion IDs
+        (ac6ca3ea ac336622 acc625bf ac00712a) to the test trace comments.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T19:01:00.172222572Z
+  modified_at: 2026-11-20T19:01:00.172222572Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
