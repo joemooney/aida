@@ -2330,8 +2330,12 @@ pub(crate) fn mark_done_after_confirmed_push(main: &Path, spec: &str, tip: &str)
 ///   a no-op round leaves on the PR never sets Done;
 /// - the host's own fetch of `origin/<branch>` confirms that tip.
 ///
-/// Then the same decision as a host-published push applies: the tip's
-/// publication subject must complete the spec, and the slice graph re-read
+/// Then the same decision as a host-published push applies, bounded to this
+/// round: the publication subject, looked up only among commits above
+/// `launch_head` (reconciliation merges skipped), must complete the spec, so
+/// a round that pushed only a reconciliation merge over an earlier round's
+/// completing commit sets nothing. A `launch_head` the host cannot resolve
+/// (a rewritten branch) sets nothing either. The slice graph re-read
 /// under the writer lock must have no outstanding child. Reported on stderr;
 /// never fails the caller, because the code push already succeeded. Returns
 /// whether the host decided the round completes the spec.
@@ -2390,7 +2394,14 @@ pub(crate) fn mark_done_after_self_published_round(
             return false;
         }
     };
-    mark_done_after_confirmed_push(main, &scope, &pin.tip)
+    // Only a completion this round declared counts: the subject comes from a
+    // commit above `launch_head`, never an earlier round's completing commit
+    // that a reconciliation-only push leaves beneath the new tip.
+    publication_subject_since(main, &pin.tip, Some(launch_head)).is_some_and(|subject| {
+        crate::publication_completion::mark_done_after_push_reported(
+            main, &scope, &subject, &pin.tip,
+        )
+    })
 }
 
 /// How [`finish_published`] finishes a pushed publication.
@@ -2417,26 +2428,50 @@ pub(crate) const HOST_RECONCILE_SUBJECT: &str = "[host] chore(seat): merge remot
 /// publication subject. `None` when git cannot be read (A2: no completion).
 // trace:BUG-2696 | ai:claude
 pub(crate) fn publication_subject(main: &Path, tip: &str) -> Option<String> {
+    publication_subject_since(main, tip, None)
+}
+
+/// [`publication_subject`] bounded to one round: with `since` (the seat head
+/// the round launched on), the walk also stops at everything reachable from
+/// `since`, so only a commit THIS round added can supply the subject. A round
+/// that pushed only a host reconciliation merge on top of an earlier round's
+/// completing commit has no publication subject (A2: no completion).
+/// `since` must be a full commit id; an unreadable one yields `None`.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn publication_subject_since(
+    main: &Path,
+    tip: &str,
+    since: Option<&str>,
+) -> Option<String> {
     let base = crate::detect_default_branch_ref(main).unwrap_or_else(|| "origin/main".into());
     let base_oid = git_text(
         main,
         &["rev-parse", "--verify", &format!("{base}^{{commit}}")],
     )
     .ok()?;
-    let log = git_text(
-        main,
-        &[
-            "log",
-            "--first-parent",
-            "-n",
-            "32",
-            "--format=%s",
-            crate::git_arg_guard::END_OF_OPTIONS,
-            tip,
-            &format!("^{base_oid}"),
-        ],
-    )
-    .ok()?;
+    let mut range = vec![tip.to_string(), format!("^{base_oid}")];
+    if let Some(since) = since {
+        // A launch head is a commit id from git, never a ref or an option.
+        if since.is_empty() || !since.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let since_oid = git_text(
+            main,
+            &["rev-parse", "--verify", &format!("{since}^{{commit}}")],
+        )
+        .ok()?;
+        range.push(format!("^{since_oid}"));
+    }
+    let mut args = vec![
+        "log",
+        "--first-parent",
+        "-n",
+        "32",
+        "--format=%s",
+        crate::git_arg_guard::END_OF_OPTIONS,
+    ];
+    args.extend(range.iter().map(String::as_str));
+    let log = git_text(main, &args).ok()?;
     log.lines()
         .map(str::trim)
         .find(|subject| !subject.starts_with(HOST_RECONCILE_SUBJECT))
