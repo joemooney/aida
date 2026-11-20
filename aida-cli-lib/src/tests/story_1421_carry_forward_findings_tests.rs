@@ -431,63 +431,358 @@ fn bug_2662_failed_approval_delivery_records_nothing() {
     }
 }
 
-/// An approval is appended only while its spec holds no verdict record that
-/// was not standing when its follow-up findings began to be filed.
+/// BUG-2662 store fixtures: a hermetic ledger root, PR-8 and bare records.
 // trace:BUG-2662 | ai:claude
-#[test]
-fn bug_2662_approval_is_refused_when_another_review_lands_during_delivery() {
-    use crate::gate::ledger::{self, event, store, GateSpec};
-    let tmp = tempfile::tempdir().unwrap();
-    let root = tmp.path();
-    let _guard =
-        crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
-    let change = ledger::ChangeKey::pr(8);
-    let body = |verdict: &str, by: &str| {
+mod bug_2662_store {
+    use crate::gate::ledger::{self, event, store, ChangeKey, Delivered, GateEvent, GateSpec};
+    use crate::gate::review_verdict::JsonObj;
+    use std::path::Path;
+
+    pub(super) const CHANGE: u64 = 8;
+
+    pub(super) fn body(verdict: &str, by: &str) -> JsonObj {
         serde_json::json!({"verdict":verdict,"recorded_by":by})
             .as_object()
             .unwrap()
             .clone()
-    };
-    let evt = |record: &crate::gate::review_verdict::JsonObj| {
-        event::verdict_event(root, change, record, None)
-    };
-    store::append(
-        root,
-        change,
-        vec![evt(&body("request-changes", "reviewer-a"))],
-    )
-    .unwrap();
-    let standing = store::standing(root, Some(change), None);
+    }
+
+    /// A verdict event on PR-8 under `spec` (`None`: the change key).
+    pub(super) fn evt(root: &Path, record: &JsonObj, spec: Option<&str>) -> GateEvent {
+        let spec = spec.map(|s| GateSpec::resolve(root, s));
+        event::verdict_event(root, ChangeKey::pr(CHANGE), record, spec.as_ref())
+    }
+
+    pub(super) fn seed(root: &Path, record: &JsonObj, spec: Option<&str>) {
+        store::append(root, ChangeKey::pr(CHANGE), vec![evt(root, record, spec)]).unwrap();
+    }
+
+    pub(super) fn standing(root: &Path, spec: Option<&str>) -> store::Standing {
+        store::observe(root, Some(ChangeKey::pr(CHANGE)), spec)
+            .unwrap()
+            .standing()
+    }
+
+    /// Append `record` on PR-8 under `spec`, admitted against `standing`.
+    pub(super) fn approve(
+        root: &Path,
+        record: &JsonObj,
+        spec: Option<&str>,
+        standing: &store::Standing,
+    ) -> std::io::Result<Delivered> {
+        let rule = store::ReviewRule {
+            standing: Some(standing),
+            ..Default::default()
+        };
+        store::append_review(
+            root,
+            Some(ChangeKey::pr(CHANGE)),
+            evt(root, record, spec),
+            &rule,
+        )
+    }
+
+    pub(super) fn newest(root: &Path) -> String {
+        ledger::project::newest_verdict(root, "PR-8").unwrap()["verdict"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    }
+
+    pub(super) fn ledger_bytes(root: &Path) -> Vec<u8> {
+        std::fs::read(store::ledger_file(root, ChangeKey::pr(CHANGE))).unwrap()
+    }
+}
+
+/// An approval is appended only while the history it joins holds no verdict
+/// record that was not standing when its follow-up findings began to be
+/// filed.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_approval_is_refused_when_another_review_lands_during_delivery() {
+    use crate::gate::ledger::{self, store, GateSpec};
+    use bug_2662_store::*;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+    seed(root, &body("request-changes", "reviewer-a"), None);
+    let standing = standing(root, None);
     // Nothing joined the standing records: appended once, then unchanged.
     let approval = body("approved", "reviewer-a");
     for expected in [ledger::Delivered::Appended, ledger::Delivered::Unchanged] {
-        assert_eq!(
-            store::append_one_standing(root, change, evt(&approval), &standing).unwrap(),
-            expected
-        );
+        assert_eq!(approve(root, &approval, None, &standing).unwrap(), expected);
     }
     // A review recorded after the snapshot refuses the approval.
-    let standing = store::standing(root, Some(change), None);
-    store::append(root, change, vec![evt(&body("rejected", "reviewer-b"))]).unwrap();
+    let standing = bug_2662_store::standing(root, None);
+    seed(root, &body("rejected", "reviewer-b"), None);
     let late = body("approved", "reviewer-c");
-    let error = store::append_one_standing(root, change, evt(&late), &standing)
+    let before = ledger_bytes(root);
+    let error = approve(root, &late, None, &standing)
         .unwrap_err()
         .to_string();
     assert!(error.contains("nothing was recorded"), "{error}");
-    assert_eq!(
-        ledger::project::newest_verdict(root, "PR-8").unwrap()["verdict"],
-        "rejected"
-    );
+    assert_eq!(ledger_bytes(root), before);
+    assert_eq!(newest(root), "rejected");
     // The same holds on a spec's unbound ledger.
     let spec = GateSpec::resolve(root, "STORY-9830");
+    let unbound = |record, standing: &store::Standing| {
+        let rule = store::ReviewRule {
+            standing: Some(standing),
+            ..Default::default()
+        };
+        let event = ledger::event::verdict_event_unbound(root, &spec, record);
+        store::append_review(root, None, event, &rule)
+    };
+    let observe = || {
+        store::observe(root, None, Some(&spec.label))
+            .unwrap()
+            .standing()
+    };
     store::append_unbound(root, &spec, &body("request-changes", "reviewer-a")).unwrap();
-    let standing = store::standing(root, None, Some(&spec.label));
+    let standing = observe();
     store::append_unbound(root, &spec, &body("rejected", "reviewer-b")).unwrap();
-    assert!(store::append_unbound_standing(root, &spec, &late, &standing).is_err());
-    let standing = store::standing(root, None, Some(&spec.label));
+    assert!(unbound(&late, &standing).is_err());
     assert_eq!(
-        store::append_unbound_standing(root, &spec, &late, &standing).unwrap(),
+        unbound(&late, &observe()).unwrap(),
         ledger::Delivered::Appended
+    );
+}
+
+/// The history an approval is weighed against is the whole change's: a
+/// refusal recorded while its findings were filed refuses it whether it was
+/// recorded under the change key or under a sibling spec the change covers,
+/// and so does one that joined the spec's unbound ledger.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_differently_labelled_refusal_during_delivery_refuses_the_approval() {
+    use crate::gate::ledger::{store, GateSpec};
+    use bug_2662_store::*;
+    for concurrent in ["change-key", "sibling-spec", "unbound"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _guard =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        let own = Some("STORY-9831");
+        seed(root, &body("request-changes", "reviewer-a"), own);
+        let standing = standing(root, own);
+        let refusal = body("rejected", "reviewer-b");
+        match concurrent {
+            "change-key" => seed(root, &refusal, None),
+            "sibling-spec" => seed(root, &refusal, Some("STORY-9832")),
+            _ => {
+                let spec = GateSpec::resolve(root, "STORY-9831");
+                store::append_unbound(root, &spec, &refusal).unwrap();
+            }
+        }
+        let before = ledger_bytes(root);
+        let error = approve(root, &body("approved", "reviewer-c"), own, &standing)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("another review was recorded"),
+            "{concurrent}: {error}"
+        );
+        assert_eq!(ledger_bytes(root), before, "{concurrent}");
+        if concurrent != "unbound" {
+            assert_eq!(newest(root), "rejected", "{concurrent}");
+        }
+    }
+}
+
+/// A history that cannot be read whole refuses, at the snapshot and at the
+/// final read alike: a malformed line or an unreadable by-spec ledger is
+/// never read as a shorter history that admits the approval.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_incomplete_history_refuses_the_approval() {
+    use crate::gate::ledger::{store, ChangeKey};
+    use bug_2662_store::*;
+    use std::io::Write as _;
+    for damage in ["malformed-line", "torn-line", "unreadable-by-spec"] {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let _guard =
+            crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+        let own = Some("STORY-9833");
+        seed(root, &body("request-changes", "reviewer-a"), own);
+        let standing = standing(root, own);
+        let ledger = store::ledger_file(root, ChangeKey::pr(CHANGE));
+        match damage {
+            "unreadable-by-spec" => {
+                // A directory where the spec's unbound ledger would be.
+                std::fs::create_dir_all(store::unbound_file(root, "STORY-9833")).unwrap();
+            }
+            _ => {
+                let mut file = std::fs::OpenOptions::new()
+                    .append(true)
+                    .open(&ledger)
+                    .unwrap();
+                let line: &[u8] = if damage == "torn-line" {
+                    b"{\"v\":1,\"seq\":"
+                } else {
+                    b"not an event\n"
+                };
+                file.write_all(line).unwrap();
+            }
+        }
+        let before = std::fs::read(&ledger).unwrap();
+        let approval = body("approved", "reviewer-c");
+        let error = approve(root, &approval, own, &standing)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("could not be read whole") && error.contains("nothing was recorded"),
+            "{damage}: {error}"
+        );
+        assert_eq!(std::fs::read(&ledger).unwrap(), before, "{damage}");
+        // The snapshot refuses too, so no approval starts from a reduced one.
+        assert!(
+            store::observe(root, Some(ChangeKey::pr(CHANGE)), own).is_err(),
+            "{damage}"
+        );
+        // One act of review is refused the same way, with no snapshot.
+        let once = store::ReviewRule {
+            once: true,
+            ..Default::default()
+        };
+        let event = evt(root, &approval, own);
+        assert!(
+            store::append_review(root, Some(ChangeKey::pr(CHANGE)), event, &once).is_err(),
+            "{damage}"
+        );
+        assert_eq!(std::fs::read(&ledger).unwrap(), before, "{damage}");
+    }
+}
+
+/// The final read, the decision and the append hold the change's lock and
+/// the spec's by-spec lock together: an unbound verdict for the spec cannot
+/// commit in between. One that landed before the locks refuses the approval;
+/// one that arrives while they are held waits and lands after it.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_unbound_append_cannot_slip_between_the_final_read_and_the_append() {
+    use crate::gate::ledger::{store, ChangeKey, Delivered, GateSpec};
+    use bug_2662_store::*;
+    use fs2::FileExt as _;
+    struct Unhook;
+    impl Drop for Unhook {
+        fn drop(&mut self) {
+            store::REVIEW_APPEND_HOOK.with(|h| h.borrow_mut().take());
+        }
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().to_path_buf();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(&root, None, &[("AIDA_CONTAINED", None)]);
+    let own = Some("STORY-9834");
+    let spec = GateSpec::resolve(&root, "STORY-9834");
+    seed(&root, &body("request-changes", "reviewer-a"), own);
+
+    // Landed after the snapshot and before the locks: refused.
+    let snapshot = standing(&root, own);
+    let _unhook = Unhook;
+    let racing = spec.clone();
+    store::REVIEW_APPEND_HOOK.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move |root, locked| {
+            if !locked {
+                store::append_unbound(root, &racing, &body("rejected", "reviewer-b")).unwrap();
+            }
+        }))
+    });
+    let error = approve(&root, &body("approved", "reviewer-c"), own, &snapshot)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("another review was recorded"), "{error}");
+
+    // Arriving under the locks: both are held, and the writer waits.
+    let snapshot = standing(&root, own);
+    let (started, waiting) = std::sync::mpsc::channel::<std::thread::JoinHandle<Delivered>>();
+    let racing = spec.clone();
+    store::REVIEW_APPEND_HOOK.with(|h| {
+        *h.borrow_mut() = Some(Box::new(move |root, locked| {
+            if !locked {
+                return;
+            }
+            let ledger = store::ledger_file(root, ChangeKey::pr(CHANGE));
+            let by_spec = store::unbound_file(root, &racing.label);
+            for lock in [
+                ledger.with_extension("lock"),
+                by_spec.with_extension("lock"),
+            ] {
+                let other = std::fs::File::open(&lock).unwrap();
+                assert!(
+                    other.try_lock_exclusive().is_err(),
+                    "{} is held through the comparison",
+                    lock.display()
+                );
+            }
+            let (root, racing) = (root.to_path_buf(), racing.clone());
+            let (entered, entering) = std::sync::mpsc::channel();
+            let writer = std::thread::spawn(move || {
+                entered.send(()).unwrap();
+                store::append_unbound(&root, &racing, &body("rejected", "reviewer-d")).unwrap()
+            });
+            entering.recv().unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(200));
+            assert!(
+                !writer.is_finished(),
+                "the unbound writer must wait for the review append"
+            );
+            started.send(writer).unwrap();
+        }))
+    });
+    let approval = body("approved", "reviewer-c");
+    assert_eq!(
+        approve(&root, &approval, own, &snapshot).unwrap(),
+        Delivered::Appended
+    );
+    assert_eq!(
+        waiting.recv().unwrap().join().unwrap(),
+        Delivered::Appended,
+        "the unbound verdict lands once the locks are released"
+    );
+    let approved = store::read_file(&root, ChangeKey::pr(CHANGE))
+        .into_iter()
+        .rev()
+        .find(|e| e.verdict_record() == Some(&approval))
+        .expect("the approval was appended");
+    let late = store::read_unbound(&root, &spec.label)
+        .into_iter()
+        .next_back()
+        .unwrap();
+    assert_eq!(late.verdict_record().unwrap()["recorded_by"], "reviewer-d");
+    assert!(
+        late.at >= approved.at,
+        "the unbound verdict committed after the approval"
+    );
+}
+
+/// A long unchanged history is admitted by identity, not by comparing every
+/// record with every other.
+// trace:BUG-2662 | ai:claude
+#[test]
+fn bug_2662_unchanged_long_history_is_admitted() {
+    use crate::gate::ledger::{store, ChangeKey, Delivered};
+    use bug_2662_store::*;
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let _guard =
+        crate::test_env::AmbientGuard::hermetic_and(root, None, &[("AIDA_CONTAINED", None)]);
+    let events = (0..400)
+        .map(|n| {
+            evt(
+                root,
+                &body("request-changes", &format!("reviewer-{n}")),
+                None,
+            )
+        })
+        .collect();
+    store::append(root, ChangeKey::pr(CHANGE), events).unwrap();
+    let snapshot = standing(root, None);
+    assert_eq!(
+        approve(root, &body("approved", "reviewer-z"), None, &snapshot).unwrap(),
+        Delivered::Appended
     );
 }
 

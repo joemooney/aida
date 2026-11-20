@@ -1556,6 +1556,44 @@ pub(crate) fn read_change_events(
     }
 }
 
+/// BUG-2662: the two ledgers a review verdict is weighed against, each read
+/// whole and strictly: every event on `change`'s ledger and every event on
+/// `unbound`'s `by-spec` ledger (a spec label). An absent ledger or file is
+/// empty; a linked, unreadable, oversized, torn or unparseable one refuses.
+/// No ownership filter is applied: the caller compares the physical history.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn read_review_ledgers(
+    root: &Path,
+    change: Option<ChangeKey>,
+    unbound: Option<&str>,
+    budget: &mut Budget,
+) -> Result<(Vec<GateEvent>, Vec<GateEvent>), Unsafe> {
+    let Some((ledger, by_spec)) = ledger_dirs(root)? else {
+        return Ok(Default::default());
+    };
+    let bound = match change {
+        Some(change) => {
+            let key = change.as_key();
+            read_change(&ledger, &format!("{key}.jsonl"), &key, budget)?
+                .map(|(events, _, _)| events)
+                .unwrap_or_default()
+        }
+        None => Vec::new(),
+    };
+    let unbound = match (unbound, by_spec) {
+        (Some(spec), Some(by_spec)) => {
+            let spec = spec.trim().to_ascii_uppercase();
+            let name = format!("{spec}.jsonl");
+            match read_entry(&by_spec, &name, MAX_LEDGER_BYTES, budget)? {
+                Some(body) => parse_events(&name, &body, &spec, budget)?,
+                None => Vec::new(),
+            }
+        }
+        _ => Vec::new(),
+    };
+    Ok((bound, unbound))
+}
+
 /// Active change-ledger sizes, largest first; no event payloads are read.
 // trace:BUG-2531 | ai:codex
 // trace:BUG-2542 | ai:claude

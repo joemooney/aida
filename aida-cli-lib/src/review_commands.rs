@@ -3235,48 +3235,39 @@ fn handle_review_record_context_with_policy_at(
     }
     // BUG-1918: a human who passed the TTY floor leaves a receipt in the
     // user's AIDA home; the ship gate re-reads it instead of trusting the
-    // `human_at_tty` flag stored beside the verdict.
-    // trace:BUG-1918 | ai:claude
-    let receipt_id = if human_at_tty && approving {
-        Some(
-            crate::gate::review_authority::write_human_receipt(
-                resolved_sha.as_deref().unwrap_or_default(),
-                spec,
-                &recorder.tokens,
-                solo_human,
-                !no_carry,
-            )
-            .context("could not write the human-review receipt")?,
-        )
-    } else {
-        None
-    };
-    let attestation = serde_json::to_value(crate::gate::review_verdict::RecorderAttestation {
-        carry_eligible: !no_carry,
-        sha: resolved_sha.clone().unwrap_or_default(),
-        seat: recorder_grant.as_ref().map(|g| g.seat.clone()),
-        grant_id: recorder_grant.as_ref().map(|g| g.id.clone()),
-        human_at_tty,
-        identity: recorder.tokens.clone(),
-        receipt_id,
-        solo_human,
-        // trace:BUG-1934 | ai:claude
-        grant_binding: recorder_grant
+    // `human_at_tty` flag stored beside the verdict. The receipt is settled
+    // below, once the record is built: a repeat of the standing act answers
+    // with that act's receipt instead of leaving a second one (BUG-2662).
+    // trace:BUG-1918 trace:BUG-2662 | ai:claude
+    let needs_receipt = human_at_tty && approving && replay_record.is_none();
+    let attest = |receipt_id: Option<String>| -> Result<serde_json::Value> {
+        let built = serde_json::to_value(crate::gate::review_verdict::RecorderAttestation {
+            carry_eligible: !no_carry,
+            sha: resolved_sha.clone().unwrap_or_default(),
+            seat: recorder_grant.as_ref().map(|g| g.seat.clone()),
+            grant_id: recorder_grant.as_ref().map(|g| g.id.clone()),
+            human_at_tty,
+            identity: recorder.tokens.clone(),
+            receipt_id,
+            solo_human,
+            // trace:BUG-1934 | ai:claude
+            grant_binding: recorder_grant
+                .as_ref()
+                .map(|g| {
+                    crate::gate::seat_authority::matched_binding(
+                        g,
+                        &crate::gate::seat_authority::presenter_tokens_for(g),
+                    )
+                })
+                .unwrap_or_default(),
+        })
+        .context("could not serialize the review recorder attestation")?;
+        Ok(replay_record
             .as_ref()
-            .map(|g| {
-                crate::gate::seat_authority::matched_binding(
-                    g,
-                    &crate::gate::seat_authority::presenter_tokens_for(g),
-                )
-            })
-            .unwrap_or_default(),
-    })
-    .context("could not serialize the review recorder attestation")?;
-    let attestation = replay_record
-        .as_ref()
-        .and_then(|r| r.get(crate::gate::review_verdict::ATTESTATION_KEY))
-        .cloned()
-        .unwrap_or(attestation);
+            .and_then(|r| r.get(crate::gate::review_verdict::ATTESTATION_KEY))
+            .cloned()
+            .unwrap_or(built))
+    };
 
     // STORY-1416 criterion 1b: recording a verdict for a PR surfaces the
     // standing marker (its text and who placed it) and any prior verdict
@@ -3308,14 +3299,10 @@ fn handle_review_record_context_with_policy_at(
     // STORY-1417: build + classify + one verified write — the same boundary
     // `record_verdict` uses, with the typed classes layered on before the
     // single durable write (BUG-1571). trace:STORY-1417 | ai:claude
-    // BUG-2136: snapshot the record as it stands so the outcome line can say
-    // whether this call added a round or re-recorded an identical one.
-    // trace:BUG-2136 | ai:claude
-    // M1: the record before is the one the gates weighed (file or ledger).
-    // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-    let record_before = crate::gate::review_verdict::current_verdict_body_at(&path)
-        .and_then(|b| serde_json::from_str::<serde_json::Value>(&b).ok())
-        .and_then(|v| v.as_object().cloned());
+    // BUG-2136: the outcome line says whether this call added a round or
+    // repeated the act already on record. BUG-2662: that is decided by the
+    // write itself, under the ledger's locks, never from a read made here.
+    // trace:BUG-2136 trace:BUG-2662 | ai:claude
     let mut verdict_obj = if let Some(record) = &replay_record {
         // A same-launch retry of a delivery-pending barrier delivers the
         // reviewer's verdict, never the barrier. trace:BUG-2564 | ai:claude
@@ -3367,11 +3354,6 @@ fn handle_review_record_context_with_policy_at(
         crate::gate::rework_hold_release::stamp_record_grant(&project_root, &mut verdict_obj);
     }
     review_classes::apply_finding_classes(&mut verdict_obj, findings, &classes);
-    // trace:BUG-1918 | ai:claude
-    verdict_obj.insert(
-        crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
-        attestation.clone(),
-    );
     verdict_obj.remove("reviewer_draft");
     if let Some(stamp) = launch_context.and_then(|c| c.handoff_stamp()) {
         verdict_obj.insert("reviewer_draft".into(), stamp);
@@ -3389,29 +3371,70 @@ fn handle_review_record_context_with_policy_at(
             crate::gate::ledger::project::PHASE3_MODE.into(),
         );
     }
-    // trace:BUG-2662 | ai:claude — a repeat of the act already on record
-    // writes nothing and emits no event. A refusal that still has deferred
-    // follow-ups to file is written through, so a failed filing is retried.
-    let repeat = record_before.as_ref().is_some_and(|before| {
-        crate::gate::review_verdict::record_outcome(Some(before), &verdict_obj)
-            == crate::gate::review_verdict::RecordOutcome::Unchanged
-            && crate::gate::review_verdict::repeats_recorded_act(before, &verdict_obj)
-            && (kind.approves() || !crate::gate::review_verdict::has_deferred_finding(&verdict_obj))
-    });
-    let outcome = if repeat {
-        crate::gate::review_verdict::RecordOutcome::Unchanged
+    // trace:BUG-2662 | ai:claude — a human-at-TTY approval that repeats the
+    // act standing for this spec at its destination answers with that act's
+    // receipt, when the receipt still vouches for it. Otherwise (no standing
+    // act, another act, a missing or invalid receipt) a new receipt is
+    // written, and the record that names it is a new round. Nothing is
+    // allocated before this point, so no receipt is left unreferenced.
+    let standing_receipt = if needs_receipt {
+        crate::gate::review_verdict::standing_review_act(&path, &verdict_obj, spec)
+            .map_err(|e| anyhow::anyhow!("could not write the review verdict: {e}"))?
+            .and_then(|standing| {
+                let id = crate::gate::review_verdict::reusable_human_receipt(
+                    &standing,
+                    resolved_sha.as_deref().unwrap_or_default(),
+                    spec,
+                    &recorder.tokens,
+                    solo_human,
+                    !no_carry,
+                )?;
+                Some((standing, id))
+            })
     } else {
-        crate::gate::review_verdict::recorded_round(&verdict_obj)
+        None
     };
+    // trace:BUG-1918 | ai:claude
+    let mut attestation = attest(standing_receipt.as_ref().map(|(_, id)| id.clone()))?;
+    verdict_obj.insert(
+        crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
+        attestation.clone(),
+    );
+    let reuses_receipt = standing_receipt.as_ref().is_some_and(|(standing, _)| {
+        crate::gate::review_verdict::repeats_recorded_act(standing, &verdict_obj)
+    });
+    if needs_receipt && !reuses_receipt {
+        let receipt_id = crate::gate::review_authority::write_human_receipt(
+            resolved_sha.as_deref().unwrap_or_default(),
+            spec,
+            &recorder.tokens,
+            solo_human,
+            !no_carry,
+        )
+        .context("could not write the human-review receipt")?;
+        attestation = attest(Some(receipt_id))?;
+        verdict_obj.insert(
+            crate::gate::review_verdict::ATTESTATION_KEY.to_string(),
+            attestation.clone(),
+        );
+    }
     let recorded_sha = verdict_obj
         .get("reviewed_sha")
         .and_then(|v| v.as_str())
         .map(str::to_string)
         .or_else(|| resolved_sha.clone());
-    if !repeat {
-        crate::gate::review_verdict::write_verdict_object_for_spec(&path, &verdict_obj, Some(spec))
-            .map_err(|e| anyhow::anyhow!("could not write the review verdict: {e}"))?;
-    }
+    // trace:BUG-2662 | ai:claude — the write decides, under the ledger's
+    // locks and against the act standing for this spec at its destination,
+    // whether this is a repeat. A repeat writes nothing and emits no event;
+    // a mixed refusal's repeat still retries filing its deferred follow-ups.
+    let repeat = crate::gate::review_verdict::record_review_act(&path, &verdict_obj, spec)
+        .map_err(|e| anyhow::anyhow!("could not write the review verdict: {e}"))?
+        == crate::gate::ledger::Delivered::Unchanged;
+    let outcome = if repeat {
+        crate::gate::review_verdict::RecordOutcome::Unchanged
+    } else {
+        crate::gate::review_verdict::recorded_round(&verdict_obj)
+    };
     // PRIN-5 / BUG-1571: never report a record this process has not itself
     // just read back. M1 slice 2: read back from where the gates read it —
     // the gate ledger (or a contained seat's hand-off file).
@@ -3680,9 +3703,37 @@ fn handle_review_record_context_with_policy_at(
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),
             );
         } else {
-            crate::gate::merge_hold_core::place_hold(&project_root, &hold)
-                .with_context(|| format!("verdict recorded, but could not protect PR-{n} with a merge hold; run `aida review stranded --fix`"))?;
-            if let Err(err) = merge_hold::sync_label(&project_root, n, true) {
+            // trace:BUG-2662 | ai:claude — a repeated refusal reconciles the
+            // protection it finds missing and writes nothing when its hold
+            // already stands with a synced label.
+            let placed = if repeat {
+                crate::gate::merge_hold_core::ensure_hold(&project_root, &hold)
+            } else {
+                crate::gate::merge_hold_core::place_hold(&project_root, &hold).map(|()| true)
+            }
+            .with_context(|| format!("verdict recorded, but could not protect PR-{n} with a merge hold; run `aida review stranded --fix`"))?;
+            // A refusal on record with no hold is one whose first recording
+            // stopped before its side effects (a failed follow-up filing):
+            // this repeat is the first to complete, so it is announced.
+            if repeat && placed {
+                emit_review_verdict_recorded(
+                    &project_root,
+                    &spec.to_ascii_uppercase(),
+                    pr.map(|n| n as u32),
+                    kind.label().to_string(),
+                    resolved_sha.clone(),
+                );
+            }
+            let label = if placed
+                || crate::gate::merge_hold_core::read_label_state(&project_root, n)
+                    != crate::gate::merge_hold_core::LabelState::Synced
+            {
+                merge_hold::sync_label(&project_root, n, true)
+            } else {
+                // The hold and its label stand as this refusal left them.
+                Ok(())
+            };
+            if let Err(err) = label {
                 eprintln!(
                     "  {} merge-hold label not applied on PR-{n}: {err} — the local merge chokepoint remains armed; run `aida merge-hold list --fix`",
                     crate::glyph(crate::glyphs::Glyph::Warning).yellow(),

@@ -1779,6 +1779,41 @@ pub(crate) fn place_hold(project_root: &Path, record: &MergeHoldRecord) -> std::
     place_hold_context(project_root, record, false)
 }
 
+/// BUG-2662: [`place_hold`] for a repeated refusal, which writes nothing
+/// when the hold it would place already stands: the open hold is on the
+/// ledger, no release is authorized against it, and composing `record` with
+/// it changes nothing. Otherwise the hold is placed as [`place_hold`] does.
+/// Returns whether a hold event was written.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn ensure_hold(project_root: &Path, record: &MergeHoldRecord) -> std::io::Result<bool> {
+    with_hold_lock(project_root, record.pr, || {
+        let state = crate::gate::ledger::hold::state(project_root, record.pr);
+        let (composed, reconcile_route) = match compose_with_existing(project_root, record) {
+            Composed::Placed(r) => (r, true),
+            Composed::Preserved(r) => (r, false),
+        };
+        // What a placement stamps or a label sync folds in is not a change.
+        let comparable = |hold: &MergeHoldRecord, spec_key| {
+            let mut hold = hold.clone();
+            hold.schema_version = 2;
+            hold.legacy = false;
+            hold.label_state = None;
+            hold.spec_key = hold.spec_key.or(spec_key);
+            hold
+        };
+        let stands = state.open_source == Some(crate::gate::ledger::hold::OpenSource::Ledger)
+            && state.authorized.is_none()
+            && state
+                .open
+                .as_ref()
+                .is_some_and(|open| comparable(open, None) == comparable(&composed, open.spec_key));
+        if stands {
+            return Ok(false);
+        }
+        append_hold(project_root, &composed, reconcile_route, false).map(|()| true)
+    })?
+}
+
 /// The same composition and placement, with explicit re-arm audit context.
 // trace:TASK-1790 | ai:codex
 pub(crate) fn rearm_hold(project_root: &Path, record: &MergeHoldRecord) -> std::io::Result<()> {

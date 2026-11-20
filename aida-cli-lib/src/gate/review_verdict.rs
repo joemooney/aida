@@ -4265,61 +4265,102 @@ pub(crate) fn recorded_round(after: &JsonObj) -> RecordOutcome {
     }
 }
 
-/// BUG-2662: `after`, the record a `review record` call built on `before`
-/// (the record standing for its key), repeats the act `before` already
-/// records, so appending it would add a verdict event that says nothing new.
+/// BUG-2662: `after`, the record a `review record` call built, repeats the
+/// act `before` already records (the act standing where it would land), so
+/// appending it would add a verdict event that says nothing new.
 ///
 /// Stricter than equal [`recording_key`]s, which compare review signal only:
 /// every field must be present-or-absent alike and equal, so a changed
-/// summary, authority (seat grant, receipt, identity), binding, draft stamp
-/// or a close/annotation the builder cleared is a new record. The only
+/// summary, authority (seat grant, human receipt, identity), binding, draft
+/// stamp or a close/annotation the builder cleared is a new record. The only
 /// differences allowed are the ones every repeat has: its timestamp, the
-/// retained round history, the inherited-findings marker, a completed
-/// delivery marker and, between two human-at-TTY approvals, the receipt id
-/// when the standing record's own receipt still vouches for its commit.
-/// A standing delivery-pending barrier never matches.
+/// retained round history, the inherited-findings marker and a completed
+/// delivery marker. A standing delivery-pending barrier never matches.
 // trace:BUG-2662 | ai:claude
 pub(crate) fn repeats_recorded_act(before: &JsonObj, after: &JsonObj) -> bool {
     if delivery_pending(&serde_json::Value::Object(before.clone())) {
         return false;
     }
-    let human = |m: &JsonObj| {
-        m.get(ATTESTATION_KEY)
-            .and_then(|a| a.get("human_at_tty"))
-            .and_then(|v| v.as_bool())
-            == Some(true)
+    let differs = |key: &str| match key {
+        "recorded_at" | "rounds" | "unarchived_rounds" | "inherited_findings" => false,
+        "sweep_pending" => {
+            let done = |m: &JsonObj| m.get(key).is_none_or(|v| v.as_bool() == Some(false));
+            !(done(before) && done(after))
+        }
+        _ => before.get(key) != after.get(key),
     };
-    let receipt_stands = human(before)
-        && human(after)
-        && before
-            .get(ATTESTATION_KEY)
-            .and_then(|a| a.get("receipt_id"))
-            .and_then(|v| v.as_str())
-            .zip(round_sha(before))
-            .is_some_and(|(id, sha)| {
-                crate::gate::review_authority::human_receipt_for(id, &sha).is_some()
-            });
-    let comparable = |m: &JsonObj| {
-        let mut m = m.clone();
-        for key in [
-            "recorded_at",
-            "rounds",
-            "unarchived_rounds",
-            "inherited_findings",
-        ] {
-            m.remove(key);
-        }
-        if m.get("sweep_pending").and_then(|v| v.as_bool()) == Some(false) {
-            m.remove("sweep_pending");
-        }
-        if receipt_stands {
-            if let Some(attestation) = m.get_mut(ATTESTATION_KEY).and_then(|a| a.as_object_mut()) {
-                attestation.remove("receipt_id");
-            }
-        }
-        m
+    !before.keys().chain(after.keys()).any(|key| differs(key))
+}
+
+/// BUG-2662: the human-review receipt of the standing act `before`, when a
+/// human-at-TTY approval of `sha` for `subject` by `identity` may answer with
+/// it instead of leaving a second receipt: `before` is such an approval of
+/// the same commit, and its receipt still exists and vouches for exactly
+/// this commit, subject, recorder and policy. `None` (a new receipt is
+/// needed) whenever any of that is not proved.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn reusable_human_receipt(
+    before: &JsonObj,
+    sha: &str,
+    subject: &str,
+    identity: &[String],
+    solo_human: bool,
+    carry_eligible: bool,
+) -> Option<String> {
+    let approves = serde_json::to_string(before)
+        .ok()
+        .and_then(|body| parse_recorded_verdict(&body))
+        .is_some_and(|v| v.kind == VerdictKind::Approved);
+    let attestation = before.get(ATTESTATION_KEY)?;
+    let human = attestation.get("human_at_tty").and_then(|v| v.as_bool()) == Some(true);
+    if !approves || !human || !round_sha(before).is_some_and(|at| same_reviewed_sha(&at, sha)) {
+        return None;
+    }
+    let id = attestation.get("receipt_id")?.as_str()?;
+    let receipt = crate::gate::review_authority::human_receipt_for(id, sha)?;
+    (receipt.subject.trim() == subject.trim()
+        && receipt.identity == identity
+        && receipt.solo_human == solo_human
+        && receipt.carry_eligible == carry_eligible)
+        .then(|| id.to_string())
+}
+
+/// BUG-2662: the act of review standing where [`record_review_act`] would
+/// land `obj` for `spec` ([`crate::gate::ledger::standing_review_act`]).
+/// `None` for a hand-off file (a contained seat, a non-canonical path).
+// trace:BUG-2662 | ai:claude
+pub(crate) fn standing_review_act(
+    path: &Path,
+    obj: &JsonObj,
+    spec: &str,
+) -> std::io::Result<Option<JsonObj>> {
+    let Some((root, _)) = canonical_verdict_key(path) else {
+        return Ok(None);
     };
-    comparable(before) == comparable(after)
+    let spec = crate::gate::ledger::GateSpec::resolve(&root, spec);
+    crate::gate::ledger::standing_review_act(path, obj, Some(&spec))
+}
+
+/// BUG-2662: [`write_verdict_object_for_spec`] for one act of review: one
+/// act is one verdict event ([`crate::gate::ledger::record_review_act_at`]).
+/// `Unchanged` when the act already stands and nothing was written. A
+/// hand-off file (a contained seat, a non-canonical path) is always written.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn record_review_act(
+    path: &Path,
+    obj: &JsonObj,
+    spec: &str,
+) -> std::io::Result<crate::gate::ledger::Delivered> {
+    let Some((root, _)) = canonical_verdict_key(path).filter(|_| !crate::gate::ledger::contained())
+    else {
+        hand_off_verdict_file(path, obj)?;
+        return Ok(crate::gate::ledger::Delivered::Appended);
+    };
+    refuse_unsafe_legacy_history(path, round_sha(obj).as_deref())?;
+    let mut obj = obj.clone();
+    carry_unarchived_rounds(path, &mut obj);
+    let spec = crate::gate::ledger::GateSpec::resolve(&root, spec);
+    crate::gate::ledger::record_review_act_at(path, &obj, Some(&spec))
 }
 
 /// BUG-2662: `handshake` names the same gate-ledger record as `path` (same
@@ -4342,15 +4383,6 @@ pub(crate) fn same_ledger_record(path: &Path, handshake: &Path) -> bool {
             (crate::gate::ledger::store_root(&root), crate::gate::ledger::store_root(&other_root)),
             (Ok(a), Ok(b)) if a == b
         )
-}
-
-/// Whether `record` carries a finding dispositioned as deferred.
-// trace:BUG-2662 | ai:claude
-pub(crate) fn has_deferred_finding(record: &JsonObj) -> bool {
-    record
-        .get("finding_dispositions")
-        .and_then(|v| v.as_array())
-        .is_some_and(|a| a.iter().any(finding_is_deferred))
 }
 
 /// First 12 chars of a sha (or the whole string when shorter) — enough to

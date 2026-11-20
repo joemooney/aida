@@ -277,6 +277,13 @@ thread_local! {
     static SHARED_DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
 }
 
+thread_local! {
+    /// The per-path locks this thread holds through [`with_lock`], innermost
+    /// last.
+    // trace:BUG-2662 | ai:claude
+    static HELD_LOCKS: std::cell::RefCell<Vec<PathBuf>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 /// Run `f` under the ledger-wide lock of `root`'s ledger in shared mode and
 /// an exclusive lock on `path` (a per-change, per-spec or index lock under
 /// that ledger), creating both if needed. Every ledger writer comes through
@@ -290,6 +297,13 @@ pub(crate) fn with_lock<T>(
     f: impl FnOnce() -> std::io::Result<T>,
 ) -> std::io::Result<T> {
     use fs2::FileExt;
+    // trace:BUG-2662 | ai:claude — re-entrant per thread: a review append
+    // holds its spec's `by-spec` lock across the change append, which indexes
+    // the spec under that same lock file. A second flock on a fresh
+    // descriptor would wait on itself.
+    if HELD_LOCKS.with(|held| held.borrow().iter().any(|p| p == path)) {
+        return f();
+    }
     let shared = if SHARED_DEPTH.with(|d| d.get()) == 0 {
         // Before this process writes: no older binary may write beside it.
         // trace:BUG-2531 | ai:claude
@@ -328,7 +342,18 @@ pub(crate) fn with_lock<T>(
     let depth = Depth;
     let file = open_lock(path)?;
     file.lock_exclusive()?;
+    struct Held;
+    impl Drop for Held {
+        fn drop(&mut self) {
+            HELD_LOCKS.with(|held| {
+                held.borrow_mut().pop();
+            });
+        }
+    }
+    HELD_LOCKS.with(|held| held.borrow_mut().push(path.to_path_buf()));
+    let held = Held;
     let out = f();
+    drop(held);
     let _ = FileExt::unlock(&file);
     drop(depth);
     drop(shared);
@@ -630,28 +655,15 @@ pub(crate) fn append_unbound_expected(
     record: &crate::gate::review_verdict::JsonObj,
     pending: Option<&crate::gate::review_verdict::JsonObj>,
 ) -> std::io::Result<Delivered> {
-    append_unbound_checked(root, gate_spec, record, |existing| {
+    let event = super::event::verdict_event_unbound(root, gate_spec, record);
+    append_unbound_checked(root, event, |existing| {
         if let Some(pending) = pending {
             let current = existing.iter().rev().find_map(|e| e.verdict_record());
             if current != Some(pending) && current != Some(record) {
                 return Err(std::io::Error::other("review changed during sweep delivery; refusing stale approval; record a fresh review"));
             }
         }
-        Ok(())
-    })
-}
-
-/// [`append_unbound`], refused when the spec gained a verdict record since
-/// `standing` was read.
-// trace:BUG-2662 | ai:claude
-pub(crate) fn append_unbound_standing(
-    root: &Path,
-    gate_spec: &GateSpec,
-    record: &crate::gate::review_verdict::JsonObj,
-    standing: &Standing,
-) -> std::io::Result<Delivered> {
-    append_unbound_checked(root, gate_spec, record, |existing| {
-        standing.admit(existing.iter().filter_map(|e| e.verdict_record()), record)
+        Ok(None)
     })
 }
 
@@ -665,22 +677,123 @@ fn unbound_spec_name(spec: &str) -> bool {
         && ChangeKey::parse(spec).is_none()
 }
 
-/// The verdict records a spec held when an approval began filing its
-/// follow-up findings: those indexed by the spec on one change's ledger and
-/// those on the spec's unbound ledger. The approval is appended only while
-/// no other record has joined them, so filing findings never turns an older
-/// review into the newest one.
+/// The identity of a verdict record: a digest of its serialized body.
 // trace:BUG-2662 | ai:claude
-pub(crate) struct Standing(Vec<crate::gate::review_verdict::JsonObj>);
+type RecordId = [u8; 32];
+
+fn record_id(record: &crate::gate::review_verdict::JsonObj) -> RecordId {
+    use sha2::Digest as _;
+    let mut hasher = sha2::Sha256::new();
+    // Hashing cannot fail, and a JSON object always serializes.
+    let _ = serde_json::to_writer(&mut hasher, record);
+    hasher.finalize().into()
+}
+
+/// One strict observation of the review history a verdict joins: every event
+/// on the destination change's ledger, whatever spec label it carries (a
+/// change's verdict is selected across all of them), and every event on the
+/// spec's unbound ledger. Both files are read whole through the checked
+/// reader, within its budget: an unreadable file or a line that does not
+/// parse is a refusal, never a shorter history.
+// trace:BUG-2662 | ai:claude
+pub(crate) struct Observed {
+    change: Option<ChangeKey>,
+    bound: Vec<GateEvent>,
+    unbound: Vec<GateEvent>,
+}
+
+/// Read [`Observed`] for a verdict landing on `change` (`None`: on the
+/// unbound ledger) under the spec label `spec`, as its event carries it.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn observe(
+    root: &Path,
+    change: Option<ChangeKey>,
+    spec: Option<&str>,
+) -> std::io::Result<Observed> {
+    let unbound = spec.filter(|s| unbound_spec_name(s));
+    let (bound, unbound) =
+        super::checked::read_review_ledgers(root, change, unbound, &mut Default::default())
+            .map_err(|refused| {
+                std::io::Error::other(format!(
+                    "the review history could not be read whole ({refused}); nothing was recorded"
+                ))
+            })?;
+    Ok(Observed {
+        change,
+        bound,
+        unbound,
+    })
+}
+
+impl Observed {
+    fn verdicts(&self) -> impl Iterator<Item = &crate::gate::review_verdict::JsonObj> {
+        self.bound
+            .iter()
+            .chain(self.unbound.iter())
+            .filter_map(|e| e.verdict_record())
+    }
+
+    /// The ledger the verdict lands on.
+    fn destination(&self) -> &[GateEvent] {
+        match self.change {
+            Some(_) => &self.bound,
+            None => &self.unbound,
+        }
+    }
+
+    /// The act standing at the destination: its newest verdict event, under
+    /// any label.
+    fn current(&self) -> Option<&GateEvent> {
+        self.destination()
+            .iter()
+            .rev()
+            .find(|e| e.verdict_record().is_some())
+    }
+
+    /// The record of the standing act, when it was recorded under `spec`.
+    pub(crate) fn current_act(
+        &self,
+        spec: Option<&str>,
+    ) -> Option<&crate::gate::review_verdict::JsonObj> {
+        self.current()
+            .filter(|e| e.spec.as_deref() == spec)
+            .and_then(|e| e.verdict_record())
+    }
+
+    /// Whether the destination already holds exactly `record` under `spec`.
+    fn holds(&self, spec: Option<&str>, record: &crate::gate::review_verdict::JsonObj) -> bool {
+        self.destination()
+            .iter()
+            .any(|e| e.spec.as_deref() == spec && e.verdict_record() == Some(record))
+    }
+
+    /// The verdict records observed, as [`Standing`].
+    pub(crate) fn standing(&self) -> Standing {
+        Standing(self.verdicts().map(record_id).collect())
+    }
+}
+
+/// The verdict records of an [`Observed`] history, taken when an approval
+/// began filing its follow-up findings. The approval is appended only while
+/// no other record has joined them, so filing findings never turns an older
+/// review into the newest one. Records are indexed by identity, so admitting
+/// a history is linear in its size.
+// trace:BUG-2662 | ai:claude
+pub(crate) struct Standing(std::collections::HashSet<RecordId>);
 
 impl Standing {
     /// `Ok` while every record in `now` was standing or is `record` itself.
-    fn admit<'a>(
+    fn admit(
         &self,
-        now: impl IntoIterator<Item = &'a crate::gate::review_verdict::JsonObj>,
+        now: &Observed,
         record: &crate::gate::review_verdict::JsonObj,
     ) -> std::io::Result<()> {
-        if now.into_iter().all(|r| r == record || self.0.contains(r)) {
+        let own = record_id(record);
+        if now
+            .verdicts()
+            .map(record_id)
+            .all(|id| id == own || self.0.contains(&id))
+        {
             return Ok(());
         }
         Err(std::io::Error::other(
@@ -689,60 +802,137 @@ impl Standing {
     }
 }
 
-/// Read [`Standing`] for `spec` (as a verdict event carries it) on `change`.
+/// What a review append must find true of the history it joins, decided
+/// under the locks its append holds.
 // trace:BUG-2662 | ai:claude
-pub(crate) fn standing(root: &Path, change: Option<ChangeKey>, spec: Option<&str>) -> Standing {
-    let mut records: Vec<crate::gate::review_verdict::JsonObj> = Vec::new();
-    if let Some(change) = change {
-        records.extend(
-            read_file(root, change)
-                .iter()
-                .filter(|e| e.spec.as_deref() == spec)
-                .filter_map(|e| e.verdict_record().cloned()),
-        );
-    }
-    if let Some(spec) = spec.filter(|s| unbound_spec_name(s)) {
-        records.extend(
-            read_unbound(root, spec)
-                .iter()
-                .filter_map(|e| e.verdict_record().cloned()),
-        );
-    }
-    Standing(records)
+#[derive(Default, Clone, Copy)]
+pub(crate) struct ReviewRule<'a> {
+    /// Refuse when a verdict record joined the history since this was read.
+    pub(crate) standing: Option<&'a Standing>,
+    /// One act of review is one event: a record that repeats the act
+    /// standing at the destination under the same spec is not appended, and
+    /// one the ledger already holds but that no longer stands is refused.
+    pub(crate) once: bool,
+    /// Copy this spec's unbound records onto the change before the append.
+    pub(crate) bind: Option<&'a GateSpec>,
 }
 
-/// [`append_one`] for a verdict event, refused when its spec gained a
-/// verdict record since `standing` was read. The check and the append share
-/// the change's lock.
+#[cfg(test)]
+thread_local! {
+    /// BUG-2662 test seam: called by [`append_review`] with the store root
+    /// before it takes its locks (`false`: a writer racing the append lands
+    /// here) and again under them, after its final read (`true`).
+    // trace:BUG-2662 | ai:claude
+    #[allow(clippy::type_complexity)]
+    pub(crate) static REVIEW_APPEND_HOOK: std::cell::RefCell<Option<Box<dyn Fn(&Path, bool)>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(test)]
+fn review_append_hook(root: &Path, locked: bool) {
+    // Taken out while it runs, so a hook that records does not re-enter.
+    if let Some(hook) = REVIEW_APPEND_HOOK.with(|h| h.borrow_mut().take()) {
+        hook(root, locked);
+        REVIEW_APPEND_HOOK.with(|h| {
+            h.borrow_mut().get_or_insert(hook);
+        });
+    }
+}
+
+/// The final observation and decision of [`append_review`], under its locks:
+/// `Some` when nothing is to be appended.
 // trace:BUG-2662 | ai:claude
-pub(crate) fn append_one_standing(
+fn review_check(
     root: &Path,
-    change: ChangeKey,
+    change: Option<ChangeKey>,
+    spec: Option<&str>,
+    record: &crate::gate::review_verdict::JsonObj,
+    rule: &ReviewRule<'_>,
+) -> std::io::Result<Option<Delivered>> {
+    let now = observe(root, change, spec)?;
+    #[cfg(test)]
+    review_append_hook(root, true);
+    if rule.once
+        && now
+            .current_act(spec)
+            .is_some_and(|act| crate::gate::review_verdict::repeats_recorded_act(act, record))
+    {
+        return Ok(Some(Delivered::Unchanged));
+    }
+    if let Some(standing) = rule.standing {
+        standing.admit(&now, record)?;
+    }
+    if rule.once && now.holds(spec, record) {
+        return Err(std::io::Error::other(
+            "this review is already on record but a later review has replaced it; nothing was recorded; record a fresh review",
+        ));
+    }
+    Ok(None)
+}
+
+/// Append the verdict `event` to `change`'s ledger, or with no change to the
+/// unbound ledger of the spec it names, as `rule` allows.
+///
+/// The final read of the history, the decision and the append share the
+/// change's lock and the spec's `by-spec` lock, taken in that order (the
+/// order a change append already indexes its spec in). No verdict can join
+/// either ledger in between: every change append holds the first and every
+/// unbound append the second.
+// trace:BUG-2662 | ai:claude
+pub(crate) fn append_review(
+    root: &Path,
+    change: Option<ChangeKey>,
     event: GateEvent,
-    standing: &Standing,
+    rule: &ReviewRule<'_>,
 ) -> std::io::Result<Delivered> {
-    let body = event.body.clone();
-    let appended = with_lock(root, &lock_file(root, change), || {
-        if let Some(record) = event.verdict_record() {
-            let now = self::standing(root, Some(change), event.spec.as_deref());
-            standing.admit(now.0.iter(), record)?;
+    let Some(record) = event.verdict_record().cloned() else {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "a review append needs a verdict event",
+        ));
+    };
+    let spec = event.spec.clone();
+    let spec = spec.as_deref();
+    #[cfg(test)]
+    review_append_hook(root, false);
+    let Some(change) = change else {
+        return append_unbound_checked(root, event, |_| {
+            review_check(root, None, spec, &record, rule)
+        });
+    };
+    let spec_lock = spec
+        .filter(|s| unbound_spec_name(s))
+        .map(|s| unbound_file(root, s).with_extension("lock"));
+    let locked = || {
+        if let Some(decided) = review_check(root, Some(change), spec, &record, rule)? {
+            return Ok(decided);
         }
-        append_locked(root, change, vec![event], false)
-    })?;
-    Ok(if appended.iter().any(|e| e.body == body) {
-        Delivered::Appended
-    } else {
-        Delivered::Unchanged
+        if let Some(bind) = rule.bind {
+            bind_unbound(root, bind, change)?;
+        }
+        let body = event.body.clone();
+        let appended = append_locked(root, change, vec![event], false)?;
+        Ok(if appended.iter().any(|e| e.body == body) {
+            Delivered::Appended
+        } else {
+            Delivered::Unchanged
+        })
+    };
+    with_lock(root, &lock_file(root, change), || match &spec_lock {
+        Some(spec_lock) => with_lock(root, spec_lock, locked),
+        None => locked(),
     })
 }
 
+/// Append the unbound verdict `event` (its `change` is the spec label)
+/// unless that ledger already holds its record. `check` runs first, under
+/// the spec's lock, with the ledger as it stands; `Some` ends the append.
 fn append_unbound_checked(
     root: &Path,
-    gate_spec: &GateSpec,
-    record: &crate::gate::review_verdict::JsonObj,
-    check: impl FnOnce(&[GateEvent]) -> std::io::Result<()>,
+    mut event: GateEvent,
+    check: impl FnOnce(&[GateEvent]) -> std::io::Result<Option<Delivered>>,
 ) -> std::io::Result<Delivered> {
-    let spec = gate_spec.label.clone();
+    let spec = event.change.clone();
     if !unbound_spec_name(&spec) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::InvalidInput,
@@ -753,11 +943,15 @@ fn append_unbound_checked(
     with_lock(root, &file.with_extension("lock"), || {
         let existing = read_unbound(root, &spec);
         refuse_newer_format(&existing, &spec)?; // trace:BUG-2531 | ai:claude
-        check(&existing)?;
-        if existing.iter().any(|e| e.verdict_record() == Some(record)) {
+        if let Some(decided) = check(&existing)? {
+            return Ok(decided);
+        }
+        if existing
+            .iter()
+            .any(|e| e.verdict_record() == event.verdict_record())
+        {
             return Ok(Delivered::Unchanged);
         }
-        let mut event = super::event::verdict_event_unbound(root, gate_spec, record);
         event.seq = existing.last().map(|e| e.seq).unwrap_or(0) + 1;
         event.at = chrono::Utc::now().to_rfc3339();
         let mut line = serde_json::to_string(&event).map_err(std::io::Error::other)?;
