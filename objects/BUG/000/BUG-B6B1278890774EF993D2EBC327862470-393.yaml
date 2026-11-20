@@ -9,12 +9,12 @@ description: |-
   1. aida queue rework finishes in under 10s on this repo's current gate ledger (658 PR ledgers), or prints progress and names the slow phase.
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T23:31:42.766011832Z
+modified_at: 2026-11-20T23:41:03.250057224Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -901,6 +901,14 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fb55-bf92-7363-b9a2-64ca76cf6baa
+  author: aida-orchestrator
+  timestamp: 2026-11-20T23:41:03.250070287Z
+  session_id: 01a1fb527b11
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
@@ -915,7 +923,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: Reviewed the full landed diff for BUG-2629. The source provides five-second phase notices, places track refusal before review lookup, and adds criterion-traced regressions with 1,100 unrelated change ledgers. Blocking defects remain in WAITING admission and the claimed aggregate recovery bound. Required fast gates failed on a gate-to-queue dependency. Fast compile was pending. Review used source and existing CI evidence only.
+  detail: 'BUG-2629 AC1 passes by the five-second named progress notices, and AC2 passes for implementer rework because track admission precedes review I/O. AC3 remains partial: the 1,100-ledger tests bound payload reads but miss quadratic binding-directory scans on a healthy spec with many related changes. Recovery can also let refused evidence decide rework admission. Reviewed the landed tree against pinned main 29e77b852369. None of the findings depends on the intervening base change. Fast gates passed, CI pending at review time. Source and existing CI evidence only.'
   recovery_hint: address the review findings, move BUG-2629 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-20T22:45:23.310922505Z
+  shelved_at: 2026-11-20T23:41:03.250057224Z
