@@ -1569,6 +1569,18 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
                 land_args::ModeCommand::Reconcile => crate::land_mode::reconcile_effective(&root),
             }
         }
+        // trace:STORY-2897 | ai:claude
+        land_args::LandCommand::Watch => {
+            let root = crate::find_project_root()?;
+            let notes = crate::main_watch::live_pass(&root)?;
+            if notes.is_empty() {
+                println!("red-main watch: main is green");
+            }
+            for note in notes {
+                println!("{note}");
+            }
+            Ok(())
+        }
     }
 }
 

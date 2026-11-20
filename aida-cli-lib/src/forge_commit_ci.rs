@@ -31,6 +31,15 @@ pub(crate) struct CommitCheck {
     pub run_id: Option<String>,
     /// GitHub workflow identity, verified from the owning Actions run.
     pub workflow_id: Option<String>,
+    /// The check was cancelled rather than failing on its own. It still
+    /// judges as [`CheckOutcome::Failed`] for every gate; only the red-main
+    /// watch tells the two apart (a cancelled run is not a red main).
+    // trace:STORY-2897 | ai:claude
+    pub cancelled: bool,
+    /// The attempt of the owning GitHub Actions run (1 for the first run, 2
+    /// after one re-run), verified from that run; `None` elsewhere.
+    // trace:STORY-2897 | ai:claude
+    pub run_attempt: Option<u64>,
 }
 
 /// Every check the forge reports on `sha`.
@@ -280,7 +289,7 @@ pub(crate) fn github_commit_checks(
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<CommitChecks> {
     let mut checks = Vec::new();
-    let mut workflows = std::collections::HashMap::<String, String>::new();
+    let mut workflows = std::collections::HashMap::<String, (String, Option<u64>)>::new();
     let mut total = None;
     let mut seen = 0usize;
     for page in 1..=MAX_PAGES {
@@ -318,9 +327,13 @@ pub(crate) fn github_commit_checks(
                         .get("workflow_id")
                         .and_then(|v| v.as_u64())
                         .context("workflow run has no workflow_id")?;
-                    workflows.insert(run.to_string(), workflow.to_string());
+                    let attempt = value.get("run_attempt").and_then(|v| v.as_u64());
+                    workflows.insert(run.to_string(), (workflow.to_string(), attempt));
                 }
-                check.workflow_id = workflows.get(run).cloned();
+                if let Some((workflow, attempt)) = workflows.get(run) {
+                    check.workflow_id = Some(workflow.clone());
+                    check.run_attempt = *attempt;
+                }
             }
             checks.push(check);
         }
@@ -375,10 +388,11 @@ pub(crate) fn parse_gh_check_runs(
             .get("status")
             .and_then(|v| v.as_str())
             .with_context(|| format!("check run `{name}` has no status"))?;
+        let conclusion = run.get("conclusion").and_then(|v| v.as_str());
         let outcome = if status != "completed" {
             CheckOutcome::Pending
         } else {
-            match run.get("conclusion").and_then(|v| v.as_str()) {
+            match conclusion {
                 Some("success") => CheckOutcome::Passed,
                 Some("neutral" | "skipped") => CheckOutcome::Skipped,
                 Some(_) => CheckOutcome::Failed,
@@ -389,6 +403,8 @@ pub(crate) fn parse_gh_check_runs(
             name: name.to_string(),
             outcome,
             workflow_id: None,
+            cancelled: outcome == CheckOutcome::Failed && conclusion == Some("cancelled"),
+            run_attempt: None,
             run_id: run
                 .get("details_url")
                 .and_then(|v| v.as_str())
@@ -442,6 +458,8 @@ pub(crate) fn parse_gh_commit_status(
                 outcome,
                 run_id: None,
                 workflow_id: None,
+                cancelled: false,
+                run_attempt: None,
             })
         })
         .collect()
@@ -483,7 +501,7 @@ pub(crate) fn parse_glab_commit_statuses(
     rows: &[serde_json::Value],
     sha: &str,
 ) -> Result<Vec<CommitCheck>> {
-    let mut latest: std::collections::BTreeMap<String, (u64, CheckOutcome)> =
+    let mut latest: std::collections::BTreeMap<String, (u64, CheckOutcome, bool)> =
         std::collections::BTreeMap::new();
     for row in rows {
         let name = row
@@ -520,18 +538,23 @@ pub(crate) fn parse_glab_commit_statuses(
             ) => CheckOutcome::Pending,
             other => anyhow::bail!("commit status `{name}` has unknown status {other:?}"),
         };
-        let entry = latest.entry(name.to_string()).or_insert((id, outcome));
+        let cancelled = row.get("status").and_then(|v| v.as_str()) == Some("canceled");
+        let entry = latest
+            .entry(name.to_string())
+            .or_insert((id, outcome, cancelled));
         if id >= entry.0 {
-            *entry = (id, outcome);
+            *entry = (id, outcome, cancelled);
         }
     }
     Ok(latest
         .into_iter()
-        .map(|(name, (_, outcome))| CommitCheck {
+        .map(|(name, (_, outcome, cancelled))| CommitCheck {
             name,
             outcome,
             run_id: None,
             workflow_id: None,
+            cancelled,
+            run_attempt: None,
         })
         .collect())
 }

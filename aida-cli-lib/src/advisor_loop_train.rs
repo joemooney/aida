@@ -144,6 +144,12 @@ pub(super) fn run(root: &Path) -> Result<()> {
                 train_service::record_failure(root, Some(&reason))?;
             }
         }
+        // The red-main watch rides the same tick; it never blocks the pass.
+        // trace:STORY-2897 | ai:claude
+        match crate::main_watch::live_pass(root) {
+            Ok(notes) => notes.iter().for_each(|n| eprintln!("auto-train: {n}")),
+            Err(error) => eprintln!("auto-train: red-main watch did not run: {error:#}"),
+        }
         // Check heartbeat and grant once a second while idle, so rotation does
         // not need to wait for the next three-minute discovery interval.
         for _ in 0..180 {

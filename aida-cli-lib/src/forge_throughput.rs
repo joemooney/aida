@@ -187,6 +187,8 @@ mod tests {
             outcome,
             run_id: Some(run.into()),
             workflow_id: None,
+            cancelled: false,
+            run_attempt: None,
         };
         let full = check("ci-tier: full", CheckOutcome::Passed, "1");
         let red = check("Build (ubuntu-latest)", CheckOutcome::Failed, "1");

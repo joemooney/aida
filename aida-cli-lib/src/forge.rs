@@ -1058,6 +1058,14 @@ pub trait Forge {
         anyhow::bail!("this forge cannot list the steps of job `{job}` in CI run {run_id}")
     }
 
+    /// Ask the forge to re-run the failed jobs of CI run `run_id` (the
+    /// red-main watch's one confirming re-run). Forges without that always
+    /// err; the watch then confirms a red by time alone.
+    // trace:STORY-2897 | ai:claude
+    fn rerun_failed_jobs(&self, run_id: &str) -> Result<()> {
+        anyhow::bail!("this forge cannot re-run the failed jobs of CI run {run_id}")
+    }
+
     /// STORY-516: branch-keyed CI probe (PR number + check rollup in one call)
     /// — the forge-neutral form of `probe_ci_state_for_branch`. Returns a
     /// [`CiProbeResult`] preserving the `NoSignal(reason)` "couldn't probe"
@@ -3184,6 +3192,32 @@ impl Forge for GitHubForge {
         })?;
         let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
         github_run_job_failed_steps("{owner}/{repo}", run_id, job, &mut api)
+    }
+
+    // trace:STORY-2897 | ai:claude
+    fn rerun_failed_jobs(&self, run_id: &str) -> Result<()> {
+        anyhow::ensure!(
+            !run_id.is_empty() && run_id.bytes().all(|b| b.is_ascii_digit()),
+            "invalid CI run id `{run_id}`"
+        );
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        let endpoint = format!("repos/{{owner}}/{{repo}}/actions/runs/{run_id}/rerun-failed-jobs");
+        let mut command = Command::new(&gh);
+        command
+            .args(["api", "-X", "POST", &endpoint])
+            .current_dir(&self.project_root)
+            .stdin(std::process::Stdio::null());
+        let out = crate::command_output_with_timeout(command, COMMIT_CI_API_TIMEOUT)
+            .with_context(|| format!("`gh api -X POST {endpoint}` timed out or failed to spawn"))?;
+        anyhow::ensure!(
+            out.status.success(),
+            "`gh api -X POST {endpoint}` failed ({}): {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
     }
 
     // trace:STORY-2912 | ai:claude

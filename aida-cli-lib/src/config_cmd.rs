@@ -887,6 +887,16 @@ const CONFIG_KNOBS: &[KnobSpec] = &[
             reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml (`aida land mode set` will reconcile the forge)",
         },
     },
+    // trace:STORY-2897 | ai:claude
+    KnobSpec {
+        section: "landing",
+        key: "red_main.fix_window",
+        doc: "How long a confirmed red main may wait for a fix before the red-main watch recommends a revert (a duration such as `2h` or `90m`).",
+        default: "2h",
+        edit: EditSafety::ReadOnly {
+            reason: "landing policy is read from the default branch only: change it in a reviewed PR to .aida/config.toml",
+        },
+    },
     // --- [telemetry]. ---
     KnobSpec {
         section: "telemetry",
@@ -3364,7 +3374,14 @@ fn policy_registry(project_root: &std::path::Path) -> Vec<PolicySection> {
         PolicySection {
             section: "landing",
             header: "[landing]".to_string(),
-            rows: vec![row("mode", policy.mode.as_str().to_string())],
+            rows: vec![
+                row("mode", policy.mode.as_str().to_string()),
+                // trace:STORY-2897 | ai:claude
+                row(
+                    "red_main.fix_window",
+                    format!("{}m", policy.red_main_fix_window.as_secs() / 60),
+                ),
+            ],
         }
     });
 

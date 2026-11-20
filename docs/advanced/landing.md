@@ -56,6 +56,38 @@ In `review-gated` mode the auto-train stands down: each pass does nothing and sa
 
 Both `set` and `reconcile` change branch protection, so each needs either the operator at a terminal or the advisor seat under a mandate that includes protected paths. Both work on GitHub only.
 
+## When main goes red
+
+<!-- trace:STORY-2897 | ai:claude -->
+
+In both modes, AIDA watches the default branch's CI after each merge. The land loop and the auto-train worker check it on every pass, and `aida land watch` checks it once on demand.
+
+A commit is red when a check the CI-gated mode requires concludes as a failure on that commit. A cancelled check is not a failure, and neither is a check that is still running.
+
+When main goes red:
+
+1. AIDA mails the advisor and product seats at once, as urgent. The mail names the first red commit, its pull request and specs, and the failing checks. AIDA also re-runs the failed jobs once.
+2. If a green re-run clears the red first, the episode is recorded as a flake. Nobody else is alerted and no spec is filed.
+3. If the red survives the re-run, or 30 minutes pass, the red is confirmed. AIDA files a bug ("main red at <commit>: <checks>"), links it to the red commit's specs, queues it at the top of the implementer queue, and notifies the operator.
+4. Merging continues while main is red. The live binary stays on the newest green commit.
+
+AIDA fixes forward by default. After confirmation it recommends a revert of the red commit, once per reason, only when:
+
+- main does not build (a compile step failed);
+- the build of a red commit fails `aida dev build`'s smoke test;
+- no fix has landed within `[landing] red_main.fix_window` (default `2h`);
+- the fix spec is tagged `needs-design`.
+
+A revert is an ordinary pull request with a normal review. The first green commit ends the episode, and AIDA mails that main is green again.
+
+`aida land metrics` reports, from `.aida/land/main-watch.jsonl`:
+
+- red-main minutes;
+- episodes, with flakes counted separately;
+- merges that landed while red;
+- fix latency, which excludes flakes;
+- how many episodes ended in a revert.
+
 ## Two CI tiers on a pull request
 
 | Tier | Runs when | What it runs |
