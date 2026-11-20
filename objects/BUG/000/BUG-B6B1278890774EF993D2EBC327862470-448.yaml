@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-20T21:30:22.267057816Z
+modified_at: 2026-11-20T22:15:18.160497286Z
 req_type: Bug
 tags:
 - dell1
@@ -913,6 +913,13 @@ comments:
   created_at: 2026-11-20T21:30:22.267054810Z
   modified_at: 2026-11-20T21:30:22.267054810Z
   session_id: 01a1fa7dad31
+- id: 01a1fb07-7748-71c3-8a9b-5fc5b94ba244
+  author: joe
+  content: 'advisor-121 15:22: stale reviewer trees blocked manual reviews of #4377 and #4364 (''branch pr-N is held by worktree... before pickup setup''), and review-watch had not cleaned them. Swept 7 dead aida-pr-* trees (4124 4181 4227 4364 4373 4376 4377) with draft backups. A reviewer tree whose process is gone must be reaped automatically before the next pickup on that branch (this bug''s scope).'
+  created_at: 2026-11-20T22:15:18.160497286Z
+  modified_at: 2026-11-20T22:15:18.160497286Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
