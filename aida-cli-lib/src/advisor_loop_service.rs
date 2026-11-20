@@ -259,8 +259,99 @@ pub(crate) fn command(action: &AdvisorLoopsCommand) -> Result<()> {
             println!("advisor loops: bindings accepted; supervisors will reconcile prior controllers before restart");
             Ok(())
         }
+        // trace:BUG-2703 | ai:claude
+        AdvisorLoopsCommand::Drain { reason, duration } => {
+            println!(
+                "{}",
+                crate::admission_drain::drain(&root, reason, duration.as_deref())?
+            );
+            Ok(())
+        }
+        AdvisorLoopsCommand::Resume => {
+            println!("{}", crate::admission_drain::resume(&root)?);
+            Ok(())
+        }
         AdvisorLoopsCommand::Worker | AdvisorLoopsCommand::TrainWorker => worker(&root),
     }
+}
+
+/// This service's admission claim, the active drain and any waiting land,
+/// ship or train, for status. Unreadable evidence is reported, not hidden.
+// trace:BUG-2703 | ai:claude
+fn admission_status(root: &Path, state: Option<&Service>, now: DateTime<Utc>) -> serde_json::Value {
+    let worker = state
+        .and_then(|s| s.worker.as_ref())
+        .filter(|w| w.alive())
+        .map(|w| w.pid);
+    let (claim, waiting) = match crate::admission_owner::holders(root) {
+        Ok(rows) => {
+            let claim = rows
+                .iter()
+                .find(|r| r.state == "claim" && r.purpose == HOLDER_PURPOSE && Some(r.pid) == worker)
+                .map(|r| {
+                    serde_json::json!({
+                        "pid": r.pid,
+                        "acquired_at": r.since,
+                        "age_seconds": r.since.map(|at| (now - at).num_seconds().max(0)),
+                    })
+                });
+            let waiting: Vec<_> = rows
+                .iter()
+                .filter(|r| r.state == "waiting")
+                .map(|r| format!("PID {} ({}) since {}", r.pid, r.purpose, r.since.map(|at| at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)).unwrap_or_default()))
+                .collect();
+            (claim.unwrap_or(serde_json::Value::Null), serde_json::json!(waiting))
+        }
+        Err(error) => (
+            serde_json::json!({ "error": format!("{error:#}") }),
+            serde_json::Value::Null,
+        ),
+    };
+    let drain = match crate::admission_drain::active(root) {
+        Ok(Some(drained)) => serde_json::json!(drained),
+        Ok(None) => serde_json::Value::Null,
+        Err(error) => serde_json::json!({ "error": format!("{error:#}") }),
+    };
+    serde_json::json!({ "admission_claim": claim, "drain": drain, "admission_waiting": waiting })
+}
+
+// trace:BUG-2703 | ai:claude
+fn admission_line(value: &serde_json::Value) -> String {
+    let claim = &value["admission_claim"];
+    let claim = if claim.is_null() {
+        "not held".to_string()
+    } else if let Some(error) = claim["error"].as_str() {
+        format!("unreadable ({error})")
+    } else {
+        match claim["age_seconds"].as_i64() {
+            Some(age) => format!("held by pid {} for {}m{:02}s", claim["pid"], age / 60, age % 60),
+            None => format!("held by pid {} (age unknown)", claim["pid"]),
+        }
+    };
+    let drain = &value["drain"];
+    let drain = if drain.is_null() {
+        "none".to_string()
+    } else if let Some(error) = drain["error"].as_str() {
+        format!("unreadable ({error}); loops treat it as drained")
+    } else {
+        format!(
+            "by {} until {}: {}",
+            drain["actor"].as_str().unwrap_or_default(),
+            drain["expires_at"].as_str().unwrap_or_default(),
+            drain["reason"].as_str().unwrap_or_default()
+        )
+    };
+    let waiting = value["admission_waiting"]
+        .as_array()
+        .filter(|w| !w.is_empty())
+        .map(|w| {
+            w.iter()
+                .filter_map(|v| v.as_str())
+                .collect::<Vec<_>>()
+                .join("; ")
+        })
+        .unwrap_or_else(|| "none".into());
+    format!("admission: claim {claim}; drain {drain}; waiting {waiting}")
 }
 
 // trace:STORY-2571 | ai:codex
@@ -317,6 +408,11 @@ fn print_status_with_pass(
     if let Some(line) = &standing_down {
         value["standing_down"] = serde_json::json!(line);
     }
+    // trace:BUG-2703 | ai:claude
+    let admission = admission_status(&root, state, Utc::now());
+    for key in ["admission_claim", "drain", "admission_waiting"] {
+        value[key] = admission[key].clone();
+    }
     if json || crate::output_format_is_json() {
         println!("{}", crate::cache_output::json_pretty(&value)?);
     } else if matches!(
@@ -342,6 +438,7 @@ fn print_status_with_pass(
         if let Some(line) = standing_down {
             println!("{NAME}: {line}");
         }
+        println!("{NAME}: {}", admission_line(&value)); // trace:BUG-2703 | ai:claude
         // trace:BUG-2674 | ai:claude
         if let Some(pass) = pass {
             println!(
@@ -837,6 +934,15 @@ fn tick_with_launcher(
         write(&dir, &state)?;
     }
     if !host_valid || state.child_grant.is_some() || Utc::now() < state.retry_after {
+        return Ok(None);
+    }
+    // An active drain holds the respawn; an unreadable drain journal refuses
+    // (counted and alerted) rather than restarting a loop it may be holding.
+    // trace:BUG-2703 | ai:claude
+    if crate::admission_drain::active(root)
+        .context("advisor loops drain state unreadable; not restarting the worker")?
+        .is_some()
+    {
         return Ok(None);
     }
     let parent = state.binding.validate(root)?;
@@ -3033,6 +3139,87 @@ mod loop_tests {
         })
         .unwrap();
         assert!(seat_authority::read_grant(&child.id).is_ok());
+    }
+
+    /// AC4: an active drain holds the supervisor's respawn (no launch, no
+    /// failure), and once it ends the supervisor launches again.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_drain_holds_the_supervisor_respawn() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        crate::admission_drain::fixture_drain(root, "joe (uid 1)", "land #4324", 600, Utc::now())
+            .unwrap();
+        let held = tick_with_launcher(root, "default", true, &mut None, |_, _, _| {
+            panic!("a drained loop must not be restarted")
+        });
+        assert_eq!(held.unwrap(), None);
+        assert_eq!(failure_state(root).unwrap().count, 0);
+        let dir = directory(root, false).unwrap().unwrap();
+        assert!(read(&dir).unwrap().unwrap().child_grant.is_none());
+        // An unreadable drain journal refuses rather than restarting.
+        let journal = root.join(".aida/admission-owner/loops-drain.journal");
+        let saved = std::fs::read(&journal).unwrap();
+        std::fs::write(&journal, b"{broken").unwrap();
+        let refused = tick_with_launcher(root, "default", true, &mut None, |_, _, _| {
+            panic!("an unreadable drain must not restart the loop")
+        })
+        .unwrap_err();
+        assert!(format!("{refused:#}").contains("drain"), "{refused:#}");
+        std::fs::write(&journal, saved).unwrap();
+        crate::admission_drain::resume(root).unwrap();
+        let launched = std::cell::Cell::new(false);
+        let error = tick_with_launcher(root, "default", true, &mut None, |_, _, _| {
+            launched.set(true);
+            anyhow::bail!("fixture launcher")
+        })
+        .unwrap_err();
+        assert!(launched.get(), "after the drain the supervisor launches: {error:#}");
+    }
+
+    /// AC4: status shows the controller's claim and its age, the drain and
+    /// any waiting land, ship or train.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_status_shows_claim_age_drain_and_waiters() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let _env = crate::test_env::AmbientGuard::hermetic_with_seat(
+            root,
+            "advisor",
+            &["advisor", "reviewer"],
+        );
+        let parent = seat_authority::grant_check(root).into_valid().unwrap();
+        rebind(root, "default", &parent).unwrap();
+        let dir = directory(root, false).unwrap().unwrap();
+        let mut state = read(&dir).unwrap().unwrap();
+        state.worker = Some(Identity::current().unwrap());
+        let value = admission_status(root, Some(&state), Utc::now());
+        assert_eq!(value["admission_claim"], serde_json::Value::Null);
+        assert!(admission_line(&value).contains("claim not held; drain none; waiting none"));
+        let claim = crate::admission_owner::acquire(root, HOLDER_PURPOSE, true).unwrap();
+        let later = Utc::now() + chrono::Duration::seconds(125);
+        let value = admission_status(root, Some(&state), later);
+        assert_eq!(value["admission_claim"]["pid"], std::process::id());
+        assert!(value["admission_claim"]["age_seconds"].as_i64().unwrap() >= 125);
+        assert!(
+            admission_line(&value).contains(&format!("held by pid {} for 2m0", std::process::id())),
+            "{}",
+            admission_line(&value)
+        );
+        crate::admission_drain::fixture_drain(root, "joe (uid 1)", "land #4324", 600, Utc::now())
+            .unwrap();
+        let line = admission_line(&admission_status(root, Some(&state), Utc::now()));
+        assert!(line.contains("drain by joe (uid 1) until"), "{line}");
+        assert!(line.contains("land #4324"), "{line}");
+        drop(claim);
     }
 }
 

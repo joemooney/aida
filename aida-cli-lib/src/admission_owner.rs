@@ -3,11 +3,13 @@
 // trace:STORY-2857 | ai:codex
 use aida_core::proc_identity::{ProcIdentity, Verdict};
 use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
 use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::{File, OpenOptions},
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,6 +18,11 @@ struct Receipt {
     identity: ProcIdentity,
     purpose: String,
     token: String,
+    /// When the claim was taken; `advisor loops status` shows its age. Older
+    /// receipts omit it, and older readers ignore it.
+    // trace:BUG-2703 | ai:claude
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    acquired_at: Option<DateTime<Utc>>,
 }
 #[derive(Debug)]
 pub(crate) struct AdmissionBusy(pub(crate) String);
@@ -212,6 +219,7 @@ pub(crate) fn write_test_receipt(root: &Path, identity: ProcIdentity, purpose: &
         identity,
         purpose: purpose.into(),
         token: uuid::Uuid::new_v4().to_string(),
+        acquired_at: None,
     };
     let path = dir.join(format!("{}.json", row.token));
     std::fs::write(&path, serde_json::to_vec(&row).unwrap()).unwrap();
@@ -259,6 +267,21 @@ fn acquire_mode(root: &Path, purpose: &str, mode: Mode) -> Result<Claim> {
     {
         return Err(busy(&rows));
     }
+    // Writer preference: a waiting land/ship (or manual train) stops new
+    // shared claims that would keep it waiting, and an audited drain stops
+    // every loop controller's claim. Unreadable evidence refuses.
+    // trace:BUG-2703 | ai:claude
+    if mode == Mode::Legacy {
+        if let Some(drain) = crate::admission_drain::active(root)? {
+            return Err(AdmissionBusy(drain.to_string()).into());
+        }
+    }
+    if let Some(intent) = intents(&dir, Utc::now())?
+        .iter()
+        .find(|intent| yields_to(mode, purpose, intent.kind))
+    {
+        return Err(AdmissionBusy(intent.describe()).into());
+    }
     let lock = open(&dir.join("mode.lock"))?;
     let result = if mode != Mode::Exclusive {
         FileExt::try_lock_shared(&lock)
@@ -285,6 +308,7 @@ fn acquire_mode(root: &Path, purpose: &str, mode: Mode) -> Result<Claim> {
             identity: c.identity.clone(),
             purpose: format!("prior land {:?}", c.kind),
             token: String::new(),
+            acquired_at: None,
         })
         .collect();
     if !children.is_empty() {
@@ -313,6 +337,7 @@ fn acquire_mode(root: &Path, purpose: &str, mode: Mode) -> Result<Claim> {
         identity: ProcIdentity::capture(std::process::id()).map_err(anyhow::Error::msg)?,
         purpose: purpose.into(),
         token: uuid::Uuid::new_v4().to_string(),
+        acquired_at: Some(Utc::now()),
     };
     let receipt = dir.join(format!("{}.json", row.token));
     std::fs::write(&receipt, serde_json::to_vec(&row)?)?;
@@ -322,17 +347,43 @@ fn acquire_mode(root: &Path, purpose: &str, mode: Mode) -> Result<Claim> {
 /// Only a land controller's direct train child gets its cooperative handoff.
 /// This conveys no grant or merge authority.
 pub(crate) fn train(root: &Path, automatic: bool) -> Result<Option<Claim>> {
-    train_mode(root, automatic, Mode::Exclusive)
+    train_mode(root, automatic, Mode::Exclusive, Duration::ZERO)
 }
 
 // Manual merge trains alone opt into member-scoped review coexistence. Direct
 // ship retains its existing exclusive/quiescent admission policy.
 // trace:BUG-2650 | ai:codex
 pub(crate) fn cooperative_train(root: &Path, automatic: bool) -> Result<Option<Claim>> {
-    train_mode(root, automatic, Mode::CooperativeTrain)
+    train_mode(root, automatic, Mode::CooperativeTrain, Duration::ZERO)
 }
 
-fn train_mode(root: &Path, automatic: bool, mode: Mode) -> Result<Option<Claim>> {
+/// `aida pr ship`'s admission: [`train`], waiting up to the configured bound
+/// (`[admission] wait_secs`) while shared holders yield.
+// trace:BUG-2703 | ai:claude
+pub(crate) fn ship_admission(root: &Path) -> Result<Option<Claim>> {
+    train_mode(root, false, Mode::Exclusive, wait_bound(root)?)
+}
+
+/// A manual `aida pr train`'s admission: [`cooperative_train`], waiting up
+/// to the configured bound while the auto-train yields between its passes.
+/// The auto-train's own trains never wait: they run on their own claim.
+// trace:BUG-2703 | ai:claude
+pub(crate) fn manual_train_admission(root: &Path, automatic: bool) -> Result<Option<Claim>> {
+    let bound = if automatic {
+        Duration::ZERO
+    } else {
+        wait_bound(root)?
+    };
+    train_mode(root, automatic, Mode::CooperativeTrain, bound)
+}
+
+/// `aida land run`'s exclusive admission, waiting up to the configured bound.
+// trace:BUG-2703 | ai:claude
+pub(crate) fn land_admission(root: &Path) -> Result<Claim> {
+    acquire_waiting(root, "land run", Mode::Exclusive, wait_bound(root)?)
+}
+
+fn train_mode(root: &Path, automatic: bool, mode: Mode, bound: Duration) -> Result<Option<Claim>> {
     let dir = directory(root);
     if dir.exists() {
         let serial = open(&dir.join("receipts.lock"))?;
@@ -356,12 +407,529 @@ fn train_mode(root: &Path, automatic: bool, mode: Mode) -> Result<Option<Claim>>
     } else {
         "manual train/ship"
     };
-    acquire_mode(root, purpose, mode).map(Some)
+    acquire_waiting(root, purpose, mode, bound).map(Some)
+}
+
+/// Default and ceiling for `[admission] wait_secs`.
+// trace:BUG-2703 | ai:claude
+const DEFAULT_WAIT_SECS: u64 = 180;
+const MAX_WAIT_SECS: u64 = 3600;
+/// Slack on an intent's expiry beyond its waiter's bound, so a waiter that is
+/// between retries never loses its place.
+const INTENT_SLACK_SECS: i64 = 30;
+const INTENT_EXTENSION: &str = "intent";
+
+/// How long a land, ship or manual train waits for admission:
+/// `[admission] wait_secs`, default 180, 0 refuses at once. An unreadable or
+/// invalid setting refuses rather than guessing.
+// trace:BUG-2703 | ai:claude
+pub(crate) fn wait_bound(root: &Path) -> Result<Duration> {
+    match crate::review_helpers::project_config_text(root) {
+        Ok(text) => parse_wait_bound(&text),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(Duration::from_secs(DEFAULT_WAIT_SECS))
+        }
+        Err(error) => Err(error).context("read .aida/config.toml for `[admission] wait_secs`"),
+    }
+}
+
+fn parse_wait_bound(text: &str) -> Result<Duration> {
+    let config: toml::Value =
+        toml::from_str(text).context("parse .aida/config.toml for `[admission] wait_secs`")?;
+    let Some(value) = config.get("admission").and_then(|a| a.get("wait_secs")) else {
+        return Ok(Duration::from_secs(DEFAULT_WAIT_SECS));
+    };
+    let seconds = value
+        .as_integer()
+        .and_then(|n| u64::try_from(n).ok())
+        .filter(|n| *n <= MAX_WAIT_SECS)
+        .with_context(|| {
+            format!("`[admission] wait_secs` must be an integer from 0 to {MAX_WAIT_SECS}")
+        })?;
+    Ok(Duration::from_secs(seconds))
+}
+
+/// What a waiting requester asks shared holders to give up.
+// trace:BUG-2703 | ai:claude
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum IntentKind {
+    /// A land or ship: every shared claim yields.
+    Exclusive,
+    /// A manual train: only the auto-train yields (trains serialize).
+    Train,
+}
+
+/// A live requester waiting for admission. Never a claim: it grants nothing,
+/// it only stops new shared claims that would keep its requester waiting.
+// trace:BUG-2703 | ai:claude
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Intent {
+    version: u8,
+    identity: ProcIdentity,
+    purpose: String,
+    kind: IntentKind,
+    token: String,
+    registered_at: DateTime<Utc>,
+    expires_at: DateTime<Utc>,
+}
+impl Intent {
+    fn describe(&self) -> String {
+        format!(
+            "{} admission requested by PID {} (purpose {}), waiting since {}",
+            match self.kind {
+                IntentKind::Exclusive => "exclusive",
+                IntentKind::Train => "train",
+            },
+            self.identity.pid,
+            self.purpose,
+            self.registered_at
+                .to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+        )
+    }
+}
+
+/// Whether a `mode` acquisition for `purpose` must defer to an intent.
+/// Exclusive requesters never defer; review controllers coexist with a
+/// manual train; the auto-train defers to any waiting land, ship or train.
+// trace:BUG-2703 | ai:claude
+fn yields_to(mode: Mode, purpose: &str, kind: IntentKind) -> bool {
+    match mode {
+        Mode::Exclusive => false,
+        Mode::CooperativeTrain => kind == IntentKind::Exclusive,
+        Mode::Legacy => kind == IntentKind::Exclusive || purpose == "legacy auto-train",
+    }
+}
+
+/// Live, unexpired intents. Callers hold receipts.lock. Dead or expired
+/// intents are removed; an unknown liveness keeps the intent (it expires);
+/// an unreadable intent is an error, so shared acquisitions refuse.
+// trace:BUG-2703 | ai:claude
+fn intents(dir: &Path, now: DateTime<Utc>) -> Result<Vec<Intent>> {
+    let mut rows = Vec::new();
+    for entry in std::fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.extension().is_none_or(|e| e != INTENT_EXTENSION) {
+            continue;
+        }
+        let body = aida_core::seat_clone_detect::read_regular_file_result_with_limit(&path, 16384)
+            .with_context(|| format!("admission intent {} is unreadable", path.display()))?;
+        let row: Intent = serde_json::from_str(&body)
+            .with_context(|| format!("admission intent {} is malformed", path.display()))?;
+        anyhow::ensure!(
+            row.version == 1
+                && row.expires_at
+                    <= row.registered_at
+                        + chrono::Duration::seconds(MAX_WAIT_SECS as i64 + INTENT_SLACK_SECS),
+            "admission intent {} is invalid",
+            path.display()
+        );
+        if row.expires_at <= now
+            || matches!(
+                aida_core::proc_identity::observe(&row.identity, true),
+                Verdict::Dead(_)
+            )
+        {
+            std::fs::remove_file(&path)?;
+        } else {
+            rows.push(row);
+        }
+    }
+    Ok(rows)
+}
+
+/// Removes its intent once the requester holds admission or gives up.
+struct IntentGuard(PathBuf);
+impl Drop for IntentGuard {
+    fn drop(&mut self) {
+        if let Some(dir) = self.0.parent() {
+            if let Ok(serial) = open(&dir.join("receipts.lock")) {
+                if serial.lock_exclusive().is_ok() {
+                    let _ = std::fs::remove_file(&self.0);
+                }
+            }
+        }
+    }
+}
+
+fn register_intent(
+    root: &Path,
+    purpose: &str,
+    kind: IntentKind,
+    remaining: Duration,
+) -> Result<IntentGuard> {
+    let dir = directory(root);
+    std::fs::create_dir_all(&dir)?;
+    let serial = open(&dir.join("receipts.lock"))?;
+    serial.lock_exclusive()?;
+    let now = Utc::now();
+    let row = Intent {
+        version: 1,
+        identity: ProcIdentity::capture(std::process::id()).map_err(anyhow::Error::msg)?,
+        purpose: purpose.into(),
+        kind,
+        token: uuid::Uuid::new_v4().to_string(),
+        registered_at: now,
+        expires_at: now + chrono::Duration::seconds(remaining.as_secs() as i64 + INTENT_SLACK_SECS),
+    };
+    let path = dir.join(format!("{}.{INTENT_EXTENSION}", row.token));
+    std::fs::write(&path, serde_json::to_vec(&row)?)?;
+    Ok(IntentGuard(path))
+}
+
+/// Acquire `mode`, retrying an [`AdmissionBusy`] refusal once a second for up
+/// to `bound`. While it waits it registers an intent, so loop controllers
+/// yield their shared claims at their next tick boundary and no new shared
+/// claim starts ahead of it. Running reviews and trains are never cut short:
+/// the quiescence and train checks still refuse until they finish. Giving up
+/// names the holders and the time waited. Any other error refuses at once.
+// trace:BUG-2703 | ai:claude
+fn acquire_waiting(root: &Path, purpose: &str, mode: Mode, bound: Duration) -> Result<Claim> {
+    let kind = if mode == Mode::Exclusive {
+        IntentKind::Exclusive
+    } else {
+        IntentKind::Train
+    };
+    let started = std::time::Instant::now();
+    let mut intent: Option<IntentGuard> = None;
+    loop {
+        let error = match acquire_mode(root, purpose, mode) {
+            Ok(claim) => return Ok(claim),
+            Err(error) => error,
+        };
+        let Some(busy) = error.downcast_ref::<AdmissionBusy>() else {
+            return Err(error);
+        };
+        let waited = started.elapsed();
+        if waited >= bound {
+            if bound.is_zero() {
+                return Err(error);
+            }
+            return Err(AdmissionBusy(format!(
+                "{}; gave up after waiting {}s (bound {}s, `[admission] wait_secs`)",
+                busy.0,
+                waited.as_secs(),
+                bound.as_secs()
+            ))
+            .into());
+        }
+        if intent.is_none() {
+            eprintln!(
+                "admission busy for {purpose} ({}); waiting up to {}s for holders to yield",
+                busy.0,
+                bound.as_secs()
+            );
+            intent = Some(register_intent(root, purpose, kind, bound - waited)?);
+        }
+        std::thread::sleep((bound - waited).min(Duration::from_secs(1)));
+    }
+}
+
+/// Why a loop controller holding (or about to take) a shared claim for
+/// `purpose` must give it up at its next tick boundary: an active drain, or
+/// a waiting requester it defers to. Unreadable evidence is a reason too.
+// trace:BUG-2703 | ai:claude
+pub(crate) fn yield_reason(root: &Path, purpose: &str) -> Option<String> {
+    let inner = || -> Result<Option<String>> {
+        if let Some(drain) = crate::admission_drain::active(root)? {
+            return Ok(Some(drain.to_string()));
+        }
+        let dir = directory(root);
+        if !dir.is_dir() {
+            return Ok(None);
+        }
+        let serial = open(&dir.join("receipts.lock"))?;
+        serial.lock_exclusive()?;
+        Ok(intents(&dir, Utc::now())?
+            .iter()
+            .find(|intent| yields_to(Mode::Legacy, purpose, intent.kind))
+            .map(Intent::describe))
+    };
+    match inner() {
+        Ok(reason) => reason,
+        Err(error) => Some(format!("admission evidence unreadable: {error:#}")),
+    }
+}
+
+/// One admission claim or waiting intent, for status display. Read-only.
+// trace:BUG-2703 | ai:claude
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct HolderView {
+    pub(crate) pid: u32,
+    pub(crate) purpose: String,
+    /// `claim` or `waiting`.
+    pub(crate) state: &'static str,
+    pub(crate) since: Option<DateTime<Utc>>,
+}
+
+/// Every claim receipt and waiting intent, as recorded. Read-only: never
+/// unlinks, and a receipt it cannot parse is reported, not trusted.
+// trace:BUG-2703 | ai:claude
+pub(crate) fn holders(root: &Path) -> Result<Vec<HolderView>> {
+    let dir = directory(root);
+    if !dir.is_dir() {
+        return Ok(Vec::new());
+    }
+    let mut rows = Vec::new();
+    for entry in std::fs::read_dir(&dir)? {
+        let path = entry?.path();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if ext != "json" && ext != INTENT_EXTENSION {
+            continue;
+        }
+        // Lock-free: a claim dropped mid-scan is simply gone.
+        let body =
+            match aida_core::seat_clone_detect::read_regular_file_result_with_limit(&path, 16384) {
+                Ok(body) => body,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(error) => return Err(error.into()),
+            };
+        if ext == "json" {
+            let row: Receipt = serde_json::from_str(&body)?;
+            if !matches!(
+                aida_core::proc_identity::observe(&row.identity, true),
+                Verdict::Dead(_)
+            ) {
+                rows.push(HolderView {
+                    pid: row.identity.pid,
+                    purpose: row.purpose,
+                    state: "claim",
+                    since: row.acquired_at,
+                });
+            }
+        } else {
+            let row: Intent = serde_json::from_str(&body)?;
+            if row.expires_at > Utc::now()
+                && !matches!(
+                    aida_core::proc_identity::observe(&row.identity, true),
+                    Verdict::Dead(_)
+                )
+            {
+                rows.push(HolderView {
+                    pid: row.identity.pid,
+                    purpose: row.purpose,
+                    state: "waiting",
+                    since: Some(row.registered_at),
+                });
+            }
+        }
+    }
+    rows.sort_by(|a, b| a.since.cmp(&b.since));
+    Ok(rows)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn intent_files(root: &Path) -> usize {
+        std::fs::read_dir(directory(root))
+            .unwrap()
+            .filter(|e| {
+                e.as_ref()
+                    .unwrap()
+                    .path()
+                    .extension()
+                    .is_some_and(|x| x == INTENT_EXTENSION)
+            })
+            .count()
+    }
+
+    /// A waiting exclusive requester stops new shared claims (writer
+    /// preference), a holder sees why it must yield, and once it does the
+    /// requester gets in within its bound; its intent is then gone.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_waiting_exclusive_gets_in_once_shared_holders_yield() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().to_path_buf();
+        let mut watcher = Some(acquire(&root, "legacy review-watch", true).unwrap());
+        assert_eq!(yield_reason(&root, "legacy review-watch"), None);
+        let waiter = {
+            let root = root.clone();
+            std::thread::spawn(move || {
+                acquire_waiting(&root, "land run", Mode::Exclusive, Duration::from_secs(20))
+            })
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        let reason = loop {
+            if let Some(reason) = yield_reason(&root, "legacy review-watch") {
+                break reason;
+            }
+            assert!(std::time::Instant::now() < deadline, "no intent registered");
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        assert!(
+            reason.contains("exclusive admission requested by PID"),
+            "{reason}"
+        );
+        assert!(reason.contains("purpose land run"), "{reason}");
+        // No new shared claim starts ahead of the waiting requester.
+        for (purpose, legacy) in [("legacy review-watch", true), ("legacy auto-train", true)] {
+            let error = acquire(&root, purpose, legacy).err().unwrap();
+            assert!(error.downcast_ref::<AdmissionBusy>().is_some());
+            assert!(error.to_string().contains("purpose land run"), "{error}");
+        }
+        assert!(cooperative_train(&root, false).is_err());
+        // The holder yields at its boundary; the requester then gets in.
+        watcher.take();
+        let land = waiter.join().unwrap().expect("exclusive within the bound");
+        assert_eq!(intent_files(&root), 0, "the intent is removed");
+        assert!(acquire(&root, "legacy review-watch", true).is_err());
+        drop(land);
+        assert!(acquire(&root, "legacy review-watch", true).is_ok());
+    }
+
+    /// A requester whose holders never yield gives up at its bound, naming
+    /// the holders and the time it waited; its intent does not linger.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_bounded_wait_gives_up_naming_holders_and_wait() {
+        let temp = tempfile::tempdir().unwrap();
+        let _watcher = acquire(temp.path(), "legacy review-watch", true).unwrap();
+        let started = std::time::Instant::now();
+        let error = acquire_waiting(
+            temp.path(),
+            "manual train/ship",
+            Mode::Exclusive,
+            Duration::from_secs(2),
+        )
+        .err()
+        .unwrap();
+        assert!(started.elapsed() >= Duration::from_secs(2));
+        assert!(error.downcast_ref::<AdmissionBusy>().is_some());
+        let text = error.to_string();
+        assert!(text.contains("purpose legacy review-watch"), "{text}");
+        assert!(
+            text.contains("gave up after waiting 2s (bound 2s"),
+            "{text}"
+        );
+        assert_eq!(intent_files(temp.path()), 0);
+        // A zero bound refuses at once with the original holder evidence.
+        let error = acquire_waiting(
+            temp.path(),
+            "manual train/ship",
+            Mode::Exclusive,
+            Duration::ZERO,
+        )
+        .err()
+        .unwrap();
+        assert!(!error.to_string().contains("gave up"));
+        assert!(error.to_string().contains("purpose legacy review-watch"));
+    }
+
+    /// A waiting manual train asks only the auto-train to yield; review
+    /// controllers keep their claim and coexist with it.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_manual_train_waits_for_the_auto_train_only() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().to_path_buf();
+        let _watcher = acquire(&root, "legacy review-watch", true).unwrap();
+        let mut worker = Some(acquire(&root, "legacy auto-train", true).unwrap());
+        let waiter = {
+            let root = root.clone();
+            std::thread::spawn(move || {
+                acquire_waiting(
+                    &root,
+                    "cooperative manual train",
+                    Mode::CooperativeTrain,
+                    Duration::from_secs(20),
+                )
+            })
+        };
+        let deadline = std::time::Instant::now() + Duration::from_secs(10);
+        while yield_reason(&root, "legacy auto-train").is_none() {
+            assert!(std::time::Instant::now() < deadline, "no train intent");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert_eq!(yield_reason(&root, "legacy review-watch"), None);
+        assert!(acquire(&root, "legacy review-watch", true).is_ok());
+        worker.take();
+        let train = waiter
+            .join()
+            .unwrap()
+            .expect("manual train within the bound");
+        assert!(acquire(&root, "legacy auto-train", true).is_err());
+        drop(train);
+    }
+
+    /// An active drain withholds every loop controller's claim and tells
+    /// holders to yield; it never blocks a land or ship.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_drain_withholds_loop_claims_only() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let watcher = acquire(root, "legacy review-watch", true).unwrap();
+        crate::admission_drain::fixture_drain(root, "joe (uid 1)", "land #4324", 600, Utc::now())
+            .unwrap();
+        for purpose in ["legacy review-watch", "legacy auto-train"] {
+            let reason = yield_reason(root, purpose).unwrap();
+            assert!(reason.contains("drained by joe (uid 1)"), "{reason}");
+            let error = acquire(root, purpose, true).err().unwrap();
+            assert!(error.downcast_ref::<AdmissionBusy>().is_some());
+        }
+        drop(watcher);
+        assert!(acquire(root, "land run", false).is_ok());
+    }
+
+    /// Expired or dead intents are discarded; a malformed one refuses shared
+    /// claims (and tells holders to yield) rather than being ignored.
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_stale_intents_expire_and_malformed_intents_fail_closed() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let guard =
+            register_intent(root, "land run", IntentKind::Exclusive, Duration::ZERO).unwrap();
+        let mut row: Intent = serde_json::from_slice(&std::fs::read(&guard.0).unwrap()).unwrap();
+        row.registered_at = Utc::now() - chrono::Duration::seconds(120);
+        row.expires_at = Utc::now() - chrono::Duration::seconds(1);
+        std::fs::write(&guard.0, serde_json::to_vec(&row).unwrap()).unwrap();
+        assert!(acquire(root, "legacy review-watch", true).is_ok());
+        assert!(!guard.0.exists(), "an expired intent is removed");
+        let mut dead = row.clone();
+        dead.identity.boot_id = uuid::Uuid::new_v4().to_string();
+        dead.expires_at = Utc::now() + chrono::Duration::seconds(60);
+        dead.registered_at = Utc::now();
+        std::fs::write(&guard.0, serde_json::to_vec(&dead).unwrap()).unwrap();
+        assert_eq!(yield_reason(root, "legacy auto-train"), None);
+        assert!(!guard.0.exists(), "a dead requester's intent is removed");
+        std::fs::write(&guard.0, b"{broken").unwrap();
+        assert!(acquire(root, "legacy auto-train", true).is_err());
+        assert!(yield_reason(root, "legacy auto-train")
+            .unwrap()
+            .contains("unreadable"));
+        // An intent claiming to outlive any bound is invalid, not trusted.
+        let mut forever = row;
+        forever.registered_at = Utc::now();
+        forever.expires_at = Utc::now() + chrono::Duration::days(30);
+        std::fs::write(&guard.0, serde_json::to_vec(&forever).unwrap()).unwrap();
+        assert!(acquire(root, "legacy auto-train", true).is_err());
+        drop(guard);
+        assert!(acquire(root, "legacy auto-train", true).is_ok());
+    }
+
+    // trace:BUG-2703 | ai:claude
+    #[test]
+    fn bug2703_wait_bound_config() {
+        assert_eq!(parse_wait_bound("").unwrap(), Duration::from_secs(180));
+        assert_eq!(
+            parse_wait_bound("[admission]\nwait_secs = 0\n").unwrap(),
+            Duration::ZERO
+        );
+        assert_eq!(
+            parse_wait_bound("[admission]\nwait_secs = 600 # ten minutes\n").unwrap(),
+            Duration::from_secs(600)
+        );
+        for bad in ["-1", "3601", "\"5m\"", "true"] {
+            assert!(parse_wait_bound(&format!("[admission]\nwait_secs = {bad}\n")).is_err());
+        }
+        let temp = tempfile::tempdir().unwrap();
+        assert_eq!(wait_bound(temp.path()).unwrap(), Duration::from_secs(180));
+    }
     // trace:BUG-2650 | ai:codex
     #[test]
     fn bug2650_cooperative_trains_serialize_and_refuse_orphan_runs() {
@@ -558,6 +1126,14 @@ mod tests {
                 .unwrap();
             assert!(out.status.success(), "git {args:?}: {out:?}");
         }
+        // The manual train waits a bounded time before refusing (BUG-2703);
+        // keep that wait short here. trace:BUG-2703 | ai:claude
+        std::fs::create_dir_all(root.path().join(".aida")).unwrap();
+        std::fs::write(
+            root.path().join(".aida/config.toml"),
+            "[admission]\nwait_secs = 1\n",
+        )
+        .unwrap();
         for manual in [false, true] {
             // Resolve the running test image, preserving the exact child fixture.
             // trace:STORY-2857 | ai:codex

@@ -82,7 +82,10 @@ pub(super) fn eligible(
 /// train can take it. A pass that would run takes it (once) first; when
 /// another holder has it, the error says so and the pass does not run. A
 /// running train is never cut short: this is called between passes only.
+/// A waiting land, ship or manual train, or a drain, also releases it and
+/// the pass does not run (BUG-2703): the error names who it yielded to.
 // trace:STORY-2905 | ai:claude
+// trace:BUG-2703 | ai:claude
 pub(super) fn hold_admission(
     root: &Path,
     stand_down: &std::result::Result<Option<&'static str>, String>,
@@ -92,15 +95,21 @@ pub(super) fn hold_admission(
         *held = None;
         return Ok(());
     }
+    if let Some(reason) = crate::admission_owner::yield_reason(root, ADMISSION_PURPOSE) {
+        *held = None;
+        anyhow::bail!("admission yielded: {reason}");
+    }
     if held.is_none() {
         *held = Some(crate::admission_owner::acquire(
             root,
-            "legacy auto-train",
+            ADMISSION_PURPOSE,
             true,
         )?);
     }
     Ok(())
 }
+
+const ADMISSION_PURPOSE: &str = "legacy auto-train";
 
 pub(super) fn run(root: &Path) -> Result<()> {
     let mut admission: Option<crate::admission_owner::Claim> = None;
@@ -112,7 +121,7 @@ pub(super) fn run(root: &Path) -> Result<()> {
         }
         let mut stand_down = crate::gate::landing_merge::train_stand_down(root);
         if let Err(error) = hold_admission(root, &stand_down, &mut admission) {
-            stand_down = Err(format!("admission is held elsewhere ({error:#})"));
+            stand_down = Err(format!("admission is not held ({error:#})"));
         }
         // In review-gated mode the land loop is the one merge hand, and a
         // policy that cannot be read runs nothing: the pass decision is
@@ -144,13 +153,31 @@ pub(super) fn run(root: &Path) -> Result<()> {
                 train_service::record_failure(root, Some(&reason))?;
             }
         }
-        // Check heartbeat and grant once a second while idle, so rotation does
-        // not need to wait for the next three-minute discovery interval.
-        for _ in 0..180 {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-            train_service::check_controller(root)?;
+        idle(root, 180, &mut admission)?;
+    }
+}
+
+/// Check heartbeat and grant once a second while idle, so rotation does not
+/// need to wait for the next three-minute discovery interval. Between passes
+/// only, a waiting land/ship/manual train or a drain gets the claim back
+/// within a second.
+// trace:BUG-2703 | ai:claude
+pub(super) fn idle(
+    root: &Path,
+    seconds: u64,
+    admission: &mut Option<crate::admission_owner::Claim>,
+) -> Result<()> {
+    for _ in 0..seconds {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        train_service::check_controller(root)?;
+        if admission.is_some() {
+            if let Some(reason) = crate::admission_owner::yield_reason(root, ADMISSION_PURPOSE) {
+                *admission = None;
+                eprintln!("auto-train: admission yielded: {reason}");
+            }
         }
     }
+    Ok(())
 }
 
 // trace:STORY-2905 | ai:claude

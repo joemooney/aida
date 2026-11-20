@@ -237,7 +237,10 @@ pub(super) fn check_launch(store: &Store) -> Result<()> {
     }
 }
 
-fn actor(root: &Path) -> Result<String> {
+/// The audited actor of a loop control: an advisor grant, or an unseated
+/// operator. Shared by the review-watch pause and the advisor loops drain.
+// trace:BUG-2703 | ai:claude
+pub(crate) fn control_actor(root: &Path, control: &str) -> Result<String> {
     use crate::gate::seat_authority::{grant_check, GrantCheck};
     let env = aida_core::exec_context::Environment::capture();
     match grant_check(root) {
@@ -249,9 +252,7 @@ fn actor(root: &Path) -> Result<String> {
             crate::gate::kernel_deps::operator_principal_from(&env),
             effective_uid()
         )),
-        _ => anyhow::bail!(
-            "review-watch pause control requires an advisor grant or an unseated operator"
-        ),
+        _ => anyhow::bail!("{control} requires an advisor grant or an unseated operator"),
     }
 }
 
@@ -291,7 +292,7 @@ pub(super) fn run(store: &Store, control: &Control) -> Result<()> {
         }
         return Ok(());
     }
-    let actor = actor(&store.root)?;
+    let actor = control_actor(&store.root, "review-watch pause control")?;
     let limits = limits(&store.root)?;
     let _lock = store.dir.lock(LOCK)?;
     let message = change_locked(store, control, actor, Utc::now(), limits)?;

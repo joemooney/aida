@@ -4523,3 +4523,169 @@ fn bug2650_pause_duration_limits_come_from_config() {
     let paused = pause::current(&store, now).unwrap().unwrap();
     assert_eq!(paused.expires_at, now + chrono::Duration::seconds(3600));
 }
+
+// trace:BUG-2703 | ai:claude
+fn bug2703_loop_claims(root: &Path) -> Vec<String> {
+    crate::admission_owner::holders(root)
+        .unwrap()
+        .into_iter()
+        .filter(|h| h.state == "claim")
+        .map(|h| h.purpose)
+        .collect()
+}
+
+// trace:BUG-2703 | ai:claude
+fn bug2703_wait_for(what: &str, mut ready: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while !ready() {
+        assert!(std::time::Instant::now() < deadline, "timed out: {what}");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// AC3 regression through the production path: both loop workers run their
+/// own claim loops (review-watch's pass boundary and idle, the auto-train's
+/// pass boundary and idle), and `aida pr ship`'s admission call acquires the
+/// exclusive mode within the configured bound. While the ship holds it the
+/// loops take no claim; afterwards they take theirs again.
+// trace:BUG-2703 | ai:claude
+#[test]
+fn bug2703_ship_gets_admission_while_both_loop_workers_run() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (temp, _store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 30\n",
+    )
+    .unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let review = {
+        let (root, stop) = (root.clone(), stop.clone());
+        std::thread::spawn(move || {
+            let mut claim = None;
+            while !stop.load(Ordering::SeqCst) {
+                hold_admission(&root, &mut claim, false).unwrap();
+                idle_yielding(&root, 1, &mut claim).unwrap();
+            }
+        })
+    };
+    let train = {
+        let (root, stop) = (root.clone(), stop.clone());
+        std::thread::spawn(move || {
+            let mut claim = None;
+            while !stop.load(Ordering::SeqCst) {
+                let _ = super::train::hold_admission(&root, &Ok(None), &mut claim);
+                super::train::idle(&root, 1, &mut claim).unwrap();
+            }
+        })
+    };
+    let both = |root: &Path| {
+        let claims = bug2703_loop_claims(root);
+        claims.iter().any(|p| p == "legacy review-watch")
+            && claims.iter().any(|p| p == "legacy auto-train")
+    };
+    bug2703_wait_for("both loop workers hold claims", || both(&root));
+    let started = std::time::Instant::now();
+    let ship = crate::admission_owner::ship_admission(&root)
+        .expect("ship acquires admission within the bound")
+        .expect("ship holds its own claim");
+    assert!(started.elapsed() < std::time::Duration::from_secs(30));
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["manual train/ship".to_string()]
+    );
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["manual train/ship".to_string()],
+        "no loop retakes a claim while the ship holds the exclusive mode"
+    );
+    drop(ship);
+    bug2703_wait_for("loops resume after the ship", || both(&root));
+    stop.store(true, Ordering::SeqCst);
+    review.join().unwrap();
+    train.join().unwrap();
+}
+
+/// AC3 control: a waiting ship never interrupts work in progress. A review
+/// already in flight keeps running after its watcher yields (the ship gives
+/// up at its bound, naming it), and a train pass that has not reached its
+/// boundary keeps its claim.
+// trace:BUG-2703 | ai:claude
+#[test]
+fn bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress() {
+    let (temp, store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 2\n",
+    )
+    .unwrap();
+    let in_flight = |store: &Store| {
+        store
+            .load()
+            .unwrap()
+            .entries
+            .values()
+            .flat_map(|e| &e.attempts)
+            .any(active)
+    };
+    // A review launch is in flight under the watcher's claim.
+    let c = change(1, 1, false);
+    dispatch(select(&store, &c, None, 2).unwrap());
+    assert!(in_flight(&store));
+    let mut watcher = None;
+    assert_eq!(hold_admission(&root, &mut watcher, false).unwrap(), None);
+    let ship = {
+        let root = root.clone();
+        std::thread::spawn(move || {
+            crate::admission_owner::ship_admission(&root).map(|c| c.is_some())
+        })
+    };
+    bug2703_wait_for("ship registers its intent", || {
+        crate::admission_owner::yield_reason(&root, "legacy review-watch").is_some()
+    });
+    // At its boundary the watcher yields and launches nothing more...
+    assert!(hold_admission(&root, &mut watcher, false)
+        .unwrap()
+        .is_some());
+    assert!(watcher.is_none());
+    // ...but the running review is not cut short, so the ship gives up.
+    let error = ship
+        .join()
+        .unwrap()
+        .err()
+        .expect("ship waits, then gives up");
+    let text = format!("{error:#}");
+    assert!(text.contains("not quiescent"), "{text}");
+    assert!(text.contains("gave up after waiting"), "{text}");
+    assert!(in_flight(&store), "the review attempt is untouched");
+    // A one-shot watcher retakes its claim once nobody waits.
+    assert_eq!(hold_admission(&root, &mut watcher, true).unwrap(), None);
+    drop(watcher);
+
+    // A train pass in progress (not at a boundary) keeps its claim.
+    let (temp, _store) = fixture();
+    let root = temp.path();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 2\n",
+    )
+    .unwrap();
+    let mut train = None;
+    super::train::hold_admission(root, &Ok(None), &mut train).unwrap();
+    let error = crate::admission_owner::ship_admission(root).err().unwrap();
+    assert!(
+        error.to_string().contains("purpose legacy auto-train"),
+        "{error}"
+    );
+    assert!(train.is_some(), "the running pass keeps its claim");
+    assert_eq!(
+        bug2703_loop_claims(root),
+        vec!["legacy auto-train".to_string()]
+    );
+    // With nobody waiting any more, its next boundary keeps the claim.
+    super::train::hold_admission(root, &Ok(None), &mut train).unwrap();
+    assert!(train.is_some());
+}

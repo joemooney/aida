@@ -1142,10 +1142,39 @@ children settle before changing modes. Surviving land children, unresolved
 review reservations, an active train, or unreadable evidence refuse the
 transition; inspect and recover the existing work rather than removing locks.
 
-Manual `aida pr train` and `aida pr ship` use a typed **admission busy** refusal
-while a controller owns admission. It names the holder PID, boot/start identity,
-namespace and purpose when known. Stop the owning service and wait for
-quiescence before retrying. Land hands only its direct train child its admission
+The loop controllers hold their shared claim one pass at a time, not for
+their lifetime. `aida pr ship`, `aida land run` and a manual `aida pr train`
+wait for admission instead of failing on the first attempt. While they wait
+they record a waiting request under `.aida/admission-owner/`. Loop
+controllers check for it between passes and give up their shared claim
+within about a second when idle. No new loop claim starts ahead of the
+waiting request. A ship or land waits for review-watch and the auto-train.
+A manual train waits only for the auto-train, because review-watch can run
+alongside a manual train. Running reviews and train passes are never cut
+short. A ship still waits until in-flight reviews settle, and a train pass
+keeps its claim until it ends. The wait is bounded by `[admission] wait_secs`
+in `.aida/config.toml`: 180 seconds by default, at most 3600, and 0 to refuse
+at once. If the requester gives up, its typed **admission busy** refusal
+names the holders (PID, boot/start identity, namespace and purpose when known)
+and how long it waited. A waiting request is removed when its requester gets
+admission, gives up or dies. Each request also expires 30 seconds after its
+bound. <!-- trace:BUG-2703 | ai:claude -->
+
+To keep the loops off admission for longer, for example during a long
+landing session, use `aida advisor loops drain --reason "<why>" --for 2h`
+(default 1h, maximum 24h). Do not signal the worker processes. An unseated
+operator or an advisor with a valid grant can drain. While a drain is
+active, both controllers give up their claims at their next pass boundary
+and take no new one. The deputy's supervisor does not restart an exited
+loop worker. Running reviews and trains finish first. `aida advisor loops
+resume` ends the drain early; otherwise it expires on its own. The journal
+`.aida/admission-owner/loops-drain.journal` keeps the latest 256 drain,
+resume and expiry events, with actor, reason, issue time and expiry. An
+unreadable journal counts as drained. `aida advisor loops status` and
+`train-status` show the controller's claim and its age, the active drain,
+and any waiting land, ship or train. <!-- trace:BUG-2703 | ai:claude -->
+
+Land hands only its direct train child its admission
 scope; ordinary grant and merge gates still apply. Eligibility scans and idle
 passes do not hold `.aida/train/run.lock`; journal recovery and the selected
 train driver take that lock separately. These claims are coordination evidence,
