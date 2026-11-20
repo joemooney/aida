@@ -2311,6 +2311,169 @@ esac
     }
 }
 
+// trace:TASK-3804 | ai:codex
+#[test]
+fn task_3804_compile_failure_keeps_conflict_resolution_off_origin() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let _mail = crate::test_aida_exe::set("/bin/true".into());
+    let fx = fixture();
+    let clone = leased_clone(&fx, "repair-compile", "c0ffee380400");
+    git_ok(&fx.main, &["branch", "feat"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    std::fs::write(clone.join("README.md"), "rework\n").unwrap();
+    let message = "fix: repair (Refs BUG-1)";
+    let head = commit_pending(&fx.main, &clone, "feat", message)
+        .unwrap()
+        .unwrap();
+    publish_rework_merge(&fx.main, &clone, "feat", &head).unwrap();
+    std::fs::write(fx.main.join("README.md"), "main moved\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main moved"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    prepare_leased_rework_merge(&fx.main, &clone, "feat", false, 3804, "test-lane").unwrap();
+    let base = git_ok(&clone, &["rev-parse", "MERGE_HEAD"]);
+    std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
+    std::fs::write(clone.join("lib.rs"), "fn broken( {").unwrap();
+
+    let forge = crate::forge::fake::RecordingForge::new();
+    let deps = crate::ship_from_seat::Deps {
+        bundle: &|_, _, _| panic!("compile refusal must stop before bundling"),
+        commit: &|main, tree, branch, message| {
+            commit_pending_with(main, tree, branch, message, &|_, _, lane, snapshot| {
+                assert_eq!(lane, "test-lane");
+                assert_eq!(
+                    std::fs::read_to_string(snapshot.join("README.md")).unwrap(),
+                    "resolved\n"
+                );
+                assert_eq!(
+                    std::fs::read_to_string(snapshot.join("lib.rs")).unwrap(),
+                    "fn broken( {"
+                );
+                assert!(!snapshot.join(".git").exists());
+                (
+                    vec!["cargo check --workspace".into()],
+                    Err(anyhow::anyhow!("could not compile `repair-fixture`")),
+                )
+            })
+        },
+        forge: &|_| Box::new(forge.clone()),
+        after_open: &|_, _| panic!("compile refusal must stop before review handoff"),
+    };
+    let mut options = opts(&clone, false, false);
+    options.commit_pending = Some(message.into());
+    let error = crate::ship_from_seat::run_from(&fx.main, options, &deps).unwrap_err();
+    assert!(forge.opened.lock().unwrap().is_empty());
+    assert!(
+        format!("{error:#}").contains("could not compile `repair-fixture`"),
+        "{error:#}"
+    );
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), head);
+    assert_eq!(git_ok(&clone, &["rev-parse", "MERGE_HEAD"]), base);
+    assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), head);
+    let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
+    let validation = guard
+        .for_tree(&clone, "feat", &head, &base)
+        .unwrap()
+        .validation
+        .as_ref()
+        .unwrap();
+    assert!(!validation.success);
+    assert_eq!(validation.tree, git_ok(&clone, &["write-tree"]));
+    assert_eq!(validation.command, ["cargo check --workspace"]);
+}
+
+// A lane that commits the host-prepared merge itself bypasses the host
+// compile check: host publication refuses that merge and pushes nothing.
+// trace:TASK-3804 | ai:claude
+#[test]
+fn task_3804_self_committed_repair_merge_is_refused_before_origin() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let _mail = crate::test_aida_exe::set("/bin/true".into());
+    let fx = fixture();
+    let clone = leased_clone(&fx, "repair-self-commit", "c0ffee380402");
+    git_ok(&fx.main, &["branch", "feat"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    std::fs::write(clone.join("README.md"), "rework\n").unwrap();
+    let head = commit_pending(&fx.main, &clone, "feat", "fix: repair (Refs BUG-1)")
+        .unwrap()
+        .unwrap();
+    publish_rework_merge(&fx.main, &clone, "feat", &head).unwrap();
+    std::fs::write(fx.main.join("README.md"), "main moved\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "main moved"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    prepare_leased_rework_merge(&fx.main, &clone, "feat", false, 3804, "test-lane").unwrap();
+    let base = git_ok(&clone, &["rev-parse", "MERGE_HEAD"]);
+    // The lane resolves, stages and commits the merge with its own Git.
+    std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
+    std::fs::write(clone.join("lib.rs"), "fn broken( {").unwrap();
+    git_ok(&clone, &["add", "README.md", "lib.rs"]);
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "user.name=Lane",
+            "-c",
+            "user.email=lane@example.invalid",
+            "commit",
+            "-qm",
+            "fix: resolve conflicts (Refs BUG-1)",
+        ],
+    );
+    let merged = git_ok(&clone, &["rev-parse", "HEAD"]);
+    assert_eq!(
+        git_ok(&clone, &["show", "-s", "--format=%P", &merged]),
+        format!("{head} {base}")
+    );
+    let before = git_ok(&fx.main, &["ls-remote", "origin"]);
+    let forge = crate::forge::fake::RecordingForge::new();
+    let error = crate::ship_from_seat::run_from(
+        &fx.main,
+        opts(&clone, false, false),
+        &crate::ship_from_seat::Deps {
+            bundle: &test_bundle,
+            commit: &no_commit,
+            forge: &|_| Box::new(forge.clone()),
+            after_open: &|_, _| panic!("an unvalidated repair must not hand off"),
+        },
+    )
+    .unwrap_err();
+    let refusal = error
+        .downcast_ref::<crate::repair_journal::UnvalidatedRepairPublication>()
+        .unwrap_or_else(|| panic!("untyped refusal: {error:#}"));
+    assert_eq!(refusal.pr, 3804);
+    assert_eq!(refusal.route, "seat-committed conflict merge");
+    assert_eq!(before, git_ok(&fx.main, &["ls-remote", "origin"]));
+    assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), head);
+    assert!(forge.opened.lock().unwrap().is_empty());
+}
+
+// trace:TASK-3804 BUG-2558 | ai:codex
+#[test]
+fn task_3804_invalid_merge_head_refuses_even_with_clean_status() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    let fx = fixture();
+    let clone = leased_clone(&fx, "broken-merge-head", "c0ffee380401");
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let merge_file = clone.join(".git/MERGE_HEAD");
+    std::fs::write(&merge_file, "invalid commit id\n").unwrap();
+    assert!(git_ok(&clone, &["status", "--porcelain"]).is_empty());
+    let result = commit_pending(&fx.main, &clone, "feat", "fix: repair (Refs TASK-3804)");
+    let error = result.expect_err("a malformed pseudoref must refuse a clean seat");
+    assert!(
+        format!("{error:#}").contains("could not inspect seat merge state"),
+        "{error:#}"
+    );
+    assert_eq!(git_ok(&clone, &["rev-parse", "HEAD"]), head);
+    assert!(merge_file.exists());
+}
+
 // trace:BUG-2456 | ai:codex
 #[cfg(target_os = "linux")]
 #[test]
@@ -2388,9 +2551,15 @@ fn bug_2456_clone_rework_publishes_through_host_and_never_runs_seat_hooks() {
             // The lane edits only files. Host staging consumes journal paths,
             // completes the retained merge and ignores malicious seat hooks.
             std::fs::write(clone.join("README.md"), "resolved\n").unwrap();
-            let tip = commit_pending(&fx.main, &clone, "feat", "fix: repair (Refs STORY-2710)")
-                .unwrap()
-                .unwrap();
+            let tip = commit_pending_with(
+                &fx.main,
+                &clone,
+                "feat",
+                "fix: repair (Refs STORY-2710)",
+                &|_, _, _, _| (vec!["true".into()], Ok(())),
+            )
+            .unwrap()
+            .unwrap();
             assert_eq!(
                 git_ok(&clone, &["show", "-s", "--format=%P", &tip])
                     .split_whitespace()
@@ -4931,11 +5100,15 @@ if '--write-ledger' in sys.argv:
             assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
             assert_eq!(git_ok(&tree, &["rev-parse", "MERGE_HEAD"]), base);
             prepare_leased_rework_merge(&fx.main, &tree, "feat", true, 3813, "regen-lane").unwrap();
-            assert!(
-                commit_pending(&fx.main, &tree, "feat", "repair (Refs STORY-2710)")
-                    .unwrap()
-                    .is_some()
-            );
+            assert!(commit_pending_with(
+                &fx.main,
+                &tree,
+                "feat",
+                "repair (Refs STORY-2710)",
+                &|_, _, _, _| (vec!["true".into()], Ok(()))
+            )
+            .unwrap()
+            .is_some());
             let guard = crate::repair_journal::RepairGuard::lock(&fx.main).unwrap();
             assert_eq!(
                 guard
@@ -5255,7 +5428,11 @@ fn bug_2657_retained_repair_failure_keeps_lease_and_retry_publishes() {
     };
     let deps = crate::ship_from_seat::Deps {
         bundle: &test_bundle,
-        commit: &crate::seat_clone::commit_pending,
+        commit: &|main, tree, branch, message| {
+            commit_pending_with(main, tree, branch, message, &|_, _, _, _| {
+                (vec!["true".into()], Ok(()))
+            })
+        },
         forge: &|_| Box::new(forge.clone()) as Box<dyn crate::forge::Forge>,
         after_open: &|_, _| {},
     };
@@ -6304,5 +6481,460 @@ fn bug_2607_failed_after_start_reports_only_a_dirty_retained_seat() {
             "{lines:?}"
         );
         assert_retention_notice(&lines, "failed-after-start", &lane.clone, dirty);
+    }
+}
+
+// Commit `subject` in the seat and push the seat's own branch to origin, as
+// an earlier self-published lane round did.
+// trace:BUG-2696 | ai:claude
+fn self_push(clone: &Path, branch: &str, subject: &str) {
+    std::fs::write(clone.join("self-pushed.txt"), format!("{subject}\n")).unwrap();
+    git_ok(clone, &["add", "-A"]);
+    git_ok(
+        clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "user.name=Lane",
+            "-c",
+            "user.email=lane@example.com",
+            "commit",
+            "-qm",
+            subject,
+        ],
+    );
+    git_ok(
+        clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "push",
+            "-q",
+            "origin",
+            &format!("HEAD:{branch}"),
+        ],
+    );
+}
+
+// Shell for a mock lane child that commits `subject` in its seat and pushes
+// its own branch to origin, as a self-publishing Claude lane does.
+// trace:BUG-2696 | ai:claude
+fn self_push_body(clone: &Path, subject: &str) -> String {
+    format!(
+        "cd '{clone}' && printf '%s\\n' '{subject}' > self-pushed.txt && \
+         git -c maintenance.auto=false -c gc.auto=0 add -A && \
+         git -c maintenance.auto=false -c gc.auto=0 -c core.hooksPath=/dev/null \
+         -c user.name=Lane -c user.email=lane@example.com commit -qm '{subject}' && \
+         git -c maintenance.auto=false -c gc.auto=0 -c core.hooksPath=/dev/null \
+         push -q origin HEAD:{REFUSED_BRANCH}",
+        clone = clone.display()
+    )
+}
+
+// BUG-1's status in the store the lane host's Done write resolves.
+// trace:BUG-2696 | ai:claude
+fn lane_bug_1_status(fx: &Fixture) -> aida_core::RequirementStatus {
+    crate::lane_recovery::storage_for(&fx.main)
+        .unwrap()
+        .load()
+        .unwrap()
+        .get_requirement_by_spec_id("BUG-1")
+        .unwrap()
+        .status
+        .clone()
+}
+
+// Seed BUG-1 at `status` in both stores a lane host may resolve: the seat's
+// hermetic host reads the distributed store, as the empty-rework lane test
+// does.
+// trace:BUG-2696 | ai:claude
+fn seed_lane_spec(fx: &Fixture, status: aida_core::RequirementStatus) {
+    crate::test_env::enroll_synthetic_home(&fx.main).unwrap();
+    let mut req = title_spec("Repair seat publication");
+    req.status = status.clone();
+    aida_core::object_store::write_object(&fx.main.join(".aida-store/objects"), &req).unwrap();
+    set_bug_1_status(fx, status);
+}
+
+/// BUG-2696 reopen (D3, AC1): a self-publishing lane pushes its own branch,
+/// so the host never runs seat publication. Driven through the real
+/// standalone implementer runner `aida queue work` launches (a mock Claude
+/// child commits and pushes), its completing push sets the spec Done. A
+/// `(Refs ...)` push and a round that pushed nothing new (origin already at a
+/// completing tip from an earlier round) leave the spec where it was. A
+/// rework round (the spec back at Approved via `aida queue rework`) whose
+/// push completes it also reaches Done, and so does the production failure:
+/// a rework round from InProgress over an earlier round's PR head. A spec
+/// already terminal never moves.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_self_published_lane_completing_push_sets_done() {
+    if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
+        return;
+    }
+    let complete = "[AI:claude] fix: complete (BUG-1)";
+    let partial = "[AI:claude] fix: one slice (Refs BUG-1)";
+    use aida_core::RequirementStatus::{Approved, Completed, Done, InProgress};
+    for (case, seed, want) in [
+        ("completing self-push", InProgress, Done),
+        ("rework completing self-push", Approved, Done),
+        ("rework from in-progress", InProgress, Done),
+        ("terminal spec", Completed, Completed),
+        ("refs self-push", InProgress, InProgress),
+        ("no new push", InProgress, InProgress),
+    ] {
+        let lane = started_lane(
+            false,
+            |_, clone| match case {
+                "completing self-push"
+                | "rework completing self-push"
+                | "rework from in-progress"
+                | "terminal spec" => self_push_body(clone, complete),
+                "refs self-push" => self_push_body(clone, partial),
+                _ => String::new(),
+            },
+            |fx, clone| {
+                if case == "no new push" {
+                    // An earlier round already pushed a completing tip; this
+                    // round starts there and pushes nothing.
+                    self_push(clone, REFUSED_BRANCH, complete);
+                }
+                if case == "rework from in-progress" {
+                    // The production failure: an earlier round's PR head is
+                    // on origin, `aida queue rework` put the spec back to
+                    // InProgress, and this round pushes a completing commit.
+                    self_push(clone, REFUSED_BRANCH, partial);
+                }
+                seed_lane_spec(fx, seed.clone());
+                Vec::new()
+            },
+        );
+        assert_eq!(lane_bug_1_status(&lane.fx), seed, "{case}: seeded");
+        crate::standalone_implementer::TEST_PR.with(|p| *p.borrow_mut() = Some(Some((7, None))));
+        let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
+            cause: "test".into(),
+        };
+        let result =
+            crate::standalone_implementer::run_for_test(crate::standalone_implementer::Launch {
+                project_root: &lane.fx.main,
+                vendor: crate::session::HeadlessVendor::Claude,
+                prompt: "go",
+                session_id: "019e0000-0000-7000-8000-000000002696",
+                spec: "BUG-1",
+                lease_id: REFUSED_LEASE,
+                branch: REFUSED_BRANCH,
+                contained: false,
+                child_grant: &grant,
+                host_main: Some(&lane.fx.main),
+            });
+        crate::standalone_implementer::TEST_PR.with(|p| *p.borrow_mut() = None);
+        if case != "no new push" {
+            assert_eq!(
+                git_ok(
+                    &lane.fx.origin,
+                    &[
+                        "log",
+                        "-1",
+                        "--format=%s",
+                        &format!("refs/heads/{REFUSED_BRANCH}")
+                    ]
+                ),
+                if case == "refs self-push" {
+                    partial
+                } else {
+                    complete
+                },
+                "{case}: the child pushed its own branch"
+            );
+        }
+        assert_eq!(
+            lane_bug_1_status(&lane.fx),
+            want,
+            "{case}: lane result {result:?}"
+        );
+    }
+}
+
+/// BUG-2696 reopen (D3, A2): the self-published Done write fails closed. An
+/// unknown launch head, a failed exit and a publication hold each set
+/// nothing for a completing push the lane did make; the positive control
+/// with the same push sets Done.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_self_published_done_fails_closed() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    for case in ["unknown launch head", "failed exit", "held", "control"] {
+        let fx = fixture();
+        let clone = seat_with_publication_pending(&fx, "self-push", "c0ffee269620", "self-push");
+        std::fs::remove_file(clone.join("self-push.txt")).unwrap();
+        set_bug_1_status(&fx, aida_core::RequirementStatus::InProgress);
+        let launch = git_ok(&clone, &["rev-parse", "HEAD"]);
+        self_push(&clone, "self-push", "[AI:claude] fix: complete (BUG-1)");
+        if case == "held" {
+            crate::punt::write_hold_signal(
+                &crate::punt::hold_signal_path(&fx.main, "BUG-1"),
+                &crate::punt::HoldSignal {
+                    spec: "BUG-1".into(),
+                    branch: "self-push".into(),
+                    reason: Some("manual gate".into()),
+                    spec_key: None,
+                },
+            )
+            .unwrap();
+        }
+        let completes = crate::ship_from_seat::mark_done_after_self_published_round(
+            &fx.main,
+            &clone,
+            "BUG-1",
+            "self-push",
+            (case != "unknown launch head").then_some(launch.as_str()),
+            case != "failed exit",
+        );
+        let want = if case == "control" {
+            aida_core::RequirementStatus::Done
+        } else {
+            aida_core::RequirementStatus::InProgress
+        };
+        assert_eq!(completes, case == "control", "{case}");
+        assert_eq!(bug_1_status(&fx), want, "{case}");
+    }
+}
+
+// Merge a side commit into the seat with the host's reconciliation subject
+// and push the seat's branch, as a round that only reconciled a diverged
+// remote PR head does.
+// trace:BUG-2696 | ai:claude
+fn reconcile_push(clone: &Path, branch: &str) {
+    let git = |args: &[&str]| {
+        let mut full = vec![
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "user.name=Host",
+            "-c",
+            "user.email=host@example.com",
+        ];
+        full.extend_from_slice(args);
+        git_ok(clone, &full)
+    };
+    let seat_branch = git(&["rev-parse", "--abbrev-ref", "HEAD"]);
+    git(&["checkout", "-qb", "remote-side", "HEAD~1"]);
+    std::fs::write(clone.join("remote-side.txt"), "remote\n").unwrap();
+    git(&["add", "remote-side.txt"]);
+    git(&["commit", "-qm", "remote work (Refs BUG-1)"]);
+    git(&["checkout", "-q", &seat_branch]);
+    let host = format!(
+        "{} (Refs BUG-1)",
+        crate::ship_from_seat::HOST_RECONCILE_SUBJECT
+    );
+    git(&["merge", "-q", "--no-ff", "-m", &host, "remote-side"]);
+    git(&["push", "-q", "origin", &format!("HEAD:{branch}")]);
+}
+
+/// BUG-2696 round 9, finding 1: the self-published completion declaration
+/// is bounded to THIS round. An earlier round's completing commit stays on
+/// the branch, the spec is reopened to Approved, and this round pushes only
+/// a host reconciliation merge: the moved, origin-confirmed tip carries no
+/// completion of its own, so the status stays put. The control pushes a new
+/// completing commit beneath the reconciliation merge and reaches Done.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_self_published_done_is_bounded_to_the_round() {
+    if !bwrap_live_or_skip() {
+        return;
+    }
+    use aida_core::RequirementStatus::{Approved, Done};
+    for (case, want) in [("reconcile only", Approved), ("new completion", Done)] {
+        let fx = fixture();
+        let clone = seat_with_publication_pending(&fx, "self-push", "c0ffee269621", "self-push");
+        std::fs::remove_file(clone.join("self-push.txt")).unwrap();
+        // The earlier round's completing push, then the reopen.
+        self_push(&clone, "self-push", "[AI:claude] fix: complete (BUG-1)");
+        set_bug_1_status(&fx, Approved);
+        let launch = git_ok(&clone, &["rev-parse", "HEAD"]);
+        if case == "new completion" {
+            self_push(
+                &clone,
+                "self-push",
+                "[AI:claude] fix: complete the rework (BUG-1)",
+            );
+        }
+        reconcile_push(&clone, "self-push");
+        assert_ne!(git_ok(&clone, &["rev-parse", "HEAD"]), launch, "{case}");
+        let completes = crate::ship_from_seat::mark_done_after_self_published_round(
+            &fx.main,
+            &clone,
+            "BUG-1",
+            "self-push",
+            Some(&launch),
+            true,
+        );
+        assert_eq!(completes, case == "new completion", "{case}");
+        assert_eq!(bug_1_status(&fx), want, "{case}");
+        // The unbounded walk still reaches the old round's completing
+        // commit; only the round bound keeps it from counting.
+        let tip = git_ok(&fx.origin, &["rev-parse", "refs/heads/self-push"]);
+        assert!(
+            crate::ship_from_seat::publication_subject(&fx.main, &tip).is_some(),
+            "{case}"
+        );
+        assert_eq!(
+            crate::ship_from_seat::publication_subject_since(&fx.main, &tip, Some(&launch))
+                .is_some(),
+            case == "new completion",
+            "{case}"
+        );
+    }
+}
+
+// Run `path` (a queue resume or a drain lane) for a mock Claude child on the
+// lane seat, with this run's PR stubbed; the runner's result.
+// trace:BUG-2696 | ai:claude
+fn run_self_published_exit(lane: &RefusedLaunch, path: &str) -> anyhow::Result<()> {
+    use crate::session::{HeadlessResume, HeadlessVendor};
+    let grant = crate::gate::seat_authority::HeadlessChildGrant::Baseline {
+        cause: "test".into(),
+    };
+    let tee = crate::headless_tee::TeeOptions {
+        enabled: false,
+        label: None,
+    };
+    let session = "019e0000-0000-7000-8000-000000002697";
+    let log = lane.fx.root.join(format!("{}.log", path.replace(' ', "-")));
+    crate::standalone_implementer::TEST_PR.with(|p| *p.borrow_mut() = Some(Some((7, None))));
+    let result = match path {
+        "queue resume" => crate::queue_cmd::run_queue_resume_to_exit(
+            Some(&lane.fx.main),
+            &HeadlessResume {
+                vendor: HeadlessVendor::Claude,
+                session_id: session,
+                resume_id: session,
+            },
+            "go",
+            &log,
+            &lane.clone,
+            &tee,
+            false,
+            "implementer",
+            (&lane.fx.main, "BUG-1", REFUSED_LEASE),
+            false,
+        ),
+        _ => crate::session::run_vendor_headless_to_exit(
+            Some(&lane.fx.main),
+            HeadlessVendor::Claude,
+            "go",
+            session,
+            &log,
+            &tee,
+            false,
+            Some(REFUSED_LEASE),
+            "implementer",
+            &grant,
+            Some((&lane.clone, REFUSED_BRANCH)),
+            true,
+            None,
+        ),
+    };
+    crate::standalone_implementer::TEST_PR.with(|p| *p.borrow_mut() = None);
+    result.map(|_| ())
+}
+
+/// BUG-2696 round 9, finding 2: the two other self-publication exits, a
+/// queue resume (`run_queue_resume_to_exit`) and a drain lane
+/// (`run_vendor_headless_to_exit`), each driven end to end with a mock
+/// Claude child that commits and pushes its own branch. A completing push
+/// sets the spec Done (from InProgress, the rework state), which also proves
+/// each runner captured its launch head BEFORE the child ran: a head read
+/// after the child would equal the pushed tip and set nothing. A `(Refs …)`
+/// push and a held (vetoed) completing push leave the spec InProgress.
+// trace:BUG-2696 | ai:claude
+#[cfg(unix)]
+#[test]
+fn bug_2696_resume_and_drain_self_published_exits_set_done() {
+    if crate::test_env::run_path_isolated_test() || !bwrap_live_or_skip() {
+        return;
+    }
+    let complete = "[AI:claude] fix: complete (BUG-1)";
+    let partial = "[AI:claude] fix: one slice (Refs BUG-1)";
+    use aida_core::RequirementStatus::{Done, InProgress};
+    for path in ["queue resume", "drain"] {
+        for (case, want) in [
+            ("completing", Done),
+            ("refs", InProgress),
+            ("held", InProgress),
+        ] {
+            let lane = started_lane(
+                false,
+                |fx, clone| match case {
+                    "refs" => self_push_body(clone, partial),
+                    "held" => {
+                        // The child records a manual gate, then pushes.
+                        let template = fx.root.join("hold-template.json");
+                        crate::punt::write_hold_signal(
+                            &template,
+                            &crate::punt::HoldSignal {
+                                spec: "BUG-1".into(),
+                                branch: REFUSED_BRANCH.into(),
+                                reason: Some("manual gate".into()),
+                                spec_key: None,
+                            },
+                        )
+                        .unwrap();
+                        let signal = crate::punt::hold_signal_path(clone, "BUG-1");
+                        format!(
+                            "mkdir -p '{dir}' && cp '{template}' '{signal}' && {push}",
+                            dir = signal.parent().unwrap().display(),
+                            template = template.display(),
+                            signal = signal.display(),
+                            push = self_push_body(clone, complete)
+                        )
+                    }
+                    _ => self_push_body(clone, complete),
+                },
+                |fx, clone| {
+                    seed_lane_spec(fx, InProgress);
+                    // A queue resume revalidates the parent seat grant from
+                    // the seat; a real seat clone names the host store, so
+                    // this one does too (the child commits it with its work).
+                    let config = clone.join(".aida/config.toml");
+                    // Top-level key: it goes before any table header.
+                    let body = format!(
+                        "store_path = \"{}\"\n{}",
+                        fx.main.join(".aida-store").display(),
+                        std::fs::read_to_string(&config).unwrap_or_default()
+                    );
+                    std::fs::write(&config, body).unwrap();
+                    Vec::new()
+                },
+            );
+            let result = run_self_published_exit(&lane, path);
+            let pushed = crate::test_git::git_command()
+                .arg("-C")
+                .arg(&lane.fx.origin)
+                .args(["log", "-1", "--format=%s"])
+                .arg(format!("refs/heads/{REFUSED_BRANCH}"))
+                .output()
+                .unwrap();
+            let log = std::fs::read_to_string(
+                lane.fx.root.join(format!("{}.log", path.replace(' ', "-"))),
+            )
+            .unwrap_or_default();
+            assert_eq!(
+                String::from_utf8_lossy(&pushed.stdout).trim(),
+                if case == "refs" { partial } else { complete },
+                "{path}/{case}: the child pushed its own branch ({result:?}; log {log})"
+            );
+            assert_eq!(
+                lane_bug_1_status(&lane.fx),
+                want,
+                "{path}/{case}: runner result {result:?}"
+            );
+        }
     }
 }

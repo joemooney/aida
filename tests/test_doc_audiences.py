@@ -71,10 +71,14 @@ class AudienceTests(unittest.TestCase):
     def test_unknown_top_level_topic_needs_audience_decision(self):
         self.assertIsNone(inventory.audience("docs/new-unclassified-topic.md"))
 
-    def test_tracked_path_guard_rejects_prose_code_and_template_references(self):
+    def doc_path_guard(self):
         spec = importlib.util.spec_from_file_location("doc_paths", ROOT / "scripts/check-doc-paths.py")
         guard = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(guard)
+        return guard
+
+    def test_tracked_path_guard_rejects_prose_code_and_template_references(self):
+        guard = self.doc_path_guard()
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             target = "docs/retired.md"
@@ -88,6 +92,63 @@ class AudienceTests(unittest.TestCase):
             self.assertFalse(guard.violations("src/lib.rs", target, {target: "docs/archive/retired.md"}, allowed, root))
             self.assertTrue(guard.violations("src/lib.rs", target + " " + target, {target: "docs/archive/retired.md"}, allowed, root))
             self.assertTrue(guard.violations("OTHER.md", target, {target: "docs/archive/retired.md"}, allowed, root))
+
+    # trace:TASK-3161 | ai:codex
+    def test_doc_path_guard_ignores_only_rust_test_directories(self):
+        guard = self.doc_path_guard()
+        target = "docs/" + "x.md"
+        literal = f'const PATH: &str = "{target}";'
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "crate").mkdir()
+            (root / "crate/Cargo.toml").touch()
+            for source in ("tests/fixture.rs", "crate/tests/fixture.rs",
+                           "crate/src/tests/fixture.rs", "crate/src/nested/tests/deep/fixture.rs"):
+                with self.subTest(source=source):
+                    self.assertEqual(guard.violations(source, literal, {}, {}, root), [])
+            for source in ("crate/src/fixture.rs", "crate/src/testsuite/fixture.rs",
+                           "crate/src/tests/README.md", "tests/README.md", "README.md"):
+                with self.subTest(source=source):
+                    self.assertEqual(len(guard.violations(source, literal, {}, {}, root)), 1)
+
+    def test_doc_path_guard_ignores_inline_test_modules_and_keeps_surrounding_code(self):
+        guard = self.doc_path_guard()
+        target = "docs/" + "x.md"
+        literal = f'const PATH: &str = "{target}";'
+        modules = f"""
+#[cfg(/* test target */ test,)]
+#[allow(clippy::disallowed_methods, reason = "fixture ]")]
+pub(crate) mod r#fixtures {{
+    /* }} /* nested comment */ {{ */
+    const BRACE: char = '}}';
+    const RAW: &str = r##"}} /*"##;
+    #[cfg(test)]
+    mod nested {{ {literal} }}
+}}
+#[cfg(test)]
+mod another {{ {literal} }}
+"""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = "crate/src/lib.rs"
+            self.assertEqual(guard.violations(source, modules, {}, {}, root), [])
+            errors = guard.violations(source, literal + modules + literal, {}, {}, root)
+            self.assertEqual(errors, [f"{source}: {target}: missing (2 unapproved reference(s))"])
+
+    def test_doc_path_guard_keeps_cfg_lookalikes_visible(self):
+        guard = self.doc_path_guard()
+        target = "docs/" + "x.md"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for text in (
+                f'const EXAMPLE: &str = r#"#[cfg(test)] mod example {{ {target} }}"#;',
+                f'/* #[cfg(test)] */ mod example {{ const PATH: &str = "{target}"; }}',
+                f'const EXAMPLE: &str = stringify!(#[cfg(test)] mod example {{ "{target}" }});',
+                f'#[cfg(not(test))] mod example {{ const PATH: &str = "{target}"; }}',
+                f'#[cfg(test)] mod fixtures; const PATH: &str = "{target}";',
+            ):
+                with self.subTest(text=text):
+                    self.assertEqual(len(guard.violations("src/lib.rs", text, {}, {}, root)), 1)
 
     def test_book_excludes_non_markdown_contributor_assets(self):
         import tomllib

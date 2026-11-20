@@ -186,6 +186,29 @@ still holds, or a symlinked or replaced clone path. If the commit fails after
 staging, the index is put back as it was.
 <!-- trace:TASK-2712 | ai:claude -->
 
+For a retained conflict repair, the host regenerates and stages the resolved
+tree, then runs the project's trusted `[validation].repair_check` command
+(read from the default branch's `.aida/config.toml`) through the lane job
+runner, inside a sandbox with a read-only snapshot of that exact tree as its
+working directory and no network. AIDA's own policy is
+`cargo check --profile agent --workspace --tests --locked`. A project with no
+`repair_check` refuses conflict repair publication instead of guessing a build.
+A compile failure reports the command's diagnostics and keeps the pending merge
+and staged resolution for retry. The shared repair journal records the
+validation against the tree ID.
+
+Only this host route publishes a conflict repair. A lane that would commit and
+push its own merge (any launch other than a contained Codex lane) is refused
+before it starts. Host publication from a seat also refuses a merge of the
+journaled head and base whose exact tree has no successful validation.
+
+Each refusal sends the advisor at most one notice for each PR and original
+head. The notice goes out on a mailbox thread named for that PR and head. If
+the acceptance receipt is lost (the host exits or the sender times out after
+the mailbox accepted it), a retry finds the thread and does not send again. A
+new PR head gets its own notice.
+<!-- trace:TASK-3804 | ai:codex -->
+
 The declaration lives at the seat's `.aida/native-publication.json`, bound to
 its host-recorded lease/spec and a fresh launch token. Standalone, drain/resume,
 foreground and background launches clear prior declarations. Supervised rotation
@@ -483,9 +506,12 @@ evidence}]}`. The exit status is 0 only when every PR is eligible. A read that
 fails counts as not eligible (`evidence: unavailable`). `--all-open` uses an
 explicit 1,000-PR listing limit and refuses results at that limit, failed
 listings, or malformed rows with a nonzero exit instead of reporting eligibility.
-A confirmed empty list remains successful. `--timeout SECS` (default 45) is
-checked between candidates, not during subprocesses; the PRs not reached are
-listed as not checked. Discovery and a running candidate can exceed the budget.
+A confirmed empty list remains successful. `--timeout SECS` (default 45) sets
+one deadline for discovery and member checks. The deadline stops outstanding
+Git and forge subprocess groups. Known PRs without a finished check appear as
+`not-checked`. When the open PR list cannot be discovered before the deadline,
+the command exits nonzero with a discovery error. JSON uses `null` for an
+undiscovered base branch.
 <!-- trace:STORY-2824 | ai:claude -->
 <!-- trace:STORY-2824 | ai:codex -->
 

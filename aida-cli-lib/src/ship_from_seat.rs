@@ -954,6 +954,18 @@ fn finish_queue_exit(
 /// Queue the request when the advisor has no current reader.
 // trace:STORY-2475 | ai:codex
 pub(crate) fn advisor_request(main: &Path, subject: &str, message: &str) -> Result<()> {
+    advisor_request_on_thread(main, subject, message, None)
+}
+
+/// `thread` names a caller-owned delivery identity, so the caller can find an
+/// accepted message again after losing its own acceptance receipt.
+// trace:TASK-3804 | ai:claude
+pub(crate) fn advisor_request_on_thread(
+    main: &Path,
+    subject: &str,
+    message: &str,
+    thread: Option<&str>,
+) -> Result<()> {
     let mut cmd = std::process::Command::new(crate::resolve_aida_exe());
     cmd.current_dir(main).args([
         "mailbox",
@@ -965,9 +977,11 @@ pub(crate) fn advisor_request(main: &Path, subject: &str, message: &str) -> Resu
         "request",
         "--subject",
         subject,
-        "--",
-        message,
     ]);
+    if let Some(thread) = thread {
+        cmd.args(["--thread", thread]);
+    }
+    cmd.args(["--", message]);
     match crate::command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(20)) {
         crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
         crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
@@ -1696,6 +1710,41 @@ fn git_text(main: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// Refuse publishing a host-prepared conflict merge (first parent the journaled
+/// original head, second parent its base) whose exact tree has no successful
+/// host compile validation: e.g. one the lane committed itself. Commits already
+/// on the default branch or the remote-tracking PR branch are not re-judged.
+// trace:TASK-3804 | ai:claude
+fn refuse_unvalidated_repair_merges(main: &Path, branch: &str, tip: &str) -> Result<()> {
+    let mut args = vec![
+        "log".to_string(),
+        "--merges".into(),
+        "--format=%T %P".into(),
+        tip.into(),
+        "--not".into(),
+    ];
+    let base = crate::detect_default_branch_ref(main).unwrap_or_else(|| "origin/main".into());
+    for published in [base, format!("refs/remotes/origin/{branch}")] {
+        let probe = format!("{published}^{{commit}}");
+        if git_text(main, &["rev-parse", "-q", "--verify", &probe]).is_ok() {
+            args.push(published);
+        }
+    }
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let log = git_text(main, &args).context("could not list merges to publish; nothing pushed")?;
+    let merges: Vec<[String; 3]> = log
+        .lines()
+        .filter_map(|line| {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            match fields.as_slice() {
+                [tree, first, second] => Some([*tree, *first, *second].map(str::to_owned)),
+                _ => None,
+            }
+        })
+        .collect();
+    crate::repair_journal::RepairGuard::lock(main)?.require_validated_merges(branch, &merges)
+}
+
 /// A verified seat branch fetched into a quarantine ref: in main for a real
 /// run, or in a scratch repository borrowing main's objects for a dry run, so
 /// a dry run leaves no ref in main.
@@ -2181,6 +2230,13 @@ pub(crate) fn run_from_with_reconciliation(
         false,
         crate::lane_fast_gate::check_import(&main, &branch, tip, automatic),
     )?;
+    // A host-prepared conflict merge reaches origin only after the host compile
+    // check passed on its exact tree. trace:TASK-3804 | ai:claude
+    drop_quarantine_on_refusal(
+        &staged,
+        false,
+        refuse_unvalidated_repair_merges(&main, &branch, tip),
+    )?;
     // trace:BUG-2618 | ai:codex
     drop_quarantine_on_refusal(
         &staged,
@@ -2259,6 +2315,95 @@ pub(crate) fn mark_done_after_confirmed_push(main: &Path, spec: &str, tip: &str)
     })
 }
 
+/// D3 (BUG-2696 reopen): the Done write for a SELF-PUBLISHED lane round. A
+/// lane the host does not publish for (a Claude lane, an uncontained Codex
+/// lane) pushes its own branch from the seat, so the host never runs
+/// [`run_from_with_reconciliation`] and its D3 hook. Each self-published exit
+/// (`aida queue work` through the standalone implementer, a queue resume and
+/// a drain lane) calls this once its fast gate has settled.
+///
+/// Sets nothing (A2: fail closed) unless every one of these holds:
+/// - the child exited cleanly and left no punt or hold;
+/// - the fast gate did not fail for `branch`;
+/// - this run pushed: the seat `HEAD` moved past `launch_head` (which must be
+///   known) and `origin` is at it, so an earlier round's completing tip that
+///   a no-op round leaves on the PR never sets Done;
+/// - the host's own fetch of `origin/<branch>` confirms that tip.
+///
+/// Then the same decision as a host-published push applies, bounded to this
+/// round: the publication subject, looked up only among commits above
+/// `launch_head` (reconciliation merges skipped), must complete the spec, so
+/// a round that pushed only a reconciliation merge over an earlier round's
+/// completing commit sets nothing. A `launch_head` the host cannot resolve
+/// (a rewritten branch) sets nothing either. The slice graph re-read
+/// under the writer lock must have no outstanding child. Reported on stderr;
+/// never fails the caller, because the code push already succeeded. Returns
+/// whether the host decided the round completes the spec.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn mark_done_after_self_published_round(
+    main: &Path,
+    tree: &Path,
+    spec: &str,
+    branch: &str,
+    launch_head: Option<&str>,
+    clean_exit: bool,
+) -> bool {
+    if !clean_exit || crate::lane_fast_gate::veto(main, spec) {
+        return false;
+    }
+    // An unreadable seat signal is a veto too (A2).
+    if !matches!(publication_veto_message(main, tree, spec), Ok(None)) {
+        return false;
+    }
+    if crate::lane_fast_gate::refuse_failed_gate(main, branch).is_err() {
+        return false;
+    }
+    let Some(launch_head) = launch_head else {
+        return false;
+    };
+    let seat = crate::headless_background::SeatState::read(tree, branch);
+    if seat.pushed_since(Some(launch_head)) != Some(true) {
+        return false;
+    }
+    let Some(pushed) = seat.pushed_head().map(str::to_string) else {
+        return false;
+    };
+    let shown = aida_core::node_alias::display_spec_id(spec);
+    // The host fetches the pushed tip itself: origin, not the seat's view of
+    // it, is what confirms the push, and the subject walk needs the commit.
+    let pin = match pin_remote_branch(main, branch) {
+        Ok(Some(pin)) if pin.tip == pushed => pin,
+        Ok(_) => {
+            eprintln!(
+                "  warning: {shown} not marked Done: origin/{branch} is not at the lane's push \
+                 {pushed}"
+            );
+            return false;
+        }
+        Err(e) => {
+            eprintln!(
+                "  warning: {shown} not marked Done: could not confirm the lane's push: {e:#}"
+            );
+            return false;
+        }
+    };
+    let scope = match crate::native_publication::resolve_scope(main, spec) {
+        Ok(scope) => scope,
+        Err(e) => {
+            eprintln!("  warning: {shown} not marked Done: {e:#}");
+            return false;
+        }
+    };
+    // Only a completion this round declared counts: the subject comes from a
+    // commit above `launch_head`, never an earlier round's completing commit
+    // that a reconciliation-only push leaves beneath the new tip.
+    publication_subject_since(main, &pin.tip, Some(launch_head)).is_some_and(|subject| {
+        crate::publication_completion::mark_done_after_push_reported(
+            main, &scope, &subject, &pin.tip,
+        )
+    })
+}
+
 /// How [`finish_published`] finishes a pushed publication.
 // trace:BUG-2696 | ai:claude
 #[derive(Debug, Clone, Copy)]
@@ -2283,26 +2428,50 @@ pub(crate) const HOST_RECONCILE_SUBJECT: &str = "[host] chore(seat): merge remot
 /// publication subject. `None` when git cannot be read (A2: no completion).
 // trace:BUG-2696 | ai:claude
 pub(crate) fn publication_subject(main: &Path, tip: &str) -> Option<String> {
+    publication_subject_since(main, tip, None)
+}
+
+/// [`publication_subject`] bounded to one round: with `since` (the seat head
+/// the round launched on), the walk also stops at everything reachable from
+/// `since`, so only a commit THIS round added can supply the subject. A round
+/// that pushed only a host reconciliation merge on top of an earlier round's
+/// completing commit has no publication subject (A2: no completion).
+/// `since` must be a full commit id; an unreadable one yields `None`.
+// trace:BUG-2696 | ai:claude
+pub(crate) fn publication_subject_since(
+    main: &Path,
+    tip: &str,
+    since: Option<&str>,
+) -> Option<String> {
     let base = crate::detect_default_branch_ref(main).unwrap_or_else(|| "origin/main".into());
     let base_oid = git_text(
         main,
         &["rev-parse", "--verify", &format!("{base}^{{commit}}")],
     )
     .ok()?;
-    let log = git_text(
-        main,
-        &[
-            "log",
-            "--first-parent",
-            "-n",
-            "32",
-            "--format=%s",
-            crate::git_arg_guard::END_OF_OPTIONS,
-            tip,
-            &format!("^{base_oid}"),
-        ],
-    )
-    .ok()?;
+    let mut range = vec![tip.to_string(), format!("^{base_oid}")];
+    if let Some(since) = since {
+        // A launch head is a commit id from git, never a ref or an option.
+        if since.is_empty() || !since.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return None;
+        }
+        let since_oid = git_text(
+            main,
+            &["rev-parse", "--verify", &format!("{since}^{{commit}}")],
+        )
+        .ok()?;
+        range.push(format!("^{since_oid}"));
+    }
+    let mut args = vec![
+        "log",
+        "--first-parent",
+        "-n",
+        "32",
+        "--format=%s",
+        crate::git_arg_guard::END_OF_OPTIONS,
+    ];
+    args.extend(range.iter().map(String::as_str));
+    let log = git_text(main, &args).ok()?;
     log.lines()
         .map(str::trim)
         .find(|subject| !subject.starts_with(HOST_RECONCILE_SUBJECT))

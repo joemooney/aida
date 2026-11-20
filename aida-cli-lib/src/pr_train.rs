@@ -112,10 +112,16 @@ fn final_gate_phase<T>(label: &str, phase: impl FnOnce() -> T) -> T {
 }
 
 /// The forge adapter checkpoints active train intent before nested calls and
-/// retry attempts. Outside a journaled train this is a no-op.
+/// retry attempts. Outside a journaled train the checkpoint is a no-op.
+///
+/// Returns the deadline the call must finish by, when a scoped read budget
+/// (`aida pr train --check --timeout`) is active. Gate modules reach the
+/// budget through this existing checkpoint rather than a new outside path.
 // trace:STORY-2401 | ai:codex
-pub(crate) fn before_train_forge_call(call: &str) -> Result<()> {
-    journal::before(call)
+// trace:TASK-3792 | ai:claude
+pub(crate) fn before_train_forge_call(call: &str) -> Result<Option<std::time::Instant>> {
+    journal::before(call)?;
+    Ok(crate::forge_lookup::forge_lookup_deadline())
 }
 
 /// The train PR body line that names its members, `#N@<head>` comma-joined.
@@ -1194,12 +1200,12 @@ pub(crate) fn short(sha: &str) -> &str {
 }
 
 fn git_raw(repo: &Path, args: &[&str]) -> Result<std::process::Output> {
-    std::process::Command::new("git")
-        .arg("-C")
+    let mut cmd = std::process::Command::new("git");
+    cmd.arg("-C")
         .arg(repo)
         .args(args)
-        .stdin(std::process::Stdio::null())
-        .output()
+        .stdin(std::process::Stdio::null());
+    crate::forge_lookup::deadline_output(cmd, std::process::Command::output)
         .with_context(|| format!("could not run `git {}`", args.first().unwrap_or(&"")))
 }
 
@@ -1324,13 +1330,17 @@ pub(crate) fn net_output(
     mut build: impl FnMut() -> std::process::Command,
 ) -> Result<std::process::Output> {
     let config = crate::network_retry::RetryConfig::load(repo);
-    crate::network_retry::run_with_retry_checked(
+    crate::network_retry::retry_output(
         label,
         &config,
         &mut crate::network_retry::StderrSink,
+        crate::forge_lookup::forge_lookup_deadline(),
         || {
             journal::before(label).map_err(std::io::Error::other)?;
-            Ok(build())
+            crate::forge_lookup::deadline_output(
+                build(),
+                crate::process_retry::command_output_retrying_etxtbsy,
+            )
         },
     )
     .with_context(|| format!("could not run `{label}`"))
@@ -1411,7 +1421,7 @@ pub(crate) trait MemberChecks {
         self.covered_ids(
             pr,
             head_ref,
-            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+            crate::pr_ship::extract_pr_spec_ids(head_ref, title),
         )
     }
     /// The local merge-hold marker's reason, if any.
@@ -1645,7 +1655,7 @@ pub(crate) fn member_spec_ids(
     subject: &str,
     body: &str,
 ) -> Vec<String> {
-    let mut ids = crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}"));
+    let mut ids = crate::pr_ship::extract_pr_spec_ids(head_ref, title);
     for line in std::iter::once(subject).chain(body.lines()) {
         // Policy reads every constituent claim and reference; only the landed
         // completion body is narrowed to the PR's completing claims.
@@ -1995,7 +2005,7 @@ impl MemberChecks for LiveChecks<'_> {
         let mut ids = self.covered_ids(
             pr,
             head_ref,
-            crate::pr_ship::extract_spec_ids_from_text(&format!("{head_ref} {title}")),
+            crate::pr_ship::extract_pr_spec_ids(head_ref, title),
         );
         if let Ok(merge_step) =
             verified::merge_step_spec_ids(self.project_root, pr, head_ref, title, subject, body)

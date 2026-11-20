@@ -394,6 +394,7 @@ pub(crate) fn ship_refusal_release(
 /// what the local title/branch claim, so the caller must judge authorship
 /// against EVERY author (fail closed), using the ids only to find verdicts.
 // trace:BUG-1918 | ai:claude
+// trace:BUG-2702 | ai:claude
 pub(crate) fn pr_gate_subject(
     main_worktree: &std::path::Path,
     pr: u64,
@@ -409,15 +410,17 @@ pub(crate) fn pr_gate_subject(
         .map(str::trim)
         .filter(|b| !b.is_empty())
         .map(str::to_string);
+    // BUG-2702: a branch names a spec only by AIDA branch convention, so
+    // `promote/integration-23` contributes nothing. trace:BUG-2702 | ai:claude
     if let Some(b) = &branch {
-        ids.extend(pr_ship::extract_spec_ids_from_text(b));
+        ids.extend(pr_ship::extract_branch_spec_ids(b));
     }
     match crate::review_pr_subject_from_forge(main_worktree, pr) {
         Ok(subject) => {
             forge_resolved = true;
             let head = subject.head_ref.trim();
             if !head.is_empty() {
-                ids.extend(pr_ship::extract_spec_ids_from_text(head));
+                ids.extend(pr_ship::extract_branch_spec_ids(head));
                 branch = Some(head.to_string());
             }
             for s in &subject.commit_subjects {
@@ -468,10 +471,9 @@ pub(crate) fn ship_gate_known_ids(
         .into_iter()
         .map(|(id, _, _)| id)
         .collect();
-    ids.extend(pr_ship::extract_spec_ids_from_text(branch));
-    if let Some(title) = title {
-        ids.extend(pr_ship::extract_spec_ids_from_text(title));
-    }
+    // BUG-2702: the branch by convention only; the title as written.
+    // trace:BUG-2702 | ai:claude
+    ids.extend(pr_ship::extract_pr_spec_ids(branch, title.unwrap_or("")));
     crate::gate::trailer_coverage::covered_gate_ids(project_root, branch, pr, ids)
 }
 
