@@ -3,24 +3,19 @@ spec_id: STORY-b6b1278890774ef993d2ebc327862470-804
 agreed_id: STORY-2906
 title: 'Throughput guard: a scheduled job that finds stuck PRs (unreviewed push, no rework lane, unmerged approval, unowned conflict) and routes them, instead of waiting for the operator to notice'
 description: |
-  Operator ask (Joe, 2026-11-18 08:10 MST): "why do I need to prompt you in order for you to investigate. We need an automated investigation each hour into throughput?"
-
-  Today's evidence: twice in 12 h Joe noticed hours without landings before any seat did (2026-11-17 23:31-04:40: 1 landing in 5 h; 2026-11-18 06:18-08:10: 0 landings). Each time the cause was visible in data AIDA already has: pushes nobody reviewed for 1-4 h, changes-requested PRs with no rework lane, approved PRs not merged, conflicting PRs with no owner. The seats' watchers are event-driven (`aida watch --emit-wakes`), and an ABSENCE of events never wakes anyone.
-
-  Stopgap in use: the product seat's scratchpad stall-check.sh, run from a Monitor every 20 min (it classifies every open PR from gh + the gate ledger + dell1 lane processes).
-
-  ## Acceptance
-  1. A scheduled substrate job `throughput-guard` (default every 20 min; a project setting) classifies every open, non-draft PR as one of: STUCK-MERGE (APPROVED at the exact head, not merged for more than N min), STUCK-REVIEW (head pushed more than N min ago, no verdict at head, no review running), STUCK-REWORK (CHANGES REQUESTED at head more than N min ago, no lane or session holding the spec), STUCK-CONFLICT (conflicting, no owner), or moving. Thresholds are project settings.
-  2. It records landings in the last 60 min and per-host lane counts and memory.
-  3. When anything is stuck, it routes ONE consolidated item per run to the seat that can act (advisor for review/merge/rework routing, product for launch), deduplicated per PR and blocker, plus a mail wake. When landings are 0 for 2 consecutive hours AND there are stuck items, it escalates to the operator with the list.
-  4. `aida land stalls` prints the same classification on demand (human + JSON).
-  5. Tests cover each class, threshold settings, dedup, and the 2 h escalation.
+  6. Vendor-neutral by construction (Joe, 2026-11-20 08:59: "Codex is an equal agent, it is the only agent allowed at my workplace"). The guard is a substrate `[[schedule.jobs]]` entry plus an `aida doctor check` (like landing-health-guard); its findings reach seats only as due jobs and mail. No model, Claude memory, CronCreate or session-local Monitor is involved, so a Codex seat receives exactly the same work.
+  7. Classification also covers the patterns that cost hours on 2026-11-19/20 (evidence in this spec's comments):
+     a. STUCK-MERGE-RED: approved at the exact head, but the required or full CI tier at that head is red (e.g. #4344, 07:12-08:57, which blocked all landings for ~3 h). The routed item names the failing tests and flags a probable flake when the same tests pass on main.
+     b. MAIN-FLAKE-RECURRENCE: a test that went red on main and green on rerun fails again (on main or any PR) within 24 h. Route a fix-forward to the advisor, and link the earlier occurrence.
+     c. LANE-OUTCOME: a lane exit of failed-after-start, punted, no-change or refused-before-start with no relaunch or routing within N min. Route it to the seat that launched the lane, with the exit line and reason.
+     d. STALE-CLAIM: a shared claim or lease that blocks admission and that `aida doctor heal stale-leases` cannot heal. Route it to the advisor with the record path and liveness evidence.
+  8. Seed `.aida/config.toml` with the job enabled by default for this project; thresholds are project settings (process-policy knobs, default = current behaviour).
 status: Draft
 priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T15:12:04.122592856Z
-modified_at: 2026-11-18T15:12:04.122592856Z
+modified_at: 2026-11-20T16:03:31.795337959Z
 req_type: Story
 tags:
 - landing
@@ -28,6 +23,35 @@ tags:
 - product-intake
 - scheduler
 - throughput
+history:
+- id: 01a1f9b2-df53-7381-9bb9-f0de709afe21
+  author: joe
+  timestamp: 2026-11-20T16:03:31.795337527Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: description
+    old_value: |
+      Operator ask (Joe, 2026-11-18 08:10 MST): "why do I need to prompt you in order for you to investigate. We need an automated investigation each hour into throughput?"
+
+      Today's evidence: twice in 12 h Joe noticed hours without landings before any seat did (2026-11-17 23:31-04:40: 1 landing in 5 h; 2026-11-18 06:18-08:10: 0 landings). Each time the cause was visible in data AIDA already has: pushes nobody reviewed for 1-4 h, changes-requested PRs with no rework lane, approved PRs not merged, conflicting PRs with no owner. The seats' watchers are event-driven (`aida watch --emit-wakes`), and an ABSENCE of events never wakes anyone.
+
+      Stopgap in use: the product seat's scratchpad stall-check.sh, run from a Monitor every 20 min (it classifies every open PR from gh + the gate ledger + dell1 lane processes).
+
+      ## Acceptance
+      1. A scheduled substrate job `throughput-guard` (default every 20 min; a project setting) classifies every open, non-draft PR as one of: STUCK-MERGE (APPROVED at the exact head, not merged for more than N min), STUCK-REVIEW (head pushed more than N min ago, no verdict at head, no review running), STUCK-REWORK (CHANGES REQUESTED at head more than N min ago, no lane or session holding the spec), STUCK-CONFLICT (conflicting, no owner), or moving. Thresholds are project settings.
+      2. It records landings in the last 60 min and per-host lane counts and memory.
+      3. When anything is stuck, it routes ONE consolidated item per run to the seat that can act (advisor for review/merge/rework routing, product for launch), deduplicated per PR and blocker, plus a mail wake. When landings are 0 for 2 consecutive hours AND there are stuck items, it escalates to the operator with the list.
+      4. `aida land stalls` prints the same classification on demand (human + JSON).
+      5. Tests cover each class, threshold settings, dedup, and the 2 h escalation.
+    new_value: |
+      6. Vendor-neutral by construction (Joe, 2026-11-20 08:59: "Codex is an equal agent, it is the only agent allowed at my workplace"). The guard is a substrate `[[schedule.jobs]]` entry plus an `aida doctor check` (like landing-health-guard); its findings reach seats only as due jobs and mail. No model, Claude memory, CronCreate or session-local Monitor is involved, so a Codex seat receives exactly the same work.
+      7. Classification also covers the patterns that cost hours on 2026-11-19/20 (evidence in this spec's comments):
+         a. STUCK-MERGE-RED: approved at the exact head, but the required or full CI tier at that head is red (e.g. #4344, 07:12-08:57, which blocked all landings for ~3 h). The routed item names the failing tests and flags a probable flake when the same tests pass on main.
+         b. MAIN-FLAKE-RECURRENCE: a test that went red on main and green on rerun fails again (on main or any PR) within 24 h. Route a fix-forward to the advisor, and link the earlier occurrence.
+         c. LANE-OUTCOME: a lane exit of failed-after-start, punted, no-change or refused-before-start with no relaunch or routing within N min. Route it to the seat that launched the lane, with the exit line and reason.
+         d. STALE-CLAIM: a shared claim or lease that blocks admission and that `aida doctor heal stale-leases` cannot heal. Route it to the advisor with the record path and liveness evidence.
+      8. Seed `.aida/config.toml` with the job enabled by default for this project; thresholds are project settings (process-policy knobs, default = current behaviour).
 filed_at:
   code_sha: e207f1f67133e71e70a8bddca9a1c9988d0e31d0
   branch: main
