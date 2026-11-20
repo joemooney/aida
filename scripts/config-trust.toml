@@ -362,6 +362,12 @@ sites = 1
 channels = ["write"]
 sites = 1
 
+# STORY-2905: the auto-train's checked landing-policy read, from the trusted
+# default branch only (git show <default sha>:.aida/config.toml).
+[readers."aida-cli-lib/src/landing_policy.rs"]
+channels = ["trusted"]
+sites = 2
+
 # Ordinary and staged MCP profile reads select only a closed policy tier.
 # trace:TASK-3223 | ai:codex
 [readers."aida-mcp/src/mcp.rs"]

@@ -290,7 +290,7 @@ fn print_status_with_pass(
         &crate::dev_build::default_live_dir()?.join("aida"),
         crate::dev_build::binary_sha_label,
     );
-    let value = serde_json::json!({
+    let mut value = serde_json::json!({
         "service": NAME, "status": status,
         "worker_binary_sha": binary["worker_binary_sha"],
         "live_binary_sha": binary["live_binary_sha"],
@@ -306,6 +306,17 @@ fn print_status_with_pass(
         "degraded_reasons": degraded,
         "recovery": "docs/cli/06-roles-sessions.md#review-watch-service-recovery",
     });
+    // The train service says when its passes do nothing: review-gated mode,
+    // or a landing policy it cannot read (STORY-2905, advisor call (c)).
+    // The review-watch service's display is unchanged. trace:STORY-2905 | ai:claude
+    let standing_down = if TRAIN {
+        crate::gate::landing_merge::train_stand_down_line(&root)
+    } else {
+        None
+    };
+    if let Some(line) = &standing_down {
+        value["standing_down"] = serde_json::json!(line);
+    }
     if json || crate::output_format_is_json() {
         println!("{}", crate::cache_output::json_pretty(&value)?);
     } else if matches!(
@@ -328,6 +339,9 @@ fn print_status_with_pass(
         println!("{}", binary_line(&value));
         println!("{NAME}: {status}; deputy {}; binding issued {}; controller {}; last exit {}; retired controllers {}; review blockers {}; recovery {}; consecutive failures {}; alert {}",
             value["deputy"], value["binding_issued_at"], value["controller"], value["last_exit"], value["retired_controllers"], value["review_blockers"], value["recovery"], value["consecutive_failures"], value["alert"]);
+        if let Some(line) = standing_down {
+            println!("{NAME}: {line}");
+        }
         // trace:BUG-2674 | ai:claude
         if let Some(pass) = pass {
             println!(

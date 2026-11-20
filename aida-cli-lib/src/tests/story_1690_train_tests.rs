@@ -4349,14 +4349,18 @@ fn pr_train_journal_killed_merge_and_eject_resume_without_replay() {
         .to_string();
     for stage in ["merge", "retire"] {
         let dir = tempfile::tempdir().unwrap();
-        let mut child = std::process::Command::new(crate::aida_exe_path())
-            .args(["--exact", &name, "--nocapture"])
-            .env(CHILD, stage)
-            .env("AIDA_TRAIN_JOURNAL_TEST_DIR", dir.path())
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .spawn()
-            .unwrap();
+        // The crash child is this test image, not the installed `aida`
+        // (which `aida_exe_path` prefers on a developer host).
+        // trace:STORY-2905 | ai:claude
+        let mut child =
+            std::process::Command::new(crate::aida_bin::current_executable_path().unwrap())
+                .args(["--exact", &name, "--nocapture"])
+                .env(CHILD, stage)
+                .env("AIDA_TRAIN_JOURNAL_TEST_DIR", dir.path())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while !dir.path().join("ready").exists() && std::time::Instant::now() < deadline {
             if let Some(status) = child.try_wait().unwrap() {

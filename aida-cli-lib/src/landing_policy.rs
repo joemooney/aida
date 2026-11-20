@@ -269,6 +269,14 @@ impl LandingPolicy {
     pub(crate) fn waits_for_ci(&self) -> bool {
         self.mode == LandingMode::CiGated
     }
+
+    /// Whether only the advisor seat (or the operator at a terminal) may
+    /// merge: the internal merger setting, and always in review-gated mode
+    /// (operator direction 2026-11-18 10:37: the merger is the advisor).
+    // trace:STORY-2903 | ai:claude
+    pub(crate) fn advisor_merges(&self) -> bool {
+        self.merger == Merger::Advisor || self.mode == LandingMode::ReviewGated
+    }
 }
 
 /// A required-check list: non-empty strings, no duplicates, and always
@@ -314,6 +322,59 @@ pub(crate) fn from_body(body: Option<&str>) -> LandingPolicy {
         },
         None => LandingPolicy::default(),
     }
+}
+
+/// The landing policy for a decision that must not default under
+/// uncertainty (the auto-train's choice to run, STORY-2905): no trusted
+/// default branch, a config that exists but cannot be read, config that
+/// does not parse, or an invalid `mode` is an error, never the ci-gated
+/// default. A default branch with no `.aida/config.toml` is the defaults.
+// trace:STORY-2905 | ai:claude
+pub(crate) fn load_checked(root: &Path) -> Result<LandingPolicy, String> {
+    let sha = crate::trusted_config::local_trusted_default_branch_sha(root)
+        .ok_or("the default branch cannot be resolved, so its landing policy is unknown")?;
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .output()
+            .map_err(|e| format!("git could not run: {e}"))
+    };
+    let listed = git(&["ls-tree", "--name-only", &sha, "--", ".aida/config.toml"])?;
+    if !listed.status.success() {
+        return Err(format!(
+            "the default branch's tree cannot be read ({})",
+            String::from_utf8_lossy(&listed.stderr).trim()
+        ));
+    }
+    if listed.stdout.iter().all(u8::is_ascii_whitespace) {
+        return Ok(LandingPolicy::default());
+    }
+    let shown = git(&["show", &format!("{sha}:.aida/config.toml")])?;
+    if !shown.status.success() {
+        return Err(format!(
+            "the default branch's .aida/config.toml cannot be read ({})",
+            String::from_utf8_lossy(&shown.stderr).trim()
+        ));
+    }
+    let body = String::from_utf8(shown.stdout)
+        .map_err(|_| "the default branch's .aida/config.toml is not UTF-8".to_string())?;
+    let value = body
+        .parse::<toml::Value>()
+        .map_err(|e| format!("the default branch's .aida/config.toml does not parse ({e})"))?;
+    // A `landing` key that is not a table is invalid, not absent.
+    if value.get("landing").is_some_and(|l| !l.is_table()) {
+        return Err("the default branch's `landing` is not a table".to_string());
+    }
+    let policy = LandingPolicy::from_config(Some(&value));
+    if policy.origin("mode") == Origin::Invalid {
+        return Err(format!(
+            "the default branch's `[landing] mode` is not valid: {}",
+            policy.warnings.join("; ")
+        ));
+    }
+    Ok(policy)
 }
 
 /// `load`, printing any fallback warnings once to stderr.

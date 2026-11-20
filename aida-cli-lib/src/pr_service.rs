@@ -588,30 +588,6 @@ pub(crate) fn ship_interactive_tty() -> bool {
     crate::gate::role_authority::has_integrity_floor_authority()
 }
 
-/// The specs whose author sessions may not merge this change: the full
-/// authorship subject `merge_approval_inputs` and the mandate path use (the
-/// gate ids plus `(Refs X)` contributors) and the PR's head branch, when the
-/// forge resolves the PR; otherwise no ids, which the approval policy reads
-/// as every recorded author (fail closed).
-// trace:STORY-2897 | ai:claude
-pub(crate) fn ship_author_ids(
-    main_worktree: &std::path::Path,
-    pr: u64,
-    known_ids: &[String],
-    head_branch: Option<&str>,
-) -> (Vec<String>, Option<String>) {
-    let (_, branch, forge_resolved, authorship_ids) =
-        pr_gate_subject(main_worktree, pr, known_ids, head_branch);
-    (
-        if forge_resolved {
-            authorship_ids
-        } else {
-            Vec::new()
-        },
-        branch,
-    )
-}
-
 /// TASK-1602: whether this caller is a drive implementer/reviewer seat.
 // trace:TASK-1602 | ai:codex
 pub(crate) fn ship_caller_is_drive_seat() -> bool {

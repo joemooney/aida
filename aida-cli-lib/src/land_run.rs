@@ -255,10 +255,29 @@ pub(super) fn log_tail(child: &Child) -> String {
     String::from_utf8_lossy(&text[from..]).into_owned()
 }
 
+/// Give `command` this process's standard input when the operator's floor
+/// authority holds here (`floor`): that authority is a person at this
+/// terminal, which a child with no terminal cannot show. Without it the
+/// child keeps the null input every other child gets.
+// trace:STORY-2903 | ai:claude
+pub(crate) fn operator_terminal(command: &mut std::process::Command, floor: bool) {
+    if floor {
+        command.stdin(std::process::Stdio::inherit());
+    }
+}
+
+/// How long one review-gated ship may take: it waits on no CI, only on
+/// the gates and the merge. trace:STORY-2903 | ai:claude
+const SHIP_TIMEOUT_SECS: u64 = 900;
+
 pub(crate) struct Limits {
     pub max_reviews: usize,
     pub max_lanes: usize,
     pub review_timeout_secs: i64,
+    /// The landing mode is review-gated: there is no train, and a ready
+    /// change is shipped by a caller who may merge it.
+    // trace:STORY-2903 | ai:claude
+    pub review_gated: bool,
 }
 
 impl Default for Limits {
@@ -267,6 +286,7 @@ impl Default for Limits {
             max_reviews: DEFAULT_MAX_REVIEWS,
             max_lanes: DEFAULT_MAX_LANES,
             review_timeout_secs: DEFAULT_REVIEW_TIMEOUT_SECS,
+            review_gated: false,
         }
     }
 }
@@ -351,6 +371,7 @@ impl Limits {
             max_reviews: number(&MAX_REVIEWS) as usize,
             max_lanes: number(&MAX_LANES) as usize,
             review_timeout_secs: number(&REVIEW_TIMEOUT_SECS),
+            review_gated: false,
         };
         (limits, warnings)
     }
@@ -377,6 +398,12 @@ pub(crate) trait Acts {
     /// Release `pr`'s hold. The release decides for itself whether it may.
     fn release_hold(&mut self, pr: &Pr) -> Result<String>;
     fn train(&mut self, prs: &[u64]) -> Result<Child>;
+    /// Whether this caller may merge `pr` (`Err`: why not).
+    // trace:STORY-2903 | ai:claude
+    fn may_merge(&mut self, pr: &Pr) -> std::result::Result<(), String>;
+    /// Run the ordinary gated `aida pr ship` of `pr` once, to its end.
+    // trace:STORY-2903 | ai:claude
+    fn ship(&mut self, pr: &Pr) -> Result<String>;
     /// Why no train may start now.
     fn train_blocker(&mut self) -> Option<String>;
     /// When each verdict recorded for `pr` at `head` was recorded.
@@ -639,6 +666,29 @@ pub(crate) fn act(
             }
             Action::Train => {
                 if row.state != State::Ready || row.track != Track::Main {
+                    continue;
+                }
+                // Review-gated: no train. A caller who may merge ships the
+                // change once through the ordinary gated `aida pr ship` (the
+                // merge boundary checks again); any other caller reports it.
+                // trace:STORY-2903 | ai:claude
+                if limits.review_gated {
+                    if let Err(why) = acts.may_merge(pr) {
+                        notes.push(format!(
+                            "#{id}: ready to merge; not merged by this run: {}",
+                            one_line(&why, 300)
+                        ));
+                    } else if dry_run {
+                        notes.push(format!("#{id}: would ship"));
+                    } else {
+                        match acts.ship(pr) {
+                            Ok(line) => notes.push(line),
+                            Err(error) => notes.push(format!(
+                                "#{id}: the ship did not merge, retried next pass: {}",
+                                one_line(&format!("{error:#}"), 300)
+                            )),
+                        }
+                    }
                     continue;
                 }
                 // The train's CI is the gate on the merged result; a member
@@ -1143,6 +1193,48 @@ impl Acts for Live {
             .map(|outcome| outcome.line(pr.id))
     }
 
+    fn may_merge(&mut self, pr: &Pr) -> std::result::Result<(), String> {
+        let change = crate::forge::ChangeRef {
+            id: pr.id,
+            url: String::new(),
+            branch: pr.branch.clone().unwrap_or_default(),
+            base: pr.base.clone(),
+            title: Some(pr.title.clone()),
+        };
+        crate::gate::landing_merge::caller_may_merge(
+            &self.root,
+            &change,
+            &specs_of(pr),
+            &crate::landing_policy::load(&self.root),
+            &crate::gate::role_authority::has_integrity_floor_authority,
+        )
+    }
+
+    fn ship(&mut self, pr: &Pr) -> Result<String> {
+        let args = strings(&["pr", "ship", &pr.id.to_string()]);
+        let mut command = self.command(&args);
+        // The operator at a terminal authorized this ship (may_merge read
+        // its floor authority): the child keeps that terminal, so it is
+        // judged with the same authority. Nothing is granted that the
+        // parent does not hold. trace:STORY-2903 | ai:claude
+        operator_terminal(
+            &mut command,
+            crate::gate::role_authority::has_integrity_floor_authority(),
+        );
+        let shown = args.join(" ");
+        let out = crate::command_output_with_timeout(
+            command,
+            std::time::Duration::from_secs(SHIP_TIMEOUT_SECS),
+        )
+        .with_context(|| format!("`aida {shown}` did not finish in {SHIP_TIMEOUT_SECS}s"))?;
+        anyhow::ensure!(
+            out.status.success(),
+            "`aida {shown}` failed: {}",
+            one_line(&String::from_utf8_lossy(&out.stderr), 300)
+        );
+        Ok(format!("#{}: shipped", pr.id))
+    }
+
     fn train(&mut self, prs: &[u64]) -> Result<Child> {
         let mut args = strings(&["pr", "train"]);
         args.extend(prs.iter().map(u64::to_string));
@@ -1226,6 +1318,16 @@ impl Acts for Live {
     }
 }
 
+/// Resolve the effective trusted landing mode for this pass into `limits`
+/// (F4). `Err` when it cannot be established; `limits` is then unchanged
+/// and the caller lands nothing this pass.
+// trace:STORY-2903 | ai:claude
+fn refresh_landing_mode(root: &Path, limits: &mut Limits) -> Result<(), String> {
+    limits.review_gated = crate::gate::landing_merge::effective_review_gated(root)
+        .map_err(|why| format!("the landing mode cannot be established ({why})"))?;
+    Ok(())
+}
+
 /// `aida land run`.
 pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> {
     use fs2::FileExt as _;
@@ -1269,7 +1371,7 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
         );
         Some(lock)
     };
-    let (limits, warnings) = Limits::load(&root);
+    let (mut limits, warnings) = Limits::load(&root);
     for warning in warnings {
         eprintln!("aida land run: {warning}");
     }
@@ -1304,6 +1406,15 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
                 std::thread::sleep(std::time::Duration::from_secs(args.interval));
                 continue;
             }
+        }
+        // The landing mode is resolved afresh every pass (STORY-2903 AC2;
+        // promotion 23 review F4): a ci-gated <-> review-gated change takes
+        // effect without a restart. A mode that cannot be established lands
+        // nothing this pass. trace:STORY-2903 | ai:claude
+        if let Err(why) = refresh_landing_mode(&root, &mut limits) {
+            eprintln!("aida land run: {why}; this pass lands nothing");
+            std::thread::sleep(std::time::Duration::from_secs(args.interval));
+            continue;
         }
         let started = std::time::Instant::now();
         match super::live_pass(&root) {

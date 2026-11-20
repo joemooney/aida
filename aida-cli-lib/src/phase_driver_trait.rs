@@ -45,6 +45,11 @@ use crate::{
 use anyhow::{Context, Result};
 use colored::Colorize;
 
+/// The marker the drain records when its CI phase did not wait for CI
+/// (review-gated landing): the head it bound is reviewed, not CI-tested.
+// trace:STORY-2903 | ai:claude
+pub(crate) const CI_SKIPPED_REVIEW_GATED: &str = "ci-skipped: review-gated";
+
 impl auto_complete::PhaseDriver for RealPhaseDriver {
     fn capture_phase_done_pr(&mut self) {
         self.phase_done_pr = self.pr_number;
@@ -1522,6 +1527,52 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
             self.ensure_implementer_branch_pushed(&branch)?;
         }
 
+        // A review-gated project merges on an approval at the exact head;
+        // CI runs on the default branch after the merge, so this phase does
+        // not wait for it. trace:STORY-2903 | ai:claude
+        let entry = crate::gate::landing_merge::Entry::capture(&self.project_root);
+        let skip = !entry.policy.waits_for_ci();
+        self.landing_entry = Some(entry);
+        if skip {
+            println!(
+                "  {} landing mode is review-gated: not waiting for CI on `{}`; the merge waits \
+                 on an approval at the exact head, and CI runs after it",
+                crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                branch
+            );
+            // The review still binds to an exact head: record the PR's
+            // current head as the one this phase concluded on, marked as a
+            // CI skip, so the review checks bind the reviewer to it. Then
+            // hand off to review as a CI pass does. trace:STORY-2903 | ai:claude
+            let pr = match self.pr_number.or(self.phase_done_pr) {
+                Some(pr) => pr,
+                None => match crate::ci_probe::ci_probe_change_id(&ci_probe_with_forge(
+                    &self.project_root,
+                    self.lifecycle_forge,
+                    &branch,
+                )) {
+                    Some(pr) => pr,
+                    None => {
+                        return Err(auto_complete::PhaseFailure::of(
+                            auto_complete::FailureKind::CiUnavailable,
+                            format!("no open change could be resolved for `{branch}`"),
+                        ))
+                    }
+                },
+            };
+            self.set_pr_number(pr);
+            self.ci_terminal_sha = pr_head_sha_best_effort(self, pr);
+            if self.ci_terminal_sha.is_none()
+                && self.lifecycle_forge != crate::forge::ForgeKind::None
+            {
+                return Err(auto_complete::PhaseFailure::of(
+                    auto_complete::FailureKind::CiUnavailable,
+                    format!("the current head of PR-{pr} is unavailable, so its review cannot be bound to it"),
+                ));
+            }
+            self.ci_skipped = Some(CI_SKIPPED_REVIEW_GATED);
+            return self.end_implementer_session();
+        }
         // Probe, then block until CI is terminal. `lifecycle:trivial` remains
         // represented by a forge-level NoCi result, but a running check is
         // never allowed to overlap review: a verdict without terminal CI for
@@ -2723,6 +2774,13 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
 
     fn merge(&mut self) -> Result<(), auto_complete::PhaseFailure> {
         self.mark_drain_phase(auto_complete::Phase::Merge);
+        // The landing policy and floor authority this merge phase starts
+        // under; the merge boundary re-checks both at the merge.
+        // trace:STORY-2903 | ai:claude
+        let landing_entry = self
+            .landing_entry
+            .clone()
+            .unwrap_or_else(|| crate::gate::landing_merge::Entry::capture(&self.project_root));
         // A standalone implementer stops at an open PR. trace:STORY-1662 | ai:claude
         crate::standalone_implementer::refuse_under_marker("drain merge").map_err(|e| {
             auto_complete::PhaseFailure::of(auto_complete::FailureKind::Internal, format!("{e:#}"))
@@ -2740,7 +2798,8 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // be computed refuses too. trace:BUG-1468 | ai:claude
         // trace:STORY-1690 | ai:claude
         if let Some(branch) = self.branch.clone() {
-            crate::gate::ci_freshness::ship_behind_base_gate(
+            // trace:STORY-2903 | ai:claude
+            crate::gate::landing_merge::behind_base_gate(
                 &self.project_root,
                 &branch,
                 pr as u64,
@@ -2791,7 +2850,9 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         let change_ref = crate::forge::ChangeRef {
             id: pr as u64,
             url: String::new(),
-            branch: String::new(),
+            // The merge boundary judges base freshness on this branch.
+            // trace:STORY-2903 | ai:claude
+            branch: self.branch.clone().unwrap_or_default(),
             base: String::new(),
             title: None,
         };
@@ -2882,9 +2943,33 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 crate::glyph(crate::glyphs::Glyph::Info).cyan()
             );
         }
-        self.lifecycle_forge()
-            .merge_change(&change_ref, &opts, &mut sink)
-            .map_err(|e| classify_drain_merge_failure(self.lifecycle_forge, pr, &e))?;
+        // trace:STORY-2903 | ai:claude
+        match crate::gate::landing_merge::merge(
+            self.lifecycle_forge().as_ref(),
+            &self.project_root,
+            crate::gate::landing_merge::Caller::Drain,
+            &landing_entry,
+            &change_ref,
+            std::slice::from_ref(&self.spec),
+            &opts,
+            &mut sink,
+            &crate::pr_train::pr_head_pin_journals,
+        ) {
+            Ok(_) => {}
+            Err(crate::gate::landing_merge::MergeError::Refused(kind, why)) => {
+                return Err(auto_complete::PhaseFailure::of(
+                    if kind == crate::gate::ship::ShipRefusal::BehindBase {
+                        auto_complete::FailureKind::BehindBase
+                    } else {
+                        auto_complete::FailureKind::Failed
+                    },
+                    why,
+                ))
+            }
+            Err(crate::gate::landing_merge::MergeError::Forge(e)) => {
+                return Err(classify_drain_merge_failure(self.lifecycle_forge, pr, &e))
+            }
+        }
         println!(
             "  {} merged PR-{}",
             crate::glyph(crate::glyphs::Glyph::Check).green(),

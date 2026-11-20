@@ -306,6 +306,10 @@ untouched_factor = 3
 "aida-core allocation_authority::tests::bug_2017_batch_alias_conflicts_refuse_before_any_persistence" = 15  # max 5.273s, median 3.223s over 9 runs
 "aida-cli-lib gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor" = 35  # max 15.320s, median 11.180s over 9 runs
 "aida-cli-lib gate::mandate_gates::story_1888_gate_paths_tests::dispatch_policy_suites_are_mounted_on_the_floor" = 25  # max 11.087s, median 8.688s over 9 runs
+# STORY-2903: parses every production source with syn to prove one merge
+# boundary; 35.0s measured in CI run 44643928149 (promotion 23), x2.
+# trace:STORY-2903 | ai:claude
+"aida-cli-lib gate::landing_merge::story_2903_merge_boundary_tests::only_the_landing_boundary_calls_merge_change" = 70
 "aida-cli-lib gate::mandate_traces::replay_tests::task_1800_audited_cases_replay_from_the_vendored_bundle" = 70  # max 34.240s, median 26.260s over 9 runs
 
 # Newly sampled slow tests; same measured x2 policy. trace:TASK-2020 | ai:codex

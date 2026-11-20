@@ -3,7 +3,7 @@
 //! the re-check fetches the change's refs and the trusted default branch.
 // trace:STORY-2897 | ai:claude
 
-use super::final_landing_recheck;
+use super::recheck as final_landing_recheck;
 use crate::gate::ship::ShipRefusal;
 use std::path::Path;
 

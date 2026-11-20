@@ -419,14 +419,13 @@ mod task_1244_drain_merge_lease_tests {
             include_str!("burndown_run.rs"),
             include_str!("phase_driver_trait.rs")
         );
-        let wave_start = src
-            .find(concat!("fn merge_wave_pr", "(project_root"))
-            .expect("wave fn");
+        let wave_start = src.find(concat!("fn merge_wave_pr", "(")).expect("wave fn");
         // Window widened for BUG-1562's typed spec on the wave hold, and
         // for STORY-1662's standalone-implementer refusal at its top.
-        let wave_body = &src[wave_start..wave_start + 6000];
+        let wave_body = &src[wave_start..wave_start + 6800];
         let acquire = concat!("merge_lock::", "acquire(");
-        let merge_call = concat!(".merge_change(", "&change_ref");
+        // The merge goes through the one merge boundary (STORY-2903).
+        let merge_call = concat!("landing_merge::", "merge(");
         let a = wave_body
             .find(acquire)
             .expect("wave merge acquires the lease");
@@ -435,7 +434,7 @@ mod task_1244_drain_merge_lease_tests {
         let drain_start = src
             .find(concat!("\"aida queue work ", "(drain merge phase)\""))
             .expect("drain merge phase acquires the lease");
-        let after = &src[drain_start..drain_start + 4000];
+        let after = &src[drain_start..drain_start + 5200];
         assert!(
             after.contains(merge_call),
             "the drain merge_change follows the lease"
@@ -1562,6 +1561,9 @@ pub(crate) fn handle_release(
             .ok_or_else(|| {
                 anyhow::anyhow!("could not resolve repository root for --after-pr merge")
             })?;
+        // The landing policy and floor authority this release merge starts
+        // under. trace:STORY-2903 | ai:claude
+        let release_landing_entry = crate::gate::landing_merge::Entry::capture(&merge_root);
         let forge = crate::forge::forge_for(&merge_root);
         let mut metadata_sink = crate::network_retry::NoopSink;
         let metadata = forge.change_metadata(n, &mut metadata_sink).ok();
@@ -1642,15 +1644,30 @@ pub(crate) fn handle_release(
             match_head: after_pr_match_head, // trace:BUG-1918
         };
         let mut sink = crate::network_retry::StderrSink;
-        if let Err(e) =
-            crate::forge::forge_for(&merge_root).merge_change(&change_ref, &merge_opts, &mut sink)
-        {
-            let hint = crate::forge::resolve_forge_kind(&merge_root)
-                .merge_cmd(&n.to_string())
-                .unwrap_or_else(|| format!("merge change {n}"));
-            anyhow::bail!(
-                "`{hint}` failed ({e:#}) — merge it manually, then re-run `aida release` without --after-pr."
-            );
+        // trace:STORY-2903 | ai:claude
+        match crate::gate::landing_merge::merge(
+            crate::forge::forge_for(&merge_root).as_ref(),
+            &merge_root,
+            crate::gate::landing_merge::Caller::Release,
+            &release_landing_entry,
+            &change_ref,
+            &after_pr_ids,
+            &merge_opts,
+            &mut sink,
+            &crate::pr_train::pr_head_pin_journals,
+        ) {
+            Ok(_) => {}
+            Err(crate::gate::landing_merge::MergeError::Refused(kind, why)) => {
+                return Err(kind.error(format!("{why} Not merging or releasing.")))
+            }
+            Err(crate::gate::landing_merge::MergeError::Forge(e)) => {
+                let hint = crate::forge::resolve_forge_kind(&merge_root)
+                    .merge_cmd(&n.to_string())
+                    .unwrap_or_else(|| format!("merge change {n}"));
+                anyhow::bail!(
+                    "`{hint}` failed ({e:#}) — merge it manually, then re-run `aida release` without --after-pr."
+                );
+            }
         }
         println!(
             "  {} {change_noun} #{n} merged",

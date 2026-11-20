@@ -17,9 +17,30 @@ itself is described in the
 
 In `ci-gated` mode, which is the rest of this page, `aida pr ship` waits for CI on the head, and the train admits only a green full-tier head.
 
-In `review-gated` mode, `aida pr ship` merges as soon as the change has an independent approval at its exact head and no hold. It does not wait for CI, and CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the merge itself must also come from a session that authored none of the change.
+In `review-gated` mode, a change merges as soon as it has an independent approval at its exact head and no hold. Nothing waits for CI; CI runs on the default branch after the merge. Choose it when review rounds are slow because they queue behind CI, and a broken main can be fixed or reverted quickly. Nothing else relaxes: the approval must be at the exact head and from someone who did not author the change, every hold binds, and mandate path coverage still applies. In exchange, the advisor seat (or the operator at a terminal) performs the merge, and only for a change it authored none of.
 
-`aida pr train` and `aida land run` do not follow the mode yet: a change behind its base is routed to the train exactly as before.
+There is no train in `review-gated` mode. A head behind its base merges as it is when none of the base's new commits touched a file it changes (an edit later reverted still counts) and it changes no protected (gate or authority) path. Otherwise it is refused until the branch is updated and the update is reviewed. Every merging command judges this at the moment it merges, against the base as the forge has it then.
+
+<!-- trace:STORY-2903 | ai:claude -->
+
+Every AIDA command that merges follows the mode, and each re-checks it immediately before the merge: if the mode on the default branch changed while it waited, or the caller's authority lapsed, nothing merges.
+
+| Command | `ci-gated` | `review-gated` |
+|---|---|---|
+| `aida pr ship` | waits for CI on the head | merges on the approval; the advisor or the operator only |
+| `aida queue work` (the drain's merge phase) | waits for CI on the head | merges on the approval; the advisor or the operator only |
+| `aida burndown` (the wave merge) | waits for CI on the head | merges on the approval; the advisor or the operator only |
+| `aida release --after-pr` | waits for CI on the head | waits for CI on the head (a release must build) |
+| `aida land run` | boards ready changes onto the train | ships each ready change once when the run may merge it; otherwise reports it |
+| `aida pr train` | as described below | the advisor or the operator only; each car's authority is judged before the merge |
+
+<!-- trace:STORY-2905 | ai:claude -->
+
+One merge hand per pull request: before any of these commands merges a pull request, it claims it on this host, and a pull request another command is already merging (or a train has boarded) is refused rather than merged twice; the refusal for a boarded pull request names how to wait for the train or release it. Claims are local to the host, so only the primary host merges; every merge also names the exact head it merges (`--match-head-commit`), which stops a second host's stale merge at the forge. A claim left by a process that has exited is taken over; one whose holder cannot be checked refuses.
+
+A train's merge is judged again before each merge attempt, and once more as the last step before the forge call, after every wait: the landing policy must be readable and the one it was proved under, the advisor-merger rule and the author rule apply to every car, and the base must still be the commit the train was built and proved on; anything else stops the train before it merges.
+
+In `review-gated` mode the auto-train stands down: each pass does nothing and says so (`standing down: landing.mode=review-gated`, also shown by `aida pr train --status`). `aida land run` is the merge hand. In `ci-gated` mode the auto-train runs as before.
 
 ### Changing the mode
 

@@ -422,10 +422,19 @@ pub(crate) fn train_status(json: bool) -> Result<()> {
             ci: &|pr| read_ci_rows(&main_worktree, pr),
         },
     )?;
+    // trace:STORY-2905 | ai:claude
+    let standing_down = crate::gate::landing_merge::train_stand_down_line(&main_worktree);
     if json {
-        println!("{}", serde_json::to_string_pretty(&status)?);
+        let mut value = serde_json::to_value(&status)?;
+        if let (Some(line), Some(obj)) = (standing_down, value.as_object_mut()) {
+            obj.insert("auto_train".into(), serde_json::json!(line));
+        }
+        println!("{}", serde_json::to_string_pretty(&value)?);
     } else {
         println!("{}", render(&status));
+        if let Some(line) = standing_down {
+            println!("Auto-train: {line}");
+        }
     }
     match status.exit_code {
         0 => Ok(()),
