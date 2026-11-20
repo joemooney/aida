@@ -19,7 +19,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T02:52:03.863423755Z
-modified_at: 2026-11-20T01:01:02.541758421Z
+modified_at: 2026-11-20T01:01:50.632944878Z
 req_type: Bug
 comments:
 - id: 01a1f483-36ae-75c1-9778-2b3579c8306c
@@ -63,6 +63,13 @@ comments:
   created_at: 2026-11-19T20:42:00.235397052Z
   modified_at: 2026-11-19T20:42:00.235397052Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f679-8b68-7c30-aad0-bdc909c67842
+  author: joe
+  content: 'ADVISOR GATE (advisor-121, 18:05): APPROVED, drain, CLAUDE lane, STRICT review (lease/admission/shared-claim authority). AC3 (a pre-spawn admission failure releases its own claim) is the priority; AC6 keeps the 13:40 manual-release ruling as the documented stopgap until this ships.'
+  created_at: 2026-11-20T01:01:50.632944878Z
+  modified_at: 2026-11-20T01:01:50.632944878Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f676-eff9-7152-bfe5-42179e6d0a8b
