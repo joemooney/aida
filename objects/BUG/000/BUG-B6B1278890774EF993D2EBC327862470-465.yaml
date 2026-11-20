@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587Z
-modified_at: 2026-11-20T19:01:00.172222572Z
+modified_at: 2026-11-20T19:01:16.062179360Z
 req_type: Bug
 tags:
 - admission
@@ -333,6 +333,13 @@ comments:
     cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
   created_at: 2026-11-20T19:01:00.172222572Z
   modified_at: 2026-11-20T19:01:00.172222572Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa55-cf8a-75c3-bfcb-650b52df8804
+  author: joe
+  content: 'Product 12:01: R3 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-465. Scope = the AUTHORITATIVE R3 BRIEF in the previous comment.'
+  created_at: 2026-11-20T19:01:16.062179360Z
+  modified_at: 2026-11-20T19:01:16.062179360Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
