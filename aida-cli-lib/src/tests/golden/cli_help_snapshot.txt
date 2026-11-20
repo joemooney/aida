@@ -17158,8 +17158,8 @@ Options:
           With --check: every open PR on the default branch
 
       --timeout <SECS>
-          With --check: stop starting new PR checks after this many seconds, checked between
-          candidates (not during subprocesses); the PRs not reached are reported as not checked
+          With --check, discovery and member checks share this budget. Unfinished PR checks are
+          reported as not checked
           
           [default: 45]
 
@@ -50030,7 +50030,7 @@ Working on aida itself
       {
         "name": "timeout",
         "takes_value": true,
-        "help": "With --check: stop starting new PR checks after this many seconds, checked between candidates (not during subprocesses); the PRs not reached are reported as not checked"
+        "help": "With --check, discovery and member checks share this budget. Unfinished PR checks are reported as not checked"
       }
     ],
     "hidden": false
