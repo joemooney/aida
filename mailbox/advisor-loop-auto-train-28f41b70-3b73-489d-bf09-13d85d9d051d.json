@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-auto-train-28f41b70-3b73-489d-bf09-13d85d9d051d",
+  "thread_id": "advisor-loop-auto-train-28f41b70-3b73-489d-bf09-13d85d9d051d",
+  "from": "auto-train",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795142336851,
+  "body": "auto-train failed 3 consecutive times. Last failure: invalid advisor loop service receipt: unknown field `image_handoff`, expected one of `version`, `deputy`, `binding`, `worker`, `child_grant`, `retired_grants`, `host_active`, `host`, `checked_at`, `retry_after`, `last_exit` at line 35 column 17. Inspect aida advisor loops status and train-status, and .aida/auto-train/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "auto-train: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
