@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-20T17:17:49.276578580Z
+modified_at: 2026-11-20T18:38:38.901753036Z
 req_type: Task
 tags:
 - codify
@@ -102,6 +102,34 @@ comments:
   created_at: 2026-11-20T17:17:49.276573301Z
   modified_at: 2026-11-20T17:17:49.276573301Z
   session_id: 01a1f9bec9c2
+- id: 01a1fa41-1373-7a92-b0d7-feb07b342441
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 11:52): 9 findings at 7067fe5 (P1 head gate through admission). Claude+Fable.
+
+    # Rework brief: TASK-3826 / PR #4373 (aida lane relay), round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 11:52 MST. Head reviewed: 7067fe5. Lane: CLAUDE+Fable. COMMIT your work.
+    This relay is the vendor-neutral replacement for the product seat's head-gated rework launches (Joe's "codify, don't remember" directive);
+    correctness of the head gate is the whole point. Fix ALL, in this order:
+     P3 FIRST (CI red): rustfmt module order in lib.rs (lane_relay before lane_result).
+     P1 head gate THROUGH admission: carry the recorded PR number and expected head into Launch, and re-check the head after host admission
+        (after the slot wait), immediately before the lane starts; a moved head aborts with a typed outcome.
+     P2 fence concurrent relays: per-spec ownership or generation (round) check around post_brief and probe/place/launch; a superseded relay
+        exits without launching.
+     P2 spec identity: compare agreed_id and canonical id consistently in admission_since (same resolver everywhere).
+     P2 pickup byte limit applies to the FRAMED brief (after indentation and frontmatter), not the raw body.
+     P2 typed stop/report for operational failures (forge read, PlaceBrief, Launch, malformed host result): record the stop, do not leave a
+        dangling authoritative brief with an ordinary error.
+     P2 Fresh mode is a real routing constraint: the host must not resume an open rework or canonical branch in Fresh mode.
+     P2 timeouts use elapsed wall time including host-command duration; never sleep past the remaining deadline.
+     P2 coverage of the production boundary: at least one test drives Live/Machine dispatch (spawn and lane_running argv built for real,
+        with a stub ssh binary on PATH), not FakeWorld only.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. Push.
+  created_at: 2026-11-20T18:38:38.901753036Z
+  modified_at: 2026-11-20T18:38:38.901753036Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
   author: joe
