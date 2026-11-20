@@ -1,0 +1,29 @@
+id: 01a1fabd-d5e7-7873-8954-19a0d6347b0d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1156
+agreed_id: TASK-3828
+title: 'BUG-2703 follow-up: drain/yield hardening (yield is not degradation, clock-bounded drain, invalid-UTF-8 intents)'
+description: |
+  Follow-up hardening for BUG-2703 (admission yield and drain), filed by advisor ruling after round 4 (cap):
+  - review_watch.rs:2900: an intentional drain or writer-preference yield is recorded separately from a discovery error; next_pass_report and pass_degradation do not mark the worker degraded or count a refused change.
+  - admission_drain.rs:226: a drain's effective expiry is bounded relative to OBSERVATION time (a backward clock step cannot extend it past the documented maximum).
+  - admission_owner.rs:740: an intent file with invalid UTF-8 (bounded, regular) follows the same stale-record policy as other malformed intents; it never blocks admission indefinitely.
+  Each with a regression. Claude lane, standard review.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T20:55:07.495815470Z
+modified_at: 2026-11-20T20:55:07.495815470Z
+req_type: Task
+tags:
+- admission
+- linked:BUG-2703
+filed_at:
+  code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
