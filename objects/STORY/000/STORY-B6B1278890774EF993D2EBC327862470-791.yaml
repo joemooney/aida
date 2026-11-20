@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:59:10.648662656Z
-modified_at: 2026-11-20T04:53:57.235325708Z
+modified_at: 2026-11-20T08:59:27.821149441Z
 req_type: Story
 tags:
 - landing
@@ -338,6 +338,23 @@ comments:
   modified_at: 2026-11-20T04:49:47.839937234Z
   session_id: 01a1f729fb0f
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1f82e-cf99-7422-8bac-9664e67c79d7
+  author: joe
+  content: |-
+    advisor-121 02:10: a reviewer draft for r3 @2829d26 was found UNCOLLECTED in a stale aida-pr-4347 tree (reviewer died before recording; draft backed up). The draft APPROVED AC1 and AC2, including the production head-race regression, with one P2: a new std::env::var("PATH") in story_1917_dispatch_flow_schedule_tests.rs:3312 fails the ExecContext ratchet, so fast gates are RED. Round 4 (FINAL) = that fix only: .aida/tmp/brief-STORY-2884-r4.md. The next reviewer can use this note; the approval itself was not recorded on the reviewer's behalf.
+
+    # Rework brief: STORY-2884 / PR #4347, round 4 of 4 (FINAL, CI-red fix only)
+
+    Advisor: claude-advisor-121, 2026-11-20 02:10 MST. Head: 2829d26. A reviewer's UNCOLLECTED draft (backed up; reviewer process died before
+    recording) APPROVED r3 (AC1, AC2 PASS incl. the production head-race regression) with ONE P2 that makes CI red:
+    - aida-cli-lib/src/gate/tests/story_1917_dispatch_flow_schedule_tests.rs:3312: UnsetShip::new reads std::env::var("PATH"), a new ambient
+      input that fails the ExecContext ratchet (tests.test_exec_context_ratchet ... new:var:c2c7e032717fc5d2fa3f; fast gates job 136090901624).
+      Replace it with the existing approved test-environment helper (as the other fixtures do). Do not edit the ratchet ledger.
+    Nothing else. cargo fmt; python3 scripts/check-exec-context ratchet (via make check-ci-fast); targeted cargo run of the touched test. Push.
+  created_at: 2026-11-20T08:59:27.821149441Z
+  modified_at: 2026-11-20T08:59:27.821149441Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1eaaa-ac4c-7391-b6c8-1f608c6fa3a1
   author: joe
