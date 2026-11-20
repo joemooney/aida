@@ -1243,6 +1243,15 @@ pub(crate) fn current(root: &Path, ids: &[&str]) -> Option<rv::CurrentVerdict> {
     resolve_current(root, ids, None)
 }
 
+/// [`current`] without the local-disagreement report. The report reads the
+/// local ledger projection of each id, which opens an ownership discovery; a
+/// caller already recovering from a failed discovery must not repeat it per
+/// key. The selection and its refusal are the same.
+// trace:BUG-2629 | ai:claude
+pub(crate) fn current_unreported(root: &Path, ids: &[&str]) -> Option<rv::CurrentVerdict> {
+    current_for(root, ids, None).unwrap_or_else(|e| Some(refused(root, &e)))
+}
+
 /// Error-preserving [`current_at_head`] for callers that must refuse, not
 /// project a non-approval, when signed publication evidence cannot be
 /// verified. Bound to the caller's live `head`: this node's branch refs may be
@@ -1278,13 +1287,17 @@ fn resolve_current(root: &Path, ids: &[&str], head: Option<&str>) -> Option<rv::
             }
             value
         }
-        Err(e) => {
-            eprintln!("review publication refused: {e:#}");
-            Some(rv::CurrentVerdict {
-                body: serde_json::json!({"verdict":"request-changes", "summary":format!("review publication refused: {e:#}")}).to_string(),
-                source: rv::VerdictSource::File(root.join(".aida-store").join(CHANGES)), written_at: None,
-            })
-        }
+        Err(e) => Some(refused(root, &e)),
+    }
+}
+
+/// The explicit non-approval a refused publication projects.
+fn refused(root: &Path, e: &anyhow::Error) -> rv::CurrentVerdict {
+    eprintln!("review publication refused: {e:#}");
+    rv::CurrentVerdict {
+        body: serde_json::json!({"verdict":"request-changes", "summary":format!("review publication refused: {e:#}")}).to_string(),
+        source: rv::VerdictSource::File(root.join(".aida-store").join(CHANGES)),
+        written_at: None,
     }
 }
 

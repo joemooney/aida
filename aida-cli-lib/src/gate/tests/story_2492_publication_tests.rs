@@ -1189,6 +1189,77 @@ fn bug_2525_synced_wait_closes_locally_without_rewriting_signed_review() {
     }
 }
 
+// BUG-2629: the sources keep their precedence while local ownership
+// discovery fails. A signed approval answers for its keys, so the older raw
+// wait it superseded on the local ledger no longer refuses rework.
+// trace:BUG-2629 | ai:claude
+#[test]
+fn bug_2629_signed_approval_supersedes_a_withheld_raw_wait() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    let native = f.spec.spec_id.clone().unwrap();
+    let admission = || crate::queue_cmd::refuse_waiting_review(&f.a, "STORY-1", &native, None);
+    {
+        let _env = env(&f.temp.path().join("home-a"));
+        let root = ledger::store_root(&f.a).unwrap();
+        let actor = rv::RecorderAttestation {
+            sha: f.sha.clone(),
+            seat: Some("reviewer".into()),
+            grant_id: Some("g-1".into()),
+            ..Default::default()
+        };
+        let wait = serde_json::json!({
+            "verdict": "waiting", "reviewed_sha": f.sha, "recorded_by": "reviewer",
+            "recorded_at": (chrono::Utc::now() - chrono::Duration::seconds(60)).to_rfc3339(),
+            "summary": "Host: operator evidence", "recorder_attestation": actor,
+        });
+        let spec = ledger::GateSpec::resolve(&f.a, "STORY-1");
+        ledger::store::append_one(
+            &root,
+            ledger::event::verdict_event(
+                &root,
+                ChangeKey::pr(7),
+                wait.as_object().unwrap(),
+                Some(&spec),
+            ),
+        )
+        .unwrap();
+        assert!(admission().is_err(), "a healthy ledger reads the wait");
+        // The spec's binding is lost and an unrelated ledger is malformed:
+        // the full read the lost binding calls for refuses.
+        let mut lost = 0;
+        for label in std::fs::read_dir(ledger::bindings::bindings_dir(&root)).unwrap() {
+            lost += usize::from(std::fs::remove_file(label.unwrap().path().join("PR-7")).is_ok());
+        }
+        assert!(lost > 0);
+        write(&root, ".aida/gate-ledger/PR-999999.jsonl", "invalid\n");
+        assert!(
+            rv::current_verdict(&f.a, "PR-7").is_none(),
+            "the projection withholds the wait"
+        );
+        let why = admission().unwrap_err();
+        assert!(why.contains("WAITING") && why.contains("Host:"), "{why}");
+    }
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        f.collect(&f.record("approved", "reviewer-session"))
+            .unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    assert_eq!(
+        kind_of(current(&f.a, &["PR-7"])),
+        Some(rv::VerdictKind::Approved)
+    );
+    admission().unwrap();
+    // Not an empty answer either: the evidence is named unavailable.
+    let why =
+        crate::queue_cmd::resolve_rework_findings(&f.a, "STORY-1", &native, None).unwrap_err();
+    assert!(why.contains("ownership discovery failed"), "{why}");
+}
+
 // trace:BUG-2530 | ai:codex
 #[test]
 fn bug2530_synced_verdict_controls_admission_and_redundant_claims() {

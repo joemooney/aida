@@ -3193,6 +3193,8 @@ pub(crate) fn refuse_waiting_pickup(
 // trace:BUG-2500 | ai:codex
 #[derive(Debug)]
 pub(crate) enum ReworkReviewError {
+    /// Rework is not admitted: a review of the spec is waiting, or (BUG-2629)
+    /// the search for one could not be completed.
     Waiting(String),
     Unavailable(String),
 }
@@ -3261,13 +3263,46 @@ fn resolve_rework_review_inner(
         .unwrap_or_else(|| display_id.to_string());
     // BUG-2629: when ownership discovery fails, the readers below withhold
     // every review copy a foreign change could own, and a withheld wait used
-    // to read as "no review". Fail closed instead: a wait known from the
-    // index, the bindings or the raw ledger still refuses, and anything else
-    // is unavailable evidence, never an empty answer.
+    // to read as "no review". Fail closed instead, from one bounded read of
+    // the spec's own ledgers: a wait known from the index, the bindings or
+    // the raw ledger still refuses, and anything else is unavailable
+    // evidence, never an empty answer. When that read cannot be completed
+    // no wait can be ruled out, so admission is refused as well.
     // trace:BUG-2629 | ai:claude
+    let uncovered = |what: &str, why: &str| {
+        ReworkReviewError::Waiting(format!(
+            "{shown}: a WAITING review cannot be ruled out — {what} ({why}). Repair the gate ledger (`aida doctor`) and retry; no implementer rework is queued."
+        ))
+    };
+    if let Some(why) = bindings.refusal() {
+        return Err(uncovered(
+            "the changes that review it could not be enumerated within the read bound",
+            why,
+        ));
+    }
     if let Some(why) = bindings.failure() {
-        if let Some(wait) = bindings.withheld_wait(project_root, &labels) {
-            waiting_rework_error(&shown, &wait)?;
+        let recovered = bindings.recover(project_root, &labels).map_err(|exhausted| {
+            uncovered(
+                "gate-ledger ownership discovery failed and its withheld reviews exceed the recovery read budget",
+                &exhausted,
+            )
+        })?;
+        if let Some(wait) = &recovered.wait {
+            // Substantive findings remain actionable even beside a wait, as
+            // below: the request-changes reviews that are readable as
+            // current without an ownership index are still imported.
+            // trace:BUG-2500 | ai:codex
+            let findings = recovered
+                .findings
+                .iter()
+                .filter_map(|(key, v)| {
+                    crate::review_verdict_display::rework_findings_comment(&shown, key, v)
+                })
+                .collect::<Vec<_>>();
+            if !findings.is_empty() {
+                return Ok(ReviewResult::Available(findings.join("\n\n")));
+            }
+            waiting_rework_error(&shown, wait)?;
         }
         return Err(ReworkReviewError::Unavailable(format!(
             "the reviews of {shown} cannot be read completely: gate-ledger ownership discovery failed ({why})"

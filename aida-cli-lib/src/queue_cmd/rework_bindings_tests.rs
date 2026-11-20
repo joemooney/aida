@@ -318,25 +318,21 @@ fn reset_ledger_reads() {
     work::DIRECTORY_ENTRIES.with(|n| n.set(0));
 }
 
-/// Acceptance 3 (and the reproduction of the reported spin): on a ledger of
-/// more than 1000 change ledgers, rework admission reads the spec's own
-/// ledgers, not the corpus. The per-key check it replaces read the whole
-/// corpus once per command, and once per KEY whose ownership discovery had
-/// to fall back to a full read that refused.
-#[test]
-fn bug_2629_rework_scan_is_bounded_on_a_ledger_of_over_1000_changes() {
-    const CHANGES: u64 = 1100;
-    const LOST: u64 = 48;
-    let (_tmp, root, _env) = fixture();
-    append(&root, 77, SPEC, &record("waiting", -30));
+/// How many unrelated change ledgers [`bench_corpus`] writes.
+const CHANGES: u64 = 1100;
+
+/// Add [`CHANGES`] bound and indexed change ledgers of other specs
+/// (`PR-10000..`, `BENCH-n`), each one review of about 2 KiB. Returns the
+/// bytes every change ledger under `root` then holds together.
+fn bench_corpus(root: &Path) -> u64 {
     let mut seed = record("request-changes", -60);
     seed.insert("findings".into(), serde_json::json!(["x".repeat(2048)]));
-    append(&root, 10_000, "BENCH-0", &seed);
-    let line = std::fs::read_to_string(store::ledger_file(&root, ChangeKey::pr(10_000))).unwrap();
+    append(root, 10_000, "BENCH-0", &seed);
+    let line = std::fs::read_to_string(store::ledger_file(root, ChangeKey::pr(10_000))).unwrap();
     let seed: serde_json::Value = serde_json::from_str(line.lines().last().unwrap()).unwrap();
     assert_eq!(seed["kind"], "verdict");
-    let dir = ledger::ledger_dir(&root);
-    let bindings = ledger::bindings::bindings_dir(&root);
+    let dir = ledger::ledger_dir(root);
+    let bindings = ledger::bindings::bindings_dir(root);
     for n in 1..CHANGES {
         let (key, spec) = (format!("PR-{}", 10_000 + n), format!("BENCH-{n}"));
         let mut event = seed.clone();
@@ -351,12 +347,28 @@ fn bug_2629_rework_scan_is_bounded_on_a_ledger_of_over_1000_changes() {
         )
         .unwrap();
     }
-    let corpus: u64 = std::fs::read_dir(&dir)
+    std::fs::read_dir(&dir)
         .unwrap()
         .flatten()
         .filter(|e| e.path().extension().is_some_and(|x| x == "jsonl"))
         .map(|e| e.metadata().unwrap().len())
-        .sum();
+        .sum()
+}
+
+/// Acceptance 3 (and the reproduction of the reported spin): on a ledger of
+/// more than 1000 change ledgers, rework admission reads the spec's own
+/// ledgers, not the corpus. The per-key check it replaces read the whole
+/// corpus once per command, and once per KEY whose ownership discovery had
+/// to fall back to a full read that refused.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-393.ac915e51 | ai:claude
+#[test]
+fn bug_2629_rework_scan_is_bounded_on_a_ledger_of_over_1000_changes() {
+    const LOST: u64 = 48;
+    let (_tmp, root, _env) = fixture();
+    append(&root, 77, SPEC, &record("waiting", -30));
+    let corpus = bench_corpus(&root);
+    let bindings = ledger::bindings::bindings_dir(&root);
+    let dir = ledger::ledger_dir(&root);
     let labels = vec![SPEC.to_string()];
     let per_key = |root: &Path| {
         reset_ledger_reads();
@@ -412,10 +424,289 @@ fn bug_2629_rework_scan_is_bounded_on_a_ledger_of_over_1000_changes() {
     std::fs::remove_file(bindings.join(SPEC).join("PR-77")).unwrap();
     let (new, took) = batch(&root);
     eprintln!("bug_2629 own discovery refused: batch={new} in {took:?}");
+    // One refused full read per resolution; `batch` resolves twice.
     assert!(
-        new <= 12 * corpus,
+        new <= 3 * corpus,
         "a refused discovery read {new} of a {corpus} byte corpus"
     );
+}
+
+/// Finding 1 of the round-4 review: many fingerprinted reviews of the spec
+/// in hand, one lost binding, a malformed ledger and no open wait, so the
+/// recovery visits every one of its changes. The refused full read happens
+/// once for the resolution, not once per change: each change's projection
+/// read (what the recovery used to ask per key) repeats it.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-393.ac915e51 | ai:claude
+#[test]
+fn bug_2629_failed_discovery_reads_the_corpus_once_for_many_target_changes() {
+    const TARGETS: u64 = 40;
+    let (_tmp, root, _env) = fixture();
+    for n in 0..TARGETS {
+        append(
+            &root,
+            500 + n,
+            SPEC,
+            &record("request-changes", -600 + n as i64),
+        );
+    }
+    let corpus = bench_corpus(&root);
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 500);
+
+    reset_ledger_reads();
+    for n in 0..TARGETS {
+        assert!(rv::current_verdict(&root, &format!("PR-{}", 500 + n)).is_none());
+    }
+    let per_key = ledger_reads();
+    assert!(
+        per_key >= (TARGETS / 2) * corpus,
+        "each withheld projection read repeats the refused full read: {per_key}"
+    );
+
+    reset_ledger_reads();
+    let started = std::time::Instant::now();
+    let why = unavailable(&root);
+    let (new, took) = (ledger_reads(), started.elapsed());
+    eprintln!("bug_2629 many targets: corpus={corpus} per-key={per_key} batch={new} in {took:?}");
+    assert!(why.contains("ownership discovery failed"), "{why}");
+    assert!(
+        new < 2 * corpus,
+        "the resolution read {new} of a {corpus} byte corpus"
+    );
+    reset_ledger_reads();
+    refuse_waiting_review(&root, SPEC, SPEC, None).unwrap();
+    assert!(ledger_reads() < 2 * corpus);
+}
+
+/// A review no ownership witness could disqualify: the `--pr` handshake.
+fn phase3(mut rec: JsonObj) -> JsonObj {
+    rec.insert("mode".into(), project::PHASE3_MODE.into());
+    rec
+}
+
+fn legacy_file(root: &Path, key: &str, body: serde_json::Value) {
+    let dir = root.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join(format!("{key}.json")), body.to_string()).unwrap();
+}
+
+/// Sets the read budget of this thread's bounded passes; restores it on drop.
+struct ReadBudgetGuard;
+
+impl ReadBudgetGuard {
+    fn set(bytes: u64) -> Self {
+        super::READ_BUDGET.with(|b| b.set(Some(bytes)));
+        Self
+    }
+}
+
+impl Drop for ReadBudgetGuard {
+    fn drop(&mut self) {
+        super::READ_BUDGET.with(|b| b.set(None));
+    }
+}
+
+/// Admission and resolution both refuse, without a waiting review in hand,
+/// because one cannot be ruled out; returns the refusal.
+fn refused_uncovered(root: &Path) -> String {
+    let early = refuse_waiting_review(root, SPEC, SPEC, None).unwrap_err();
+    match review(root) {
+        Err(ReworkReviewError::Waiting(why)) => {
+            assert_eq!(why, early);
+            assert!(why.contains("cannot be ruled out"), "{why}");
+            why
+        }
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+}
+
+/// Finding 2: the recovery reads under an aggregate byte budget. When the
+/// budget ends before the ledger that holds the wait, the search is
+/// incomplete and admission is refused, naming the file; it is never
+/// answered from the part that was read.
+#[test]
+fn bug_2629_recovery_past_its_read_budget_refuses_by_name() {
+    let (_tmp, root, _env) = fixture();
+    append(&root, 3698, SPEC, &record("request-changes", -40));
+    append(&root, 3699, SPEC, &record("waiting", -30));
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+    let first = std::fs::metadata(store::ledger_file(&root, ChangeKey::pr(3698)))
+        .unwrap()
+        .len();
+    {
+        let _budget = ReadBudgetGuard::set(first);
+        let why = refused_uncovered(&root);
+        assert!(why.contains("PR-3699.jsonl"), "{why}");
+        assert!(why.contains("read budget"), "{why}");
+    }
+    assert!(refused_waiting(&root), "the full budget finds the wait");
+}
+
+/// Finding 3: a terminal annotation closes a wait only in the view of the
+/// key it names. One that names the change key but sits on another change's
+/// ledger is never seen by the change-keyed reader, and one that matches key
+/// and source without being a closed record closes nothing.
+#[test]
+fn bug_2629_only_a_closure_in_the_keys_own_view_closes_a_withheld_wait() {
+    let annotate = |root: &Path, key: &str, closed: bool| {
+        let current = rv::current_verdict(root, "PR-3698").unwrap();
+        let source: JsonObj = serde_json::from_str(&current.body).unwrap();
+        let mut note = source.clone();
+        note.insert("terminal_wait_key".into(), key.into());
+        note.insert("terminal_wait_source".into(), source.into());
+        if closed {
+            note.insert("closed_by_merge".into(), "PR-4000".into());
+            note.insert("closed_at".into(), chrono::Utc::now().to_rfc3339().into());
+        }
+        note
+    };
+    {
+        // The spec-keyed closure is genuine; the change-keyed one is foreign.
+        let (_tmp, root, _env) = fixture();
+        append(&root, 3698, SPEC, &record("waiting", -30));
+        let foreign = annotate(&root, "PR-3698", true);
+        let current = rv::current_verdict(&root, SPEC).unwrap();
+        assert!(rv::close_terminal_wait(&root, SPEC, ChangeKey::pr(3698), &current).unwrap());
+        append(&root, 4000, SPEC, &foreign);
+        assert!(refused_waiting(&root), "healthy ledger, foreign closure");
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+        assert!(refused_waiting(&root), "failed discovery, foreign closure");
+    }
+
+    // Both keys annotated on the wait's own ledger, neither record closed.
+    let (_tmp, root, _env) = fixture();
+    append(&root, 3698, SPEC, &record("waiting", -30));
+    for open in ["PR-3698", SPEC].map(|key| annotate(&root, key, false)) {
+        append(&root, 3698, SPEC, &open);
+    }
+    assert!(
+        refused_waiting(&root),
+        "healthy ledger, unclosed annotation"
+    );
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+    assert!(
+        refused_waiting(&root),
+        "failed discovery, unclosed annotation"
+    );
+}
+
+/// Finding 4: a write-ahead binding lists a change for the spec before any
+/// review of it is appended there. Its current wait, recorded for another
+/// spec, does not refuse this one; a wait recorded for this spec does.
+#[test]
+fn bug_2629_a_listed_changes_wait_for_another_spec_does_not_refuse() {
+    for (recorded_for, refuses) in [("BUG-9000", false), (SPEC, true)] {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 77, SPEC, &record("request-changes", -60));
+        append(&root, 50, recorded_for, &phase3(record("waiting", -30)));
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 77);
+        // Listed by a binding only: the hint names PR-77 alone.
+        std::fs::write(
+            ledger::bindings::bindings_dir(&root)
+                .join(SPEC)
+                .join("PR-50"),
+            b"",
+        )
+        .unwrap();
+        std::fs::write(
+            ledger::ledger_dir(&root).join(format!("by-spec/{SPEC}.json")),
+            serde_json::json!({ "changes": ["PR-77"] }).to_string(),
+        )
+        .unwrap();
+        let readable = rv::current_verdict(&root, "PR-50")
+            .and_then(|current| rv::parse_recorded_verdict(&current.body))
+            .unwrap();
+        assert_eq!(readable.kind, rv::VerdictKind::Waiting);
+        assert_eq!(
+            refused_waiting(&root),
+            refuses,
+            "recorded for {recorded_for}"
+        );
+        if !refuses {
+            unavailable(&root);
+        }
+    }
+}
+
+/// Finding 6: a wait on one bound change does not keep back the
+/// request-changes findings that are readable as current on another, as in
+/// a healthy ledger. Findings a withheld later round may have superseded
+/// are not imported.
+#[test]
+fn bug_2629_readable_findings_beside_a_withheld_wait_are_still_imported() {
+    use crate::rework_direction::ReviewResult;
+    let imported = |root: &Path, finding: &str| {
+        refuse_waiting_review(root, SPEC, SPEC, None).unwrap();
+        match resolve_rework_review(root, SPEC, SPEC, None) {
+            Ok(ReviewResult::Available(block)) => {
+                assert_eq!(block.matches(finding).count(), 1, "{block}");
+            }
+            other => panic!("expected findings, got {other:?}"),
+        }
+    };
+    {
+        // A ledger round no witness could disqualify.
+        let (_tmp, root, _env) = fixture();
+        append(&root, 3698, SPEC, &record("waiting", -30));
+        append(&root, 4000, SPEC, &phase3(record("request-changes", -10)));
+        assert!(matches!(
+            resolve_rework_review(&root, SPEC, SPEC, None),
+            Ok(ReviewResult::Available(_))
+        ));
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+        assert!(rv::current_verdict(&root, "PR-3698").is_none());
+        imported(&root, "repair the defect");
+    }
+
+    {
+        // A legacy verdict file of an indexed change.
+        let (_tmp, root, _env) = fixture();
+        append(&root, 3698, SPEC, &record("waiting", -30));
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+        legacy_file(
+            &root,
+            "PR-4001",
+            serde_json::json!({
+                "verdict": "request-changes", "reviewed_sha": HEAD,
+                "findings": ["repair the legacy defect"],
+            }),
+        );
+        project::index_spec(&root, SPEC, ChangeKey::pr(4001)).unwrap();
+        imported(&root, "repair the legacy defect");
+    }
+
+    // The readable refusal is followed by a round whose ownership cannot be
+    // verified: it is not known to be current, and the wait refuses.
+    let (_tmp, root, _env) = fixture();
+    append(&root, 3698, SPEC, &record("waiting", -30));
+    append(&root, 4000, SPEC, &phase3(record("request-changes", -20)));
+    append(&root, 4000, SPEC, &record("approved", -10));
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+    assert!(refused_waiting(&root));
+}
+
+/// Finding 7: a ledger whose bindings certify nothing (written before the
+/// bindings existed: no marker, no binding, no hint) can still hold a
+/// waiting review that names the spec. The per-key check found it by its
+/// event's label; so does the bounded pass that replaces it, and when that
+/// pass cannot cover the ledger, admission is refused.
+#[test]
+fn bug_2629_an_unbootstrapped_ledger_is_searched_by_label() {
+    let (_tmp, root, _env) = fixture();
+    append(&root, 3698, SPEC, &phase3(record("waiting", -30)));
+    std::fs::remove_file(ledger::bindings::marker_file(&root)).unwrap();
+    std::fs::remove_dir_all(ledger::bindings::bindings_dir(&root)).unwrap();
+    std::fs::remove_dir_all(ledger::ledger_dir(&root).join("by-spec")).unwrap();
+    let labels = vec![SPEC.to_string()];
+    assert!(change_verdict_bound_to(&root, "PR-3698", &labels));
+    assert!(super::discover(&root, &labels, None, false).binds("PR-3698"));
+    assert!(refused_waiting(&root));
+    // Another spec's reviews stay its own.
+    assert!(!super::discover(&root, &["BUG-9000".to_string()], None, false).binds("PR-3698"));
+
+    let _budget = ReadBudgetGuard::set(1);
+    let why = refused_uncovered(&root);
+    assert!(why.contains("could not be enumerated"), "{why}");
+    assert!(why.contains("PR-3698.jsonl"), "{why}");
 }
 
 struct StoreFixture {
@@ -511,6 +802,7 @@ fn bug_2629_queue_rework_refuses_a_withheld_wait_without_mutation() {
 
 /// Acceptance 2: a spec on another track is refused before the gate ledger
 /// is listed or read at all.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-393.aca2b718 | ai:claude
 #[test]
 fn bug_2629_track_refusal_precedes_any_gate_ledger_read() {
     if crate::test_env::run_path_isolated_test() {
@@ -543,6 +835,7 @@ fn bug_2629_track_refusal_precedes_any_gate_ledger_read() {
 
 /// Acceptance 1: a phase that outlives the notice interval names itself and
 /// its elapsed time; a quick one says nothing.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-393.ac56b111 | ai:claude
 #[test]
 fn bug_2629_a_slow_rework_phase_names_itself() {
     use std::sync::{Arc, Mutex};

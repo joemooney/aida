@@ -259,12 +259,22 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
                 .any(|b| b.verdict_record() == u.verdict_record())
         })
         .collect();
-    // trace:TASK-2964 | ai:codex
-    // Merge independent ledgers by their next event's host time, retaining
-    // append order within each ledger even when the host clock rolls back.
-    // A global timestamp sort would make a spec lookup disagree with its PR.
+    let mut out = merge_streams(bound.into_iter().chain(unbound));
+    out.retain(|e| terminal_annotation_matches(e, key));
+    out
+}
+
+/// One label's verdict events from several ledgers, in the order its readers
+/// weigh them.
+// trace:TASK-2964 | ai:codex
+// Merge independent ledgers by their next event's host time, retaining
+// append order within each ledger even when the host clock rolls back.
+// A global timestamp sort would make a spec lookup disagree with its PR.
+// BUG-2629: shared with the rework recovery, which reads the same view.
+// trace:BUG-2629 | ai:claude
+pub(crate) fn merge_streams(events: impl IntoIterator<Item = GateEvent>) -> Vec<GateEvent> {
     let mut streams: Vec<std::collections::VecDeque<GateEvent>> = Vec::new();
-    for event in bound.into_iter().chain(unbound) {
+    for event in events {
         if let Some(stream) = streams.iter_mut().find(|stream| {
             stream
                 .front()
@@ -285,7 +295,6 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
     {
         out.push(streams[index].pop_front().unwrap());
     }
-    out.retain(|e| terminal_annotation_matches(e, key));
     out
 }
 
@@ -791,6 +800,13 @@ impl MiskeyOwners {
     pub(crate) fn fail_closed(events: &mut Vec<GateEvent>) {
         events.retain(|event| matches!(disqualifiable(event), Candidate::Keep));
     }
+}
+
+/// Whether `event` stands without an ownership index: no witness could
+/// disqualify it, so [`MiskeyOwners::fail_closed`] keeps it.
+// trace:BUG-2629 | ai:claude
+pub(crate) fn ownership_free(event: &GateEvent) -> bool {
+    matches!(disqualifiable(event), Candidate::Keep)
 }
 
 /// Whether any of `events` is a copy an ownership witness could disqualify.

@@ -1649,6 +1649,20 @@ pub(crate) fn checked_legacy_verdict(
         .and_then(|body| parse_recorded_verdict(&body)))
 }
 
+/// [`checked_legacy_verdict`] with the file's body: for a reader that orders
+/// the file against ledger rounds itself ([`ledger_supersedes`]) and applies
+/// a terminal annotation to the exact source it names, because the current
+/// projection withholds those rounds (rework admission after a failed
+/// ownership discovery).
+// trace:BUG-2629 | ai:claude
+pub(crate) fn checked_legacy_record(
+    start: &Path,
+    key: &str,
+) -> std::io::Result<Option<(String, RecordedVerdict)>> {
+    Ok(checked_legacy_verdict_body(&verdict_path(start, key))?
+        .and_then(|body| parse_recorded_verdict(&body).map(|verdict| (body, verdict))))
+}
+
 /// Error-aware current projection for gates that must distinguish missing
 /// evidence from refused or malformed evidence. Never hide an unsafe legacy
 /// artifact behind a ledger verdict.
