@@ -33,7 +33,7 @@ fn lease_at(
         worktree_path: worktree.to_path_buf(),
         branch: branch.into(),
         started_at: chrono::Utc::now() - chrono::Duration::seconds(120),
-        hostname: "h".into(),
+        hostname: crate::coordination::hostname(),
         role: Some("reviewer".into()),
         creator_pid,
         creator_pid_start_time: None,
@@ -784,6 +784,27 @@ fn bug_2684_unverifiable_review_holder_is_never_proven_dead() {
     assert!(!released);
     assert!(lease_path(repo.path(), &live.id).exists());
 
+    // A legacy lease recorded on another host: its pids name nothing in this
+    // host's process table, so their absence here proves nothing. The same
+    // lease recorded on this host is positively dead.
+    let gone = deleted_worktree(repo.path(), holder.path(), "pr-4404");
+    let mut elsewhere = lease_at(
+        "01a1f76fce04",
+        "PR-4404",
+        &gone,
+        "pr-4404",
+        Some(reaped_pid()),
+    );
+    elsewhere.review_verb = true;
+    elsewhere.active_pid = Some(reaped_pid());
+    assert!(
+        crate::ownership::reader::review_holder_proven_dead(repo.path(), &elsewhere).is_ok(),
+        "control: on this host every recorded process is positively gone"
+    );
+    elsewhere.hostname = format!("{}-elsewhere", crate::coordination::hostname());
+    write_lease(repo.path(), &elsewhere);
+    kept(&elsewhere, "recorded on another host");
+
     // An unreadable ownership record: every recorded process is positively
     // dead, but the evidence of who holds the key cannot be read.
     let gone = deleted_worktree(repo.path(), holder.path(), "pr-4402");
@@ -804,6 +825,140 @@ fn bug_2684_unverifiable_review_holder_is_never_proven_dead() {
     std::fs::write(store.path_for(&key), "{ not an ownership record").unwrap();
     assert!(crate::ownership::reader::lease_record(repo.path(), &unreadable).is_err());
     kept(&unreadable, "ownership evidence unreadable");
+}
+
+/// BUG-2684: the supervisor's completion receipt ends a reviewer lease only
+/// when it is bound to that lease. A clean Closed record naming no holder,
+/// whose reason binds this lease, releases the lease once its tree is gone;
+/// the same shape with a reason that binds another lease refuses, though
+/// every process the lease records is positively dead.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_only_the_lease_bound_completion_receipt_ends_a_holderless_review() {
+    use crate::ownership::{dual, store::Expect, Ownership, Phase, WorkKey};
+    let repo = committed_repo();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(repo.path(), "reviewer", &[]);
+    let holder = tempfile::tempdir().unwrap();
+    let head = String::from_utf8(git(repo.path(), &["rev-parse", "HEAD"]).stdout)
+        .unwrap()
+        .trim()
+        .to_string();
+    let put = |key: &WorkKey, phase: Phase, holder: Option<crate::ownership::Holder>| {
+        crate::ownership::store::OwnershipStore::for_project(repo.path())
+            .unwrap()
+            .unwrap()
+            .update(key, "fixture", Expect::Any, |_| {
+                Some((
+                    Ownership {
+                        key: key.clone(),
+                        generation: 0,
+                        phase: phase.clone(),
+                        holder: holder.clone(),
+                    },
+                    None,
+                ))
+            })
+            .unwrap();
+    };
+    let reviewing = |n: u64, lease: &SessionLease| {
+        let key = WorkKey::Review {
+            change: dual::change(n),
+            head: head.clone(),
+        };
+        let mut owner =
+            dual::holder_for_lease(lease, &dual::WriterFacts::here(), chrono::Utc::now());
+        owner.witnesses.clear();
+        put(&key, Phase::Reviewing { head: head.clone() }, Some(owner));
+        key
+    };
+    let closed_holderless = |lease: &SessionLease| {
+        let record = crate::ownership::reader::lease_record(repo.path(), lease)
+            .unwrap()
+            .unwrap();
+        assert!(record.holder.is_none(), "{record:?}");
+        match record.phase {
+            Phase::Closed { why } => why,
+            other => panic!("expected a Closed record, got {other:?}"),
+        }
+    };
+
+    // Bound: the supervisor's own receipt for this lease. The lease records
+    // no process at all, so nothing but the receipt can end it.
+    let gone = deleted_worktree(repo.path(), holder.path(), "pr-4501");
+    let mut bound = lease_at("01a1f76fcf01", "PR-4501", &gone, "pr-4501", None);
+    bound.review_verb = true;
+    bound.pr_head_sha = Some(head.clone());
+    write_lease(repo.path(), &bound);
+    reviewing(4501, &bound);
+    assert!(
+        !crate::ownership::reader::stale_review_lease_ended(repo.path(), &bound),
+        "before the receipt, a lease recording no process has no proof"
+    );
+    crate::ownership::reader::review_finished(repo.path(), &bound).unwrap();
+    let bound_why = closed_holderless(&bound);
+    assert!(bound_why.contains(&bound.id), "{bound_why}");
+    assert!(crate::ownership::reader::stale_review_lease_ended(
+        repo.path(),
+        &bound
+    ));
+    assert!(crate::session_start::release_dead_gone_tree_conflict(
+        repo.path(),
+        &bound
+    ));
+    assert!(!lease_path(repo.path(), &bound.id).exists());
+
+    // The receipt ends the lease, not the tree: while the tree exists the
+    // lease stays for the guarded teardown.
+    let present = holder.path().join("wt-present");
+    std::fs::create_dir_all(&present).unwrap();
+    let mut standing = lease_at("01a1f76fcf03", "PR-4503", &present, "pr-4503", None);
+    standing.review_verb = true;
+    standing.pr_head_sha = Some(head.clone());
+    write_lease(repo.path(), &standing);
+    reviewing(4503, &standing);
+    crate::ownership::reader::review_finished(repo.path(), &standing).unwrap();
+    assert!(!crate::session_start::release_dead_gone_tree_conflict(
+        repo.path(),
+        &standing
+    ));
+    assert!(lease_path(repo.path(), &standing.id).exists());
+
+    // Unbound: holder-less and Closed, but the reason is the receipt of the
+    // lease above. Every process this lease records is positively dead on
+    // this host, so only the missing binding refuses.
+    let gone = deleted_worktree(repo.path(), holder.path(), "pr-4502");
+    let mut unbound = lease_at(
+        "01a1f76fcf02",
+        "PR-4502",
+        &gone,
+        "pr-4502",
+        Some(reaped_pid()),
+    );
+    unbound.review_verb = true;
+    unbound.active_pid = Some(reaped_pid());
+    unbound.pr_head_sha = Some(head.clone());
+    write_lease(repo.path(), &unbound);
+    let key = reviewing(4502, &unbound);
+    assert!(
+        crate::ownership::reader::review_holder_proven_dead(repo.path(), &unbound).is_ok(),
+        "control: with its holder recorded, this lease is positively dead"
+    );
+    for why in [bound_why.as_str(), "released by operator", ""] {
+        put(&key, Phase::Closed { why: why.into() }, None);
+        assert_eq!(closed_holderless(&unbound), why);
+        let refusal =
+            crate::ownership::reader::review_holder_proven_dead(repo.path(), &unbound).unwrap_err();
+        assert!(refusal.contains("names no holder"), "{why:?}: {refusal}");
+        assert!(
+            !crate::ownership::reader::stale_review_lease_ended(repo.path(), &unbound),
+            "{why:?}"
+        );
+        assert!(
+            !crate::session_start::release_dead_gone_tree_conflict(repo.path(), &unbound),
+            "{why:?}"
+        );
+        assert!(lease_path(repo.path(), &unbound.id).exists(), "{why:?}");
+    }
 }
 
 /// BUG-2684: the review lease-conflict prompt is never offered to a

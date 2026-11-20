@@ -832,22 +832,6 @@ fn bug2450_reviewer_launch_mails_once_and_retains_unsafe_exited_lease() {
     }
 }
 
-/// BUG-2684: `aida queue work --no-human` hands its flag to session start as
-/// an argument; nothing process-wide carries it.
-// trace:BUG-2684 | ai:claude
-#[test]
-fn bug_2684_queue_work_passes_no_human_to_session_start() {
-    let src = include_str!("../queue_cmd/work.rs");
-    let body = &src[src.find("pub(crate) fn handle_queue_work(").unwrap()..];
-    let call = &body[body
-        .find("crate::session_start::session_start_with_receipt(")
-        .unwrap()..];
-    let call = &call[..call.find("let setup_receipt").unwrap()];
-    let flat: String = call.split_whitespace().collect();
-    assert!(flat.ends_with("/*no_human*/no_human,)};"), "{flat}");
-    assert!(!include_str!("../session_start.rs").contains(&["static NO_", "HUMAN"].concat()));
-}
-
 // trace:STORY-2325 | ai:codex
 #[test]
 fn prc_safe_end_retires_dead_pushed_seat_without_force() {

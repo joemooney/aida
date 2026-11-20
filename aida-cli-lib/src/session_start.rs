@@ -167,6 +167,26 @@ pub(crate) mod test_attended_terminal {
     }
 }
 
+/// Test-only, per-thread record of the `no_human` argument each session
+/// start on this thread received, so a test can observe what a pickup
+/// passed instead of reading the caller's source.
+// trace:BUG-2684 | ai:claude
+#[cfg(test)]
+pub(crate) mod test_no_human_seen {
+    thread_local! {
+        static SEEN: std::cell::RefCell<Vec<bool>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    pub(super) fn record(no_human: bool) {
+        SEEN.with(|seen| seen.borrow_mut().push(no_human));
+    }
+
+    /// Every value recorded on this thread since the last call.
+    pub(crate) fn take() -> Vec<bool> {
+        SEEN.with(|seen| std::mem::take(&mut *seen.borrow_mut()))
+    }
+}
+
 /// Release an earlier reviewer's lease blocking a review pickup when its
 /// holder is proven dead by the ownership reader (not only by the
 /// process-table heuristic [`review_branch_conflicts`] applies) and its
@@ -2261,6 +2281,8 @@ pub(crate) fn session_start_with_receipt(
     // trace:BUG-2684 | ai:claude
     no_human: bool,
 ) -> Result<SessionStartReceipt> {
+    #[cfg(test)]
+    test_no_human_seen::record(no_human);
     let base = session_base.map(|base| match base {
         SessionBase::Explicit(branch)
         | SessionBase::QueueBranch(branch)
