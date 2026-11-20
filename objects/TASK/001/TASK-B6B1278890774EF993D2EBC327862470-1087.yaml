@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T20:53:49.349747862Z
-modified_at: 2026-11-19T23:40:24.636554573Z
+modified_at: 2026-11-19T23:56:26.535141953Z
 req_type: Task
 relationships:
 - rel_type: Child
@@ -271,6 +271,24 @@ comments:
   modified_at: 2026-11-19T23:37:35.069577827Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1f63d-7b50-7550-9d34-af2a56f690c3
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+
+    Reviewed HEAD: 7ea7f37fcb09ca74eea9f111226ff5c36f7156af for PR #4321. Reviewed the origin/main merge-base diff and the pending native working tree. The host-staged parent is be435bcf3807a9e0c892e2d7def934a25c4b1942. No untracked additions.
+
+    AC1: [evidence: behavioral-test] Existing compile-gate evidence retained. The host fixture task_3804_compile_failure_keeps_conflict_resolution_off_origin and the self-committed repair refusal fixture cover publication refusal. This slice does not change the compile or publication gates.
+    AC2: [evidence: behavioral-test] The strict local and canonical mailbox lookup rejects read and parse failures before dispatch and records delivery_unknown. The new task_3804_accepted_notice_read_and_parse_failures_block_resend regression exercises both mailbox layers with both failures after a real acceptance and a lost journal receipt. Two retries per case stop before the sender. Restoring the accepted file makes reconciliation adopt the receipt and clear the unknown state. Removed the recovery guidance to delete unreadable evidence because deleting the only accepted copy can let a retry send again.
+    AC3: [evidence: behavioral-test] Existing BUG-2558 pseudoref regression retained. task_3804_invalid_merge_head_refuses_even_with_clean_status tests malformed MERGE_HEAD with empty porcelain. This slice does not change pseudoref handling.
+
+    Probes: Compared the generated thread value with the decoded message thread ID. Checked invalid JSON, an unreadable message path, repeated attempts, and restoration after failure. The delivery decision still refuses when either layer reports an unreadable message. A malformed unrelated message can also block reconciliation until its mailbox evidence is restored. The recovery text and tests grant no publication or mailbox authority.
+
+    Validation: All four repair-journal tests ran and passed in lane job j20261119T234435169-2-0. cargo fmt --check, git diff --check, and the store writer inventory passed. Regenerated writers and operation mappings match the three-way merge of the inventory, including both sides' reviewed route entries. FAST reached Cargo ratchet compilation. Exact new-head CI is pending host publication. Refs-only declaration recorded.
+  created_at: 2026-11-19T23:56:26.535141953Z
+  modified_at: 2026-11-19T23:56:26.535141953Z
+  session_id: 01a1f62e8791
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0fd-3b33-7230-a9b9-b924b9001fba
   author: joe
