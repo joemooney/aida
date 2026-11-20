@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T18:07:57.019489695Z
+modified_at: 2026-11-20T18:39:16.764127759Z
 req_type: Task
 tags:
 - landing
@@ -25,6 +25,13 @@ comments:
   content: 'advisor-121 11:12: also carry from STORY-2906 AC2: a real per-host memory observation for FOREIGN lane hosts (e.g. dell1), via a host heartbeat field or a bounded remote probe; #4372 reports an explicit ''unknown (no remote memory source)'' until then.'
   created_at: 2026-11-20T18:07:57.019489695Z
   modified_at: 2026-11-20T18:07:57.019489695Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa41-a866-7ba0-9a7a-d1137877bdad
+  author: joe
+  content: 'advisor-121 11:55, scope addition (codify, don''t remember): two more stall classes the guard must detect, all seen today with no wake event. (a) UNREVIEWED-HEAD: an open main PR whose head has had no review verdict for 30 min or more (#4365 3h, #4363 2h20m, #4364 3h), with the cause named: ''watcher admission is busy'' in the review-watch log, or a stale aida-pr-N reviewer tree or lease. (b) UNROUTED-CR: a changes-requested verdict at the exact head, no rework queued and no live lane for 20 min or more (#4373 unrouted 2h). Route both to the advisor seat.'
+  created_at: 2026-11-20T18:39:16.764127759Z
+  modified_at: 2026-11-20T18:39:16.764127759Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
