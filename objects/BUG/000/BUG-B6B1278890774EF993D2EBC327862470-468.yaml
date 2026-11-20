@@ -1,0 +1,38 @@
+id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-468
+agreed_id: BUG-2706
+title: Review-watch reviews merge-only heads while a dell1 rework lane is still live (STORY-2705 deferral misses foreign lane hosts)
+description: |
+  Regression / gap of STORY-2705 ("Review-watch defers reviewing a PR head while an implementer lane for its spec is live"): the deferral does not see implementer lanes running on a FOREIGN lane host (dell1). Rework lanes merge origin/main first and push that merge commit, so review-watch on the operator host reviews the merge-only head while the lane is still working, wasting a full (often STRICT, Fable) review and placing a hold on a head that is about to move.
+
+  Evidence 2026-11-20 (lane-run.sh live on dell1 at review time):
+  - #4364 BUG-2684 r3: review of merge-only 778dc38 (pushed 12:45) recorded about 13:25; the lane pushed its real fix later.
+  - #4363 BUG-2703 r4: review of merge-only cde727e (pushed 13:02) recorded 13:43; the real r4 commit 1fb8210 landed 13:42.
+  - Earlier the same day: #4347 (d728fb7) premature approval lifted a hold while CI was red.
+
+  Acceptance:
+  - AC1: review-watch defers a head while an implementer lane for the PR's spec is live on ANY registered lane host (dell1 included), using the lane-host records or relay status the lane relay and the throughput guard already read, not only local leases.
+  - AC2: a head whose only new commit is a merge of the base, while such a lane is live, is never reviewed; once the lane exits, the newest head is reviewed.
+  - AC3: when the lane-host state cannot be read, review-watch defers for a bounded time (a setting, default 20 min) and then reviews, logging why.
+  - Regressions for AC1-AC3 with a fake foreign lane host.
+status: Draft
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-20T20:43:55.025623325Z
+modified_at: 2026-11-20T20:43:55.025623325Z
+req_type: Bug
+tags:
+- lanes
+- linked:STORY-2705
+- review-watch
+- throughput
+filed_at:
+  code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 719aa4947d0
+  vendor: claude
+  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
