@@ -1,14 +1,7 @@
 job: throughput-guard-route-advisor
-last_run: 2026-11-20T20:46:59.442297220Z
+last_run: 2026-11-20T21:50:57.234236404Z
 last_by:
   seat: advisor
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: '[STUCK-REVIEW] #4376 at db59d813 has had no verdict, no reviewer and no lane for 36 min, and its CI is red (Build (ubuntu-latest), CI (fast compile); base not fresh: CI run 44818216542''s tested base is unknown: GitHub CI evidence unavailable at repos/joemooney/aida/actions/jobs/136572029867/logs) -> launch a reviewer for #4376 at db59d813, or route a lane for its red CI; [STUCK-CONFLICT] #4306 at b6315683 conflicts with its base and nobody owns it, for 1177 min -> route a lane to resolve the conflict on #4306; [STUCK-CONFLICT] #4365 at b8d7faa4 conflicts with its base and nobody owns it, for 390 min -> route a lane to resolve the conflict on #4365'
-due_since: 2026-11-20T21:46:49.565885057Z
-due_reason: on CronJobFired:throughput-guard-route-advisor
-due_failure:
-  trip_id: throughput-guard-route-advisor@2026-11-20T21:46:49Z
-  job: throughput-guard
-  error: '[STUCK-REVIEW] #4376 at db59d813 has had no verdict, no reviewer and no lane for 36 min, and its CI is red (Build (ubuntu-latest), CI (fast compile); base not fresh: CI run 44818216542''s tested base is unknown: GitHub CI evidence unavailable at repos/joemooney/aida/actions/jobs/136572029867/logs) -> launch a reviewer for #4376 at db59d813, or route a lane for its red CI; [STUCK-CONFLICT] #4306 at b6315683 conflicts with its base and nobody owns it, for 1177 min -> route a lane to resolve the conflict on #4306; [STUCK-CONFLICT] #4365 at b8d7faa4 conflicts with its base and nobody owns it, for 390 min -> route a lane to resolve the conflict on #4365'
