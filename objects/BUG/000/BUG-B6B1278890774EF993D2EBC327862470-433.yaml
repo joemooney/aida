@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T19:11:17.635576449Z
+modified_at: 2026-11-20T19:11:55.129979342Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -125,6 +125,13 @@ comments:
     Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
   created_at: 2026-11-20T19:11:17.635576449Z
   modified_at: 2026-11-20T19:11:17.635576449Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fa5f-ccdd-7ea1-b4b0-b4095beb1940
+  author: joe
+  content: 'Product 12:11: SLICE1 lane queued on dell1 (claude), branch bug-b6b1278890774ef993d2ebc327862470-433. Scope = the AUTHORITATIVE SLICE1 BRIEF in the previous comment.'
+  created_at: 2026-11-20T19:11:55.129979342Z
+  modified_at: 2026-11-20T19:11:55.129979342Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
