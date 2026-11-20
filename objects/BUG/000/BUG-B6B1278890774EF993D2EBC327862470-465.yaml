@@ -18,7 +18,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T04:35:29.108587336Z
-modified_at: 2026-11-20T15:02:47.583813675Z
+modified_at: 2026-11-20T15:03:08.809173588Z
 req_type: Bug
 tags:
 - admission
@@ -76,6 +76,32 @@ comments:
   created_at: 2026-11-20T14:13:25.204687861Z
   modified_at: 2026-11-20T14:13:25.204687861Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1f97b-c5e9-7100-b882-d3bf5164601f
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 08:08): four findings at 36e1d02 (the deadline must cover receipts.lock; keep settlement maintenance while yielding; a real worker plus ship regression with a no-interrupt control; loops status shows both workers). Claude, gated on the live lane exiting.
+
+    # Rework brief: BUG-2703 / PR #4363, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 08:08 MST. Head reviewed: 36e1d02. Lane: CLAUDE, STRICT (admission authority). All four findings:
+    1. [unmet AC] admission_owner.rs:386-390: receipts.lock is taken with a blocking lock_exclusive BEFORE the wait deadline starts; acquire_mode,
+       register_intent and IntentGuard::drop also block on it. Carry ONE deadline through preflight, acquisition and intent cleanup; use bounded
+       try-locks; on expiry, report the holder and return. Regression: a process holding receipts.lock stalled, so `pr ship --wait 1` returns by the
+       deadline with a holder report.
+    2. [defect] review_watch.rs:2881-2888: when yielding admission to a waiting ship, review-watch must STILL run settlement maintenance
+       (store.prune plus advance), so prior attempts (including claimed Superseding ones whose descendants exited) become quiescent. Yield only
+       new LAUNCHES, not maintenance. Regression: a Superseding attempt with exited descendants, a waiting ship, then the attempt is confirmed and
+       cleared, so the ship acquires.
+    3. [unmet AC, test gap] add a regression through the REAL worker loops (review-watch and auto-train workers running) and the real pr ship
+       handler on an approved fixture PR: the ship acquires within its bound; plus a control where an in-progress review launch or train stack is
+       NOT interrupted mid-operation.
+    4. [unmet AC] `aida advisor loops status` (human and JSON) shows BOTH workers' claims and ages (review-watch AND auto-train), with unknown age
+       for legacy receipts.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; make check-ci-fast. COMMIT your work. Push.
+  created_at: 2026-11-20T15:03:08.809173588Z
+  modified_at: 2026-11-20T15:03:08.809173588Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f73e-8221-7992-9cf2-59ff363f36b0
