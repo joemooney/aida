@@ -808,6 +808,54 @@ fn sandbox_config_lock_category_routes_from_alias_to_heal() {
     assert!(!lock.exists());
 }
 
+/// The repair-journal category is reachable by every alias, and its finding
+/// routes to the heal that releases the reservation of a lane that is gone.
+// trace:BUG-2688 | ai:claude
+#[test]
+fn repair_journal_category_routes_from_alias_to_heal() {
+    use crate::repair_journal::{RepairEntry, RepairGuard, RepairKey, SpawnOutcome, HEAL_CATEGORY};
+    for alias in ["repair-journal", "repair-reservations", "conflict-repair"] {
+        assert_eq!(normalize_doctor_category(alias).unwrap(), HEAL_CATEGORY);
+        assert!(doctor_category_selected(Some(alias), HEAL_CATEGORY).unwrap());
+    }
+    assert!(!doctor_category_selected(Some("stale-locks"), HEAL_CATEGORY).unwrap());
+
+    let dir = tempfile::tempdir().unwrap();
+    let main = dir.path();
+    RepairGuard::lock(main)
+        .unwrap()
+        .reserve(RepairEntry {
+            key: RepairKey {
+                repository: main.into(),
+                pr: 4365,
+                original_head: "a".repeat(40),
+            },
+            dispatched_by: "direct-rework".into(),
+            reserved_at: "then".into(),
+            lane_id: "gone-lane".into(),
+            tree_path: main.join("gone-seat"),
+            branch: "pr".into(),
+            base: "b".repeat(40),
+            spawn: SpawnOutcome::Unknown,
+            original_conflict_paths: vec!["src/lib.rs".into()],
+            regeneration_success: None,
+            regenerated_tree: None,
+            preparation_success: None,
+            validation: None,
+            refusal_notice: None,
+        })
+        .unwrap();
+    let finding = crate::repair_journal::scan(main).remove(0);
+    assert!(finding.safe_heal);
+    let healed = heal_doctor_finding(main, &finding, &DoctorRunOptions::default()).unwrap();
+    assert_eq!(healed.status, "healed");
+    assert!(healed.detail.unwrap().contains("repair-journal.backup-"));
+    assert!(crate::repair_journal::scan(main).is_empty());
+    // The same finding again: the reservation is already released.
+    let repeat = heal_doctor_finding(main, &finding, &DoctorRunOptions::default()).unwrap();
+    assert_eq!(repeat.status, "skipped");
+}
+
 /// A full `aida doctor --category config-lock` run reports the planted
 /// placeholder, so the scan stays wired into `doctor_multi_agent`. Runs in
 /// its own process because it changes the working directory.

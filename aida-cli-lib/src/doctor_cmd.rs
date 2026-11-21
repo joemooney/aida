@@ -606,6 +606,17 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
         findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
     }
 
+    // Conflict-repair reservations whose lane is provably gone (no lease, no
+    // live lane run, no seat). One journal read plus the lease listing.
+    // trace:BUG-2688 | ai:claude
+    if doctor_category_selected(
+        opts.category.as_deref(),
+        crate::repair_journal::HEAL_CATEGORY,
+    )? {
+        findings.extend(crate::repair_journal::scan(&project_root));
+        findings.sort_by(|a, b| a.category.cmp(&b.category).then(a.id.cmp(&b.id)));
+    }
+
     // TASK-1595: commits that exist in one agent worktree only — a branch on
     // no remote, or a spec commit a reset left reachable from the reflog
     // alone. Reflogs only, bounded; no fsck. trace:TASK-1595 | ai:claude
@@ -2181,6 +2192,22 @@ fn heal_doctor_finding(
         "gate-ledger-bindings" => heal_doctor_gate_ledger_bindings(project_root, finding),
         // trace:BUG-2211 | ai:claude
         "sandbox-config-lock" => heal_doctor_sandbox_config_lock(project_root, finding),
+        // The proof is re-read under the journal lock; a reservation whose
+        // lane or seat is still there is kept. trace:BUG-2688 | ai:claude
+        crate::repair_journal::HEAL_CATEGORY => {
+            let outcome =
+                crate::repair_journal::heal_dead_lane_reservation(project_root, &finding.id)?;
+            Ok(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: "released conflict-repair reservation of a lane that is gone".to_string(),
+                status: if outcome.is_ok() { "healed" } else { "skipped" }.to_string(),
+                detail: Some(match outcome {
+                    Ok(backup) => format!("journal backed up to {}", backup.display()),
+                    Err(kept) => format!("reservation kept: {kept}"),
+                }),
+            })
+        }
         // trace:TASK-1595 | ai:claude
         "stranded-commits" => {
             let outcome = crate::stranded_commits::heal(project_root, &finding.id);

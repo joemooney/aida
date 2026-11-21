@@ -3213,9 +3213,30 @@ pub(crate) fn prepare_rework_merge_fixture(
     pr: u64,
     lane_id: &str,
 ) -> Result<Vec<String>> {
-    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
-        rework_base_from_metadata(branch, fixture_rework_metadata(branch, "main"))
-    })
+    prepare_rework_merge_fixture_admitted(main, tree, branch, resume, pr, lane_id, &|| Ok(()))
+}
+
+// trace:BUG-2688 | ai:claude
+#[cfg(test)]
+pub(crate) fn prepare_rework_merge_fixture_admitted(
+    main: &Path,
+    tree: &Path,
+    branch: &str,
+    resume: bool,
+    pr: u64,
+    lane_id: &str,
+    admit_conflict: &dyn Fn() -> Result<()>,
+) -> Result<Vec<String>> {
+    prepare_rework_merge_with_base(
+        main,
+        tree,
+        branch,
+        resume,
+        pr,
+        lane_id,
+        admit_conflict,
+        || rework_base_from_metadata(branch, fixture_rework_metadata(branch, "main")),
+    )
 }
 
 // trace:BUG-2603 | ai:codex
@@ -3286,7 +3307,12 @@ fn fetch_rework_heads(main: &Path, base: &str, branch: &str) -> Result<(String, 
 /// Host preparation of a rework. Clone Git runs only in AIDA's writable
 /// sandbox with the host identity; ordinary linked worktrees use host Git.
 /// Conflicts retain MERGE_HEAD and journaled paths; the lane edits files only.
+/// `admit_conflict` is the launch's route and eligibility check for a
+/// conflicted repair. It runs once a conflict is observed and before the
+/// repair journal is touched, so a refused route reserves nothing and its
+/// error is returned as is.
 // trace:STORY-2475 | ai:codex
+// trace:BUG-2688 | ai:claude
 pub(crate) fn prepare_rework_merge(
     main: &Path,
     tree: &Path,
@@ -3294,10 +3320,18 @@ pub(crate) fn prepare_rework_merge(
     resume: bool,
     pr: u64,
     lane_id: &str,
+    admit_conflict: &dyn Fn() -> Result<()>,
 ) -> Result<Vec<String>> {
-    prepare_rework_merge_with_base(main, tree, branch, resume, pr, lane_id, || {
-        rework_base_branch(main, pr, branch)
-    })
+    prepare_rework_merge_with_base(
+        main,
+        tree,
+        branch,
+        resume,
+        pr,
+        lane_id,
+        admit_conflict,
+        || rework_base_branch(main, pr, branch),
+    )
 }
 
 // Inject the forge observation at the boundary; all Git and repair preparation
@@ -3310,6 +3344,7 @@ fn prepare_rework_merge_with_base(
     resume: bool,
     pr: u64,
     lane_id: &str,
+    admit_conflict: &dyn Fn() -> Result<()>,
     discover_base: impl FnOnce() -> Result<String>,
 ) -> Result<Vec<String>> {
     use std::ffi::{OsStr, OsString};
@@ -3394,11 +3429,18 @@ fn prepare_rework_merge_with_base(
     let pending_resume = resume
         && execute(&["status", "--porcelain", "--untracked-files=all"])
             .is_ok_and(|status| !status.is_empty());
-    prepare_host_repair_with(
+    // A refused route is not a preparation failure: no reservation exists, no
+    // refusal notice is owed, and the recovery text below does not apply.
+    // trace:BUG-2688 | ai:claude
+    let route_refused = std::cell::Cell::new(false);
+    prepare_host_repair_admitted(
         main, tree, pr, lane_id,
         &execute,
         branch,
         resume,
+        &|| {
+            admit_conflict().inspect_err(|_| route_refused.set(true))
+        },
         |tip| publish_rework_merge(main, tree, branch, tip),
         |base, restore_only| {
             let head = execute(&["rev-parse", "HEAD"])?;
@@ -3416,6 +3458,9 @@ fn prepare_rework_merge_with_base(
         },
     )
     .map_err(|error| {
+        if route_refused.get() {
+            return error;
+        }
         if let Some(key) = repair_key.into_inner() {
             report_repair_refusal(main, &key, &error);
         }
@@ -3882,7 +3927,11 @@ fn repair_merge_tree_conflict(args: &[&str], code: Option<i32>, stdout: &[u8]) -
 // Host-staged conflict preparation. The shared reservation precedes the merge;
 // any ambiguous failure keeps it. Only proof of lane death may release it.
 // trace:STORY-2710 | ai:codex
-fn prepare_host_repair_with(
+// `admit_conflict` refuses a conflicted repair this launch may not run. It is
+// asked before the reservation and before any other journal write, so a
+// refused route or ineligible launch leaves the journal and the seat as found.
+// trace:BUG-2688 | ai:claude
+fn prepare_host_repair_admitted(
     main: &Path,
     tree: &Path,
     pr: u64,
@@ -3890,6 +3939,7 @@ fn prepare_host_repair_with(
     execute: &dyn Fn(&[&str]) -> Result<String>,
     branch: &str,
     resume: bool,
+    admit_conflict: &dyn Fn() -> Result<()>,
     publish: impl FnOnce(&str) -> Result<()>,
     regenerate: impl FnOnce(&str, bool) -> Result<()>,
     fetch_heads: impl FnOnce() -> Result<(String, String)>,
@@ -3914,6 +3964,7 @@ fn prepare_host_repair_with(
         let prepared = entry.preparation_success == Some(true);
         let failed_generation = entry.regeneration_success == Some(false);
         drop(guard);
+        admit_conflict()?;
         if !prepared || failed_generation {
             RepairGuard::lock(main)?.record_preparation(&key, false)?;
             regenerate(&merge, !failed_generation)?;
@@ -3965,6 +4016,7 @@ fn prepare_host_repair_with(
             before == pr_head,
             "repair requires the exact original PR head; local commits preserved"
         );
+        admit_conflict()?;
         let mut journal = RepairGuard::lock(main)?;
         journal.reserve(RepairEntry {
             key: key.clone(),
@@ -4020,6 +4072,36 @@ fn prepare_host_repair_with(
         }
         Ok(vec![])
     }
+}
+
+// The preparation with every conflicted repair admitted.
+// trace:BUG-2688 | ai:claude
+#[cfg(test)]
+fn prepare_host_repair_with(
+    main: &Path,
+    tree: &Path,
+    pr: u64,
+    lane_id: &str,
+    execute: &dyn Fn(&[&str]) -> Result<String>,
+    branch: &str,
+    resume: bool,
+    publish: impl FnOnce(&str) -> Result<()>,
+    regenerate: impl FnOnce(&str, bool) -> Result<()>,
+    fetch_heads: impl FnOnce() -> Result<(String, String)>,
+) -> Result<Vec<String>> {
+    prepare_host_repair_admitted(
+        main,
+        tree,
+        pr,
+        lane_id,
+        execute,
+        branch,
+        resume,
+        &|| Ok(()),
+        publish,
+        regenerate,
+        fetch_heads,
+    )
 }
 
 // Keep launch admission and the Git operations together: any failed fetch,
@@ -4155,6 +4237,7 @@ mod rework_merge_tests {
             false,
             2603,
             "integration-lane",
+            &|| Ok(()),
             || {
                 rework_base_from_metadata(
                     "rework",
@@ -4180,6 +4263,7 @@ mod rework_merge_tests {
             false,
             2603,
             "integration-lane",
+            &|| Ok(()),
             || {
                 rework_base_from_metadata(
                     "rework",
@@ -6435,6 +6519,12 @@ mod lane_worktree_reentry_tests;
 #[cfg(test)]
 #[path = "tests/task_2807_pickup_launch_rollback_tests.rs"]
 mod pickup_launch_rollback_tests;
+
+// The conflict-repair reservation loop against real Git seats and a real
+// pickup rollback. trace:BUG-2688 | ai:claude
+#[cfg(test)]
+#[path = "tests/bug_2688_repair_reservation_tests.rs"]
+mod repair_reservation_tests;
 
 // The lane disk deferral against a real setup and a git-canonical queue.
 // trace:BUG-2684 | ai:claude

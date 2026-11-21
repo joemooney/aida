@@ -2042,6 +2042,12 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["sandbox-config-lock", "config-lock", "git-config-lock"],
         "sandbox-config-lock",
     ),
+    // Conflict-repair reservations left by a lane that is gone.
+    // trace:BUG-2688 | ai:claude
+    (
+        &["repair-journal", "repair-reservations", "conflict-repair"],
+        "repair-journal",
+    ),
     // trace:TASK-2324 | ai:codex
     (&["rustc-cache", "rustc-info"], "rustc-cache"),
     (&["cache-retention"], "cache-retention"),

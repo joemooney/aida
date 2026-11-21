@@ -208,6 +208,9 @@ pub(crate) use work::{
     TRACK_TAG_PREFIX,
 };
 pub use work::{refuse_waiting_review, spec_open_change_key};
+// trace:BUG-2688 | ai:claude
+#[cfg(test)]
+pub(crate) use work::prepare_and_route_rework_conflict;
 #[cfg(test)]
 pub(crate) use work::{resolve_rework_findings, resolve_rework_review};
 
