@@ -1,0 +1,18 @@
+{
+  "id": "fb0d1ba2-39cf-4345-af37-6dde81f9e402",
+  "thread_id": "fb0d1ba2-39cf-4345-af37-6dde81f9e402",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795224406811,
+  "body": "- [STUCK-REVIEW] #4376 at 190513dc has had no verdict, no reviewer and no lane for 44 min, and its CI is red (Build (ubuntu-latest), CI (fast compile), CI (fast gates); base not fresh: CI run 44845618874's tested base is unknown: GitHub CI evidence unavailable at repos/joemooney/aida/actions/jobs/136664509542/logs)\n  -> launch a reviewer for #4376 at 190513dc, or route a lane for its red CI\n- [STUCK-CONFLICT] #4387 at 509f5afb conflicts with its base and nobody owns it, for 32 min\n  -> route a lane to resolve the conflict on #4387\n\n2 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 2 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
