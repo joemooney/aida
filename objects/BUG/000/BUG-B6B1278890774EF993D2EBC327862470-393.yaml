@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-21T08:44:08.612273926Z
+modified_at: 2026-11-21T09:51:28.771497367Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -41,6 +41,26 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a1fb55-610a-7e51-bf73-d29432841808
   created_at: 2026-11-21T08:27:59.286588728Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1faee-c7b8-7e11-9976-05ed3f799bf8
+  created_at: 2026-11-21T08:53:29.786443420Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1faee-fbe6-7392-bd62-eacc87d88c86
+  created_at: 2026-11-21T08:54:40.148495264Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1faef-2f1b-7432-b6d5-9a85a3a88d66
+  created_at: 2026-11-21T08:55:52.090991956Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fb54-fdaa-72e2-8784-a68bfd5d04d3
+  created_at: 2026-11-21T08:57:03.286370842Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fb55-2eda-7750-90d5-54b0d2bd60d7
+  created_at: 2026-11-21T08:58:15.076469474Z
   created_by: joe
 comments:
 - id: 01a1e372-09ba-78d2-b17b-0b34c7114bbc
@@ -887,6 +907,62 @@ comments:
   content: 'Requeue the previously authorized round-5 rework for PR #4380. At current head 367c23a7723a the round-4 Changes Requested verdict is still exact; the later Done event cites that identical commit. The signed round-5 scope is one per-invocation discovery cache, bounded ledger consumption, and the real queue work lock-contention regression. BUG-2706 remains blocked on this fix. Preserve the independent review and CI gates.'
   created_at: 2026-11-21T08:44:08.461338101Z
   modified_at: 2026-11-21T08:44:08.461338101Z
+- id: 01a1fd83-60fd-79a0-88e5-25711fabb05b
+  author: auto-complete
+  content: |
+    <!-- aida:drain-phase-failure -->
+    ## Drain phase failure — phase 1 (implementer)
+
+    Recorded by `aida queue work BUG-2629 --auto-complete`. This is a narrative record on the parent spec, not a new spec: it informs the next reader and asks nothing of anyone. The drain still exited non-zero and still wrote its telemetry line.
+
+    - Signature: phase 1 (implementer) · kind `launch-refused`
+    - Seat: implementer
+    - Parent spec: BUG-2629
+    - Branch under test: main
+    - Commit under test: aa567732958f
+    - Recorded at: 2026-11-21T09:50:01.458588721+00:00
+
+    ### Failure
+
+    phase 1 workspace race for BUG-2629: branch `bug-2629-fresh` was free when phase 1 resolved it but exists now. `aida queue work --branch` reuses an existing branch, so launching would adopt a branch this run did not create; refused before launching. Re-run to resolve a fresh workspace, or inspect `bug-2629-fresh` first
+
+    Failure kind: `launch-refused`
+
+    ### Recovery hint shown to the operator
+
+    The implementer never launched — see the failure detail above for the preflight/lease refusal it hit. Resolve that, then retry: `aida queue work BUG-2629`.
+
+    ## Recurrence
+
+    Attempts: 1
+    Latest recurrence: 2026-11-21T09:50:01.458588721+00:00
+
+    ### Phase durations
+
+      - phase 1 (implementer): 4242 ms
+
+    ### Telemetry entry
+
+    The line appended to `~/.aida/auto-complete.jsonl` for this run:
+
+    ```json
+    {"spec_id":"BUG-2629","started_at":"2026-11-21T09:49:41.856370467+00:00","completed_at":"2026-11-21T09:50:01.458588721+00:00","outcome":"failed","variant":"full","failed_phase":1,"failure_kind":"launch-refused","failure_message":"phase 1 workspace race for BUG-2629: branch `bug-2629-fresh` was free when phase 1 resolved it but exists now. `aida queue work --branch` reuses an existing branch, so launching would adopt a branch this run did not create; refused before launching. Re-run to resolve a fresh workspace, or inspect `bug-2629-fresh` first","phase_durations":[{"phase":1,"slug":"implementer","elapsed_ms":4242}],"total_ms":18690,"binary_sha":"aa567732958"}
+    ```
+
+    ### Promoting this to its own spec
+
+    If this is a distinct defect rather than a drain hiccup, promote it to its own spec (it is NOT promoted automatically):
+
+    1. Save this note's text to a file, e.g. `/tmp/note.md`.
+    2. `aida add --type bug --priority medium --parent BUG-2629 --title "drain phase 1 (implementer) failure on BUG-2629" --description-from-file /tmp/note.md`
+    3. `aida edit <NEW-ID> --status approved`
+  created_at: 2026-11-21T09:50:08.125637477Z
+  modified_at: 2026-11-21T09:50:08.125637477Z
+- id: 01a1fd84-9c03-7073-9279-2cf035cf1a89
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: implementer/launch-refused: phase 1 workspace race for BUG-2629: branch `bug-2629-fresh` was free when phase 1 resolved it but exists now. `aida queue work --branch` reuses an existing branch, so launching would adopt a branch this run did not create; refused before launching. Re-run to resolve a fresh workspace, or inspect `bug-2629-fresh` first. Triage reason: The host prepared take-4380 at the existing PR head, but its legacy launcher refused contained Claude. The normal drain aborted before launch when it refused to adopt bug-2629-fresh. Restore the existing approved cap-exception rework to the implementer queue. The scope, exact-head review and merge hold remain in force.'
+  created_at: 2026-11-21T09:51:28.771489410Z
+  modified_at: 2026-11-21T09:51:28.771489410Z
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
@@ -1182,6 +1258,47 @@ history:
   changes:
   - field_name: status
     old_value: Done
+    new_value: Approved
+- id: 01a1fd4f-ef67-72d0-bf8c-7397fd509f16
+  author: joe
+  timestamp: 2026-11-21T08:53:56.711729606Z
+  changes: []
+- id: 01a1fd51-0092-7312-967f-6c86b816c1e8
+  author: joe
+  timestamp: 2026-11-21T08:55:06.642845303Z
+  changes: []
+- id: 01a1fd52-19e4-7493-90b0-b64e5cee8a2f
+  author: joe
+  timestamp: 2026-11-21T08:56:18.660322085Z
+  changes: []
+- id: 01a1fd53-306e-7073-8cd9-c690a1a94ec1
+  author: joe
+  timestamp: 2026-11-21T08:57:29.966117355Z
+  changes: []
+- id: 01a1fd54-4951-7181-aca3-cd113e3c9756
+  author: joe
+  timestamp: 2026-11-21T08:58:41.873561696Z
+  changes: []
+- id: 01a1fd82-f9f1-7fa0-a1db-758ba27bdb9e
+  author: aida-orchestrator-phase1
+  timestamp: 2026-11-21T09:49:41.745565855Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a1fd83-457f-7060-83b7-216b18c70e4f
+  author: aida-orchestrator
+  timestamp: 2026-11-21T09:50:01.087594261Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
+- id: 01a1fd84-9c03-7073-9279-2ceb956b021e
+  author: joe
+  timestamp: 2026-11-21T09:51:28.771471347Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
     new_value: Approved
 execution_mode: drain
 filed_at:
