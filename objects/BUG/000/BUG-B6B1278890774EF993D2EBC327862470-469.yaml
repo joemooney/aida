@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T00:29:00.176113724Z
+modified_at: 2026-11-21T00:53:48.388118422Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -138,6 +138,26 @@ comments:
   created_at: 2026-11-21T00:25:27.300711271Z
   modified_at: 2026-11-21T00:25:27.300711271Z
   session_id: 01a1fb48ad93
+- id: 01a1fb98-5ae4-7602-93e4-10686632c261
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1f53ccdae5 (round 2 of PR #4385, plus the fast-gate ratchet fix)
+
+    Acceptance evidence (all in aida-cli-lib/src/review_draft.rs tests unless noted; lane job runs: review_draft:: 28 passed, bug_2149_2150 suite passed after building the CLI, bug_2457 + story_1888 gate-path + story_1728 registry/help golden passed):
+    - AC1 [evidence: behavioral-test + documentation-inspection] one contract in skill, command template, prompt and gate: bug_2707_prompt_command_is_shell_quoted_and_gates_exit_on_acceptance reads both templates; bug_2707_submission_and_recorder_agree_on_approved_with_findings.
+    - AC2 [evidence: behavioral-test] validation bound to the submission: bug_2707_approved_draft_with_unresolved_findings_is_refused_at_submission (failed submission, parent read refuses, corrected resubmission accepted), bug_2707_raw_draft_write_is_not_a_submission.
+    - AC3 [evidence: behavioral-test] p3 + style approved draft: same tests.
+    - Findings 3-7: bug_2707_submission_is_decided_by_the_parent_launch_policy, bug_2707_submission_reads_one_bounded_no_follow_handle, the shell-quoting test (whitespace, quote, $() and backtick), bug_2707_default_policy_remedy_matches_the_recorder_rule (the skill's own example), bug_2707_intrinsically_blocking_findings_get_request_changes_only.
+    - Fast gate: approval_refusal now lives in gate/review_verdict.rs; gate_authority_code_is_on_the_floor passes. The change touches gate/, so it needs a human merge.
+
+    Probe findings fixed before push: a pending draft left after a recorded launch no longer blocks checkout teardown; a refused pending draft is retained (unconsumed_drafts) and the parent reports it as never accepted instead of treating the draft as absent.
+
+    Residual risks: the acceptance receipt is a workflow binding, not authority (a reviewer could forge it; the recorder still refuses the approval). make check-ci-fast could not run to completion inside this lane's 60 s tool cap; make sync-templates could not write .claude/skills/local (read-only here), the tracked mirrors are symlinks. The four follow-up tasks filed for findings 4-7 (…-1184 to …-1187) are resolved by this commit and can be closed.
+  created_at: 2026-11-21T00:53:48.388118422Z
+  modified_at: 2026-11-21T00:53:48.388118422Z
+  session_id: 01a1fb814444
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe
