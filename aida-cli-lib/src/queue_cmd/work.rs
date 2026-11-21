@@ -837,6 +837,7 @@ pub(crate) fn rework_conflict_route(
 
 /// The launch facts [`apply_rework_conflict_route`] needs from the pickup.
 // trace:STORY-2475 | ai:claude
+#[derive(Clone, Copy)]
 pub(crate) struct ReworkConflictLaunch<'a> {
     pub(crate) vendor: session::HeadlessVendor,
     pub(crate) resume: bool,
@@ -845,6 +846,59 @@ pub(crate) struct ReworkConflictLaunch<'a> {
     pub(crate) scope: &'a str,
     pub(crate) pr: u64,
     pub(crate) branch: &'a str,
+}
+
+/// Whether this launch may run a conflicted repair at all: its route and its
+/// vendor eligibility. Pure of the seat and the repair journal, so pickup asks
+/// it before the conflict is reserved; a refusal here leaves no reservation
+/// for the next attempt to trip over.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn admit_rework_conflict_launch(launch: ReworkConflictLaunch<'_>) -> Result<()> {
+    // Only the host-published route compile-checks the exact merged tree before
+    // it commits and publishes; a lane that commits and ships its own merge
+    // would bypass that check, so refuse it before launch. trace:TASK-3804 | ai:claude
+    let host_publishes =
+        crate::vendors::headless::host_publishes_implementer(launch.vendor, launch.contained);
+    if !host_publishes {
+        return Err(crate::repair_journal::UnvalidatedRepairPublication {
+            pr: launch.pr,
+            route: format!(
+                "self-published {} {} lane",
+                if launch.contained {
+                    "contained"
+                } else {
+                    "uncontained"
+                },
+                launch.vendor.as_str()
+            ),
+        }
+        .into());
+    }
+    session::preflight_launch_vendor(launch.vendor, launch.interactive)?;
+    session::require_vendor_containment(launch.vendor, launch.contained, "conflict rework")
+}
+
+/// Host preparation of a rework followed by its conflict route, in the order
+/// pickup runs them: `prepare` receives the launch's admission check and asks
+/// it before reserving a conflict, then the route is applied to the result.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn prepare_and_route_rework_conflict(
+    project_root: &Path,
+    launch: ReworkConflictLaunch<'_>,
+    prompt: &mut String,
+    resolved_model: &mut Option<String>,
+    prepare: impl FnOnce(&dyn Fn() -> Result<()>) -> Result<Vec<String>>,
+    notify: impl FnOnce(&str, &str) -> Result<()>,
+) -> Result<session::HeadlessVendor> {
+    let prepared = prepare(&|| admit_rework_conflict_launch(launch));
+    apply_rework_conflict_route(
+        project_root,
+        prepared,
+        launch,
+        prompt,
+        resolved_model,
+        notify,
+    )
 }
 
 /// Append the host-journal conflict paths without changing vendor or model.
@@ -874,28 +928,7 @@ pub(crate) fn apply_rework_conflict_route(
         return Ok(launch.vendor);
     }
     let vendor = route_vendor;
-    // Only the host-published route compile-checks the exact merged tree before
-    // it commits and publishes; a lane that commits and ships its own merge
-    // would bypass that check, so refuse it before launch. trace:TASK-3804 | ai:claude
-    let host_publishes =
-        crate::vendors::headless::host_publishes_implementer(vendor, launch.contained);
-    if !host_publishes {
-        return Err(crate::repair_journal::UnvalidatedRepairPublication {
-            pr: launch.pr,
-            route: format!(
-                "self-published {} {} lane",
-                if launch.contained {
-                    "contained"
-                } else {
-                    "uncontained"
-                },
-                vendor.as_str()
-            ),
-        }
-        .into());
-    }
-    session::preflight_launch_vendor(vendor, launch.interactive)?;
-    session::require_vendor_containment(vendor, launch.contained, "conflict rework")?;
+    admit_rework_conflict_launch(ReworkConflictLaunch { vendor, ..launch })?;
     prompt.push_str(&format!(
         "\n\n{}",
         crate::rework_direction::host_conflict_task(
@@ -904,7 +937,7 @@ pub(crate) fn apply_rework_conflict_route(
                 base: "main".into(),
                 files,
             },
-            host_publishes,
+            crate::vendors::headless::host_publishes_implementer(vendor, launch.contained),
         )
     ));
     Ok(vendor)
@@ -6322,20 +6355,14 @@ pub(crate) fn handle_queue_work(
             let mut prompt = prompt.clone();
             if !no_launch && !plan_only && !guided && role == "implementer" {
                 if let Some((pr, branch)) = rework_pr.as_ref() {
-                    let files = crate::seat_clone::prepare_rework_merge(
+                    // Route and eligibility are checked before a conflict is
+                    // reserved in the repair journal. trace:BUG-2688 | ai:claude
+                    let resume = matches!(launch, Some(QueueWorkLaunch::Resume(_)));
+                    launch_vendor = prepare_and_route_rework_conflict(
                         &project_root,
-                        &lease.worktree_path,
-                        branch,
-                        matches!(launch, Some(QueueWorkLaunch::Resume(_))),
-                        *pr,
-                        &lease.id,
-                    );
-                    launch_vendor = apply_rework_conflict_route(
-                        &project_root,
-                        files,
                         ReworkConflictLaunch {
                             vendor: launch_vendor,
-                            resume: matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                            resume,
                             interactive: !no_human,
                             contained,
                             scope: &plan.scope,
@@ -6344,6 +6371,17 @@ pub(crate) fn handle_queue_work(
                         },
                         &mut prompt,
                         &mut resolved_model,
+                        |admit_conflict| {
+                            crate::seat_clone::prepare_rework_merge(
+                                &project_root,
+                                &lease.worktree_path,
+                                branch,
+                                resume,
+                                *pr,
+                                &lease.id,
+                                admit_conflict,
+                            )
+                        },
                         |subject, body| {
                             crate::ship_from_seat::advisor_request(&project_root, subject, body)
                         },
@@ -7421,6 +7459,7 @@ pub(crate) fn run_pickup_launch(
     };
     if launch_refused_before_agent(&result, mark.started()) && receipt.owns_setup() {
         leave_setup_tree(project_root, &receipt);
+        let lane_id = receipt.lease_id.clone();
         // trace:BUG-2548 | ai:codex — never claim success with a retained lease.
         if let Err(error) = receipt.rollback() {
             return (
@@ -7430,6 +7469,12 @@ pub(crate) fn run_pickup_launch(
                 ))),
                 false,
             );
+        }
+        // No worker spawned and the lease is verified gone: this lane's own
+        // conflict-repair reservation must not block the next attempt.
+        // trace:BUG-2688 | ai:claude
+        if let Some(lane_id) = lane_id.as_deref() {
+            crate::repair_journal::release_unspawned_lane(project_root, lane_id);
         }
         return (result, true);
     }

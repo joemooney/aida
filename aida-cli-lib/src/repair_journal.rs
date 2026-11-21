@@ -103,7 +103,6 @@ pub(crate) struct RepairGuard {
 }
 impl RepairGuard {
     pub fn lock(main: &Path) -> Result<Self> {
-        use std::os::unix::fs::OpenOptionsExt;
         let dir = main.join(".aida");
         std::fs::create_dir_all(&dir)?;
         anyhow::ensure!(
@@ -112,40 +111,7 @@ impl RepairGuard {
         );
         let path = dir.join("repair-journal.json");
         let lock = lock_file(&dir.join("repair-journal.lock"))?;
-        let journal = match std::fs::OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-            .open(&path)
-        {
-            Ok(mut f) => {
-                use std::io::Read;
-                anyhow::ensure!(
-                    f.metadata()?.is_file() && f.metadata()?.len() <= 4 * 1024 * 1024,
-                    "invalid repair journal file"
-                );
-                let mut bytes = Vec::new();
-                (&mut f).take(4 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
-                anyhow::ensure!(bytes.len() <= 4 * 1024 * 1024, "repair journal too large");
-                serde_json::from_slice::<Journal>(&bytes).context("invalid repair journal")?
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Journal {
-                version: 1,
-                entries: vec![],
-            },
-            Err(e) => return Err(e).context("cannot read repair journal"),
-        };
-        anyhow::ensure!(
-            journal.version == 1,
-            "unsupported repair journal version {}",
-            journal.version
-        );
-        for (i, entry) in journal.entries.iter().enumerate() {
-            anyhow::ensure!(
-                entry.key.repository == main
-                    && !journal.entries[..i].iter().any(|e| e.key == entry.key),
-                "invalid or duplicate repair journal key"
-            );
-        }
+        let journal = load_journal(&path, main)?;
         Ok(Self {
             _lock: lock,
             path,
@@ -162,7 +128,17 @@ impl RepairGuard {
 
     pub fn reserve(&mut self, mut entry: RepairEntry) -> Result<()> {
         if let Some(previous) = self.journal.entries.iter().find(|e| e.key == entry.key) {
-            anyhow::ensure!(previous.spawn == SpawnOutcome::ProvenDead, "repair head already reserved; unknown spawn outcomes require proof that the prior lane is dead");
+            // Name the holder and the one command that releases a dead one.
+            // trace:BUG-2688 | ai:claude
+            anyhow::ensure!(
+                previous.spawn == SpawnOutcome::ProvenDead,
+                "repair head already reserved by lane {} for seat {}; unknown spawn outcomes \
+                 require proof that the prior lane is dead. If that lane has ended and its seat \
+                 is gone, run `aida doctor heal {HEAL_CATEGORY} --yes` to release the \
+                 reservation, then retry",
+                previous.lane_id,
+                previous.tree_path.display()
+            );
             entry.refusal_notice = previous.refusal_notice.clone();
         }
         self.journal.entries.retain(|e| e.key != entry.key);
@@ -331,9 +307,209 @@ impl RepairGuard {
         );
         Ok(entry)
     }
+    /// A launch that was refused or failed before any worker spawned, and
+    /// whose setup was rolled back, proves its own lane dead: release the
+    /// reservations that lane made, so the next attempt can reserve the head.
+    /// Only an `unknown` entry of exactly this lane whose seat is gone is
+    /// released; an adopted seat's entry went back to its orphan lease first.
+    // trace:BUG-2688 | ai:claude
+    pub fn release_unspawned(&mut self, lane_id: &str) -> Result<usize> {
+        let mut released = 0;
+        for entry in &mut self.journal.entries {
+            if entry.lane_id == lane_id
+                && entry.spawn == SpawnOutcome::Unknown
+                && path_is_absent(&entry.tree_path)
+            {
+                entry.spawn = SpawnOutcome::ProvenDead;
+                released += 1;
+            }
+        }
+        if released > 0 {
+            self.save()?;
+        }
+        Ok(released)
+    }
+    #[cfg(test)]
+    pub(crate) fn entries(&self) -> &[RepairEntry] {
+        &self.journal.entries
+    }
     fn save(&self) -> Result<()> {
         aida_core::fs_atomic::write_atomic(&self.path, serde_json::to_vec_pretty(&self.journal)?)?;
         Ok(())
+    }
+}
+
+/// `aida doctor` category for reservations whose lane is provably gone.
+// trace:BUG-2688 | ai:claude
+pub(crate) const HEAL_CATEGORY: &str = "repair-journal";
+
+// Only a definite "no such path" counts; a permission or I/O error is unknown.
+// trace:BUG-2688 | ai:claude
+fn path_is_absent(path: &Path) -> bool {
+    matches!(
+        std::fs::symlink_metadata(path),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound
+    )
+}
+
+/// Release the reservations of a launch that was rolled back before any
+/// worker spawned. Best effort: a failure is reported with the command that
+/// releases the reservation later, and never masks the launch's own error.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn release_unspawned_lane(main: &Path, lane_id: &str) {
+    if path_is_absent(&main.join(".aida/repair-journal.json")) {
+        return;
+    }
+    match RepairGuard::lock(main).and_then(|mut journal| journal.release_unspawned(lane_id)) {
+        Ok(0) => {}
+        Ok(released) => eprintln!(
+            "  released {released} conflict-repair reservation(s) of the rolled-back launch"
+        ),
+        Err(error) => eprintln!(
+            "  could not release the rolled-back launch's conflict-repair reservation: \
+             {error:#}; run `aida doctor heal {HEAL_CATEGORY} --yes` before retrying"
+        ),
+    }
+}
+
+/// The doctor finding id of one reservation: its PR and original head.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn reservation_id(key: &RepairKey) -> String {
+    format!("pr-{}-{}", key.pr, key.original_head)
+}
+
+/// Why a live reservation cannot be released, or `None` when its lane is
+/// provably gone: no lease names the lane or its seat, no lane run for it is
+/// alive, and the seat tree no longer exists. Any evidence that cannot be
+/// read keeps the reservation.
+// trace:BUG-2688 | ai:claude
+fn reservation_holder(
+    main: &Path,
+    entry: &RepairEntry,
+    leases: &[crate::leases::SessionLease],
+) -> Option<String> {
+    if let Some(lease) = leases
+        .iter()
+        .find(|lease| lease.id == entry.lane_id || lease.worktree_path == entry.tree_path)
+    {
+        return Some(format!(
+            "lease {} still holds the lane or its seat",
+            lease.id
+        ));
+    }
+    match crate::lane_liveness::headless_lane_run_alive(main, &entry.lane_id) {
+        Ok(false) => {}
+        Ok(true) => return Some(format!("lane run for {} is still alive", entry.lane_id)),
+        Err(error) => return Some(format!("lane run state is unknown: {error:#}")),
+    }
+    if !path_is_absent(&entry.tree_path) {
+        return Some(format!(
+            "seat {} still exists or cannot be inspected",
+            entry.tree_path.display()
+        ));
+    }
+    None
+}
+
+/// Live reservations whose lane is provably gone, for `aida doctor`. A
+/// project with no journal has none. The scan takes no lock and creates
+/// nothing, so it also runs where the host's `.aida` is read-only.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn dead_lane_reservations(main: &Path) -> Result<Vec<RepairEntry>> {
+    let journal_path = main.join(".aida/repair-journal.json");
+    if path_is_absent(&journal_path) {
+        return Ok(Vec::new());
+    }
+    let journal = load_journal(&journal_path, main)?;
+    let live: Vec<_> = journal
+        .entries
+        .into_iter()
+        .filter(|entry| entry.spawn != SpawnOutcome::ProvenDead)
+        .collect();
+    // With no live reservation there is no question for the leases to answer.
+    if live.is_empty() {
+        return Ok(live);
+    }
+    let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
+    Ok(live
+        .into_iter()
+        .filter(|entry| reservation_holder(main, entry, &leases).is_none())
+        .collect())
+}
+
+/// Release one reservation found by [`dead_lane_reservations`]. The proof is
+/// re-read under the journal lock, and the journal is copied to a backup file
+/// beside it before the entry is marked `proven_dead`. `Ok(Err(why))` is a
+/// reservation that is kept; `Ok(Ok(backup))` names the backup written.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn heal_dead_lane_reservation(
+    main: &Path,
+    id: &str,
+) -> Result<std::result::Result<PathBuf, String>> {
+    let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
+    let mut guard = RepairGuard::lock(main)?;
+    let Some(index) = guard
+        .journal
+        .entries
+        .iter()
+        .position(|entry| reservation_id(&entry.key) == id)
+    else {
+        return Ok(Err("reservation is no longer in the repair journal".into()));
+    };
+    let entry = &guard.journal.entries[index];
+    if entry.spawn == SpawnOutcome::ProvenDead {
+        return Ok(Err("reservation is already released".into()));
+    }
+    if let Some(holder) = reservation_holder(main, entry, &leases) {
+        return Ok(Err(holder));
+    }
+    let backup = guard.path.with_file_name(format!(
+        "repair-journal.backup-{}.json",
+        chrono::Utc::now().format("%Y%m%dT%H%M%S%.9fZ")
+    ));
+    let current = std::fs::read(&guard.path).context("cannot read repair journal for backup")?;
+    aida_core::fs_atomic::write_atomic(&backup, current)
+        .context("cannot back up repair journal; reservation kept")?;
+    guard.journal.entries[index].spawn = SpawnOutcome::ProvenDead;
+    guard.save()?;
+    Ok(Ok(backup))
+}
+
+/// `aida doctor` findings: one safe heal per reservation whose lane is
+/// provably gone. A journal or lease store that cannot be read is reported,
+/// never healed.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn scan(main: &Path) -> Vec<crate::DoctorFinding> {
+    match dead_lane_reservations(main) {
+        Ok(entries) => entries
+            .iter()
+            .map(|entry| crate::DoctorFinding {
+                category: HEAL_CATEGORY.to_string(),
+                id: reservation_id(&entry.key),
+                summary: format!(
+                    "conflict-repair reservation for PR #{} is held by lane {}, which has no \
+                     lease, no live lane run and no seat at {}; it blocks the next repair of \
+                     this PR head",
+                    entry.key.pr,
+                    entry.lane_id,
+                    entry.tree_path.display()
+                ),
+                action: format!(
+                    "run `aida doctor heal {HEAL_CATEGORY} --yes` to release it (the journal \
+                     is backed up first)"
+                ),
+                safe_heal: true,
+            })
+            .collect(),
+        Err(error) => vec![crate::DoctorFinding {
+            category: HEAL_CATEGORY.to_string(),
+            id: "unreadable".to_string(),
+            summary: format!("conflict-repair reservations could not be checked: {error:#}"),
+            action: "inspect `.aida/repair-journal.json` and `aida session leases --all`; \
+                     nothing is released while this evidence is unreadable"
+                .to_string(),
+            safe_heal: false,
+        }],
     }
 }
 
@@ -360,6 +536,50 @@ impl std::fmt::Display for UnvalidatedRepairPublication {
 }
 
 impl std::error::Error for UnvalidatedRepairPublication {}
+
+// Bounded, validated read of the journal file. Writers replace the file
+// atomically, so a reader that only reports (the doctor scan) may call this
+// without the sidecar lock; every mutation re-reads under it.
+// trace:STORY-2710 | ai:codex
+// trace:BUG-2688 | ai:claude
+fn load_journal(path: &Path, main: &Path) -> Result<Journal> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let journal = match std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+    {
+        Ok(mut f) => {
+            use std::io::Read;
+            anyhow::ensure!(
+                f.metadata()?.is_file() && f.metadata()?.len() <= 4 * 1024 * 1024,
+                "invalid repair journal file"
+            );
+            let mut bytes = Vec::new();
+            (&mut f).take(4 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
+            anyhow::ensure!(bytes.len() <= 4 * 1024 * 1024, "repair journal too large");
+            serde_json::from_slice::<Journal>(&bytes).context("invalid repair journal")?
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Journal {
+            version: 1,
+            entries: vec![],
+        },
+        Err(e) => return Err(e).context("cannot read repair journal"),
+    };
+    anyhow::ensure!(
+        journal.version == 1,
+        "unsupported repair journal version {}",
+        journal.version
+    );
+    for (i, entry) in journal.entries.iter().enumerate() {
+        anyhow::ensure!(
+            entry.key.repository == main
+                && !journal.entries[..i].iter().any(|e| e.key == entry.key),
+            "invalid or duplicate repair journal key"
+        );
+    }
+    Ok(journal)
+}
 
 fn lock_file(path: &Path) -> Result<File> {
     use std::os::unix::fs::OpenOptionsExt;
@@ -797,6 +1017,204 @@ mod tests {
             Some(format!("adopted from mailbox thread {delivery}").as_str())
         );
         assert!(notice.delivery_unknown.is_none());
+    }
+
+    fn unknown_entry(main: &Path, pr: u64, lane: &str, tree: &Path) -> RepairEntry {
+        RepairEntry {
+            key: RepairKey {
+                repository: main.into(),
+                pr,
+                original_head: "a".repeat(40),
+            },
+            dispatched_by: "direct-rework".into(),
+            reserved_at: "then".into(),
+            lane_id: lane.into(),
+            tree_path: tree.into(),
+            branch: "pr".into(),
+            base: "b".repeat(40),
+            spawn: SpawnOutcome::Unknown,
+            original_conflict_paths: vec!["src/lib.rs".into()],
+            regeneration_success: None,
+            regenerated_tree: None,
+            preparation_success: None,
+            validation: None,
+            refusal_notice: None,
+        }
+    }
+
+    fn spawn_of(main: &Path, pr: u64) -> SpawnOutcome {
+        let guard = RepairGuard::lock(main).unwrap();
+        let entry = guard.entries().iter().find(|e| e.key.pr == pr).unwrap();
+        entry.spawn.clone()
+    }
+
+    // A rolled-back launch releases only its own unknown reservation, and only
+    // once its seat is gone. trace:BUG-2688 | ai:claude
+    #[test]
+    fn bug_2688_unspawned_release_is_limited_to_the_lane_and_a_gone_seat() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let kept_seat = main.join("kept-seat");
+        std::fs::create_dir(&kept_seat).unwrap();
+        let mut started = unknown_entry(main, 3, "lane", &main.join("gone-3"));
+        started.spawn = SpawnOutcome::Started;
+        let mut guard = RepairGuard::lock(main).unwrap();
+        for entry in [
+            unknown_entry(main, 1, "lane", &main.join("gone-1")),
+            unknown_entry(main, 2, "lane", &kept_seat),
+            started,
+            unknown_entry(main, 4, "other-lane", &main.join("gone-4")),
+        ] {
+            guard.reserve(entry).unwrap();
+        }
+        drop(guard);
+        release_unspawned_lane(main, "lane");
+        assert_eq!(spawn_of(main, 1), SpawnOutcome::ProvenDead);
+        assert_eq!(
+            spawn_of(main, 2),
+            SpawnOutcome::Unknown,
+            "seat still exists"
+        );
+        assert_eq!(spawn_of(main, 3), SpawnOutcome::Started, "a worker spawned");
+        assert_eq!(spawn_of(main, 4), SpawnOutcome::Unknown, "another lane");
+        // The released head can be reserved again; the others still refuse,
+        // naming the holder and the command that releases a dead one.
+        let mut guard = RepairGuard::lock(main).unwrap();
+        guard
+            .reserve(unknown_entry(main, 1, "next", &main.join("next-seat")))
+            .unwrap();
+        let refusal = guard
+            .reserve(unknown_entry(main, 4, "next", &main.join("next-seat")))
+            .unwrap_err()
+            .to_string();
+        assert!(refusal.contains("other-lane"), "{refusal}");
+        assert!(
+            refusal.contains("aida doctor heal repair-journal --yes"),
+            "{refusal}"
+        );
+        // No journal: nothing is created by the release.
+        let empty = tempfile::tempdir().unwrap();
+        release_unspawned_lane(empty.path(), "lane");
+        assert!(!empty.path().join(".aida").exists());
+    }
+
+    fn write_lease(main: &Path, id: &str, tree: &Path) {
+        let path = crate::lease_path(main, id);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &path,
+            format!(
+                "id = {id:?}\nscope = \"BUG-2688\"\nslug = \"bug-2688\"\nowner = \"test\"\n\
+                 worktree_path = {}\nbranch = \"pr\"\nstarted_at = \"2026-11-20T00:00:00Z\"\n\
+                 hostname = \"h\"\nrole = \"implementer\"\n",
+                aida_core::toml_quote::toml_string(&tree.display().to_string()),
+            ),
+        )
+        .unwrap();
+    }
+
+    fn write_lane_run(main: &Path, lane: &str, body: &str) -> PathBuf {
+        let path = main.join(format!(".aida/lanes/headless-{lane}.json"));
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, body).unwrap();
+        path
+    }
+
+    fn lane_run(lane: &str, pid: u32) -> String {
+        serde_json::json!({
+            "lease_id": lane,
+            "spec": "BUG-2688",
+            "vendor": "codex",
+            "pid": pid,
+            "log_path": "/nonexistent/log",
+            "started_at": "2026-11-20T00:00:00Z",
+            "exited_at": "2026-11-20T00:01:00Z",
+        })
+        .to_string()
+    }
+
+    // The heal releases a reservation only when the lease, the lane run and
+    // the seat are all provably gone, and backs the journal up first. Every
+    // remaining or unreadable piece of evidence keeps the reservation.
+    // trace:BUG-2688 | ai:claude
+    #[test]
+    fn bug_2688_heal_releases_only_a_provably_gone_lane_and_backs_up_the_journal() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        // No journal: nothing to report and nothing created.
+        assert!(scan(main).is_empty());
+        assert!(!main.join(".aida").exists());
+
+        let seat = main.join("seat");
+        let entry = unknown_entry(main, 4365, "lane-1", &seat);
+        let id = reservation_id(&entry.key);
+        RepairGuard::lock(main).unwrap().reserve(entry).unwrap();
+        let kept = |why: &str| {
+            assert!(scan(main).is_empty(), "{why}: must not be reported");
+            let outcome = heal_dead_lane_reservation(main, &id).unwrap();
+            assert!(outcome.is_err(), "{why}: must be kept");
+            assert_eq!(spawn_of(main, 4365), SpawnOutcome::Unknown, "{why}");
+            outcome.unwrap_err()
+        };
+
+        // 1. The lane's lease still exists.
+        write_lease(main, "lane-1", &main.join("elsewhere"));
+        assert!(kept("lane lease").contains("lane-1"));
+        std::fs::remove_file(crate::lease_path(main, "lane-1")).unwrap();
+        // 2. Another lease holds the seat path.
+        write_lease(main, "successor", &seat);
+        assert!(kept("seat lease").contains("successor"));
+        // 3. A lease file that cannot be parsed: ownership is unknown.
+        std::fs::write(crate::lease_path(main, "successor"), "id = ").unwrap();
+        let unreadable = scan(main);
+        assert_eq!(unreadable.len(), 1);
+        assert!(!unreadable[0].safe_heal, "{unreadable:?}");
+        assert!(heal_dead_lane_reservation(main, &id).is_err());
+        assert_eq!(spawn_of(main, 4365), SpawnOutcome::Unknown);
+        std::fs::remove_file(crate::lease_path(main, "successor")).unwrap();
+        // 4. The seat tree still exists.
+        std::fs::create_dir(&seat).unwrap();
+        assert!(kept("seat exists").contains("still exists"));
+        std::fs::remove_dir(&seat).unwrap();
+        // 5. The lane run is alive despite its exit stamp, or unreadable.
+        let record = write_lane_run(main, "lane-1", &lane_run("lane-1", std::process::id()));
+        assert!(kept("live lane run").contains("still alive"));
+        std::fs::write(&record, "{\"lease_id\": ").unwrap();
+        assert!(kept("torn lane record").contains("unknown"));
+
+        // 6. A finished lane run, no lease, no seat: reported and healed.
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let dead_pid = child.id();
+        child.wait().unwrap();
+        std::fs::write(&record, lane_run("lane-1", dead_pid)).unwrap();
+        let findings = scan(main);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].id, id);
+        assert_eq!(findings[0].category, HEAL_CATEGORY);
+        assert!(findings[0].safe_heal);
+        let before = std::fs::read(main.join(".aida/repair-journal.json")).unwrap();
+        let backup = heal_dead_lane_reservation(main, &id).unwrap().unwrap();
+        assert_eq!(std::fs::read(&backup).unwrap(), before);
+        assert_eq!(backup.parent(), Some(main.join(".aida").as_path()));
+        assert_eq!(spawn_of(main, 4365), SpawnOutcome::ProvenDead);
+        // Healed once: nothing more to report, a repeat is a no-op, and the
+        // head can be reserved by the next lane.
+        assert!(scan(main).is_empty());
+        assert!(heal_dead_lane_reservation(main, &id).unwrap().is_err());
+        assert!(heal_dead_lane_reservation(main, "pr-1-missing")
+            .unwrap()
+            .is_err());
+        write_lease(main, "lane-2", &main.join("seat-2"));
+        RepairGuard::lock(main)
+            .unwrap()
+            .reserve(unknown_entry(main, 4365, "lane-2", &main.join("seat-2")))
+            .unwrap();
+        // A lane id that is not a lease id never reaches a file lookup.
+        RepairGuard::lock(main)
+            .unwrap()
+            .reserve(unknown_entry(main, 9, "../escape", &main.join("gone")))
+            .unwrap();
+        assert!(scan(main).is_empty());
     }
 
     #[test]

@@ -797,6 +797,37 @@ pub(crate) fn claim_worker_has_exited(
         )
 }
 
+/// Whether the headless lane run recorded for `lease_id` under `project_root`
+/// is still alive. No record is a definite "no run"; a record that cannot be
+/// read or parsed, or an id that is not a lease id, is an error (unknown).
+/// The exit stamp alone never proves death: the recorded process must be
+/// provably dead, so every "cannot tell" reads as alive.
+// trace:BUG-2688 | ai:claude
+pub(crate) fn headless_lane_run_alive(project_root: &Path, lease_id: &str) -> anyhow::Result<bool> {
+    use anyhow::Context;
+    anyhow::ensure!(
+        !lease_id.is_empty()
+            && lease_id
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'-'),
+        "`{lease_id}` is not a lease id"
+    );
+    let path = headless_record_path(project_root, lease_id);
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => {
+            return Err(error).with_context(|| format!("reading lane record {}", path.display()))
+        }
+    };
+    let record: HeadlessLaneRecord = serde_json::from_str(&raw)
+        .with_context(|| format!("lane record {} is not valid", path.display()))?;
+    Ok(!aida_core::liveness::process_provably_dead(
+        record.pid,
+        record.pid_start_time.as_deref(),
+    ))
+}
+
 // A bound claim whose admission never spawned a worker: its clone is present
 // here and holds no lane record for the claim's lease. Only a confirmed absence
 // counts; an unreadable record or a missing clone is not evidence.
