@@ -9,12 +9,12 @@ description: |-
   1. aida queue rework finishes in under 10s on this repo's current gate ledger (658 PR ledgers), or prints progress and names the slow phase.
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
-status: Done
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-21T00:36:12.895809568Z
+modified_at: 2026-11-21T00:51:09.333089060Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -1046,6 +1046,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Done
+- id: 01a1fb95-ed95-7423-8a76-de41dbaab4c3
+  author: aida-orchestrator
+  timestamp: 2026-11-21T00:51:09.333108427Z
+  session_id: 01a1fb9267b8
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
@@ -1056,3 +1064,11 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2629 passes the slow-phase progress and early track-refusal criteria by source inspection. The end-to-end scan still performs quadratic work on healthy and recovery paths, and incomplete review evidence can admit an implementer pickup. CI pending at review time.
+  recovery_hint: address the review findings, move BUG-2629 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-21T00:51:09.333089060Z
