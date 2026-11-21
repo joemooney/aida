@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-20T23:34:34.859808866Z
+modified_at: 2026-11-21T00:04:21.459646469Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -375,6 +375,33 @@ comments:
     A reference merge (commit 29e77b852369, `(Refs TASK-3133)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-20T23:34:34.859805753Z
   modified_at: 2026-11-20T23:34:34.859805753Z
+- id: 01a1fb6a-eaaa-7420-9db6-6cd4409c8b9e
+  author: dirtlab
+  content: |-
+    ## Lane-job evidence: seat_clone:: on origin/main 29e77b8 (includes #4365)
+
+    Seat tree is identical to origin/main 29e77b8523 (empty diff; no edits, no commits). Command, run three consecutive times as a contained dell1 lane job (bubblewrap, lane target overlay) with AIDA_CARGO_FORCE_BUILD=1:
+    `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`
+
+    | run | lane job id | passed | failed | ignored | time |
+    |---|---|---|---|---|---|
+    | 1 | j20261120T235009601-3-0 | 381 | 0 | 3 | 118.51s |
+    | 2 | j20261121T000039418-3-0 | 381 | 0 | 3 | 121.71s |
+    | 3 | j20261121T000244880-3-0 | 381 | 0 | 3 | 69.44s |
+
+    Failing tests: none in any run, so there are no class (a), (b) or (c) failures to classify. 14402 filtered out each run; all three exited 0.
+
+    Ignored (same 3 each run, all by design): rework_merge_tests::portable_renderer_child (child entry point), seat_clone_handshake_tests::grouped_repeat_regression (explicit ten-run repeat), seat_publish_tests::bug_2488_seat_handshake_refusals_child (run by its watchdog parent).
+
+    Observations: run 1 printed over-60-seconds notices for 8 tests (bug_2552_bwrap_refused_holder_requires_dead_clean_pushed_clone, five orphan_reentry_tests, two review_repickup_tests); all passed. Runs ended with the note 'seed: overlay-stale' (primary rewrote a seed file in place; affects only this seat's build).
+
+    Logs: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1fb516582/<job id>.out
+
+    Not covered here: the 3 primary-host runs of AC3 (assigned to the product seat).
+  created_at: 2026-11-21T00:04:10.538219886Z
+  modified_at: 2026-11-21T00:04:10.538219886Z
+  session_id: 01a1fb516582
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
@@ -496,6 +523,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1fb6b-1cea-7db0-8bb6-6f1c94d688a1
+  author: dirtlab
+  timestamp: 2026-11-21T00:04:23.402713143Z
+  session_id: 01a1fb516582
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
@@ -504,8 +537,7 @@ filed_at:
   session: 01a1e1976efb
   harness_version: codex-cli 0.167.0
 attention_reason:
-  category: design-fork
-  detail: 'PR #4365 conflict in aida-cli-lib/src/tests/bug_home_038_seat_publish_tests.rs at story_2640_fast_gate_real_lane_exit_paths_settle_reservations. Both sides change the behavior of the same disk-headroom preflight: HEAD injects 100 GiB available, while the staged base writes project configuration lowering the floor to 1 GiB. The conflict-only brief requires a punt on behavioral overlap.'
-  lean: Keep both fixture settings to preserve the base configuration and deterministic available-space evidence.
+  category: other
+  detail: 'evidence posted: seat_clone:: lane-job runs on origin/main 29e77b8 (j20261120T235009601-3-0, j20261121T000039418-3-0, j20261121T000244880-3-0) each 381 passed / 0 failed / 3 ignored; see the TASK-3133 comment. No commits, no PR. Remaining for completion: the 3 primary-host runs of AC3 (product seat).'
   raised_by: implementer
-  raised_at: 2026-11-20T19:13:24.284029122Z
+  raised_at: 2026-11-21T00:04:21.459646469Z
