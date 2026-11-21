@@ -233,6 +233,25 @@ pub enum ReviewCommand {
         json: bool,
     },
 
+    /// Submit a standalone reviewer's draft verdict (the reviewer runs this).
+    ///
+    /// The launch prompt names a launch directory. Write the draft JSON to
+    /// `pending.json` inside it, then run this on the directory. It applies
+    /// the checks the launcher and the recorder apply later, under the
+    /// launching project's review policy: the closed draft format, and the
+    /// rule that any unresolved finding means request-changes. An `approved`
+    /// draft may carry only findings the recorder files as deferred
+    /// follow-ups. An accepted draft becomes the launch's submission; a
+    /// refusal accepts nothing and says what to change, so correct
+    /// `pending.json` and run it again. Nothing is recorded here: the
+    /// launcher records the accepted draft after the reviewer exits.
+    // trace:BUG-2707 | ai:claude
+    SubmitDraft {
+        /// The launch directory the review prompt named.
+        #[clap(value_name = "LAUNCH_DIR")]
+        launch_dir: std::path::PathBuf,
+    },
+
     /// One-time repair: expand every abbreviated `reviewed_sha` on disk to
     /// its full commit sha where this repo can still resolve it, and mark
     /// the rest explicitly unresolvable. Never invents a value and never

@@ -1346,7 +1346,8 @@ fn task1805_pickup_refuses_an_unknown_or_ambiguous_backing_id() {
 }
 
 /// Exercise the actual fresh headless launch boundary, including prompt
-/// transport, data-only vendor output, parent recording and collection.
+/// transport, the reviewer's own draft submission through the command its
+/// prompt names, parent validation, recording and collection.
 // trace:BUG-2564 | ai:codex
 #[test]
 fn standalone_review_verdict_structured_child_reaches_parent_canonical_record() {
@@ -1398,15 +1399,39 @@ fn standalone_review_verdict_structured_child_reaches_parent_canonical_record() 
                     );
                     let data = serde_json::json!({"version":1,"pr":59,"reviewed_sha":head,
                 "verdict":"approved","summary":"data-only child complete rationale","findings":[]});
+                    // The reviewer's `aida` is the CLI built beside this
+                    // test, so the prompt's command runs the real submission.
+                    // trace:BUG-2707 | ai:claude
+                    std::os::unix::fs::symlink(
+                        crate::test_exec::matching_aida_cli(),
+                        tmp.path().join("bin/aida"),
+                    )
+                    .unwrap();
                     format!(
                         r#"#!/bin/sh
 unset AIDA_SESSION_GRANT AIDA_SESSION_ID AIDA_AGENT_TYPE AIDA_AGENT_NAME
 python3 - "$@" <<'PY'
-import json, pathlib, re, sys
-matches = [re.search(r'absolute path `([^`]+/draft.json)`', arg) for arg in sys.argv[1:]]
-path = next(match.group(1) for match in matches if match)
-assert pathlib.Path(path).is_absolute()
-pathlib.Path(path).write_text(json.dumps(json.loads(r'''{data}''')))
+import json, pathlib, re, subprocess, sys
+matches = [re.search(r'absolute path `([^`]+)/pending.json`', arg) for arg in sys.argv[1:]]
+launch = pathlib.Path(next(match.group(1) for match in matches if match))
+assert launch.is_absolute()
+# The submission is the command the prompt gives, run through a shell as written.
+commands = [re.search(r'exactly as written: (aida review submit-draft [^\n]+)\n', arg) for arg in sys.argv[1:]]
+command = next(match.group(1) for match in commands if match)
+def submit(draft):
+    (launch / "pending.json").write_text(json.dumps(draft))
+    return subprocess.run(command, shell=True, capture_output=True, text=True)
+draft = json.loads(r'''{data}''')
+# An approval that carries an unresolved finding is refused while this
+# reviewer still runs, and nothing is accepted from it.
+refused = submit(dict(draft, findings=["P3: rename the helper"]))
+assert refused.returncode != 0, refused
+assert "request-changes" in refused.stdout + refused.stderr, refused
+assert not (launch / "draft.json").exists()
+accepted = submit(draft)
+assert accepted.returncode == 0, accepted
+assert json.loads((launch / "draft.json").read_text()) == draft
+assert not (launch / "pending.json").exists()
 PY
 "#
                     )
