@@ -25,7 +25,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T07:23:48.351768Z
-modified_at: 2026-11-20T21:09:57.059168226Z
+modified_at: 2026-11-21T00:32:10.656798438Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -578,6 +578,13 @@ comments:
   content: 'advisor-121 14:12, THIRD hand edit, with a concrete REPRO LOOP: (1) a codex conflict lane punts, leaving a repair-journal reservation spawn=unknown; (2) the advisor marks it proven_dead (12:33); (3) a Claude reconcile is refused on the self-published route (''run the repair as a contained Codex lane'') but FIRST re-reserves the same key with a fresh spawn=unknown (lane 01a1fa766be0, 12:37); (4) the next codex attempt (13:44) is refused with ''retained conflicts require their host journal evidence''. Marked 01a1fa766be0 proven_dead under flock (backup .aida/repair-journal.json.bak-advisor121-20261120T140953). FIX REQUIRED: a refused or pre-start-failed repair must never leave (or must self-record proven_dead on) its reservation; route refusal must happen BEFORE reserving.'
   created_at: 2026-11-20T21:09:57.059168226Z
   modified_at: 2026-11-20T21:09:57.059168226Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb84-cd70-70c3-9afb-d7cfb1b26356
+  author: joe
+  content: 'advisor-121 17:45 CORRECTION: my 2026-11-20 comments here about repair-journal reservations (12:34, 14:12) belong to BUG-2688, not this completed admission spec. Moved there; ignore them here.'
+  created_at: 2026-11-21T00:32:10.656798438Z
+  modified_at: 2026-11-21T00:32:10.656798438Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
