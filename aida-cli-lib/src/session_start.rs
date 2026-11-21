@@ -110,6 +110,97 @@ pub(crate) fn review_anchor_matches_change(
         })
 }
 
+/// Whether a review lease conflict must be decided without a prompt: this
+/// invocation's `--no-human` flag, `AIDA_HEADLESS` (`headless_env`), or no
+/// terminal on stdin.
+/// The persistent no-human acknowledgement markers do not count: they
+/// outlive the unattended run that wrote them, and an attended pickup on the
+/// same machine still gets its prompt.
+// trace:BUG-1205 | ai:claude
+// trace:BUG-2684 | ai:claude
+pub(crate) fn review_conflict_cannot_prompt(no_human: bool, headless_env: bool) -> bool {
+    #[cfg(test)]
+    if test_attended_terminal::forced() {
+        return review_conflict_cannot_prompt_from(no_human, false, true);
+    }
+    review_conflict_cannot_prompt_from(
+        no_human,
+        headless_env,
+        std::io::IsTerminal::is_terminal(&std::io::stdin()),
+    )
+}
+
+/// Pure core of [`review_conflict_cannot_prompt`].
+// trace:BUG-2684 | ai:claude
+pub(crate) fn review_conflict_cannot_prompt_from(
+    no_human: bool,
+    headless_env: bool,
+    stdin_is_tty: bool,
+) -> bool {
+    no_human || headless_env || !stdin_is_tty
+}
+
+/// Test-only, per-thread stand-in for an attended terminal (a tty on stdin
+/// and no `AIDA_HEADLESS`), which a test process never has.
+// trace:BUG-2684 | ai:claude
+#[cfg(test)]
+pub(crate) mod test_attended_terminal {
+    thread_local! {
+        static FORCED: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
+
+    pub(crate) fn forced() -> bool {
+        FORCED.with(std::cell::Cell::get)
+    }
+
+    /// Treat this thread as an attended terminal until the guard drops.
+    pub(crate) struct Guard(bool);
+
+    pub(crate) fn force() -> Guard {
+        Guard(FORCED.with(|f| f.replace(true)))
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            FORCED.with(|f| f.set(self.0));
+        }
+    }
+}
+
+/// Test-only, per-thread record of the `no_human` argument each session
+/// start on this thread received, so a test can observe what a pickup
+/// passed instead of reading the caller's source.
+// trace:BUG-2684 | ai:claude
+#[cfg(test)]
+pub(crate) mod test_no_human_seen {
+    thread_local! {
+        static SEEN: std::cell::RefCell<Vec<bool>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    pub(super) fn record(no_human: bool) {
+        SEEN.with(|seen| seen.borrow_mut().push(no_human));
+    }
+
+    /// Every value recorded on this thread since the last call.
+    pub(crate) fn take() -> Vec<bool> {
+        SEEN.with(|seen| std::mem::take(&mut *seen.borrow_mut()))
+    }
+}
+
+/// Release an earlier reviewer's lease blocking a review pickup when its
+/// holder is proven dead by the ownership reader (not only by the
+/// process-table heuristic [`review_branch_conflicts`] applies) and its
+/// worktree is gone. Such a lease holds nothing a human could choose to
+/// keep, so it never prompts. Other roles keep the guarded `session end`.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn release_dead_gone_tree_conflict(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+) -> bool {
+    crate::ownership::reader::stale_review_lease_ended(project_root, lease)
+        && crate::session_reap::release_proven_dead_gone_worktree_lease(project_root, lease)
+}
+
 /// How a reviewer pickup meets the lease holding the PR's source branch. The
 /// change title (a forge round trip) is fetched only once every other
 /// coexistence condition holds; the branch is the source branch the caller
@@ -2123,6 +2214,7 @@ pub(crate) fn session_start(
         PathReentry::None,
         None,
         false,
+        /* no_human */ false,
     )
     .map(|mut receipt| receipt.disarm())
 }
@@ -2184,7 +2276,13 @@ pub(crate) fn session_start_with_receipt(
     // policy; only that exact change may lift the Done refusal.
     // trace:STORY-2690 | ai:claude
     done_rework_admitted: bool,
+    // This invocation's `--no-human`: a review lease conflict is decided
+    // from the substrate, never at a prompt.
+    // trace:BUG-2684 | ai:claude
+    no_human: bool,
 ) -> Result<SessionStartReceipt> {
+    #[cfg(test)]
+    test_no_human_seen::record(no_human);
     let base = session_base.map(|base| match base {
         SessionBase::Explicit(branch)
         | SessionBase::QueueBranch(branch)
@@ -3011,10 +3109,25 @@ pub(crate) fn session_start_with_receipt(
                 // automatically (the option a human would pick); a LIVE lease
                 // refuses with a typed message instead of a silent cancel.
                 // trace:BUG-1205 | ai:claude
-                let headless = std::env::var_os("AIDA_HEADLESS").is_some()
-                    || !std::io::IsTerminal::is_terminal(&std::io::stdin());
+                let headless = review_conflict_cannot_prompt(
+                    no_human,
+                    std::env::var_os("AIDA_HEADLESS").is_some(),
+                );
                 // trace:TASK-3420 | ai:codex
                 let is_live = crate::ownership::reader::lease_retained(&project_root, l);
+                // A provably dead lease whose tree is gone holds nothing a
+                // human could choose to keep: release it, never prompt.
+                // trace:BUG-2684 | ai:claude
+                if !is_live && release_dead_gone_tree_conflict(&project_root, l) {
+                    eprintln!(
+                        "{} released lease {} on `{}`: its worktree {} is gone and its session has ended",
+                        crate::glyph(crate::glyphs::Glyph::Info).cyan(),
+                        &l.id[..l.id.len().min(8)],
+                        l.branch,
+                        l.worktree_path.display()
+                    );
+                    continue;
+                }
                 // BUG-2150: an explicit reviewer pickup coexists with the
                 // implementer's lease; another reviewer's lease still conflicts.
                 // trace:BUG-2150 | ai:claude

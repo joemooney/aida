@@ -95,6 +95,7 @@ fn adopt_receipt(
         crate::session_start::PathReentry::AdoptOrphan,
         None,
         /* done_rework_admitted */ false,
+        /* no_human */ false,
     )
 }
 

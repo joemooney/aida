@@ -42,6 +42,16 @@ fn queue_work_sync_force(
     no_pull: bool,
     force_claim: bool,
 ) -> anyhow::Result<()> {
+    queue_work_full(storage, no_launch, no_pull, force_claim, false)
+}
+
+fn queue_work_full(
+    storage: &crate::Storage,
+    no_launch: bool,
+    no_pull: bool,
+    force_claim: bool,
+    no_human: bool,
+) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
@@ -66,7 +76,7 @@ fn queue_work_sync_force(
         false,
         None,
         "claude",
-        false,
+        /* no_human */ no_human,
         crate::phase_driver::AutonomyMode::Default,
         None,
         false,
@@ -381,6 +391,336 @@ fn bug_2684_unrecorded_reviewer_draft_survives_exit_teardown_and_next_pickup() {
         .unwrap()
         .is_empty());
     assert!(!tree.join(".aida/review-verdicts").exists());
+}
+
+/// A finished reviewer whose verdict is recorded at its head, but whose
+/// lifecycle close was never written (the 2026-11-20 stall that held the
+/// next head's review for hours), is retired by the next head's pickup only
+/// when its holder is POSITIVELY dead. Reaping fails closed: no verdict, a
+/// WAITING verdict, a verdict at another head, a lease recording no process,
+/// a live creator outside the tree, or an ownership record naming a
+/// replacement holder each keep the tree and lease, and the refusal says why.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup() {
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let fx = fixture();
+    let mut ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+    let gh = fx.root.join("fake-gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+    let store = fx.main.join(".aida-store");
+    git_ok(&store, &["config", "user.email", "test@example.com"]);
+    git_ok(&store, &["config", "user.name", "AIDA Test"]);
+    let (storage, status) = review_story(&fx.main);
+    let base = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    std::fs::write(fx.main.join("README.md"), "first PR head\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "first PR head"]);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    queue_work(&storage).unwrap();
+    let mut lease = crate::list_leases(&fx.main).remove(0);
+    let tree = lease.worktree_path.clone();
+    let first_head = git_ok(&tree, &["rev-parse", "HEAD"]);
+    // The observed stale lease: exact session, Reviewing, no witnesses, so
+    // the ownership record alone cannot judge its holder.
+    lease.pr_head_sha = Some(first_head.clone());
+    lease.holder_record = None;
+    lease.pid_namespace = crate::agent_registry::current_pid_namespace();
+    let lease_file = crate::lease_path(&fx.main, &lease.id);
+    let key = crate::ownership::WorkKey::Review {
+        change: crate::ownership::dual::change(2457),
+        head: first_head.clone(),
+    };
+    let set_holder = |lease: &crate::SessionLease, session: &str| {
+        use crate::ownership::{Ownership, Phase};
+        let mut holder = crate::ownership::dual::holder_for_lease(
+            lease,
+            &crate::ownership::dual::WriterFacts::here(),
+            chrono::Utc::now(),
+        );
+        holder.witnesses.clear();
+        holder.session = session.to_string();
+        crate::ownership::store::OwnershipStore::for_project(&fx.main)
+            .unwrap()
+            .unwrap()
+            .update(
+                &key,
+                "fixture",
+                crate::ownership::store::Expect::Any,
+                |_| {
+                    Some((
+                        Ownership {
+                            key: key.clone(),
+                            generation: 0,
+                            phase: Phase::Reviewing {
+                                head: first_head.clone(),
+                            },
+                            holder: Some(holder),
+                        },
+                        None,
+                    ))
+                },
+            )
+            .unwrap();
+    };
+    let reaped = || {
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        pid
+    };
+    let set_pids = |lease: &mut crate::SessionLease, active: Option<u32>, creator: Option<u32>| {
+        lease.active_pid = active;
+        lease.creator_pid = creator;
+        lease.active_pid_start_time = None;
+        lease.creator_pid_start_time = None;
+        std::fs::write(&lease_file, toml::to_string(&*lease).unwrap()).unwrap();
+    };
+    set_holder(&lease, &lease.id);
+    set_pids(&mut lease, None, None);
+    assert!(matches!(
+        crate::ownership::reader::lease_owner(&fx.main, &lease),
+        crate::ownership::OwnerVerdict::Unknown { .. }
+    ));
+    assert!(!crate::ownership::reader::review_lease_ended(
+        &fx.main, &lease
+    ));
+
+    std::fs::write(fx.main.join("README.md"), "next PR head\n").unwrap();
+    git_ok(&fx.main, &["commit", "-qam", "next PR head"]);
+    git_ok(
+        &fx.main,
+        &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+    );
+    let next_head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    status(aida_core::RequirementStatus::Approved);
+
+    let verdicts = fx.main.join(".aida/review-verdicts");
+    std::fs::create_dir_all(&verdicts).unwrap();
+    let verdict = verdicts.join("PR-2457.json");
+    let record = |kind: &str, sha: &str| {
+        std::fs::write(
+            &verdict,
+            serde_json::json!({
+                "verdict": kind,
+                "reviewed_sha": sha,
+                "recorded_by": "reviewer-fixture",
+                "summary": "fixture review",
+                "findings": ["[P2] fixture finding"],
+            })
+            .to_string(),
+        )
+        .unwrap();
+    };
+    let retained = |why: &str| -> String {
+        let before = std::fs::read(&lease_file).unwrap();
+        let err = format!("{:#}", queue_work(&storage).unwrap_err());
+        assert!(err.contains("held by worktree"), "{why}: {err}");
+        assert_eq!(std::fs::read(&lease_file).unwrap(), before, "{why}");
+        assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), first_head, "{why}");
+        assert!(tree.exists(), "{why}");
+        err
+    };
+    let recorded = |sha: &str| {
+        crate::queue_cmd::conclusive_review_recorded_at(
+            &fx.main,
+            crate::session_start::ReviewForge::GitHub,
+            2457,
+            sha,
+        )
+    };
+
+    retained("no verdict");
+    record("waiting", &first_head);
+    assert!(!recorded(&first_head));
+    retained("a WAITING verdict is not conclusive");
+    record("request-changes", &base);
+    assert!(!recorded(&first_head));
+    retained("a verdict at another head");
+
+    record("request-changes", &first_head);
+    assert!(recorded(&first_head));
+    assert!(!recorded(&next_head), "only the reviewed head is covered");
+
+    // Unknown liveness keeps it: no recorded process proves the holder dead.
+    let err = retained("a lease recording no process has no death proof");
+    assert!(err.contains("has a recorded verdict but was kept"), "{err}");
+
+    // A live creator outside the tree keeps it, though the worker is gone.
+    set_pids(&mut lease, Some(reaped()), Some(std::process::id()));
+    let err = retained("a live creator outside the tree");
+    assert!(err.contains("creator process"), "{err}");
+
+    // A replacement holder owns the work key: nothing is retired, even with
+    // every process this old lease recorded positively dead.
+    set_pids(&mut lease, Some(reaped()), Some(reaped()));
+    set_holder(&lease, "01replacement0holder");
+    let err = retained("the record names a replacement holder");
+    assert!(err.contains("different session"), "{err}");
+    let replaced = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    assert_eq!(replaced.holder.unwrap().session, "01replacement0holder");
+    assert!(
+        crate::ownership::reader::journal_recorded_review_retirement(&fx.main, &lease).is_err()
+    );
+
+    // Positively dead holder + verdict at its exact head: retired.
+    set_holder(&lease, &lease.id);
+    queue_work(&storage).unwrap();
+    assert!(!lease_file.exists());
+    let new_lease = crate::list_leases(&fx.main).remove(0);
+    assert_ne!(new_lease.id, lease.id);
+    assert_eq!(new_lease.worktree_path, tree);
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), next_head);
+    // The retirement wrote the lease-bound completion receipt.
+    let old = crate::ownership::reader::lease_record(&fx.main, &lease)
+        .unwrap()
+        .unwrap();
+    assert!(old.holder.is_none());
+    assert!(matches!(old.phase, crate::ownership::Phase::Closed { .. }));
+}
+
+/// Each local source `conclusive_review_recorded_at` documents answers on its
+/// own, at exactly the reviewed head: the legacy verdict file, its archived
+/// rounds (a per-round file and a `rounds` array), the gate ledger, and the
+/// GitLab `MR-` key (which a GitHub pickup never reads). A WAITING record in
+/// any of them is not conclusive. The synced publication source is covered
+/// beside its signed fixture
+/// (`bug_2684_synced_publication_alone_counts_as_recorded_at_its_head`).
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_each_local_verdict_source_counts_as_recorded_at_its_head() {
+    use crate::gate::ledger::{self, ChangeKey};
+    use crate::session_start::ReviewForge::{GitHub, GitLab};
+    let fx = fixture();
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+    let root = fx.main.as_path();
+    let recorded = crate::queue_cmd::conclusive_review_recorded_at;
+    let sha = |c: char| c.to_string().repeat(40);
+    let other = sha('f');
+    let verdict = |kind: &str, head: &str| {
+        serde_json::json!({
+            "verdict": kind,
+            "reviewed_sha": head,
+            "recorded_by": "reviewer-fixture",
+            "summary": "fixture review",
+            "findings": ["[P2] fixture finding"],
+        })
+    };
+    let verdicts = root.join(".aida/review-verdicts");
+    let write = |rel: &str, body: serde_json::Value| {
+        let path = verdicts.join(rel);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, body.to_string()).unwrap();
+    };
+    let ledger_verdict = |key: &str, kind: &str, head: &str| {
+        let record = verdict(kind, head).as_object().unwrap().clone();
+        ledger::record_event(
+            root,
+            ledger::event::verdict_event(root, ChangeKey::parse(key).unwrap(), &record, None),
+        )
+        .unwrap();
+    };
+
+    // Nothing recorded anywhere.
+    assert!(!recorded(root, GitHub, 31, &sha('a')));
+
+    // The legacy verdict file.
+    write("PR-31.json", verdict("waiting", &sha('a')));
+    assert!(!recorded(root, GitHub, 31, &sha('a')), "WAITING file");
+    write("PR-31.json", verdict("request-changes", &sha('a')));
+    assert!(recorded(root, GitHub, 31, &sha('a')));
+    assert!(!recorded(root, GitHub, 31, &other));
+    assert!(!recorded(root, GitHub, 32, &sha('a')), "another change");
+
+    // Archived rounds: the current file has moved on to a later head; the
+    // earlier heads live in the archive directory beside it.
+    write("PR-33.json", verdict("approved", &sha('b')));
+    let mut round = verdict("request-changes", &sha('c'));
+    round["rounds"] = serde_json::json!([
+        verdict("request-changes", &sha('d')),
+        verdict("waiting", &sha('e')),
+    ]);
+    write("PR-33/round-1.json", round);
+    assert!(recorded(root, GitHub, 33, &sha('b')), "current file");
+    assert!(recorded(root, GitHub, 33, &sha('c')), "archived round file");
+    assert!(
+        recorded(root, GitHub, 33, &sha('d')),
+        "nested `rounds` entry"
+    );
+    assert!(!recorded(root, GitHub, 33, &sha('e')), "archived WAITING");
+    assert!(!recorded(root, GitHub, 33, &other));
+    // An archive with no current file still answers.
+    write("PR-34/round-1.json", verdict("approved", &sha('c')));
+    assert!(recorded(root, GitHub, 34, &sha('c')));
+
+    // The gate ledger, with no verdict file at all.
+    ledger_verdict("PR-35", "waiting", &sha('a'));
+    assert!(!recorded(root, GitHub, 35, &sha('a')), "ledger WAITING");
+    ledger_verdict("PR-35", "request-changes", &sha('b'));
+    assert!(!verdicts.join("PR-35.json").exists());
+    assert!(recorded(root, GitHub, 35, &sha('b')));
+    assert!(!recorded(root, GitHub, 35, &sha('a')));
+    assert!(!recorded(root, GitHub, 35, &other));
+
+    // The GitLab `MR-` key, as a file and as a ledger change. A GitLab
+    // pickup reads both keys; a GitHub pickup never reads `MR-`.
+    write("MR-36.json", verdict("approved", &sha('a')));
+    assert!(recorded(root, GitLab, 36, &sha('a')));
+    assert!(!recorded(root, GitHub, 36, &sha('a')));
+    assert!(!recorded(root, GitLab, 36, &other));
+    ledger_verdict("MR-37", "request-changes", &sha('b'));
+    assert!(recorded(root, GitLab, 37, &sha('b')));
+    assert!(!recorded(root, GitHub, 37, &sha('b')));
+    // A GitLab pickup still honours the `PR-` key.
+    assert!(recorded(root, GitLab, 31, &sha('a')));
+}
+
+/// A `--no-human` review pickup hands its flag to session start, where the
+/// lease-conflict loop decides from the substrate instead of prompting; an
+/// attended pickup passes none. Observed at session start itself, on the
+/// real `aida queue work` path.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_no_human_review_pickup_passes_no_human_to_session_start() {
+    for no_human in [false, true] {
+        let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
+        ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
+        ambient.set_key("AIDA_NO_HUMAN_ACKNOWLEDGED", "1");
+        let gh = fx.root.join("fake-gh");
+        crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        git_ok(&fx.main, &["init", "-q", ".aida-store"]);
+        let store = fx.main.join(".aida-store");
+        git_ok(&store, &["config", "user.email", "test@example.com"]);
+        git_ok(&store, &["config", "user.name", "AIDA Test"]);
+        let (storage, _status) = review_story(&fx.main);
+        std::fs::write(fx.main.join("README.md"), "PR head\n").unwrap();
+        git_ok(&fx.main, &["commit", "-qam", "PR head"]);
+        git_ok(
+            &fx.main,
+            &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
+        );
+        crate::session_start::test_no_human_seen::take();
+        let result = queue_work_full(&storage, true, true, false, no_human);
+        let seen = crate::session_start::test_no_human_seen::take();
+        assert_eq!(
+            seen,
+            vec![no_human],
+            "no_human={no_human}: session start saw {seen:?}; pickup result {result:?}"
+        );
+        result.unwrap();
+        assert_eq!(crate::list_leases(&fx.main).len(), 1);
+    }
 }
 
 // trace:BUG-2469 | ai:codex

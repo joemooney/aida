@@ -3830,6 +3830,59 @@ fn is_default_review_worktree(
         }))
 }
 
+/// Whether a conclusive (non-WAITING) verdict for this change is recorded at
+/// exactly `head`, in the legacy file, its archived rounds, the gate ledger,
+/// or a synced publication. An unreadable source counts as no verdict.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn conclusive_review_recorded_at(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+    head: &str,
+) -> bool {
+    let mut keys = vec![format!("PR-{n}")];
+    if forge == ReviewForge::GitLab {
+        keys.push(format!("MR-{n}"));
+    }
+    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+    crate::gate::review_verdict::conclusive_recorded_at(root, &keys, head)
+}
+
+/// Whether a reviewer lease's review is over, or why it is kept: its verdict
+/// is recorded at exactly the head it reviewed AND its holder is positively
+/// dead. Unknown liveness — an unreadable record, a record naming another
+/// holder, a live legacy creator — keeps it. `None` means the lease is not a
+/// recorded review of this change at all. Tree safety (dirty, live cwd,
+/// unpublished commits, an unrecorded draft, merge-hold markers) remains the
+/// caller's job.
+// trace:BUG-2684 | ai:claude
+fn recorded_review_lease_state(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+    lease: &SessionLease,
+) -> Option<std::result::Result<(), String>> {
+    (crate::pr_lease_takeover::reviewer_target(lease) == Some((forge, n))
+        && lease
+            .pr_head_sha
+            .as_deref()
+            .is_some_and(|head| conclusive_review_recorded_at(root, forge, n, head)))
+    .then(|| crate::ownership::reader::review_holder_proven_dead(root, lease))
+}
+
+// trace:BUG-2684 | ai:claude
+fn recorded_review_lease_finished(
+    root: &std::path::Path,
+    forge: ReviewForge,
+    n: u64,
+    lease: &SessionLease,
+) -> bool {
+    matches!(
+        recorded_review_lease_state(root, forge, n, lease),
+        Some(Ok(()))
+    )
+}
+
 /// A finished or crashed review may leave its disposable checkout. An ended
 /// reviewer lease additionally requires current forge-head coverage.
 /// Retire only the default review tree, so ordinary occupied branches
@@ -3881,8 +3934,15 @@ fn review_worktree_retirement(
             .collect())
     };
     // A crashed review needs positive death proof. Only one exact reviewer
-    // lease is eligible.
+    // lease is eligible. A review whose verdict is recorded at the lease's
+    // head and whose worker is gone has also ended, even without a lifecycle
+    // close record (a finished reviewer's stale lease blocked the next head).
     // trace:BUG-2498 BUG-2469 | ai:codex
+    // trace:BUG-2684 | ai:claude
+    let ended = |lease: &SessionLease| {
+        crate::ownership::reader::review_lease_ended(root, lease)
+            || recorded_review_lease_finished(root, forge, n, lease)
+    };
     let leases = matching_leases()?;
     let reclaim = match leases.as_slice() {
         [] => None,
@@ -3891,9 +3951,27 @@ fn review_worktree_retirement(
                 && crate::worktree::canonical_or_self(&lease.worktree_path)
                     == crate::worktree::canonical_or_self(&path)
                 && crate::pr_lease_takeover::reviewer_target(lease) == Some((forge, n))
-                && crate::ownership::reader::review_lease_ended(root, lease) =>
+                && ended(lease) =>
         {
             Some(lease)
+        }
+        // A recorded review whose holder is not positively dead is kept;
+        // name why, so the refusal is not a bare "branch held".
+        // trace:BUG-2684 | ai:claude
+        [lease] => {
+            let kept = match recorded_review_lease_state(root, forge, n, lease) {
+                Some(Err(why)) => Some(why),
+                _ => None,
+            };
+            return preflight_queue_work_branch(root, Some(&branch))
+                .map(|_| None)
+                .map_err(|error| match kept {
+                    Some(why) => anyhow::anyhow!(
+                        "{error:#}\nReviewer lease {} has a recorded verdict but was kept: {why}.",
+                        lease.id
+                    ),
+                    None => error,
+                });
         }
         _ => return preflight_queue_work_branch(root, Some(&branch)).map(|_| None),
     };
@@ -4000,7 +4078,7 @@ fn review_worktree_retirement(
     // trace:BUG-2469 | ai:codex
     if let Some(lease) = reclaim {
         anyhow::ensure!(
-            crate::ownership::reader::review_lease_ended(root, lease)
+            ended(lease)
                 && Some(std::fs::read(crate::lease_path(root, &lease.id))?) == lease_snapshot
                 && working_tree_clean(&path) == Some(true),
             "review ownership or working tree changed before retirement"
@@ -4018,12 +4096,23 @@ fn review_worktree_retirement(
     );
     // trace:STORY-2325 | ai:codex
     if let Some(lease) = reclaim {
-        crate::ownership::reader::journal_review_reclaim(root, lease).with_context(|| {
-            format!(
-                "ownership reclaim could not end lease {}; inspect `aida session end {}`",
-                lease.id, lease.id
-            )
-        })?;
+        crate::ownership::reader::journal_review_reclaim(root, lease)
+            .or_else(|error| {
+                // A recorded verdict is the completion evidence when the
+                // holder's death cannot be proven positively.
+                // trace:BUG-2684 | ai:claude
+                if recorded_review_lease_finished(root, forge, n, lease) {
+                    crate::ownership::reader::journal_recorded_review_retirement(root, lease)
+                } else {
+                    Err(error)
+                }
+            })
+            .with_context(|| {
+                format!(
+                    "ownership reclaim could not end lease {}; inspect `aida session end {}`",
+                    lease.id, lease.id
+                )
+            })?;
     }
     anyhow::ensure!(
         crate::session_reap::resolve_local_branch_tip(root, &branch).as_deref()
@@ -6219,7 +6308,6 @@ pub(crate) fn handle_queue_work(
                 }
             );
         }
-
         // session_start handles worktree creation, lease persistence, env
         // shim, conflict detection. We always pass launch=false so we can
         // (a) write the cluster manifest from the new lease and (b) emit
@@ -6283,6 +6371,10 @@ pub(crate) fn handle_queue_work(
                 // trace:STORY-2690 | ai:claude
                 /* done_rework_admitted */
                 plan.done_rework_change.is_some(),
+                // A `--no-human` pickup's setup must never stop at a prompt.
+                // trace:BUG-2684 | ai:claude
+                /* no_human */
+                no_human,
             )
         };
         let setup_receipt = if no_launch {

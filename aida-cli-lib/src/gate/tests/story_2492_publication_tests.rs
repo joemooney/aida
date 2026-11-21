@@ -1063,6 +1063,40 @@ fn synced_publication_skips_watcher_without_a_local_verdict_directory() {
     );
 }
 
+/// BUG-2684: a synced publication alone, with no local verdict file and no
+/// local ledger verdict, counts as the review recorded at exactly its head.
+// trace:BUG-2684 | ai:claude
+#[test]
+fn bug_2684_synced_publication_alone_counts_as_recorded_at_its_head() {
+    if !available() {
+        return;
+    }
+    let f = Fixture::new();
+    let recorded = |head: &str| rv::conclusive_recorded_at(&f.a, &["PR-7"], head);
+    {
+        let _env = env(&f.temp.path().join("home-a"));
+        assert!(!recorded(&f.sha), "nothing is published yet");
+    }
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        let record = f.record("request-changes", "reviewer-session");
+        f.collect(&record).unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    assert!(!f.a.join(".aida/review-verdicts").exists());
+    assert!(
+        ledger::project::verdict_records(&f.a, "PR-7").is_empty(),
+        "the publication is the only source on this node"
+    );
+    assert!(recorded(&f.sha));
+    assert!(
+        !recorded(&"a".repeat(40)),
+        "a publication at another head covers nothing"
+    );
+    assert!(!rv::conclusive_recorded_at(&f.a, &["PR-8"], &f.sha));
+}
+
 // trace:STORY-2696 | ai:codex
 #[test]
 fn story_2696_signed_no_carry_projection_and_supersession() {

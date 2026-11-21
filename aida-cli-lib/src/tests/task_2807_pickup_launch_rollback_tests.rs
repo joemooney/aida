@@ -37,6 +37,7 @@ fn launching_setup(scope: &str) -> crate::session_start::SessionStartReceipt {
         crate::session_start::PathReentry::None,
         None,
         /* done_rework_admitted */ false,
+        /* no_human */ false,
     )
     .unwrap();
     assert!(receipt.owns_setup(), "a launching pickup owns its setup");
@@ -413,6 +414,7 @@ fn bug_2697_an_errored_claim_push_is_released_when_an_unrolled_start_fails() {
         crate::session_start::PathReentry::None,
         None,
         /* done_rework_admitted */ false,
+        /* no_human */ false,
     );
     crate::seat_clone::failpoint::fail_before_lease(false);
 

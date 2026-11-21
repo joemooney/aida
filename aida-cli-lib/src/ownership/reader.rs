@@ -531,6 +531,138 @@ pub(crate) fn journal_review_reclaim(root: &Path, lease: &crate::SessionLease) -
     journal_reclaim(root, lease)
 }
 
+/// Whether an earlier reviewer's lease has ended for a review pickup: the
+/// pickup ownership rule does not retain it and either its holder is
+/// positively dead ([`review_holder_proven_dead`]) or the record is the
+/// completion receipt bound to this lease
+/// ([`review_completion_receipt_bound`]). Unknown liveness keeps the lease.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn stale_review_lease_ended(root: &Path, lease: &crate::SessionLease) -> bool {
+    crate::pr_lease_takeover::reviewer_target(lease).is_some()
+        && !lease_retained(root, lease)
+        && (review_holder_proven_dead(root, lease).is_ok()
+            || review_completion_receipt_bound(root, lease))
+}
+
+/// The ownership record is the supervisor's completion receipt for exactly
+/// this lease: a Closed review record naming no holder whose reason binds
+/// this lease's identity and worker generation, with the recorded worker
+/// gone ([`review_completion_matches`]). A holder-less Closed record with any
+/// other reason (another lease's receipt, a manual release) proves nothing
+/// about this lease, and an unreadable record is never a receipt.
+// trace:BUG-2684 | ai:claude
+fn review_completion_receipt_bound(root: &Path, lease: &crate::SessionLease) -> bool {
+    matches!(
+        lease_record(root, lease),
+        Ok(Some(record))
+            if matches!(record.key, WorkKey::Review { .. })
+                && record.holder.is_none()
+                && matches!(&record.phase, Phase::Closed { why } if review_completion_matches(lease, why))
+    )
+}
+
+/// Positive proof that a reviewer lease's holder ended, or why it is kept.
+/// Reaping fails closed: an unreadable ownership record, a record naming a
+/// different (or no) holder, or a provably live holder keeps the lease. When
+/// the record names this session but cannot judge it, or no record exists
+/// (a legacy lease), every recorded process must be positively gone
+/// ([`lease_processes_proven_gone`]).
+// trace:BUG-2684 | ai:claude
+pub(crate) fn review_holder_proven_dead(
+    root: &Path,
+    lease: &crate::SessionLease,
+) -> std::result::Result<(), String> {
+    match lease_record(root, lease) {
+        Err(error) => Err(format!("ownership evidence unreadable: {error:#}")),
+        Ok(Some(record)) => match record.holder.as_ref() {
+            Some(holder) if holder.session == lease.id => match owner(&record) {
+                OwnerVerdict::Dead { .. } => Ok(()),
+                OwnerVerdict::Alive { witness } => {
+                    Err(format!("review holder is still alive ({witness})"))
+                }
+                OwnerVerdict::Unknown { why } => lease_processes_proven_gone(lease)
+                    .map_err(|process| format!("holder liveness unknown ({why}); {process}")),
+            },
+            Some(holder) => Err(format!(
+                "ownership record names a different session ({})",
+                holder.session
+            )),
+            None => Err("ownership record names no holder for this session".into()),
+        },
+        Ok(None) => lease_processes_proven_gone(lease),
+    }
+}
+
+/// Every process a lease records is positively gone: the worker
+/// ([`finished_review_worker_is_gone`]), the owner by its liveness probe,
+/// and the creator by pid plus recorded start identity. A legacy lease
+/// whose live creator sits outside the tree is therefore never finished,
+/// and a lease recording no process at all has no proof. A lease recorded on
+/// another host, or processes in a pid namespace this observer cannot see,
+/// are unverifiable whatever the lease's age: the heartbeat backstop is not
+/// a death proof here.
+// trace:BUG-2684 | ai:claude
+fn lease_processes_proven_gone(lease: &crate::SessionLease) -> std::result::Result<(), String> {
+    // A pid means nothing on another host: a lease recorded elsewhere is
+    // never judged against this host's process table.
+    if lease.hostname != crate::coordination::hostname() {
+        return Err(format!(
+            "it was recorded on another host ({}); its processes cannot be observed here",
+            lease.hostname
+        ));
+    }
+    if !aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace) {
+        return Err("its processes are in a pid namespace this host cannot observe".into());
+    }
+    if !finished_review_worker_is_gone(lease) {
+        return Err("its recorded worker is alive or unverifiable".into());
+    }
+    if crate::leases::lease_owner_gone(lease) != Some(true) {
+        return Err("its owner process is not provably gone".into());
+    }
+    // The creator by pid plus start identity; only a Dead verdict proves it.
+    match lease.creator_pid {
+        Some(pid)
+            if !matches!(
+                aida_core::proc_identity::observe_legacy_registry(
+                    pid,
+                    lease.creator_pid_start_time.as_deref(),
+                    lease.pid_namespace,
+                ),
+                aida_core::proc_identity::Verdict::Dead(_)
+            ) =>
+        {
+            Err(format!(
+                "its creator process {pid} is still alive or unverifiable"
+            ))
+        }
+        _ => Ok(()),
+    }
+}
+
+/// Journal retirement of a review whose verdict the caller found recorded at
+/// the lease's head. Only a positively dead holder is retired: an ownership
+/// death proof is journaled as a reclaim; a dead legacy lease (no record)
+/// needs no journal; a recording holder whose death rests on the lease's own
+/// process proof gets the lease-bound completion receipt. Anything else —
+/// including a record that names another holder — refuses.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn journal_recorded_review_retirement(
+    root: &Path,
+    lease: &crate::SessionLease,
+) -> Result<()> {
+    review_holder_proven_dead(root, lease).map_err(|why| {
+        anyhow::anyhow!("review holder not proven dead: {why}; retirement refused")
+    })?;
+    match lease_record(root, lease)? {
+        None => Ok(()),
+        Some(_) if matches!(lease_owner(root, lease), OwnerVerdict::Dead { .. }) => {
+            journal_reclaim(root, lease)
+        }
+        Some(_) => review_finished(root, lease),
+    }
+}
+
 /// Record a reclaim attempt with positive death proof before guarded retirement. CAS refuses a
 /// replacement during preflight; the holder remains until session_end succeeds.
 /// This journal entry grants no permission to discard a tree or pending mail.

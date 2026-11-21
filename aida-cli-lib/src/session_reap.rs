@@ -1685,6 +1685,30 @@ pub(crate) fn release_gone_worktree_lease(
     true
 }
 
+/// Release a lease whose holder the caller has proven dead (ownership
+/// verdict, not the process-table heuristic) and whose absolute worktree
+/// path no longer exists. Same effect as [`release_gone_worktree_lease`]:
+/// clear git's stale registration, delete the lease files; the branch stays.
+/// Returns `false`, changing nothing, when the tree exists or the
+/// registration could not be cleared safely.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn release_proven_dead_gone_worktree_lease(
+    project_root: &std::path::Path,
+    lease: &SessionLease,
+) -> bool {
+    let path = &lease.worktree_path;
+    if path.as_os_str().is_empty() || !path.is_absolute() || path.exists() {
+        return false;
+    }
+    if clear_missing_worktree_registration(project_root, path, || {}, || {})
+        == RegistrationClearOutcome::Declined
+    {
+        return false;
+    }
+    release_lease_files(project_root, &lease.id);
+    !crate::lease_path(project_root, &lease.id).exists()
+}
+
 /// Release each of `leases` that is dead with its tree gone, judging them all
 /// from ONE process-table scan (taken only when some tree is gone). Returns
 /// `(released, kept)`.

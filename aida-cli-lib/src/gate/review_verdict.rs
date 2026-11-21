@@ -1614,6 +1614,42 @@ pub(crate) fn verdict_history(
     Ok(records)
 }
 
+/// Whether a conclusive (non-WAITING) verdict under any of `keys` is recorded
+/// at exactly `head`, in the legacy file, its archived rounds, the gate
+/// ledger, or a synced publication. An unreadable source counts as no verdict.
+// trace:BUG-2684 | ai:claude
+pub(crate) fn conclusive_recorded_at(root: &Path, keys: &[&str], head: &str) -> bool {
+    let conclusive = |v: &RecordedVerdict| {
+        !matches!(v.kind, VerdictKind::Waiting | VerdictKind::Unknown)
+            && v.reviewed_sha
+                .as_deref()
+                .is_some_and(|sha| same_reviewed_sha(sha, head))
+    };
+    keys.iter().any(|key| {
+        let events = super::ledger::ChangeKey::parse(key)
+            .and_then(|change| {
+                let ledger = super::ledger::store_root(root).ok()?;
+                super::ledger::checked::read_change_events(
+                    &ledger,
+                    change,
+                    &mut super::ledger::checked::Budget::default(),
+                )
+                .ok()
+            })
+            .unwrap_or_default();
+        verdict_history(root, key, &events)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|(record, _, _)| {
+                parse_recorded_verdict(&serde_json::Value::Object(record.clone()).to_string())
+            })
+            .any(|v| conclusive(&v))
+            || super::review_publication::current_at_head(root, &[*key], head)
+                .and_then(|current| parse_recorded_verdict(&current.body))
+                .is_some_and(|v| conclusive(&v))
+    })
+}
+
 /// Strict read of the legacy verdict file at `path`: `Ok(None)` only when
 /// nothing (not even a dangling link) is there; an unreadable or
 /// unparseable file is an error, never absence.
