@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T07:11:02.326820602Z
+modified_at: 2026-11-21T07:11:17.713370642Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -368,6 +368,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2707 bug protocol (PR touches at least one test file): met. AC3 met by p3/style regression coverage. AC1 and AC2 partial: the documented unresolved-finding rule and in-session correction are present, but the final validate-only handoff and locked collection through recording and consumption are missing. The required fast gate fails on the new test’s ambient PATH read. Reviewed the landed diff against main aa567732958f.. Triage reason: Advisor revalidation at #4385 bdd60daf20ca: merging main kept the round-3 submission protocol and the ambient-PATH CI failure. Complete the existing final-round validate-only redesign, including TASK-HOME-1199, under the recorded scope. Treat the prior final-round lane as unpublished until a new head proves otherwise. This is the existing final-round work, with its review and CI gates intact.'
   created_at: 2026-11-21T07:11:02.326812959Z
   modified_at: 2026-11-21T07:11:02.326812959Z
+- id: 01a1fcf1-f43b-7823-b4c4-94212687e440
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2707):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: bdd60daf20ca
+    Recorded: 2026-11-21T02:42:15.983341663+00:00
+    Findings:
+    1. The final BUG-2707 brief requires validate-only submission. submit_draft still writes draft.json and consumes pending.json. The prompt, CLI help, skill and tests still require that handoff. Make submit-draft validate draft.json without file mutations, and update those instructions and tests together.
+    2. LaunchDraft::read drops LaunchLock before queue_cmd/work.rs records the returned verdict and calls consumed() at line 8020. A corrected refusal accepted in that interval can be renamed to recorded.json while the ledger records the earlier approval. Hold the collection lock through validation, recording and consumption, and cover that interval.
+    3. consume_pending compares the claimed bytes and then unlinks the name. An in-place writer holding the pending inode can finish its correction after the comparison and lose the correction. The concurrency test uses atomic replacement and misses the supported in-place write. Remove the claim/consume protocol as directed.
+    4. remove_in discards unlinkat errors. If claim removal fails, submission can report success and tell the reviewer to exit while LaunchDraft::read subsequently refuses the leftover claim. Removing pending-file cleanup from validation eliminates this false acceptance.
+    5. submit_draft calls restore_claim before opening launch.json. In an unrelated directory containing both pending names, restore_claim removes pending.consumed.json before the command reports an invalid launch directory. Validation must leave the supplied directory untouched.
+    6. aida-cli/tests/bug_2707_submit_draft_cli.rs:43 still reads the ambient PATH. Fast-gates job 136691046541 identifies this exact var_os call in test_repository_matches_exact_ledger. Use the deterministic fixture PATH required by the final brief.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-21T07:11:17.563739997Z
+  modified_at: 2026-11-21T07:11:17.563739997Z
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe
