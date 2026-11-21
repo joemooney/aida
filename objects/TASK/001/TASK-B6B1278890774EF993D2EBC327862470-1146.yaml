@@ -1,5 +1,6 @@
 id: 01a1fabb-33c0-7c22-8611-a2ac5e706a54
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1146
+agreed_id: TASK-3191
 title: 'Review follow-up: [P2] Retain failed confirming rerun requests for retry. main_watch.rs:868-878 sets rerun_r'
 description: |-
   From STORY-2897
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T20:52:14.912481051Z
+history:
+- id: 01a1fb7d-9d97-7ae0-b240-81d00d7c0af8
+  author: joe
+  timestamp: 2026-11-21T00:24:35.991369371Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 81cbe3ada1c6b53f5e155c698a2a61d90c062cca
   branch: pr-4362
