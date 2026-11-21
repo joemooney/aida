@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T01:14:18.661355662Z
+modified_at: 2026-11-21T01:47:46.611426341Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -241,6 +241,41 @@ comments:
   modified_at: 2026-11-21T01:11:32.837071062Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fbc9-c433-7a70-b48a-f1490fad3892
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 10854bb60d (round 3 rework of PR #4385)
+
+    **Acceptance evidence**
+    - AC1: [evidence: documentation-inspection] skill and command templates, docs/cli/04-git-lifecycle.md and the launch prompt state one contract (any unresolved finding means request-changes) and now say the launcher re-checks whatever it collects.
+    - AC2: [evidence: behavioral-test] refusal while the reviewer runs: aida-cli/tests/bug_2707_submit_draft_cli.rs drives the real binary (refuse, accept, refused later attempt); standalone_review_verdict_structured_child_reaches_parent_canonical_record runs the real CLI from the fake vendor through the prompt's own command, refused then accepted, then parent recording.
+    - AC3: [evidence: behavioral-test] bug_2707_approved_draft_with_unresolved_findings_is_refused_at_submission (p3 + style).
+
+    **Round 3 findings**
+    1. No host-side channel exists for a reviewer command to reach the launcher, so the ruling's fallback applies: LaunchDraft keeps the parent's policy in memory and read() validates the collected draft under it. The receipt file is removed. Test: bug_2707_launcher_validates_the_collected_draft_under_its_own_policy (forged receipt, raw overwrite, launch.json rewritten to a lenient policy).
+    2. A pending attempt blocks collection, even of an earlier accepted draft, and teardown keeps it beside recorded.json. Test: bug_2707_refused_resubmission_blocks_the_earlier_acceptance (starts from an accepted clean approval).
+    3. Bounded flock on the launch directory for submissions and collection; unique O_EXCL temp names; one atomic rename of draft.json; pending consumed by rename-claim and compare, put back with linkat when it differs. Tests: bug_2707_acceptance_consumes_only_the_validated_pending_generation, bug_2707_concurrent_submissions_stay_consistent.
+    4. cfg(unix) on the /bin/sh test; scripts/check-portability.sh exits 0.
+
+    **Probe findings and fixes**
+    - The real binary refused submit-draft outside an AIDA project (found by the new binary test). Fixed: it now runs before project discovery.
+    - A lock holder that never releases would have hung the launcher; the wait is bounded at 30s and then refuses.
+
+    **Behaviour change to note**
+    - A consistent draft written straight to draft.json is now collected (it is validated by the launcher); round 2 refused it for lacking a receipt.
+
+    **Validation**
+    - Targeted lib tests (bug_2707, standalone_review_verdict, bug_2457): 33 passed. Binary test: 1 passed. Ratchet lib filters: 103 passed, 1 failed (bug_2398_real_native_codex_core_delegated_roles_and_reviewer_recording: Codex preflight ForeignNamespace in this sandbox; matched by a broad filter, not a ratchet). bug_1502_format_json_audit passed. check-store-writers, check-templates, Python ratchet unittests (90), cargo fmt --check: pass.
+    - make check-ci-fast was NOT completed: the source-gate runner exceeds this lane's 60s per-call cap and was cut off part-way. docs/cli/verify-manual.py not run (built binary not visible from this sandbox).
+
+    **Residual risks**
+    - A crash between the claim rename and its removal leaves pending.consumed.json; collection refuses and the next submission restores it.
+    - flock is advisory: a reviewer that bypasses the command is still bound only by the launcher's validation at collection, after it can no longer correct the draft.
+  created_at: 2026-11-21T01:47:46.611426341Z
+  modified_at: 2026-11-21T01:47:46.611426341Z
+  session_id: 01a1fbaaba25
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe
