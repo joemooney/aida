@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-21T01:56:08.644906938Z
+modified_at: 2026-11-21T01:56:33.970999230Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -542,6 +542,13 @@ comments:
   created_at: 2026-11-21T01:56:08.644906938Z
   modified_at: 2026-11-21T01:56:08.644906938Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fbd2-00b3-74d0-8822-d1eaf7ae873e
+  author: joe
+  content: 'advisor-121 19:00: completion gate SATISFIED pending landing. Primary host 509f5af: 3 forced runs at 382/0/3 (product). dell1 lane jobs on the slice-3 tree: j20261121T003501393-2-0, j20261121T004622701-12-0, j20261121T004937460-20-0, each 382/0/3 (PR #4387 body). #4387 is (Refs TASK-3133); when it lands, the advisor completes TASK-3133 by hand.'
+  created_at: 2026-11-21T01:56:33.970999230Z
+  modified_at: 2026-11-21T01:56:33.970999230Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
