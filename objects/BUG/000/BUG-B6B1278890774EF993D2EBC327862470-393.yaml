@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-21T00:52:52.359308987Z
+modified_at: 2026-11-21T00:53:06.581675987Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -857,6 +857,13 @@ comments:
     cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push. The DELTA review covers this ruling's items only.
   created_at: 2026-11-21T00:52:52.359308987Z
   modified_at: 2026-11-21T00:52:52.359308987Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb97-e849-7bf1-8406-7dd3c53f255e
+  author: joe
+  content: 'Product 17:53: R5-CAP-EXCEPTION lane queued on dell1 (claude), branch bug-2629-fresh. Scope = the AUTHORITATIVE R5-CAP-EXCEPTION BRIEF in the previous comment.'
+  created_at: 2026-11-21T00:53:06.581675987Z
+  modified_at: 2026-11-21T00:53:06.581675987Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
