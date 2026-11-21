@@ -53829,6 +53829,11 @@ Working on aida itself
         "help": "Parent comment ID (for replies)"
       },
       {
+        "name": "print-id",
+        "takes_value": false,
+        "help": "Also print `comment-id: <ID>`, the id the store gave the new comment, for a caller that edits it later"
+      },
+      {
         "name": "relayed-from",
         "takes_value": true,
         "help": "The seat whose claim this comment relays. Use it when recording another seat's measurement, finding or argument rather than something you verified; it is stored with the comment and shown as \"via <author>, originally <seat>\""

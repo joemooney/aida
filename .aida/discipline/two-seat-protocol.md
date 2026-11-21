@@ -22,18 +22,31 @@ When the advisor rules "launch SPEC on VENDOR with this brief", product runs
 `aida lane relay SPEC [--pr N] --brief FILE --vendor claude|codex` and nothing
 else: no host-local relay script, no hand-placed brief file, no hand-written
 "authoritative brief" comment. Pass `--pr N` for a rework of an open change and
-omit it for fresh work. The command posts the brief on the spec, supersedes
-earlier round briefs, waits for the spec's running lane and the host's memory
-floor, refuses a round whose head moved or whose change closed (checked again
-when the lane actually starts), delivers the brief to either vendor the same
-way, and reports a stop or an admission refusal to the advisor. A second relay
-for the same spec supersedes the first, which then launches nothing. Claude and Codex lanes are equal paths; the vendor and model
-come from the ruling and project config (`[lane_relay]`,
+omit it for fresh work; a `--pr` that belongs to another spec is refused. The
+command posts the brief on the spec, waits for the spec's running lane and the
+host's memory floor, refuses a round whose head moved or whose change closed
+(checked again when the lane actually starts), delivers the brief to either
+vendor the same way, and reports a stop or an admission refusal to the advisor.
+Earlier round briefs are marked superseded once the new lane has started, and
+stay in force when it has not. A second relay for the same spec supersedes the
+first, which then launches nothing. Claude and Codex lanes are equal paths; the
+vendor and model come from the ruling and project config (`[lane_relay]`,
 `[agents.<vendor>.seats]`), and the lane host from `~/.aida/lane-relay.toml`,
-never from memory. A `SKIPPED`, `REFUSED` or
-`UNCONFIRMED` result goes back to the advisor for a new ruling; product does
-not relaunch it on its own. See `aida lane relay --help` and the CLI
-reference's `aida lane` section.
+never from memory. The command prints its result as
+`Lane relay <RESULT> SPEC (...)` and exits 2 unless the lane was admitted. Each
+of these results goes back to the advisor for a new ruling; product does not
+relaunch it on its own:
+
+- `SKIPPED`: nothing was launched (head moved, change merged, closed or
+  unreadable, a lane still running, the host below its limits or unreachable, a
+  later relay took over, or the launcher's own gate stopped it).
+- `REFUSED`: the lane host refused the launch before the agent started.
+- `UNCONFIRMED`: the lane was started but its admission was not seen in time,
+  or the launcher exited without recording an attempt.
+- `FAILED`: a relay step failed (recording the brief, delivering it, starting
+  the launcher, or an unreadable host reply).
+
+See `aida lane relay --help` and the CLI reference's `aida lane` section.
 
 Product never merges implementation or approves its own disputed judgment.
 Advisor never writes the implementation it will later gate, never merges its

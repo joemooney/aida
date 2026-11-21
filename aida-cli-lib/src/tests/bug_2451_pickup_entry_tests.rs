@@ -2120,3 +2120,150 @@ fn story_2690_queue_work_admits_a_done_spec_onto_its_open_change() {
         );
     }
 }
+
+/// TASK-3826, through `handle_queue_work`: a launch a relay started says
+/// what it is for, and the pickup's own routing is held to it. Fresh work is
+/// refused when the spec has an open change, a rework is refused when the
+/// pickup would continue another change, and a gate that cannot be read
+/// refuses; each before anything is claimed. A rework of the change the
+/// pickup resolves is not stopped by the gate.
+// trace:TASK-3826 | ai:claude
+#[test]
+fn task_3826_queue_work_holds_a_relayed_launch_to_its_gate() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::lane_relay::{gate_refusal_code, GATE_ENV};
+    const HEAD: &str = "0123456789012345678901234567890123456789";
+    let open_change = "42\tfix BUG-2451\thttps://example.invalid/42\tbug-2451-rework";
+    let pickup = |gate: Option<&str>| {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = forge_fixture(&fx.main, &fx.root, open_change);
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        match gate {
+            Some(gate) => ambient.set_key(GATE_ENV, gate),
+            None => ambient.unset_key(GATE_ENV),
+        }
+        git_ok(&fx.main, &["branch", "bug-2451-rework"]);
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        let result = queue_work(&storage, false);
+        let leases = crate::list_leases(&fx.main);
+        let status = storage
+            .load()
+            .unwrap()
+            .get_requirement_by_spec_id("BUG-2451")
+            .unwrap()
+            .status
+            .clone();
+        (result, leases, status)
+    };
+
+    for (gate, code, says) in [
+        ("fresh", "fresh-blocked", "--pr 42"),
+        (
+            "rework:7:0123456789012345678901234567890123456789",
+            "rework-mismatch",
+            "would continue #42 on `bug-2451-rework`",
+        ),
+        ("rework:42", "relay-gate-invalid", "names no relayed launch"),
+        ("", "relay-gate-invalid", "names no relayed launch"),
+    ] {
+        let (result, leases, status) = pickup(Some(gate));
+        let error = result.expect_err(gate);
+        assert_eq!(gate_refusal_code(&error), Some(code), "{gate}: {error:#}");
+        assert!(format!("{error:#}").contains(says), "{gate}: {error:#}");
+        assert!(leases.is_empty(), "{gate}: a refused launch claimed a seat");
+        assert_eq!(
+            status,
+            aida_core::RequirementStatus::Approved,
+            "{gate}: a refused launch changed the spec"
+        );
+    }
+
+    // The relayed change is the one the pickup resolves, and a launch no
+    // relay started is not asked: the gate stops neither.
+    for gate in [Some(format!("rework:42:{HEAD}")), None] {
+        let (result, leases, _) = pickup(gate.as_deref());
+        if let Err(error) = &result {
+            assert_eq!(gate_refusal_code(error), None, "{gate:?}: {error:#}");
+        }
+        assert!(
+            leases.iter().all(|lease| lease.branch == "bug-2451-rework"),
+            "{gate:?}: {leases:?}"
+        );
+    }
+}
+
+/// TASK-3826: relayed fresh work never resumes the spec's retained canonical
+/// branch, which an ungated pickup of the same state does
+/// (`bug_2549_queue_resumes_prless_canonical_head_without_force`).
+// trace:TASK-3826 | ai:claude
+#[test]
+fn task_3826_relayed_fresh_work_does_not_resume_the_canonical_branch() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    for relayed in [true, false] {
+        let fx = fixture();
+        let mut ambient =
+            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+        let gh = recovery_forge_fixture(&fx.main, &fx.root);
+        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+        if relayed {
+            ambient.set_key(crate::lane_relay::GATE_ENV, "fresh");
+        } else {
+            ambient.unset_key(crate::lane_relay::GATE_ENV);
+        }
+        git_ok(&fx.main, &["checkout", "-qb", "bug-2451"]);
+        std::fs::write(fx.main.join("unfinished"), "an earlier round\n").unwrap();
+        git_ok(&fx.main, &["add", "unfinished"]);
+        git_ok(
+            &fx.main,
+            &[
+                "-c",
+                "maintenance.auto=false",
+                "-c",
+                "gc.auto=0",
+                "commit",
+                "-qm",
+                "unfinished implementation (Refs BUG-2451)",
+            ],
+        );
+        let head = git_ok(&fx.main, &["rev-parse", "bug-2451"]);
+        git_ok(&fx.main, &["checkout", "main"]);
+        let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, "BUG-2451");
+        storage
+            .update_atomically(|store| {
+                store
+                    .get_requirement_by_spec_id_mut("BUG-2451")
+                    .unwrap()
+                    .status = aida_core::RequirementStatus::InProgress;
+            })
+            .unwrap();
+
+        let result = queue_work(&storage, false);
+
+        let leases = crate::list_leases(&fx.main);
+        if relayed {
+            assert!(
+                leases.iter().all(|lease| lease.branch != "bug-2451"),
+                "relayed fresh work resumed the retained branch: {leases:?} ({result:?})"
+            );
+            if let Err(error) = &result {
+                assert_eq!(
+                    crate::lane_relay::gate_refusal_code(error),
+                    None,
+                    "no open change, so the gate itself refuses nothing: {error:#}"
+                );
+            }
+        } else {
+            result.unwrap();
+            assert_eq!(leases.len(), 1);
+            assert_eq!(leases[0].branch, "bug-2451");
+        }
+        // The retained work is untouched either way.
+        assert_eq!(git_ok(&fx.main, &["rev-parse", "bug-2451"]), head);
+    }
+}

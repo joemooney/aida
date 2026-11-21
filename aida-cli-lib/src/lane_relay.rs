@@ -1,14 +1,15 @@
 //! `aida lane relay`: hand an advisor's brief to an implementer lane on a
 //! lane host, as a rework of an open change or as fresh work.
 //!
-//! The relay takes the spec's next relay round on the host, posts the brief
-//! on the spec as its authoritative round brief (marking earlier ones
-//! superseded), waits until no lane for the spec runs on the host and the
+//! The relay takes the spec's next relay round on the host (which first
+//! pulls its store), posts the brief on the spec as its authoritative round
+//! brief, waits until no lane for the spec runs on the host and the
 //! host is above its memory floor, re-checks the change against the head
 //! seen at invocation, then delivers the brief through the vendor's brief
 //! mailbox and starts the lane with that brief named explicitly. It then
-//! watches the lane's admission receipt. Every stop is typed, written to the
-//! spec and mailed to the advisor.
+//! watches the lane's admission receipt; once the lane has started, earlier
+//! round briefs on the spec are marked superseded, and not before. Every
+//! stop is typed, written to the spec and mailed to the advisor.
 //!
 //! Two things keep a stale round from running. A later relay for the same
 //! spec takes a higher round, and every host step of an earlier relay then
@@ -193,6 +194,7 @@ pub(crate) struct PrView {
     pub(crate) state: String,
     pub(crate) head: String,
     pub(crate) branch: String,
+    pub(crate) title: String,
 }
 
 /// What the relay starts.
@@ -530,8 +532,19 @@ impl LaunchGate {
     }
 }
 
+#[cfg(test)]
+thread_local! {
+    /// What the forge answers a launcher's own head check in a test.
+    pub(crate) static TEST_LAUNCH_PR: std::cell::RefCell<Option<Result<PrView, String>>> =
+        const { std::cell::RefCell::new(None) };
+}
+
 fn forge_pr(root: &Path, pr: u64) -> Result<PrView> {
     use crate::forge::ChangeState;
+    #[cfg(test)]
+    if let Some(reply) = TEST_LAUNCH_PR.with(|p| p.borrow().clone()) {
+        return reply.map_err(|why| anyhow::anyhow!(why));
+    }
     let change = crate::forge_lookup::with_forge_lookup_deadline(Duration::from_secs(30), || {
         crate::forge::forge_for(root).change_metadata(pr, &mut crate::network_retry::NoopSink)
     })?;
@@ -544,6 +557,7 @@ fn forge_pr(root: &Path, pr: u64) -> Result<PrView> {
         .into(),
         head: change.head_sha,
         branch: change.head_ref,
+        title: change.title,
     })
 }
 
@@ -554,6 +568,10 @@ impl HeadSource for ForgeHead<'_> {
         forge_pr(self.0, pr)
     }
     fn pause(&mut self, duration: Duration) {
+        #[cfg(test)]
+        if TEST_LAUNCH_PR.with(|p| p.borrow().is_some()) {
+            return;
+        }
         std::thread::sleep(duration);
     }
 }
@@ -584,7 +602,10 @@ pub(crate) trait World {
     fn pr(&mut self, pr: u64) -> Result<PrView>;
     /// `(comment id, content)` for each top-level comment on the spec.
     fn comments(&mut self, spec: &str) -> Result<Vec<(String, String)>>;
-    fn comment_add(&mut self, spec: &str, body: &str) -> Result<()>;
+    /// Every id that names `spec` in this machine's store.
+    fn spec_ids(&mut self, spec: &str) -> Result<Vec<String>>;
+    /// Add a top-level comment and return the id the store gave it.
+    fn comment_add(&mut self, spec: &str, body: &str) -> Result<String>;
     fn comment_edit(&mut self, spec: &str, id: &str, body: &str) -> Result<()>;
     fn store_push(&mut self) -> Result<()>;
     fn notify_advisor(&mut self, subject: &str, body: &str) -> Result<()>;
@@ -689,11 +710,12 @@ fn label_for(args: &RelayArgs, rework: bool) -> Result<String> {
     };
     anyhow::ensure!(
         !label.is_empty()
+            && !label.starts_with('-')
             && label.len() <= 40
             && label
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, ' ' | '-' | '_')),
-        "invalid --label `{label}`: use letters, digits, spaces, `-` and `_`"
+        "invalid --label `{label}`: use letters, digits, spaces, `-` and `_`, starting with a letter, digit or `_`"
     );
     Ok(label)
 }
@@ -703,29 +725,24 @@ pub(crate) fn is_authoritative_brief(content: &str) -> bool {
     crate::rework_direction::is_relayed_brief_lead(&crate::rework_direction::lead_line(content))
 }
 
-/// The `relay <host>#<round>` tag in a relayed brief's heading.
-fn relay_tag(content: &str) -> Option<(String, u64)> {
-    let rest = content.lines().next()?.split_once("; relay ")?.1;
-    let (host, round) = rest.split([';', ')']).next()?.rsplit_once('#')?;
-    Some((host.trim().to_string(), round.trim().parse().ok()?))
-}
-
 /// What one relay run has put where, so a stop can take it back.
 struct Round {
     label: String,
     /// This relay's round on the lane host.
     number: u64,
-    /// The brief comment's id on the spec, once posted and found.
-    comment: Option<String>,
+    /// When the brief was posted, as its heading says.
+    stamp: String,
+    /// The brief comment this run posted: the id the store returned for it,
+    /// and its text.
+    posted: Option<(String, String)>,
     /// Whether delivery to the lane host was attempted.
     delivering: bool,
     /// The brief's path on the lane host, once delivered.
     placed: Option<String>,
 }
 
-/// Post the round brief and its pointer comment, marking earlier round
-/// briefs superseded. A brief a later relay on the same host posted is left
-/// alone: this run is the superseded one and its next host step says so.
+/// Post the round brief and its pointer comment. Earlier round briefs stay
+/// in force until this round's lane actually starts ([`supersede_earlier`]).
 fn post_brief(
     world: &mut dyn World,
     spec: &str,
@@ -735,7 +752,8 @@ fn post_brief(
     round: &mut Round,
 ) -> Result<()> {
     let label = round.label.clone();
-    let stamp = Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+    round.stamp = Utc::now().format("%Y-%m-%d %H:%M UTC").to_string();
+    let stamp = &round.stamp;
     let target = match mode {
         Mode::Rework { pr, head, .. } => format!("; PR #{pr} at head {}", short(head)),
         Mode::Fresh => String::new(),
@@ -748,47 +766,51 @@ fn post_brief(
         round.number
     );
     let brief_comment = format!("{heading}\n{}", body.trim_end());
-    world.comment_add(spec, &brief_comment)?;
-    let all = world.comments(spec)?;
-    round.comment = all
-        .iter()
-        .rev()
-        .find(|(_, content)| content.trim() == brief_comment.trim())
-        .map(|(id, _)| id.clone());
-    let mut superseded = 0;
-    for (id, content) in all {
-        let own =
-            round.comment.as_deref() == Some(id.as_str()) || content.trim() == brief_comment.trim();
-        let newer = relay_tag(&content)
-            .is_some_and(|(host, number)| host == plan.host_name() && number > round.number);
-        if own || newer || !is_authoritative_brief(&content) {
-            continue;
-        }
-        world.comment_edit(
-            spec,
-            &id,
-            &format!(
-                "SUPERSEDED by the {label} brief relayed {stamp}. Do not act on this brief.\n\n{content}"
-            ),
-        )?;
-        superseded += 1;
-    }
+    // The store's own id for the comment is how this run finds it again.
+    let id = world.comment_add(spec, &brief_comment)?;
+    round.posted = Some((id, brief_comment));
     let branch = match mode {
         Mode::Rework { branch, .. } => format!(", branch {branch}"),
         Mode::Fresh => ", fresh work on a new branch".into(),
     };
-    world.comment_add(
-        spec,
-        &format!(
-            "Lane relay {stamp}: {label} lane queued on {} ({}{branch}). Scope = the AUTHORITATIVE {label} BRIEF in the previous comment{}.",
-            plan.host_name(),
-            plan.vendor,
-            match superseded {
-                0 => String::new(),
-                n => format!("; {n} earlier round brief(s) marked SUPERSEDED"),
-            }
-        ),
-    )
+    world
+        .comment_add(
+            spec,
+            &format!(
+                "Lane relay {stamp}: {label} lane queued on {} ({}{branch}). Scope = the AUTHORITATIVE {label} BRIEF in the previous comment.",
+                plan.host_name(),
+                plan.vendor,
+            ),
+        )
+        .map(drop)
+}
+
+/// Once this round's lane has started: mark every round brief posted before
+/// this run's as superseded. A brief posted after it is newer direction and
+/// is left alone. Returns how many were marked.
+fn supersede_earlier(world: &mut dyn World, spec: &str, round: &Round) -> Result<usize> {
+    let (own, _) = round.posted.as_ref().context("this run posted no brief")?;
+    let all = world.comments(spec)?;
+    let at = all
+        .iter()
+        .position(|(id, _)| id == own)
+        .with_context(|| format!("this run's brief comment {own} is no longer on {spec}"))?;
+    let mut marked = 0;
+    for (id, content) in &all[..at] {
+        if !is_authoritative_brief(content) {
+            continue;
+        }
+        world.comment_edit(
+            spec,
+            id,
+            &format!(
+                "SUPERSEDED by the {} brief relayed {}. Do not act on this brief.\n\n{content}",
+                round.label, round.stamp
+            ),
+        )?;
+        marked += 1;
+    }
+    Ok(marked)
 }
 
 /// Record a stop where a person will see it: the relay log, the spec and the
@@ -799,26 +821,28 @@ fn report(world: &mut dyn World, spec: &str, vendor: &str, round: &Round, stop: 
     let line = stop.line(spec, &round.label);
     world.log(&line);
     if !stop.brief_stays() {
-        if let Some(id) = round.comment.as_deref() {
-            let marked = world.comments(spec).ok().and_then(|all| {
-                let (_, content) = all.into_iter().find(|(cid, _)| cid == id)?;
-                // A later relay's post already marked it.
-                if !is_authoritative_brief(&content) {
-                    return Some(());
+        if let Some((id, posted)) = &round.posted {
+            // The comment as it stands now; when the spec cannot be re-read,
+            // the text this run posted under that id.
+            let content = world
+                .comments(spec)
+                .ok()
+                .and_then(|all| all.into_iter().find(|(cid, _)| cid == id))
+                .map_or_else(|| posted.clone(), |(_, content)| content);
+            // A later relay's launch may already have marked it.
+            if is_authoritative_brief(&content) {
+                if let Err(err) = world.comment_edit(
+                    spec,
+                    id,
+                    &format!(
+                        "SUPERSEDED: not launched ({}). Do not act on this brief.\n\n{content}",
+                        stop.code()
+                    ),
+                ) {
+                    world.log(&format!(
+                        "warning: could not mark the unlaunched brief comment {id} superseded: {err:#}"
+                    ));
                 }
-                world
-                    .comment_edit(
-                        spec,
-                        id,
-                        &format!(
-                            "SUPERSEDED: not launched ({}). Do not act on this brief.\n\n{content}",
-                            stop.code()
-                        ),
-                    )
-                    .ok()
-            });
-            if marked.is_none() {
-                world.log("warning: could not mark the unlaunched brief comment superseded");
             }
         }
         // A delivery whose reply was lost may still have stored the brief.
@@ -1086,11 +1110,48 @@ fn deliver(
         round.label,
         plan.host_name()
     ));
+    // Only now is this round the one in force.
+    match supersede_earlier(world, spec, round) {
+        Ok(0) => {}
+        Ok(marked) => {
+            let note = format!(
+                "Lane relay: {} lane admitted on {}; {marked} earlier round brief(s) marked SUPERSEDED.",
+                round.label,
+                plan.host_name()
+            );
+            world.log(&note);
+            let recorded = world.comment_add(spec, &note).map(drop);
+            if let Err(err) = recorded.and_then(|()| world.store_push()) {
+                world.log(&format!(
+                    "warning: could not record the superseded briefs on {spec}: {err:#}"
+                ));
+            }
+        }
+        Err(err) => world.log(&format!(
+            "warning: the lane is running, but earlier round briefs on {spec} could not be marked superseded: {err:#}"
+        )),
+    }
     Ok(Outcome::Admitted {
         mode: mode.clone(),
         brief,
         log,
     })
+}
+
+/// Whether the change's title or branch names `spec`, by any id this
+/// machine's store knows it by. A change that names no spec at all does not.
+fn pr_names_spec(world: &mut dyn World, spec: &str, view: &PrView) -> Result<bool> {
+    let mut ids = world
+        .spec_ids(spec)
+        .with_context(|| format!("cannot resolve {spec} to check --pr against it"))?;
+    if !ids.iter().any(|id| id == spec) {
+        ids.push(spec.to_string());
+    }
+    Ok(
+        crate::pr_ship::extract_pr_spec_ids(&view.branch, &view.title)
+            .iter()
+            .any(|named| names_spec(&ids, named)),
+    )
 }
 
 /// One relay run, start to recorded outcome. An `Err` is a usage error
@@ -1103,7 +1164,8 @@ pub(crate) fn relay(args: &RelayArgs, plan: &Plan, world: &mut dyn World) -> Res
     let mut round = Round {
         label: label_for(args, args.pr.is_some())?,
         number: 0,
-        comment: None,
+        stamp: String::new(),
+        posted: None,
         delivering: false,
         placed: None,
     };
@@ -1116,6 +1178,17 @@ pub(crate) fn relay(args: &RelayArgs, plan: &Plan, world: &mut dyn World) -> Res
                 pr,
                 why: format!("{err:#}"),
             }),
+            // A change for another spec is a mistyped `--pr`, whatever its
+            // state: refused before anything is posted.
+            Ok(view) if !pr_names_spec(world, spec, &view)? => anyhow::bail!(
+                "PR #{pr} (`{}`, branch `{}`) names {}, not {spec}; check --pr",
+                view.title,
+                view.branch,
+                match crate::pr_ship::extract_pr_spec_ids(&view.branch, &view.title) {
+                    ids if ids.is_empty() => "no spec".to_string(),
+                    ids => ids.join(", "),
+                }
+            ),
             Ok(view) if view.state.eq_ignore_ascii_case("OPEN") => {
                 match plain_value("PR branch", &view.branch) {
                     Ok(()) => Ok(Mode::Rework {
@@ -1155,6 +1228,11 @@ pub(crate) fn relay(args: &RelayArgs, plan: &Plan, world: &mut dyn World) -> Res
             Stop::Failed { why, .. } => Stop::HostUnreachable { secs: 0, why },
             other => other,
         })?;
+        if let Some(why) = begun["store_pull"].as_str() {
+            world.log(&format!(
+                "warning: the lane host could not refresh its store before resolving {spec}: {why}"
+            ));
+        }
         round.number = begun["round"]
             .as_u64()
             .filter(|number| *number > 0)
@@ -1175,6 +1253,9 @@ pub(crate) fn relay(args: &RelayArgs, plan: &Plan, world: &mut dyn World) -> Res
 
 /// What the host operations need from the machine.
 pub(crate) trait HostSys {
+    /// Bring the host's store up to date with its remote, bounded, so the
+    /// spec is resolved against current data.
+    fn refresh_store(&self, root: &Path) -> Result<()>;
     /// Every id that names `spec` in the host's store (its canonical id, its
     /// display id and the one given), the canonical one first. An error
     /// means the host cannot tell, which no step treats as "no match".
@@ -1206,18 +1287,28 @@ pub(crate) fn names_spec(ids: &[String], candidate: &str) -> bool {
     })
 }
 
-/// Whether a process's arguments are a lane launcher working the spec: an
-/// `aida queue work <spec> …`, or a `lane-run.sh <spec> …` wrapper that has
-/// not reached it yet.
+/// Whether a process's arguments are a lane launcher working the spec:
+/// `aida queue work … <spec> …`, `aida queue rework … <spec> … --work`, or a
+/// `lane-run.sh … <spec> …` wrapper that has not reached `queue work` yet.
+/// The spec may stand anywhere after the subcommand. An argument that merely
+/// equals the spec's id (a flag's value) also counts: a wrong "running" only
+/// makes a relay wait, a wrong "idle" starts a second lane.
 pub(crate) fn cmdline_runs_lane(argv: &[String], ids: &[String]) -> bool {
-    argv.windows(3)
-        .any(|w| w[0] == "queue" && w[1] == "work" && names_spec(ids, &w[2]))
-        || argv.windows(2).any(|w| {
-            Path::new(&w[0])
-                .file_name()
-                .is_some_and(|name| name == "lane-run.sh")
-                && names_spec(ids, &w[1])
-        })
+    let names = |rest: &[String]| rest.iter().any(|arg| names_spec(ids, arg));
+    (0..argv.len()).any(|at| {
+        let rest = &argv[at + 1..];
+        if argv[at] == "queue" {
+            return match rest.first().map(String::as_str) {
+                Some("work") => names(&rest[1..]),
+                Some("rework") => names(&rest[1..]) && rest[1..].iter().any(|arg| arg == "--work"),
+                _ => false,
+            };
+        }
+        Path::new(&argv[at])
+            .file_name()
+            .is_some_and(|name| name == "lane-run.sh")
+            && names(rest)
+    })
 }
 
 fn spec_file_stem(spec: &str) -> Result<&str> {
@@ -1475,9 +1566,18 @@ pub(crate) fn host_op(
 ) -> Result<serde_json::Value> {
     match op {
         RelayHostCommand::Begin { spec } => {
+            spec_file_stem(spec)?;
+            // A spec filed moments ago on the relaying machine is only in
+            // this host's store after a pull. A failed pull is reported and
+            // the spec is resolved against what the host has.
+            let pull = sys.refresh_store(root).err().map(|err| format!("{err:#}"));
             let ids = ids_for(root, spec, sys)?;
             let round = Fence::hold(root, &ids)?.advance()?;
-            Ok(serde_json::json!({ "round": round }))
+            let mut reply = serde_json::json!({ "round": round });
+            if let Some(why) = pull {
+                reply["store_pull"] = why.into();
+            }
+            Ok(reply)
         }
         RelayHostCommand::Probe { spec, round } => {
             let ids = ids_for(root, spec, sys)?;
@@ -1713,6 +1813,20 @@ fn show_spec(aida: &Path, root: &Path, spec: &str) -> Result<serde_json::Value> 
     serde_json::from_str(&out).context("`aida show --format json` returned non-JSON")
 }
 
+/// The ids `aida show --format json` reports for a spec, canonical first.
+fn shown_ids(shown: &serde_json::Value) -> Result<Vec<String>> {
+    let mut ids = Vec::new();
+    for key in ["spec_id", "agreed_id", "display_id"] {
+        if let Some(id) = shown[key].as_str().filter(|id| !id.is_empty()) {
+            if !ids.iter().any(|known| known == id) {
+                ids.push(id.to_string());
+            }
+        }
+    }
+    anyhow::ensure!(!ids.is_empty(), "the store reported no id");
+    Ok(ids)
+}
+
 /// The real machine.
 struct Machine {
     /// The `aida` that reads the host's store.
@@ -1731,19 +1845,17 @@ impl Machine {
 }
 
 impl HostSys for Machine {
+    fn refresh_store(&self, root: &Path) -> Result<()> {
+        let aida = &self.aida;
+        let mut cmd = std::process::Command::new(aida);
+        cmd.current_dir(root).args(["db", "sync", "--pull"]);
+        bounded(cmd, 45, "`aida db sync --pull`").map(drop)
+    }
+
     fn spec_ids(&self, root: &Path, spec: &str) -> Result<Vec<String>> {
         let shown = show_spec(&self.aida, root, spec)
             .with_context(|| format!("cannot resolve {spec} in this host's store"))?;
-        let mut ids = Vec::new();
-        for key in ["spec_id", "agreed_id", "display_id"] {
-            if let Some(id) = shown[key].as_str().filter(|id| !id.is_empty()) {
-                if !ids.iter().any(|known| known == id) {
-                    ids.push(id.to_string());
-                }
-            }
-        }
-        anyhow::ensure!(!ids.is_empty(), "{spec} has no id in this host's store");
-        Ok(ids)
+        shown_ids(&shown).with_context(|| format!("{spec} has no id in this host's store"))
     }
 
     fn lane_running(&self, ids: &[String]) -> bool {
@@ -1878,15 +1990,28 @@ impl World for Live {
             .unwrap_or_default())
     }
 
-    fn comment_add(&mut self, spec: &str, body: &str) -> Result<()> {
-        self.with_body(body, |file| {
+    fn spec_ids(&mut self, spec: &str) -> Result<Vec<String>> {
+        shown_ids(&show_spec(&self.aida, &self.root, spec)?)
+    }
+
+    fn comment_add(&mut self, spec: &str, body: &str) -> Result<String> {
+        let out = self.with_body(body, |file| {
             bounded(
-                self.aida(&["comment", "add", spec, "--body-file", file]),
+                self.aida(&["comment", "add", spec, "--body-file", file, "--print-id"]),
                 60,
                 "`aida comment add`",
             )
-        })
-        .map(drop)
+        })?;
+        out.lines()
+            .find_map(|line| {
+                line.trim()
+                    .strip_prefix(crate::comment_cmd::PRINT_ID_PREFIX)
+            })
+            .map(|id| id.trim().to_string())
+            .filter(|id| !id.is_empty())
+            .with_context(|| {
+                format!("`aida comment add` posted on {spec} but did not report the comment's id")
+            })
     }
 
     fn comment_edit(&mut self, spec: &str, id: &str, body: &str) -> Result<()> {
@@ -1949,7 +2074,8 @@ impl World for Live {
             &remote,
         ]);
         cmd.envs(self.ssh_env.iter().map(|(key, value)| (key, value)));
-        let out = bounded(cmd, 90, &format!("the lane host command on {host}"))?;
+        // Longer than the host's own bounds: a store pull, then `aida show`.
+        let out = bounded(cmd, 150, &format!("the lane host command on {host}"))?;
         let line = out
             .lines()
             .rev()

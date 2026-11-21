@@ -40,6 +40,16 @@ pub enum LaneCommand {
     RelayHost(RelayHostCommand),
 }
 
+/// A `--label` value is text for a heading, never an option: `--label=-x`
+/// is refused here as `--label -x` already is.
+// trace:TASK-3826 | ai:claude
+fn relay_label(raw: &str) -> Result<String, String> {
+    if raw.trim_start().starts_with('-') {
+        return Err("a label cannot start with `-`".into());
+    }
+    Ok(raw.to_string())
+}
+
 /// `aida lane relay` arguments.
 // trace:TASK-3826 | ai:claude
 #[derive(clap::Args, Debug, Clone)]
@@ -74,7 +84,7 @@ pub struct RelayArgs {
     pub host_dir: Option<String>,
     /// Round label in the brief's heading. Defaults to REWORK for an open
     /// change and FRESH otherwise.
-    #[clap(long, value_name = "LABEL")]
+    #[clap(long, value_name = "LABEL", value_parser = relay_label)]
     pub label: Option<String>,
     /// Seconds to wait for a running lane to exit and for host memory
     /// headroom before giving up.

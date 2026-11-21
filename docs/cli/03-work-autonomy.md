@@ -320,17 +320,20 @@ relays (the product seat's machine). Claude and Codex lanes take the same path.
 1. **Mode.** With `--pr N` on an open change it starts a rework of that change
    on its branch and records the change's head. Without `--pr`, or when change
    N is already merged or closed, it starts fresh work on a new branch. A
-   finished change is never handed to a lane as a rework.
-2. **Round.** The lane host gives the run the spec's next relay round (a
-   counter in `.aida/lane-relay/<SPEC>.round` on the host). A later relay for
+   finished change is never handed to a lane as a rework. Change N must name
+   the spec in its title or branch (by the spec's display or canonical id);
+   a `--pr` for another spec is refused before anything is posted.
+2. **Round.** The lane host pulls its store (a failed pull is logged and the
+   host's current data is used), then gives the run the spec's next relay
+   round (a counter in `.aida/lane-relay/<SPEC>.round` on the host). A later relay for
    the same spec takes a higher round, and every later host step of the
    earlier run then stops with `relay-superseded` without delivering or
    launching anything. Two relays for one spec cannot both launch.
 3. **Brief on the spec.** The brief is posted on the spec as
    `AUTHORITATIVE <LABEL> BRIEF (…)`, followed by a pointer comment naming the
-   host, vendor and branch. Earlier round briefs on the spec are rewritten to
-   lead with `SUPERSEDED …`, so a rework prompt leads with the newest one
-   only. The store is then pushed.
+   host, vendor and branch. The store is then pushed. Earlier round briefs
+   on the spec are left as they are until step 8 has seen the lane start; a
+   rework prompt leads with the newest brief either way.
 4. **Wait.** It waits, checking every `--poll` seconds for up to
    `--wait-timeout` seconds (six hours), until no lane for the spec is running
    on the host and the host is above its memory floor
@@ -358,11 +361,17 @@ relays (the product seat's machine). Claude and Codex lanes take the same path.
 8. **Admission.** It watches the new lane's attempt record for up to
    `--admission-timeout` seconds (40 minutes). The host's cold-start cap
    (`max_concurrent_cold_starts`) is applied by the lane launch itself, which
-   queues for a slot; the relay adds no limit of its own.
+   queues for a slot; the relay adds no limit of its own. Once the lane has
+   started, every round brief posted on the spec before this one is rewritten
+   to lead with `SUPERSEDED …` and a comment says how many were. A relay that
+   stops, on this machine or on the host, leaves them in force.
 
 The host recognises the spec by any of its ids (the display id it is listed
 under and the store's canonical id), so the running-lane check, the round and
 the admission record agree whichever one the relay or a lane was given.
+A running lane is a process on the host whose arguments are `aida queue work`,
+`aida queue rework … --work` or a `lane-run.sh` wrapper, with the spec named
+anywhere after the subcommand.
 
 The command prints its progress, appends it to `.aida/lane-relay/relay.log`,
 exits 0 once the lane is admitted and exits 2 on a stop. Every stop is
@@ -387,7 +396,14 @@ written as a spec comment and mailed to the advisor with one of these reasons:
 | `admission-unconfirmed` | Not admitted within `--admission-timeout`, usually still queued for a start slot | yes |
 | `launch-vanished` | The launcher exited without recording an attempt; the comment carries the launch log's tail | yes |
 
-When the brief is no longer in force, its spec comment is marked
+The command's result line reads `Lane relay <RESULT> <SPEC> (<label>;
+<reason>): …`, where the result is `SKIPPED` (nothing was launched), `REFUSED`
+(`admission-refused`), `UNCONFIRMED` (`admission-unconfirmed`,
+`launch-vanished`) or `FAILED` (`brief-record-failed`,
+`brief-delivery-failed`, `launch-failed`, `host-reply-malformed`).
+
+When the brief is no longer in force, its spec comment (found by the id the
+store returned when it was posted) is marked
 `SUPERSEDED: not launched` and a delivered copy is withdrawn from the host's
 mailbox (renamed `*.superseded`), so no later lane picks it up. No agent
 started for any of those reasons, with one exception to check by hand: after

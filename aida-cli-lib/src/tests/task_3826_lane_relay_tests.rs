@@ -28,6 +28,10 @@ struct HostState {
     home: PathBuf,
     /// What the started launcher does on the host.
     on_spawn: RefCell<Option<Box<dyn Fn(&Path, &HostState)>>>,
+    /// Store pulls and spec lookups, in the order the host made them.
+    store_calls: RefCell<Vec<&'static str>>,
+    /// Why the host's store pull fails, when it does.
+    pull_error: RefCell<Option<String>>,
 }
 
 impl HostState {
@@ -58,7 +62,15 @@ impl HeadSource for &HostState {
 struct FakeSys(Rc<HostState>);
 
 impl HostSys for FakeSys {
+    fn refresh_store(&self, _root: &Path) -> Result<()> {
+        self.0.store_calls.borrow_mut().push("pull");
+        match self.0.pull_error.borrow().as_ref() {
+            Some(why) => anyhow::bail!("{why}"),
+            None => Ok(()),
+        }
+    }
     fn spec_ids(&self, _root: &Path, spec: &str) -> Result<Vec<String>> {
+        self.0.store_calls.borrow_mut().push("ids");
         let mut ids = self.0.aliases.borrow().clone();
         ids.push(spec.to_string());
         Ok(ids)
@@ -100,6 +112,14 @@ struct FakeWorld {
     prs: VecDeque<Result<PrView, String>>,
     pr_reads: usize,
     comments: Vec<(String, String)>,
+    /// How many comments were ever added.
+    added: usize,
+    /// The store keeps a comment's text in its own form, not byte for byte.
+    store_reflows_text: bool,
+    /// Reading the spec's comments back fails.
+    comments_unreadable: bool,
+    /// A comment someone else posts while the host starts the launcher.
+    posted_during_launch: Option<String>,
     mails: Vec<(String, String)>,
     logs: Vec<String>,
     pushes: usize,
@@ -128,6 +148,10 @@ impl FakeWorld {
             prs: VecDeque::new(),
             pr_reads: 0,
             comments: Vec::new(),
+            added: 0,
+            store_reflows_text: false,
+            comments_unreadable: false,
+            posted_during_launch: None,
             mails: Vec::new(),
             logs: Vec::new(),
             pushes: 0,
@@ -205,12 +229,24 @@ impl World for FakeWorld {
         reply.map_err(|why| anyhow::anyhow!(why))
     }
     fn comments(&mut self, _spec: &str) -> Result<Vec<(String, String)>> {
+        anyhow::ensure!(!self.comments_unreadable, "store read timed out");
         Ok(self.comments.clone())
     }
-    fn comment_add(&mut self, _spec: &str, body: &str) -> Result<()> {
-        self.comments
-            .push((format!("c{}", self.comments.len()), body.to_string()));
-        Ok(())
+    fn spec_ids(&mut self, spec: &str) -> Result<Vec<String>> {
+        let mut ids = self.host.aliases.borrow().clone();
+        ids.push(spec.to_string());
+        Ok(ids)
+    }
+    fn comment_add(&mut self, _spec: &str, body: &str) -> Result<String> {
+        self.added += 1;
+        let id = format!("added-{}", self.added);
+        let stored = if self.store_reflows_text {
+            body.replace('\n', "\r\n")
+        } else {
+            body.to_string()
+        };
+        self.comments.push((id.clone(), stored));
+        Ok(id)
     }
     fn comment_edit(&mut self, _spec: &str, id: &str, body: &str) -> Result<()> {
         let comment = self
@@ -240,6 +276,11 @@ impl World for FakeWorld {
         assert_eq!(&parsed, op);
         self.clock += self.host_cost;
         let mut reply = host_op(&self.root, &parsed, &mut FakeSys(self.host.clone()))?;
+        if matches!(op, RelayHostCommand::Launch { .. }) {
+            if let Some(body) = self.posted_during_launch.take() {
+                self.comments.push(("by-hand".into(), body));
+            }
+        }
         (self.on_reply)(op, &mut reply);
         Ok(reply)
     }
@@ -271,6 +312,7 @@ fn open(head: &str) -> Result<PrView, String> {
         state: "OPEN".into(),
         head: head.into(),
         branch: "task-9-branch".into(),
+        title: "fix the gate (Refs TASK-9)".into(),
     })
 }
 
@@ -279,6 +321,7 @@ fn not_open(state: &str) -> Result<PrView, String> {
         state: state.into(),
         head: H0.into(),
         branch: "task-9-branch".into(),
+        title: "fix the gate (Refs TASK-9)".into(),
     })
 }
 
@@ -608,8 +651,330 @@ fn a_newer_brief_supersedes_an_old_stored_round_brief() {
         .collect();
     assert_eq!(in_force.len(), 1);
     assert!(in_force[0].1.contains("NEW ROUND TWO TASK"));
-    assert!(world.comment_starting("Lane relay ")[0]
-        .contains("1 earlier round brief(s) marked SUPERSEDED"));
+    assert!(!world.comment_starting("Lane relay ")[0].contains("SUPERSEDED"));
+    let admitted = world.comment_starting("Lane relay: FRESH lane admitted on lanehost");
+    assert_eq!(admitted.len(), 1);
+    assert!(admitted[0].contains("1 earlier round brief(s) marked SUPERSEDED"));
+}
+
+const OLD_BRIEF: &str = "AUTHORITATIVE R1 BRIEF (advisor, relayed 09:12):\nOLD ROUND ONE TASK";
+
+fn with_old_brief() -> FakeWorld {
+    let mut world = FakeWorld::new();
+    world.comments.push(("old".into(), OLD_BRIEF.into()));
+    world
+}
+
+/// The earlier round's brief stays the one in force through every stop, on
+/// this machine or on the host: only a started lane retires it.
+#[test]
+fn earlier_briefs_stay_in_force_until_the_new_lane_starts() {
+    let unmarked = |world: &FakeWorld, case: &str| {
+        assert_eq!(world.comments[0].1, OLD_BRIEF, "{case}");
+        assert!(
+            !world
+                .comments
+                .iter()
+                .any(|(_, c)| c.contains("SUPERSEDED by")),
+            "{case}"
+        );
+    };
+
+    // The head moved before the launch.
+    let mut world = with_old_brief();
+    world.prs = [open(H0), open(H1)].into();
+    let args = world.args(Some(7), "round two");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert!(matches!(outcome, Outcome::Stopped(Stop::HeadMoved { .. })));
+    unmarked(&world, "head-moved");
+
+    // The host stops the launch itself: a lane for the spec started between
+    // the relay's probe and its launch step.
+    let mut world = with_old_brief();
+    let host = world.host.clone();
+    world.on_reply = Box::new(move |op, _| {
+        if matches!(op, RelayHostCommand::PlaceBrief { .. }) {
+            host.running.set(true);
+        }
+    });
+    let args = world.args(None, "round two");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert_eq!(
+        outcome,
+        Outcome::Stopped(Stop::LaneStillRunning { secs: 0 })
+    );
+    assert!(world.host.spawned.borrow().is_empty());
+    unmarked(&world, "lane-still-running at launch");
+
+    // A later relay took the round on the host.
+    let mut world = with_old_brief();
+    let file = round_file(&world, SPEC);
+    world.on_reply = Box::new(move |op, _| {
+        if matches!(op, RelayHostCommand::Begin { .. }) {
+            std::fs::write(&file, "7\n").unwrap();
+        }
+    });
+    let args = world.args(None, "round two");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert_eq!(outcome, Outcome::Stopped(Stop::Superseded));
+    unmarked(&world, "relay-superseded");
+
+    // The launcher's own gate stops it after host admission.
+    let mut world = with_old_brief();
+    launcher_applies_its_gate(&world, Some((4373, "task-9-branch")));
+    let args = world.args(None, "round two");
+    let outcome = relay(&args, &plan_for("codex"), &mut world).unwrap();
+    assert!(matches!(
+        outcome,
+        Outcome::Stopped(Stop::GateRefused { .. })
+    ));
+    unmarked(&world, "fresh-blocked");
+
+    // The host refuses admission, or never confirms it: the new brief stays
+    // for the retry, and so does the old one.
+    let mut world = with_old_brief();
+    world.launcher_records(|attempt| {
+        attempt
+            .finish(
+                Kind::RefusedBeforeStart,
+                "holder-state-unknown",
+                "dirty",
+                None,
+                None,
+                true,
+            )
+            .unwrap()
+    });
+    let args = world.args(None, "round two");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert!(matches!(
+        outcome,
+        Outcome::Stopped(Stop::AdmissionRefused { .. })
+    ));
+    unmarked(&world, "admission-refused");
+    let mut world = with_old_brief();
+    let args = world.args(None, "round two");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert!(matches!(
+        outcome,
+        Outcome::Stopped(Stop::LaunchVanished { .. })
+    ));
+    unmarked(&world, "launch-vanished");
+
+    // The lane starts: the old brief is marked, and a brief someone posted
+    // after this relay's own is newer direction and is left alone.
+    let mut world = with_old_brief();
+    world
+        .comments
+        .push(("note".into(), "an unrelated note".into()));
+    world.posted_during_launch = Some("AUTHORITATIVE R3 BRIEF (by hand):\nNEWER STILL".into());
+    world.launcher_records(|attempt| attempt.started(1));
+    let args = world.args(None, "round two");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert!(matches!(outcome, Outcome::Admitted { .. }), "{outcome:?}");
+    assert!(world.comments[0]
+        .1
+        .starts_with("SUPERSEDED by the FRESH brief relayed"));
+    assert_eq!(world.comments[1].1, "an unrelated note");
+    let in_force: Vec<&str> = world
+        .comments
+        .iter()
+        .filter(|(_, c)| is_authoritative_brief(c))
+        .map(|(id, _)| id.as_str())
+        .collect();
+    assert_eq!(in_force, ["added-1", "by-hand"]);
+}
+
+/// The relay finds its own brief by the id the store returned for it, so a
+/// store that keeps the text in another form, or cannot be read back, still
+/// gets exactly that comment marked, and the brief is posted once.
+#[test]
+fn the_relays_own_brief_is_found_by_its_comment_id() {
+    let briefs_posted = |world: &FakeWorld| {
+        world
+            .comments
+            .iter()
+            .filter(|(_, c)| c.contains("round two: fix the gate"))
+            .count()
+    };
+
+    // Stored text differs from what was sent.
+    let mut world = with_old_brief();
+    world.store_reflows_text = true;
+    world.prs = [open(H0), open(H1)].into();
+    let args = world.args(Some(7), "round two: fix the gate\nand its test");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert!(matches!(outcome, Outcome::Stopped(Stop::HeadMoved { .. })));
+    let own = &world
+        .comments
+        .iter()
+        .find(|(id, _)| id == "added-1")
+        .unwrap()
+        .1;
+    assert!(
+        own.starts_with("SUPERSEDED: not launched (head-moved)"),
+        "{own}"
+    );
+    assert!(own.contains("\r\n"), "the stored form is what gets marked");
+    assert_eq!(briefs_posted(&world), 1);
+    assert_eq!(world.comments[0].1, OLD_BRIEF);
+
+    // The spec cannot be read back after the brief was added: the stop is
+    // still recorded against that comment, and nothing is posted twice.
+    let mut world = with_old_brief();
+    world.comments_unreadable = true;
+    world.prs = [open(H0), open(H1)].into();
+    let args = world.args(Some(7), "round two: fix the gate");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert!(matches!(outcome, Outcome::Stopped(Stop::HeadMoved { .. })));
+    let own = &world
+        .comments
+        .iter()
+        .find(|(id, _)| id == "added-1")
+        .unwrap()
+        .1;
+    assert!(
+        own.starts_with("SUPERSEDED: not launched (head-moved)"),
+        "{own}"
+    );
+    assert_eq!(briefs_posted(&world), 1);
+    assert_eq!(world.mails.len(), 1);
+
+    // The same failure once the lane has started: the launch stands, the
+    // unmarked earlier briefs are reported, and nothing is reposted.
+    let mut world = with_old_brief();
+    world.comments_unreadable = true;
+    world.launcher_records(|attempt| attempt.started(1));
+    let args = world.args(None, "round two: fix the gate");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert!(matches!(outcome, Outcome::Admitted { .. }), "{outcome:?}");
+    assert!(world.logs.iter().any(
+        |l| l.contains("could not be marked superseded") && l.contains("store read timed out")
+    ));
+    assert_eq!(briefs_posted(&world), 1);
+    assert_eq!(world.comments[0].1, OLD_BRIEF);
+    assert_eq!(world.host.spawned.borrow().len(), 1);
+}
+
+#[test]
+fn a_pr_for_another_spec_is_refused_before_anything_is_posted() {
+    const CANONICAL: &str = "TASK-b6b1278890774ef993d2ebc327862470-9";
+    let view = |state: &str, title: &str, branch: &str| -> Result<PrView, String> {
+        Ok(PrView {
+            state: state.into(),
+            head: H0.into(),
+            branch: branch.into(),
+            title: title.into(),
+        })
+    };
+    for (state, title, branch, named) in [
+        (
+            "OPEN",
+            "fix the parser (TASK-90)",
+            "task-90-parser",
+            "TASK-90",
+        ),
+        // A finished change for another spec is as much a mistyped --pr.
+        (
+            "MERGED",
+            "fix the parser (TASK-90)",
+            "task-90-parser",
+            "TASK-90",
+        ),
+        // A change that names no spec cannot be confirmed as this spec's.
+        ("OPEN", "tidy the docs", "docs-tidy", "no spec"),
+        // An id that only starts like the spec's is another spec.
+        ("OPEN", "fix (TASK-91)", "wip", "TASK-91"),
+    ] {
+        let mut world = FakeWorld::new();
+        world.prs = [view(state, title, branch)].into();
+        let args = world.args(Some(7), "round two");
+        let error = relay(&args, &plan_for("claude"), &mut world).unwrap_err();
+        let error = format!("{error:#}");
+        assert!(
+            error.contains("PR #7") && error.contains(named) && error.contains("check --pr"),
+            "{title}: {error}"
+        );
+        assert!(
+            world.comments.is_empty() && world.mails.is_empty(),
+            "{title}"
+        );
+        assert!(
+            !round_file(&world, SPEC).exists(),
+            "{title}: host not asked"
+        );
+        assert!(world.host.spawned.borrow().is_empty());
+    }
+    // The change may name the spec by either id, in its title or its branch.
+    for (title, branch) in [
+        ("fix the gate (Refs TASK-9)", "wip"),
+        ("fix the gate", "task-9-gate"),
+        ("fix the gate", "task-b6b1278890774ef993d2ebc327862470-9"),
+        ("fix (refs task-9)", "wip"),
+    ] {
+        let mut world = FakeWorld::new();
+        *world.host.aliases.borrow_mut() = vec![CANONICAL.into()];
+        world.prs = [view("OPEN", title, branch)].into();
+        world.launcher_records(|attempt| attempt.started(1));
+        let args = world.args(Some(7), "round two");
+        let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+        assert!(
+            matches!(outcome, Outcome::Admitted { .. }),
+            "{title} / {branch}: {outcome:?}"
+        );
+    }
+}
+
+#[test]
+fn a_label_is_never_an_option() {
+    for bad in ["-x", "--help", "- r2", "", "r2;rm"] {
+        let mut world = FakeWorld::new();
+        let mut args = world.args(None, "do the work");
+        args.label = Some(bad.into());
+        let error = relay(&args, &plan_for("claude"), &mut world).unwrap_err();
+        assert!(
+            format!("{error:#}").contains("invalid --label"),
+            "{bad}: {error:#}"
+        );
+        assert!(world.comments.is_empty(), "{bad}");
+        assert!(!round_file(&world, SPEC).exists(), "{bad}: host not asked");
+    }
+    for good in ["r2", "R2-ci", "round 3", "_x"] {
+        let mut world = FakeWorld::new();
+        world.launcher_records(|attempt| attempt.started(1));
+        let mut args = world.args(None, "do the work");
+        args.label = Some(good.into());
+        let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+        assert!(matches!(outcome, Outcome::Admitted { .. }), "{good}");
+    }
+}
+
+#[test]
+fn the_host_pulls_its_store_before_it_resolves_the_spec() {
+    let mut world = FakeWorld::new();
+    world.launcher_records(|attempt| attempt.started(1));
+    let args = world.args(None, "do the work");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert!(matches!(outcome, Outcome::Admitted { .. }));
+    let calls = world.host.store_calls.borrow().clone();
+    assert_eq!(calls[..2], ["pull", "ids"], "{calls:?}");
+    assert_eq!(
+        calls.iter().filter(|call| **call == "pull").count(),
+        1,
+        "only the first host step pulls"
+    );
+
+    // A pull that fails is reported; the host resolves against what it has.
+    let mut world = FakeWorld::new();
+    *world.host.pull_error.borrow_mut() = Some("store remote unreachable".into());
+    world.launcher_records(|attempt| attempt.started(1));
+    let args = world.args(None, "do the work");
+    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+    assert!(matches!(outcome, Outcome::Admitted { .. }));
+    assert!(world
+        .logs
+        .iter()
+        .any(|l| l.starts_with("warning:") && l.contains("store remote unreachable")));
 }
 
 #[test]
@@ -772,17 +1137,38 @@ fn a_lane_process_is_recognised_by_its_spec() {
         "aida queue work TASK-node1-9 --role implementer",
         "aida queue work TASK-9 --role implementer --no-human --vendor claude",
         "/home/u/.local/bin/aida queue work task-9 --branch b",
+        // The spec after the flags.
+        "aida queue work --role implementer --no-human TASK-9",
+        "aida --format json queue work --vendor codex TASK-node1-9 --force-claim",
+        // A rework that launches.
+        "aida queue rework TASK-9 --work",
+        "aida queue rework TASK-9 --for implementer --work --no-human",
+        "aida queue rework --work task-9",
+        "/home/u/.local/bin/aida queue rework --status in-progress TASK-node1-9 --work",
+        // The wrapper, before it reaches `queue work`.
         "/bin/bash /home/u/lane-run.sh TASK-9 codex --branch b",
         "bash scripts/lane-run.sh TASK-9 --role implementer",
+        "bash scripts/lane-run.sh --role implementer TASK-9",
     ] {
         assert!(cmdline_runs_lane(&argv(running), &ids), "{running}");
     }
     for other in [
         "aida queue work TASK-90 --role implementer",
+        "aida queue work --role implementer TASK-90",
         "aida queue list TASK-9",
+        // A rework that only routes the spec starts no lane.
+        "aida queue rework TASK-9",
+        "aida queue rework TASK-9 --for reviewer",
+        "aida queue rework TASK-90 --work",
+        "aida queue add TASK-9 --for implementer",
+        // The spec before the subcommand names no lane.
+        "aida show TASK-9 queue work",
+        "aida queue work --brief /briefs/TASK-9-2026.md TASK-90",
         "aida lane relay-host probe TASK-9",
         "aida lane relay TASK-9 --brief b.md",
         "bash scripts/lane-run.sh TASK-91",
+        "cat TASK-9 scripts/lane-run.sh",
+        "queue",
         "",
     ] {
         assert!(!cmdline_runs_lane(&argv(other), &ids), "{other}");
@@ -806,6 +1192,10 @@ fn the_command_parses_its_documented_form() {
         vec![
             "lane", "relay", "TASK-9", "--brief", "b.md", "--vendor", "gemini",
         ],
+        vec![
+            "lane", "relay", "TASK-9", "--brief", "b.md", "--label", "-x",
+        ],
+        vec!["lane", "relay", "TASK-9", "--brief", "b.md", "--label=-x"],
     ] {
         assert!(<crate::lane_cmd::LaneArgs as clap::Parser>::try_parse_from(bad).is_err());
     }
@@ -1087,45 +1477,6 @@ fn a_relay_superseded_by_a_later_one_launches_nothing() {
 }
 
 #[test]
-fn an_older_relay_does_not_mark_a_newer_relays_brief() {
-    let mut world = FakeWorld::new();
-    // A later relay on the same host (round 5) has already posted.
-    world.comments.push((
-        "newer".into(),
-        "AUTHORITATIVE R3 BRIEF (relayed 2026-11-20 19:00 UTC; codex lane on lanehost; relay lanehost#5):\nNEWER".into(),
-    ));
-    // A relay to another host is no evidence about this host's rounds.
-    world.comments.push((
-        "elsewhere".into(),
-        "AUTHORITATIVE R1 BRIEF (relayed 2026-11-19 19:00 UTC; codex lane on otherhost; relay otherhost#9):\nELSEWHERE".into(),
-    ));
-    std::fs::create_dir_all(world.root.join(".aida/lane-relay")).unwrap();
-    std::fs::write(round_file(&world, SPEC), "5\n").unwrap();
-    // This run takes round 6 and is then overtaken at once by round 7, whose
-    // brief is the one tagged below.
-    world.comments[0].1 = world.comments[0].1.replace("#5", "#7");
-    let file = round_file(&world, SPEC);
-    world.on_reply = Box::new(move |op, _| {
-        if matches!(op, RelayHostCommand::Begin { .. }) {
-            std::fs::write(&file, "7\n").unwrap();
-        }
-    });
-    let args = world.args(None, "the older brief");
-
-    let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
-
-    assert_eq!(outcome, Outcome::Stopped(Stop::Superseded));
-    assert!(
-        is_authoritative_brief(&world.comments[0].1),
-        "the newer relay's brief stays in force"
-    );
-    assert!(world.comments[1]
-        .1
-        .starts_with("SUPERSEDED by the FRESH brief"));
-    assert!(world.host.spawned.borrow().is_empty());
-}
-
-#[test]
 fn the_spec_is_matched_by_any_of_its_ids_on_the_host() {
     const CANONICAL: &str = "TASK-b6b1278890774ef993d2ebc327862470-9";
     let mut world = FakeWorld::new();
@@ -1353,12 +1704,15 @@ fn the_real_machine_starts_the_launcher_and_sees_it_running() {
     let tmp = tempfile::tempdir().unwrap();
     let root = tmp.path().canonicalize().unwrap();
     let home = root.join("home");
-    // The host's `aida`, as far as the relay uses it: the spec's ids.
+    // The host's `aida`, as far as the relay uses it: the store pull and
+    // the spec's ids. It records each call.
     let aida = root.join("bin/aida");
+    let aida_calls = root.join("aida-calls");
     script(
         &aida,
         &format!(
-            "#!/bin/sh\nprintf '%s\\n' '{{\"spec_id\":\"{canonical}\",\"agreed_id\":\"{spec}\",\"display_id\":\"{spec}\"}}'\n"
+            "#!/bin/sh\nprintf '%s\\n' \"$PWD $*\" >> '{}'\nif [ \"$1\" = db ]; then exit 0; fi\nprintf '%s\\n' '{{\"spec_id\":\"{canonical}\",\"agreed_id\":\"{spec}\",\"display_id\":\"{spec}\"}}'\n",
+            aida_calls.display()
         ),
     );
     // The launcher: a wrapper named as the real one, which records how it
@@ -1396,6 +1750,14 @@ fn the_real_machine_starts_the_launcher_and_sees_it_running() {
             canonical.to_ascii_uppercase()
         ))
         .exists());
+    // Taking the round pulled the host's store first, then resolved the spec.
+    assert_eq!(
+        std::fs::read_to_string(&aida_calls).unwrap(),
+        format!(
+            "{root} db sync --pull\n{root} show {spec} --format json\n",
+            root = root.display()
+        )
+    );
     let probe = op(RelayHostCommand::Probe {
         spec: spec.clone(),
         round,
@@ -1520,6 +1882,8 @@ fn the_live_relay_reaches_the_lane_host_through_ssh() {
     let calls = root.join("aida-calls");
     let comments = root.join("comments");
     let ssh_calls = root.join("ssh-calls");
+    let own = root.join("own-comment");
+    let edits = root.join("comment-edits");
     // `aida` for both sides: it records each call (directory, then its
     // arguments, tab-separated) and answers as the real one would.
     let aida = home.join(".local/bin/aida");
@@ -1532,8 +1896,16 @@ line=$PWD
 for arg in "$@"; do line="$line$tab$arg"; done
 printf '%s\n' "$line" >> '{calls}'
 case "$1 $2 $3" in
-  "show "*) echo '{{"comments":[]}}' ;;
-  "comment add "*) cat "$5" >> '{comments}'; printf '\n==\n' >> '{comments}' ;;
+  "show "*)
+    printf '{{"spec_id":"TASK-9","comments":[{{"id":"old-1","content":"AUTHORITATIVE R1 BRIEF (x):\\nOLD ROUND"}},{{"content":"a comment without an id"}}'
+    if [ -f '{own}' ]; then printf ',{{"id":"%s","content":"as the store holds it"}}' "$(cat '{own}')"; fi
+    printf ',{{"id":"later-1","content":"AUTHORITATIVE R9 BRIEF (y):\\nLATER"}}]}}\n' ;;
+  "comment add "*)
+    cat "$5" >> '{comments}'; printf '\n==\n' >> '{comments}'
+    id="new-$(grep -c '' '{calls}')"
+    [ -f '{own}' ] || printf '%s' "$id" > '{own}'
+    echo "Comment added to $3"; echo "comment-id: $id" ;;
+  "comment edit "*) printf '%s\n' "$4" "$6" >> '{edits}'; cat "$8" >> '{edits}' ;;
   "lane relay-host begin") echo 'noise before the result'; echo '{{"round":3}}' ;;
   "lane relay-host probe") echo '{{"current":true,"running":false,"shortfall":null}}' ;;
   "lane relay-host place-brief") echo '{{"path":"/host/briefs/b.md","superseded":[]}}' ;;
@@ -1543,6 +1915,8 @@ esac
 "#,
             calls = calls.display(),
             comments = comments.display(),
+            own = own.display(),
+            edits = edits.display(),
         ),
     );
     // `ssh`, found on PATH: it records its arguments and runs the remote
@@ -1665,6 +2039,43 @@ esac
         "{posted}"
     );
     assert!(posted.contains("; relay lanehost#3)") && posted.contains(body.trim_end()));
+    // The brief was added with a request for its id, and that id is what the
+    // relay then looked for when it read the spec back through `aida show`.
+    let adds: Vec<&str> = calls
+        .lines()
+        .filter(|line| line.contains("\tcomment\tadd\t"))
+        .collect();
+    assert!(adds.len() >= 2 && adds.iter().all(|add| add.ends_with("\t--print-id")));
+    assert!(std::fs::read_to_string(&own).unwrap().starts_with("new-"));
+    assert!(calls
+        .lines()
+        .any(|line| line == format!("{}\tshow\t{SPEC}\t--format\tjson", root.display())));
+    // Once the lane had started, the one round brief posted before this
+    // relay's own was edited through `aida comment edit`, by its id; the
+    // brief posted after it was not.
+    let edit_calls: Vec<&str> = calls
+        .lines()
+        .filter(|line| line.contains("\tcomment\tedit\t"))
+        .collect();
+    assert_eq!(edit_calls.len(), 1, "{edit_calls:?}");
+    assert!(edit_calls[0].starts_with(&format!(
+        "{}\tcomment\tedit\t--req-id\t{SPEC}\t--comment-id\told-1\t--body-file\t",
+        root.display()
+    )));
+    let edited = std::fs::read_to_string(&edits).unwrap();
+    assert!(
+        edited.starts_with(&format!(
+            "{SPEC}\nold-1\nSUPERSEDED by the R 2 brief relayed "
+        )),
+        "{edited}"
+    );
+    assert!(
+        edited.ends_with("AUTHORITATIVE R1 BRIEF (x):\nOLD ROUND"),
+        "{edited}"
+    );
+    assert!(posted.contains(
+        "Lane relay: R 2 lane admitted on lanehost; 1 earlier round brief(s) marked SUPERSEDED."
+    ));
     assert!(
         std::fs::read_to_string(root.join(".aida/lane-relay/relay.log"))
             .unwrap()

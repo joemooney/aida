@@ -35,6 +35,7 @@ pub(crate) fn handle_comment_command(cmd: &CommentCommand, storage: &Storage) ->
             parent,
             interactive,
             relayed_from,
+            print_id,
         } => {
             // Use --content flag if provided, otherwise use positional argument
             let effective_content = resolve_body(
@@ -45,7 +46,7 @@ pub(crate) fn handle_comment_command(cmd: &CommentCommand, storage: &Storage) ->
             match effective_content {
                 Some(c) if !*interactive => {
                     // trace:BUG-1534 | ai:claude
-                    add_comment_cli_relayed(
+                    let comment = add_comment_cli_relayed(
                         storage,
                         id,
                         &c,
@@ -53,6 +54,10 @@ pub(crate) fn handle_comment_command(cmd: &CommentCommand, storage: &Storage) ->
                         parent.as_deref(),
                         relayed_from.as_deref(),
                     )?;
+                    // trace:TASK-3826 | ai:claude
+                    if *print_id {
+                        println!("{PRINT_ID_PREFIX} {comment}");
+                    }
                 }
                 _ => {
                     add_comment_interactive(storage, id, author.as_deref(), parent.as_deref())?;
@@ -257,8 +262,13 @@ pub(crate) fn add_comment_cli(
     author: Option<&str>,
     parent_id: Option<&str>,
 ) -> Result<()> {
-    add_comment_cli_relayed(storage, req_id, content, author, parent_id, None)
+    add_comment_cli_relayed(storage, req_id, content, author, parent_id, None).map(drop)
 }
+
+/// Leads the line `aida comment add --print-id` prints with the new
+/// comment's id.
+// trace:TASK-3826 | ai:claude
+pub(crate) const PRINT_ID_PREFIX: &str = "comment-id:";
 
 /// [`add_comment_cli`] plus the seat whose claim the comment relays.
 // trace:BUG-1534 | ai:claude
@@ -269,7 +279,7 @@ pub(crate) fn add_comment_cli_relayed(
     author: Option<&str>,
     parent_id: Option<&str>,
     relayed_from: Option<&str>,
-) -> Result<()> {
+) -> Result<Uuid> {
     // trace:BUG-2614 | ai:codex
     let _author_store = aida_core::provenance::author_store_scope(storage.path());
     let mut store = storage.load()?;
@@ -294,6 +304,7 @@ pub(crate) fn add_comment_cli_relayed(
         Comment::new(author, content.to_string()).with_session_id(session_id)
     }
     .with_relayed_from(relayed_from);
+    let comment_id = comment.id;
 
     if let Some(parent_str) = parent_id {
         let parent_uuid = Uuid::parse_str(parent_str)?;
@@ -304,7 +315,7 @@ pub(crate) fn add_comment_cli_relayed(
 
     storage.save(&store)?;
     println!("{}", "Comment added successfully".green());
-    Ok(())
+    Ok(comment_id)
 }
 
 fn list_comments(storage: &Storage, req_id: &str) -> Result<()> {
@@ -441,6 +452,7 @@ fn run_comment(
                             stdin,
                             author,
                             relayed_from,
+                            print_id,
                             ..
                         },
                 } => {
@@ -490,6 +502,7 @@ fn run_comment(
                     }
                     // trace:BUG-1534 | ai:claude — record whose claim this relays.
                     .with_relayed_from(relayed_from.as_deref());
+                    let comment_id = comment.id;
 
                     req.comments.push(comment);
                     req.modified_at = now;
@@ -498,6 +511,10 @@ fn run_comment(
                     // spec_id from the resolved req. trace:BUG-68 | ai:claude
                     record_role_activity(req.spec_id.as_deref().unwrap_or(req_id), "comment");
                     println!("Comment added to {}", req_id);
+                    // trace:TASK-3826 | ai:claude
+                    if *print_id {
+                        println!("{PRINT_ID_PREFIX} {comment_id}");
+                    }
 
                     // STORY-644 / TASK-1766: notify each @mentioned user via the mailbox
                     // only when the handle resolves to a known person, role or registered agent.
