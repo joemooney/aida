@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-20T23:22:04.256997932Z
+modified_at: 2026-11-21T00:02:12.600104085Z
 req_type: Task
 tags:
 - landing
@@ -384,6 +384,30 @@ comments:
   modified_at: 2026-11-20T23:19:30.689803639Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb69-1df8-7732-8f4a-db1d0571b1ff
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 160e9b17ed (round 3 of #4381; diff origin/main...HEAD)
+
+    Acceptance evidence [behavioral-test], all in aida-cli-lib lib tests, run through the lane job runner (land:: lane_hosts now:: = 186 passed; an earlier run adding coordination:: leases:: = 581 passed; ratchet filter = 91 passed):
+    - F1 bounded reads: the_guards_reads_of_shared_records_do_not_block_on_a_fifo (list_claims, lane records, list_leases_strict_all, Evidence::read, guard state).
+    - F2 interim rule (no heartbeat producer here, BUG-2706 owns it): a_claim_past_its_expiry_with_no_heartbeat_is_unknown_and_never_routes_rework (45-minute claim).
+    - F3: an_invalid_record_is_unknown_for_the_stall_and_for_its_hosts_count_alike; another_hosts_claim_reaches_the_standing_only_through_the_lane_records.
+    - F4: a_lane_on_a_spec_whose_id_is_a_prefix_of_anothers_holds_only_its_own_change; a_claim_covers_a_change_by_spec_or_branch (both directions).
+    - F5: task_3827_on_gitlab_the_log_line_and_the_stale_lease_are_matched_by_mr_key.
+    - F6: task_3827_only_a_listed_unoccupied_worktree_on_the_review_branch_is_a_leftover_tree; the_production_evidence_tells_a_reviewer_worktree_from_a_directory_of_that_name (real git).
+    - F7: one lease listing classified in place (Liveness::Unknown is said, never called dead).
+    - F8: STUCK-MERGE-RED clause asserted with and without CI detail.
+    - F9: a_saved_observation_is_shown_with_the_same_bounds_as_a_fresh_one.
+
+    Probe findings fixed before push: a bare prefix scope (task) matched every task-* branch through the delimiter rule; TOML cannot carry u64::MAX so the overflow fixture uses i64::MAX; the withheld-rework line is only said past rework_mins.
+
+    Residual risks: (1) an invalid record withholds rework of its change until it is removed; it is listed under Not read each run but routed to no seat. (2) an expired claim withholds rework for up to 24h, by the advisor's interim rule, until BUG-2706's heartbeat lands. (3) the reconciler's own local reads (run book, agent registry, gate ledger) are not bounded here. (4) make check-ci-fast could not finish inside this lane's 60s call cap: run individually were store-writers (regenerated, 3 rows), trace headers, structural guards, portability, crate globs, glyph lint, doc audiences, rustfmt; check-ratchets.py as a whole was not run.
+  created_at: 2026-11-21T00:02:12.600104085Z
+  modified_at: 2026-11-21T00:02:12.600104085Z
+  session_id: 01a1fb4428f4
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
