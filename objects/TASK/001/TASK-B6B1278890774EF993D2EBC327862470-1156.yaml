@@ -13,11 +13,24 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:55:07.495815470Z
-modified_at: 2026-11-21T02:10:57.483466019Z
+modified_at: 2026-11-21T06:58:48.496593023Z
 req_type: Task
 tags:
 - admission
 - linked:BUG-2703
+relationships:
+- rel_type: Supersedes
+  target_id: 01a1fabc-88dc-7263-876b-88aa8df81a83
+  created_at: 2026-11-21T06:56:17.646597669Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fabc-bbf3-7260-8728-f518efd81d3f
+  created_at: 2026-11-21T06:57:26.177226756Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fabc-ed9c-79e0-8dce-d6f31e5f037b
+  created_at: 2026-11-21T06:58:35.784006790Z
+  created_by: joe
 comments:
 - id: 01a1fbb7-dcd2-7d81-81c4-05dd687f0010
   author: joe
@@ -74,6 +87,18 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fce4-a1ff-7a70-a788-c989de6b71c0
+  author: joe
+  timestamp: 2026-11-21T06:56:44.543204847Z
+  changes: []
+- id: 01a1fce5-ab66-7f71-96cb-5dc9f8e0fbda
+  author: joe
+  timestamp: 2026-11-21T06:57:52.486195571Z
+  changes: []
+- id: 01a1fce6-be2e-7021-bbe0-684ceea92ba8
+  author: joe
+  timestamp: 2026-11-21T06:59:02.830551466Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8

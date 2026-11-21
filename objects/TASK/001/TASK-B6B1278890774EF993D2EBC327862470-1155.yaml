@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 1fb82107b586e3d1239b32d9505e3070faeb6ed8
 
   admission_owner.rs:740, intents: A regular intent file with invalid UTF-8 fails in read_regular_file_result_with_limit before parse_intent or stale-file aging. Every mode, including exclusive ship, propagates that error indefinitely. Handle malformed bytes in a bounded regular intent using the same stale-record policy as malformed JSON while retaining refusals for unsafe file types and I/O errors.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T20:54:08.028222845Z
-modified_at: 2026-11-20T20:54:08.028222845Z
+modified_at: 2026-11-21T06:58:20.718608906Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1f73c-f2d4-7ad3-85a1-7b10d07388d2
   created_at: 2026-11-20T20:54:20.707886727Z
+- rel_type: SupersededBy
+  target_id: 01a1fabd-d5e7-7873-8954-19a0d6347b0d
+  created_at: 2026-11-21T06:58:08.137703684Z
+  created_by: joe
+history:
+- id: 01a1fce5-e249-72d0-bddc-f3815f94668e
+  author: joe
+  timestamp: 2026-11-21T06:58:06.537475546Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fce6-5276-7432-a5f1-71b4b1e0fad8
+  author: joe
+  timestamp: 2026-11-21T06:58:35.254122131Z
+  changes: []
+implementation_summary: Consolidated into existing TASK-3828, whose description explicitly includes stale malformed UTF-8 intent handling and requires a regression. Source remains unfinished; this closes only duplicate intake, not the underlying work.
 filed_at:
   code_sha: 1fb82107b586e3d1239b32d9505e3070faeb6ed8
   branch: pr-4363

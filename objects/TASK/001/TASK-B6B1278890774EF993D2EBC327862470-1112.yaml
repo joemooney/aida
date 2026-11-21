@@ -2,17 +2,21 @@ id: 01a1f2c0-2153-7dc2-a3ac-00f5bb6caeb7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1112
 agreed_id: TASK-3149
 title: 'Review follow-up: [P2 test-gap] agent_launch.rs:1829-1834: the private-clone validation boundary (host_recor'
-description: |-
+description: |
   From BUG-2619
   Reviewed sha: 6f529cc258955fc4e30d8a6ff622dfbbfa7dc4b2
 
   [P2 test-gap] agent_launch.rs:1829-1834: the private-clone validation boundary (host_recorded_clone) is not exercised. Deferred; noted on BUG-2619.
-status: Draft
+
+  ## Acceptance
+  1. Exercise Claude transcript fallback in an isolated fixture where the expected transcript is missing and the only matching transcript belongs to a private clone in the seat inventory.
+  2. With valid host registration, recover that clone's canonical cwd. With missing host registration and otherwise identical evidence, refuse recovery before launching Claude. Assert both results through the same recovery entry point.
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T07:40:40.147235551Z
-modified_at: 2026-11-19T07:40:40.147235551Z
+modified_at: 2026-11-21T07:06:17.524470211Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -22,6 +26,12 @@ relationships:
 - rel_type: References
   target_id: 01a1e29e-f426-7dc1-82f3-908b27a97da6
   created_at: 2026-11-19T07:40:52.404516266Z
+comments:
+- id: 01a1fc0e-8991-7931-9541-0c5b3bcaeac9
+  author: joe
+  content: 'Advisor closeout audit 2026-11-20: KEEP OPEN. At main aa567732958, claude_agent_resume_cwd still filters private clones through seat_clone::host_recorded_clone (agent_launch.rs:1830). The BUG-2619 regression creates an ordinary linked git worktree and exercises transcript/grant checks; it does not construct a private clone or toggle host-registration evidence. Therefore the reported private-clone boundary coverage is not established by the existing test. No implementation or status change.'
+  created_at: 2026-11-21T03:02:41.052043268Z
+  modified_at: 2026-11-21T03:02:41.052043268Z
 history:
 - id: 01a1f2d9-26ac-7ba2-b8de-c777621359c5
   author: joe
@@ -29,6 +39,32 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fcd2-45a5-74e3-85a5-518dddbccd3f
+  author: joe
+  timestamp: 2026-11-21T06:36:41.253568902Z
+  changes:
+  - field_name: description
+    old_value: |-
+      From BUG-2619
+      Reviewed sha: 6f529cc258955fc4e30d8a6ff622dfbbfa7dc4b2
+
+      [P2 test-gap] agent_launch.rs:1829-1834: the private-clone validation boundary (host_recorded_clone) is not exercised. Deferred; noted on BUG-2619.
+    new_value: |
+      From BUG-2619
+      Reviewed sha: 6f529cc258955fc4e30d8a6ff622dfbbfa7dc4b2
+
+      [P2 test-gap] agent_launch.rs:1829-1834: the private-clone validation boundary (host_recorded_clone) is not exercised. Deferred; noted on BUG-2619.
+
+      ## Acceptance
+      1. Exercise Claude transcript fallback in an isolated fixture where the expected transcript is missing and the only matching transcript belongs to a private clone in the seat inventory.
+      2. With valid host registration, recover that clone's canonical cwd. With missing host registration and otherwise identical evidence, refuse recovery before launching Claude. Assert both results through the same recovery entry point.
+- id: 01a1fced-6034-7ba1-944d-e3615360d6e0
+  author: joe
+  timestamp: 2026-11-21T07:06:17.524460210Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
   branch: main

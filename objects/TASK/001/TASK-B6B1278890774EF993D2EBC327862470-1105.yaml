@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 1097003953eac8021ce2d700cf6894feda46fec8
 
   [P3] Apply the formatter-required layout at aida-cli-lib/src/review_commands.rs:2992-2996. Exact-head CI fast-gates job 135286121876 fails its Check formatting step because the multiline apply_policy(&policy, findings, finding_classes) call must use the formatter's two-line assignment. The job log shows the precise replacement and exits 2; this is source formatting drift, not the previously reported sandbox socket failure. Format this call and obtain passing exact-head CI. This is a nonblocking style follow-up under the project review policy; CI still prevents landing.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T02:25:36.179088853Z
-modified_at: 2026-11-19T02:25:36.179088853Z
+modified_at: 2026-11-21T06:49:25.896527979Z
 req_type: Task
 tags:
 - carried-from:STORY-2913
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a1ef76-3f0b-7393-bd34-02831db1185f
   created_at: 2026-11-19T02:25:48.381693647Z
+comments:
+- id: 01a1fcce-7b65-7b13-8dcd-d3efb23d0774
+  author: joe
+  content: 'Product closure evidence for advisor: #4269 landed as cfbc140e9ee. Current main aa567732958 uses the formatter''s two-line apply_policy assignment, and cargo fmt --all -- --check passed on the clean matching checkout.'
+  created_at: 2026-11-21T06:32:20.212765675Z
+  modified_at: 2026-11-21T06:32:20.212765675Z
 history:
 - id: 01a1f1c5-37d4-7113-ad97-1bc8273bf255
   author: joe
@@ -29,6 +35,14 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fcdd-f088-7543-89f2-2aa98bf91bca
+  author: joe
+  timestamp: 2026-11-21T06:49:25.896518522Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Independent advisor closeout at main aa567732958, 2026-11-20. The offending apply_policy assignment was formatted during STORY-2913 rework; cargo fmt --all -- --check passes on current merged main.
 filed_at:
   code_sha: 1097003953eac8021ce2d700cf6894feda46fec8
   branch: pr-4269
@@ -37,3 +51,6 @@ filed_at:
   aida_build_sha: 9f2f93cc432
   vendor: claude
   session: 01a1f19cebb1
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:49:13.223187041Z

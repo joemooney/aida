@@ -2,17 +2,21 @@ id: 01a1f330-2c92-77d2-b236-0c3e88276e39
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1119
 agreed_id: TASK-3157
 title: 'Review follow-up: [P2] review_watch.rs:3072-3075, 3088, 2913-2917: when a pass stops on a global error, the '
-description: |-
+description: |
   From BUG-2674
   Reviewed sha: ffd52c08797563a2ef81537637e9b1d2db088a85
 
   [P2] review_watch.rs:3072-3075, 3088, 2913-2917: when a pass stops on a global error, the accumulated refused/busy evidence is dropped (only the stop is recorded, busy=0). Deferred; noted on BUG-2674.
-status: Draft
+
+  ## Acceptance
+  1. In a review-watch pass, observe a busy change, a refused change, then a whole-watcher stop. Assert that the final pass report retains the earlier busy count and refusal evidence and records the stop separately with its diagnostic.
+  2. Processing stops at the whole-watcher failure. Preserve the bounded refusal sample, total refusal count, and existing suppression of a superseded image's report.
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T09:43:03.058201739Z
-modified_at: 2026-11-19T09:43:03.058201739Z
+modified_at: 2026-11-21T07:06:46.460632923Z
 req_type: Task
 tags:
 - carried-from:BUG-2674
@@ -22,6 +26,12 @@ relationships:
 - rel_type: References
   target_id: 01a1ecce-8905-7051-a16c-2e950de34de0
   created_at: 2026-11-19T09:43:15.367227345Z
+comments:
+- id: 01a1fc0f-5e30-7142-8098-805a68d6d8e3
+  author: joe
+  content: 'Advisor closeout audit 2026-11-20: KEEP OPEN. At main aa567732958, run_with_program matches watch_changes: only Ok(watched) copies watched.busy/refused into the pass. Err(error) records the outer pass plus one formatted error and returns. Earlier accumulated busy/refused evidence is not carried in that error result. This is separate from the already corrected refusal-total/sample issue TASK-3147 and TRAIN health issue TASK-3156. No implementation or status change.'
+  created_at: 2026-11-21T03:03:35.168600192Z
+  modified_at: 2026-11-21T03:03:35.168600192Z
 history:
 - id: 01a1f33a-a6c2-7ee0-a721-a9fc4dbfdfd6
   author: joe
@@ -29,6 +39,32 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fcd3-336b-78e3-9d86-4cfc08769f91
+  author: joe
+  timestamp: 2026-11-21T06:37:42.123857637Z
+  changes:
+  - field_name: description
+    old_value: |-
+      From BUG-2674
+      Reviewed sha: ffd52c08797563a2ef81537637e9b1d2db088a85
+
+      [P2] review_watch.rs:3072-3075, 3088, 2913-2917: when a pass stops on a global error, the accumulated refused/busy evidence is dropped (only the stop is recorded, busy=0). Deferred; noted on BUG-2674.
+    new_value: |
+      From BUG-2674
+      Reviewed sha: ffd52c08797563a2ef81537637e9b1d2db088a85
+
+      [P2] review_watch.rs:3072-3075, 3088, 2913-2917: when a pass stops on a global error, the accumulated refused/busy evidence is dropped (only the stop is recorded, busy=0). Deferred; noted on BUG-2674.
+
+      ## Acceptance
+      1. In a review-watch pass, observe a busy change, a refused change, then a whole-watcher stop. Assert that the final pass report retains the earlier busy count and refusal evidence and records the stop separately with its diagnostic.
+      2. Processing stops at the whole-watcher failure. Preserve the bounded refusal sample, total refusal count, and existing suppression of a superseded image's report.
+- id: 01a1fced-d13c-75d2-84c7-3395d16d5696
+  author: joe
+  timestamp: 2026-11-21T07:06:46.460621462Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
   branch: main

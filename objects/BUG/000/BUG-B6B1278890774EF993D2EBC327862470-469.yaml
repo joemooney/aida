@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T07:11:17.713370642Z
+modified_at: 2026-11-21T07:13:30.092414893Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -385,6 +385,18 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-21T07:11:17.563739997Z
   modified_at: 2026-11-21T07:11:17.563739997Z
+- id: 01a1fcf4-2a97-7630-aacc-88bd76103b4f
+  author: joe
+  content: |
+    AUTHORITATIVE FINAL REWORK BRIEF, pinned to PR #4385 at bdd60daf20ca. Complete the existing round-4 ruling on the existing PR. No additional design scope.
+
+    In review_draft.rs make submit-draft validate the bounded draft.json read and print its disposition without writes. Remove the pending/consumed claim and restore protocol, including cleanup side effects on invalid launch directories. In queue_cmd/work.rs hold the launch lock from collection through validation, verdict recording and consumption. Keep the launcher as the recording authority and update the launch prompt, CLI help, and skill instructions to match.
+
+    Cover a contradictory draft that skipped validation and a draft edited after validation. The launcher must refuse both before a verdict is recorded. Cover the collection lock lifetime through recording and consumption. The exact-head fast-gate job 136691046541 still finds the ambient PATH read in aida-cli/tests/bug_2707_submit_draft_cli.rs. Use a deterministic fixture PATH or omit the override if it is unnecessary. Do not change the ledger baseline.
+
+    Run cargo fmt --all -- --check, the targeted review_draft tests through the lane job runner, and the normal host fast gates. Preserve the independent review and CI requirements at the newly published head.
+  created_at: 2026-11-21T07:13:30.092414893Z
+  modified_at: 2026-11-21T07:13:30.092414893Z
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe

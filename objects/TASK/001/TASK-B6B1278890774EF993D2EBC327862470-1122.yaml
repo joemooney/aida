@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 6edcb21547e083271200f1c4c6ca611d99576ced
 
   [P2] Preserve the existing authorization result when relabeling approval actionability. review_verdict_show_body deliberately returns needs-review when independent_approval_authorized rejects an unattested, self-authored, revoked or otherwise invalid approval. The new postprocessing at review_commands.rs:4337-4340 and 4390 checks only the parsed approval word and matching SHA, then unconditionally overwrites that result with current-head-approved. An unattested APPROVED file at local HEAD is enough to trigger this even without a PR lookup; the real merge gates may still correctly demand a reviewer. Keep the authority validation in the display path and cover the full handler/postprocessing with the existing invalid-authority fixtures, rather than testing only the preexisting body function or a fabricated renderer input.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T17:11:02.330067815Z
-modified_at: 2026-11-19T17:11:02.330067815Z
+modified_at: 2026-11-21T06:52:50.877288008Z
 req_type: Task
 tags:
 - carried-from:STORY-2893
@@ -29,6 +29,14 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fce1-113d-77e1-87d8-ac932a0fd512
+  author: joe
+  timestamp: 2026-11-21T06:52:50.877277521Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Independent advisor closeout at main aa567732958, 2026-11-20. handle_review_verdict_show delegates approval validation through gate::review_approval::independent_approval_authorized into the actual next-actor path. Source rework documents invalid-approval fixtures; the old parsed-word-only postprocessing is replaced.
 filed_at:
   code_sha: 6edcb21547e083271200f1c4c6ca611d99576ced
   branch: pr-4318
@@ -37,3 +45,6 @@ filed_at:
   aida_build_sha: e5b78d27e14
   vendor: claude
   session: 01a1f4c617e1
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:52:37.999730119Z

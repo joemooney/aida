@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-21T01:37:38.718009828Z
+modified_at: 2026-11-21T07:11:49.624160827Z
 req_type: Story
 tags:
 - landing
@@ -945,6 +945,15 @@ comments:
   modified_at: 2026-11-21T01:37:38.718009828Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fcf2-a0d0-7bd2-8103-f8967d8e7d1e
+  author: joe
+  content: |-
+    Advisor follow-up inventory at origin/main aa567732958 and S3a #4389 at 964a98c30ed. #4362 merged to integration and was reverted at 74644c21f58. Retain these 15 drafts pending disposition at the replacement boundary.
+    - S3a observational evidence: TASK-3185 (first-red attribution), TASK-3191 (accepted-only per-run retry), TASK-3193 (failed-job pagination), TASK-3195 (directory durability), and TASK-HOME-1164/1165/1166/1168/1169/1173 (trusted state root, pass deadline, failure routing, revert attribution, independent metrics, status wording). TASK-3191 looks addressed on the open S3a head. TASK-3195 has sync_data before rename there, with directory durability still unproven. TASK-HOME-1168 still sees the old revert subject rule and TASK-HOME-1169 still sees the propagated journal error.
+    - S3b store effects under the existing sketch/signoff ruling: TASK-3175 (completion event), TASK-3186 and TASK-3197 (coordinated smoke handoff), TASK-3198 (landed-fix attribution). S3a reports recovery without claiming a specific fix. TASK-3190 spans both slices: the landing-watch test exemption belongs to S3a and the dev-build smoke call path to S3b.
+    Use the current replacement head and verdicts as evidence. Do not use the reverted integration merge as closure.
+  created_at: 2026-11-21T07:11:49.624160827Z
+  modified_at: 2026-11-21T07:11:49.624160827Z
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe

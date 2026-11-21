@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: ef678e7f9515ed47f5d7485680fa6b18fbf00926
 
   [P2] aida-cli-lib/src/doctor/remote.rs:454-470 switches fetch to the scratch --git-dir and reconstructs only the remote URL. Repository-local transport settings are consequently absent from the fetch (for example core.sshCommand selecting a required SSH identity, a local credential.helper, or remote-specific proxy/uploadpack settings). ls-remote against the original repository can succeed while this fallback fails, turning an otherwise classifiable recent fast-forward into an uncertainty finding on every scheduled check whenever the advertised objects are missing locally. Preserve the original remote's required transport configuration safely in the isolated fetch, and add coverage for a transport configured only in the source repository. The existing fixture uses plain local bare remotes and cannot detect this.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T05:58:09.118918813Z
-modified_at: 2026-11-19T05:58:09.118918813Z
+modified_at: 2026-11-21T06:50:21.889748309Z
 req_type: Task
 tags:
 - carried-from:BUG-2672
@@ -29,6 +29,14 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fcde-cb41-7ff3-977e-f13d20ad8ebb
+  author: joe
+  timestamp: 2026-11-21T06:50:21.889736314Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Independent advisor closeout at main aa567732958, 2026-11-20. doctor/remote.rs forwards local/worktree transport settings into the scratch config, including SSH, credentials and remote-specific options. The uploadpack fixture and forwarding/quoting tests are present; BUG-2672 rework records passing remote_drift tests.
 filed_at:
   code_sha: ef678e7f9515ed47f5d7485680fa6b18fbf00926
   branch: pr-4282
@@ -37,3 +45,6 @@ filed_at:
   aida_build_sha: 697f85f2fff
   vendor: claude
   session: 01a1f25e9499
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:50:08.777424511Z

@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 872a1e9f0d62b203142579aa3f63aaaefdf96792
 
   [P3] Fix the two rustfmt differences that fail exact-head CI. CI (fast gates), job 135520369426 at 872a1e9f0d62b203142579aa3f63aaaefdf96792, fails Check formatting: queue_cmd/mod.rs:202 must reorder/wrap the moved_seats_note import, and repair_journal.rs:340 must wrap the seats_for filter closure as shown in the job log. Apply rustfmt in implementation rework. Evidence: https://github.com/joemooney/aida/actions/runs/44512336372/job/135520369426 . This is nonblocking style under the project review policy, retained alongside the blocking defects; readiness still requires passing CI.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T11:25:10.519257299Z
-modified_at: 2026-11-19T11:25:10.519257299Z
+modified_at: 2026-11-21T07:08:32.967939632Z
 req_type: Task
 tags:
 - carried-from:BUG-2688
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   created_at: 2026-11-19T11:25:23.262405965Z
+- rel_type: SupersededBy
+  target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  created_at: 2026-11-21T07:08:20.501761524Z
+  created_by: joe
 history:
 - id: 01a1f3c6-5e87-7561-a6a6-6028c660f327
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fcef-3d12-7f12-bc4d-532e82787989
+  author: joe
+  timestamp: 2026-11-21T07:08:19.602703248Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fcef-a850-7462-ac7b-57803532de01
+  author: joe
+  timestamp: 2026-11-21T07:08:47.056169820Z
+  changes: []
+implementation_summary: 'PR #4306 was closed and its replacement is #4388 under BUG-2688. The two cited formatting sites are absent or revised on fc4441ac7032. Checked both replacement files with rustfmt at that pinned head. Exact-head CI for the replacement remains a BUG-2688 gate.'
 filed_at:
   code_sha: 872a1e9f0d62b203142579aa3f63aaaefdf96792
   branch: pr-4306

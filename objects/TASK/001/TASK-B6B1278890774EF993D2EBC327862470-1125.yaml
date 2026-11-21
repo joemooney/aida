@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: f195fb6d4710bd8bd12ffb0375ee2de8bad93d2c
 
   Exclude unrelated project deputies from operator awaiting reports. At aida-cli-lib/src/deputy_shell/mod.rs:927-937, only session-scoped reads suppress an empty stranded_jobs list. With no AIDA_SESSION_ID, a dead native queue containing exclusively project-A jobs is still emitted and counted actionable while awaiting runs in project B: the project filter removes every job, but the deputy is pushed anyway. Require relevant-project evidence independently of the session filter and cover two distinct projects with the no-session collector. This behavior is present in both the original reviewed head and protected-base landed tree and is unaffected by the base-only tests.rs change.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T18:13:50.709060041Z
-modified_at: 2026-11-21T06:30:35.384115738Z
+modified_at: 2026-11-21T06:53:28.494609283Z
 req_type: Task
 tags:
 - carried-from:TASK-3801
@@ -35,6 +35,14 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fce1-a42e-75c1-b17b-df4bda9d90d7
+  author: joe
+  timestamp: 2026-11-21T06:53:28.494600047Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Independent advisor closeout at main aa567732958, 2026-11-20. deputy_shell/mod.rs unconditionally skips empty stranded_jobs, independently of session filtering. The two-project operator assertion is present in deputy_shell/tests.rs. TASK-3801 rework records the correction and passing deputy suite.
 filed_at:
   code_sha: f195fb6d4710bd8bd12ffb0375ee2de8bad93d2c
   branch: pr-4319
@@ -43,3 +51,6 @@ filed_at:
   aida_build_sha: e5b78d27e14
   vendor: claude
   session: 01a1f501e46f
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:53:15.011969953Z

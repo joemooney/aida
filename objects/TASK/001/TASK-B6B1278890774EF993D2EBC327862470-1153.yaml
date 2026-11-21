@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 1fb82107b586e3d1239b32d9505e3070faeb6ed8
 
   review_watch.rs:2900: An intentional drain or writer-preference yield is passed to record_pass as a discovery error. next_pass_report counts one refused change on a pass that examined zero changes, and pass_degradation marks the healthy supervised worker degraded for the duration of the drain. Represent an intentional yield separately, preserving real evidence errors.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T20:53:42.236010929Z
-modified_at: 2026-11-20T20:53:42.236010929Z
+modified_at: 2026-11-21T06:56:03.099885268Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1f73c-f2d4-7ad3-85a1-7b10d07388d2
   created_at: 2026-11-20T20:53:55.258252740Z
+- rel_type: SupersededBy
+  target_id: 01a1fabd-d5e7-7873-8954-19a0d6347b0d
+  created_at: 2026-11-21T06:55:50.609678882Z
+  created_by: joe
 history:
 - id: 01a1fb7d-cf7f-7be0-843f-e7dc01b85fa7
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fce3-ccad-73c1-9e9d-ff4a783b0730
+  author: joe
+  timestamp: 2026-11-21T06:55:49.933738328Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fce4-36d0-7123-80ca-74d50a2fd572
+  author: joe
+  timestamp: 2026-11-21T06:56:17.104010027Z
+  changes: []
+implementation_summary: Consolidated into existing TASK-3828, whose description explicitly includes intentional yield must not count as discovery failure and requires a regression. Source remains unfinished; this closes only duplicate intake, not the underlying work.
 filed_at:
   code_sha: 1fb82107b586e3d1239b32d9505e3070faeb6ed8
   branch: pr-4363

@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 0aeae185378bb67e48c086b5ddc961e8851a82b0
 
   [P2] Update the store-writer inventory for the production function rename. review_watch.rs:3209 moves the writer body from watch_change to admit_change, but scripts/store-writers.toml:1880-1881 still inventories watch_change's transaction and Directory::open sinks. Existing exact-head CI jobs 135439208179 and 135439207798 both fail the store-writer ratchet on precisely these two additions and two stale rows; workspace/test compilation itself finished successfully. Update the reviewed inventory rows to the new production owner while preserving their policy metadata. This is a concrete source/inventory mismatch, not a request to wait for CI.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T08:55:08.263390329Z
-modified_at: 2026-11-19T08:55:08.263390329Z
+modified_at: 2026-11-21T06:52:13.824762435Z
 req_type: Task
 tags:
 - carried-from:BUG-2674
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a1ecce-8905-7051-a16c-2e950de34de0
   created_at: 2026-11-19T08:55:21.602802797Z
+comments:
+- id: 01a1fccf-50d9-7201-8019-a2b37759bdc5
+  author: joe
+  content: 'Product closure evidence for advisor: #4286 landed as b0671acf9f4. Current main aa567732958 inventories both transaction and Directory::open under admit_change. The compatibility store-writer check passed, reconciling 3,841 sites.'
+  created_at: 2026-11-21T06:33:15.073264Z
+  modified_at: 2026-11-21T06:33:15.073264Z
 history:
 - id: 01a1f33a-d626-7512-8fd6-8a67f55d9539
   author: joe
@@ -29,6 +35,14 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fce0-8080-70c2-b849-31a518ce16dd
+  author: joe
+  timestamp: 2026-11-21T06:52:13.824748025Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Independent advisor closeout at main aa567732958, 2026-11-20. The inventory identifies review_watch.rs admit_change transaction and Directory::open sinks. Fresh writer inventory check passes.
 filed_at:
   code_sha: 0aeae185378bb67e48c086b5ddc961e8851a82b0
   branch: pr-4286
@@ -37,3 +51,6 @@ filed_at:
   aida_build_sha: d8460c9ac52
   vendor: claude
   session: 01a1f301754c
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:52:01.114037252Z

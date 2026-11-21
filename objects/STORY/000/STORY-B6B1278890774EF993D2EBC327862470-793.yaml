@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T23:41:42.236834417Z
-modified_at: 2026-11-19T22:27:53.537051623Z
+modified_at: 2026-11-21T06:34:40.388044325Z
 req_type: Story
 tags:
 - landing
@@ -374,6 +374,11 @@ comments:
   modified_at: 2026-11-19T22:27:19.243073031Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fcd0-9f54-7fb1-9287-0489d681aec0
+  author: joe
+  content: 'Product closure evidence at main aa567732958 for drafts from landed #4318: TASK-3162 is covered by the authority predicate before verdict relabelling and unauthorized_approval_stays_needs_review_through_the_handler for both local and observed PR heads. TASK-3163''s separate verdict_approval_authorized helper is gone. The current handler delegates authorization to gate::review_approval::independent_approval_authorized before rendering.'
+  created_at: 2026-11-21T06:34:40.388044325Z
+  modified_at: 2026-11-21T06:34:40.388044325Z
 history:
 - id: 01a1ebf6-c780-73f3-b1a8-6c2fcc2296e2
   author: joe

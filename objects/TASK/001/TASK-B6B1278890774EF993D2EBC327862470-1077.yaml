@@ -8,11 +8,29 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T05:15:27.264999619Z
-modified_at: 2026-11-15T06:48:59.679039702Z
+modified_at: 2026-11-21T06:39:20.997278594Z
 req_type: Task
 tags:
 - ci
 - landing-emergency
+comments:
+- id: 01a1fcd4-e633-7f63-904a-8e721c76c0c3
+  author: joe
+  content: |
+    Product evidence for item (2), 2026-11-20 MST. STORY-2833 landed in 09b509ffd70 at 2026-11-15 09:01:05 UTC. Sampled three successful integration-branch pull_request CI workflows on each side. All six selected FAST and restored the same exact fast-compile cache key (v0-rust-ci-dev-profile-fast-check-Linux-x64-2fd77104-cef71200, full match true). The three before heads lack scripts/ratchet-set.json. The three after heads descend from 09b509ffd70. Wall time is the ci-tier job start to the successful aggregate Build completion, excluding forge queue time before the tier job.
+
+    | Run | Head | FAST wall | Fast compile |
+    | --- | --- | ---: | ---: |
+    | [43691472706](https://github.com/joemooney/aida/actions/runs/43691472706) | 0fbfcdb | 6m22s | 3m08s |
+    | [43692002303](https://github.com/joemooney/aida/actions/runs/43692002303) | b01a36a | 7m07s | 2m50s |
+    | [43696800049](https://github.com/joemooney/aida/actions/runs/43696800049) | d3ed49d | 5m58s | 3m13s |
+    | [43699462285](https://github.com/joemooney/aida/actions/runs/43699462285) | fdff88a | 14m04s | 13m51s |
+    | [43707922488](https://github.com/joemooney/aida/actions/runs/43707922488) | 10d112c | 13m41s | 13m30s |
+    | [43729565452](https://github.com/joemooney/aida/actions/runs/43729565452) | 456468e | 13m59s | 13m48s |
+
+    All three sampled post-landing workflows exceed 12 minutes, with fast compile on the critical path. The worktrees differ, so the comparison establishes budget failure in comparable hosted warm runs and does not isolate which compilation or guard step caused the delta. The measured split required by item (2), historical replay evidence, and the one-week approval-red metric remain open.
+  created_at: 2026-11-21T06:39:20.997278594Z
+  modified_at: 2026-11-21T06:39:20.997278594Z
 history:
 - id: 01a1ddf7-621f-7393-a42f-f13bbf1bd44c
   author: joe

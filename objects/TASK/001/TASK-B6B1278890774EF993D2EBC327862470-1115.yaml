@@ -2,17 +2,21 @@ id: 01a1f2e3-fac0-7142-943e-e50044b243ad
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1115
 agreed_id: TASK-3154
 title: 'Review follow-up: [P2] lane_disk_deferral.rs:125-129: the LaneSpaceRefused typed error is lost through the S'
-description: |-
+description: |
   From BUG-2684
   Reviewed sha: bbb5fb3a75048a9c4b4363d1b44b019c942c8ae3
 
   [P2] lane_disk_deferral.rs:125-129: the LaneSpaceRefused typed error is lost through the StandaloneImplementerExit wrapper, so reason=admission-refused. Deferred; noted on BUG-2684.
-status: Draft
+
+  ## Acceptance
+  1. Exercise the normal pickup deferral path with a structured LaneSpaceRefused. Assert that the returned error still exposes the original typed refusal and that the persisted launch outcome identifies disk-floor deferral.
+  2. Keep exit code 36, setup rollback, and queue-note behavior. An unrelated launch or measurement error retains its own classification.
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T08:19:49.568395128Z
-modified_at: 2026-11-19T08:19:49.568395128Z
+modified_at: 2026-11-21T07:09:32.379253141Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -22,6 +26,12 @@ relationships:
 - rel_type: References
   target_id: 01a1ef57-0cf9-7932-b4e9-057aa44fb917
   created_at: 2026-11-19T08:20:02.701136179Z
+comments:
+- id: 01a1fc0e-f26a-7ec2-8a86-6fc1f411391d
+  author: joe
+  content: 'Advisor closeout audit 2026-11-20: KEEP OPEN. At main aa567732958, lane_disk_deferral::defer still returns a newly constructed StandaloneImplementerExit containing only formatted error text, discarding the original LaneSpaceRefused chain. The current tests cover refusal discovery through anyhow context before this conversion, not preservation after defer. The original typed-cause issue remains. No implementation or status change.'
+  created_at: 2026-11-21T03:03:07.797816415Z
+  modified_at: 2026-11-21T03:03:07.797816415Z
 history:
 - id: 01a1f2f1-eaea-7102-a425-f572a21135ad
   author: joe
@@ -29,6 +39,32 @@ history:
   session_id: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fcd2-bcaa-7e30-adf7-b25185bf23bd
+  author: joe
+  timestamp: 2026-11-21T06:37:11.722472912Z
+  changes:
+  - field_name: description
+    old_value: |-
+      From BUG-2684
+      Reviewed sha: bbb5fb3a75048a9c4b4363d1b44b019c942c8ae3
+
+      [P2] lane_disk_deferral.rs:125-129: the LaneSpaceRefused typed error is lost through the StandaloneImplementerExit wrapper, so reason=admission-refused. Deferred; noted on BUG-2684.
+    new_value: |
+      From BUG-2684
+      Reviewed sha: bbb5fb3a75048a9c4b4363d1b44b019c942c8ae3
+
+      [P2] lane_disk_deferral.rs:125-129: the LaneSpaceRefused typed error is lost through the StandaloneImplementerExit wrapper, so reason=admission-refused. Deferred; noted on BUG-2684.
+
+      ## Acceptance
+      1. Exercise the normal pickup deferral path with a structured LaneSpaceRefused. Assert that the returned error still exposes the original typed refusal and that the persisted launch outcome identifies disk-floor deferral.
+      2. Keep exit code 36, setup rollback, and queue-note behavior. An unrelated launch or measurement error retains its own classification.
+- id: 01a1fcf0-595b-7cc2-ac2a-60771f93e5cd
+  author: joe
+  timestamp: 2026-11-21T07:09:32.379243463Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
   branch: main

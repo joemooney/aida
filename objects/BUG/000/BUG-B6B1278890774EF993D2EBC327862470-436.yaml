@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:44:00.742183729Z
-modified_at: 2026-11-19T10:57:37.795520075Z
+modified_at: 2026-11-21T06:34:08.805123555Z
 req_type: Bug
 tags:
 - alert-noise
@@ -236,6 +236,11 @@ comments:
   content: 'Auto-completion warning: BUG-2672 was In Progress when merge 2ebbc098111bb16e404197548ae68556eb2c30e2 completed it; verify that no active round remains.'
   created_at: 2026-11-19T10:57:37.685557161Z
   modified_at: 2026-11-19T10:57:37.685557161Z
+- id: 01a1fcd0-231f-74d1-93bc-23c85e6d0ce6
+  author: joe
+  content: 'Product closure evidence at main aa567732958 for drafts from landed #4282: TASK-3146 is covered by forwarding repo and worktree transport config into the scratch fetch, with the remote_drift_forwards_only_source_transport_config regression. TASK-3150''s upload-pack fixture now uses test_exec::write_executable. TASK-3152''s bridge fixture now passes clone_key through aida_core::toml_quote::toml_key before interpolation.'
+  created_at: 2026-11-21T06:34:08.805123555Z
+  modified_at: 2026-11-21T06:34:08.805123555Z
 history:
 - id: 01a1ec8a-a4b2-76f0-81f6-03400488bb9b
   author: joe

@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 12ad00b70c6d4d90c8abe07b5c6482b329947d39
 
   P2: aida-cli-lib/src/tests/task_1544_light_doctor_tests.rs:175-177 interpolates clone_key, a filesystem path, directly into a quoted TOML table key. A temporary-root path containing a quote or backslash produces malformed or differently interpreted local-layer configuration, so the enabled-bridge fixture fails instead of testing grace. Exact-head CI fast-gates job 135409421737 rejects this new line in Check Rust test portability ratchet, causing the required Build aggregate to fail. Serialize the table key/local-layer document through TOML escaping rather than raw path interpolation. This is a test-fixture/source-guard defect, independent of the protected-base changes; it does not establish a production acceptance or authority defect.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T07:45:26.844300669Z
-modified_at: 2026-11-19T07:45:26.844300669Z
+modified_at: 2026-11-21T06:51:37.196969835Z
 req_type: Task
 tags:
 - carried-from:BUG-2672
@@ -29,6 +29,14 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fcdf-f16c-7962-bed4-47035d2a3b08
+  author: joe
+  timestamp: 2026-11-21T06:51:37.196958718Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Independent advisor closeout at main aa567732958, 2026-11-20. The local-layer fixture serializes clone_key through aida_core::toml_quote::toml_key. This replaces the cited raw path interpolation on merged main.
 filed_at:
   code_sha: 12ad00b70c6d4d90c8abe07b5c6482b329947d39
   branch: pr-4282
@@ -37,3 +45,6 @@ filed_at:
   aida_build_sha: cfbc140e9ee
   vendor: claude
   session: 01a1f2c0c269
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:51:24.647161093Z

@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 768640005c55bef865e331d70f2a1e0be1058617
 
   Keep unrelated project deputies out of operator awaiting reports. In aida-cli-lib/src/deputy_shell/mod.rs:927-937, the empty-stranded-jobs check is conditional on session.is_some(). With no AIDA_SESSION_ID, a dead queue containing only project A jobs is emitted by awaiting in project B: the earlier project filter removes every job but the code still pushes the deputy and increments the actionable count. Require relevant project evidence independently of the session filter, and cover two projects with an operator/no-session collector test. This behavior is identical in the original head and protected-base landed tree.
-status: Draft
+status: Rejected
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T17:29:30.370542672Z
-modified_at: 2026-11-21T06:30:49.943505463Z
+modified_at: 2026-11-21T06:55:36.692913788Z
 req_type: Task
 tags:
 - carried-from:TASK-3801
@@ -35,6 +35,14 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fce3-98f4-7c61-8e34-3fe845d55097
+  author: joe
+  timestamp: 2026-11-21T06:55:36.692903890Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Rejected
+implementation_summary: 'Independent advisor closeout at main aa567732958, 2026-11-20. Duplicate of TASK-3164: same cross-project dead-deputy filter at a merge-only head. TASK-3801 advisor comment 2026-11-19T18:14:38 explicitly says this repeat review was premature; final rework and main contain the unconditional empty-stranded-jobs skip.'
 filed_at:
   code_sha: 768640005c55bef865e331d70f2a1e0be1058617
   branch: pr-4319

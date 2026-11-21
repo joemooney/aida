@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 64a68c24a6180c827bf42553c6486de04b6dd37f
 
   [P3] Preserve the total refusal count separately from capped diagnostic samples. aida-cli-lib/src/advisor_loop_service.rs:2539-2543 retains at most 16 error strings, but print_status_with_pass at line 331 reports pass.errors.len() as the number refused. A pass refusing 20 changes logs 20 yet status reports 16, with no truncation indication or total in last_pass. Keep the bounded sample while persisting/displaying the actual total and indicating omitted messages; add a greater-than-16 case.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T08:02:17.988742574Z
-modified_at: 2026-11-19T08:02:17.988742574Z
+modified_at: 2026-11-21T06:50:40.949241881Z
 req_type: Task
 tags:
 - carried-from:BUG-2674
@@ -29,6 +29,14 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fcdf-15b5-7b73-a678-58ac2b5e4020
+  author: joe
+  timestamp: 2026-11-21T06:50:40.949231515Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Independent advisor closeout at main aa567732958, 2026-11-20. PassReport persists refused separately from capped errors; status prints pass.refused. bug2674_refusal_total_survives_the_capped_sample asserts 20 vs 16; source rework records the passing test run.
 filed_at:
   code_sha: 64a68c24a6180c827bf42553c6486de04b6dd37f
   branch: pr-4286
@@ -37,3 +45,6 @@ filed_at:
   aida_build_sha: cfbc140e9ee
   vendor: claude
   session: 01a1f2d04f2a
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:50:27.811125124Z

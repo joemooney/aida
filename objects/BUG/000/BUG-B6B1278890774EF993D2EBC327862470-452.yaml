@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-21T02:13:06.295857797Z
+modified_at: 2026-11-21T07:09:00.262821322Z
 req_type: Bug
 tags:
 - conflicts
@@ -43,6 +43,10 @@ relationships:
   target_id: 01a1fba8-f823-79a3-b4ba-e5d996db807d
   created_at: 2026-11-21T01:12:03.925326506Z
   created_by: dirtlab
+- rel_type: Supersedes
+  target_id: 01a1f38d-abf7-75c2-8436-9db64f237fe8
+  created_at: 2026-11-21T07:08:47.850194964Z
+  created_by: joe
 comments:
 - id: 01a1efbc-0843-74f0-b0e0-1af7563bfd6c
   author: joe
@@ -938,6 +942,11 @@ comments:
   created_at: 2026-11-21T02:04:28.652681048Z
   modified_at: 2026-11-21T02:04:28.652681048Z
   session_id: 01a1fbbdf18d
+- id: 01a1fcd7-56bb-7153-be82-49ca8737c210
+  author: joe
+  content: 'Product landing-health evidence for R2 #4388 at fc4441ac7032. FAST gates still flags the five fixture Git writes in TASK-HOME-1198 and also flags lane_liveness.rs::headless_lane_run_alive for a new direct process_provably_dead decision. FAST compile''s two failing ratchets independently identify the liveness expansion and the typed HeadlessVendor site in prepare_and_route_rework_conflict from TASK-HOME-1197. Workspace compilation reached the ratchet tests. CI: https://github.com/joemooney/aida/actions/runs/44851055094/job/136682267310 and https://github.com/joemooney/aida/actions/runs/44851055094/job/136682267292'
+  created_at: 2026-11-21T06:42:00.089245445Z
+  modified_at: 2026-11-21T06:42:00.089245445Z
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -1261,6 +1270,10 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1fcf0-1326-73d0-8218-14b64b83e19a
+  author: joe
+  timestamp: 2026-11-21T07:09:14.406573323Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1

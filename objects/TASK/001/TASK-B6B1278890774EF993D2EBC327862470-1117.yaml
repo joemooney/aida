@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 0aeae185378bb67e48c086b5ddc961e8851a82b0
 
   [P2] Restrict review-pass health checks to the review watcher or instrument auto-train too. advisor_loop_service.rs:204-219 now applies pass_degradation to TrainStatus as well as Status. review_watch_train_service.rs includes this same file with TRAIN=true, but advisor_loop_train.rs:79-114 never calls record_pass/controller_pass_report and never writes auto-train/last-pass.json. Every otherwise healthy live auto-train worker therefore becomes degraded after the 15-minute no-report grace, reporting 'no discovery pass since the worker started' even while completing successful train passes. Guard the review-specific health calculation for TRAIN, or provide train-specific pass evidence and deadlines. Cover a healthy long-lived train status.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T08:54:54.944909086Z
-modified_at: 2026-11-19T08:54:54.944909086Z
+modified_at: 2026-11-21T06:51:55.447323927Z
 req_type: Task
 tags:
 - carried-from:BUG-2674
@@ -29,6 +29,14 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fce0-38b7-7a91-bda1-84517a916138
+  author: joe
+  timestamp: 2026-11-21T06:51:55.447309862Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Independent advisor closeout at main aa567732958, 2026-11-20. pass_health excludes TRAIN; bug2674_long_lived_worker_pass_health_is_review_watch_only pins that behavior. BUG-2674 round-3 rework records passing targeted tests.
 filed_at:
   code_sha: 0aeae185378bb67e48c086b5ddc961e8851a82b0
   branch: pr-4286
@@ -37,3 +45,6 @@ filed_at:
   aida_build_sha: d8460c9ac52
   vendor: claude
   session: 01a1f301754c
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:51:42.842465021Z

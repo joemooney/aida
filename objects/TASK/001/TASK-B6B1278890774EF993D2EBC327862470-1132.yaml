@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T15:39:12.885207714Z
-modified_at: 2026-11-20T18:52:49.081266338Z
+modified_at: 2026-11-21T07:12:02.700933397Z
 req_type: Task
 tags:
 - config
@@ -129,6 +129,11 @@ comments:
   created_at: 2026-11-20T16:36:31.890447345Z
   modified_at: 2026-11-20T16:36:31.890447345Z
   session_id: 01a1f9a316e9
+- id: 01a1fcf2-d4ec-7c31-b17d-48228f34f7f4
+  author: joe
+  content: Advisor follow-up on TASK-3172 and TASK-3173. The landed config at 012b95ef890 is worktree-inherited, as documented in aida-core/src/agents_config.rs. The earlier acceptance amendment assumes the default branch supplies the tuning to existing reviewer branches. A real post-landing check needs an eligible review checkout carrying that commit, no AIDA_AGENT_MODEL/AIDA_AGENT_EFFORT override, and effective vendor argv plus successful launch. TASK-3171 separately tracks making model and effort resolution visible. TASK-3824 still owns the dated rollback. No host-wide override or branch refresh was applied.
+  created_at: 2026-11-21T07:12:02.700933397Z
+  modified_at: 2026-11-21T07:12:02.700933397Z
 history:
 - id: 01a1f99d-7db5-7bd3-997d-6bde09930651
   author: joe

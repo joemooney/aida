@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: ab78b795bfa1234e342015c172b2b317cfe629d3
 
   [P2] Classify the new ancestor-lock writer sites in scripts/store-writers.toml. Existing exact-head CI jobs 135343436098 and 135343436172 both fail the store-writer inventory ratchet for seat_authority.rs::lock_grant_record_bounded additions OpenOptions::new, fs::create_dir_all and truncate. The latter job successfully completes workspace compilation before this guard fails; this is a reproducible inventory omission introduced by the new function, not a compiler error. Regenerate and review the three inventory classifications against the pinned base, retaining the guard. The aggregate Build failure follows these failed lanes.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T05:04:41.706974701Z
-modified_at: 2026-11-19T05:04:41.706974701Z
+modified_at: 2026-11-21T06:49:44.482115934Z
 req_type: Task
 tags:
 - carried-from:TASK-3820
@@ -22,6 +22,12 @@ relationships:
 - rel_type: References
   target_id: 01a1f199-2c4e-7bb3-819b-f28446dcf702
   created_at: 2026-11-19T05:04:54.681478982Z
+comments:
+- id: 01a1fcce-b53b-75f2-8d3b-e958881f4077
+  author: joe
+  content: 'Product closure evidence for advisor: #4280 landed as 081a16e3436. Current main aa567732958 inventories all three lock_grant_record_bounded sites with the blocked disposition. The compatibility store-writer check passed, reconciling 3,841 sites.'
+  created_at: 2026-11-21T06:32:34.921194544Z
+  modified_at: 2026-11-21T06:32:34.921194544Z
 history:
 - id: 01a1f24b-9e65-7d20-ad08-9707b93e2bc6
   author: joe
@@ -29,6 +35,14 @@ history:
   session_id: 01a1efc7-0101-7c11-afbb-7d68c01dc5c3
   harness_version: 2.1.327 (Claude Code)
   changes: []
+- id: 01a1fcde-3922-7003-8390-7392ecf1ed52
+  author: joe
+  timestamp: 2026-11-21T06:49:44.482106423Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Independent advisor closeout at main aa567732958, 2026-11-20. scripts/store-writers.toml inventories all three lock_grant_record_bounded sinks. Fresh check-store-writers.py reconciles 3841 sites.
 filed_at:
   code_sha: ab78b795bfa1234e342015c172b2b317cfe629d3
   branch: pr-4280
@@ -37,3 +51,6 @@ filed_at:
   aida_build_sha: 697f85f2fff
   vendor: claude
   session: 01a1f22e29ec
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:49:31.518521273Z
