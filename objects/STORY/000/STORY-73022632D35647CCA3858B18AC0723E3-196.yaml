@@ -1,0 +1,47 @@
+id: 01a1fba8-f823-79a3-b4ba-e5d996db807d
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-196
+title: 'Review PR-4388: [AI:claude] fix(rework): conflict-repair reservations no longer block retries (BUG-2688)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1fb8a`) for branch `bug-2688-journal-loop`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4388>
+  - Branch: `bug-2688-journal-loop` → `main`
+
+  ## Covers
+
+  - BUG-2688
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4388` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-21T01:11:57.219871255Z
+modified_at: 2026-11-21T01:12:00.473600151Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  created_at: 2026-11-21T01:12:00.473562311Z
+  created_by: dirtlab
+history:
+- id: 01a1fba9-0c65-7771-aca4-b7c94eaf93ef
+  author: dirtlab
+  timestamp: 2026-11-21T01:12:02.405159617Z
+  session_id: 01a1fb8af8a3
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+filed_at:
+  code_sha: 5029dd61e7670f7a73ae69527f97218de96a942e
+  branch: bug-2688-journal-loop
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 29e77b8523
+  vendor: claude
+  session: 01a1fb8af8a3
+  harness_version: 2.1.319 (Claude Code)

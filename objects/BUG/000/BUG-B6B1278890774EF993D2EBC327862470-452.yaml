@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-21T00:47:11.536257151Z
+modified_at: 2026-11-21T01:12:03.925360238Z
 req_type: Bug
 tags:
 - conflicts
@@ -37,6 +37,11 @@ relationships:
     custom: implemented-by
   target_id: 01a1f3be-209a-70a2-88c6-1277725fa0e8
   created_at: 2026-11-19T13:12:57.522907246Z
+  created_by: dirtlab
+- rel_type:
+    custom: implemented-by
+  target_id: 01a1fba8-f823-79a3-b4ba-e5d996db807d
+  created_at: 2026-11-21T01:12:03.925326506Z
   created_by: dirtlab
 comments:
 - id: 01a1efbc-0843-74f0-b0e0-1af7563bfd6c
@@ -807,6 +812,34 @@ comments:
   modified_at: 2026-11-21T00:34:13.824322666Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fba8-6e4c-7523-90c3-e54b3ef99658
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5029dd61e767 (fresh branch bug-2688-journal-loop from origin/main; #4306 not resumed)
+
+    Scope: advisor-121 ruling AC1-AC3. AC4 (--fresh moves a retained seat aside only after the live worktree-holder scan) is deferred to a follow-up, as the ruling allows. The round-9 finding (behind-origin recovery message at seat_clone.rs:3764-3769 of adeab8a790bb) is not addressed: that message and the adopted-seat recovery path it describes exist only on the closed #4306 head, not on origin/main or this branch, and the ruling supersedes that scope.
+
+    AC1: [evidence: behavioral-test] route/eligibility refusal precedes any journal reservation. work.rs admit_rework_conflict_launch + prepare_and_route_rework_conflict; seat_clone.rs prepare_host_repair_admitted asks admit_conflict before RepairGuard::reserve and before the resumed-merge journal writes. Tests: bug_2688_refused_route_reserves_nothing_and_a_gone_lane_heals_without_a_hand_edit (journal byte-identical, no MERGE_HEAD, typed UnvalidatedRepairPublication, both self-publishing routes), bug_2688_first_route_refusal_creates_no_reservation (no journal file; clean rework never asks).
+    AC2: [evidence: behavioral-test] run_pickup_launch releases the launch's own reservation after a verified rollback (repair_journal::release_unspawned_lane). Tests: bug_2688_pre_spawn_failure_releases_the_launch_own_reservation (real session_start receipt and rollback; retry reserves; a started worker's reservation is kept), bug_2688_unspawned_release_is_limited_to_the_lane_and_a_gone_seat.
+    AC3: [evidence: behavioral-test] doctor category repair-journal; heal re-reads proof under the journal lock and writes .aida/repair-journal.backup-<ts>.json first. Tests: bug_2688_heal_releases_only_a_provably_gone_lane_and_backs_up_the_journal (lease on lane, lease on seat, unparseable lease, seat present, live lane run, torn lane record all keep it), repair_journal_category_routes_from_alias_to_heal, and the loop test's step 2.
+
+    Probes: (1) category string is one const plus the alias row; (2) lane id is validated as a lease id before it names a file; (3) journal keys are unique at load, heal matches the full pr+head id; (4/5) every release path fails closed: unreadable leases, lane record or seat state keep the reservation; no existing test weakened; apply_rework_conflict_route still re-checks the route after preparation.
+
+    Validation: 36 targeted tests pass via lane job (bug_2688, repair_journal, story_2710, task_3804, doctor routing). Wider filter run: 244 passed, 1 failed: bug_044 story_2475_all_codex_lane_exits_publish_after_child_exit, refused by the host disk floor (31.2 GiB free < 60 GiB), unrelated to this diff. cargo fmt, check-store-writers, crate-glob, exec-context, trace-header, glyph, doc-link and doc-intent gates pass. make check-ci-fast could NOT be run to completion: this lane caps a tool call at 60 s and the gate has no resume; it was cut off inside 'Containment conformance evidence tests' after the first four gates passed. check-ratchets (cargo) was not run.
+
+    Residual risks: a reservation left by a lane that ran and exited while its seat directory is retained is not healable until the seat is ended (by design: tree gone is required). Nothing writes spawn=started; the heal treats started and unknown alike.
+  created_at: 2026-11-21T01:11:21.932833005Z
+  modified_at: 2026-11-21T01:11:21.932833005Z
+  session_id: 01a1fb8af8a3
+  harness_version: 2.1.319 (Claude Code)
+- id: 01a1fba8-abdd-74d3-88a3-b6afcf28d65d
+  author: aida-publication-done
+  content: Implementer push 5029dd61e767 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-21T01:11:37.693683974Z
+  modified_at: 2026-11-21T01:11:37.693683974Z
+  session_id: 01a1fb8af8a3
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -1078,6 +1111,21 @@ history:
 - id: 01a1fb92-53ff-7201-b140-d1b8f82a5a63
   author: dirtlab
   timestamp: 2026-11-21T00:47:13.407237616Z
+  session_id: 01a1fb8af8a3
+  harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a1fba8-abdd-74d3-88a3-b690ad5f1d94
+  author: aida-publication-done
+  timestamp: 2026-11-21T01:11:37.693682337Z
+  session_id: 01a1fb8af8a3
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a1fba9-19bf-7ff3-8b88-5ada9f2ae4c8
+  author: dirtlab
+  timestamp: 2026-11-21T01:12:05.823982183Z
   session_id: 01a1fb8af8a3
   harness_version: 2.1.319 (Claude Code)
   changes: []
