@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-20T23:41:20.222240829Z
+modified_at: 2026-11-21T00:09:28.551238165Z
 req_type: Story
 tags:
 - landing
@@ -921,6 +921,14 @@ comments:
   created_at: 2026-11-20T23:41:20.222240829Z
   modified_at: 2026-11-20T23:41:20.222240829Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb6f-f63c-7c63-9d0f-0aaf7480e6dc
+  author: joe
+  content: |
+    Ruling step 1 done: S3 (#4362 5a4a2dc, plus the post-merge test fix 5b9312d) reverted out of integration at 74644c2 (pushed, check-ci-fast exit 0); the tree equals main at 719aa49 (the only newer main commit is #4365, TASK-3133). #4384 closed with the ruling cited. ORDER: S3a first, then S1b. Reason: the signed S1b Q1 rule (a red Build is info only when an open red-main episode covers those checks) reads the watch episode state, which only S3a provides; S1b first would have to stub it. S3a reuses S3 at f037b9d minus every store effect (no fix spec, human item, completion, store spool; smoke evidence reported only) plus the in-scope p24 finding list. Starting S3a now on an integration branch.
+  created_at: 2026-11-21T00:09:28.551238165Z
+  modified_at: 2026-11-21T00:09:28.551238165Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
