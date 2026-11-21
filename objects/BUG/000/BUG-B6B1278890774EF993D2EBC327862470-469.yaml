@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T01:53:55.763573641Z
+modified_at: 2026-11-21T01:57:31.759415413Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -376,6 +376,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a1fbd2-e4a3-72c2-86bf-f8c472488235
+  author: joe
+  timestamp: 2026-11-21T01:57:44.739774770Z
+  session_id: 01a1fbd04c28
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
@@ -386,3 +391,11 @@ filed_at:
   vendor: claude
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2707 (bug protocol): met — the PR adds a CLI test file and changes two standalone reviewer test files. AC1 met for the documented approval rule and AC3 met for p3/style coverage. AC2 partial: the real submit command provides immediate policy feedback and the parent revalidates, but successful submission and collection can still discard or refuse a newer draft. The required fast-gates job failed the ExecContext environment ratchet. Reviewed the pinned landed diff. No finding depends on the intervening base commit.'
+  recovery_hint: address the review findings, move BUG-2707 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-21T01:57:31.759415413Z
