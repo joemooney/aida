@@ -3840,40 +3840,12 @@ pub(crate) fn conclusive_review_recorded_at(
     n: u64,
     head: &str,
 ) -> bool {
-    use crate::gate::review_verdict::{self as rv, VerdictKind};
-    let conclusive = |v: &rv::RecordedVerdict| {
-        !matches!(v.kind, VerdictKind::Waiting | VerdictKind::Unknown)
-            && v.reviewed_sha
-                .as_deref()
-                .is_some_and(|sha| rv::same_reviewed_sha(sha, head))
-    };
     let mut keys = vec![format!("PR-{n}")];
     if forge == ReviewForge::GitLab {
         keys.push(format!("MR-{n}"));
     }
-    keys.iter().any(|key| {
-        let events = crate::gate::ledger::ChangeKey::parse(key)
-            .and_then(|change| {
-                let ledger = crate::gate::ledger::store_root(root).ok()?;
-                crate::gate::ledger::checked::read_change_events(
-                    &ledger,
-                    change,
-                    &mut crate::gate::ledger::checked::Budget::default(),
-                )
-                .ok()
-            })
-            .unwrap_or_default();
-        rv::verdict_history(root, key, &events)
-            .unwrap_or_default()
-            .iter()
-            .filter_map(|(record, _, _)| {
-                rv::parse_recorded_verdict(&serde_json::Value::Object(record.clone()).to_string())
-            })
-            .any(|v| conclusive(&v))
-            || crate::gate::review_publication::current_at_head(root, &[key.as_str()], head)
-                .and_then(|current| rv::parse_recorded_verdict(&current.body))
-                .is_some_and(|v| conclusive(&v))
-    })
+    let keys: Vec<&str> = keys.iter().map(String::as_str).collect();
+    crate::gate::review_verdict::conclusive_recorded_at(root, &keys, head)
 }
 
 /// Whether a reviewer lease's review is over, or why it is kept: its verdict

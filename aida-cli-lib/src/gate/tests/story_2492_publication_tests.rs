@@ -1072,14 +1072,7 @@ fn bug_2684_synced_publication_alone_counts_as_recorded_at_its_head() {
         return;
     }
     let f = Fixture::new();
-    let recorded = |head: &str| {
-        crate::queue_cmd::conclusive_review_recorded_at(
-            &f.a,
-            crate::session_start::ReviewForge::GitHub,
-            7,
-            head,
-        )
-    };
+    let recorded = |head: &str| rv::conclusive_recorded_at(&f.a, &["PR-7"], head);
     {
         let _env = env(&f.temp.path().join("home-a"));
         assert!(!recorded(&f.sha), "nothing is published yet");
@@ -1101,15 +1094,9 @@ fn bug_2684_synced_publication_alone_counts_as_recorded_at_its_head() {
         !recorded(&"a".repeat(40)),
         "a publication at another head covers nothing"
     );
-    assert!(!crate::queue_cmd::conclusive_review_recorded_at(
-        &f.a,
-        crate::session_start::ReviewForge::GitHub,
-        8,
-        &f.sha,
-    ));
+    assert!(!rv::conclusive_recorded_at(&f.a, &["PR-8"], &f.sha));
 }
 
-// trace:STORY-2696 | ai:codex
 // trace:STORY-2696 | ai:codex
 #[test]
 fn story_2696_signed_no_carry_projection_and_supersession() {
