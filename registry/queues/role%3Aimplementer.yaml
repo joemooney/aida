@@ -516,3 +516,11 @@
   added_at: 2026-11-21T07:10:03.781585089Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1fb83-8dde-7c00-bf7d-8e0469b620fc
+  position: 634000
+  added_by: role:implementer
+  note: Keep the admission policy unchanged. Confirm the zero-bound helpers are test-only or migrate tests safely, and cover Linux device decoding with separate high major and nonzero high minor bits. Use the corrected operator wording already in landed docs. Coordinate changes to admission_owner.rs with TASK-HOME-1190.
+  added_at: 2026-11-21T07:38:25.517952277Z
+  for_role: implementer
+  added_by_machine: imac
