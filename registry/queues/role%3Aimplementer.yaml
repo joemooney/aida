@@ -1,8 +1,9 @@
 - user_id: role:implementer
   requirement_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
-  position: -953000
+  position: -954000
   added_by: role:implementer
-  added_at: 2026-11-21T01:58:47.543491907Z
+  note: 'Advisor revalidation at #4385 bdd60daf20ca: merging main kept the round-3 submission protocol and the ambient-PATH CI failure. Complete the existing final-round validate-only redesign, including TASK-HOME-1199, under the recorded scope. Treat the prior final-round lane as unpublished until a new head proves otherwise. This is the existing final-round work, with its review and CI gates intact.'
+  added_at: 2026-11-21T07:11:18.565513412Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
@@ -448,5 +449,69 @@
   position: 625000
   added_by: role:implementer
   added_at: 2026-11-14T20:39:44.990127764Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1f2c0-2153-7dc2-a3ac-00f5bb6caeb7
+  position: 626000
+  added_by: role:implementer
+  note: Private-clone registration control pair through the normal Claude transcript recovery entry point. Coordinate the fixture with TASK-3151. Test-only; retain the production containment boundary.
+  added_at: 2026-11-21T07:06:18.387349195Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1f2bf-ef26-7dd0-94fd-03a8a9744a06
+  position: 627000
+  added_by: role:implementer
+  note: Contained refusal, contained recorded-cwd control, and uncontained recovery through the same entry point. Reuse the TASK-3149 fixture where applicable. Test-only.
+  added_at: 2026-11-21T07:06:33.098468646Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1f330-2c92-77d2-b236-0c3e88276e39
+  position: 628000
+  added_by: role:implementer
+  note: Preserve busy and refusal evidence on a whole-watcher stop. Implement and test the pass sequence in the spec against the current watcher.
+  added_at: 2026-11-21T07:06:47.361295807Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1fb83-8b0b-7491-b154-6bd8598e48f6
+  position: 629000
+  added_by: role:implementer
+  note: Inventory the existing admission.wait_secs branch-local reader as policy in scripts/config-trust.toml. Do not change its runtime semantics.
+  added_at: 2026-11-21T07:07:03.628070320Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1fb83-8cef-7180-be40-a310b4a3ecd5
+  position: 630000
+  added_by: role:implementer
+  note: Test stdin-only and stderr-only TTY cases for the existing operator conjunction, with both-stream control. Test-only; no authority changes.
+  added_at: 2026-11-21T07:07:19.913806465Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1f2e3-fac0-7142-943e-e50044b243ad
+  position: 631000
+  added_by: role:implementer
+  note: Independent BUG-2684 follow-up. Preserve the typed disk refusal in the normal pickup path and launch outcome while retaining exit 36 and rollback. Serialize with TASK-3155.
+  added_at: 2026-11-21T07:09:33.457168493Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1f2e4-2e49-7053-b35a-0d432f76ac3c
+  position: 632000
+  added_by: role:implementer
+  note: Independent BUG-2684 follow-up. Update existing queue rows under the store lock and cover interleaved edit and removal. Serialize with TASK-3154.
+  added_at: 2026-11-21T07:09:47.742224298Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1fb83-8bfe-7d93-988c-c26b7d07a7c0
+  position: 633000
+  added_by: role:implementer
+  note: Keep production behavior and proof of the 1 s setting. Remove fixture timing races in the three named tests using deterministic handoffs. Coordinate with BUG-2703 follow-up TASK-3828.
+  added_at: 2026-11-21T07:10:03.781585089Z
   for_role: implementer
   added_by_machine: imac
