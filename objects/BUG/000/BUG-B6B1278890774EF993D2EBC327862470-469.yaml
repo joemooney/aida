@@ -10,12 +10,12 @@ description: |
   (b) the skill tells reviewers that any finding means request-changes, and the draft validator rejects the contradiction BEFORE the reviewer exits (an in-session error that it can fix), not at launcher collection.
 
   Acceptance: AC1 one documented contract in the skill template plus the gate; AC2 a reviewer draft that violates it is refused while the reviewer is still running (validation at draft write), with a message telling it what to change; AC3 regression covering an approved draft with p3 and style findings, under the chosen contract.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-20T23:49:27.247919569Z
+modified_at: 2026-11-21T00:08:45.167755123Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -44,6 +44,31 @@ comments:
   modified_at: 2026-11-20T23:23:34.146951082Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb6e-c2d9-7b42-a229-9e386c062f4b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
+
+    Contract (advisor ruling, option b): any unresolved finding means request-changes; an approved draft may carry only findings the recorder files as deferred follow-ups. Recorder behaviour unchanged.
+
+    Acceptance evidence
+    - AC1 [evidence: documentation-inspection] aida-core/templates/skills/aida-review.md states the contract in 'Derive the verdict' and the standalone draft paragraph; the launch prompt (review_draft.rs LaunchDraft::prompt) and docs/cli/04-git-lifecycle.md say the same; the gate side is the existing recorder refusal, which the new check reuses (apply_policy + incoming_disposition).
+    - AC2 [evidence: behavioral-test] new read-only 'aida review check-draft PATH [--pr N] [--sha SHA]' run by the reviewer after every draft write; bug_2707_approved_draft_with_unresolved_findings_is_refused_at_write asserts the refusal names the findings and both fixes; bug_2707_check_applies_the_schema_and_launch_binding covers the schema, launch binding and the prompt instruction.
+    - AC3 [evidence: behavioral-test] bug_2707_check_and_recorder_agree_on_approved_with_findings: approved + plain p3/style findings is refused by the check and by the recorder (nothing recorded); the deferred approval passes the check and is recorded Approved. bug_2707_consistent_drafts_pass_the_check and bug_2707_unreadable_policy_refuses_even_a_deferred_approval cover the list-in-force and fail-closed policies.
+
+    Validation: lane jobs passed: bug_2707 (5), review_draft:: + story_1728 + bug_015_spec_arg (47), aida-cli bug_1502_format_json_audit (14); help golden regenerated. Fast source gates run one at a time (60s tool cap): 45 of 48 pass; 'Containment conformance evidence tests', 'Store mutation channel tests' and 'Self-hosted routing security fixtures' fail in this seat sandbox with PermissionError / read-only /tmp in their own fixtures, in files this change does not touch. check-store-writers.py passes. The cargo ratchet half of check-ci-fast was not run as a whole.
+
+    Probe findings / fixes: rustfmt drift fixed before push. Strict tier: the change adds a refusal-side check only; no path grants or relaxes authority, no existing test weakened; parse_draft keeps LaunchDraft::read's checks and messages.
+
+    Residual risks
+    - The check is enforced by instruction (prompt + skill), not mechanically: a reviewer that skips it still meets the recorder's refusal after exit, with the older message.
+    - The check reads the blocking-class list from the reviewer checkout's local default-branch ref; if that lags the primary checkout, check and recorder can decide differently for a list changed in between.
+    - The launcher still retries a deterministic approval refusal three times before giving up.
+  created_at: 2026-11-21T00:08:22.489775431Z
+  modified_at: 2026-11-21T00:08:22.489775431Z
+  session_id: 01a1fb48ad93
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe
@@ -82,6 +107,15 @@ history:
   - field_name: tags
     old_value: review, reviewer-skill, throughput
     new_value: docs:impacted, review, reviewer-skill, throughput
+- id: 01a1fb6f-1bb4-7a32-b112-02e801c73e96
+  author: dirtlab
+  timestamp: 2026-11-21T00:08:45.236039718Z
+  session_id: 01a1fb48ad93
+  harness_version: 2.1.319 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
@@ -92,3 +126,7 @@ filed_at:
   vendor: claude
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+implementation_info:
+  implemented: true
+  implemented_at: 2026-11-21T00:08:45.167755123Z
+  implemented_by: dirtlab
