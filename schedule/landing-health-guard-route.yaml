@@ -5,3 +5,9 @@ last_by:
   vendor: codex
 result: done
 note: 'Reran landing-health. Its three-PR shared signature is the aggregate and the FAST step wrapper. Exact logs show distinct structural-selection, execution-context, and Git/liveness/vendor failures. Main FULL is green. Landing gap 315m, 12 open PRs. No headroom finding; #4389 coverage unknown. Recorded evidence on BUG-2669, BUG-2707 and BUG-2688. Escalated admission-lock and driver-authority blockers to Joe.'
+due_since: 2026-11-21T07:03:33.426507094Z
+due_reason: on CronJobFailed:landing-health-guard
+due_failure:
+  trip_id: landing-health-guard@2026-11-21T06:48:30.677884392Z
+  job: landing-health-guard
+  error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
