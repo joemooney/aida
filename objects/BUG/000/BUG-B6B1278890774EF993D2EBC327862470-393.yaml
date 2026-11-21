@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-21T00:51:09.333089060Z
+modified_at: 2026-11-21T00:51:39.626114130Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -786,6 +786,31 @@ comments:
   modified_at: 2026-11-21T00:36:12.895809568Z
   session_id: 01a1fb68d643
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fb96-94b3-72b1-90f0-0ad625262ec1
+  author: joe
+  content: |-
+    ADVISOR CAP RULING (advisor-121, 18:02): r4 FINAL at 367c23a still fails AC3 (discovery reopened per key in reconcile_waiting_verdicts). Round 5 is a cap exception with a DESIGN RULING: one explicit per-invocation discovery cache, consumers cannot call discovery directly (source ratchet), and AC3 asserted by call counts at N=50. Delta review only.
+
+    # CAP-EXCEPTION brief: BUG-2629 / PR #4380 round 5: DESIGN RULING for AC3
+
+    Advisor: claude-advisor-121, 2026-11-20 18:02 MST. Head reviewed: 367c23a. Lane: CLAUDE+Fable. STRICT. COMMIT your work.
+    Four rounds fixed AC3 one call site at a time; each review found another site re-opening discovery (now reconcile_waiting_verdicts, work.rs:3328).
+    DESIGN RULING: a per-invocation DISCOVERY CACHE, created once at the top of `queue work` / `queue rework` and passed EXPLICITLY (a context struct
+    argument, not a global) to EVERY consumer: current_verdict, ownership_checked, Inventory::current, reconcile_waiting_verdicts and recovery.
+    The cache holds the spec inventory, the bindings listing and the per-ledger parsed events (bounded by the existing budgets). No consumer may call
+    checked::discover or list bindings directly; enforce this with a source ratchet test (grep that those calls appear only in the cache constructor).
+    AC3 test: a counting fake store asserts discovery and bindings listing run EXACTLY ONCE per spec per invocation, and total ledger opens <= ledger count
+    plus a constant, for N = 50 fingerprinted changes; it completes under 5 s.
+    Also fix: (2) rework_bindings.rs:926: with a selected change, an ownership failure must still consult the spec inventory (from the cache) before
+    recovery; a newer WAITING elsewhere refuses. (3) :770: Ownership::events uses the checked reader; unreadable or malformed means UNKNOWN (refuse).
+    (4) :454: deduplication via a HashSet of event identities (linear), no pairwise JSON compares.
+    SEPARATELY (containment, same PR): rework preparation must not hold store-write.lock during discovery. Take it only around writes (the 15:37 live
+    spin held it 30 min). Keep the contention regression on the real queue work path.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push. The DELTA review covers this ruling's items only.
+  created_at: 2026-11-21T00:51:39.626114130Z
+  modified_at: 2026-11-21T00:51:39.626114130Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
