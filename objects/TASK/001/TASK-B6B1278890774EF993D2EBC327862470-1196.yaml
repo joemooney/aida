@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 5029dd61e7670f7a73ae69527f97218de96a942e
 
   queue_cmd/work.rs:932 repeats the effectful launch admission after preparation has reserved and merged. The second binary/containment preflight can refuse after state changes, particularly on retained setups that cannot roll back. Carry successful conflict admission through routing, and test that the check runs once.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-21T01:27:29.959172610Z
-modified_at: 2026-11-21T01:27:29.959172610Z
+modified_at: 2026-11-21T08:19:23.973787578Z
 req_type: Task
 tags:
 - carried-from:BUG-2688
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   created_at: 2026-11-21T01:27:43.937665163Z
+- rel_type: SupersededBy
+  target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  created_at: 2026-11-21T08:19:11.387884480Z
+  created_by: joe
+history:
+- id: 01a1fd30-1a3e-7240-b0b9-a4d891473f6c
+  author: joe
+  timestamp: 2026-11-21T08:19:10.526852351Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd30-863b-7e72-9616-e45787b1ccbc
+  author: joe
+  timestamp: 2026-11-21T08:19:38.171118699Z
+  changes: []
+implementation_summary: 'Consolidated into BUG-2688 round 2 behavior item 6: carry successful admission through conflict routing and test once-only effectful preflight. PR #4388 still carries that work.'
 filed_at:
   code_sha: 5029dd61e7670f7a73ae69527f97218de96a942e
   branch: pr-4388

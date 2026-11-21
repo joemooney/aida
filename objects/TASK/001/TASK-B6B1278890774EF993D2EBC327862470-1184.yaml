@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
 
   check_draft_file checks symlink_metadata and then reopens the path with an unbounded read_to_string. Replacement or growth between those operations defeats the regular-file and size checks and can hang or exhaust the reviewer. Open once with the existing no-follow/nonblocking reader, check the opened handle and limit the read to LIMIT + 1 as LaunchDraft::read does.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-21T00:14:52.260183327Z
-modified_at: 2026-11-21T00:14:52.260183327Z
+modified_at: 2026-11-21T08:22:56.648720269Z
 req_type: Task
 tags:
 - carried-from:BUG-2707
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
   created_at: 2026-11-21T00:15:16.805493568Z
+- rel_type: SupersededBy
+  target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
+  created_at: 2026-11-21T08:22:44.297533355Z
+  created_by: joe
+history:
+- id: 01a1fd33-59fc-7051-8e89-ba278fadd5ec
+  author: joe
+  timestamp: 2026-11-21T08:22:43.452141067Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd33-c4cd-7153-b08e-c87fa435fdc7
+  author: joe
+  timestamp: 2026-11-21T08:23:10.797829975Z
+  changes: []
+implementation_summary: 'Consolidated into BUG-2707 final rework for PR #4385. Validate-only submission requires a single bounded, no-follow read of the opened regular draft, with no mutation of the launch directory. Verify against the published replacement head.'
 filed_at:
   code_sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
   branch: pr-4385

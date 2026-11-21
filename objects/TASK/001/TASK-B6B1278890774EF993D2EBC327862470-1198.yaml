@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 5029dd61e7670f7a73ae69527f97218de96a942e
 
   The fast-gates Git maintenance guard rejects five commit/push call sites in bug_2688_repair_reservation_tests.rs (30, 31, 35, 36, 260). The imported git_ok already delegates to test_git::git_command, but the guard does not recognize the cross-file wrapper. Make the protected helper use visible to the guard without raising its baseline.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-21T01:27:59.710630761Z
-modified_at: 2026-11-21T01:27:59.710630761Z
+modified_at: 2026-11-21T08:21:46.641217596Z
 req_type: Task
 tags:
 - carried-from:BUG-2688
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   created_at: 2026-11-21T01:28:15.648195332Z
+- rel_type: SupersededBy
+  target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  created_at: 2026-11-21T08:21:34.297138556Z
+  created_by: joe
+history:
+- id: 01a1fd32-47e9-7c13-b199-f1ff512dfcbe
+  author: joe
+  timestamp: 2026-11-21T08:21:33.289868243Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd32-b2f0-7931-9773-33d07748e25a
+  author: joe
+  timestamp: 2026-11-21T08:22:00.688819498Z
+  changes: []
+implementation_summary: 'Consolidated into BUG-2688 round 2 CI item (b): use the recognized test_git helper for the same five fixture writes without increasing the maintenance baseline. This remains a gate on PR #4388.'
 filed_at:
   code_sha: 5029dd61e7670f7a73ae69527f97218de96a942e
   branch: pr-4388

@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 10854bb60da9a652cb41ceb7ebd70af1d179a4a8
 
   The new CLI test reads the ambient PATH in aida-cli/tests/bug_2707_submit_draft_cli.rs:43. Fast-gates job 136686053267 identifies this exact var_os site as forbidden in test_repository_matches_exact_ledger. Give the subprocess a deterministic fixture PATH or omit the override when unnecessary.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-21T01:57:07.111355344Z
-modified_at: 2026-11-21T01:57:07.111355344Z
+modified_at: 2026-11-21T08:24:07.983428978Z
 req_type: Task
 tags:
 - carried-from:BUG-2707
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
   created_at: 2026-11-21T01:57:19.770043217Z
+- rel_type: SupersededBy
+  target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
+  created_at: 2026-11-21T08:23:55.234434616Z
+  created_by: joe
+history:
+- id: 01a1fd34-6f0f-7221-87af-0deeb4968f54
+  author: joe
+  timestamp: 2026-11-21T08:23:54.383207397Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd34-dc59-7643-8b55-cca5aae20bb8
+  author: joe
+  timestamp: 2026-11-21T08:24:22.361958347Z
+  changes: []
+implementation_summary: 'Consolidated into BUG-2707 final rework for PR #4385. The authoritative brief explicitly replaces the same ambient PATH read with a deterministic fixture or removes it if unnecessary. Fast-gates job 136691046541 remains the exact-head failure evidence.'
 filed_at:
   code_sha: 10854bb60da9a652cb41ceb7ebd70af1d179a4a8
   branch: pr-4385

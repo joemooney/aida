@@ -1,0 +1,20 @@
+{
+  "id": "ee94762c-8e70-4021-80c5-6034bd3dda39",
+  "thread_id": "repair-refusal-50b042403e34610caed41a785291d8ca",
+  "from": "codex-advisor-26",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795248334858,
+  "body": "Head: 509f5afbb29daaa8771237f5812e1aafd8e0493f\nLane: 01a1fd06c235\nConflict paths: [\"aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs\"]\nValidation: None\nReason: repair regeneration failed or timed out; merge and journal retained",
+  "subject": "Conflict repair refused for PR #4387",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

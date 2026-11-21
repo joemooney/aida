@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-21T00:28:09.145858124Z
+modified_at: 2026-11-21T08:17:08.483787387Z
 req_type: Task
 tags:
 - landing
@@ -25,6 +25,26 @@ relationships:
   target_id: 01a1fad9-1554-77e3-9f13-99422a225f0b
   created_at: 2026-11-20T21:25:23.671473768Z
   created_by: dirtlab
+- rel_type: Supersedes
+  target_id: 01a1fab9-8f26-7ec3-95b4-aaf4911d05aa
+  created_at: 2026-11-21T08:11:55.749949672Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fae2-cdc1-7f23-9455-3bdf0b8d2d08
+  created_at: 2026-11-21T08:13:22.905957757Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fae2-9c11-7623-8212-5e28cb6f7f4b
+  created_at: 2026-11-21T08:14:32.756306112Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fae2-69b8-7b90-be8d-f9835b869684
+  created_at: 2026-11-21T08:15:44.342761275Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fae2-ffaf-7be1-a910-3f10f3b5ea15
+  created_at: 2026-11-21T08:16:55.638642632Z
+  created_by: joe
 comments:
 - id: 01a1fa25-052e-7e70-b232-7f01ebfb1bc4
   author: joe
@@ -504,6 +524,26 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fd29-e156-7691-bbea-4f6522c91577
+  author: joe
+  timestamp: 2026-11-21T08:12:22.742425575Z
+  changes: []
+- id: 01a1fd2b-3615-72a2-a3fe-3254d144e512
+  author: joe
+  timestamp: 2026-11-21T08:13:49.973347045Z
+  changes: []
+- id: 01a1fd2c-46fb-7141-9b06-8af54f0c607f
+  author: joe
+  timestamp: 2026-11-21T08:14:59.835948330Z
+  changes: []
+- id: 01a1fd2d-5e05-7121-b616-afeac6ab17a6
+  author: joe
+  timestamp: 2026-11-21T08:16:11.269570311Z
+  changes: []
+- id: 01a1fd2e-75d9-7af3-8e03-ddbf1aa609d3
+  author: joe
+  timestamp: 2026-11-21T08:17:22.905954510Z
+  changes: []
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495

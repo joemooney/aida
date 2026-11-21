@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 0ab2fa424e20d439ec8a63c589c9084890744898
 
   aida-cli-lib/src/review_commands.rs:3524 — emit_review_verdict_recorded uses events::emit, which discards append failures, but mark_review_announced still marks the announcement complete. A transient events.jsonl write failure therefore suppresses the announcement even after recovery and retry. Mark completion only on confirmed delivery.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T23:18:58.939306708Z
-modified_at: 2026-11-20T23:18:58.939306708Z
+modified_at: 2026-11-21T08:25:21.055956337Z
 req_type: Task
 tags:
 - carried-from:BUG-2662
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T23:19:12.050980180Z
+- rel_type: SupersededBy
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-21T08:25:08.477804551Z
+  created_by: joe
+history:
+- id: 01a1fd35-8cac-72c1-8ca9-898824f22ece
+  author: joe
+  timestamp: 2026-11-21T08:25:07.500981211Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd35-f8ab-7b80-bb4b-c83f6b0e032d
+  author: joe
+  timestamp: 2026-11-21T08:25:35.147475803Z
+  changes: []
+implementation_summary: 'Consolidated into BUG-2662 round 5 item 3. The signed rework calls for a fallible event append, marking done only on confirmed delivery, and retrying pending announcements. PR #4378 remains open.'
 filed_at:
   code_sha: 0ab2fa424e20d439ec8a63c589c9084890744898
   branch: pr-4378

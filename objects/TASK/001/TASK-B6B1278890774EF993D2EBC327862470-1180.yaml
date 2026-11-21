@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 0ab2fa424e20d439ec8a63c589c9084890744898
 
   aida-cli-lib/src/gate/review_authority.rs, HumanReceiptSettlement::receipt_id — When removing a previous crashed attempt’s unreferenced receipt fails, the function warns and returns a new ID. issue then overwrites the slot reservation, losing the recovery pointer to the old receipt. A transient unlink failure followed by a successful reservation write leaves an orphan permanently. Preserve the reservation and propagate the cleanup error so a retry can finish it.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T23:19:12.537150154Z
-modified_at: 2026-11-20T23:19:12.537150154Z
+modified_at: 2026-11-21T08:26:31.801097108Z
 req_type: Task
 tags:
 - carried-from:BUG-2662
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T23:19:25.293041234Z
+- rel_type: SupersededBy
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-21T08:26:19.173053519Z
+  created_by: joe
+history:
+- id: 01a1fd36-a0e3-7171-b80b-3ef64832d2fc
+  author: joe
+  timestamp: 2026-11-21T08:26:18.211867016Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd37-0d32-7d91-af51-8f475d241ea1
+  author: joe
+  timestamp: 2026-11-21T08:26:45.938228133Z
+  changes: []
+implementation_summary: 'Consolidated into BUG-2662 round 5 item 4. The signed rework requires adopting or refusing a prior receipt if unlink fails, without overwriting its recovery pointer. PR #4378 remains open.'
 filed_at:
   code_sha: 0ab2fa424e20d439ec8a63c589c9084890744898
   branch: pr-4378

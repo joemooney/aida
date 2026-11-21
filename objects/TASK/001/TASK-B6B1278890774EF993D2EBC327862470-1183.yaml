@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: fb1e88018a70046786f06bb53ac4528bd3926c8d
 
   aida-cli-lib/src/tests/queue_work_tests.rs:5114 — The lock-contention regression calls refuse_waiting_pickup directly. A caller that starts holding store-write.lock across that call would still pass this test, even though that is the reported headless queue work failure. Drive the production pickup entry or the caller that owns the lock lifetime while the contention probe is installed.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T23:40:39.050930018Z
-modified_at: 2026-11-20T23:40:39.050930018Z
+modified_at: 2026-11-21T08:27:44.039877069Z
 req_type: Task
 tags:
 - carried-from:BUG-2629
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
   created_at: 2026-11-20T23:40:51.270846525Z
+- rel_type: SupersededBy
+  target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
+  created_at: 2026-11-21T08:27:31.296415844Z
+  created_by: joe
+history:
+- id: 01a1fd37-b800-7292-b49d-b956a0426875
+  author: joe
+  timestamp: 2026-11-21T08:27:29.664072450Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd38-28c5-77b0-8bd8-faf1f3f0cb07
+  author: joe
+  timestamp: 2026-11-21T08:27:58.533502190Z
+  changes: []
+implementation_summary: 'Consolidated into BUG-2629 round 5. The signed ruling requires waiting-verdict discovery outside store-write.lock and a contention regression through real queue work. PR #4380 remains open.'
 filed_at:
   code_sha: fb1e88018a70046786f06bb53ac4528bd3926c8d
   branch: pr-4380

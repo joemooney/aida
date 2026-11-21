@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30
 
   holder_of embeds unbounded shared lease_id and error text directly in a routed message. The invalid-ID error path still interpolates the original ID, so whitespace/control characters bypass the intended single-line quoting. Bound and sanitize all routed fields, including actual record paths.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:35:30.241737986Z
-modified_at: 2026-11-20T21:35:30.241737986Z
+modified_at: 2026-11-21T08:13:00.478788149Z
 req_type: Task
 tags:
 - carried-from:TASK-3827
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1f9f6-d2c8-7bf0-94a2-5d78947c37de
   created_at: 2026-11-20T21:35:42.902239188Z
+- rel_type: SupersededBy
+  target_id: 01a1f9f6-d2c8-7bf0-94a2-5d78947c37de
+  created_at: 2026-11-21T08:12:47.917909794Z
+  created_by: joe
 history:
 - id: 01a1fb45-44fd-7c72-83ef-f64c55f5816f
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fd2a-1baa-76e3-bd56-b9b7adb25ef1
+  author: joe
+  timestamp: 2026-11-21T08:12:37.674652717Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd2a-ac81-79f2-a207-13c9d71d986d
+  author: joe
+  timestamp: 2026-11-21T08:13:14.753902805Z
+  changes: []
+implementation_summary: Consolidated into TASK-3827. The signed scope explicitly requires bounds and single-line sanitization for all routed IDs, errors and paths, and PR-D owns the stale-claim observation and real paths. Retain this finding as a check at the appropriate slice review.
 filed_at:
   code_sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30
   branch: pr-4381

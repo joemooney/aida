@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30
 
   Policy accepts any positive TOML i64 for flake_window_hours and lane_outcome_mins. Duration::hours/minutes and doubling the retention window can overflow and panic during normal reporting. Validate representable bounds or use checked arithmetic.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:35:04.632438407Z
-modified_at: 2026-11-20T21:35:04.632438407Z
+modified_at: 2026-11-21T08:15:29.302046046Z
 req_type: Task
 tags:
 - carried-from:TASK-3827
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1f9f6-d2c8-7bf0-94a2-5d78947c37de
   created_at: 2026-11-20T21:35:17.391993334Z
+- rel_type: SupersededBy
+  target_id: 01a1f9f6-d2c8-7bf0-94a2-5d78947c37de
+  created_at: 2026-11-21T08:15:16.377965387Z
+  created_by: joe
+history:
+- id: 01a1fd2c-84ba-7533-9cb1-1d622f44b6a7
+  author: joe
+  timestamp: 2026-11-21T08:15:15.642016390Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd2c-f268-7bb3-b176-7cfc9814563b
+  author: joe
+  timestamp: 2026-11-21T08:15:43.720439350Z
+  changes: []
+implementation_summary: Consolidated into TASK-3827. The signed safety scope demands validated policy duration ranges or checked arithmetic, with no overflow panic. Apply the same gate when flake_window_hours and lane_outcome_mins return in their authorized slices.
 filed_at:
   code_sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30
   branch: pr-4381

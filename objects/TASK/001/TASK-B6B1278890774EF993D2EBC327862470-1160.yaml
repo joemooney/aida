@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30
 
   Each tick reads and sorts all historical receipts and scans all historical attempt identities against the store before applying the horizon. FollowUps::after scans that whole vector again for every recent exit. Bound or incrementally index receipt ingestion and key follow-ups by canonical spec so work does not grow with all prior launches.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:35:43.023980502Z
-modified_at: 2026-11-20T21:35:43.023980502Z
+modified_at: 2026-11-21T08:16:40.531614360Z
 req_type: Task
 tags:
 - carried-from:TASK-3827
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1f9f6-d2c8-7bf0-94a2-5d78947c37de
   created_at: 2026-11-20T21:35:55.783792605Z
+- rel_type: SupersededBy
+  target_id: 01a1f9f6-d2c8-7bf0-94a2-5d78947c37de
+  created_at: 2026-11-21T08:16:27.809960399Z
+  created_by: joe
+history:
+- id: 01a1fd2d-9ba7-7d31-8434-c81aee4d1fc7
+  author: joe
+  timestamp: 2026-11-21T08:16:27.047436612Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd2e-0893-7e92-8b6a-1db5e48003f1
+  author: joe
+  timestamp: 2026-11-21T08:16:54.931755959Z
+  changes: []
+implementation_summary: Consolidated into TASK-3827 PR-C. The signed LANE-OUTCOME scope explicitly carries bounded and indexed receipt ingestion plus retention of unresolved exits. This draft tracks that same requirement.
 filed_at:
   code_sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30
   branch: pr-4381
