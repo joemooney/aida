@@ -10,12 +10,12 @@ description: |
   (b) the skill tells reviewers that any finding means request-changes, and the draft validator rejects the contradiction BEFORE the reviewer exits (an in-session error that it can fix), not at launcher collection.
 
   Acceptance: AC1 one documented contract in the skill template plus the gate; AC2 a reviewer draft that violates it is refused while the reviewer is still running (validation at draft write), with a message telling it what to change; AC3 regression covering an approved draft with p3 and style findings, under the chosen contract.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T01:11:32.837071062Z
+modified_at: 2026-11-21T01:14:18.661355662Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -320,6 +320,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1fbab-20a5-7c73-883d-9ddc5816fb1f
+  author: aida-session-start
+  timestamp: 2026-11-21T01:14:18.661353857Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
