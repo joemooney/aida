@@ -26,6 +26,7 @@
 //! takes a signed record's precedence.
 // trace:BUG-2629 | ai:claude
 
+use crate::gate::ledger::event::EVENT_VERSION;
 use crate::gate::ledger::{self, bindings, checked, project, store, ChangeKey, GateEvent};
 use crate::gate::review_verdict::{self as rv, JsonObj, RecordedVerdict, VerdictKind};
 use std::path::{Path, PathBuf};
@@ -119,6 +120,10 @@ thread_local! {
     /// A byte budget for every [`ReadBudget`] in place of its production one.
     pub(crate) static READ_BUDGET: std::cell::Cell<Option<u64>> =
         const { std::cell::Cell::new(None) };
+    /// A parse-attempt ceiling for every [`ReadBudget`] in place of
+    /// [`MAX_PARSE_ATTEMPTS`].
+    pub(crate) static PARSE_BUDGET: std::cell::Cell<Option<usize>> =
+        const { std::cell::Cell::new(None) };
     /// Called at every step of a discovery or recovery that touches the
     /// ledger: a probe of what the command holds while it reads.
     pub(crate) static ON_LEDGER_STEP: std::cell::RefCell<Option<Box<dyn Fn()>>> =
@@ -169,21 +174,37 @@ impl Unread {
     }
 }
 
-/// The byte budget of one bounded pass: every byte it reads and every
-/// payload it retains is charged here. A read is capped at what remains, on
-/// the open handle, so a file that grows between its listing and its read
-/// cannot take the pass past the bound.
+/// Lines one bounded pass may try to parse, events or not: the selection's
+/// ceiling. Many short lines fit the byte budget many times over.
+// trace:BUG-2629 | ai:claude
+const MAX_PARSE_ATTEMPTS: usize = checked::MAX_SELECTION_EVENTS;
+
+/// The budget of one bounded pass: every byte it reads and every payload it
+/// retains is charged here, and so is every line it tries to parse. A read
+/// is capped at what remains, on the open handle, so a file that grows
+/// between its listing and its read cannot take the pass past the bound.
 // trace:BUG-2629 | ai:claude
 struct ReadBudget {
     total: u64,
     left: u64,
+    attempts: usize,
 }
 
 impl ReadBudget {
     fn new(total: u64) -> Self {
         #[cfg(test)]
         let total = READ_BUDGET.with(|b| b.get()).unwrap_or(total);
-        Self { total, left: total }
+        #[allow(unused_mut)]
+        let mut attempts = MAX_PARSE_ATTEMPTS;
+        #[cfg(test)]
+        if let Some(limit) = PARSE_BUDGET.with(|b| b.get()) {
+            attempts = limit;
+        }
+        Self {
+            total,
+            left: total,
+            attempts,
+        }
     }
 
     fn exhausted(&self, what: &dyn std::fmt::Display) -> String {
@@ -202,66 +223,94 @@ impl ReadBudget {
         Ok(())
     }
 
-    /// The text of the regular file at `file`, charged as read. `Ok(None)`
-    /// only when no such file exists; a file that exists and cannot be read
-    /// (not regular, unreadable, not UTF-8) is [`Unread::Failed`].
-    fn read(&mut self, file: &Path) -> Result<Option<String>, Unread> {
+    /// Count one line of `what` about to be parsed, or refuse it: the pass
+    /// has then tried as many lines as it may.
+    fn attempt(&mut self, what: &dyn std::fmt::Display) -> Result<(), String> {
+        if self.attempts == 0 {
+            return Err(format!(
+                "{what} holds more lines than remain of the pass's parse budget"
+            ));
+        }
+        self.attempts -= 1;
+        #[cfg(test)]
+        checked::discovery_work_tests::PARSE_ATTEMPTS.with(|n| n.set(n.get() + 1));
+        Ok(())
+    }
+
+    /// The text of the ledger entry `name` (of the pinned ledger directory,
+    /// or of its `by-spec` child), charged as read; `shown` names it in a
+    /// refusal. `Ok(None)` only when no such entry exists. The entry is
+    /// opened once, beneath the pinned directory, without following a link
+    /// and without blocking, and that handle is the one validated and read
+    /// ([`checked::Pinned::open`]): a link, a FIFO, a device or a hard link
+    /// in a ledger's place is [`Unread::Failed`], as is text that is not
+    /// UTF-8. Bytes read are charged whether or not they decode.
+    fn read(
+        &mut self,
+        pinned: &checked::Pinned,
+        by_spec: bool,
+        name: &str,
+        shown: &Path,
+    ) -> Result<Option<String>, Unread> {
         use std::io::Read as _;
         step();
         let failed = |what: &dyn std::fmt::Display| {
-            Unread::Failed(format!("{} cannot be read: {what}", file.display()))
+            Unread::Failed(format!("{} cannot be read: {what}", shown.display()))
         };
-        // A regular-file check comes before the open, so a FIFO in a
-        // ledger's place never hangs the pass. trace:BUG-2543 | ai:claude
-        match std::fs::metadata(file) {
-            Ok(meta) if meta.is_file() => {}
-            Ok(_) => return Err(failed(&"not a regular file")),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                return match std::fs::symlink_metadata(file) {
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                    _ => Err(failed(&"a link to nothing")),
-                };
-            }
-            Err(e) => return Err(failed(&e)),
-        }
-        let handle = std::fs::File::open(file).map_err(|e| failed(&e))?;
-        let meta = handle.metadata().map_err(|e| failed(&e))?;
-        if !meta.is_file() {
-            return Err(failed(&"not a regular file"));
-        }
+        let (handle, meta) = match pinned.open(by_spec, name) {
+            Ok(Some(opened)) => opened,
+            Ok(None) => return Ok(None),
+            Err(why) => return Err(failed(&why)),
+        };
         if meta.len() > self.left {
-            return Err(Unread::Exhausted(self.exhausted(&file.display())));
+            return Err(Unread::Exhausted(self.exhausted(&shown.display())));
         }
         let mut bytes = Vec::new();
-        handle
+        let read = handle
             .take(self.left.saturating_add(1))
-            .read_to_end(&mut bytes)
-            .map_err(|e| failed(&e))?;
+            .read_to_end(&mut bytes);
         if bytes.len() as u64 > self.left {
-            return Err(Unread::Exhausted(self.exhausted(&file.display())));
+            return Err(Unread::Exhausted(self.exhausted(&shown.display())));
         }
+        // What a failed read had read is spent as well.
         self.left -= bytes.len() as u64;
         #[cfg(test)]
         checked::discovery_work_tests::LOSSY_READ_BYTES
             .with(|n| n.set(n.get() + bytes.len() as u64));
+        read.map_err(|e| failed(&e))?;
         String::from_utf8(bytes)
             .map(Some)
             .map_err(|_| failed(&"not UTF-8"))
     }
 }
 
-/// The events of a ledger's text in file order, and its non-blank lines
-/// that are not events.
+/// The file name of `change`'s ledger in the ledger directory.
+fn ledger_name(change: ChangeKey) -> String {
+    format!("{}.jsonl", change.as_key())
+}
+
+/// Hand `each` every non-blank line of the ledger text `body` (which
+/// `shown` names) with its line number and, when the line is an event, the
+/// event. Each line is counted against the pass's parse ceiling before it is
+/// parsed, and no line is kept: `Err` when the ceiling is reached.
 // trace:BUG-2629 | ai:claude
-fn parse_ledger(body: &str) -> (Vec<GateEvent>, Vec<&str>) {
-    let (mut events, mut torn) = (Vec::new(), Vec::new());
-    for line in body.lines().filter(|line| !line.trim().is_empty()) {
-        match serde_json::from_str(line) {
-            Ok(event) => events.push(event),
-            Err(_) => torn.push(line),
+fn scan_ledger<'a>(
+    budget: &mut ReadBudget,
+    shown: &Path,
+    body: &'a str,
+    mut each: impl FnMut(usize, &'a str, Option<GateEvent>),
+) -> Result<(), String> {
+    for (n, line) in body.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
         }
+        budget.attempt(&shown.display())?;
+        let event = (line.len() <= checked::MAX_LINE_BYTES)
+            .then(|| serde_json::from_str(line).ok())
+            .flatten();
+        each(n + 1, line, event);
     }
-    (events, torn)
+    Ok(())
 }
 
 impl ReworkBindings {
@@ -328,19 +377,29 @@ impl ReworkBindings {
             return Ok(out);
         };
         let mut budget = ReadBudget::new(MAX_RECOVERY_BYTES);
+        // A ledger directory that cannot be pinned is an unknown source of
+        // every review in it; the legacy files and publications are still
+        // judged, so a wait among them is named.
+        let pinned = checked::pin(root).unwrap_or_else(|e| {
+            out.unknown = Some(e.0);
+            None
+        });
         let mut by_label: Vec<Vec<GateEvent>> = labels.iter().map(|_| Vec::new()).collect();
         let mut inventory = self.inventory.clone();
         inventory.sort_by_key(|(change, _)| change.as_key());
         for (change, proved) in inventory {
+            let key = change.as_key();
             let events = recovery_events(
                 &mut budget,
+                pinned.as_ref(),
+                (false, &ledger_name(change)),
                 &store::ledger_file(root, change),
+                &key,
                 &mut out.unknown,
             )?
             .into_iter()
             .filter(|e| !e.is_spec_only())
             .collect::<Vec<_>>();
-            let key = change.as_key();
             let view: Vec<&GateEvent> = events
                 .iter()
                 .filter(|e| project::terminal_annotation_matches(e, &key))
@@ -349,8 +408,13 @@ impl ReworkBindings {
             // precedes its append, and may outlive one that never came)
             // answers for the spec only when its answering review is
             // recorded for the spec, as the ordinary binding check has it.
+            // A round whose verdict cannot be read is judged too when it is
+            // recorded for the spec: it is unknown evidence about it.
             let concerns = proved
-                || newest(&standing(&view)).is_some_and(|e| labels.iter().any(|l| names(e, l)));
+                || newest(&standing(&view)).is_some_and(|e| labels.iter().any(|l| names(e, l)))
+                || view
+                    .iter()
+                    .any(|e| unreadable(e) && labels.iter().any(|l| names(e, l)));
             if concerns {
                 let found = judge(project_root, &key, &view, &mut budget, &mut out.unknown)?;
                 out.take(&key, found, &mut budget)?;
@@ -364,9 +428,19 @@ impl ReworkBindings {
         for (label, mut bound) in labels.iter().zip(by_label) {
             let mut unbound = Vec::new();
             if let Some(spec) = project::spec_key(label) {
+                let file = store::unbound_file(root, &spec);
+                let name = file
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .unwrap_or_default()
+                    .to_string();
+                // An unbound record is keyed by its spec.
                 for event in recovery_events(
                     &mut budget,
-                    &store::unbound_file(root, &spec),
+                    pinned.as_ref(),
+                    (true, &name),
+                    &file,
+                    &spec,
                     &mut out.unknown,
                 )? {
                     let copies = |b: &GateEvent| b.verdict_record() == event.verdict_record();
@@ -397,18 +471,32 @@ impl ReworkBindings {
     }
 }
 
-/// The verdict events of the ledger at `file` for a recovery, read under
-/// `budget`. `Err` when the budget ran out. A ledger that exists and cannot
-/// be read, or holds a line that is not an event, is noted in `unknown`:
-/// what it records is not known, and the events that did parse are still
-/// returned so a wait among them is named.
+/// The verdict events of one ledger for a recovery: the entry `entry`
+/// (`by-spec` or not, and its name) of the pinned ledger, which `file`
+/// names, read under `budget`. `Err` when the budget ran out.
+///
+/// Every line is held to the envelope the strict reader requires of the
+/// ledger it is read from ([`checked`]): it parses, its version is
+/// supported, it is bound to `source` (the change the ledger belongs to, or
+/// the spec of an unbound ledger) and its sequence number advances. A line
+/// that is not is no evidence about this key: a record misplaced here, which
+/// strict discovery refuses, answers nothing, clears no wait and supplies no
+/// findings. It is noted in `unknown` by name, as is a ledger that exists
+/// and cannot be read or ends in a torn line; the events that do belong are
+/// still returned, so a wait among them is named.
 // trace:BUG-2629 | ai:claude
 fn recovery_events(
     budget: &mut ReadBudget,
+    pinned: Option<&checked::Pinned>,
+    entry: (bool, &str),
     file: &Path,
+    source: &str,
     unknown: &mut Option<String>,
 ) -> Result<Vec<GateEvent>, String> {
-    let body = match budget.read(file) {
+    let Some(pinned) = pinned else {
+        return Ok(Vec::new());
+    };
+    let body = match budget.read(pinned, entry.0, entry.1, file) {
         Ok(body) => body.unwrap_or_default(),
         Err(Unread::Exhausted(why)) => return Err(why),
         Err(Unread::Failed(why)) => {
@@ -416,16 +504,44 @@ fn recovery_events(
             String::new()
         }
     };
-    let (events, torn) = parse_ledger(&body);
-    if !torn.is_empty() {
-        unknown.get_or_insert_with(|| {
-            format!("{} holds a record that cannot be parsed", file.display())
-        });
+    if !body.is_empty() && !body.ends_with('\n') {
+        unknown.get_or_insert_with(|| format!("{} ends in a torn line", file.display()));
     }
-    Ok(events
-        .into_iter()
-        .filter(|e| e.verdict_record().is_some())
-        .collect())
+    let mut events = Vec::new();
+    let mut seq: Option<u64> = None;
+    scan_ledger(budget, file, &body, |n, _, event| {
+        let refused = match &event {
+            None => Some("cannot be parsed".to_string()),
+            Some(e) if e.v == 0 || e.v > EVENT_VERSION => {
+                Some(format!("has unsupported event version {}", e.v))
+            }
+            Some(e) if !e.change.eq_ignore_ascii_case(source) => {
+                Some(format!("is bound to {}, not {source}", e.change))
+            }
+            Some(e) if seq.is_some_and(|prev| prev >= e.seq) => {
+                Some("does not advance the ledger's sequence".to_string())
+            }
+            Some(_) => None,
+        };
+        match (refused, event) {
+            (Some(why), _) => {
+                unknown.get_or_insert_with(|| {
+                    format!(
+                        "{} holds a record that cannot be parsed or does not belong to it: line {n} {why}",
+                        file.display()
+                    )
+                });
+            }
+            (None, Some(event)) => {
+                seq = Some(event.seq);
+                if event.verdict_record().is_some() {
+                    events.push(event);
+                }
+            }
+            (None, None) => {}
+        }
+    })?;
+    Ok(events)
 }
 
 /// Whether `event` is recorded for the spec `label`.
@@ -450,16 +566,55 @@ fn annotation(event: &GateEvent) -> Option<&JsonObj> {
         .filter(|record| record.contains_key("terminal_wait_source"))
 }
 
+/// A review round whose verdict cannot be read (the record has no verdict
+/// field, say): what it decided is unknown. It is never "no review".
+// trace:BUG-2629 | ai:claude
+fn unreadable(event: &GateEvent) -> bool {
+    annotation(event).is_none()
+        && event
+            .verdict_record()
+            .and_then(rv::parse_ledger_record)
+            .is_none()
+}
+
+/// The readable review rounds of `view`, oldest first: no annotations, and
+/// no round whose verdict cannot be read ([`unreadable`]).
+fn readable<'a>(view: &[&'a GateEvent]) -> Vec<&'a GateEvent> {
+    view.iter()
+        .copied()
+        .filter(|e| annotation(e).is_none() && !unreadable(e))
+        .collect()
+}
+
 /// The review rounds of `view` that stand while ownership is unknown: the
 /// waits, withheld or not, and the rounds no witness could disqualify. A
 /// round whose ownership is unverified clears nothing, so a later approval
 /// or refusal that a foreign change might own does not hide an earlier wait.
+/// A round whose verdict cannot be read stands for nothing and clears
+/// nothing either: the wait before it is kept.
 fn standing<'a>(view: &[&'a GateEvent]) -> Vec<&'a GateEvent> {
-    view.iter()
-        .copied()
-        .filter(|e| annotation(e).is_none())
+    readable(view)
+        .into_iter()
         .filter(|e| is_wait(e) || project::ownership_free(e))
         .collect()
+}
+
+/// What the answering record `body` of `key` establishes: an open wait,
+/// current open findings, or nothing; `None` when the record cannot be read
+/// as a verdict, which is unknown, never nothing. `closure` is the view's
+/// latest terminal annotation; one that cannot be read closes nothing.
+// trace:BUG-2629 | ai:claude
+fn settle(key: &str, closure: Option<&JsonObj>, body: String, current: bool) -> Option<Standing> {
+    let own = rv::parse_recorded_verdict(&body)?;
+    let closed = closure
+        .and_then(|record| rv::terminal_wait_overlay_body(key, &body, record))
+        .and_then(|over| rv::parse_recorded_verdict(&over).map(|verdict| (over, verdict)));
+    let (body, verdict) = closed.unwrap_or((body, own));
+    Some(match verdict {
+        v if v.kind == VerdictKind::Waiting && !v.is_closed() => Standing::Wait(v),
+        v if current && !v.is_closed() && v.kind.requires_changes() => Standing::Findings(body, v),
+        _ => Standing::Nothing,
+    })
 }
 
 /// The answering round of `rounds` (oldest first, no annotations), as
@@ -497,11 +652,13 @@ fn newest<'a>(rounds: &[&'a GateEvent]) -> Option<&'a GateEvent> {
 /// ledger round no witness could disqualify with no withheld round after
 /// it, or a legacy file no ledger round supersedes.
 ///
-/// A publication that cannot be verified, or a legacy file that is refused,
-/// unreadable or malformed, is not absent: it is noted in `unknown` (the
-/// caller refuses on it), takes no precedence, and the raw rounds are still
-/// judged so a wait behind it is named. The legacy file is read within
-/// `budget` and the signed body is charged to it; `Err` when it runs out.
+/// A publication that cannot be verified or read, a legacy file that is
+/// refused, unreadable or malformed, or a ledger round whose verdict cannot
+/// be read, is not absent: it is noted in `unknown` (the caller refuses on
+/// it), takes no precedence and clears nothing, and the readable rounds are
+/// still judged so a wait behind it is named. The legacy file is read within
+/// `budget`, which is charged every byte read from it whether or not it
+/// parses, and the signed body is charged to it; `Err` when it runs out.
 // trace:BUG-2629 | ai:claude
 fn judge(
     project_root: &Path,
@@ -511,25 +668,20 @@ fn judge(
     unknown: &mut Option<String>,
 ) -> Result<Standing, String> {
     let closure = view.iter().rev().find_map(|e| annotation(e));
-    let settle = |body: String, current: bool| {
-        let body = closure
-            .and_then(|record| rv::terminal_wait_overlay_body(key, &body, record))
-            .unwrap_or(body);
-        match rv::parse_recorded_verdict(&body) {
-            Some(v) if v.kind == VerdictKind::Waiting && !v.is_closed() => Standing::Wait(v),
-            Some(v) if current && !v.is_closed() && v.kind.requires_changes() => {
-                Standing::Findings(body, v)
-            }
-            _ => Standing::Nothing,
-        }
-    };
     match published(project_root, key) {
         Ok(Some(signed)) => {
             budget.charge(
                 &format_args!("the signed review of {key}"),
                 signed.body.len() as u64,
             )?;
-            return Ok(settle(signed.body, true));
+            match settle(key, closure, signed.body, true) {
+                Some(found) => return Ok(found),
+                None => {
+                    unknown.get_or_insert_with(|| {
+                        format!("the signed review publication of {key} cannot be read")
+                    });
+                }
+            }
         }
         Ok(None) => {}
         Err(e) => {
@@ -540,11 +692,13 @@ fn judge(
     }
     let path = rv::verdict_path(project_root, key);
     step();
-    let (file_body, legacy) = match rv::checked_legacy_record(project_root, key, budget.left) {
-        Ok(Some((body, verdict))) => {
-            budget.charge(&path.display(), body.len() as u64)?;
-            (Some(body), Some(verdict))
-        }
+    // Every byte read from the legacy file is spent, parsed or not: a
+    // malformed file must not leave the allowance whole for the next key.
+    let mut consumed = 0;
+    let read = rv::checked_legacy_record(project_root, key, budget.left, &mut consumed);
+    budget.charge(&path.display(), consumed)?;
+    let (file_body, legacy) = match read {
+        Ok(Some((body, verdict))) => (Some(body), Some(verdict)),
         Ok(None) => (None, None),
         Err(e)
             if e.get_ref()
@@ -562,44 +716,72 @@ fn judge(
             .as_ref()
             .is_none_or(|file| rv::ledger_supersedes(&path, Some(file), event))
     };
-    let rounds: Vec<&GateEvent> = view
-        .iter()
-        .copied()
-        .filter(|e| annotation(e).is_none())
-        .collect();
+    if view.iter().any(|e| unreadable(e)) {
+        unknown.get_or_insert_with(|| {
+            format!("a review round recorded for {key} holds no readable verdict")
+        });
+    }
+    let rounds = readable(view);
+    let mut unsettled = || {
+        unknown.get_or_insert_with(|| format!("the review recorded for {key} cannot be read"));
+        Standing::Nothing
+    };
     if let Some(event) = newest(&standing(view)).filter(|e| supersedes(e)) {
-        let Some(body) = event
-            .verdict_record()
-            .and_then(|record| serde_json::to_string(record).ok())
-        else {
-            return Ok(Standing::Nothing);
-        };
         let current = project::ownership_free(event)
             && newest(&rounds).is_some_and(|last| std::ptr::eq(last, event));
-        return Ok(settle(body, current));
+        return Ok(event
+            .verdict_record()
+            .and_then(|record| serde_json::to_string(record).ok())
+            .and_then(|body| settle(key, closure, body, current))
+            .unwrap_or_else(&mut unsettled));
     }
     Ok(match file_body {
-        Some(body) => settle(body, !rounds.iter().any(|e| supersedes(e))),
+        Some(body) => {
+            let current = !rounds.iter().any(|e| supersedes(e));
+            settle(key, closure, body, current).unwrap_or_else(&mut unsettled)
+        }
         None => Standing::Nothing,
     })
 }
 
-/// Whether the projection readers can establish ownership of `change`'s
-/// review copies: the condition under which they present them rather than
-/// withhold them ([`checked::filter_miskeyed_or_fail_closed`]).
-fn ownership_checked(root: &Path, change: ChangeKey) -> Result<(), String> {
-    step();
-    let mut events: Vec<GateEvent> = store::read_file(root, change)
-        .into_iter()
-        .filter(|e| !e.is_spec_only())
-        .collect();
-    if !project::needs_witnesses(&events) {
-        return Ok(());
-    }
-    match checked::discover(root) {
-        Ok(Some(mut discovery)) => discovery.filter_events(&mut events).map_err(|e| e.0),
-        Ok(None) => Err("the gate ledger disappeared while it was read".into()),
-        Err(e) => Err(e.0),
+/// The ownership check of one inventory: ONE strict discovery, opened at the
+/// first change that needs it and kept for every change after.
+///
+/// Opening a discovery per change made each one re-validate the shared
+/// ownership inventory ([`checked::DiscoveryScope`]): list the spec's
+/// bindings and stat every ledger folded so far. Over a spec's N changes
+/// that is quadratic filesystem work with hardly a byte read, which is how a
+/// healthy spec with many fingerprinted reviews still spun. The one
+/// discovery here folds each spec's ledgers once and answers every change
+/// from that index.
+// trace:BUG-2629 | ai:claude
+struct Ownership<'a> {
+    root: &'a Path,
+    discovery: Option<checked::Discovery>,
+}
+
+impl Ownership<'_> {
+    /// `change`'s events as the projection readers present them
+    /// ([`project::events`]), or why ownership of its review copies cannot
+    /// be established: the condition under which those readers withhold
+    /// them ([`checked::filter_miskeyed_or_fail_closed`]).
+    fn events(&mut self, change: ChangeKey) -> Result<Vec<GateEvent>, String> {
+        step();
+        let mut events: Vec<GateEvent> = store::read_file(self.root, change)
+            .into_iter()
+            .filter(|e| !e.is_spec_only())
+            .collect();
+        if !project::needs_witnesses(&events) {
+            return Ok(events);
+        }
+        if self.discovery.is_none() {
+            self.discovery = checked::discover(self.root).map_err(|e| e.0)?;
+        }
+        let Some(discovery) = self.discovery.as_mut() else {
+            return Err("the gate ledger disappeared while it was read".into());
+        };
+        discovery.filter_events(&mut events).map_err(|e| e.0)?;
+        Ok(events)
     }
 }
 
@@ -628,29 +810,25 @@ fn bindings_certified(root: &Path) -> bool {
 /// is empty. A line that is not an event is passed over unless it carries a
 /// label's text: an event recorded for a label names it, so a line without
 /// it is no review of the spec, and one with it may be.
+///
+/// The bounds are bytes read ([`checked::MAX_DISCOVERY_BYTES`]) and lines
+/// tried ([`MAX_PARSE_ATTEMPTS`]), shared by every ledger of the pass; each
+/// ledger is opened beneath the pinned ledger directory, without following a
+/// link ([`ReadBudget::read`]).
 // trace:BUG-2629 | ai:claude
 fn labelled_changes(root: &Path, labels: &[String]) -> Result<Vec<ChangeKey>, String> {
-    use std::io::ErrorKind::NotFound;
     step();
     let dir = ledger::ledger_dir(root);
-    let unlisted = |e: std::io::Error| format!("{} cannot be listed: {e}", dir.display());
-    let entries = match std::fs::read_dir(&dir) {
-        Ok(entries) => entries,
-        Err(e)
-            if e.kind() == NotFound
-                && matches!(std::fs::symlink_metadata(&dir), Err(e) if e.kind() == NotFound) =>
-        {
-            return Ok(Vec::new())
-        }
-        Err(e) => return Err(unlisted(e)),
+    let unlisted = |e: checked::Unsafe| format!("{} cannot be listed: {e}", dir.display());
+    // The pinned directory: a linked component refuses, and every ledger is
+    // opened beneath it.
+    let Some(pinned) = checked::pin(root).map_err(unlisted)? else {
+        return Ok(Vec::new());
     };
     let mut changes = Vec::new();
-    for entry in entries {
-        let name = entry.map_err(&unlisted)?.file_name();
-        let Some(change) = name
-            .to_str()
-            .and_then(bindings::change_ledger_name)
-            .and_then(|key| ChangeKey::parse(&key))
+    for name in pinned.names().map_err(unlisted)? {
+        let Some(change) =
+            bindings::change_ledger_name(&name).and_then(|key| ChangeKey::parse(&key))
         else {
             continue;
         };
@@ -669,30 +847,41 @@ fn labelled_changes(root: &Path, labels: &[String]) -> Result<Vec<ChangeKey>, St
         .map(|label| label.trim().to_ascii_lowercase())
         .filter(|label| !label.is_empty())
         .collect();
+    // One byte budget and one parse ceiling for the whole pass.
     let mut budget = ReadBudget::new(checked::MAX_DISCOVERY_BYTES);
     let mut found = Vec::new();
     for change in changes {
         let file = store::ledger_file(root, change);
         // A ledger removed since the listing holds no review.
-        let Some(body) = budget.read(&file).map_err(Unread::why)? else {
+        let Some(body) = budget
+            .read(&pinned, false, &ledger_name(change), &file)
+            .map_err(Unread::why)?
+        else {
             continue;
         };
-        let (events, torn) = parse_ledger(&body);
-        if let Some(label) = wanted.iter().find(|label| {
-            torn.iter()
-                .any(|line| line.to_ascii_lowercase().contains(label.as_str()))
-        }) {
+        // Nothing of a line is kept: an event answers whether it reviews
+        // the spec, and a line that is not one whether it names a label.
+        let mut reviews_spec = false;
+        let mut torn: Option<&String> = None;
+        scan_ledger(&mut budget, &file, &body, |_, line, event| match event {
+            Some(e) => {
+                reviews_spec |= !e.is_spec_only()
+                    && e.verdict_record().is_some()
+                    && labels.iter().any(|label| names(&e, label));
+            }
+            None if torn.is_none() => {
+                let line = line.to_ascii_lowercase();
+                torn = wanted.iter().find(|label| line.contains(label.as_str()));
+            }
+            None => {}
+        })?;
+        if let Some(label) = torn {
             return Err(format!(
                 "{} holds a record that cannot be parsed and may review {}",
                 file.display(),
                 label.to_ascii_uppercase()
             ));
         }
-        let reviews_spec = events.iter().any(|e| {
-            !e.is_spec_only()
-                && e.verdict_record().is_some()
-                && labels.iter().any(|label| names(e, label))
-        });
         if reviews_spec {
             found.push(change);
         }
@@ -729,6 +918,11 @@ pub(crate) fn discover(
     };
     // One ownership inventory for every read below. trace:BUG-2543 | ai:claude
     let _discovery = checked::DiscoveryScope::enter();
+    // And one discovery over it for every change checked. trace:BUG-2629 | ai:claude
+    let mut ownership = Ownership {
+        root: &root,
+        discovery: None,
+    };
     if !selected_only {
         // At most one label pass per inventory: it covers every label.
         let scan_by_label = |out: &mut ReworkBindings| match labelled_changes(&root, labels) {
@@ -779,20 +973,33 @@ pub(crate) fn discover(
         // binds what it names, and no further ledger is read.
         for (change, proved) in out.inventory.clone() {
             step();
+            let mut presented = None;
             if out.failure.is_none() {
-                if let Err(why) = ownership_checked(&root, change) {
-                    out.fail(why);
+                match ownership.events(change) {
+                    Ok(events) => presented = Some(events),
+                    Err(why) => out.fail(why),
                 }
             }
+            // The change's newest verdict, as its projection reads it
+            // ([`project::newest_verdict_event`]), from the events already
+            // in hand: no second read, and no second discovery.
+            let key = change.as_key();
             let bound = proved
-                || (out.failure.is_none()
-                    && project::newest_verdict_event(project_root, &change.as_key()).is_some_and(
-                        |event| {
-                            event.spec.as_deref().is_some_and(|spec| {
-                                labels.iter().any(|l| l.eq_ignore_ascii_case(spec))
-                            })
-                        },
-                    ));
+                || presented.is_some_and(|events| {
+                    let verdicts = events
+                        .into_iter()
+                        .filter(|e| {
+                            e.verdict_record().is_some()
+                                && project::terminal_annotation_matches(e, &key)
+                        })
+                        .collect();
+                    project::newest_of(verdicts).is_some_and(|event| {
+                        event
+                            .spec
+                            .as_deref()
+                            .is_some_and(|spec| labels.iter().any(|l| l.eq_ignore_ascii_case(spec)))
+                    })
+                });
             if bound {
                 out.bound.push(change);
             }
@@ -800,12 +1007,13 @@ pub(crate) fn discover(
     }
     if let Some(open) = open_change.and_then(ChangeKey::parse) {
         if out.failure.is_none() {
-            if let Err(why) = ownership_checked(&root, open) {
+            if let Err(why) = ownership.events(open) {
                 out.fail(why);
             }
         }
         out.note(open, true);
     }
+    drop(ownership);
     out.root = Some(root);
     out
 }

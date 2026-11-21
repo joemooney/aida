@@ -2006,6 +2006,173 @@ fn bug_2607_waiting_rework_refusal_reports_only_a_dirty_clone() {
     }
 }
 
+/// BUG-2629 (operator report, 2026-11-20): a headless `queue work` rework
+/// launch spun in review discovery while it held the store write lock, and
+/// every other store writer on the host waited behind it.
+///
+/// This drives the production entry, `handle_queue_work`, as a headless
+/// rework pickup of a spec with two bound changes and six fingerprinted
+/// review rounds each, so the lock's lifetime is the caller's own: a caller
+/// that took the lock around admission would fail here. At every step of
+/// the discovery that touches the gate ledger this thread holds no store
+/// write lock, and a second writer takes `store-write.lock` without waiting.
+/// The second writer locks through an open file description of its own,
+/// which is what another process holds: `flock` locks belong to the
+/// description, so the lock is refused to it exactly when it would be
+/// refused to another process. The pickup ends at the waiting review, on
+/// the healthy path and on the recovery after a failed ownership discovery.
+// trace:BUG-2629 | ai:claude
+#[test]
+fn bug_2629_headless_queue_work_discovers_reviews_without_the_store_write_lock() {
+    use crate::gate::ledger::{self, event, store, ChangeKey};
+    use crate::gate::review_verdict::{JsonObj, RecorderAttestation, ATTESTATION_KEY};
+    use std::os::fd::AsRawFd;
+    const SPEC: &str = "BUG-2451";
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let fx = fixture();
+    let mut ambient =
+        crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let gh = forge_fixture(
+        &fx.main,
+        &fx.root,
+        "42\tfix BUG-2451\thttps://example.invalid/42\tbug-2451-rework",
+    );
+    ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
+    let (storage, _) = super::orphan_reentry_tests::queued_scope(&fx.main, SPEC);
+    let root = ledger::store_root(&fx.main).unwrap();
+    let head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    let round = |pr: u64, verdict: &str, secs: i64| {
+        let at = (chrono::Utc::now() + chrono::Duration::seconds(secs)).to_rfc3339();
+        let actor = RecorderAttestation {
+            sha: head.clone(),
+            seat: Some("reviewer".to_string()),
+            grant_id: Some("g-1".to_string()),
+            ..Default::default()
+        };
+        let mut record: JsonObj = serde_json::from_value(serde_json::json!({
+            "verdict": verdict, "reviewed_sha": head, "recorded_by": "reviewer",
+            "recorded_at": at,
+            "summary": "operator must supply probe evidence; resume with a fresh review",
+            "findings": [format!("finding at {secs} on {pr}")],
+        }))
+        .unwrap();
+        record.insert(
+            ATTESTATION_KEY.to_string(),
+            serde_json::to_value(actor).unwrap(),
+        );
+        let spec = ledger::GateSpec::with_key(SPEC, None);
+        store::append_one(
+            &root,
+            event::verdict_event(&root, ChangeKey::pr(pr), &record, Some(&spec)),
+        )
+        .unwrap();
+    };
+    // An earlier change the reviewer approved, and the open one, whose
+    // newest round waits.
+    for n in 0..5 {
+        round(41, "request-changes", -2000 + 60 * n);
+        round(42, "request-changes", -1000 + 60 * n);
+    }
+    round(41, "approved", -1500);
+    round(42, "waiting", -60);
+
+    // The lock every store writer of this project takes.
+    let lock = aida_core::db::store_write_lock_path(&fx.main.join(".aida-store"));
+    std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
+    if !lock.exists() {
+        std::fs::write(&lock, b"").unwrap();
+    }
+    let contend = std::rc::Rc::new({
+        let lock = lock.clone();
+        move || {
+            let writer = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&lock)
+                .unwrap();
+            // SAFETY: `writer` is an open descriptor for the whole call.
+            let taken = unsafe { libc::flock(writer.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+            (taken == 0).then_some(writer)
+        }
+    });
+    // The probe does see a held lock.
+    let held = contend().expect("the lock starts free");
+    assert!(
+        contend().is_none(),
+        "a second writer must wait on a held lock"
+    );
+    drop(held);
+
+    let steps = std::rc::Rc::new(std::cell::Cell::new(0usize));
+    struct Probe;
+    impl Drop for Probe {
+        fn drop(&mut self) {
+            crate::queue_cmd::ON_LEDGER_STEP.with(|probe| *probe.borrow_mut() = None);
+        }
+    }
+    let _probe = Probe;
+    {
+        let steps = steps.clone();
+        let contend = contend.clone();
+        crate::queue_cmd::ON_LEDGER_STEP.with(|probe| {
+            *probe.borrow_mut() = Some(Box::new(move || {
+                steps.set(steps.get() + 1);
+                assert!(
+                    !aida_core::db::any_store_write_lock_held(),
+                    "queue work ran review discovery under the store write lock"
+                );
+                assert!(
+                    contend().is_some(),
+                    "another store writer could not take the lock during review discovery"
+                );
+            }));
+        });
+    }
+
+    // Healthy ledger: the pickup checks the change the forge selected (the
+    // open pull request) and ends at its wait.
+    let started = std::time::Instant::now();
+    let error = headless_pickup(&storage).unwrap_err();
+    assert!(format!("{error:#}").contains("WAITING"), "{error:#}");
+    let healthy = steps.get();
+    assert!(
+        healthy >= 1,
+        "queue work visited {healthy} ledger steps before it refused"
+    );
+
+    // Failed ownership discovery: the recovery reads every round's ledger,
+    // and the wait still refuses the pickup.
+    std::fs::remove_file(
+        ledger::bindings::bindings_dir(&root)
+            .join(SPEC)
+            .join("PR-41"),
+    )
+    .unwrap();
+    std::fs::write(
+        ledger::ledger_dir(&root).join("PR-999999.jsonl"),
+        b"invalid\n",
+    )
+    .unwrap();
+    let error = headless_pickup(&storage).unwrap_err();
+    assert!(format!("{error:#}").contains("WAITING"), "{error:#}");
+    assert!(
+        steps.get() >= healthy + 2,
+        "the recovery visited {} ledger steps",
+        steps.get() - healthy
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(30),
+        "review discovery took {:?}",
+        started.elapsed()
+    );
+    assert!(
+        contend().is_some(),
+        "the lock is free after the pickup refused"
+    );
+}
+
 /// STORY-2690: `queue work <Done spec> --role implementer` reaches real session
 /// admission on the open change's branch, queued or dequeued, without editing
 /// the spec's status; session start alone still refuses Done.

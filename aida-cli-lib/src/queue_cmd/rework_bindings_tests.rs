@@ -1078,18 +1078,40 @@ fn bug_2629_legacy_records_and_kept_findings_spend_the_recovery_budget() {
 #[test]
 fn bug_2629_a_read_is_capped_at_the_remaining_budget() {
     let (_tmp, root, _env) = fixture();
-    let file = root.join("ledger.jsonl");
+    let dir = ledger::ledger_dir(&root);
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("PR-1.jsonl");
     std::fs::write(&file, vec![b'x'; 64]).unwrap();
+    let pinned = ledger::checked::pin(&root).unwrap().unwrap();
     let _budget = ReadBudgetGuard::set(100);
     let mut budget = super::ReadBudget::new(u64::MAX);
-    assert_eq!(budget.read(&file).ok().flatten().map(|b| b.len()), Some(64));
+    let mut read = |budget: &mut super::ReadBudget, name: &str| {
+        budget.read(&pinned, false, name, &dir.join(name))
+    };
+    assert_eq!(
+        read(&mut budget, "PR-1.jsonl")
+            .ok()
+            .flatten()
+            .map(|b| b.len()),
+        Some(64)
+    );
     assert_eq!(budget.left, 36);
     assert!(matches!(
-        budget.read(&file),
-        Err(super::Unread::Exhausted(why)) if why.contains("ledger.jsonl")
+        read(&mut budget, "PR-1.jsonl"),
+        Err(super::Unread::Exhausted(why)) if why.contains("PR-1.jsonl")
     ));
     assert_eq!(budget.left, 36, "a refused read spends nothing");
-    assert!(matches!(budget.read(&root.join("absent")), Ok(None)));
+    assert!(matches!(read(&mut budget, "absent"), Ok(None)));
+    // No by-spec directory: no unbound ledger.
+    assert!(matches!(
+        budget.read(
+            &pinned,
+            true,
+            "BUG-1.jsonl",
+            &dir.join("by-spec/BUG-1.jsonl")
+        ),
+        Ok(None)
+    ));
     assert!(budget.charge(&"kept", 37).is_err());
     budget.charge(&"kept", 36).unwrap();
     // The legacy reader stops at its allowance as well.
@@ -1098,14 +1120,19 @@ fn bug_2629_a_read_is_capped_at_the_remaining_budget() {
         "PR-1",
         serde_json::json!({"verdict": "approved", "reviewed_sha": HEAD}),
     );
-    let over = rv::checked_legacy_record(&root, "PR-1", 8).unwrap_err();
+    let mut consumed = 0;
+    let over = rv::checked_legacy_record(&root, "PR-1", 8, &mut consumed).unwrap_err();
     assert!(over.get_ref().is_some_and(|e| e.is::<rv::OverReadLimit>()));
-    assert!(rv::checked_legacy_record(&root, "PR-1", 4096)
+    assert_eq!(consumed, 0, "a file over the allowance is not read");
+    let (body, _) = rv::checked_legacy_record(&root, "PR-1", 4096, &mut consumed)
         .unwrap()
-        .is_some());
-    assert!(rv::checked_legacy_record(&root, "PR-2", 4096)
-        .unwrap()
-        .is_none());
+        .unwrap();
+    assert_eq!(consumed, body.len() as u64);
+    assert!(
+        rv::checked_legacy_record(&root, "PR-2", 4096, &mut consumed)
+            .unwrap()
+            .is_none()
+    );
 }
 
 /// Answers for the signed publication of every key; restored on drop.
@@ -1224,4 +1251,362 @@ fn bug_2629_an_unbound_review_outlives_its_withheld_bound_copy() {
         }
         other => panic!("expected the unbound findings, got {other:?}"),
     }
+}
+
+/// Round-6 finding 1 (acceptance 3 on a healthy ledger), in the reported
+/// shape: two changes of the spec with six fingerprinted review rounds each
+/// (BUG-2706's two pull requests), beside `targets` more bound changes of
+/// the spec. Returns how many change ledgers the spec has and their bytes.
+fn healthy_many_target_spec(root: &Path, targets: u64) -> (u64, u64) {
+    for (pr, base) in [(4401, -2000), (4402, -1500)] {
+        for round in 0..6 {
+            append(
+                root,
+                pr,
+                SPEC,
+                &record("request-changes", base + 60 * round),
+            );
+        }
+    }
+    for n in 0..targets {
+        append(
+            root,
+            500 + n,
+            SPEC,
+            &record("request-changes", -900 + n as i64),
+        );
+    }
+    let bytes = (500..500 + targets)
+        .chain([4401, 4402])
+        .map(|pr| {
+            std::fs::metadata(store::ledger_file(root, ChangeKey::pr(pr)))
+                .unwrap()
+                .len()
+        })
+        .sum();
+    (targets + 2, bytes)
+}
+
+/// Filesystem work of one measured call: discoveries opened, shared
+/// inventory re-validations, directory entries listed, ledger bytes read.
+#[derive(Debug, Clone, Copy)]
+struct Work {
+    opened: usize,
+    checks: usize,
+    entries: usize,
+    bytes: u64,
+    took: std::time::Duration,
+}
+
+fn measured<T>(run: impl FnOnce() -> T) -> (T, Work) {
+    reset_ledger_reads();
+    work::INVENTORY_CHECKS.with(|n| n.set(0));
+    work::DISCOVERIES_OPENED.with(|n| n.set(0));
+    let started = std::time::Instant::now();
+    let out = run();
+    let spent = Work {
+        opened: work::DISCOVERIES_OPENED.with(Cell::get),
+        checks: work::INVENTORY_CHECKS.with(Cell::get),
+        entries: work::DIRECTORY_ENTRIES.with(Cell::get),
+        bytes: ledger_reads(),
+        took: started.elapsed(),
+    };
+    (out, spent)
+}
+
+/// Round-6 finding 1: the ownership of every change of a healthy spec is
+/// checked under ONE discovery. A discovery per change re-validated the
+/// shared inventory each time (a listing of the spec's bindings and a stat
+/// of every folded ledger), which is quadratic filesystem work over the
+/// spec's changes although hardly a byte is read. The inventory pass opens
+/// one discovery, re-validates nothing, lists a number of directory entries
+/// linear in the spec's changes and reads each ledger a bounded number of
+/// times; the whole resolution stays linear and finishes in seconds.
+// trace:BUG-b6b1278890774ef993d2ebc327862470-393.ac915e51 | ai:claude
+#[test]
+fn bug_2629_one_discovery_checks_every_change_of_a_healthy_spec() {
+    let labels = vec![SPEC.to_string()];
+    let limit = std::time::Duration::from_secs(5);
+    let run = |targets: u64| {
+        let (_tmp, root, _env) = fixture();
+        let (ledgers, bytes) = healthy_many_target_spec(&root, targets);
+        let (bindings, pass) = measured(|| super::discover(&root, &labels, None, false));
+        eprintln!("bug_2629 healthy {ledgers} ledgers of {bytes} bytes: inventory pass {pass:?}");
+        assert_eq!(bindings.failure(), None);
+        assert_eq!(bindings.refusal(), None);
+        for pr in (500..500 + targets).chain([4401, 4402]) {
+            assert!(bindings.binds(&format!("PR-{pr}")), "PR-{pr}");
+        }
+        assert_eq!(pass.opened, 1, "one discovery for {ledgers} changes");
+        assert_eq!(pass.checks, 0, "no inventory is re-validated per change");
+        assert!(
+            pass.entries as u64 <= 3 * ledgers + 16,
+            "{} directory entries listed for {ledgers} changes",
+            pass.entries
+        );
+        // Each ledger once for its events and once for the ownership index.
+        assert!(
+            pass.bytes < 3 * bytes,
+            "{} bytes read of {bytes} in {ledgers} ledgers",
+            pass.bytes
+        );
+        assert!(pass.took < limit, "the inventory pass took {:?}", pass.took);
+        let (_, whole) = measured(|| review(&root));
+        eprintln!("bug_2629 healthy {ledgers} ledgers: whole resolution {whole:?}");
+        assert!(whole.took < limit, "the resolution took {:?}", whole.took);
+        (ledgers, bytes, pass, whole)
+    };
+    let (few, few_bytes, few_pass, few_whole) = run(6);
+    let (many, many_bytes, many_pass, many_whole) = run(48);
+    // The pass does not open more discoveries for more changes, and what
+    // the whole resolution reads grows with the spec's ledgers, not with
+    // their square.
+    assert_eq!(few_pass.opened, many_pass.opened);
+    let growth = many.div_ceil(few);
+    assert!(
+        many_pass.entries <= few_pass.entries * growth as usize + 16,
+        "directory entries grew from {} to {} for {few} -> {many} changes",
+        few_pass.entries,
+        many_pass.entries
+    );
+    assert!(
+        many_whole.bytes * few_bytes <= 2 * few_whole.bytes.max(few_bytes) * many_bytes,
+        "the resolution read {} of {many_bytes} bytes against {} of {few_bytes}",
+        many_whole.bytes,
+        few_whole.bytes
+    );
+    assert!(
+        many_whole.opened <= 2 * growth as usize * few_whole.opened.max(1),
+        "the resolution opened {} discoveries against {}",
+        many_whole.opened,
+        few_whole.opened
+    );
+}
+
+/// Rewrite the last event of `pr`'s ledger in place.
+fn rewrite_last_event(root: &Path, pr: u64, edit: impl Fn(&mut serde_json::Value)) {
+    let file = store::ledger_file(root, ChangeKey::pr(pr));
+    let body = std::fs::read_to_string(&file).unwrap();
+    let mut lines: Vec<String> = body.lines().map(str::to_string).collect();
+    let last = lines.last_mut().unwrap();
+    let mut event: serde_json::Value = serde_json::from_str(last).unwrap();
+    edit(&mut event);
+    *last = event.to_string();
+    std::fs::write(&file, lines.join("\n") + "\n").unwrap();
+}
+
+/// Round-6 finding 2: the recovery holds each record to the envelope the
+/// strict reader requires of the ledger it is read from. A later phase-3
+/// record that parses but does not belong there (another change's key, an
+/// unsupported version, a sequence number that does not advance) is what
+/// strict discovery refused; it must not answer for this change, clear its
+/// wait or supply findings. The wait stays refused.
+#[test]
+fn bug_2629_a_misplaced_record_answers_nothing_in_recovery() {
+    fn foreign(event: &mut serde_json::Value) {
+        event["change"] = "PR-1".into();
+    }
+    fn unsupported(event: &mut serde_json::Value) {
+        event["v"] = (event::EVENT_VERSION + 1).into();
+    }
+    fn replayed(event: &mut serde_json::Value) {
+        event["seq"] = 0.into();
+    }
+    let misplacements: [(&str, fn(&mut serde_json::Value)); 3] = [
+        ("another change's record", foreign),
+        ("an unsupported version", unsupported),
+        ("a sequence that does not advance", replayed),
+    ];
+    for later in ["approved", "request-changes"] {
+        // In its place the later round answers: the wait is superseded.
+        {
+            let (_tmp, root, _env) = fixture();
+            append(&root, 3698, SPEC, &record("waiting", -30));
+            append(&root, 3698, SPEC, &phase3(record(later, -10)));
+            lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+            assert!(!refused_waiting(&root), "a {later} round in its place");
+        }
+        for (name, misplace) in misplacements {
+            let (_tmp, root, _env) = fixture();
+            append(&root, 3698, SPEC, &record("waiting", -30));
+            append(&root, 3698, SPEC, &phase3(record(later, -10)));
+            rewrite_last_event(&root, 3698, misplace);
+            lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+            assert!(refused_waiting(&root), "{name} ({later}) cleared the wait");
+        }
+    }
+    // With no wait to name, the misplaced record is unknown evidence, by name.
+    let (_tmp, root, _env) = fixture();
+    append(&root, 3698, SPEC, &phase3(record("request-changes", -30)));
+    append(&root, 3698, SPEC, &phase3(record("approved", -10)));
+    rewrite_last_event(&root, 3698, foreign);
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+    let why = refused_uncovered(&root);
+    assert!(
+        why.contains("PR-3698.jsonl") && why.contains("PR-1"),
+        "{why}"
+    );
+}
+
+/// Round-6 finding 3: the recovery and the label pass open a ledger beneath
+/// the pinned ledger directory, without following a link and without
+/// blocking, and read the handle they validated. A link to a well-formed
+/// ledger, a hard link and a FIFO are each refused by name, promptly.
+#[test]
+fn bug_2629_a_linked_or_special_ledger_is_refused_not_read() {
+    fn linked(root: &Path, file: &Path) {
+        let elsewhere = root.join("elsewhere.jsonl");
+        std::fs::rename(file, &elsewhere).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, file).unwrap();
+    }
+    fn hard_linked(root: &Path, file: &Path) {
+        std::fs::hard_link(file, root.join("second-name.jsonl")).unwrap();
+    }
+    fn fifo(_: &Path, file: &Path) {
+        use std::os::unix::ffi::OsStrExt;
+        std::fs::remove_file(file).unwrap();
+        let path = std::ffi::CString::new(file.as_os_str().as_bytes()).unwrap();
+        // SAFETY: `path` is a NUL-terminated path owned for the call.
+        assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+    }
+    let replacements: [(&str, fn(&Path, &Path)); 3] = [
+        ("a link", linked),
+        ("a hard link", hard_linked),
+        ("a FIFO", fifo),
+    ];
+    let labels = vec![SPEC.to_string()];
+    for (name, replace) in replacements {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 4000, SPEC, &phase3(record("request-changes", -10)));
+        append(&root, 4001, SPEC, &phase3(record("request-changes", -5)));
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 4000);
+        unavailable(&root);
+        replace(&root, &store::ledger_file(&root, ChangeKey::pr(4001)));
+        let started = std::time::Instant::now();
+        let why = refused_uncovered(&root);
+        assert!(why.contains("PR-4001.jsonl"), "{name}: {why}");
+        let why = super::labelled_changes(&root, &labels).unwrap_err();
+        assert!(why.contains("PR-4001.jsonl"), "{name}: {why}");
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(20),
+            "{name} stalled the command for {:?}",
+            started.elapsed()
+        );
+    }
+}
+
+/// Round-6 finding 4: a verdict event whose record has no verdict field is
+/// a round nobody can read. It is unknown, never "no review": as the newest
+/// round it must not discard the wait recorded before it.
+#[test]
+fn bug_2629_a_round_without_a_verdict_keeps_the_wait_before_it() {
+    {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 3698, SPEC, &record("waiting", -30));
+        append(&root, 3698, SPEC, &phase3(record("approved", -10)));
+        rewrite_last_event(&root, 3698, |event| {
+            event["record"].as_object_mut().unwrap().remove("verdict");
+        });
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+        assert!(refused_waiting(&root));
+    }
+
+    // With no wait before it, the unreadable round still refuses, by name.
+    let (_tmp, root, _env) = fixture();
+    append(&root, 3698, SPEC, &phase3(record("request-changes", -30)));
+    append(&root, 3698, SPEC, &phase3(record("approved", -10)));
+    rewrite_last_event(&root, 3698, |event| {
+        event["record"].as_object_mut().unwrap().remove("verdict");
+    });
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 3698);
+    let why = refused_uncovered(&root);
+    assert!(why.contains("no readable verdict"), "{why}");
+}
+
+/// Round-6 finding 5: a legacy file that does not parse, or is not UTF-8,
+/// was read all the same, and the recovery's budget pays for it. Two such
+/// files, each fitting the allowance alone, exhaust it together.
+#[test]
+fn bug_2629_a_malformed_legacy_file_spends_the_recovery_budget() {
+    const LEGACY: usize = 4096;
+    for body in [vec![b'x'; LEGACY], vec![0xff; LEGACY]] {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 4000, SPEC, &phase3(record("request-changes", -10)));
+        append(&root, 4001, SPEC, &phase3(record("request-changes", -5)));
+        lose_binding_beside_corrupt_ledger(&root, SPEC, 4000);
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        for key in ["PR-4000", "PR-4001"] {
+            std::fs::write(dir.join(format!("{key}.json")), &body).unwrap();
+        }
+        // Unbounded, both files are read and are unknown evidence.
+        let why = refused_uncovered(&root);
+        assert!(why.contains("PR-4000.json"), "{why}");
+        // Every ledger of the label pass, then one legacy file and a half.
+        let ledgers: u64 = std::fs::read_dir(ledger::ledger_dir(&root))
+            .unwrap()
+            .flatten()
+            .filter(|e| e.path().extension().is_some_and(|x| x == "jsonl"))
+            .map(|e| e.metadata().unwrap().len())
+            .sum();
+        let _budget = ReadBudgetGuard::set(ledgers + (LEGACY + LEGACY / 2) as u64);
+        let why = refused_uncovered(&root);
+        assert!(
+            why.contains("recovery read budget") && why.contains("PR-4001.json"),
+            "{why}"
+        );
+    }
+}
+
+/// Sets the parse ceiling of this thread's bounded passes; restores it on
+/// drop.
+struct ParseBudgetGuard;
+
+impl ParseBudgetGuard {
+    fn set(lines: usize) -> Self {
+        super::PARSE_BUDGET.with(|b| b.set(Some(lines)));
+        Self
+    }
+}
+
+impl Drop for ParseBudgetGuard {
+    fn drop(&mut self) {
+        super::PARSE_BUDGET.with(|b| b.set(None));
+    }
+}
+
+/// Round-6 finding 6: the fallback passes count every line they try to
+/// parse against one ceiling shared by the whole pass, and keep none of the
+/// lines that fail. Many short malformed lines, well inside the byte budget,
+/// stop the pass at the ceiling, by name.
+#[test]
+fn bug_2629_the_fallback_passes_stop_at_the_parse_ceiling() {
+    let labels = vec![SPEC.to_string()];
+    let (_tmp, root, _env) = fixture();
+    append(&root, 4000, SPEC, &phase3(record("request-changes", -10)));
+    append(&root, 4001, SPEC, &phase3(record("request-changes", -5)));
+    let dir = ledger::ledger_dir(&root);
+    // Sorted between the spec's ledgers: the ceiling is shared across them.
+    std::fs::write(dir.join("PR-4000999.jsonl"), "x\n".repeat(1000)).unwrap();
+    assert_eq!(
+        super::labelled_changes(&root, &labels),
+        Ok(vec![ChangeKey::pr(4000), ChangeKey::pr(4001)])
+    );
+    {
+        let _lines = ParseBudgetGuard::set(100);
+        work::PARSE_ATTEMPTS.with(|n| n.set(0));
+        let why = super::labelled_changes(&root, &labels).unwrap_err();
+        assert!(
+            why.contains("PR-4000999.jsonl") && why.contains("parse budget"),
+            "{why}"
+        );
+        assert_eq!(work::PARSE_ATTEMPTS.with(Cell::get), 100);
+    }
+    // The recovery shares the ceiling across its ledgers as well.
+    std::fs::remove_file(dir.join("PR-4000999.jsonl")).unwrap();
+    lose_binding_beside_corrupt_ledger(&root, SPEC, 4000);
+    unavailable(&root);
+    let _lines = ParseBudgetGuard::set(1);
+    let why = refused_uncovered(&root);
+    assert!(why.contains("parse budget"), "{why}");
 }

@@ -3235,6 +3235,11 @@ fn resolve_rework_review_inner(
     use crate::gate::review_verdict::RecordedVerdict;
     let ids = [display_id, spec_id];
     let labels = spec_labels(&ids);
+    // BUG-2629: one ownership inventory for the whole resolution. The
+    // readers below each open a discovery of their own; outside a scope each
+    // one folded every ledger bound to the spec again.
+    // trace:BUG-2629 | ai:claude
+    let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
     // Refs-only batches do not complete the spec, but their terminal reviews
     // must not block the next batch. Reconcile only this spec's proved keys.
     // trace:BUG-2525 | ai:codex
