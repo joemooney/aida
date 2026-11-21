@@ -8,12 +8,12 @@ description: |
   - admission_drain.rs:226: a drain's effective expiry is bounded relative to OBSERVATION time (a backward clock step cannot extend it past the documented maximum).
   - admission_owner.rs:740: an intent file with invalid UTF-8 (bounded, regular) follows the same stale-record policy as other malformed intents; it never blocks admission indefinitely.
   Each with a regression. Claude lane, standard review.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:55:07.495815470Z
-modified_at: 2026-11-21T01:27:58.554604463Z
+modified_at: 2026-11-21T01:31:48.388882245Z
 req_type: Task
 tags:
 - admission
@@ -55,6 +55,13 @@ history:
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fbbb-2524-7470-99ed-fc8302aad039
+  author: aida-session-start
+  timestamp: 2026-11-21T01:31:48.388880129Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
