@@ -1,0 +1,31 @@
+id: 01a1fba5-e125-7801-812f-5f4271302468
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1194
+title: 'Review follow-up: The required fast-gates job 136668421203 fails the Rust test portability ratchet on the tw'
+description: |-
+  From BUG-2707
+  Reviewed sha: 1f53ccdae5191f51e6dc905d6cb1be5c5cb8681e
+
+  The required fast-gates job 136668421203 fails the Rust test portability ratchet on the two unguarded /bin/sh calls at lines 1225 and 1239 in bug_2707_prompt_command_is_shell_quoted_and_gates_exit_on_acceptance. Apply the Unix cfg guard recognized by the ratchet or use a portable fixture.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-21T01:08:34.725218124Z
+modified_at: 2026-11-21T01:08:34.725218124Z
+req_type: Task
+tags:
+- carried-from:BUG-2707
+- finding-hash:028523bb
+- from-review:BUG-2707
+relationships:
+- rel_type: References
+  target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
+  created_at: 2026-11-21T01:08:53.004833116Z
+filed_at:
+  code_sha: 1f53ccdae5191f51e6dc905d6cb1be5c5cb8681e
+  branch: pr-4385
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 29e77b85236
+  vendor: claude
+  session: 01a1fba32445
