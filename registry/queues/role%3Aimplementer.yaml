@@ -1,9 +1,9 @@
 - user_id: role:implementer
   requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
-  position: -956000
+  position: -957000
   added_by: role:implementer
-  note: 'Requeue the previously authorized round-5 rework for PR #4380. At current head 367c23a7723a the round-4 Changes Requested verdict is still exact; the later Done event cites that identical commit. The signed round-5 scope is one per-invocation discovery cache, bounded ledger consumption, and the real queue work lock-contention regression. BUG-2706 remains blocked on this fix. Preserve the independent review and CI gates.'
-  added_at: 2026-11-21T08:44:09.482646835Z
+  note: The host prepared take-4380 at the existing PR head, but its legacy launcher refused contained Claude. The normal drain aborted before launch when it refused to adopt bug-2629-fresh. Restore the existing approved cap-exception rework to the implementer queue. The scope, exact-head review and merge hold remain in force.
+  added_at: 2026-11-21T09:51:32.742429731Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
@@ -57,161 +57,10 @@
   added_at: 2026-11-20T21:57:15.250607639Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1f73c-f2d4-7ad3-85a1-7b10d07388d2
-  position: -931000
-  added_by: role:implementer
-  added_at: 2026-11-20T20:57:10.272474770Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ef37-0a1a-7071-b7bd-d5de9dca1448
-  position: -921000
-  added_by: role:implementer
-  added_at: 2026-11-20T18:08:43.354666453Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1f873-4929-7be2-8bde-20874c4661ce
-  position: -916000
-  added_by: role:implementer
-  added_at: 2026-11-20T11:15:23.517471285Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1f1b7-e797-7202-af83-c100961b85cc
   position: -915000
   added_by: role:implementer
   added_at: 2026-11-20T09:00:57.073797112Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1eaa9-ac38-71b2-9fa2-43c1105fe5c5
-  position: -914000
-  added_by: role:implementer
-  added_at: 2026-11-20T09:00:18.736926581Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1f733-b147-7fd1-8f38-7254c7be25eb
-  position: -913000
-  added_by: role:implementer
-  added_at: 2026-11-20T05:35:22.547490885Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1f153-9dae-7782-85b1-8041df21cece
-  position: -912000
-  added_by: role:implementer
-  added_at: 2026-11-20T02:42:04.238644846Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1efa9-04e9-76f0-9895-5d31af232f0e
-  position: -911000
-  added_by: role:implementer
-  added_at: 2026-11-20T01:51:19.320319773Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1f5c2-beca-7222-959d-3870de1bf6f2
-  position: -910000
-  added_by: role:implementer
-  added_at: 2026-11-20T00:13:53.699855564Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e0fc-d8a5-7c72-99f0-fc450b90cb69
-  position: -909000
-  added_by: role:implementer
-  added_at: 2026-11-19T23:34:41.061600514Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e863-f8ff-7cb0-b8c4-a62d4692bafb
-  position: -908000
-  added_by: role:implementer
-  added_at: 2026-11-19T23:33:55.896999127Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1dc32-1a0e-7551-9a79-565f0cae4a7b
-  position: -907000
-  added_by: role:implementer
-  added_at: 2026-11-19T23:29:12.634890029Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ef4d-ffbc-74d3-afdd-35a12624acda
-  position: -903000
-  added_by: role:implementer
-  added_at: 2026-11-19T21:47:45.550844990Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a169c7-0777-79a1-ada3-89eeef94de78
-  position: -900000
-  added_by: role:implementer
-  added_at: 2026-11-19T21:34:48.333501897Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e2af-857a-72f3-a10a-472b4f5ffcc3
-  position: -899000
-  added_by: role:implementer
-  added_at: 2026-11-19T19:01:05.691133207Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e8e0-6ae4-76b2-a3de-c4da8a2880de
-  position: -898000
-  added_by: role:implementer
-  added_at: 2026-11-19T18:54:04.751277858Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ebe3-43dc-7810-8dd1-f2918d7dbc7c
-  position: -895000
-  added_by: role:implementer
-  added_at: 2026-11-19T17:58:54.505811216Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e0fa-f56b-73a0-b88a-fc7a47513bd0
-  position: -892000
-  added_by: role:implementer
-  added_at: 2026-11-19T17:31:20.862194100Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ca8b-86cf-7bb0-bb1c-87ea20a576ef
-  position: -887000
-  added_by: role:implementer
-  note: 'Round 2 for PR #4309. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3786-r2.md (the reviewer findings verbatim). codex --brief.'
-  added_at: 2026-11-19T13:31:48.234910704Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e7ec-216d-75d3-8d19-8f2c0b15bdeb
-  position: -886000
-  added_by: role:implementer
-  note: 'Round 3 for PR #4290. AUTHORITATIVE scope: .aida/tmp/brief-TASK-3812-r3.md: ONE real-process exit-code test. CLAUDE or codex with --brief.'
-  added_at: 2026-11-19T13:26:27.916977822Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ee98-e3fc-7f61-b28e-2fd201f1d28e
-  position: -883000
-  added_by: role:implementer
-  note: 'Round 4 (FINAL) for PR #4293. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2682-r4.md: strip AIDA_OVER_HOST_LIMIT from all vendor children; fail-closed override audit. CLAUDE.'
-  added_at: 2026-11-19T12:19:47.885645411Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1efdc-d07f-7fb1-99d4-c5ceb933f288
-  position: -877000
-  added_by: role:implementer
-  note: 'Round 2 for PR #4301. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2690-r2.md: real-path tests for the update-branch head mutation and its guards. CLAUDE, STRICT.'
-  added_at: 2026-11-19T10:09:36.897026706Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e30c-9af4-7b72-84a1-8058c785f865
-  position: -874000
-  added_by: role:implementer
-  note: 'Round 3 for PR #4294. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2625-r3.md: judge each legacy job by its claiming runner, not the current runner.pid. CLAUDE lane.'
-  added_at: 2026-11-19T09:45:54.962899056Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e1e1-bd10-7701-ac28-985c30651ad5
-  position: -868000
-  added_by: role:implementer
-  note: 'Round 3 for PR #4285. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2607-r3.md: adapt the helpers to main''s run_recorded/handle_queue_work; AC3 production-path tests for the 4 remaining early paths. CLAUDE lane.'
-  added_at: 2026-11-19T08:18:07.459219314Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1ec8a-2c66-7022-9d5c-01d6514aa984
-  position: -865000
-  added_by: role:implementer
-  note: 'Round 3 for PR #4282. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2672-r3.md: no bridge configured means no grace window; store-writers; mark_executable. CLAUDE lane.'
-  added_at: 2026-11-19T07:10:48.720076945Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1be07-68d8-74b1-831f-8d84a014c451
@@ -240,13 +89,6 @@
   added_by: role:implementer
   note: 'Advisor 18:46 hygiene re-dispatch (stale needs-attention note): resume the concrete remaining work per the 2026-11-18 Refs-landed sweep (.aida/tmp/refs-sweep-2026-11-18.md, group D) from current main. Lane: codex unless STRICT.'
   added_at: 2026-11-19T01:44:19.992549136Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e461-489e-7b12-acd9-58fd403fbb2d
-  position: -834000
-  added_by: role:implementer
-  note: 'PR #4272 conflict-only rework'
-  added_at: 2026-11-19T00:49:52.766006587Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e468-9ec1-7bf2-95cf-266f585c1c6d
@@ -531,5 +373,21 @@
   added_by: role:implementer
   note: Use the documented manual recovery option. Describe how an authorized operator retains the unreadable journal for audit and restores a valid journal using the existing commands. Keep automatic observation fail-closed until recovery. Add an isolated regression exercising the documented recovery and valid-journal status. Any new command authority or automatic recovery needs a separate sketch.
   added_at: 2026-11-21T07:39:48.282171020Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  position: 636000
+  added_by: role:implementer
+  note: 'S3a rework only: continue PR #4389 to integration at 964a98c30edf, using the pinned 19-finding rework brief. Leave S1b and S3b to their separately signed scope.'
+  added_at: 2026-11-21T09:05:19.483907804Z
+  for_role: implementer
+  added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1f9c0-1c04-72f1-8efa-7e549eec0f34
+  position: 637000
+  added_by: role:implementer
+  note: Read-only model/effort diagnostics. For each vendor and effective seat, report the resolved values and their source in config show and reviewer pickup dry-run. Use the same resolver as the actual headless launch, including worktree-local config and explicit env precedence. Test a reviewer checkout with and without the temporary config and env overrides. Keep launch behavior and authority unchanged. Real vendor acceptance remains TASK-3173.
+  added_at: 2026-11-21T09:10:25.789356670Z
   for_role: implementer
   added_by_machine: imac
