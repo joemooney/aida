@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: NeedsAttention
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-21T00:32:34.730076186Z
+modified_at: 2026-11-21T00:33:13.452939915Z
 req_type: Bug
 tags:
 - conflicts
@@ -775,6 +775,13 @@ comments:
   modified_at: 2026-11-21T00:32:34.730076186Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb85-82ec-7190-86f6-d4042ac360f9
+  author: joe
+  content: 'Returned from NeedsAttention to In Progress via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full sweep of all 3,646 lines of the supplied landed diff against protected main 23c989cd95f9c86dfe23550c76155b75b1d07098, landed tree 87c3ab9546269d945dc551cb16bd9131806d631e; attests only original PR head b6315683216cbfe5676532348e86a1bfa169e22e. Four actionable findings require changes. No finding depends on base-only changes to docs/cli/06-roles-sessions.md or scripts/store-writers.toml.. No triage reason was given.'
+  created_at: 2026-11-21T00:33:13.452927101Z
+  modified_at: 2026-11-21T00:33:13.452927101Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -1012,6 +1019,15 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a1fb85-82ec-7190-86f6-d3f07908d24c
+  author: joe
+  timestamp: 2026-11-21T00:33:13.452906979Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: InProgress
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
   branch: main
@@ -1021,24 +1037,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Full sweep of all 3,646 lines of the supplied landed diff against protected main 23c989cd95f9c86dfe23550c76155b75b1d07098, landed tree 87c3ab9546269d945dc551cb16bd9131806d631e; attests only original PR head b6315683216cbfe5676532348e86a1bfa169e22e. Four actionable findings require changes. No finding depends on base-only changes to docs/cli/06-roles-sessions.md or scripts/store-writers.toml.
-
-    Covered spec BUG-b6b1278890774ef993d2ebc327862470-452 (BUG-2688). The generated prompt could not resolve the short ID; canonical aida show --full supplied the four criteria. Reused the supplied untraced-criteria list and inspected the tests added in this diff.
-
-    AC aca42931: Rework preparation either creates a conflict-resolution seat or refuses with exact missing evidence and ONE working recovery command — unverified; pending adopted-repair and early identity/journal error paths violate it (findings 3 and 4).
-
-    AC ac153421: Retained conflict with seat gone and journal missing is treated as no retained conflict after remote-head verification — verified by source inspection of fetch-before-preparation and the added clean_remote_branch_and_seat_gone_without_journal_start_fresh regression. Runnable targeted command: cargo test -p aida-cli-lib clean_remote_branch_and_seat_gone_without_journal_start_fresh (not executed in this review).
-
-    AC acc34a6d: --fresh always starts from remote branch head and ignores logged retained-conflict state — unverified; relocation and ref realignment omit an ahead/diverged local branch when the prior worktree is gone (finding 2). Retained-directory preservation does have substantive new regression coverage.
-
-    AC Tests: clean remote conflict; seat gone plus journal missing gives fresh start; genuine journaled conflict resumes — verified by inspection of clean_remote_branch_and_seat_gone_without_journal_start_fresh and adopted_seat_resumes_journaled_conflict_with_edits, including transferred journal ownership and preserved edits. Runnable command for the second case: cargo test -p aida-cli-lib adopted_seat_resumes_journaled_conflict_with_edits (not executed). These tests trace BUG-2688 at module level; the supplied previously-untraced behaviors are covered in the diff, subject to the specific gaps in the findings.
-
-    Existing exact-head GitHub evidence: CI fast gates, fast compilation and Build (ubuntu-latest) succeeded; full test shards were skipped. merge-hold-gate was pending at review time and is not the reason for this verdict. No Cargo, builds or local tests were run, per reviewer policy. Source evidence is not claimed as runtime execution. Review claim attempt was refused; standalone draft handoff is used as instructed.
-  recovery_hint: address the review findings, move BUG-2688 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-19T15:22:29.707055410Z
