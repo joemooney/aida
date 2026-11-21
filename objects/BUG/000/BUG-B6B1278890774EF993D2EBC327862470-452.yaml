@@ -846,6 +846,34 @@ comments:
   created_at: 2026-11-21T01:17:37.507328867Z
   modified_at: 2026-11-21T01:17:37.507328867Z
   session_id: 01a1fb8af8a3
+- id: 01a1fbb9-3b46-72c2-b12e-300d9553e6b9
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 18:40): 11 findings at 5029dd6 (CI gates, heal safety, original ACs). Claude+Fable, STRICT.
+
+    # Rework brief: BUG-2688 FRESH / PR #4388, round 2 of 4, STRICT
+
+    Advisor: claude-advisor-121, 2026-11-20 18:40 MST. Head reviewed: 5029dd6 (11). Lane: CLAUDE+Fable. COMMIT your work. Fix all; CI first:
+     CI: (a) work.rs:885 no new typed HeadlessVendor reference (reuse the routing boundary; vendor-debt guard); (b) the Git maintenance guard: route the five
+         test git calls (bug_2688_repair_reservation_tests.rs 30/31/35/36/260) through the recognised test_git helper directly.
+     SAFETY of the new heal (destructive; fail closed):
+      1 repair_journal.rs:449 take the lease snapshot UNDER the journal lock; bind the heal to the scanned reservation generation and revalidate ownership just
+        before release.
+      2 lane_liveness.rs:824 death needs the record's lease ID to match and a namespace-aware PID check; an invisible PID is UNKNOWN (no release).
+      3 lane_liveness.rs:816 bounded, nonblocking, no-follow read of a verified regular file; a dangling symlink is UNKNOWN, not "no run".
+      4 repair_journal.rs:433/449 a strict lease listing must distinguish confirmed absence from an unreadable or dangling sessions dir or entry: unreadable refuses.
+      5 :437 reservation_holder errors become a non-healable finding naming the missing or invalid evidence.
+     BEHAVIOUR:
+      6 work.rs:932 carry the successful conflict admission through routing; no second effectful preflight after state changed.
+      7 [acc34a6d] fresh pickup with MERGE_HEAD in a retained tree: log it, set aside the retained state (preserved), start at the fetched remote SHA.
+      8 [ac153421 + Tests] cover through pickup: a removed seat plus missing journal with the remote head ahead; resume=true and false; the replacement worktree
+        from the remote head.
+      9 seat_clone.rs:3495 every refusal names a runnable recovery command (no generic "diagnose that failure").
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-21T01:29:30.018164446Z
+  modified_at: 2026-11-21T01:29:30.018164446Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
