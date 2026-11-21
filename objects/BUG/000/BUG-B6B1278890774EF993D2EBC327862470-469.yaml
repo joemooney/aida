@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T01:10:37.015930799Z
+modified_at: 2026-11-21T01:10:59.668895034Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -191,6 +191,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2707: request changes. AC1 met for the documented unresolved-finding rule. AC2 partial: ordinary submission gives immediate corrective diagnostics, but parent collection accepts unvalidated handoffs and can record a superseded approval. AC3 met for the p3/style regression. BUG-2707 (bug protocol): met — two standalone reviewer test files changed. The required fast-gates job failed the test portability ratchet. Reviewed the full pinned landing diff using source and existing CI evidence.. No triage reason was given.'
   created_at: 2026-11-21T01:10:37.015924535Z
   modified_at: 2026-11-21T01:10:37.015924535Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fba8-1629-7bd2-9524-eba7d790ba5a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2707):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 1f53ccdae519
+    Recorded: 2026-11-21T01:08:09.991823185+00:00
+    Findings:
+    1. AC2: LaunchDraft::read at lines 172–191 treats a matching digest in a reviewer-writable receipt as proof of submission. The structured-child integration fixture itself writes both files directly and reaches the canonical recorder without invoking submit-draft. An inconsistent approval with matching receipt therefore passes launch.read() and first receives its policy refusal after the reviewer exits. The recorder still protects canonical approval. Retain the parent’s launch policy and validate the collected draft against it, bind acceptance to validation if command provenance is required, and exercise the actual CLI in the integration fixture.
+    2. A refused resubmission can silently lose newly reported findings. After an accepted clean approval, submitting an approval with a newly identified blocking finding returns at line 476 with the prior receipt intact. LaunchDraft::read only checks pending.json when draft.json is absent, so collection can record the old clean approval if the child exits or is interrupted. Teardown then ignores the newer pending findings once recorded.json exists. Refuse collection while a later attempt remains unresolved and retain that attempt for recovery. Cover this ordering with an initially approved verdict.
+    3. Concurrent submissions can acknowledge inconsistent state. write_in unlinks a fixed temporary name before creating it, and submit_draft publishes the draft and receipt separately before unlinking pending.json unconditionally. Overlapping retries can publish a different writer’s temporary file, leave mismatched draft and receipt, or remove a replacement pending draft. Serialize acceptance per launch and consume only the pending generation that was validated.
+    4. The required fast-gates job 136668421203 fails the Rust test portability ratchet on the two unguarded /bin/sh calls at lines 1225 and 1239 in bug_2707_prompt_command_is_shell_quoted_and_gates_exit_on_acceptance. Apply the Unix cfg guard recognized by the ratchet or use a portable fixture.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-21T01:10:59.369805469Z
+  modified_at: 2026-11-21T01:10:59.369805469Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
