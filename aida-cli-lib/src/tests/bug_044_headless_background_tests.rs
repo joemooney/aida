@@ -1881,3 +1881,124 @@ fn bug_2682_over_wip_launches_still_wait_on_host_limits_until_explicitly_overrid
         TEST_HOST.with(|h| h.borrow_mut().take());
     }
 }
+
+// ── TASK-3826: a relayed launch's gate at the launch boundary ─────────────
+
+/// Both production launchers (the standalone `queue work` launch and the
+/// drain's headless phase) apply a relayed launch's gate right after host
+/// admission: a rework whose change moved off the relayed head, merged,
+/// closed or cannot be read spawns no child, and neither does a gate value
+/// that cannot be read. A change still open at the relayed head, fresh work,
+/// and a launch no relay started all go on, and the child never inherits the
+/// gate.
+// trace:TASK-3826 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn task_3826_a_relayed_launch_is_gated_on_its_head_after_host_admission() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    use crate::lane_admission::{TestHost, TEST_HOST};
+    use crate::lane_relay::{PrView, GATE_ENV, TEST_LAUNCH_PR};
+    const RELAYED: &str = "aaaaaaaa00000000000000000000000000000000";
+    const MOVED: &str = "bbbbbbbb11111111111111111111111111111111";
+    let at = |state: &str, head: &str| -> Result<PrView, String> {
+        Ok(PrView {
+            state: state.into(),
+            head: head.into(),
+            branch: "claude/story-9".into(),
+            title: "fix (STORY-9)".into(),
+        })
+    };
+    let rework = format!("rework:7:{RELAYED}");
+    for mode in [0u8, 1] {
+        // (gate, what the forge says once the host admitted, refusal code)
+        let cases: [(Option<&str>, Result<PrView, String>, Option<&str>); 9] = [
+            (Some(&rework), at("OPEN", MOVED), Some("head-moved")),
+            (Some(&rework), at("MERGED", RELAYED), Some("pr-merged")),
+            (Some(&rework), at("CLOSED", RELAYED), Some("pr-closed")),
+            (Some(&rework), Err("HTTP 502".into()), Some("pr-unreadable")),
+            (
+                Some("rework:7"),
+                at("OPEN", RELAYED),
+                Some("relay-gate-invalid"),
+            ),
+            (Some(""), at("OPEN", RELAYED), Some("relay-gate-invalid")),
+            (Some(&rework), at("OPEN", RELAYED), None),
+            // Fresh work has no head to hold; an ungated launch is not asked.
+            (Some("fresh"), at("OPEN", MOVED), None),
+            (None, at("CLOSED", MOVED), None),
+        ];
+        for (case, (gate, forge, refusal)) in cases.into_iter().enumerate() {
+            let fx = Fixture::new(&format!("t3826gate{mode}{case}"));
+            let _pin = crate::seat_clone::LauncherMainPin::new(&fx.project);
+            std::fs::write(
+                fx.project.join(".aida/config.toml"),
+                "[forge]\nprovider = \"pure-git\"\n[doctor.disk_headroom]\nmin_free_gib = 1\n",
+            )
+            .unwrap();
+            // The host admits at once: the gate is what decides.
+            TEST_HOST.with(|h| {
+                *h.borrow_mut() = Some(TestHost {
+                    max_concurrent_cold_starts: 4,
+                    min_memory_headroom_gib: 1,
+                    prefix: TestHost::prefix(),
+                    memory_gib: std::rc::Rc::new(std::cell::Cell::new(64)),
+                    on_wait: Box::new(|| panic!("a free slot does not queue")),
+                })
+            });
+            let marker = fx.path("child-ran");
+            let child = format!(
+                "printf '%s' \"${{{GATE_ENV}-unset}}\" > '{}'\n",
+                marker.display()
+            );
+            si::TEST_PR.with(|p| *p.borrow_mut() = Some(None));
+            TEST_LAUNCH_PR.with(|p| *p.borrow_mut() = Some(forge));
+            let result = fx.run_mode_env(
+                &child,
+                crate::session::HeadlessVendor::Claude,
+                false,
+                mode,
+                &[(GATE_ENV, gate)],
+            );
+            TEST_LAUNCH_PR.with(|p| p.borrow_mut().take());
+            si::TEST_PR.with(|p| *p.borrow_mut() = None);
+            TEST_HOST.with(|h| h.borrow_mut().take());
+
+            let what = format!("mode={mode} gate={gate:?} case={case}");
+            match refusal {
+                Some(code) => {
+                    let error = result.expect_err(&what);
+                    assert_eq!(
+                        crate::lane_relay::gate_refusal_code(&error),
+                        Some(code),
+                        "{what}: {error:#}"
+                    );
+                    assert!(
+                        !marker.exists() && !fx.path("count").exists(),
+                        "{what}: a refused launch spawned its child"
+                    );
+                    // The standalone launcher records the attempt the relay
+                    // then reads: refused before start, with the gate's code.
+                    if mode == 0 {
+                        let receipt = bug_2643_receipt(&fx);
+                        assert_eq!(
+                            receipt["result"], "refused-before-start",
+                            "{what}: {receipt}"
+                        );
+                        assert_eq!(receipt["reason_code"], code, "{what}: {receipt}");
+                        assert_eq!(receipt["started"], false, "{what}: {receipt}");
+                    }
+                }
+                None => {
+                    assert!(marker.exists(), "{what}: no child: {result:?}");
+                    assert_eq!(
+                        std::fs::read_to_string(&marker).unwrap(),
+                        "unset",
+                        "{what}: the child inherited the relay's gate"
+                    );
+                }
+            }
+        }
+    }
+}

@@ -54,6 +54,12 @@ pub enum CommentCommand {
         /// Use interactive mode (prompts)
         #[clap(long)]
         interactive: bool,
+
+        /// Also print `comment-id: <ID>`, the id the store gave the new
+        /// comment, for a caller that edits it later.
+        // trace:TASK-3826 | ai:claude
+        #[clap(long, hide = true, conflicts_with = "interactive")]
+        print_id: bool,
     },
 
     /// List all comments for a requirement

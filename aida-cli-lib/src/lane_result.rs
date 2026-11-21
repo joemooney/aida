@@ -377,6 +377,14 @@ impl Attempt {
             },
             if started {
                 "lane-failed"
+            } else if let Some(code) = result
+                .as_ref()
+                .err()
+                .and_then(crate::lane_relay::gate_refusal_code)
+            {
+                // A relayed launch its own gate stopped: the relay reads
+                // this reason. trace:TASK-3826 | ai:claude
+                code
             } else if result
                 .as_ref()
                 .is_err_and(|e| crate::lane_disk_deferral::refusal(e).is_some())
@@ -459,6 +467,49 @@ impl Attempt {
             _ => line,
         })
     }
+}
+
+/// What the newest attempt for a spec recorded about its admission.
+// trace:TASK-3826 | ai:claude
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct AdmissionRecord {
+    pub(crate) started: bool,
+    pub(crate) result: Option<Kind>,
+    pub(crate) reason_code: Option<String>,
+    pub(crate) detail: Option<String>,
+}
+
+/// The newest attempt created at or after `since` whose recorded spec
+/// `names_spec` accepts, for a caller that started a lane and watches
+/// whether the host admitted it. A receipt records whichever id the pickup
+/// resolved (the display id once routed, the launcher's argument before), so
+/// the caller decides identity with the resolver it uses everywhere else.
+/// Unreadable receipts are skipped: they belong to other attempts or are
+/// mid-write.
+// trace:TASK-3826 | ai:claude
+pub(crate) fn admission_since(
+    main: &Path,
+    since: chrono::DateTime<chrono::Utc>,
+    names_spec: &dyn Fn(&str) -> bool,
+) -> Option<AdmissionRecord> {
+    let dir = crate::main_worktree_root_from(main).join(".aida/lane-results");
+    std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            if path.extension()? != "json" {
+                return None;
+            }
+            serde_json::from_slice::<Receipt>(&std::fs::read(path).ok()?).ok()
+        })
+        .filter(|r| r.created_at >= since && names_spec(&r.spec))
+        .max_by_key(|r| r.created_at)
+        .map(|r| AdmissionRecord {
+            started: r.started,
+            result: r.result,
+            reason_code: r.reason_code,
+            detail: r.detail,
+        })
 }
 
 // Clone seats an early refusal may have left for this scope: those on the

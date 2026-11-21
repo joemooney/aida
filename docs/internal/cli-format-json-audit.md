@@ -837,6 +837,14 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida lane job` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job run` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida lane job wait` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane relay` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane relay-host` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane relay-host begin` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane relay-host probe` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane relay-host place-brief` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane relay-host launch` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane relay-host retract` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida lane relay-host admission` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida adoption` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida adoption status` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida adoption refresh` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |

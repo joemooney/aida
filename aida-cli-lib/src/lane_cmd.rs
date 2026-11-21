@@ -29,6 +29,9 @@ fn run_lane(matches: &clap::ArgMatches, _ctx: &crate::cmdkit::DispatchCtx) -> Re
     let args = <LaneArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     let job = match args.command {
         LaneCommand::Job(job) => job,
+        // trace:TASK-3826 | ai:claude
+        LaneCommand::Relay(relay) => return crate::lane_relay::run(&relay),
+        LaneCommand::RelayHost(op) => return crate::lane_relay::run_host(&op),
         LaneCommand::FastGateRelease { branch } => {
             let cwd = std::env::current_dir()?;
             let main = crate::main_worktree_root_from(&cwd);

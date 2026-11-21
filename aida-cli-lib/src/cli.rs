@@ -47,6 +47,8 @@ pub(crate) use crate::init_cmd::init_cmd_args::InitFootprint;
 pub(crate) use crate::integration_cmd::integration_cmd_args::IntegrationCommand;
 pub(crate) use crate::internal_cmd::internal_cmd_args::InternalCommand;
 pub(crate) use crate::lane_cmd::lane_cmd_args::{LaneCommand, LaneJobCommand};
+// trace:TASK-3826 | ai:claude
+pub(crate) use crate::lane_cmd::lane_cmd_args::{RelayArgs, RelayHostCommand};
 pub(crate) use crate::leases::leases_args::FasttrackCommand;
 pub(crate) use crate::lint_cmd::lint_cmd_args::{LintCommand, LintConstantsFailOn};
 pub(crate) use crate::load_cmd::load_cmd_args::LoadCommand;

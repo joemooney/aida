@@ -31895,6 +31895,7 @@ Usage: aida lane [OPTIONS] <COMMAND>
 Commands:
   fast-gate-release  Release a host fast-gate review hold without granting publication authority
   job                Hand cargo runs to the lane's launcher, outside the tool-call time limit
+  relay              Relay a brief to an implementer lane on a lane host, gated on the PR head
   help               Print this message or the help of the given subcommand(s)
 
 Options:
@@ -32022,6 +32023,328 @@ Options:
           Lines of output to print when the run ends
           
           [default: 120]
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay
+Relay a brief to an implementer lane on a lane host, gated on the PR head.
+
+Posts the brief on the spec as its authoritative round brief (earlier ones are marked superseded),
+waits until no lane for the spec runs on the host and the host has memory headroom, then delivers
+the brief and starts the lane. With `--pr` on an open change it starts a rework of that change, and
+only while the change is still open at the head seen at invocation; a merged or closed change starts
+fresh work instead. Anything that stops the launch is recorded on the spec and sent to the advisor.
+
+Usage: aida lane relay [OPTIONS] --brief <FILE> <SPEC>
+
+Arguments:
+  <SPEC>
+          The spec the lane works
+
+Options:
+      --pr <N>
+          The open change this brief reworks. Its head is recorded now and checked again just before
+          the launch
+
+      --brief <FILE>
+          The brief to relay
+
+      --vendor <VENDOR>
+          The agent that runs the lane, by its launch name. Defaults to `[lane_relay] vendor`, then
+          the project's default
+
+      --model <MODEL>
+          Model for this run. Defaults to the vendor's implementer model in project config; when
+          neither is set the lane host's own default applies
+
+      --host <HOST>
+          SSH alias of the lane host. Defaults to `host` in `~/.aida/lane-relay.toml`; without
+          either the lane starts on this machine
+
+      --host-dir <DIR>
+          The project checkout on the lane host, relative to its home directory or absolute.
+          Defaults to `host_dir` in `~/.aida/lane-relay.toml`, then this checkout's path relative to
+          the local home directory
+
+      --label <LABEL>
+          Round label in the brief's heading. Defaults to REWORK for an open change and FRESH
+          otherwise
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --wait-timeout <SECS>
+          Seconds to wait for a running lane to exit and for host memory headroom before giving up
+          
+          [default: 21600]
+
+      --admission-timeout <SECS>
+          Seconds to watch the started lane for its admission result
+          
+          [default: 2400]
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+      --poll <SECS>
+          Seconds between checks while waiting
+          
+          [default: 60]
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay-host
+The lane-host side of `aida lane relay`
+
+Usage: aida lane relay-host [OPTIONS] <COMMAND>
+
+Commands:
+  begin        Take the spec's next relay round; earlier relays for it then stop
+  probe        Whether the round is still the spec's newest, whether a lane for the spec is running,
+               and any memory shortfall
+  place-brief  Store a brief for the vendor and retire earlier pending ones
+  launch       Start the lane, detached, unless the round was superseded or a lane for the spec
+               already runs. With `--pr` and `--head` the launcher reworks that change and re-checks
+               its head once the host admits it; without them it starts fresh work only
+  retract      Withdraw a delivered brief no lane should run: the one named, or every pending brief
+               for the spec when the relay never learned the path. Does nothing once a later round
+               has taken over
+  admission    The admission result of the lane a launch started
+  help         Print this message or the help of the given subcommand(s)
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay-host begin
+Take the spec's next relay round; earlier relays for it then stop
+
+Usage: aida lane relay-host begin [OPTIONS] <SPEC>
+
+Arguments:
+  <SPEC>
+          
+
+Options:
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay-host probe
+Whether the round is still the spec's newest, whether a lane for the spec is running, and any memory
+shortfall
+
+Usage: aida lane relay-host probe [OPTIONS] --round <ROUND> <SPEC>
+
+Arguments:
+  <SPEC>
+          
+
+Options:
+      --round <ROUND>
+          
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay-host place-brief
+Store a brief for the vendor and retire earlier pending ones
+
+Usage: aida lane relay-host place-brief [OPTIONS] --round <ROUND> --vendor <VENDOR> --label <LABEL> --body-b64 <BODY_B64> <SPEC>
+
+Arguments:
+  <SPEC>
+          
+
+Options:
+      --round <ROUND>
+          
+
+      --vendor <VENDOR>
+          
+
+      --label <LABEL>
+          
+
+      --body-b64 <BODY_B64>
+          The brief body, base64
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay-host launch
+Start the lane, detached, unless the round was superseded or a lane for the spec already runs. With
+`--pr` and `--head` the launcher reworks that change and re-checks its head once the host admits it;
+without them it starts fresh work only
+
+Usage: aida lane relay-host launch [OPTIONS] --round <ROUND> --vendor <VENDOR> --brief <BRIEF> <SPEC>
+
+Arguments:
+  <SPEC>
+          
+
+Options:
+      --round <ROUND>
+          
+
+      --vendor <VENDOR>
+          
+
+      --branch <BRANCH>
+          
+
+      --pr <PR>
+          
+
+      --head <HEAD>
+          The head the change must still be at when the lane starts
+
+      --model <MODEL>
+          
+
+      --brief <BRIEF>
+          
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay-host retract
+Withdraw a delivered brief no lane should run: the one named, or every pending brief for the spec
+when the relay never learned the path. Does nothing once a later round has taken over
+
+Usage: aida lane relay-host retract [OPTIONS] --round <ROUND> --vendor <VENDOR> <SPEC>
+
+Arguments:
+  <SPEC>
+          
+
+Options:
+      --round <ROUND>
+          
+
+      --vendor <VENDOR>
+          
+
+      --brief <BRIEF>
+          
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida lane relay-host admission
+The admission result of the lane a launch started
+
+Usage: aida lane relay-host admission [OPTIONS] --launched-at <LAUNCHED_AT> --log <LOG> <SPEC>
+
+Arguments:
+  <SPEC>
+          
+
+Options:
+      --launched-at <LAUNCHED_AT>
+          RFC 3339 time the launch reported
+
+      --log <LOG>
+          The launch log the launch reported
 
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
@@ -53626,6 +53949,11 @@ Working on aida itself
         "help": "Parent comment ID (for replies)"
       },
       {
+        "name": "print-id",
+        "takes_value": false,
+        "help": "Also print `comment-id: <ID>`, the id the store gave the new comment, for a caller that edits it later"
+      },
+      {
         "name": "relayed-from",
         "takes_value": true,
         "help": "The seat whose claim this comment relays. Use it when recording another seat's measurement, finding or argument rather than something you verified; it is stored with the comment and shown as \"via <author>, originally <seat>\""
@@ -65253,6 +65581,355 @@ Working on aida itself
       }
     ],
     "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay"
+    ],
+    "about": "Relay a brief to an implementer lane on a lane host, gated on the PR head",
+    "flags": [
+      {
+        "name": "admission-timeout",
+        "takes_value": true,
+        "help": "Seconds to watch the started lane for its admission result"
+      },
+      {
+        "name": "brief",
+        "takes_value": true,
+        "help": "The brief to relay"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "host",
+        "takes_value": true,
+        "help": "SSH alias of the lane host. Defaults to `host` in `~/.aida/lane-relay.toml`; without either the lane starts on this machine"
+      },
+      {
+        "name": "host-dir",
+        "takes_value": true,
+        "help": "The project checkout on the lane host, relative to its home directory or absolute. Defaults to `host_dir` in `~/.aida/lane-relay.toml`, then this checkout's path relative to the local home directory"
+      },
+      {
+        "name": "label",
+        "takes_value": true,
+        "help": "Round label in the brief's heading. Defaults to REWORK for an open change and FRESH otherwise"
+      },
+      {
+        "name": "model",
+        "takes_value": true,
+        "help": "Model for this run. Defaults to the vendor's implementer model in project config; when neither is set the lane host's own default applies"
+      },
+      {
+        "name": "poll",
+        "takes_value": true,
+        "help": "Seconds between checks while waiting"
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": "The open change this brief reworks. Its head is recorded now and checked again just before the launch"
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": "The agent that runs the lane, by its launch name. Defaults to `[lane_relay] vendor`, then the project's default"
+      },
+      {
+        "name": "wait-timeout",
+        "takes_value": true,
+        "help": "Seconds to wait for a running lane to exit and for host memory headroom before giving up"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay-host"
+    ],
+    "about": "The lane-host side of `aida lane relay`",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay-host",
+      "begin"
+    ],
+    "about": "Take the spec's next relay round; earlier relays for it then stop",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay-host",
+      "probe"
+    ],
+    "about": "Whether the round is still the spec's newest, whether a lane for the spec is running, and any memory shortfall",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "round",
+        "takes_value": true,
+        "help": ""
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay-host",
+      "place-brief"
+    ],
+    "about": "Store a brief for the vendor and retire earlier pending ones",
+    "flags": [
+      {
+        "name": "body-b64",
+        "takes_value": true,
+        "help": "The brief body, base64"
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "label",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "round",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": ""
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay-host",
+      "launch"
+    ],
+    "about": "Start the lane, detached, unless the round was superseded or a lane for the spec already runs. With `--pr` and `--head` the launcher reworks that change and re-checks its head once the host admits it; without them it starts fresh work only",
+    "flags": [
+      {
+        "name": "branch",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "brief",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "head",
+        "takes_value": true,
+        "help": "The head the change must still be at when the lane starts"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "model",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "pr",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "round",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": ""
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay-host",
+      "retract"
+    ],
+    "about": "Withdraw a delivered brief no lane should run: the one named, or every pending brief for the spec when the relay never learned the path. Does nothing once a later round has taken over",
+    "flags": [
+      {
+        "name": "brief",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "round",
+        "takes_value": true,
+        "help": ""
+      },
+      {
+        "name": "vendor",
+        "takes_value": true,
+        "help": ""
+      }
+    ],
+    "hidden": true
+  },
+  {
+    "path": [
+      "aida",
+      "lane",
+      "relay-host",
+      "admission"
+    ],
+    "about": "The admission result of the lane a launch started",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "launched-at",
+        "takes_value": true,
+        "help": "RFC 3339 time the launch reported"
+      },
+      {
+        "name": "log",
+        "takes_value": true,
+        "help": "The launch log the launch reported"
+      }
+    ],
+    "hidden": true
   },
   {
     "path": [

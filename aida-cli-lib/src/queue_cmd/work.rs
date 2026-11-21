@@ -4916,6 +4916,14 @@ pub(crate) fn handle_queue_work(
         };
         let selected_change = rework_change.as_ref().map(|(key, _)| key.as_key());
         let rework_pr = rework_change.map(|(key, branch)| (key.number, branch));
+        // A relayed launch says what it is for: fresh work never continues an
+        // open change, and a rework continues only the change it names.
+        // trace:TASK-3826 | ai:claude
+        let relayed_fresh = crate::lane_relay::route_launch(
+            rework_pr
+                .as_ref()
+                .map(|(pr, branch)| (*pr, branch.as_str())),
+        )?;
         // Record the inferred rework branch before the waiting gate can refuse,
         // so a refusal still names a dirty clone kept on that branch.
         // trace:BUG-2607 | ai:claude
@@ -4958,7 +4966,9 @@ pub(crate) fn handle_queue_work(
                 && role == "implementer"
                 && branch_override.is_none()
                 && rework_branch_override.is_none()
-                && adopt_orphan.is_none(),
+                && adopt_orphan.is_none()
+                // Relayed fresh work starts a new branch. trace:TASK-3826 | ai:claude
+                && !relayed_fresh,
         )?;
         if let Some(branch) = &canonical_resume {
             eprintln!(

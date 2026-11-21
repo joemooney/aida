@@ -165,6 +165,9 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     // The operator's reasoned host-limit override for one launch command;
     // a vendor child must never inherit it. trace:BUG-2682 | ai:claude
     "AIDA_OVER_HOST_LIMIT",
+    // The relay's head gate for the one launch it started; the launcher
+    // strips it from the vendor child. trace:TASK-3826 | ai:claude
+    "AIDA_LANE_RELAY_GATE",
     "AIDA_AGENT_CMD",
     "AIDA_ADD_NO_REMOTE_SYNC",
     "AIDA_ADVISOR_HANDSHAKE",

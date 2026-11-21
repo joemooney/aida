@@ -41,9 +41,24 @@ pub(crate) fn is_brief_comment(content: &str) -> bool {
     if first == "advisor" || first.starts_with("advisor ") || first.starts_with("advisor:") {
         return !crate::queue_cmd::is_ruling_comment(content);
     }
+    // The heading `aida lane relay` writes: `AUTHORITATIVE <label> BRIEF (…)`.
+    // An earlier one it marked `SUPERSEDED …` no longer leads with it.
+    // trace:TASK-3826 | ai:claude
+    if is_relayed_brief_lead(&first) {
+        return true;
+    }
     ["advisor brief", "advisor rework brief", "rework brief"]
         .iter()
         .any(|p| first.starts_with(p))
+}
+
+/// Whether a lowercased lead line is a relayed round brief's heading.
+// trace:TASK-3826 | ai:claude
+pub(crate) fn is_relayed_brief_lead(first: &str) -> bool {
+    first
+        .strip_prefix("authoritative ")
+        .and_then(|rest| rest.split_once('('))
+        .is_some_and(|(head, _)| head.trim_end().ends_with(" brief") || head.trim() == "brief")
 }
 
 /// Every comment on the spec, replies included.
