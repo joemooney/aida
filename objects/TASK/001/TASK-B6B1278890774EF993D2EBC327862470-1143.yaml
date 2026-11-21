@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: d0d953c3461a95653bc8dc20f6cb44f9abf978cf
 
   Yielded settlement snapshots keys before prune acquires admission.lock and reloads state. Another watcher already in a pass can reserve a new change between those reads. prune treats that new key as closed and can discard the unclaimed local reservation before dispatch. Reconcile lost dispatchers under the lock without filtering on an older key set.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T19:56:43.805248433Z
-modified_at: 2026-11-20T19:56:43.805248433Z
+modified_at: 2026-11-21T07:05:23.473275944Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -29,6 +29,14 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fcec-8d11-7251-ad62-8e03d135d215
+  author: joe
+  timestamp: 2026-11-21T07:05:23.473263081Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
+implementation_summary: Verified on origin/main aa567732958 (#4363). Yielded settlement reconciles current state without passing a stale key set to prune. The bug2703_yielded_settlement_never_discards_an_unclaimed_reservation regression interleaves a new reservation, verifies it survives settlement, and proves the old snapshot would discard it.
 filed_at:
   code_sha: d0d953c3461a95653bc8dc20f6cb44f9abf978cf
   branch: pr-4363
@@ -37,3 +45,6 @@ filed_at:
   aida_build_sha: 012b95ef890
   vendor: claude
   session: 01a1fa85c395
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T07:05:11.002154140Z
