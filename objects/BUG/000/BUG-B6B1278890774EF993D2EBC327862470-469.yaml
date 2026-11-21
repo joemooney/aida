@@ -10,12 +10,12 @@ description: |
   (b) the skill tells reviewers that any finding means request-changes, and the draft validator rejects the contradiction BEFORE the reviewer exits (an in-session error that it can fix), not at launcher collection.
 
   Acceptance: AC1 one documented contract in the skill template plus the gate; AC2 a reviewer draft that violates it is refused while the reviewer is still running (validation at draft write), with a message telling it what to change; AC3 regression covering an approved draft with p3 and style findings, under the chosen contract.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T00:57:38.920757633Z
+modified_at: 2026-11-21T01:09:13.083067574Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -226,6 +226,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a1fba6-76fb-7423-89ab-3cf11a65becd
+  author: aida-orchestrator
+  timestamp: 2026-11-21T01:09:13.083085668Z
+  session_id: 01a1fba32445
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
@@ -236,3 +244,11 @@ filed_at:
   vendor: claude
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2707: request changes. AC1 met for the documented unresolved-finding rule. AC2 partial: ordinary submission gives immediate corrective diagnostics, but parent collection accepts unvalidated handoffs and can record a superseded approval. AC3 met for the p3/style regression. BUG-2707 (bug protocol): met — two standalone reviewer test files changed. The required fast-gates job failed the test portability ratchet. Reviewed the full pinned landing diff using source and existing CI evidence.'
+  recovery_hint: address the review findings, move BUG-2707 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-21T01:09:13.083067574Z
