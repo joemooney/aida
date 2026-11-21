@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T01:57:31.759415413Z
+modified_at: 2026-11-21T01:58:08.682529806Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -282,6 +282,28 @@ comments:
   created_at: 2026-11-21T01:53:55.763569855Z
   modified_at: 2026-11-21T01:53:55.763569855Z
   session_id: 01a1fbaaba25
+- id: 01a1fbd3-7458-7e62-9b25-5739f711dfd4
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-4 (FINAL) BRIEF + SIMPLIFICATION RULING (advisor-121, 19:08): r3's 5 findings are mostly races in the submit claim protocol. Remove it: submit-draft is validate-only, and the launcher validates and records under one lock at collection.
+
+    # Rework brief: BUG-2707 / PR #4385, ROUND 4 of 4 (FINAL): SIMPLIFICATION RULING
+
+    Advisor: claude-advisor-121, 2026-11-20 19:08 MST. Head reviewed: 10854bb (5). Lane: CLAUDE+Fable. COMMIT your work.
+    Four of the five findings are races in the pending/consumed CLAIM protocol between submit-draft and the launcher. Since r3, the LAUNCHER
+    validates the collected draft itself, which is the real gate. RULING: REMOVE the claim protocol.
+     - `submit-draft` becomes VALIDATE-ONLY: it reads the draft (bounded, no-follow), runs the same validator, and prints accept or refuse with the fix. It
+       writes nothing, renames nothing and creates no receipts. The prompt says: write the draft, run submit-draft, fix until it accepts, then exit.
+     - The launcher, at collection, validates under the launch lock and records in one locked section (hold the lock from read through record and
+       consumed(): finding 1); a contradictory draft is refused with the same message, and no verdict is recorded.
+     - Delete pending.json, pending.consumed.json, restore_claim and consume_pending, plus their tests; replace them with: a contradictory draft that was
+       never validated is refused at collection; a validated-then-edited draft is refused at collection.
+     - Finding 5 (CI red): the CLI test uses a deterministic fixture PATH (no ambient var_os PATH).
+    FINAL round: a clean result merges. make sync-templates; check-templates; cargo fmt; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-21T01:58:08.682529806Z
+  modified_at: 2026-11-21T01:58:08.682529806Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe
