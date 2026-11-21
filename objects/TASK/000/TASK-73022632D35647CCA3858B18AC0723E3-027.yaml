@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-21T00:04:51.810704241Z
+modified_at: 2026-11-21T00:22:02.821639443Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -414,6 +414,48 @@ comments:
   created_at: 2026-11-21T00:04:51.810698942Z
   modified_at: 2026-11-21T00:04:51.810698942Z
   session_id: 01a1fb516582
+- id: 01a1fb7b-77b4-7f02-87e9-453c2216db3d
+  author: joe
+  content: |-
+    Product 17:24: AC3 PRIMARY-HOST EVIDENCE at origin/main 29e77b8 (#4365 landed). FAIL, deterministic.
+
+    Command (detached worktree ~/ai/aida-worktrees/task3133-evidence, primary host imac; AIDA_CARGO_FORCE_BUILD=1 because the wrapper otherwise skips an unmodified main checkout, see BUG-2708):
+    `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`
+
+    Results, 3 consecutive runs: identical, 362 passed / 19 failed / 3 ignored each (313s, 199s, 259s). The same 19 names fail every time, so nothing is flaky; it is all one class.
+
+    Failing (18 in seat_clone::bwrap_tests::linux, plus 1 publish test):
+    - seat_clone::bwrap_tests::linux::a_clone_is_recorded_only_for_its_own_launchers_main
+    - seat_clone::bwrap_tests::linux::a_clone_launched_from_inside_itself_keeps_its_boundary
+    - seat_clone::bwrap_tests::linux::agent_new_scopes_the_contained_boundary_to_the_seat_tree
+    - seat_clone::bwrap_tests::linux::a_host_recorded_clone_keeps_its_own_git_writable_and_main_git_denied
+    - seat_clone::bwrap_tests::linux::bug_2169_bwrap_a_genuine_main_lease_naming_another_cargo_target_dir_grants_nothing
+    - seat_clone::bwrap_tests::linux::bug_2169_bwrap_clone_seat_cargo_build_uses_its_own_target_dir
+    - seat_clone::bwrap_tests::linux::bug_2169_bwrap_only_the_host_lease_makes_a_host_recorded_clone
+    - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t1_rename_aside
+    - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t2_host_detach
+    - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t3_clone_seat_commits_fetches_merges_and_pushes
+    - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t4_objects_and_alternates
+    - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t5_origin_head_and_tags
+    - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t8_main_config_and_hooks
+    - seat_clone::bwrap_tests::linux::task_2032_every_queue_work_launch_arm_keeps_the_clone_boundary
+    - seat_clone::bwrap_tests::linux::task_2712_agent_new_rescopes_the_codex_write_set_to_the_seat
+    - seat_clone::bwrap_tests::linux::task_2712_headless_reviewer_argv_carries_the_gate_ledger
+    - seat_clone::bwrap_tests::linux::task_2712_native_codex_clone_gets_the_claude_write_set_and_no_git
+    - seat_clone::bwrap_tests::linux::task_2712_native_codex_implementer_gets_no_gate_ledger
+    - seat_clone::seat_publish_tests::bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize
+
+    Root cause (dominant, rs:329 and siblings in aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs):
+    `contained launch refused: <fixture>/seats/aida-seat-aida-task-2169 has a .git directory or symlink that resolves to <fixture>/aida, and it is not a seat clone the host recorded for that checkout`
+
+    Reading: the fixture builds its own main plus seat clone, but crate::seat_clone::launcher_main() (used in settings_for and the launch path) resolves from the REAL process/test-binary location. On the primary host the test binary lives under /home/joe/ai/aida/target/worktrees/<wt>/agent, i.e. inside the real primary checkout, so the 'recorded clone' check consults the real main's records rather than the fixture's. On dell1 lane seats the binary is not under a primary checkout, which plausibly explains host-specific results. The fix direction is to make launcher_main() injectable or env-overridable in the bwrap fixtures (AIDA_LAUNCHER_MAIN-style), pinned to the fixture main.
+    Separate: bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize panics at bug_home_038_seat_publish_tests.rs:4487 with 'handshake refusal child failed: exit status: 2' (child exits 2; probably the same launcher-main resolution, unconfirmed).
+
+    The dell1 lane-job (contained) evidence run is in flight on an evidence-only lane; its counts will follow as a separate comment.
+  created_at: 2026-11-21T00:22:02.821639443Z
+  modified_at: 2026-11-21T00:22:02.821639443Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
