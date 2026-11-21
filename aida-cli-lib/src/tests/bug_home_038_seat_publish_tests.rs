@@ -4477,7 +4477,7 @@ fn bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize() {
         "bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize",
         "bug_2488_seat_handshake_refusals_child",
     );
-    let mut child = std::process::Command::new(crate::resolve_aida_exe())
+    let mut child = std::process::Command::new(crate::aida_bin::current_executable_path().unwrap())
         .args(["--exact", &name, "--ignored", "--nocapture"])
         .spawn()
         .unwrap();

@@ -69,28 +69,19 @@ mod linux {
         ok
     }
 
-    /// Use the workspace's ignored target when it is outside a seat.
-    /// Lane jobs use a temporary fixture and restore its visibility in bwrap.
+    // A linked checkout's target may resolve under the primary checkout's
+    // target/worktrees. A main created there cannot anchor a recorded clone.
+    // Keep the fixture outside both Cargo's target and a seat-owned TMPDIR.
+    // trace:TASK-3133 | ai:codex
     fn fixture_tempdir() -> tempfile::TempDir {
-        let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
-        // A repository nested inside a seat remains part of that seat for
-        // clone detection. Use TMPDIR there, never the operator's host main.
-        // trace:TASK-2032 | ai:codex
-        let base = Some(workspace.join("target"))
-            .filter(|p| {
-                !p.starts_with("/tmp") && !aida_core::seat_clone_detect::is_named_or_marked_clone(p)
-            })
-            .unwrap_or_else(std::env::temp_dir)
-            .join("bug-2169-bwrap");
-        std::fs::create_dir_all(&base).unwrap();
         tempfile::Builder::new()
-            .prefix("fx-")
-            .tempdir_in(base)
+            .prefix("bug-2169-bwrap-")
+            .tempdir_in("/tmp")
             .unwrap()
     }
 
     /// Give the fixture its own store and stop every store walk-up at the
-    /// fixture root. The fixture lives under the workspace's `target/`, so a
+    /// fixture root. When fixtures lived under the workspace's `target/`, a
     /// walk from a config naming no store (the seat configs below) used to
     /// climb to this checkout's `.aida/config.toml` and resolve the
     /// operator's real store, where the seat grants then wrote the hermetic
@@ -518,6 +509,38 @@ mod linux {
     }
 
     // ───────────────────────── host trust and settings (no sandbox) ─────────────
+
+    // Exercise the primary-host layout with a real libtest executable under
+    // another checkout. Its cargo target is also an unsuitable temp root.
+    // trace:TASK-3133 | ai:codex
+    #[test]
+    fn recorded_clone_fixture_is_independent_of_the_test_binary_checkout() {
+        let host = tempfile::tempdir_in("/tmp").unwrap();
+        git_ok(host.path(), &["init", "-q"]);
+        let profile = host.path().join("target/worktrees/evidence/agent/deps");
+        std::fs::create_dir_all(&profile).unwrap();
+        let running = crate::aida_bin::current_executable_path().unwrap();
+        let binary = profile.join(running.file_name().unwrap());
+        if std::fs::hard_link(&running, &binary).is_err() {
+            std::fs::copy(&running, &binary).unwrap();
+        }
+        let case = concat!(
+            "seat_clone::bwrap_tests::linux::",
+            "a_host_recorded_clone_keeps_its_own_git_writable_and_main_git_denied"
+        );
+        let output = Command::new(binary)
+            .current_dir(host.path())
+            .env("TMPDIR", &profile)
+            .args(["--exact", case])
+            .output()
+            .unwrap();
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(
+            output.status.success() && stdout.contains("1 passed"),
+            "{stdout}{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 
     /// TASK-2032: the anchor is the launcher's main, not every main this
     /// process ever resolved. A clone of a main the process has noted is not
