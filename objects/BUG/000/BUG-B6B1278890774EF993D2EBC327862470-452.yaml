@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-20T15:18:51.576268153Z
+modified_at: 2026-11-21T00:32:34.730076186Z
 req_type: Bug
 tags:
 - conflicts
@@ -747,6 +747,32 @@ comments:
   content: 'advisor-121 2026-11-20 08:24: related rework-routing defect. TASK-3786''s lanes twice ran as reworks of its finished #4309 review: once on the spec''s canonical (merged) branch, and once even on a fresh --branch, because queue work hands the lane the spec''s stored ''authoritative round-2 task'' (a resolved #4309 finding) and treats the newer advisor brief as older context. Both lanes punted no-change. Workaround: completed TASK-3786 and moved the remaining scope to TASK-3822. Fix direction: a stored rework round should only drive a lane while its PR is open; once the PR is merged or closed, the next pickup is fresh work with the newest brief.'
   created_at: 2026-11-20T15:18:51.576268153Z
   modified_at: 2026-11-20T15:18:51.576268153Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb85-2a11-7061-b09a-353b0df66adc
+  author: joe
+  content: |-
+    ADVISOR RULING (advisor-121, 17:45): #4306 CLOSED (round-4 cap since 11-19, open P1, conflicting). BUG-2688 relaunches FRESH with today's repro loop as its core (3 hand edits of dell1's repair journal: 12:33, 14:09 and the 13:44 refusal). Brief:
+
+    # FRESH brief: BUG-2688 (conflict-repair reservations block retries) — supersedes #4306
+
+    Advisor: claude-advisor-121, 2026-11-20 17:45 MST. Lane: CLAUDE+Fable, FRESH branch from origin/main (never resume #4306's bug-2688-redesign). STRICT.
+    #4306 is closed: parked at the round-4 cap since 11-19 with an open P1, and now conflicting. Today's evidence (3 advisor hand edits of dell1
+    .aida/repair-journal.json, setting spawn=proven_dead under flock) defines the core:
+     REPRO LOOP (2026-11-20, #4365 TASK-3133): (1) a codex conflict lane punts and leaves a reservation with spawn=unknown; (2) a hand edit marks it proven_dead;
+     (3) a Claude reconcile is REFUSED on the route ('run the repair as a contained Codex lane') but FIRST re-reserves the same key with a new spawn=unknown;
+     (4) the next codex attempt is refused: 'retained conflicts require their host journal evidence before a resume'.
+    Acceptance:
+     AC1 route and eligibility refusals happen BEFORE any repair-journal reservation.
+     AC2 a repair attempt that fails or is refused before spawning a worker records spawn=proven_dead for its own reservation (or never reserves).
+     AC3 a reservation whose lane is provably gone (no lease, no live lane-run, tree gone) is healable by `aida doctor heal` (journal lock, backup),
+         with no hand edit needed.
+     AC4 (the old #4306 core, keep only if small) --fresh moves a retained seat aside ONLY after the live worktree-holder scan that session_end uses
+         (the round-4 P1); otherwise defer it to a follow-up.
+     Regressions for AC1-AC3 reproducing the loop above.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-21T00:32:34.730076186Z
+  modified_at: 2026-11-21T00:32:34.730076186Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
