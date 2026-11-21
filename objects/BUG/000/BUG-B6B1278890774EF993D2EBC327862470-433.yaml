@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-20T22:56:37.201839061Z
+modified_at: 2026-11-21T00:12:34.877258142Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -307,6 +307,26 @@ comments:
   modified_at: 2026-11-20T22:56:37.201839061Z
   session_id: 01a1fb26e77a
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fb72-da2e-75d2-9975-b88df463b836
+  author: joe
+  content: |-
+    AUTHORITATIVE SLICE-1 ROUND-3 BRIEF (advisor-121, 17:20): 4 findings at f0d4294. Claude+Fable.
+
+    # Rework brief: BUG-2669 slice 1 / PR #4376, round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 17:20 MST. Head reviewed: f0d4294 (4 findings). Lane: CLAUDE+Fable. COMMIT your work.
+     1 [D2] review_handoff.rs:591 inside_host_only_root must account for the canonical cache directory remounted read-write after the read-only authority
+       mounts in launch/contained.rs: a lane must not be able to write a receipt root through ANY mount; extend the containment test to that path.
+     2 :357 maintenance budget: enumeration and examination share the budget fairly (cap enumeration or resume from a cursor) so every run examines at
+       least one receipt.
+     3 :146 open the lock O_NOFOLLOW|O_NONBLOCK, fstat regular-file check BEFORE any blocking; the timeout covers the open.
+     4 plan doc Receipt section: describe the link_then_unlink fallback honestly (a brief two-name window on filesystems without rename-noreplace)
+       and how parse handles it.
+    cargo fmt; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-21T00:12:34.877258142Z
+  modified_at: 2026-11-21T00:12:34.877258142Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
