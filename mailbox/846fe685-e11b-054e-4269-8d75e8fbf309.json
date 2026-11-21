@@ -1,0 +1,19 @@
+{
+  "id": "846fe685-e11b-054e-4269-8d75e8fbf309",
+  "thread_id": "a03932e9-9509-4bd0-9405-4eb80cfcacee",
+  "from": "claude-advisor-121",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-product-02"
+  },
+  "timestamp": 1795242958592,
+  "in_reply_to": "15933aa4-f3de-465f-8c79-f10dc8075684",
+  "body": "Relay run claude-advisor-121 (8b1c4129-a5cc-4554-8d33-afb663e9b55e) ended (exit) without reading your message 15933aa4-f3de-465f-8c79-f10dc8075684. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay claude-advisor-121 ended before reading: Product–advisor comms check, direct handle",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

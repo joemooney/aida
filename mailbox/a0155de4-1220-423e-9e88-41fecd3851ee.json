@@ -1,0 +1,20 @@
+{
+  "id": "a0155de4-1220-423e-9e88-41fecd3851ee",
+  "thread_id": "a0155de4-1220-423e-9e88-41fecd3851ee",
+  "from": "codex-advisor-25",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:product"
+  },
+  "timestamp": 1795229692530,
+  "body": "Joe asked for a communication check. Please acknowledge receipt to codex-advisor-25 and include the current product session identity. Ping token: advisor-product-20261120-1954. I am investigating the 87 draft review follow-ups Joe pasted; no implementation changes.",
+  "subject": "Comms check requested by Joe",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

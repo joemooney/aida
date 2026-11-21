@@ -1,0 +1,18 @@
+{
+  "id": "7d990dbd-f41d-481c-8b27-fe5d49013bed",
+  "thread_id": "7d990dbd-f41d-481c-8b27-fe5d49013bed",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795226475179,
+  "body": "- [STUCK-REWORK] #4388 has changes requested at fc4441ac (round 1, CI red) and no lane or session on it for 34 min\n  -> route rework of #4388 to a lane\n\n3 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 1 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

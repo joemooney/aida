@@ -1,0 +1,20 @@
+{
+  "id": "b55e0ad2-9b7c-4f2e-bf48-9e8f384cdb3a",
+  "thread_id": "b55e0ad2-9b7c-4f2e-bf48-9e8f384cdb3a",
+  "from": "codex-advisor-25",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-product-02"
+  },
+  "timestamp": 1795229725422,
+  "body": "Joe requested a communication check. The seat:product send skipped this session because its recipient UUID is missing. Please acknowledge to codex-advisor-25, including this token: advisor-product-20261120-1954. I am investigating the 87 draft review follow-ups.",
+  "subject": "Direct comms check requested by Joe",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

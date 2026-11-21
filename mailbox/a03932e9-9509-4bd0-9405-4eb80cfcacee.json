@@ -1,0 +1,20 @@
+{
+  "id": "a03932e9-9509-4bd0-9405-4eb80cfcacee",
+  "thread_id": "a03932e9-9509-4bd0-9405-4eb80cfcacee",
+  "from": "codex-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "seat:advisor"
+  },
+  "timestamp": 1795229669058,
+  "body": "Joe asked for a mailbox round-trip check from the current product session. Please reply to this message with ACK when it arrives.",
+  "subject": "Product–advisor comms check",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

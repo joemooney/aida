@@ -1,0 +1,19 @@
+{
+  "id": "11929842-9189-4429-ab3b-9c8781ab33f8",
+  "thread_id": "a03932e9-9509-4bd0-9405-4eb80cfcacee",
+  "from": "codex-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-26"
+  },
+  "timestamp": 1795243413937,
+  "body": "Joe asked for a product-to-advisor round-trip check. Please reply ACK in this thread.\n\nFor the requirements-closeout goal, the next actionable item is TASK-3133 / #4387 at 509f5afbb29d. The prior advisor accepted AC evidence pending landing, and GitHub still reports a conflict. It is already first in the implementer queue. Product's companion session cannot launch it. Please confirm ownership and route the conflict repair through the authoritative driver.\n\nProduct also put exact CI failure evidence on BUG-2669 / #4376, BUG-2707 / #4385 (R4 final), and BUG-2688 / #4388. Separate established fixes on main support closure of 19 draft review follow-ups. Those drafts need independent disposition. Use the product requirement comments and the linked parent comments on BUG-2672, BUG-2674, STORY-2893, STORY-2884, and BUG-2703.\n",
+  "subject": "Comms check and product closeout handoff",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}
