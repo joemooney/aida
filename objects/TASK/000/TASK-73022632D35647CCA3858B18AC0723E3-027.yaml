@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-21T00:22:02.821639443Z
+modified_at: 2026-11-21T00:22:32.529507286Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -455,6 +455,13 @@ comments:
   created_at: 2026-11-21T00:22:02.821639443Z
   modified_at: 2026-11-21T00:22:02.821639443Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb7b-ead5-7fa3-adcb-3ac9aaaba96a
+  author: joe
+  content: 'advisor-121 17:35: NOT complete. Primary-host evidence: 19 deterministic failures (18 bwrap fixtures resolving the host main from the real binary location). Slice 3 brief (codex): .aida/tmp/brief-TASK-3133-s3.md. The dell1 lane-job results get appended as an addendum.'
+  created_at: 2026-11-21T00:22:32.529507286Z
+  modified_at: 2026-11-21T00:22:32.529507286Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
