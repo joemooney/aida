@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-21T08:43:41.205881950Z
+modified_at: 2026-11-21T08:44:08.612273926Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -882,6 +882,11 @@ comments:
   created_at: 2026-11-21T00:58:55.716316106Z
   modified_at: 2026-11-21T00:58:55.716316106Z
   session_id: 01a1fb68d643
+- id: 01a1fd46-f58d-7ab2-84a6-1520d84ff6e5
+  author: joe
+  content: 'Requeue the previously authorized round-5 rework for PR #4380. At current head 367c23a7723a the round-4 Changes Requested verdict is still exact; the later Done event cites that identical commit. The signed round-5 scope is one per-invocation discovery cache, bounded ledger consumption, and the real queue work lock-contention regression. BUG-2706 remains blocked on this fix. Preserve the independent review and CI gates.'
+  created_at: 2026-11-21T08:44:08.461338101Z
+  modified_at: 2026-11-21T08:44:08.461338101Z
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
