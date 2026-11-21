@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T01:09:13.083067574Z
+modified_at: 2026-11-21T01:09:37.730749038Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -164,6 +164,28 @@ comments:
   created_at: 2026-11-21T00:57:38.920753238Z
   modified_at: 2026-11-21T00:57:38.920753238Z
   session_id: 01a1fb814444
+- id: 01a1fba7-15a0-76a1-b292-16fee82f95f6
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-3 BRIEF (advisor-121, 18:15): 4 findings at 1f53ccd; core: the acceptance must be host-owned, not reviewer-writable. Claude+Fable.
+
+    # Rework brief: BUG-2707 / PR #4385, round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 18:15 MST. Head reviewed: 1f53ccd (4). Lane: CLAUDE+Fable. COMMIT your work.
+     1 [AC2 core] the submission acknowledgement must not be reviewer-writable. The submit command (run by the reviewer) asks the HOST-side launcher to
+       validate and record acceptance in a host-owned location (outside the review worktree and the sandbox; the same trust root as BUG-2669's
+       receipts in the user's AIDA home); LaunchDraft::read accepts only a draft whose digest matches that host-owned acceptance. If a host-side
+       channel is not available in the current architecture, the LAUNCHER re-validates the draft itself at collection and refuses contradictions (validation
+       at collection is the fallback; the in-session submit stays a fast-feedback helper). Fix the fixture so it goes through the real path.
+     2 a refused resubmission after an accepted one invalidates the prior acceptance (a newer pending draft wins; read refuses until it is accepted).
+     3 concurrent submissions: a unique temp name (create_new), atomic rename of draft plus acceptance as one unit, and pending.json removed only if it is
+       still the one this submission consumed.
+     4 CI red: Unix cfg guard on the two /bin/sh calls in the test (portability ratchet).
+    cargo fmt; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-21T01:09:37.730749038Z
+  modified_at: 2026-11-21T01:09:37.730749038Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe
