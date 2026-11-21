@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-21T00:52:26.716769963Z
+modified_at: 2026-11-21T00:52:42.673278366Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -816,6 +816,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2629 passes the slow-phase progress and early track-refusal criteria by source inspection. The end-to-end scan still performs quadratic work on healthy and recovery paths, and incomplete review evidence can admit an implementer pickup. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-21T00:52:26.716760459Z
   modified_at: 2026-11-21T00:52:26.716760459Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb97-5993-7a30-b5a6-3b5707212ed0
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2629):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 367c23a7723a
+    Recorded: 2026-11-21T00:50:56.160552086+00:00
+    Findings:
+    1. aida-cli-lib/src/queue_cmd/work.rs:3328 — BUG-2629 AC3 still fails for N fingerprinted changes bound to one spec. reconcile_waiting_verdicts calls current_verdict for each review key. Each local change projection opens another discovery, and Inventory::current lists all N bindings and stats all N folded ledgers on each open. active_verdicts_for repeats this when no open change answers. The outer DiscoveryScope saves payload reads but leaves quadratic filesystem work. The scaling test bounds whole.bytes and whole.opened while checking directory entries only for the initial binding pass. Reuse a checked batch projection through reconciliation and selection, refreshing after a write, and bound whole-resolution directory entries and stat work.
+    2. aida-cli-lib/src/queue_cmd/rework_bindings.rs:926 — When queue work supplies a selected change, discover skips the spec inventory. If ownership filtering that selected change fails, recover builds the spec-label view from the selected ledger and the unbound file alone. A newer WAITING review recorded for the spec on a sibling change is invisible. For example, give the selected change an older fingerprinted approval, a sibling a newer phase-3 wait, and another bound sibling a malformed ledger. Recovery can return Unavailable, which refuse_waiting_pickup admits. Recover the full label view, or refuse pickup when its completeness cannot be established. Cover this through selected-change pickup.
+    3. aida-cli-lib/src/queue_cmd/rework_bindings.rs:770 — Ownership::events uses store::read_file, which returns an empty vector for unreadable or non-UTF-8 input and drops malformed lines. With no surviving fingerprint, needs_witnesses is false and the method reports success. For a certified, indexed change whose only WAITING round is in a ledger with invalid UTF-8, no recovery or named refusal is triggered. The ordinary projection also loses the wait, and implementer admission proceeds. Use an error-preserving, bounded read for inventoried ledgers before the witness fast path, and cover a sole unreadable bound change without another ledger to trigger recovery.
+    4. aida-cli-lib/src/queue_cmd/rework_bindings.rs:454 — Recovery also has quadratic per-spec rescans. For N distinct reviews present in both a change ledger and the unbound ledger, each unbound event scans the bound vector with any and potentially retain, comparing full JSON records. All input can fit the byte and parse budgets while those comparisons grow as N squared. Index the duplicate records once, preserving the ownership-free preference and event order, and add a scaling assertion for this mirrored-history case.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-21T00:52:42.515675785Z
+  modified_at: 2026-11-21T00:52:42.515675785Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
