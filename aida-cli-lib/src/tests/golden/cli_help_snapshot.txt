@@ -22272,7 +22272,7 @@ Commands:
   list            List recorded review verdicts
   classes         Count review findings per defect class across every recorded verdict, including
                   archived rounds. Alias of `aida findings classes`
-  check-draft     Check a standalone reviewer's draft verdict before the reviewer exits
+  submit-draft    Submit a standalone reviewer's draft verdict (the reviewer runs this)
   normalize-shas  One-time repair: expand every abbreviated `reviewed_sha` on disk to its full
                   commit sha where this repo can still resolve it, and mark the rest explicitly
                   unresolvable. Never invents a value and never touches an already-full or sha-less
@@ -22914,28 +22914,24 @@ Options:
 
   -h, --help
           Print help (see a summary with '-h')
-===== aida review check-draft
-Check a standalone reviewer's draft verdict before the reviewer exits.
+===== aida review submit-draft
+Submit a standalone reviewer's draft verdict (the reviewer runs this).
 
-Run it on the draft file the launch prompt named, after every write. It applies the checks the
-launcher and the recorder apply later: the closed draft format, and the rule that any unresolved
+The launch prompt names a launch directory. Write the draft JSON to `pending.json` inside it, then
+run this on the directory. It applies the checks the launcher and the recorder apply later, under
+the launching project's review policy: the closed draft format, and the rule that any unresolved
 finding means request-changes. An `approved` draft may carry only findings the recorder files as
-deferred follow-ups. A refusal says what to change; rewrite the draft and run the check again until
-it passes. Reads only: nothing is recorded.
+deferred follow-ups. An accepted draft becomes the launch's submission; a refusal accepts nothing
+and says what to change, so correct `pending.json` and run it again. Nothing is recorded here: the
+launcher records the accepted draft after the reviewer exits.
 
-Usage: aida review check-draft [OPTIONS] <PATH>
+Usage: aida review submit-draft [OPTIONS] <LAUNCH_DIR>
 
 Arguments:
-  <PATH>
-          The draft file to check
+  <LAUNCH_DIR>
+          The launch directory the review prompt named
 
 Options:
-      --pr <N>
-          Pull request the launch named; the draft must match it
-
-      --sha <SHA>
-          Full head commit the launch named; the draft must match it
-
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -56216,9 +56212,9 @@ Working on aida itself
     "path": [
       "aida",
       "review",
-      "check-draft"
+      "submit-draft"
     ],
-    "about": "Check a standalone reviewer's draft verdict before the reviewer exits",
+    "about": "Submit a standalone reviewer's draft verdict (the reviewer runs this)",
     "flags": [
       {
         "name": "canonical-ids",
@@ -56234,16 +56230,6 @@ Working on aida itself
         "name": "help",
         "takes_value": false,
         "help": "Print help (see more with '--help')"
-      },
-      {
-        "name": "pr",
-        "takes_value": true,
-        "help": "Pull request the launch named; the draft must match it"
-      },
-      {
-        "name": "sha",
-        "takes_value": true,
-        "help": "Full head commit the launch named; the draft must match it"
       }
     ],
     "hidden": false

@@ -1524,7 +1524,9 @@ and additional event vectors; these reads never rewrite ledger history.
 <!-- trace:BUG-2517 | ai:codex -->
 
 Standalone headless reviewer launches pin the change head and give fresh and
-resumed children an absolute, exclusive `draft.json` path in their review tree.
+resumed children an exclusive launch directory in their review tree; the child
+submits its draft there with `aida review submit-draft`, which validates it
+under the launching project's review policy and alone produces `draft.json`.
 The closed version-1 draft carries data only; it supplies no identity or grant.
 After the child exits, the parent reads through the directory descriptor held
 since before spawn, refuses unsafe files and conflicting legacy evidence, and

@@ -705,10 +705,14 @@ finding you are about to record:
   only want noted → the verdict is `RequestChanges`;
 - a finding the recorder will file as a deferred follow-up → it may ride an
   `Approved` verdict. That takes the structured finding JSON described under
-  *Finding disposition and approval-time sweep*: `text`, `severity`, a registry
-  `blocking_tier` and, while no blocking-class list is in force, an explicit
-  `"disposition":"deferred"` with a one-line `rationale`. Plain-text findings
-  never defer.
+  *Finding disposition and approval-time sweep*. While no blocking-class list
+  is in force: `text`, `severity`, an explicit `"disposition":"deferred"` and
+  a one-line `rationale` (no `blocking_tier` is needed). Under a configured
+  list: `text`, `severity` and a registry `blocking_tier` outside the listed
+  classes; the recorder sets the disposition. Security and authority-bypass
+  findings, and test gaps in gate, sandbox, authority, seat or containment
+  code, block under every list and cannot be written as follow-ups. Plain-text
+  findings never defer.
 
 A sentence such as "no finding is in a blocking class; follow-ups recorded" in
 the summary does not change this: the findings array decides.
@@ -723,19 +727,22 @@ unverifiable stale value misfired both ways before BUG-233; only
 - anything else → `"mode": "standalone"`
 
 **Standalone headless launch with a draft contract:** the launch prompt's
-absolute `draft.json` path and closed version-1 JSON contract supersede the
-recording and metadata-enrichment instructions below. Write the complete
-summary and all findings there, including an empty findings array when there
-are none. Then run the check the launch prompt names,
-`aida review check-draft <draft.json> --pr <N> --sha <FULL-REVIEWED-SHA>`,
-after every write. It applies the launcher's format checks and the rule above
-(an `approved` draft carrying an unresolved finding is refused) while you can
-still fix the draft; when it refuses, rewrite the draft as the message says and
-run it again. Exit only once it passes. Do not run `aida review record` or add identity, grants,
+absolute `pending.json` path, its `aida review submit-draft <launch-dir>`
+command and its closed version-1 JSON contract supersede the recording and
+metadata-enrichment instructions below. Write the complete summary and all
+findings to `pending.json`, including an empty findings array when there are
+none, then submit the draft with the command exactly as the prompt gives it.
+The submission is the only supported handoff: it applies the launcher's format
+checks and the rule above (an `approved` draft carrying an unresolved finding
+is refused) under the launching project's policy, while you can still fix the
+draft. If it refuses, fix `pending.json` as the message says and resubmit.
+Exit only after the submission is accepted: a draft the command has not
+accepted, or a `draft.json` written by hand, is not a submission and the
+parent records nothing from it. Do not run `aida review record` or add identity, grants,
 attestations, receipts, commands, covered specs, or ledger destinations. If a
-legacy record attempt was refused, still write the draft. The parent validates
-and records the draft; never claim recording succeeded inside the sandbox.
-Fresh and resumed launches each supply their own absolute draft path.
+legacy record attempt was refused, still submit the draft. The parent validates
+and records the accepted draft; never claim recording succeeded inside the sandbox.
+Fresh and resumed launches each supply their own launch directory.
 Interactive and orchestrated reviews without this contract retain the canonical
 record route below.
 <!-- trace:BUG-2564 | ai:codex -->

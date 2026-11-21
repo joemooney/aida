@@ -244,8 +244,8 @@ pub(crate) fn handle_review_command(
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
         ReviewCommand::List { json } => handle_review_list(*json),
         // trace:BUG-2707 | ai:claude
-        ReviewCommand::CheckDraft { path, pr, sha } => {
-            crate::review_draft::handle_check_draft(path, *pr, sha.as_deref())
+        ReviewCommand::SubmitDraft { launch_dir } => {
+            crate::review_draft::handle_submit_draft(launch_dir)
         }
         // trace:BUG-1516 | ai:claude
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),

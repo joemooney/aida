@@ -7584,8 +7584,13 @@ pub(crate) fn run_standalone_reviewer(
     };
     let draft = if no_human {
         match launch_head {
+            // The reviewer's submission is decided under this (the parent)
+            // project's blocking policy. trace:BUG-2707 | ai:claude
             Some(head) => Some(crate::review_draft::LaunchDraft::prepare(
-                worktree, pr, head,
+                worktree,
+                pr,
+                head,
+                &crate::gate::kernel_deps::review_blocking::effective_warned(project_root),
             )?),
             None => {
                 eprintln!(
@@ -8123,7 +8128,7 @@ pub(crate) fn run_standalone_reviewer(
         .and_then(reviewer_summary::parse_result_event);
     let recovery = collected.as_ref().err().map(|_| {
         if let Some(draft) = &draft {
-            return format!("Structured draft location: {} (a missing draft requires the reviewer to write it; a rejected draft is retained). No log text or commands were used as verdict evidence.", draft.path().display());
+            return format!("Structured draft location: {} (a missing draft requires the reviewer to submit it with `aida review submit-draft`; a rejected draft is retained). No log text or commands were used as verdict evidence.", draft.path().display());
         }
         reviewer_summary::unrecorded_review_recovery(
             worktree,

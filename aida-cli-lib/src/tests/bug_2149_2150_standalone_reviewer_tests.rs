@@ -1402,11 +1402,16 @@ fn standalone_review_verdict_structured_child_reaches_parent_canonical_record() 
                         r#"#!/bin/sh
 unset AIDA_SESSION_GRANT AIDA_SESSION_ID AIDA_AGENT_TYPE AIDA_AGENT_NAME
 python3 - "$@" <<'PY'
-import json, pathlib, re, sys
-matches = [re.search(r'absolute path `([^`]+/draft.json)`', arg) for arg in sys.argv[1:]]
-path = next(match.group(1) for match in matches if match)
-assert pathlib.Path(path).is_absolute()
-pathlib.Path(path).write_text(json.dumps(json.loads(r'''{data}''')))
+import hashlib, json, pathlib, re, sys
+matches = [re.search(r'absolute path `([^`]+)/pending.json`', arg) for arg in sys.argv[1:]]
+launch = pathlib.Path(next(match.group(1) for match in matches if match))
+assert launch.is_absolute()
+assert any(f"aida review submit-draft {{launch}}" in arg for arg in sys.argv[1:])
+# What an accepted `aida review submit-draft` leaves: the draft and its receipt.
+body = json.dumps(json.loads(r'''{data}'''))
+(launch / "draft.json").write_text(body)
+(launch / "submitted.json").write_text(
+    json.dumps({{"version": 1, "sha256": hashlib.sha256(body.encode()).hexdigest()}}))
 PY
 "#
                     )
