@@ -1,6 +1,8 @@
 - user_id: role:product
-  requirement_id: 01a0dfca-faa9-7f31-9cd7-762219b9db72
-  position: 1000
+  requirement_id: 01a1fa01-12a6-7370-a80d-1e279fef87b0
+  position: 2000
   added_by: role:product
-  added_at: 2026-09-28T15:53:42.580979995Z
+  note: TASK-3823 post-landing evidence. Capture actual admitted review-watch launch model and effort from an eligible head before rollback; see acceptance handoff.
+  added_at: 2026-11-21T09:26:53.856034491Z
   for_role: product
+  added_by_machine: imac
