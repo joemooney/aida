@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T01:58:08.682529806Z
+modified_at: 2026-11-21T01:58:46.674685090Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -302,6 +302,24 @@ comments:
     FINAL round: a clean result merges. make sync-templates; check-templates; cargo fmt; ratchets; targeted cargo run; check-ci-fast. Push.
   created_at: 2026-11-21T01:58:08.682529806Z
   modified_at: 2026-11-21T01:58:08.682529806Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fbd3-d5f9-7c12-9036-21fe1ef904bc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2707):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 10854bb60da9
+    Recorded: 2026-11-21T01:57:00.885259451+00:00
+    Findings:
+    1. LaunchDraft::read releases the launch lock before queue_cmd/work.rs records its returned data and calls consumed() at line 8020. If a concurrent submit accepts a corrected refusal in that interval, the parent can record the old approval, rename the corrected refusal to recorded.json, and allow teardown to discard it. Bind recording and consumption to the same generation and ensure that a later accepted submission is retained or explicitly refused once collection starts. Cover a retry between read and consumption.
+    2. In review_draft.rs:500–505, consume_pending compares the claimed file and later unlinks it. The supported instructions let reviewers write pending.json in place. A writer that already opened the pending inode can write its correction after the comparison, even after the rename to the claim name. The unlink then discards that correction. The concurrency regression only uses atomic replacement. Make atomic staging part of the supported writer operation, or otherwise coordinate writers before taking ownership of the generation.
+    3. review_draft.rs:505 ignores unlinkat failures through remove_in. If claim removal fails after the byte comparison, submit-draft reports acceptance and tells the reviewer to exit, but LaunchDraft::read refuses the remaining pending.consumed.json. Propagate removal failures so the reviewer can recover before exiting, and cover failed cleanup.
+    4. submit_draft at review_draft.rs:535 invokes restore_claim before checking launch.json. Passing a non-launch directory containing pending.consumed.json and pending.json deletes the former on EEXIST, then reports that the directory is invalid. Validate the launch record before performing recovery or mutating any file in the supplied directory.
+    5. The new CLI test reads the ambient PATH in aida-cli/tests/bug_2707_submit_draft_cli.rs:43. Fast-gates job 136686053267 identifies this exact var_os site as forbidden in test_repository_matches_exact_ledger. Give the subprocess a deterministic fixture PATH or omit the override when unnecessary.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-21T01:58:46.521636138Z
+  modified_at: 2026-11-21T01:58:46.521636138Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
