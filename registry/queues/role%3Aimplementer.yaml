@@ -524,3 +524,11 @@
   added_at: 2026-11-21T07:38:25.517952277Z
   for_role: implementer
   added_by_machine: imac
+- user_id: role:implementer
+  requirement_id: 01a1fb83-8574-7782-9809-fc86b22eb521
+  position: 635000
+  added_by: role:implementer
+  note: Use the documented manual recovery option. Describe how an authorized operator retains the unreadable journal for audit and restores a valid journal using the existing commands. Keep automatic observation fail-closed until recovery. Add an isolated regression exercising the documented recovery and valid-journal status. Any new command authority or automatic recovery needs a separate sketch.
+  added_at: 2026-11-21T07:39:48.282171020Z
+  for_role: implementer
+  added_by_machine: imac
