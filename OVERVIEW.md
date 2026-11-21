@@ -751,6 +751,15 @@ archive retention still need the completeness and revival design described in
 [the proposed sketch](docs/plans/2026-11-12-bug-2531-discovery-retention-sketch.md).
 <!-- trace:BUG-2531 | ai:codex -->
 
+Queue work and rework pin a review-discovery cache for the invocation, including
+the in-process `rework --work` continuation. Admission, terminal-wait
+reconciliation and findings selection share its per-spec bindings and checked
+ledger events. If selected-change ownership fails, recovery checks the spec's
+inventory for withheld waits and refuses on unreadable evidence. Exact-source
+terminal annotations can retire a wait, and review discovery stays outside the
+canonical store write lock.
+<!-- trace:BUG-2629 | ai:codex -->
+
 The gate architecture is **effective gate state = f(head SHA, canonical IDs,
 ledger)**. `gate::canon` resolves a change's spec labels against one committed
 store snapshot to immutable requirement UUIDs (`SpecKey`); native, agreed,

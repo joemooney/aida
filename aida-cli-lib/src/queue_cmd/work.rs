@@ -1,4 +1,5 @@
 // trace:TASK-3426 | ai:codex
+use super::rework_bindings::{DiscoveryCache, WaitingReviews};
 use super::*;
 // trace:BUG-2509 | ai:codex
 use crate::gate::ledger::{ChangeForge, ChangeKey};
@@ -3144,26 +3145,39 @@ pub fn refuse_waiting_review(
 // Both pickup checks use the resolved change when branch selection found one.
 // trace:BUG-2656 | ai:codex
 fn pickup_rework_review(
+    cache: &mut DiscoveryCache,
     root: &Path,
     display: &str,
     spec: &str,
     selected_change: Option<&str>,
 ) -> Result<ReviewResult<String>, ReworkReviewError> {
+    let scope = (
+        display.to_owned(),
+        spec.to_owned(),
+        selected_change.map(str::to_owned),
+    );
+    if let Some(found) = cache.pickups.get(&scope) {
+        return found.clone();
+    }
     let open = selected_change
         .is_none()
         .then(|| spec_open_change_key(root, &[display, spec]))
         .flatten();
-    resolve_rework_review_inner(
+    let found = resolve_rework_review_inner(
+        cache,
         root,
         display,
         spec,
         selected_change.or(open.as_deref()),
         selected_change.is_some(),
-    )
+    );
+    cache.pickups.insert(scope, found.clone());
+    found
 }
 
 // trace:BUG-2500 | ai:codex
 pub(crate) fn refuse_waiting_pickup(
+    cache: &mut DiscoveryCache,
     root: &Path,
     plan: &QueueWorkPlan,
     role: &str,
@@ -3182,7 +3196,7 @@ pub(crate) fn refuse_waiting_pickup(
             &entry.spec_id
         };
         if let Err(ReworkReviewError::Waiting(why)) =
-            pickup_rework_review(root, display, &entry.spec_id, selected_change)
+            pickup_rework_review(cache, root, display, &entry.spec_id, selected_change)
         {
             return Err(why);
         }
@@ -3191,7 +3205,7 @@ pub(crate) fn refuse_waiting_pickup(
 }
 
 // trace:BUG-2500 | ai:codex
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum ReworkReviewError {
     /// Rework is not admitted: a review of the spec is waiting, or (BUG-2629)
     /// the search for one could not be completed.
@@ -3221,43 +3235,52 @@ pub(crate) fn resolve_rework_review(
     spec_id: &str,
     open_change: Option<&str>,
 ) -> Result<ReviewResult<String>, ReworkReviewError> {
-    resolve_rework_review_inner(project_root, display_id, spec_id, open_change, false)
+    resolve_rework_review_cached(
+        &mut DiscoveryCache::default(),
+        project_root,
+        display_id,
+        spec_id,
+        open_change,
+    )
 }
 
-fn resolve_rework_review_inner(
+pub(super) fn resolve_rework_review_cached(
+    cache: &mut DiscoveryCache,
+    project_root: &Path,
+    display_id: &str,
+    spec_id: &str,
+    open_change: Option<&str>,
+) -> Result<ReviewResult<String>, ReworkReviewError> {
+    resolve_rework_review_inner(cache, project_root, display_id, spec_id, open_change, false)
+}
+
+pub(super) fn resolve_rework_review_inner(
+    cache: &mut DiscoveryCache,
     project_root: &Path,
     display_id: &str,
     spec_id: &str,
     open_change: Option<&str>,
     selected_only: bool,
 ) -> Result<ReviewResult<String>, ReworkReviewError> {
-    use crate::gate::review_alias::{select_verdict, spec_labels, AliasSelection};
+    use crate::gate::review_alias::{spec_labels, AliasSelection};
     use crate::gate::review_verdict::RecordedVerdict;
     let ids = [display_id, spec_id];
     let labels = spec_labels(&ids);
-    // BUG-2629: one ownership inventory for the whole resolution. The
-    // readers below each open a discovery of their own; outside a scope each
-    // one folded every ledger bound to the spec again.
-    // trace:BUG-2629 | ai:claude
-    let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
-    // Refs-only batches do not complete the spec, but their terminal reviews
-    // must not block the next batch. Reconcile only this spec's proved keys.
-    // trace:BUG-2525 | ai:codex
-    // BUG-2540: the keys bound to this spec, computed once. Resolving a key's
-    // current verdict costs git subprocesses, so the readers below resolve
-    // only these instead of every key in the store (thousands: 180 s+).
-    // trace:BUG-2540 | ai:claude
-    // BUG-2629: binding is decided from the spec's own ledger inventory, one
-    // discovery for all of it; asking every stored key read the whole ledger.
-    // trace:BUG-2629 | ai:claude
-    let bindings =
-        super::rework_bindings::discover(project_root, &labels, open_change, selected_only);
-    let all_keys = crate::gate::review_verdict::verdict_keys(project_root);
-    let (bound_keys, rest): (Vec<String>, Vec<String>) =
-        all_keys.into_iter().partition(|key| bindings.binds(key));
-    let open_keys: Vec<String> = rest
+    // One explicit snapshot serves admission, terminal reconciliation, and
+    // findings selection. trace:BUG-2629 | ai:codex
+    let bindings = super::rework_bindings::discover_with_cache(
+        cache,
+        project_root,
+        &labels,
+        open_change,
+        selected_only,
+    );
+    let bound_keys = bindings.bound_keys();
+    let open_keys: Vec<_> = open_change
+        .and_then(ChangeKey::parse)
+        .map(|change| change.as_key())
+        .filter(|key| bound_keys.binary_search(key).is_err())
         .into_iter()
-        .filter(|key| open_change.is_some_and(|open| open.eq_ignore_ascii_case(key)))
         .collect();
     let mut review_keys = labels.clone();
     review_keys.extend(bound_keys.iter().cloned());
@@ -3286,7 +3309,7 @@ fn resolve_rework_review_inner(
         ));
     }
     if let Some(why) = bindings.failure() {
-        let recovered = bindings.recover(project_root, &labels).map_err(|exhausted| {
+        let recovered = bindings.recover(project_root, &labels, cache).map_err(|exhausted| {
             uncovered(
                 "gate-ledger ownership discovery failed and its withheld reviews exceed the recovery read budget",
                 &exhausted,
@@ -3307,7 +3330,7 @@ fn resolve_rework_review_inner(
                     crate::review_verdict_display::rework_findings_comment(&shown, key, v)
                 })
                 .collect::<Vec<_>>();
-            if !findings.is_empty() {
+            if !selected_only && !findings.is_empty() {
                 return Ok(ReviewResult::Available(findings.join("\n\n")));
             }
             waiting_rework_error(&shown, wait)?;
@@ -3324,9 +3347,47 @@ fn resolve_rework_review_inner(
             "the reviews of {shown} cannot be read completely: gate-ledger ownership discovery failed ({why})"
         )));
     }
+    let mut unavailable = None;
+    let mut wait = None;
+    for key in &review_keys {
+        if let Err(why) = cache.events(project_root, &bindings, key) {
+            return Err(uncovered(
+                "a gate-ledger review source could not be read",
+                &why,
+            ));
+        }
+        match cache.current_verdict(project_root, &bindings, key) {
+            Ok(Some(current)) => {
+                if let Some(verdict) =
+                    crate::gate::review_verdict::parse_recorded_verdict(&current.body)
+                {
+                    wait = wait.or_else(|| waiting_rework_error(&shown, &verdict).err());
+                }
+            }
+            Ok(None) => {}
+            Err(why) => {
+                unavailable.get_or_insert(why);
+            }
+        }
+    }
+    if let Some(why) = unavailable {
+        if let Some(wait) = wait {
+            return Err(wait);
+        }
+        return Err(ReworkReviewError::Unavailable(why));
+    }
     crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(15), || {
-        crate::review_waiting::reconcile_waiting_verdicts(project_root, Some(&review_keys));
+        crate::review_waiting::reconcile_waiting(
+            project_root,
+            Some(&review_keys),
+            &mut WaitingReviews {
+                root: project_root,
+                cache,
+                bindings: &bindings,
+            },
+        );
     });
+    let mut current = |key: &str| cache.current_verdict(project_root, &bindings, key);
     // Ignore terminal waits before alias ordering as well as PR/spec ordering.
     // Otherwise a late annotation can hide an active review on another label.
     // Refused or unreadable labels remain in the strict selector.
@@ -3335,75 +3396,84 @@ fn resolve_rework_review_inner(
         .iter()
         .copied()
         .filter(|id| {
-            !crate::gate::review_verdict::current_verdict(project_root, id)
+            !current(id)
+                .ok()
+                .flatten()
                 .and_then(|c| crate::gate::review_verdict::parse_recorded_verdict(&c.body))
                 .is_some_and(|v| {
                     v.kind == crate::gate::review_verdict::VerdictKind::Waiting && v.is_closed()
                 })
         })
         .collect();
-    let spec_keyed: Option<(RecordedVerdict, Option<chrono::DateTime<chrono::Utc>>)> =
-        match select_verdict(project_root, &active_ids) {
-            AliasSelection::Selected(s) => {
-                let at = verdict_recorded_time(
-                    &s.verdict,
-                    s.order_time.map(|t| t.with_timezone(&chrono::Utc)),
-                );
-                Some((s.verdict, at))
-            }
-            AliasSelection::Absent => None,
-            unavailable => {
-                // Substantive findings remain actionable even beside a wait.
-                // Inspect all candidates before refusing a waiting-only review.
-                // trace:BUG-2500 | ai:codex
-                let mut candidates = Vec::new();
-                for label in &labels {
-                    if let Some(current) =
-                        crate::gate::review_verdict::current_verdict(project_root, label)
+    let spec_keyed: Option<(RecordedVerdict, Option<chrono::DateTime<chrono::Utc>>)> = match cache
+        .select_verdict(project_root, &bindings, &active_ids)
+    {
+        AliasSelection::Selected(s) => {
+            let at = verdict_recorded_time(
+                &s.verdict,
+                s.order_time.map(|t| t.with_timezone(&chrono::Utc)),
+            );
+            Some((s.verdict, at))
+        }
+        AliasSelection::Absent => None,
+        unavailable => {
+            // Substantive findings remain actionable even beside a wait.
+            // Inspect all candidates before refusing a waiting-only review.
+            // trace:BUG-2500 | ai:codex
+            let mut candidates = Vec::new();
+            for label in &labels {
+                if let Some(current) = cache
+                    .current_verdict(project_root, &bindings, label)
+                    .ok()
+                    .flatten()
+                {
+                    if let Some(v) =
+                        crate::gate::review_verdict::parse_recorded_verdict(&current.body)
                     {
-                        if let Some(v) =
-                            crate::gate::review_verdict::parse_recorded_verdict(&current.body)
-                        {
-                            candidates.push((label.clone(), v));
-                        }
+                        candidates.push((label.clone(), v));
                     }
                 }
-                candidates.extend(crate::gate::review_verdict::active_verdicts_for(
-                    project_root,
-                    bound_keys.iter().chain(&open_keys).cloned(),
-                ));
-                if candidates.iter().any(|(_, v)| {
-                    !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
-                }) {
-                    let findings = candidates
-                        .iter()
-                        .filter(|(_, v)| !v.is_closed() && v.kind.requires_changes())
-                        .filter_map(|(key, v)| {
-                            crate::review_verdict_display::rework_findings_comment(&shown, key, v)
-                        })
-                        .collect::<Vec<_>>();
-                    if !findings.is_empty() {
-                        return Ok(ReviewResult::Available(findings.join("\n\n")));
-                    }
-                    for (_, v) in &candidates {
-                        waiting_rework_error(&shown, v)?;
-                    }
+            }
+            candidates.extend(bound_keys.iter().chain(&open_keys).filter_map(|key| {
+                let current = cache
+                    .current_verdict(project_root, &bindings, key)
+                    .ok()
+                    .flatten()?;
+                crate::gate::review_verdict::parse_recorded_verdict(&current.body)
+                    .map(|verdict| (key.clone(), verdict))
+            }));
+            if candidates.iter().any(|(_, v)| {
+                !v.is_closed() && v.kind == crate::gate::review_verdict::VerdictKind::Waiting
+            }) {
+                let findings = candidates
+                    .iter()
+                    .filter(|(_, v)| !v.is_closed() && v.kind.requires_changes())
+                    .filter_map(|(key, v)| {
+                        crate::review_verdict_display::rework_findings_comment(&shown, key, v)
+                    })
+                    .collect::<Vec<_>>();
+                if !findings.is_empty() {
+                    return Ok(ReviewResult::Available(findings.join("\n\n")));
                 }
-                let reason = unavailable
-                    .unavailable_reason()
-                    .unwrap_or_default()
-                    .to_string();
-                if unavailable.fail_closed().is_some() {
-                    return Err(ReworkReviewError::Unavailable(format!(
+                for (_, v) in &candidates {
+                    waiting_rework_error(&shown, v)?;
+                }
+            }
+            let reason = unavailable
+                .unavailable_reason()
+                .unwrap_or_default()
+                .to_string();
+            if unavailable.fail_closed().is_some() {
+                return Err(ReworkReviewError::Unavailable(format!(
                         "a request-changes review of {shown} exists but its current review cannot be selected ({reason})"
                     )));
-                }
-                eprintln!(
+            }
+            eprintln!(
                     "warning: no review findings imported for {shown}: its current review cannot be selected ({reason}). Read the review comment before starting rework."
                 );
-                return Ok(ReviewResult::Unavailable);
-            }
-        };
+            return Ok(ReviewResult::Unavailable);
+        }
+    };
 
     // A closed wait has no selection priority over any active review.
     // trace:BUG-2525 | ai:codex
@@ -3417,7 +3487,11 @@ fn resolve_rework_review_inner(
     let change_keyed: Option<(String, RecordedVerdict)> = match open_key.as_deref() {
         // The spec's open PR answers for its change key, approval included:
         // a newer approval there means no findings are outstanding.
-        Some(key) => match crate::gate::review_verdict::current_verdict(project_root, key) {
+        Some(key) => match cache
+            .current_verdict(project_root, &bindings, key)
+            .ok()
+            .flatten()
+        {
             None => None,
             Some(current) => {
                 match crate::gate::review_verdict::parse_recorded_verdict(&current.body) {
@@ -3442,11 +3516,18 @@ fn resolve_rework_review_inner(
             // as the gates weigh it.
             // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
             // trace:TASK-1191 | ai:codex
-            let mut bound =
-                crate::gate::review_verdict::active_verdicts_for(project_root, bound_keys.clone())
-                    .into_iter()
-                    .filter(|(_, verdict)| verdict.kind.blocks_done() && !verdict.is_closed())
-                    .collect::<Vec<_>>();
+            let mut bound = bound_keys
+                .iter()
+                .filter_map(|key| {
+                    let current = cache
+                        .current_verdict(project_root, &bindings, key)
+                        .ok()
+                        .flatten()?;
+                    crate::gate::review_verdict::parse_recorded_verdict(&current.body)
+                        .map(|verdict| (key.clone(), verdict))
+                })
+                .filter(|(_, verdict)| verdict.kind.blocks_done() && !verdict.is_closed())
+                .collect::<Vec<_>>();
             // A wait cannot hide actionable findings in another bound change.
             // trace:BUG-2500 | ai:codex
             if bound.len() > 1
@@ -3497,8 +3578,11 @@ fn resolve_rework_review_inner(
         }
     };
 
-    let change_time = |key: &str, v: &RecordedVerdict| {
-        let written = crate::gate::review_verdict::current_verdict(project_root, key)
+    let mut change_time = |key: &str, v: &RecordedVerdict| {
+        let written = cache
+            .current_verdict(project_root, &bindings, key)
+            .ok()
+            .flatten()
             .and_then(|c| c.written_at)
             .map(chrono::DateTime::<chrono::Utc>::from);
         verdict_recorded_time(v, written)
@@ -4573,6 +4657,7 @@ pub(crate) fn refuse_retired_steal(steal: bool) -> Result<()> {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn handle_queue_work(
     storage: &Storage,
+    review_cache: Option<&mut DiscoveryCache>,
     // Invocation-local host check from the dispatcher; direct callers pass None.
     // A changed rework vendor still needs its own check. trace:STORY-2642 | ai:codex
     mut preflight_vendor: Option<session::HeadlessVendor>,
@@ -4662,6 +4747,9 @@ pub(crate) fn handle_queue_work(
     over_wip: bool,
     brief_file: Option<&std::path::Path>,
 ) -> Result<()> {
+    let mut local_review_cache = DiscoveryCache::default();
+    let review_cache = review_cache.unwrap_or(&mut local_review_cache);
+
     // Record admission before any pickup gate; previews and interactive sessions
     // do not claim a headless lane attempt. trace:STORY-2690 | ai:codex
     let mut attempt = if no_human && resume.is_none() && !dry_run && !no_launch && !list_sessions {
@@ -5001,6 +5089,7 @@ pub(crate) fn handle_queue_work(
         }
         // trace:BUG-2500 | ai:codex — admission precedes calibration and setup.
         refuse_waiting_pickup(
+            review_cache,
             &project_root,
             &plan,
             &role,
@@ -5518,7 +5607,7 @@ pub(crate) fn handle_queue_work(
                     .first()
                     .map(|entry| entry.spec_id.as_str())
                     .unwrap_or(plan.anchor_display.as_str());
-                pickup_rework_review(root, &plan.anchor_display, spec_id, selected_change.as_deref())
+                pickup_rework_review(review_cache, root, &plan.anchor_display, spec_id, selected_change.as_deref())
                 .map_err(|error| {
                     let (ReworkReviewError::Waiting(why) | ReworkReviewError::Unavailable(why)) = error;
                     anyhow::anyhow!(
@@ -10464,6 +10553,7 @@ pub(super) fn handle_queue_command(
             };
             handle_queue_work(
                 storage,
+                None,
                 preflight_vendor,
                 &user_id,
                 resolved_id.as_deref().or(effective_id),
@@ -10680,9 +10770,18 @@ mod bug2656_tests {
             assert_eq!(key.number, id);
             assert_eq!(head, branch);
             let key = key.as_key();
-            let admission =
-                refuse_waiting_pickup(root, &plan, "implementer", false, false, false, Some(&key));
-            let review = pickup_rework_review(root, spec, spec, Some(&key));
+            let admission = refuse_waiting_pickup(
+                &mut DiscoveryCache::default(),
+                root,
+                &plan,
+                "implementer",
+                false,
+                false,
+                false,
+                Some(&key),
+            );
+            let review =
+                pickup_rework_review(&mut DiscoveryCache::default(), root, spec, spec, Some(&key));
             if id == 42 {
                 assert!(admission.unwrap_err().contains("operator evidence for 42"));
                 assert!(

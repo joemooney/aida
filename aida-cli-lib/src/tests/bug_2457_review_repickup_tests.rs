@@ -45,6 +45,7 @@ fn queue_work_sync_force(
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
+        None,
         crate::test_env::HERMETIC_TEST_USER,
         Some(if no_launch { "PR-2457" } else { "STORY-2457" }),
         None,

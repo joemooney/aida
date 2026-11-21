@@ -375,6 +375,7 @@ fn queue_work_with(
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
+        None,
         crate::test_env::HERMETIC_TEST_USER,
         Some("BUG-2451"),
         None,
@@ -1873,6 +1874,7 @@ fn bug_2600_phase1_admission_records_one_override_per_member() {
 fn headless_pickup(storage: &crate::Storage) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
+        None,
         None,
         crate::test_env::HERMETIC_TEST_USER,
         Some("BUG-2451"),

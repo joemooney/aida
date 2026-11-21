@@ -791,6 +791,31 @@ fn bug_2629_queue_rework_refuses_a_withheld_wait_without_mutation() {
     append(&ledger_root, 3698, SPEC, &record("waiting", -30));
     lose_binding_beside_corrupt_ledger(&ledger_root, SPEC, 3698);
     assert!(rv::current_verdict(&fx.root, "PR-3698").is_none());
+    let lock = aida_core::db::store_write_lock_path(fx.storage.path());
+    let observations = std::rc::Rc::new(Cell::new(0));
+    struct ResetProbe;
+    impl Drop for ResetProbe {
+        fn drop(&mut self) {
+            super::ON_LEDGER_STEP.with(|probe| *probe.borrow_mut() = None);
+        }
+    }
+    let _reset = ResetProbe;
+    super::ON_LEDGER_STEP.with(|probe| {
+        let observations = observations.clone();
+        *probe.borrow_mut() = Some(Box::new(move || {
+            use fs2::FileExt as _;
+            assert!(!aida_core::db::any_store_write_lock_held());
+            let writer = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&lock)
+                .unwrap();
+            writer
+                .try_lock_exclusive()
+                .expect("review discovery holds no store writer lock");
+            observations.set(observations.get() + 1);
+        }));
+    });
     let before = serde_json::to_value(fx.backend.load().unwrap()).unwrap();
     for _ in 0..2 {
         let err = rework(&fx.storage).unwrap_err().to_string();
@@ -802,6 +827,7 @@ fn bug_2629_queue_rework_refuses_a_withheld_wait_without_mutation() {
         assert!(fx.storage.queue_users().unwrap().is_empty());
         assert!(!fx.root.join(".aida/merge-holds").exists());
     }
+    assert!(observations.get() > 0);
 }
 
 /// Acceptance 2: a spec on another track is refused before the gate ledger
@@ -1294,6 +1320,8 @@ struct Work {
     opened: usize,
     checks: usize,
     entries: usize,
+    binding_lists: usize,
+    ledger_opens: usize,
     bytes: u64,
     took: std::time::Duration,
 }
@@ -1302,12 +1330,16 @@ fn measured<T>(run: impl FnOnce() -> T) -> (T, Work) {
     reset_ledger_reads();
     work::INVENTORY_CHECKS.with(|n| n.set(0));
     work::DISCOVERIES_OPENED.with(|n| n.set(0));
+    work::BINDING_LISTS.with(|n| n.set(0));
+    work::LEDGER_OPENS.with(|n| n.set(0));
     let started = std::time::Instant::now();
     let out = run();
     let spent = Work {
         opened: work::DISCOVERIES_OPENED.with(Cell::get),
         checks: work::INVENTORY_CHECKS.with(Cell::get),
         entries: work::DIRECTORY_ENTRIES.with(Cell::get),
+        binding_lists: work::BINDING_LISTS.with(Cell::get),
+        ledger_opens: work::LEDGER_OPENS.with(Cell::get),
         bytes: ledger_reads(),
         took: started.elapsed(),
     };
@@ -1351,8 +1383,21 @@ fn bug_2629_one_discovery_checks_every_change_of_a_healthy_spec() {
             pass.bytes
         );
         assert!(pass.took < limit, "the inventory pass took {:?}", pass.took);
-        let (_, whole) = measured(|| review(&root));
+        let mut cache = super::DiscoveryCache::default();
+        let (_, whole) = measured(|| {
+            // Admission and findings selection use the same command context.
+            for _ in 0..2 {
+                crate::queue_cmd::work::resolve_rework_review_cached(
+                    &mut cache, &root, SPEC, SPEC, None,
+                )
+                .unwrap();
+            }
+        });
         eprintln!("bug_2629 healthy {ledgers} ledgers: whole resolution {whole:?}");
+        assert_eq!(whole.opened, 1, "{whole:?}");
+        assert_eq!(whole.binding_lists, 1, "{whole:?}");
+        assert_eq!(whole.checks, 0, "{whole:?}");
+        assert!(whole.ledger_opens as u64 <= ledgers + 2, "{whole:?}");
         assert!(whole.took < limit, "the resolution took {:?}", whole.took);
         (ledgers, bytes, pass, whole)
     };
@@ -1609,4 +1654,53 @@ fn bug_2629_the_fallback_passes_stop_at_the_parse_ceiling() {
     let _lines = ParseBudgetGuard::set(1);
     let why = refused_uncovered(&root);
     assert!(why.contains("parse budget"), "{why}");
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_selected_ownership_failure_checks_other_spec_changes() {
+    let (_tmp, root, _env) = fixture();
+    append(&root, 41, SPEC, &record("request-changes", -100));
+    let other = "BUG-17";
+    append(&root, 41, other, &record("approved", -90));
+    corrupt_bound_sibling(&root, other);
+    let mut wait = phase3(record("waiting", -30));
+    wait.insert("summary".into(), "newer evidence on PR-42".into());
+    append(&root, 42, SPEC, &wait);
+    let mut cache = super::DiscoveryCache::default();
+    let result = crate::queue_cmd::work::resolve_rework_review_inner(
+        &mut cache,
+        &root,
+        SPEC,
+        SPEC,
+        Some("PR-41"),
+        true,
+    );
+    assert!(
+        matches!(result, Err(ReworkReviewError::Waiting(ref why))
+            if why.contains("newer evidence on PR-42")),
+        "{result:?}"
+    );
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_selected_malformed_ledger_is_unknown_even_without_fingerprints() {
+    let (_tmp, root, _env) = fixture();
+    append(&root, 41, SPEC, &phase3(record("approved", -100)));
+    std::fs::write(store::ledger_file(&root, ChangeKey::pr(41)), "invalid\n").unwrap();
+    let mut cache = super::DiscoveryCache::default();
+    let result = crate::queue_cmd::work::resolve_rework_review_inner(
+        &mut cache,
+        &root,
+        SPEC,
+        SPEC,
+        Some("PR-41"),
+        true,
+    );
+    assert!(
+        matches!(result, Err(ReworkReviewError::Waiting(ref why))
+            if why.contains("PR-41.jsonl")),
+        "{result:?}"
+    );
 }

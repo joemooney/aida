@@ -680,12 +680,14 @@ fn bug_2507_rework_imports_large_ledger_findings_and_refuses_over_limit() {
         FRIENDLY,
         record("request_changes", NEW_HEAD, &ts(-30), &[&too_large]),
     );
+    // trace:BUG-2629 | ai:codex
+    let refused = crate::queue_cmd::resolve_rework_findings(&root, FRIENDLY, NATIVE, None)
+        .expect_err("oversized current evidence must refuse rework");
     assert!(
-        crate::queue_cmd::resolve_rework_findings(&root, FRIENDLY, NATIVE, None)
-            .unwrap()
-            .is_none(),
-        "must not import older findings"
+        refused.contains("WAITING review cannot be ruled out"),
+        "{refused}"
     );
+    assert!(refused.contains("PR-3708.jsonl"), "{refused}");
     let why = crate::gate::ledger::checked::read_change_events(
         &root,
         pr,

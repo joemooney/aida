@@ -727,6 +727,16 @@ pub(crate) fn across(
     out
 }
 
+// Queue admission already holds the checked streams for these labels.
+// trace:BUG-2629 | ai:codex
+pub(crate) fn choose_cached(
+    project_root: &Path,
+    store_root: &Path,
+    per_label: Vec<(String, Vec<GateEvent>)>,
+) -> AliasSelection {
+    choose(project_root, store_root, per_label)
+}
+
 /// Choose among every label's current record (see [`select_verdict`]).
 fn choose(
     project_root: &Path,

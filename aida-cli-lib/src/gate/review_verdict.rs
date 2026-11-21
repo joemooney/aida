@@ -1574,6 +1574,38 @@ pub(crate) fn current_verdict(start: &Path, key: &str) -> Option<CurrentVerdict>
     choose_current(start, key, path, file_body)
 }
 
+/// Single-key verdict selection using the caller's checked ledger snapshot.
+// trace:BUG-2629 | ai:codex
+pub(crate) fn current_verdict_from_events(
+    start: &Path,
+    store: &Path,
+    key: &str,
+    events: &[super::ledger::GateEvent],
+    file_body: Option<String>,
+    signed: Option<CurrentVerdict>,
+) -> Option<CurrentVerdict> {
+    let path = verdict_path(start, key);
+    let selected = signed.or_else(|| {
+        choose_local_with_event(path, file_body, || {
+            super::ledger::project::newest_review_of(events.to_vec())
+                .map(|event| (store.to_path_buf(), event))
+        })
+    });
+    selected.map(|mut current| {
+        if let Some(record) = events
+            .iter()
+            .rev()
+            .filter_map(|event| event.verdict_record())
+            .find(|record| record.contains_key("terminal_wait_source"))
+        {
+            if let Some(body) = terminal_wait_overlay_body(key, &current.body, record) {
+                current.body = body;
+            }
+        }
+        current
+    })
+}
+
 /// A retained record with optional ledger spec and timestamp context.
 pub(crate) type HistoricalVerdict = (JsonObj, Option<String>, Option<String>);
 
@@ -1835,6 +1867,17 @@ fn choose_local_current(
     if file_body.is_none() && std::fs::symlink_metadata(&path).is_ok() {
         return None;
     }
+    choose_local_with_event(path, file_body, || {
+        let event = super::ledger::project::newest_review_event(start, key)?;
+        Some((super::ledger::store_root(start).ok()?, event))
+    })
+}
+
+fn choose_local_with_event(
+    path: PathBuf,
+    file_body: Option<String>,
+    newest: impl FnOnce() -> Option<(PathBuf, super::ledger::GateEvent)>,
+) -> Option<CurrentVerdict> {
     let parsed = file_body.as_deref().map(parse_recorded_verdict);
     let from_file = |body: String| CurrentVerdict {
         body,
@@ -1847,11 +1890,10 @@ fn choose_local_current(
     let parsed = parsed.flatten();
     // Order the source round against the file before applying its exact closure.
     // trace:BUG-2525 | ai:codex
-    let ledger = crate::gate::ledger::project::newest_review_event(start, key)
-        .filter(|event| ledger_supersedes(&path, parsed.as_ref(), event))
-        .and_then(|event| {
+    let ledger = newest()
+        .filter(|(_, event)| ledger_supersedes(&path, parsed.as_ref(), event))
+        .and_then(|(store, event)| {
             let body = serde_json::to_string(event.verdict_record()?).ok()?;
-            let store = crate::gate::ledger::store_root(start).ok()?;
             Some(CurrentVerdict {
                 body,
                 written_at: ledger_order_time(&event).map(std::time::SystemTime::from),
@@ -3811,24 +3853,54 @@ pub(crate) fn close_terminal_wait(
         {
             return Ok(false);
         }
-        let mut obj: JsonObj =
-            serde_json::from_str(&current.body).map_err(std::io::Error::other)?;
-        refuse_unsafe_legacy_history(&verdict_path(root, key), round_sha(&obj).as_deref())?;
-        let source = serde_json::Value::Object(obj.clone());
-        obj.insert("terminal_wait_key".into(), key.into());
-        obj.insert("terminal_wait_source".into(), source);
-        obj.insert("closed_by_merge".into(), change.as_key().into());
-        obj.insert("closed_at".into(), chrono::Utc::now().to_rfc3339().into());
-        let spec = ledger::ChangeKey::parse(key)
-            .is_none()
-            .then(|| ledger::GateSpec::resolve(root, key));
-        // This local lifecycle annotation must not be published as a new signed review.
-        store::append_one(
-            &store_root,
-            ledger::event::verdict_event(&store_root, change, &obj, spec.as_ref()),
-        )?;
+        append_terminal_wait(root, &store_root, key, change, &current)?;
         Ok(true)
     })
+}
+
+/// Annotate an exact source observed by queue admission. A concurrent new
+/// review has a different body and cannot be closed by this annotation.
+// trace:BUG-2629 | ai:codex
+pub(crate) fn close_cached_terminal_wait(
+    root: &Path,
+    store_root: &Path,
+    key: &str,
+    change: super::ledger::ChangeKey,
+    expected: &CurrentVerdict,
+) -> std::io::Result<JsonObj> {
+    if super::ledger::contained() {
+        return Err(std::io::Error::other(
+            "a contained seat cannot close gate reviews",
+        ));
+    }
+    super::ledger::store::with_exclusive(store_root, || {
+        append_terminal_wait(root, store_root, key, change, expected)
+    })
+}
+
+fn append_terminal_wait(
+    root: &Path,
+    store_root: &Path,
+    key: &str,
+    change: super::ledger::ChangeKey,
+    current: &CurrentVerdict,
+) -> std::io::Result<JsonObj> {
+    use super::ledger::{self, store};
+    let mut obj: JsonObj = serde_json::from_str(&current.body).map_err(std::io::Error::other)?;
+    refuse_unsafe_legacy_history(&verdict_path(root, key), round_sha(&obj).as_deref())?;
+    let source = serde_json::Value::Object(obj.clone());
+    obj.insert("terminal_wait_key".into(), key.into());
+    obj.insert("terminal_wait_source".into(), source);
+    obj.insert("closed_by_merge".into(), change.as_key().into());
+    obj.insert("closed_at".into(), chrono::Utc::now().to_rfc3339().into());
+    let spec = ledger::ChangeKey::parse(key)
+        .is_none()
+        .then(|| ledger::GateSpec::resolve(root, key));
+    store::append_one(
+        store_root,
+        ledger::event::verdict_event(store_root, change, &obj, spec.as_ref()),
+    )?;
+    Ok(obj)
 }
 
 // Apply the local annotation to its exact effective source, even when the

@@ -314,6 +314,10 @@ impl Pinned {
             (true, Some(dir)) => dir,
             (true, None) => return Ok(None),
         };
+        #[cfg(test)]
+        if !by_spec {
+            discovery_work_tests::LEDGER_OPENS.with(|n| n.set(n.get() + 1));
+        }
         let file = match openat(dir, name, 0) {
             Ok(file) => file,
             Err(e) if missing(&e) => return Ok(None),
@@ -398,6 +402,8 @@ fn read_change(
 ) -> Result<Option<(Vec<GateEvent>, u64, EntryStat)>, Unsafe> {
     let mut attempt = 0;
     loop {
+        #[cfg(test)]
+        discovery_work_tests::LEDGER_OPENS.with(|n| n.set(n.get() + 1));
         let Some((body, meta)) = read_entry_meta(ledger, name, MAX_LEDGER_BYTES, budget)? else {
             return Ok(None);
         };
@@ -686,6 +692,7 @@ struct Cached {
     stat: EntryStat,
     /// Charged to a caller's selection budget (not only the work budget).
     selected: bool,
+    bound_checked: bool,
 }
 
 /// A label's by-spec hint as one discovery read it: what it names, the hint
@@ -713,6 +720,8 @@ fn list_bound(
     marked: bool,
     spec: &str,
 ) -> Result<Option<Vec<String>>, Unsafe> {
+    #[cfg(test)]
+    discovery_work_tests::BINDING_LISTS.with(|n| n.set(n.get() + 1));
     let refuse =
         |what: String, e: std::io::Error| not_bound(format!("refusing gate-ledger {what}: {e}"));
     let mut changes = Vec::new();
@@ -794,7 +803,7 @@ pub(crate) struct Discovery {
     work: Budget,
     /// Per listed label, its bound changes; `None` when it has no bindings
     /// directory.
-    bound: std::collections::HashMap<String, Option<Vec<String>>>,
+    bound: std::collections::HashMap<String, Result<Option<Vec<String>>, Unsafe>>,
     /// The store root, for the full read a selection falls back to, and
     /// what that read found beyond the bindings: per label, the changes
     /// whose ledger carries it although no binding names them.
@@ -810,6 +819,12 @@ pub(crate) struct Discovery {
     /// Ledgers are read once across a list operation. Their total retained
     /// payload is bounded by the work and selection budgets.
     cache: std::collections::HashMap<String, Cached>,
+    // Queue readers pin one discovery for the invocation, including its
+    // negative reads and any full scan needed after losing a binding.
+    // trace:BUG-2629 | ai:codex
+    queue: bool,
+    misses: std::collections::HashMap<String, Result<(), Unsafe>>,
+    queue_scan: Option<Result<std::collections::HashMap<String, Vec<String>>, Unsafe>>,
 }
 
 /// Every change a label's reviews may sit on, as a selection and the
@@ -959,6 +974,18 @@ pub(crate) fn discover_with_budget(root: &Path, work: Budget) -> Result<Option<D
 
 // trace:BUG-2531 | ai:claude
 // trace:BUG-2584 | ai:claude
+pub(crate) fn discover_for_queue(root: &Path) -> Result<Option<Discovery>, Unsafe> {
+    let mut found = open_discovery(
+        root,
+        Budget::with_limits(MAX_DISCOVERY_BYTES, MAX_SELECTION_EVENTS),
+        false,
+    )?;
+    if let Some(discovery) = &mut found {
+        discovery.queue = true;
+    }
+    Ok(found)
+}
+
 fn open_discovery(root: &Path, work: Budget, share: bool) -> Result<Option<Discovery>, Unsafe> {
     #[cfg(test)]
     discovery_work_tests::DISCOVERIES_OPENED.with(|n| n.set(n.get() + 1));
@@ -1003,26 +1030,23 @@ fn open_discovery(root: &Path, work: Budget, share: bool) -> Result<Option<Disco
         full: None,
         hints: Default::default(),
         cache: Default::default(),
+        queue: false,
+        misses: Default::default(),
+        queue_scan: None,
     }))
 }
 
 impl Discovery {
-    /// The changes bound to the normalized label `spec`, listed once.
-    // trace:BUG-2531 | ai:claude
-    fn bound_changes(&mut self, spec: &str) -> Result<Vec<String>, Unsafe> {
-        Ok(self.listed(spec)?.unwrap_or_default())
-    }
-
-    /// [`Discovery::bound_changes`], telling a label without a bindings
-    /// directory (`None`: never bound) from one whose directory is empty.
-    // trace:BUG-2531 | ai:claude
-    fn listed(&mut self, spec: &str) -> Result<Option<Vec<String>>, Unsafe> {
-        if let Some(changes) = self.bound.get(spec) {
-            return Ok(changes.clone());
-        }
-        let changes = list_bound(&self.ledger, &self.ledger_path, self.marked, spec)?;
-        self.bound.insert(spec.to_string(), changes.clone());
-        Ok(changes)
+    /// The changes bound to the normalized label, listed once. A missing
+    /// directory is distinct from a present directory with no bindings.
+    // trace:BUG-2531 BUG-2629 | ai:codex
+    pub(crate) fn listed(&mut self, spec: &str) -> Result<Option<&[String]>, Unsafe> {
+        self.bound
+            .entry(spec.to_string())
+            .or_insert_with(|| list_bound(&self.ledger, &self.ledger_path, self.marked, spec))
+            .as_ref()
+            .map(|value| value.as_deref())
+            .map_err(Clone::clone)
     }
 
     /// Read `key`'s ledger once into the cache; `false` when it has none. A
@@ -1031,28 +1055,14 @@ impl Discovery {
     /// ledger carries must be bound to it, or the bindings are inconsistent.
     // trace:BUG-2531 | ai:claude
     fn load(&mut self, key: &str, selection: Option<&mut Budget>) -> Result<bool, Unsafe> {
-        if let Some(cached) = self.cache.get_mut(key) {
-            if let Some(budget) = selection {
-                if !cached.selected {
-                    budget.spend_bytes(cached.bytes)?;
-                    for _ in 0..cached.events.len() {
-                        budget.spend_event()?;
-                    }
-                    cached.selected = true;
-                }
-            }
+        if !self.load_raw(key, selection)? {
+            return Ok(false);
+        }
+        if self.cache[key].bound_checked {
             return Ok(true);
         }
-        let selected = selection.is_some();
-        let budget = match selection {
-            Some(budget) => budget,
-            None => &mut self.work,
-        };
-        let name = format!("{key}.jsonl");
-        let Some((events, bytes, stat)) = read_change(&self.ledger, &name, key, budget)? else {
-            return Ok(false);
-        };
-        let reviewed: std::collections::BTreeSet<String> = events
+        let reviewed: std::collections::BTreeSet<String> = self.cache[key]
+            .events
             .iter()
             .filter(|e| e.verdict_record().is_some())
             .filter_map(|e| e.spec.as_deref().map(binding_key))
@@ -1064,22 +1074,135 @@ impl Discovery {
                 .recovered
                 .get(&spec)
                 .is_some_and(|changes| changes.iter().any(|c| c == key));
-            if !recovered && !self.bound_changes(&spec)?.iter().any(|c| c == key) {
+            if !recovered
+                && !self
+                    .listed(&spec)?
+                    .is_some_and(|keys| keys.binary_search_by(|c| c.as_str().cmp(key)).is_ok())
+            {
                 return Err(not_bound(format!(
                     "refusing gate-ledger selection: {key} records {spec} reviews without a binding"
                 )));
             }
         }
-        self.cache.insert(
-            key.to_string(),
-            Cached {
-                events,
-                bytes,
-                stat,
-                selected,
-            },
-        );
+        self.cache
+            .get_mut(key)
+            .expect("loaded ledger")
+            .bound_checked = true;
         Ok(true)
+    }
+
+    fn load_raw(&mut self, key: &str, selection: Option<&mut Budget>) -> Result<bool, Unsafe> {
+        if let Some(cached) = self.cache.get_mut(key) {
+            if let Some(budget) = selection {
+                if !cached.selected {
+                    budget.spend_bytes(cached.bytes)?;
+                    for _ in &cached.events {
+                        budget.spend_event()?;
+                    }
+                    cached.selected = true;
+                }
+            }
+            return Ok(true);
+        }
+        if let Some(miss) = self.misses.get(key) {
+            return miss.clone().map(|()| false);
+        }
+        let selected = selection.is_some();
+        let budget = selection.unwrap_or(&mut self.work);
+        let name = format!("{key}.jsonl");
+        let read = read_change(&self.ledger, &name, key, budget);
+        match read {
+            Ok(Some((events, bytes, stat))) => {
+                self.cache.insert(
+                    key.to_string(),
+                    Cached {
+                        events,
+                        bytes,
+                        stat,
+                        selected,
+                        bound_checked: false,
+                    },
+                );
+                Ok(true)
+            }
+            other => {
+                let miss = other.map(|_| ());
+                if self.queue {
+                    self.misses.insert(key.to_string(), miss.clone());
+                }
+                miss.map(|()| false)
+            }
+        }
+    }
+
+    // Ownership for queue admission starts from a checked physical read.
+    // A missing binding can still be recovered by the owner set's scan.
+    // trace:BUG-2629 | ai:codex
+    pub(crate) fn queue_change_events(
+        &mut self,
+        change: ChangeKey,
+        budget: &mut Budget,
+    ) -> Result<Vec<GateEvent>, Unsafe> {
+        let key = change.as_key();
+        if !self.load_raw(&key, Some(budget))? {
+            return Ok(Vec::new());
+        }
+        let mut events: Vec<_> = self.cache[&key]
+            .events
+            .iter()
+            .filter(|event| !event.is_spec_only())
+            .cloned()
+            .collect();
+        self.filter_events(&mut events)?;
+        Ok(events)
+    }
+
+    pub(crate) fn cached_change(&self, change: ChangeKey) -> Option<(&[GateEvent], u64)> {
+        let key = change.as_key();
+        if self.misses.get(&key).is_some_and(Result::is_ok) {
+            return Some((&[], 0));
+        }
+        self.cache
+            .get(&key)
+            .map(|cached| (cached.events.as_slice(), cached.bytes))
+    }
+
+    pub(crate) fn queue_recorded_changes(&mut self, spec: &str) -> Result<Vec<String>, Unsafe> {
+        if self.queue_scan.is_none() {
+            self.queue_scan = Some(self.scan_queue_bindings());
+        }
+        match self.queue_scan.as_ref().expect("queue scan initialized") {
+            Ok(labels) => Ok(labels.get(spec).cloned().unwrap_or_default()),
+            Err(why) => Err(why.clone()),
+        }
+    }
+
+    fn scan_queue_bindings(
+        &mut self,
+    ) -> Result<std::collections::HashMap<String, Vec<String>>, Unsafe> {
+        let mut labels = std::collections::HashMap::<String, Vec<String>>::new();
+        let keys = list_pinned(&self.ledger, &self.ledger_path)?
+            .into_iter()
+            .filter_map(|name| change_ledger_name(&name));
+        for (index, key) in keys.enumerate() {
+            if index >= MAX_CHANGE_LEDGERS {
+                return Err(not_bound(format!(
+                    "more than {MAX_CHANGE_LEDGERS} change ledgers"
+                )));
+            }
+            if !self.load_raw(&key, None)? {
+                return Err(not_bound(format!("{key} vanished while it was read")));
+            }
+            for label in self.cache[&key]
+                .events
+                .iter()
+                .filter_map(|event| event.spec.as_deref().map(binding_key))
+                .collect::<std::collections::HashSet<_>>()
+            {
+                labels.entry(label).or_default().push(key.clone());
+            }
+        }
+        Ok(labels)
     }
 
     // trace:BUG-2531 | ai:codex
@@ -1214,12 +1337,35 @@ impl Discovery {
     }
 
     fn ledger_exists(&self, key: &str) -> Result<bool, Unsafe> {
-        match openat(&self.ledger, &format!("{key}.jsonl"), 0) {
-            Ok(_) => Ok(true),
-            Err(e) if missing(&e) => Ok(false),
-            Err(e) => Err(Unsafe(format!(
-                "refusing gate-ledger entry {key}.jsonl: {e}"
-            ))),
+        use std::os::fd::AsRawFd;
+        let name = std::ffi::CString::new(format!("{key}.jsonl")).expect("validated change key");
+        let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+        // SAFETY: the pinned descriptor and name are live, and stat is writable.
+        let result = unsafe {
+            libc::fstatat(
+                self.ledger.as_raw_fd(),
+                name.as_ptr(),
+                stat.as_mut_ptr(),
+                libc::AT_SYMLINK_NOFOLLOW,
+            )
+        };
+        if result == 0 {
+            // SAFETY: fstatat initialized stat on success.
+            let stat = unsafe { stat.assume_init() };
+            if stat.st_mode & libc::S_IFMT != libc::S_IFLNK {
+                return Ok(true);
+            }
+            return Err(Unsafe(format!(
+                "refusing gate-ledger entry {key}.jsonl: a link"
+            )));
+        }
+        let error = std::io::Error::last_os_error();
+        if missing(&error) {
+            Ok(false)
+        } else {
+            Err(Unsafe(format!(
+                "refusing gate-ledger entry {key}.jsonl: {error}"
+            )))
         }
     }
 
@@ -1299,7 +1445,11 @@ impl Discovery {
     }
 
     /// `spec`'s unbound verdict events, strictly.
-    fn unbound(&self, spec: &str, budget: &mut Budget) -> Result<Vec<GateEvent>, Unsafe> {
+    pub(crate) fn unbound(
+        &self,
+        spec: &str,
+        budget: &mut Budget,
+    ) -> Result<Vec<GateEvent>, Unsafe> {
         let Some(by_spec) = &self.by_spec else {
             return Ok(Vec::new());
         };
@@ -1337,7 +1487,7 @@ impl Discovery {
         budget: &mut Budget,
         selection: bool,
     ) -> Result<OwnerSet, Unsafe> {
-        let listed = self.listed(spec)?;
+        let listed = self.listed(spec)?.map(<[String]>::to_vec);
         let keyed = spec_key(spec).as_deref() == Some(spec);
         let (hint, hint_stat) = if keyed {
             self.index_hint(spec, budget, selection)?
@@ -1350,17 +1500,23 @@ impl Discovery {
             let found = match self.recovered.get(spec) {
                 Some(found) => found.clone(),
                 None => {
-                    let scan = full_read(&self.root)?;
-                    let found: Vec<String> = scan
-                        .as_deref()
-                        .map(|scan| recorded_in(scan, spec))
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|key| !changes.contains(key))
-                        .collect();
-                    self.full = scan;
-                    self.recovered.insert(spec.to_string(), found.clone());
-                    found
+                    if self.queue {
+                        let found = self.queue_recorded_changes(spec)?;
+                        self.recovered.insert(spec.to_string(), found.clone());
+                        found
+                    } else {
+                        let scan = full_read(&self.root)?;
+                        let found: Vec<String> = scan
+                            .as_deref()
+                            .map(|scan| recorded_in(scan, spec))
+                            .unwrap_or_default()
+                            .into_iter()
+                            .filter(|key| !changes.contains(key))
+                            .collect();
+                        self.full = scan;
+                        self.recovered.insert(spec.to_string(), found.clone());
+                        found
+                    }
                 }
             };
             changes.extend(found);
@@ -1668,6 +1824,11 @@ pub(crate) fn capacity(root: &Path) -> Result<Capacity, Unsafe> {
 #[cfg(test)]
 // trace:BUG-2531 | ai:codex
 pub(crate) mod discovery_work_tests {
+    thread_local! {
+        pub(crate) static BINDING_LISTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        pub(crate) static LEDGER_OPENS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    }
+
     use super::*;
     use std::cell::Cell;
     thread_local! {

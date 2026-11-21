@@ -1,3 +1,9 @@
+Queue work and rework share one checked review-discovery cache across admission,
+terminal-wait reconciliation and findings import. Recovery checks the complete
+spec inventory when selected-change ownership fails. Review discovery runs
+outside the canonical store write lock. See OVERVIEW.md.
+<!-- trace:BUG-2629 | ai:codex -->
+
 Cross-label gate-ledger discovery has a separate 128 MiB/200,000-attempt
 aggregate work ceiling, including unrelated payloads and torn retries; exhaustion
 refuses selection. Automatic archive retention and discovery limited to relevant

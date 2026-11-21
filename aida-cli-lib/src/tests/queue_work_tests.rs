@@ -4985,19 +4985,34 @@ fn bug_2500_waiting_pickup_checks_every_member_and_preserves_exemptions() {
         "reviewer",
     )
     .unwrap();
-    assert!(
-        refuse_waiting_pickup(tmp.path(), &plan, "implementer", false, false, false, None).is_err()
-    );
+    assert!(refuse_waiting_pickup(
+        &mut crate::queue_cmd::rework_bindings::DiscoveryCache::default(),
+        tmp.path(),
+        &plan,
+        "implementer",
+        false,
+        false,
+        false,
+        None
+    )
+    .is_err());
     for (role, listing, plan_only, guided) in [
         ("reviewer", false, false, false),
         ("implementer", true, false, false),
         ("implementer", false, true, false),
         ("implementer", false, false, true),
     ] {
-        assert!(
-            refuse_waiting_pickup(tmp.path(), &plan, role, listing, plan_only, guided, None)
-                .is_ok()
-        );
+        assert!(refuse_waiting_pickup(
+            &mut crate::queue_cmd::rework_bindings::DiscoveryCache::default(),
+            tmp.path(),
+            &plan,
+            role,
+            listing,
+            plan_only,
+            guided,
+            None
+        )
+        .is_ok());
     }
     assert!(!tmp.path().join(".aida/queue").exists());
     assert!(!tmp.path().join(".aida/merge-holds").exists());
@@ -5111,7 +5126,18 @@ fn bug_2629_pickup_discovery_leaves_the_store_write_lock_to_other_writers() {
             }));
         });
     }
-    let admit = || refuse_waiting_pickup(&root, &plan, "implementer", false, false, false, None);
+    let admit = || {
+        refuse_waiting_pickup(
+            &mut crate::queue_cmd::rework_bindings::DiscoveryCache::default(),
+            &root,
+            &plan,
+            "implementer",
+            false,
+            false,
+            false,
+            None,
+        )
+    };
 
     // Healthy ledger: both bound changes are visited.
     let _ = admit();

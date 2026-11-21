@@ -273,27 +273,34 @@ fn verdict_events(root: &Path, key: &str) -> Vec<GateEvent> {
 // BUG-2629: shared with the rework recovery, which reads the same view.
 // trace:BUG-2629 | ai:claude
 pub(crate) fn merge_streams(events: impl IntoIterator<Item = GateEvent>) -> Vec<GateEvent> {
-    let mut streams: Vec<std::collections::VecDeque<GateEvent>> = Vec::new();
+    use std::cmp::Reverse;
+    use std::collections::{BinaryHeap, HashMap, VecDeque};
+    let mut stream_index = HashMap::new();
+    let mut streams: Vec<VecDeque<GateEvent>> = Vec::new();
     for event in events {
-        if let Some(stream) = streams.iter_mut().find(|stream| {
-            stream
-                .front()
-                .is_some_and(|first| first.change == event.change)
-        }) {
-            stream.push_back(event);
-        } else {
-            streams.push(std::collections::VecDeque::from([event]));
+        let index = *stream_index.entry(event.change.clone()).or_insert_with(|| {
+            streams.push(VecDeque::new());
+            streams.len() - 1
+        });
+        streams[index].push_back(event);
+    }
+    let mut heads = BinaryHeap::new();
+    for (index, stream) in streams.iter().enumerate() {
+        if let Some(event) = stream.front() {
+            heads.push(Reverse((event.at.clone(), event.seq, index)));
         }
     }
     let mut out = Vec::new();
-    while let Some(index) = streams
-        .iter()
-        .enumerate()
-        .filter_map(|(index, stream)| stream.front().map(|event| (index, event)))
-        .min_by(|(_, a), (_, b)| a.at.cmp(&b.at).then(a.seq.cmp(&b.seq)))
-        .map(|(index, _)| index)
-    {
-        out.push(streams[index].pop_front().unwrap());
+    while let Some(Reverse((_, _, index))) = heads.pop() {
+        let stream = &mut streams[index];
+        out.push(
+            stream
+                .pop_front()
+                .expect("heap holds one queued event per stream"),
+        );
+        if let Some(event) = stream.front() {
+            heads.push(Reverse((event.at.clone(), event.seq, index)));
+        }
     }
     out
 }

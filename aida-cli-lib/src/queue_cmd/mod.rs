@@ -129,7 +129,7 @@ pub(crate) use recover::{handle_queue_recover, recover_action_label, recover_pus
 mod remove_move;
 mod rework;
 // trace:BUG-2629 | ai:claude
-mod rework_bindings;
+pub(crate) mod rework_bindings;
 #[cfg(test)]
 pub(crate) use rework::require_rework_pickable;
 pub(crate) use rework::{

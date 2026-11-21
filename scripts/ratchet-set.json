@@ -6,6 +6,18 @@
       "target": [
         "--lib"
       ],
+      "filter": "bug_2629_queue_discovery_source_ratchet",
+      "source": "aida-cli-lib/src/queue_cmd/rework_discovery_ratchet.rs",
+      "scope": "filter",
+      "tests": [
+        "bug_2629_queue_discovery_source_ratchet"
+      ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
       "filter": "story_1888_gate_paths",
       "source": "aida-cli-lib/src/tests/story_1888_gate_paths_tests.rs",
       "tests": [

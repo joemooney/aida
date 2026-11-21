@@ -27,10 +27,62 @@ fn change_from_review_url(root: &Path, url: &str) -> Option<crate::gate::ledger:
 /// This annotates the old review; it grants no approval or spec completion.
 // trace:BUG-2525 | ai:codex
 pub(crate) fn reconcile_waiting_verdicts(project_root: &Path, keys: Option<&[String]>) {
+    let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
+    reconcile_waiting(project_root, keys, &mut StoreReviews(project_root));
+}
+
+// trace:BUG-2629 | ai:codex
+pub(crate) trait WaitReviews {
+    fn current(&mut self, key: &str) -> Option<rv::CurrentVerdict>;
+    fn signed(&mut self, key: &str) -> Option<rv::CurrentVerdict>;
+    fn changes(&self, key: &str) -> Vec<crate::gate::ledger::ChangeKey>;
+    fn close(
+        &mut self,
+        key: &str,
+        change: crate::gate::ledger::ChangeKey,
+        source: &rv::CurrentVerdict,
+    ) -> std::io::Result<()>;
+}
+
+struct StoreReviews<'a>(&'a Path);
+
+impl WaitReviews for StoreReviews<'_> {
+    fn current(&mut self, key: &str) -> Option<rv::CurrentVerdict> {
+        rv::current_verdict(self.0, key)
+    }
+
+    fn signed(&mut self, key: &str) -> Option<rv::CurrentVerdict> {
+        crate::gate::review_publication::current_verified(self.0, &[key])
+            .ok()
+            .flatten()
+    }
+
+    fn changes(&self, key: &str) -> Vec<crate::gate::ledger::ChangeKey> {
+        use crate::gate::ledger;
+        ledger::store_root(self.0)
+            .map(|root| ledger::project::changes_for_spec(&root, key))
+            .unwrap_or_default()
+    }
+
+    fn close(
+        &mut self,
+        key: &str,
+        change: crate::gate::ledger::ChangeKey,
+        source: &rv::CurrentVerdict,
+    ) -> std::io::Result<()> {
+        rv::close_terminal_wait(self.0, key, change, source).map(|_| ())
+    }
+}
+
+pub(crate) fn reconcile_waiting(
+    project_root: &Path,
+    keys: Option<&[String]>,
+    reviews: &mut impl WaitReviews,
+) {
     use crate::forge_observed::Observed;
     let forge = crate::forge::forge_for(project_root);
     let kind = forge.kind();
-    reconcile_waiting_verdicts_with(project_root, keys, |change| {
+    reconcile_waiting_with(project_root, keys, reviews, |change| {
         use crate::gate::ledger::ChangeForge;
         if !matches!(
             (kind, change.forge),
@@ -46,27 +98,34 @@ pub(crate) fn reconcile_waiting_verdicts(project_root: &Path, keys: Option<&[Str
     });
 }
 
-// Injectable observation keeps regression tests independent of PATH and live APIs.
-// trace:BUG-2525 | ai:codex
+#[cfg(test)]
 pub(crate) fn reconcile_waiting_verdicts_with(
     project_root: &Path,
     keys: Option<&[String]>,
+    observe: impl FnMut(crate::gate::ledger::ChangeKey) -> Option<(crate::forge::ChangeState, String)>,
+) {
+    let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
+    reconcile_waiting_with(project_root, keys, &mut StoreReviews(project_root), observe);
+}
+
+// Injectable observation keeps regression tests independent of PATH and live APIs.
+// trace:BUG-2525 | ai:codex
+fn reconcile_waiting_with(
+    project_root: &Path,
+    keys: Option<&[String]>,
+    reviews: &mut impl WaitReviews,
     mut observe: impl FnMut(
         crate::gate::ledger::ChangeKey,
     ) -> Option<(crate::forge::ChangeState, String)>,
 ) {
     use crate::forge::ChangeState;
-    use crate::gate::ledger::{self, ChangeKey};
-    // Every `aida pull` auto-bump walks every verdict key here: share one
-    // re-validated gate-ledger discovery across them, not one per key.
-    // trace:BUG-2551 BUG-2543 | ai:claude
-    let _discovery = ledger::checked::DiscoveryScope::enter();
+    use crate::gate::ledger::ChangeKey;
     let mut observations = std::collections::HashMap::new();
     let candidates = keys
         .map(<[String]>::to_vec)
         .unwrap_or_else(|| rv::verdict_keys(project_root));
     for key in candidates {
-        let Some(source) = rv::current_verdict(project_root, &key) else {
+        let Some(source) = reviews.current(&key) else {
             continue;
         };
         let Some(verdict) = rv::parse_recorded_verdict(&source.body) else {
@@ -89,7 +148,8 @@ pub(crate) fn reconcile_waiting_verdicts_with(
         } else {
             // Verified publication projections carry their repository-bound
             // change in the receipt identity, even without a local index.
-            let signed_source = crate::gate::review_publication::current(project_root, &[&key])
+            let signed_source = reviews
+                .signed(&key)
                 .is_some_and(|signed| signed.body == source.body && signed.source == source.source);
             if let Some(receipt) = verdict
                 .attestation
@@ -120,9 +180,7 @@ pub(crate) fn reconcile_waiting_verdicts_with(
             // An explicit review URL identifies the batch. Only fall back to
             // the spec index when the round does not name its own change.
             if changes.is_empty() {
-                if let Ok(root) = ledger::store_root(project_root) {
-                    changes.extend(ledger::project::changes_for_spec(&root, &key));
-                }
+                changes.extend(reviews.changes(&key));
             }
         }
         for change in changes {
@@ -135,7 +193,7 @@ pub(crate) fn reconcile_waiting_verdicts_with(
             if matches!(state, ChangeState::Merged | ChangeState::Closed)
                 && (explicitly_named || rv::same_reviewed_sha(head, terminal_head))
             {
-                if let Err(error) = rv::close_terminal_wait(project_root, &key, change, &source) {
+                if let Err(error) = reviews.close(&key, change, &source) {
                     eprintln!("warning: could not close terminal batch review for {key}: {error}");
                 }
                 break;
@@ -196,9 +254,12 @@ mod tests {
             .to_string(),
         )
         .unwrap();
-        reconcile_waiting_verdicts_with(tmp.path(), Some(&["TASK-3448".into()]), |_| {
-            panic!("a self-asserted publication identity cannot bypass repository validation")
-        });
+        reconcile_waiting_with(
+            tmp.path(),
+            Some(&["TASK-3448".into()]),
+            &mut StoreReviews(tmp.path()),
+            |_| panic!("a self-asserted publication identity cannot bypass repository validation"),
+        );
         assert!(!rv::read_recorded_verdict(tmp.path(), "TASK-3448")
             .unwrap()
             .is_closed());

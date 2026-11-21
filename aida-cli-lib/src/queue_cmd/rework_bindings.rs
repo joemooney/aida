@@ -29,11 +29,12 @@
 use crate::gate::ledger::event::EVENT_VERSION;
 use crate::gate::ledger::{self, bindings, checked, project, store, ChangeKey, GateEvent};
 use crate::gate::review_verdict::{self as rv, JsonObj, RecordedVerdict, VerdictKind};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 /// One spec's change-keyed review inventory.
 // trace:BUG-2629 | ai:claude
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct ReworkBindings {
     /// The store root the inventory was read from; `None` when it cannot be
     /// resolved (then nothing is bound, as before).
@@ -42,6 +43,9 @@ pub(crate) struct ReworkBindings {
     /// change is proved to concern the spec without reading its events: the
     /// by-spec index names it, or it is the spec's open change.
     inventory: Vec<(ChangeKey, bool)>,
+    positions: HashMap<ChangeKey, usize>,
+    hints: HashMap<String, Vec<ChangeKey>>,
+    selected_only_extra: Option<ChangeKey>,
     /// The changes whose verdicts are bound to the spec.
     bound: Vec<ChangeKey>,
     /// Why ownership of the inventory's reviews could not be established.
@@ -68,7 +72,7 @@ pub(crate) struct Recovered {
     pub(crate) unknown: Option<String>,
     /// The record bodies behind `findings`: one review read under its
     /// change key and under its spec key is imported once.
-    bodies: Vec<String>,
+    bodies: HashSet<String>,
 }
 
 impl Recovered {
@@ -91,7 +95,7 @@ impl Recovered {
                         &format_args!("the findings recorded for {key}"),
                         2 * body.len() as u64,
                     )?;
-                    self.bodies.push(body);
+                    self.bodies.insert(body);
                     self.findings.push((key.to_string(), verdict));
                 }
             }
@@ -158,6 +162,7 @@ fn published(project_root: &Path, key: &str) -> anyhow::Result<Option<rv::Curren
 
 /// Why a bounded read did not return a file's text.
 // trace:BUG-2629 | ai:claude
+#[derive(Clone)]
 enum Unread {
     /// The byte budget ran out: the pass stops here.
     Exhausted(String),
@@ -262,13 +267,15 @@ impl ReadBudget {
             Ok(None) => return Ok(None),
             Err(why) => return Err(failed(&why)),
         };
+        if meta.len() > checked::MAX_LEDGER_BYTES {
+            return Err(failed(&"it exceeds the per-file gate-ledger size cap"));
+        }
         if meta.len() > self.left {
             return Err(Unread::Exhausted(self.exhausted(&shown.display())));
         }
         let mut bytes = Vec::new();
-        let read = handle
-            .take(self.left.saturating_add(1))
-            .read_to_end(&mut bytes);
+        let cap = self.left.min(checked::MAX_LEDGER_BYTES);
+        let read = handle.take(cap.saturating_add(1)).read_to_end(&mut bytes);
         if bytes.len() as u64 > self.left {
             return Err(Unread::Exhausted(self.exhausted(&shown.display())));
         }
@@ -277,16 +284,14 @@ impl ReadBudget {
         #[cfg(test)]
         checked::discovery_work_tests::LOSSY_READ_BYTES
             .with(|n| n.set(n.get() + bytes.len() as u64));
+        if bytes.len() as u64 > cap {
+            return Err(failed(&"it grew past the per-file gate-ledger size cap"));
+        }
         read.map_err(|e| failed(&e))?;
         String::from_utf8(bytes)
             .map(Some)
             .map_err(|_| failed(&"not UTF-8"))
     }
-}
-
-/// The file name of `change`'s ledger in the ledger directory.
-fn ledger_name(change: ChangeKey) -> String {
-    format!("{}.jsonl", change.as_key())
 }
 
 /// Hand `each` every non-blank line of the ledger text `body` (which
@@ -315,13 +320,11 @@ fn scan_ledger<'a>(
 
 impl ReworkBindings {
     fn note(&mut self, change: ChangeKey, proved: bool) {
-        match self
-            .inventory
-            .iter_mut()
-            .find(|(known, _)| *known == change)
-        {
-            Some((_, was)) => *was |= proved,
-            None => self.inventory.push((change, proved)),
+        if let Some(&position) = self.positions.get(&change) {
+            self.inventory[position].1 |= proved;
+        } else {
+            self.positions.insert(change, self.inventory.len());
+            self.inventory.push((change, proved));
         }
     }
 
@@ -330,6 +333,7 @@ impl ReworkBindings {
     }
 
     /// Whether the verdict stored under `key` is bound to the spec.
+    #[cfg(test)]
     pub(crate) fn binds(&self, key: &str) -> bool {
         ChangeKey::parse(key).is_some_and(|change| self.bound.contains(&change))
     }
@@ -371,35 +375,29 @@ impl ReworkBindings {
         &self,
         project_root: &Path,
         labels: &[String],
+        cache: &mut DiscoveryCache,
     ) -> Result<Recovered, String> {
         let mut out = Recovered::default();
         let Some(root) = self.root.as_deref() else {
             return Ok(out);
         };
         let mut budget = ReadBudget::new(MAX_RECOVERY_BYTES);
-        // A ledger directory that cannot be pinned is an unknown source of
-        // every review in it; the legacy files and publications are still
-        // judged, so a wait among them is named.
-        let pinned = checked::pin(root).unwrap_or_else(|e| {
-            out.unknown = Some(e.0);
-            None
-        });
         let mut by_label: Vec<Vec<GateEvent>> = labels.iter().map(|_| Vec::new()).collect();
         let mut inventory = self.inventory.clone();
         inventory.sort_by_key(|(change, _)| change.as_key());
         for (change, proved) in inventory {
             let key = change.as_key();
-            let events = recovery_events(
-                &mut budget,
-                pinned.as_ref(),
-                (false, &ledger_name(change)),
-                &store::ledger_file(root, change),
-                &key,
-                &mut out.unknown,
-            )?
-            .into_iter()
-            .filter(|e| !e.is_spec_only())
-            .collect::<Vec<_>>();
+            let events = cache
+                .recovery_ledger(
+                    false,
+                    &store::ledger_file(root, change),
+                    &key,
+                    &mut budget,
+                    &mut out.unknown,
+                )?
+                .into_iter()
+                .filter(|e| !e.is_spec_only())
+                .collect::<Vec<_>>();
             let view: Vec<&GateEvent> = events
                 .iter()
                 .filter(|e| project::terminal_annotation_matches(e, &key))
@@ -429,35 +427,16 @@ impl ReworkBindings {
             let mut unbound = Vec::new();
             if let Some(spec) = project::spec_key(label) {
                 let file = store::unbound_file(root, &spec);
-                let name = file
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or_default()
-                    .to_string();
                 // An unbound record is keyed by its spec.
-                for event in recovery_events(
-                    &mut budget,
-                    pinned.as_ref(),
-                    (true, &name),
-                    &file,
-                    &spec,
-                    &mut out.unknown,
-                )? {
-                    let copies = |b: &GateEvent| b.verdict_record() == event.verdict_record();
-                    // A record bound to a change is read once, from the
-                    // change, as in the projection: when that copy can
-                    // answer. A copy whose ownership is unverified answers
-                    // nothing here, so the unbound record, which no foreign
-                    // change can own, stands in its place.
-                    if bound
-                        .iter()
-                        .any(|b| copies(b) && project::ownership_free(b))
-                    {
-                        continue;
-                    }
-                    bound.retain(|b| !copies(b));
-                    unbound.push(event);
-                }
+                let protected =
+                    record_identities(bound.iter().filter(|event| project::ownership_free(event)));
+                unbound =
+                    cache.recovery_ledger(true, &file, &spec, &mut budget, &mut out.unknown)?;
+                // An ownership-free bound copy can answer. An unverified
+                // bound copy is replaced by its independent unbound copy.
+                unbound.retain(|event| !has_record(&protected, event));
+                let replaced = record_identities(&unbound);
+                bound.retain(|event| !has_record(&replaced, event));
             }
             let merged = project::merge_streams(bound.into_iter().chain(unbound));
             let view: Vec<&GateEvent> = merged
@@ -469,6 +448,22 @@ impl ReworkBindings {
         }
         Ok(out)
     }
+}
+
+// The JSON record's Hash and Eq use the same identity. Retain references
+// while comparing streams so deduplication does not copy verdict payloads.
+// trace:BUG-2629 | ai:codex
+fn record_identities<'a>(events: impl IntoIterator<Item = &'a GateEvent>) -> HashSet<&'a JsonObj> {
+    events
+        .into_iter()
+        .filter_map(GateEvent::verdict_record)
+        .collect()
+}
+
+fn has_record(records: &HashSet<&JsonObj>, event: &GateEvent) -> bool {
+    event
+        .verdict_record()
+        .is_some_and(|record| records.contains(record))
 }
 
 /// The verdict events of one ledger for a recovery: the entry `entry`
@@ -485,31 +480,46 @@ impl ReworkBindings {
 /// and cannot be read or ends in a torn line; the events that do belong are
 /// still returned, so a wait among them is named.
 // trace:BUG-2629 | ai:claude
-fn recovery_events(
+#[derive(Default)]
+struct RawLedger {
+    events: Vec<GateEvent>,
+    // The label scan may ignore malformed lines that cannot name its spec.
+    malformed: Vec<String>,
+    labels: HashSet<String>,
+    issue: Option<String>,
+    bytes: u64,
+    attempts: usize,
+}
+
+fn read_raw_ledger(
     budget: &mut ReadBudget,
     pinned: Option<&checked::Pinned>,
     entry: (bool, &str),
     file: &Path,
     source: &str,
-    unknown: &mut Option<String>,
-) -> Result<Vec<GateEvent>, String> {
+) -> Result<RawLedger, Unread> {
     let Some(pinned) = pinned else {
-        return Ok(Vec::new());
+        return Ok(RawLedger::default());
     };
-    let body = match budget.read(pinned, entry.0, entry.1, file) {
-        Ok(body) => body.unwrap_or_default(),
-        Err(Unread::Exhausted(why)) => return Err(why),
-        Err(Unread::Failed(why)) => {
-            unknown.get_or_insert(why);
-            String::new()
-        }
+    let Some(body) = budget.read(pinned, entry.0, entry.1, file)? else {
+        return Ok(RawLedger::default());
+    };
+    let mut raw = RawLedger {
+        bytes: body.len() as u64,
+        ..RawLedger::default()
     };
     if !body.is_empty() && !body.ends_with('\n') {
-        unknown.get_or_insert_with(|| format!("{} ends in a torn line", file.display()));
+        raw.issue = Some(format!("{} ends in a torn line", file.display()));
     }
-    let mut events = Vec::new();
     let mut seq: Option<u64> = None;
-    scan_ledger(budget, file, &body, |n, _, event| {
+    scan_ledger(budget, file, &body, |n, line, event| {
+        raw.attempts += 1;
+        if let Some(label) = event.as_ref()
+            .filter(|event| !event.is_spec_only() && event.verdict_record().is_some())
+            .and_then(|event| event.spec.as_deref())
+        {
+            raw.labels.insert(label.trim().to_ascii_uppercase());
+        }
         let refused = match &event {
             None => Some("cannot be parsed".to_string()),
             Some(e) if e.v == 0 || e.v > EVENT_VERSION => {
@@ -524,24 +534,25 @@ fn recovery_events(
             Some(_) => None,
         };
         match (refused, event) {
-            (Some(why), _) => {
-                unknown.get_or_insert_with(|| {
-                    format!(
-                        "{} holds a record that cannot be parsed or does not belong to it: line {n} {why}",
-                        file.display()
-                    )
-                });
+            (Some(why), event) => {
+                if event.is_none() {
+                    raw.malformed.push(line.to_ascii_lowercase());
+                }
+                raw.issue.get_or_insert_with(|| format!(
+                    "{} holds a record that cannot be parsed or does not belong to it: line {n} {why}",
+                    file.display()
+                ));
             }
             (None, Some(event)) => {
                 seq = Some(event.seq);
                 if event.verdict_record().is_some() {
-                    events.push(event);
+                    raw.events.push(event);
                 }
             }
             (None, None) => {}
         }
-    })?;
-    Ok(events)
+    }).map_err(Unread::Exhausted)?;
+    Ok(raw)
 }
 
 /// Whether `event` is recorded for the spec `label`.
@@ -744,58 +755,498 @@ fn judge(
     })
 }
 
-/// The ownership check of one inventory: ONE strict discovery, opened at the
-/// first change that needs it and kept for every change after.
-///
-/// Opening a discovery per change made each one re-validate the shared
-/// ownership inventory ([`checked::DiscoveryScope`]): list the spec's
-/// bindings and stat every ledger folded so far. Over a spec's N changes
-/// that is quadratic filesystem work with hardly a byte read, which is how a
-/// healthy spec with many fingerprinted reviews still spun. The one
-/// discovery here folds each spec's ledgers once and answers every change
-/// from that index.
-// trace:BUG-2629 | ai:claude
-struct Ownership<'a> {
-    root: &'a Path,
-    discovery: Option<checked::Discovery>,
+/// Review evidence owned by one queue invocation. Failed and absent reads
+/// stay pinned too, so another consumer cannot retry discovery implicitly.
+// trace:BUG-2629 | ai:codex
+#[derive(Default)]
+pub(crate) struct DiscoveryCache {
+    root: Option<PathBuf>,
+    discovery: Option<Result<Option<checked::Discovery>, String>>,
+    budget: checked::Budget,
+    change_events: HashMap<ChangeKey, Result<Vec<GateEvent>, String>>,
+    label_events: HashMap<String, Result<Vec<GateEvent>, String>>,
+    listed: HashMap<String, Result<Option<Vec<ChangeKey>>, String>>,
+    inventories: HashMap<Vec<String>, ReworkBindings>,
+    current: HashMap<String, Result<Option<rv::CurrentVerdict>, String>>,
+    closures: HashMap<String, JsonObj>,
+    signed: HashMap<Vec<String>, Result<Option<rv::CurrentVerdict>, String>>,
+    fallback: Option<Result<Option<checked::Pinned>, String>>,
+    raw: HashMap<(bool, String), Result<RawLedger, Unread>>,
+    raw_budget: Option<ReadBudget>,
+    verdict_budget: Option<ReadBudget>,
+    pub(super) pickups: HashMap<
+        (String, String, Option<String>),
+        Result<crate::rework_direction::ReviewResult<String>, super::work::ReworkReviewError>,
+    >,
 }
 
-impl Ownership<'_> {
-    /// `change`'s events as the projection readers present them
-    /// ([`project::events`]), or why ownership of its review copies cannot
-    /// be established: the condition under which those readers withhold
-    /// them ([`checked::filter_miskeyed_or_fail_closed`]).
-    fn events(&mut self, change: ChangeKey) -> Result<Vec<GateEvent>, String> {
+impl DiscoveryCache {
+    fn discovery(
+        &mut self,
+        project_root: &Path,
+    ) -> Result<Option<&mut checked::Discovery>, String> {
         step();
-        let mut events: Vec<GateEvent> = store::read_file(self.root, change)
-            .into_iter()
-            .filter(|e| !e.is_spec_only())
-            .collect();
-        if !project::needs_witnesses(&events) {
-            return Ok(events);
+        self.discovery
+            .get_or_insert_with(|| {
+                let root = ledger::store_root(project_root).map_err(|e| e.to_string())?;
+                let discovery = checked::discover_for_queue(&root).map_err(|e| e.0);
+                self.root = Some(root);
+                discovery
+            })
+            .as_mut()
+            .map(Option::as_mut)
+            .map_err(|why| why.clone())
+    }
+
+    fn listed(
+        &mut self,
+        project_root: &Path,
+        spec: &str,
+    ) -> Result<Option<Vec<ChangeKey>>, String> {
+        if let Some(listed) = self.listed.get(spec) {
+            return listed.clone();
         }
-        if self.discovery.is_none() {
-            self.discovery = checked::discover(self.root).map_err(|e| e.0)?;
-        }
-        let Some(discovery) = self.discovery.as_mut() else {
-            return Err("the gate ledger disappeared while it was read".into());
+        let listed = match self.discovery(project_root) {
+            Ok(Some(discovery)) => discovery
+                .listed(spec)
+                .map(|listed| {
+                    listed.map(|keys| {
+                        keys.iter()
+                            .filter_map(|key| ChangeKey::parse(key))
+                            .collect()
+                    })
+                })
+                .map_err(|why| why.0),
+            // Uncertified ledgers are enumerated by label. Hints may also
+            // tie a legacy verdict file to an otherwise unrecorded change.
+            _ => Ok(None),
         };
-        discovery.filter_events(&mut events).map_err(|e| e.0)?;
-        Ok(events)
+        self.listed.insert(spec.to_string(), listed.clone());
+        listed
+    }
+
+    fn ownership_checked(
+        &mut self,
+        project_root: &Path,
+        change: ChangeKey,
+    ) -> Result<&[GateEvent], String> {
+        if !self.change_events.contains_key(&change) {
+            let mut budget = std::mem::take(&mut self.budget);
+            let found = match self.discovery(project_root) {
+                Ok(Some(discovery)) => discovery
+                    .queue_change_events(change, &mut budget)
+                    .map_err(|why| why.0),
+                Ok(None) => Ok(Vec::new()),
+                Err(why) => {
+                    let Some(root) = self.root.as_deref() else {
+                        return Err(why);
+                    };
+                    let file = store::ledger_file(root, change);
+                    match self.raw_ledger(false, &file, &change.as_key()) {
+                        Ok(raw)
+                            if raw.issue.is_none() && !project::needs_witnesses(&raw.events) =>
+                        {
+                            Ok(raw
+                                .events
+                                .iter()
+                                .filter(|event| !event.is_spec_only())
+                                .cloned()
+                                .collect())
+                        }
+                        Ok(raw) => Err(raw.issue.clone().unwrap_or(why)),
+                        Err(error) => Err(error.why()),
+                    }
+                }
+            }
+            .and_then(|events| {
+                if events
+                    .iter()
+                    .any(|event| event.verdict_record().is_some() && unreadable(event))
+                {
+                    Err(format!(
+                        "{} holds a review round with no readable verdict",
+                        change.as_key()
+                    ))
+                } else {
+                    Ok(events)
+                }
+            });
+            self.budget = budget;
+            self.change_events.insert(change, found);
+        }
+        self.change_events[&change].as_deref().map_err(Clone::clone)
+    }
+
+    fn inventory(&mut self, project_root: &Path, labels: &[String]) -> ReworkBindings {
+        if let Some(inventory) = self.inventories.get(labels) {
+            return inventory.clone();
+        }
+        let inventory = discover_inventory(self, project_root, labels);
+        self.inventories.insert(labels.to_vec(), inventory.clone());
+        inventory
+    }
+
+    fn raw_ledger(
+        &mut self,
+        by_spec: bool,
+        file: &Path,
+        source: &str,
+    ) -> Result<&RawLedger, Unread> {
+        let key = (by_spec, source.to_string());
+        if !self.raw.contains_key(&key) {
+            let root = self.root.as_deref().expect("inventory has a store root");
+            let pinned = self
+                .fallback
+                .get_or_insert_with(|| checked::pin(root).map_err(|why| why.0));
+            let found = match pinned {
+                Ok(pinned) => read_raw_ledger(
+                    self.raw_budget
+                        .get_or_insert_with(|| ReadBudget::new(checked::MAX_DISCOVERY_BYTES)),
+                    pinned.as_ref(),
+                    (
+                        by_spec,
+                        file.file_name()
+                            .and_then(|name| name.to_str())
+                            .unwrap_or_default(),
+                    ),
+                    file,
+                    source,
+                ),
+                Err(why) => Err(Unread::Failed(why.clone())),
+            };
+            self.raw.insert(key.clone(), found);
+        }
+        self.raw[&key].as_ref().map_err(Clone::clone)
+    }
+
+    fn cached_change(&self, change: ChangeKey) -> Option<(&[GateEvent], u64)> {
+        self.discovery
+            .as_ref()
+            .and_then(|found| found.as_ref().ok().and_then(Option::as_ref))
+            .and_then(|discovery| discovery.cached_change(change))
+    }
+
+    fn recovery_ledger(
+        &mut self,
+        by_spec: bool,
+        file: &Path,
+        source: &str,
+        budget: &mut ReadBudget,
+        unknown: &mut Option<String>,
+    ) -> Result<Vec<GateEvent>, String> {
+        let (events, bytes, attempts) = match ChangeKey::parse(source)
+            .filter(|_| !by_spec)
+            .and_then(|change| self.cached_change(change))
+        {
+            Some((events, bytes)) => (events, bytes, events.len()),
+            None => match self.raw_ledger(by_spec, file, source) {
+                Ok(raw) => {
+                    if let Some(why) = &raw.issue {
+                        unknown.get_or_insert_with(|| why.clone());
+                    }
+                    (&raw.events[..], raw.bytes, raw.attempts)
+                }
+                Err(Unread::Failed(why)) => {
+                    unknown.get_or_insert(why);
+                    return Ok(Vec::new());
+                }
+                Err(Unread::Exhausted(why)) => return Err(why),
+            },
+        };
+        budget.charge(&file.display(), bytes)?;
+        for _ in 0..attempts {
+            budget.attempt(&file.display())?;
+        }
+        Ok(events
+            .iter()
+            .filter(|event| event.verdict_record().is_some())
+            .cloned()
+            .collect())
+    }
+    pub(super) fn events(
+        &mut self,
+        project_root: &Path,
+        bindings: &ReworkBindings,
+        key: &str,
+    ) -> Result<&[GateEvent], String> {
+        if let Some(change) = ChangeKey::parse(key) {
+            return self.ownership_checked(project_root, change);
+        }
+        let Some(spec) = project::spec_key(key) else {
+            return Ok(&[]);
+        };
+        if !self.label_events.contains_key(&spec) {
+            let view = self.label_view(project_root, bindings, &spec);
+            self.label_events.insert(spec.clone(), view);
+        }
+        self.label_events[&spec].as_deref().map_err(Clone::clone)
+    }
+
+    fn label_view(
+        &mut self,
+        project_root: &Path,
+        bindings: &ReworkBindings,
+        spec: &str,
+    ) -> Result<Vec<GateEvent>, String> {
+        let mut bound = Vec::new();
+        for (change, _) in &bindings.inventory {
+            if bindings.selected_only_extra == Some(*change) {
+                continue;
+            }
+            bound.extend(
+                self.ownership_checked(project_root, *change)?
+                    .iter()
+                    .filter(|event| event.verdict_record().is_some() && names(event, spec))
+                    .cloned(),
+            );
+        }
+        let mut budget = std::mem::take(&mut self.budget);
+        let unbound = match self.discovery(project_root) {
+            Ok(Some(discovery)) => discovery.unbound(spec, &mut budget).map_err(|why| why.0),
+            Ok(None) => Ok(Vec::new()),
+            Err(why) => {
+                let Some(root) = self.root.as_deref() else {
+                    self.budget = budget;
+                    return Err(why);
+                };
+                let file = store::unbound_file(root, spec);
+                self.raw_ledger(true, &file, spec)
+                    .map_err(Unread::why)
+                    .and_then(|raw| {
+                        if let Some(why) = &raw.issue {
+                            Err(why.clone())
+                        } else {
+                            Ok(raw.events.clone())
+                        }
+                    })
+            }
+        };
+        self.budget = budget;
+        let identities = record_identities(&bound);
+        let mut unbound = unbound?;
+        if unbound.iter().any(unreadable) {
+            return Err(format!(
+                "the unbound ledger of {spec} contains no readable verdict"
+            ));
+        }
+        unbound.retain(|event| !has_record(&identities, event));
+        bound.extend(unbound);
+        Ok(project::merge_streams(bound)
+            .into_iter()
+            .filter(|event| project::terminal_annotation_matches(event, spec))
+            .collect())
+    }
+
+    fn signed(&mut self, root: &Path, ids: &[&str]) -> Result<Option<rv::CurrentVerdict>, String> {
+        let keys = ids.iter().map(|key| key.to_string()).collect();
+        self.signed
+            .entry(keys)
+            .or_insert_with(|| {
+                let found = match ids {
+                    [key] => published(root, key),
+                    _ => crate::gate::review_publication::current_verified(root, ids),
+                }
+                .map_err(|error| {
+                    format!("signed review publication could not be verified: {error:#}")
+                })?;
+                if let Some(found) = &found {
+                    self.verdict_budget
+                        .get_or_insert_with(|| ReadBudget::new(MAX_RECOVERY_BYTES))
+                        .charge(&"signed review publications", found.body.len() as u64)?;
+                }
+                Ok(found)
+            })
+            .clone()
+    }
+
+    fn legacy_body(&mut self, root: &Path, key: &str) -> Result<Option<String>, String> {
+        let budget = self
+            .verdict_budget
+            .get_or_insert_with(|| ReadBudget::new(MAX_RECOVERY_BYTES));
+        let path = rv::verdict_path(root, key);
+        let mut consumed = 0;
+        let found = rv::checked_legacy_record(root, key, budget.left, &mut consumed);
+        budget.charge(&path.display(), consumed)?;
+        found
+            .map(|found| found.map(|(body, _)| body))
+            .map_err(|why| format!("{} cannot be read: {why}", path.display()))
+    }
+
+    pub(super) fn current_verdict(
+        &mut self,
+        root: &Path,
+        bindings: &ReworkBindings,
+        key: &str,
+    ) -> Result<Option<rv::CurrentVerdict>, String> {
+        if !self.current.contains_key(key) {
+            let store = self.root.clone().unwrap_or_else(|| root.to_path_buf());
+            let current = (|| {
+                let signed = self.signed(root, &[key])?;
+                let legacy = self.legacy_body(root, key)?;
+                let events = self.events(root, bindings, key)?;
+                if ChangeKey::parse(key).is_some() {
+                    let verdicts: Vec<_> = events
+                        .iter()
+                        .filter(|event| {
+                            event.verdict_record().is_some()
+                                && project::terminal_annotation_matches(event, key)
+                        })
+                        .cloned()
+                        .collect();
+                    Ok(rv::current_verdict_from_events(
+                        root, &store, key, &verdicts, legacy, signed,
+                    ))
+                } else {
+                    Ok(rv::current_verdict_from_events(
+                        root, &store, key, events, legacy, signed,
+                    ))
+                }
+            })();
+            self.current.insert(key.to_string(), current);
+        }
+        let mut current = self.current[key].clone()?;
+        if let (Some(source), Some(record)) = (&mut current, self.closures.get(key)) {
+            if let Some(body) = rv::terminal_wait_overlay_body(key, &source.body, record) {
+                source.body = body;
+            }
+        }
+        Ok(current)
+    }
+
+    pub(super) fn select_verdict(
+        &mut self,
+        root: &Path,
+        bindings: &ReworkBindings,
+        ids: &[&str],
+    ) -> crate::gate::review_alias::AliasSelection {
+        use crate::gate::review_alias::{self, AliasSelection, Selected};
+        let labels = review_alias::spec_labels(ids);
+        let signed = if labels.len() == 1 {
+            self.signed(root, &[&labels[0]])
+        } else {
+            self.signed(root, ids)
+        };
+        if let Err(reason) = signed.as_ref() {
+            return AliasSelection::Unsafe {
+                reason: reason.clone(),
+                refusal: None,
+            };
+        }
+        if let Ok(Some(mut remote)) = signed {
+            for key in &labels {
+                let stored = self.events(root, bindings, key).ok().and_then(|events| {
+                    events
+                        .iter()
+                        .rev()
+                        .filter_map(GateEvent::verdict_record)
+                        .find(|record| record.contains_key("terminal_wait_source"))
+                        .cloned()
+                });
+                if let Some(body) = self
+                    .closures
+                    .get(key)
+                    .or(stored.as_ref())
+                    .and_then(|record| rv::terminal_wait_overlay_body(key, &remote.body, record))
+                {
+                    remote.body = body;
+                }
+            }
+            return AliasSelection::Selected(Box::new(Selected {
+                verdict: rv::parse_recorded_verdict(&remote.body).expect("verified publication"),
+                body: remote.body,
+                label: ids.first().unwrap_or(&"").to_string(),
+                source: remote.source,
+                order_time: None,
+            }));
+        }
+        match labels.as_slice() {
+            [] => AliasSelection::Absent,
+            [label] => match self.current_verdict(root, bindings, label) {
+                Ok(Some(current)) => match rv::parse_recorded_verdict(&current.body) {
+                    Some(verdict) => AliasSelection::Selected(Box::new(Selected {
+                        verdict,
+                        label: label.clone(),
+                        body: current.body,
+                        source: current.source,
+                        order_time: None,
+                    })),
+                    None => AliasSelection::Unsafe {
+                        reason: format!("the review of {label} does not parse"),
+                        refusal: None,
+                    },
+                },
+                Ok(None) => AliasSelection::Absent,
+                Err(reason) => AliasSelection::Unsafe {
+                    reason,
+                    refusal: None,
+                },
+            },
+            _ => {
+                let snapshots = labels
+                    .into_iter()
+                    .map(|label| {
+                        let events = self.events(root, bindings, &label)?.to_vec();
+                        Ok((label, events))
+                    })
+                    .collect::<Result<Vec<_>, String>>();
+                match snapshots {
+                    Ok(events) => review_alias::choose_cached(
+                        root,
+                        self.root.as_deref().unwrap_or(root),
+                        events,
+                    ),
+                    Err(reason) => AliasSelection::Unsafe {
+                        reason,
+                        refusal: None,
+                    },
+                }
+            }
+        }
+    }
+
+    pub(super) fn close_wait(
+        &mut self,
+        root: &Path,
+        key: &str,
+        change: ChangeKey,
+        source: &rv::CurrentVerdict,
+    ) -> std::io::Result<()> {
+        let store = self.root.as_deref().unwrap_or(root);
+        let annotation = rv::close_cached_terminal_wait(root, store, key, change, source)?;
+        self.closures.insert(key.to_string(), annotation);
+        Ok(())
     }
 }
 
-/// Whether the bindings of the ledger under `root` are certified complete,
-/// as a strict selection requires: a supported marker with older writers
-/// fenced out, or no change ledger at all. Otherwise a change may hold a
-/// review of a spec that neither a binding nor a hint records.
-// trace:BUG-2629 | ai:claude
-fn bindings_certified(root: &Path) -> bool {
-    use bindings::MarkerState;
-    match bindings::marker_state(root) {
-        Ok(MarkerState::Complete) => store::writer_fenced(root),
-        Ok(MarkerState::NoLedger | MarkerState::Trivial) => true,
-        _ => false,
+pub(super) struct WaitingReviews<'a> {
+    pub(super) root: &'a Path,
+    pub(super) cache: &'a mut DiscoveryCache,
+    pub(super) bindings: &'a ReworkBindings,
+}
+
+impl crate::review_waiting::WaitReviews for WaitingReviews<'_> {
+    fn current(&mut self, key: &str) -> Option<rv::CurrentVerdict> {
+        self.cache
+            .current_verdict(self.root, self.bindings, key)
+            .ok()
+            .flatten()
+    }
+
+    fn signed(&mut self, key: &str) -> Option<rv::CurrentVerdict> {
+        self.cache.signed(self.root, &[key]).ok().flatten()
+    }
+
+    fn changes(&self, label: &str) -> Vec<ChangeKey> {
+        self.bindings.hints.get(label).cloned().unwrap_or_default()
+    }
+
+    fn close(
+        &mut self,
+        key: &str,
+        change: ChangeKey,
+        source: &rv::CurrentVerdict,
+    ) -> std::io::Result<()> {
+        self.cache.close_wait(self.root, key, change, source)
     }
 }
 
@@ -816,206 +1267,224 @@ fn bindings_certified(root: &Path) -> bool {
 /// ledger is opened beneath the pinned ledger directory, without following a
 /// link ([`ReadBudget::read`]).
 // trace:BUG-2629 | ai:claude
-fn labelled_changes(root: &Path, labels: &[String]) -> Result<Vec<ChangeKey>, String> {
+fn labelled_changes_with_cache(
+    cache: &mut DiscoveryCache,
+    root: &Path,
+    labels: &[String],
+) -> Result<Vec<ChangeKey>, String> {
     step();
     let dir = ledger::ledger_dir(root);
-    let unlisted = |e: checked::Unsafe| format!("{} cannot be listed: {e}", dir.display());
-    // The pinned directory: a linked component refuses, and every ledger is
-    // opened beneath it.
-    let Some(pinned) = checked::pin(root).map_err(unlisted)? else {
+    let unlisted = |e: &str| format!("{} cannot be listed: {e}", dir.display());
+    let pin = cache
+        .fallback
+        .get_or_insert_with(|| checked::pin(root).map_err(|why| why.0));
+    let Some(pinned) = pin.as_ref().map_err(|why| unlisted(why))? else {
         return Ok(Vec::new());
     };
-    let mut changes = Vec::new();
-    for name in pinned.names().map_err(unlisted)? {
-        let Some(change) =
-            bindings::change_ledger_name(&name).and_then(|key| ChangeKey::parse(&key))
-        else {
-            continue;
-        };
-        if changes.len() >= checked::MAX_CHANGE_LEDGERS {
+    let changes = pinned.names().map_err(|why| unlisted(&why.0))?;
+    let wanted: Vec<_> = labels
+        .iter()
+        .map(|label| label.trim().to_ascii_lowercase())
+        .filter(|label| !label.is_empty())
+        .collect();
+    let mut found = Vec::new();
+    for (index, change) in changes
+        .iter()
+        .filter_map(|name| {
+            bindings::change_ledger_name(name).and_then(|key| ChangeKey::parse(&key))
+        })
+        .enumerate()
+    {
+        if index >= checked::MAX_CHANGE_LEDGERS {
             return Err(format!(
                 "{} holds more than {} change ledgers",
                 dir.display(),
                 checked::MAX_CHANGE_LEDGERS
             ));
         }
-        changes.push(change);
-    }
-    changes.sort_by_key(|change| change.as_key());
-    let wanted: Vec<String> = labels
-        .iter()
-        .map(|label| label.trim().to_ascii_lowercase())
-        .filter(|label| !label.is_empty())
-        .collect();
-    // One byte budget and one parse ceiling for the whole pass.
-    let mut budget = ReadBudget::new(checked::MAX_DISCOVERY_BYTES);
-    let mut found = Vec::new();
-    for change in changes {
-        let file = store::ledger_file(root, change);
-        // A ledger removed since the listing holds no review.
-        let Some(body) = budget
-            .read(&pinned, false, &ledger_name(change), &file)
-            .map_err(Unread::why)?
-        else {
-            continue;
+        let relevant = if let Some((events, _)) = cache.cached_change(change) {
+            events.iter().any(|event| {
+                !event.is_spec_only()
+                    && event.verdict_record().is_some()
+                    && labels.iter().any(|label| names(event, label))
+            })
+        } else {
+            let file = store::ledger_file(root, change);
+            let raw = cache
+                .raw_ledger(false, &file, &change.as_key())
+                .map_err(Unread::why)?;
+            if let Some(label) = wanted.iter().find(|label| {
+                raw.malformed
+                    .iter()
+                    .any(|line| line.contains(label.as_str()))
+            }) {
+                return Err(format!(
+                    "{} holds a record that cannot be parsed and may review {}",
+                    file.display(),
+                    label.to_ascii_uppercase()
+                ));
+            }
+            labels.iter().any(|label| raw.labels.contains(label))
         };
-        // Nothing of a line is kept: an event answers whether it reviews
-        // the spec, and a line that is not one whether it names a label.
-        let mut reviews_spec = false;
-        let mut torn: Option<&String> = None;
-        scan_ledger(&mut budget, &file, &body, |_, line, event| match event {
-            Some(e) => {
-                reviews_spec |= !e.is_spec_only()
-                    && e.verdict_record().is_some()
-                    && labels.iter().any(|label| names(&e, label));
-            }
-            None if torn.is_none() => {
-                let line = line.to_ascii_lowercase();
-                torn = wanted.iter().find(|label| line.contains(label.as_str()));
-            }
-            None => {}
-        })?;
-        if let Some(label) = torn {
-            return Err(format!(
-                "{} holds a record that cannot be parsed and may review {}",
-                file.display(),
-                label.to_ascii_uppercase()
-            ));
-        }
-        if reviews_spec {
+        if relevant {
             found.push(change);
         }
     }
     Ok(found)
 }
 
-/// The change-keyed review inventory of the spec known by `labels`, read
-/// from `project_root`'s gate ledger.
-///
-/// A change is bound when the spec's by-spec index names it, or when its
-/// newest ledger verdict is recorded for the spec; only a change the ledger
-/// records against the spec can be the latter, so no other ledger is read.
-/// That holds for a ledger whose bindings are certified complete. For one
-/// that is not (never bootstrapped, or open to older writers) the changes
-/// are enumerated by the label their events carry instead, in one bounded
-/// pass ([`labelled_changes`]). So are they when a lost binding's strict
-/// full read refuses: that read returned no inventory, so the spec's changes
-/// are not known from it. A pass that cannot cover the ledger is a
-/// [`ReworkBindings::refusal`].
-/// With `selected_only` (branch selection supplied the change) no
-/// spec-bound change is looked for. `open_change`, the spec's open or
-/// selected change, is always checked: its reviews answer for the spec.
-// trace:BUG-2629 | ai:claude
-pub(crate) fn discover(
+#[cfg(test)]
+fn labelled_changes(root: &Path, labels: &[String]) -> Result<Vec<ChangeKey>, String> {
+    let mut cache = DiscoveryCache {
+        root: Some(root.to_path_buf()),
+        ..DiscoveryCache::default()
+    };
+    labelled_changes_with_cache(&mut cache, root, labels)
+}
+
+/// Build the spec inventory once, independently of selecting a change.
+// trace:BUG-2629 | ai:codex
+fn discover_inventory(
+    cache: &mut DiscoveryCache,
+    project_root: &Path,
+    labels: &[String],
+) -> ReworkBindings {
+    let mut out = ReworkBindings::default();
+    let uncertified = cache.discovery(project_root).is_err();
+    let Some(root) = cache.root.clone() else {
+        return out;
+    };
+    let mut scan = uncertified;
+    for label in labels {
+        let Some(spec) = project::spec_key(label) else {
+            continue;
+        };
+        let hint = project::index_changes(&root, &spec);
+        let listed = match cache.listed(project_root, &spec) {
+            Ok(listed) => listed,
+            Err(why) => {
+                out.fail(why);
+                scan = true;
+                None
+            }
+        };
+        let lost = checked::binding_lost(hint.as_deref(), listed.as_deref());
+        if let Some(hint) = &hint {
+            out.hints.insert(spec.clone(), hint.clone());
+        }
+        for change in hint.into_iter().flatten() {
+            out.note(change, true);
+        }
+        for change in listed.into_iter().flatten() {
+            out.note(change, false);
+        }
+        if lost && !uncertified {
+            match cache.discovery(project_root).and_then(|discovery| {
+                discovery
+                    .map(|d| d.queue_recorded_changes(&spec).map_err(|e| e.0))
+                    .unwrap_or_else(|| Ok(Vec::new()))
+            }) {
+                Ok(found) => found
+                    .iter()
+                    .filter_map(|key| ChangeKey::parse(key))
+                    .for_each(|change| out.note(change, false)),
+                Err(why) => {
+                    out.fail(why);
+                    scan = true;
+                }
+            }
+        }
+    }
+    if scan {
+        match labelled_changes_with_cache(cache, &root, labels) {
+            Ok(found) => found.into_iter().for_each(|change| out.note(change, false)),
+            Err(why) => out.refusal = Some(why),
+        }
+    }
+    out.root = Some(root);
+    out
+}
+
+impl ReworkBindings {
+    pub(super) fn bound_keys(&self) -> Vec<String> {
+        let mut keys: Vec<_> = self.bound.iter().map(|change| change.as_key()).collect();
+        keys.sort();
+        keys
+    }
+}
+
+pub(super) fn discover_with_cache(
+    cache: &mut DiscoveryCache,
     project_root: &Path,
     labels: &[String],
     open_change: Option<&str>,
     selected_only: bool,
 ) -> ReworkBindings {
-    let mut out = ReworkBindings::default();
-    let Ok(root) = ledger::store_root(project_root) else {
-        return out;
-    };
-    // One ownership inventory for every read below. trace:BUG-2543 | ai:claude
-    let _discovery = checked::DiscoveryScope::enter();
-    // And one discovery over it for every change checked. trace:BUG-2629 | ai:claude
-    let mut ownership = Ownership {
-        root: &root,
-        discovery: None,
-    };
-    if !selected_only {
-        // At most one label pass per inventory: it covers every label.
-        let scan_by_label = |out: &mut ReworkBindings| match labelled_changes(&root, labels) {
-            Ok(found) => found.into_iter().for_each(|change| out.note(change, false)),
-            Err(why) => out.refusal = Some(why),
-        };
-        let uncertified = !bindings_certified(&root);
-        if uncertified {
-            scan_by_label(&mut out);
-        }
-        for label in labels {
-            let Some(spec) = project::spec_key(label) else {
-                continue;
+    let selected = open_change.and_then(ChangeKey::parse);
+    let mut selected_check = None;
+    if let Some(change) = selected {
+        selected_check = cache.ownership_checked(project_root, change).err();
+    }
+    let mut out = cache.inventory(project_root, labels);
+    if let Some(why) = selected_check {
+        out.fail(why);
+    }
+    if out.refusal.is_none() && out.failure.is_none() && !selected_only {
+        for (change, proved) in &out.inventory {
+            let events = match cache.ownership_checked(project_root, *change) {
+                Ok(events) => events,
+                Err(why) => {
+                    out.fail(why);
+                    break;
+                }
             };
-            let hint = project::index_changes(&root, &spec);
-            let listed = bindings::bound_changes_lossy(&root, &spec);
-            let lost = checked::binding_lost(hint.as_deref(), listed.as_deref());
-            for change in hint.into_iter().flatten() {
-                out.note(change, true);
-            }
-            for change in listed.into_iter().flatten() {
-                out.note(change, false);
-            }
-            // A deleted binding must not hide a review: every ledger that
-            // carries the label, from one full read. A full read that
-            // refused is not repeated for the next label: it reads the same
-            // ledgers and refuses the same way.
-            if lost && out.failure.is_none() {
-                match checked::recorded_changes(&root, &spec) {
-                    Ok(found) => found
-                        .iter()
-                        .filter_map(|key| ChangeKey::parse(key))
-                        .for_each(|change| out.note(change, false)),
-                    Err(e) => {
-                        out.fail(e.0);
-                        // The refused read enumerated nothing, so the
-                        // change whose binding was lost is still unknown:
-                        // find it by label, or refuse when that cannot
-                        // cover the ledger either.
-                        if !uncertified {
-                            scan_by_label(&mut out);
-                        }
-                    }
-                }
-            }
-        }
-        // An incomplete inventory already fails the read; the index still
-        // binds what it names, and no further ledger is read.
-        for (change, proved) in out.inventory.clone() {
-            step();
-            let mut presented = None;
-            if out.failure.is_none() {
-                match ownership.events(change) {
-                    Ok(events) => presented = Some(events),
-                    Err(why) => out.fail(why),
-                }
-            }
-            // The change's newest verdict, as its projection reads it
-            // ([`project::newest_verdict_event`]), from the events already
-            // in hand: no second read, and no second discovery.
             let key = change.as_key();
-            let bound = proved
-                || presented.is_some_and(|events| {
-                    let verdicts = events
-                        .into_iter()
-                        .filter(|e| {
-                            e.verdict_record().is_some()
-                                && project::terminal_annotation_matches(e, &key)
+            let bound = *proved
+                || project::newest_of(
+                    events
+                        .iter()
+                        .filter(|event| {
+                            event.verdict_record().is_some()
+                                && project::terminal_annotation_matches(event, &key)
                         })
-                        .collect();
-                    project::newest_of(verdicts).is_some_and(|event| {
-                        event
-                            .spec
-                            .as_deref()
-                            .is_some_and(|spec| labels.iter().any(|l| l.eq_ignore_ascii_case(spec)))
-                    })
-                });
+                        .cloned()
+                        .collect(),
+                )
+                .is_some_and(|event| labels.iter().any(|label| names(&event, label)));
             if bound {
-                out.bound.push(change);
+                out.bound.push(*change);
             }
         }
+    } else if !selected_only {
+        out.bound = out
+            .inventory
+            .iter()
+            .filter_map(|(c, proved)| proved.then_some(*c))
+            .collect();
     }
-    if let Some(open) = open_change.and_then(ChangeKey::parse) {
-        if out.failure.is_none() {
-            if let Err(why) = ownership.events(open) {
-                out.fail(why);
-            }
+    if let Some(change) = selected {
+        if !out.positions.contains_key(&change) {
+            out.selected_only_extra = Some(change);
         }
-        out.note(open, true);
+        out.note(change, true);
     }
-    drop(ownership);
-    out.root = Some(root);
     out
+}
+
+#[cfg(test)]
+fn discover(
+    project_root: &Path,
+    labels: &[String],
+    open_change: Option<&str>,
+    selected_only: bool,
+) -> ReworkBindings {
+    discover_with_cache(
+        &mut DiscoveryCache::default(),
+        project_root,
+        labels,
+        open_change,
+        selected_only,
+    )
 }
 
 /// How long a rework lookup runs before it first names itself.
@@ -1053,3 +1522,7 @@ pub(crate) fn announce_slow_phase<T>(
 #[cfg(test)]
 #[path = "rework_bindings_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "rework_discovery_ratchet.rs"]
+mod discovery_ratchet;

@@ -739,6 +739,7 @@ fn test_queue_work_respects_no_launch_for_calling_lane_attribution() {
     let res = crate::queue_cmd::handle_queue_work(
         &storage,
         None,
+        None,
         crate::test_env::HERMETIC_TEST_USER,
         Some("TASK-3000"),
         None,

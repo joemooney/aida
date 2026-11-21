@@ -553,6 +553,9 @@ pub(crate) fn handle_queue_rework(
     no_pull: bool,
     user: Option<&str>,
 ) -> Result<()> {
+    // The --work continuation shares this review snapshot with preparation.
+    // trace:BUG-2629 | ai:codex
+    let mut review_cache = super::rework_bindings::DiscoveryCache::default();
     refuse_retired_steal(steal)?;
     // `--resume` chains through to `aida queue work --resume` (TASK-112,
     // shipped). It implies `--work` — there is nothing to resume without
@@ -744,6 +747,9 @@ pub(crate) fn handle_queue_rework(
         require_rework_pickable(&projected, &store)?;
     }
 
+    // Prepare review evidence before the atomic store writers below acquire
+    // store-write.lock. Forge and gate-ledger reads stay outside that lock.
+    // trace:BUG-2629 | ai:codex
     // Decide recurrence before return-to-flight clears review evidence and
     // emits its audit/event: a refused blind retry never leaves the shelf.
     // trace:BUG-2502 | ai:codex
@@ -785,7 +791,8 @@ pub(crate) fn handle_queue_rework(
             super::rework_bindings::SLOW_PHASE_NOTICE,
             say,
             || {
-                super::work::resolve_rework_review(
+                super::work::resolve_rework_review_cached(
+                    &mut review_cache,
                     &root,
                     &display_id,
                     &spec_id,
@@ -954,6 +961,7 @@ pub(crate) fn handle_queue_rework(
                 let new_status = new_status.clone();
                 let now = chrono::Utc::now();
                 let mut moved_to: Option<RequirementStatus> = None;
+                let reopen_root = requeue_project_root(storage);
                 // Per-spec compare-and-swap under the store write lock; the
                 // status recheck below runs on the copy read under it. trace:BUG-1612 | ai:claude
                 storage.update_spec_atomically(req, |r| {
@@ -971,11 +979,7 @@ pub(crate) fn handle_queue_rework(
                     // (Completed -> InProgress is `rework_smart_target`'s
                     // default) — clear the stale completed_at so the next
                     // completion stamps a fresh date. trace:TASK-1477 | ai:claude
-                    crate::completion::record_reopen(
-                        r,
-                        &current_status,
-                        Some(&requeue_project_root(storage)),
-                    );
+                    crate::completion::record_reopen(r, &current_status, Some(&reopen_root));
                 })?;
                 if let Some(actual) = moved_to {
                     anyhow::bail!(
@@ -1158,6 +1162,7 @@ pub(crate) fn handle_queue_rework(
     if work {
         handle_queue_work(
             storage,
+            Some(&mut review_cache),
             None,
             &user_id,
             Some(&spec_id),
