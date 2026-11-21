@@ -5003,6 +5003,151 @@ fn bug_2500_waiting_pickup_checks_every_member_and_preserves_exemptions() {
     assert!(!tmp.path().join(".aida/merge-holds").exists());
 }
 
+/// BUG-2629 (operator report, 2026-11-20): a headless `queue work` rework
+/// launch spun in review discovery while it held the store write lock, and
+/// every other store writer on the host waited behind it. Pickup admission
+/// for a spec with two bound changes and several rounds each must leave the
+/// lock free at every step that touches the gate ledger, on the healthy
+/// path and on the recovery after a failed ownership discovery: a second
+/// writer (its own open file description, as another process has) takes
+/// the lock without waiting each time.
+// trace:BUG-2629 | ai:claude
+#[test]
+fn bug_2629_pickup_discovery_leaves_the_store_write_lock_to_other_writers() {
+    use crate::gate::ledger::{self, event, store, ChangeKey};
+    use crate::gate::review_verdict::{JsonObj, RecorderAttestation, ATTESTATION_KEY};
+    use std::os::fd::AsRawFd;
+    const SPEC: &str = "BUG-2706";
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_CONTAINED", None)]);
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().canonicalize().unwrap();
+    let round = |pr: u64, verdict: &str, secs: i64| {
+        let at = (chrono::Utc::now() + chrono::Duration::seconds(secs)).to_rfc3339();
+        let actor = RecorderAttestation {
+            sha: "a".repeat(40),
+            seat: Some("reviewer".to_string()),
+            grant_id: Some("g-1".to_string()),
+            ..Default::default()
+        };
+        let mut record: JsonObj = serde_json::from_value(serde_json::json!({
+            "verdict": verdict, "reviewed_sha": "a".repeat(40), "recorded_by": "reviewer",
+            "recorded_at": at, "summary": format!("round at {secs} on {pr}"),
+            "findings": [format!("finding at {secs} on {pr}")],
+        }))
+        .unwrap();
+        record.insert(
+            ATTESTATION_KEY.to_string(),
+            serde_json::to_value(actor).unwrap(),
+        );
+        let spec = ledger::GateSpec::with_key(SPEC, None);
+        let change = ChangeKey::pr(pr);
+        store::append_one(
+            &root,
+            event::verdict_event(&root, change, &record, Some(&spec)),
+        )
+        .unwrap();
+    };
+    for (pr, base) in [(4401, -900), (4402, -500)] {
+        for n in 0..4 {
+            round(pr, "request-changes", base + 60 * n);
+        }
+    }
+    let plan = plan_with(
+        QueueWorkMode::Item,
+        SPEC,
+        vec![resolved(
+            SPEC,
+            entry(Uuid::new_v4(), Some("implementer"), None),
+        )],
+    );
+
+    // The lock every store writer of this project takes.
+    let lock = aida_core::db::store_write_lock_path(&root.join(".aida-store"));
+    std::fs::create_dir_all(lock.parent().unwrap()).unwrap();
+    std::fs::write(&lock, b"").unwrap();
+    let contend = std::rc::Rc::new({
+        let lock = lock.clone();
+        move || {
+            let writer = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&lock)
+                .unwrap();
+            // SAFETY: `writer` is an open descriptor for the whole call.
+            let taken = unsafe { libc::flock(writer.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+            (taken == 0).then_some(writer)
+        }
+    });
+    // The probe does see a held lock.
+    let held = contend().expect("the lock starts free");
+    assert!(
+        contend().is_none(),
+        "a second writer must wait on a held lock"
+    );
+    drop(held);
+
+    let steps = std::rc::Rc::new(std::cell::Cell::new(0usize));
+    struct Probe;
+    impl Drop for Probe {
+        fn drop(&mut self) {
+            crate::queue_cmd::ON_LEDGER_STEP.with(|probe| *probe.borrow_mut() = None);
+        }
+    }
+    let _probe = Probe;
+    {
+        let steps = steps.clone();
+        let contend = contend.clone();
+        crate::queue_cmd::ON_LEDGER_STEP.with(|probe| {
+            *probe.borrow_mut() = Some(Box::new(move || {
+                steps.set(steps.get() + 1);
+                assert!(
+                    !aida_core::db::any_store_write_lock_held(),
+                    "pickup discovery ran under the store write lock"
+                );
+                assert!(
+                    contend().is_some(),
+                    "another store writer could not take the lock during pickup discovery"
+                );
+            }));
+        });
+    }
+    let admit = || refuse_waiting_pickup(&root, &plan, "implementer", false, false, false, None);
+
+    // Healthy ledger: both bound changes are visited.
+    let _ = admit();
+    let healthy = steps.get();
+    assert!(healthy >= 2, "discovery visited {healthy} ledger steps");
+
+    // Failed ownership discovery: the recovery reads every round's ledger.
+    std::fs::remove_file(
+        ledger::bindings::bindings_dir(&root)
+            .join(SPEC)
+            .join("PR-4401"),
+    )
+    .unwrap();
+    std::fs::write(
+        ledger::ledger_dir(&root).join("PR-999999.jsonl"),
+        b"invalid\n",
+    )
+    .unwrap();
+    let started = std::time::Instant::now();
+    let _ = admit();
+    assert!(
+        steps.get() >= healthy + 2,
+        "the recovery visited {} ledger steps",
+        steps.get() - healthy
+    );
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(30),
+        "pickup discovery took {:?}",
+        started.elapsed()
+    );
+    assert!(
+        contend().is_some(),
+        "the lock is free after pickup admission"
+    );
+}
+
 // trace:TASK-3608 | ai:codex
 #[test]
 fn task_3608_pipelined_sidecar_preserves_no_change() {

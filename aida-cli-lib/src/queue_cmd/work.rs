@@ -3004,6 +3004,10 @@ pub(crate) fn review_ref_from_verdict_filename(path: &std::path::Path) -> String
 /// is recorded for the spec. Prose that merely mentions an ID, a file name
 /// or a sort order never binds a review to a spec.
 // trace:BUG-2403 | ai:claude
+// BUG-2629: production binds through `rework_bindings::discover`; this
+// per-key form stays as the oracle its regression tests compare against.
+// trace:BUG-2629 | ai:claude
+#[cfg(test)]
 pub(crate) fn change_verdict_bound_to(
     project_root: &std::path::Path,
     key: &str,
@@ -3189,6 +3193,8 @@ pub(crate) fn refuse_waiting_pickup(
 // trace:BUG-2500 | ai:codex
 #[derive(Debug)]
 pub(crate) enum ReworkReviewError {
+    /// Rework is not admitted: a review of the spec is waiting, or (BUG-2629)
+    /// the search for one could not be completed.
     Waiting(String),
     Unavailable(String),
 }
@@ -3229,6 +3235,11 @@ fn resolve_rework_review_inner(
     use crate::gate::review_verdict::RecordedVerdict;
     let ids = [display_id, spec_id];
     let labels = spec_labels(&ids);
+    // BUG-2629: one ownership inventory for the whole resolution. The
+    // readers below each open a discovery of their own; outside a scope each
+    // one folded every ledger bound to the spec again.
+    // trace:BUG-2629 | ai:claude
+    let _discovery = crate::gate::ledger::checked::DiscoveryScope::enter();
     // Refs-only batches do not complete the spec, but their terminal reviews
     // must not block the next batch. Reconcile only this spec's proved keys.
     // trace:BUG-2525 | ai:codex
@@ -3236,10 +3247,14 @@ fn resolve_rework_review_inner(
     // current verdict costs git subprocesses, so the readers below resolve
     // only these instead of every key in the store (thousands: 180 s+).
     // trace:BUG-2540 | ai:claude
+    // BUG-2629: binding is decided from the spec's own ledger inventory, one
+    // discovery for all of it; asking every stored key read the whole ledger.
+    // trace:BUG-2629 | ai:claude
+    let bindings =
+        super::rework_bindings::discover(project_root, &labels, open_change, selected_only);
     let all_keys = crate::gate::review_verdict::verdict_keys(project_root);
-    let (bound_keys, rest): (Vec<String>, Vec<String>) = all_keys
-        .into_iter()
-        .partition(|key| !selected_only && change_verdict_bound_to(project_root, key, &labels));
+    let (bound_keys, rest): (Vec<String>, Vec<String>) =
+        all_keys.into_iter().partition(|key| bindings.binds(key));
     let open_keys: Vec<String> = rest
         .into_iter()
         .filter(|key| open_change.is_some_and(|open| open.eq_ignore_ascii_case(key)))
@@ -3247,13 +3262,71 @@ fn resolve_rework_review_inner(
     let mut review_keys = labels.clone();
     review_keys.extend(bound_keys.iter().cloned());
     review_keys.extend(open_keys.iter().cloned());
-    crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(15), || {
-        crate::review_waiting::reconcile_waiting_verdicts(project_root, Some(&review_keys));
-    });
     let shown = labels
         .first()
         .cloned()
         .unwrap_or_else(|| display_id.to_string());
+    // BUG-2629: when ownership discovery fails, the readers below withhold
+    // every review copy a foreign change could own, and a withheld wait used
+    // to read as "no review". Fail closed instead, from one bounded read of
+    // the spec's own ledgers: a wait known from the index, the bindings or
+    // the raw ledger still refuses, and anything else is unavailable
+    // evidence, never an empty answer. When that read cannot be completed
+    // no wait can be ruled out, so admission is refused as well.
+    // trace:BUG-2629 | ai:claude
+    let uncovered = |what: &str, why: &str| {
+        ReworkReviewError::Waiting(format!(
+            "{shown}: a WAITING review cannot be ruled out — {what} ({why}). Repair the gate ledger (`aida doctor`) and retry; no implementer rework is queued."
+        ))
+    };
+    if let Some(why) = bindings.refusal() {
+        return Err(uncovered(
+            "the changes that review it could not be enumerated",
+            why,
+        ));
+    }
+    if let Some(why) = bindings.failure() {
+        let recovered = bindings.recover(project_root, &labels).map_err(|exhausted| {
+            uncovered(
+                "gate-ledger ownership discovery failed and its withheld reviews exceed the recovery read budget",
+                &exhausted,
+            )
+        })?;
+        if let Some(wait) = &recovered.wait {
+            // Substantive findings remain actionable even beside a wait, as
+            // below: the request-changes reviews that are readable as
+            // current without an ownership index are still imported. Not
+            // beside a source that could not be read or verified: what it
+            // holds may supersede them, so nothing then admits rework.
+            // trace:BUG-2500 | ai:codex
+            let findings = recovered
+                .findings
+                .iter()
+                .filter(|_| recovered.unknown.is_none())
+                .filter_map(|(key, v)| {
+                    crate::review_verdict_display::rework_findings_comment(&shown, key, v)
+                })
+                .collect::<Vec<_>>();
+            if !findings.is_empty() {
+                return Ok(ReviewResult::Available(findings.join("\n\n")));
+            }
+            waiting_rework_error(&shown, wait)?;
+        }
+        // An unreadable, unparseable or unverifiable review source is
+        // unknown, never absent: a wait may be behind it.
+        if let Some(unknown) = &recovered.unknown {
+            return Err(uncovered(
+                "gate-ledger ownership discovery failed and a review source could not be read or verified",
+                unknown,
+            ));
+        }
+        return Err(ReworkReviewError::Unavailable(format!(
+            "the reviews of {shown} cannot be read completely: gate-ledger ownership discovery failed ({why})"
+        )));
+    }
+    crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(15), || {
+        crate::review_waiting::reconcile_waiting_verdicts(project_root, Some(&review_keys));
+    });
     // Ignore terminal waits before alias ordering as well as PR/spec ordering.
     // Otherwise a late annotation can hide an active review on another label.
     // Refused or unreadable labels remain in the strict selector.

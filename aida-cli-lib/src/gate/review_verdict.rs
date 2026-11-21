@@ -1649,6 +1649,82 @@ pub(crate) fn checked_legacy_verdict(
         .and_then(|body| parse_recorded_verdict(&body)))
 }
 
+/// A legacy verdict file larger than its reader's remaining byte allowance
+/// ([`checked_legacy_record`]): the read stopped at the allowance.
+// trace:BUG-2629 | ai:claude
+#[derive(Debug)]
+pub(crate) struct OverReadLimit;
+
+impl std::fmt::Display for OverReadLimit {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("verdict exceeds the reader's byte allowance")
+    }
+}
+
+impl std::error::Error for OverReadLimit {}
+
+/// [`checked_legacy_verdict`] with the file's body: for a reader that orders
+/// the file against ledger rounds itself ([`ledger_supersedes`]) and applies
+/// a terminal annotation to the exact source it names, because the current
+/// projection withholds those rounds (rework admission after a failed
+/// ownership discovery).
+///
+/// At most `limit` bytes are read, through the one validated handle, so a
+/// file that grows after it was opened cannot take the caller past its
+/// aggregate budget; a larger file is an [`OverReadLimit`] error. A file
+/// that is refused, unreadable or does not parse is an error as well, never
+/// an absent record.
+///
+/// `consumed` is set to the bytes read from the file, whatever the outcome:
+/// a body that is not UTF-8 or does not parse was read all the same, and the
+/// caller's aggregate budget pays for it.
+// trace:BUG-2629 | ai:claude
+pub(crate) fn checked_legacy_record(
+    start: &Path,
+    key: &str,
+    limit: u64,
+    consumed: &mut u64,
+) -> std::io::Result<Option<(String, RecordedVerdict)>> {
+    use std::io::Read as _;
+    let path = verdict_path(start, key);
+    let (file, meta) = match open_verdict_handle(&path) {
+        Ok(opened) => opened,
+        Err(error)
+            if error.kind() == std::io::ErrorKind::NotFound
+                && matches!(std::fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound) =>
+        {
+            return Ok(None)
+        }
+        Err(error) => return Err(error),
+    };
+    let cap = limit.min(MAX_COLLECTED_VERDICT_BYTES);
+    let over = || std::io::Error::other(OverReadLimit);
+    if meta.len() > cap {
+        return Err(over());
+    }
+    let mut bytes = Vec::new();
+    // A failed read keeps what it had read in `bytes`: that is charged too.
+    let read = file.take(cap + 1).read_to_end(&mut bytes);
+    *consumed = bytes.len() as u64;
+    read?;
+    if bytes.len() as u64 > cap {
+        return Err(over());
+    }
+    let body = String::from_utf8(bytes).map_err(|_| {
+        std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("verdict {} is not UTF-8", path.display()),
+        )
+    })?;
+    match parse_recorded_verdict(&body) {
+        Some(verdict) => Ok(Some((body, verdict))),
+        None => Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("invalid verdict {}", path.display()),
+        )),
+    }
+}
+
 /// Error-aware current projection for gates that must distinguish missing
 /// evidence from refused or malformed evidence. Never hide an unsafe legacy
 /// artifact behind a ledger verdict.

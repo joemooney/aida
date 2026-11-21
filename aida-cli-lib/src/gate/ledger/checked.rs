@@ -270,6 +270,70 @@ fn parse_events(
     Ok(out)
 }
 
+/// The gate ledger's directories, pinned as the strict reader pins them, for
+/// a bounded pass that reads raw ledgers without opening a discovery (rework
+/// admission's recovery and label pass). Every entry is opened beneath the
+/// pinned handle without following a link and without blocking, and is
+/// accepted only as a singly linked regular file, checked on the handle that
+/// is then read: there is no check-then-open window.
+// trace:BUG-2629 | ai:claude
+pub(crate) struct Pinned {
+    ledger: File,
+    ledger_path: std::path::PathBuf,
+    by_spec: Option<File>,
+}
+
+/// Pin the gate ledger under `root`; `Ok(None)` when it does not exist. A
+/// linked or non-directory component refuses.
+// trace:BUG-2629 | ai:claude
+pub(crate) fn pin(root: &Path) -> Result<Option<Pinned>, Unsafe> {
+    Ok(ledger_dirs(root)?.map(|(ledger, by_spec)| Pinned {
+        ledger,
+        ledger_path: super::ledger_dir(root),
+        by_spec,
+    }))
+}
+
+impl Pinned {
+    /// The entry names of the ledger directory ([`list_pinned`]).
+    pub(crate) fn names(&self) -> Result<Vec<String>, Unsafe> {
+        list_pinned(&self.ledger, &self.ledger_path)
+    }
+
+    /// The validated handle of `name` in the ledger directory (or in its
+    /// `by-spec` child), with the metadata of that handle; `Ok(None)` only
+    /// when no such entry exists. `Err` says why the entry is refused.
+    pub(crate) fn open(
+        &self,
+        by_spec: bool,
+        name: &str,
+    ) -> Result<Option<(File, std::fs::Metadata)>, String> {
+        use std::os::unix::fs::MetadataExt;
+        let dir = match (by_spec, &self.by_spec) {
+            (false, _) => &self.ledger,
+            (true, Some(dir)) => dir,
+            (true, None) => return Ok(None),
+        };
+        let file = match openat(dir, name, 0) {
+            Ok(file) => file,
+            Err(e) if missing(&e) => return Ok(None),
+            // O_NOFOLLOW on a link.
+            Err(e) if e.raw_os_error() == Some(libc::ELOOP) => {
+                return Err("not a regular file (a link)".into())
+            }
+            Err(e) => return Err(e.to_string()),
+        };
+        let meta = file.metadata().map_err(|e| e.to_string())?;
+        if !meta.is_file() {
+            return Err("not a regular file".into());
+        }
+        if meta.nlink() != 1 {
+            return Err("not a singly linked file".into());
+        }
+        Ok(Some((file, meta)))
+    }
+}
+
 /// Directory entries one discovery pass may list.
 pub(crate) const MAX_LEDGER_ENTRIES: usize = 16_384;
 /// Change ledgers one discovery pass may read.
@@ -842,6 +906,8 @@ impl Inventory {
         ledger_id: (u64, u64),
         marked: bool,
     ) -> bool {
+        #[cfg(test)]
+        discovery_work_tests::INVENTORY_CHECKS.with(|n| n.set(n.get() + 1));
         !self.poisoned
             && self.ledger_id == ledger_id
             && self.marked == marked
@@ -894,6 +960,8 @@ pub(crate) fn discover_with_budget(root: &Path, work: Budget) -> Result<Option<D
 // trace:BUG-2531 | ai:claude
 // trace:BUG-2584 | ai:claude
 fn open_discovery(root: &Path, work: Budget, share: bool) -> Result<Option<Discovery>, Unsafe> {
+    #[cfg(test)]
+    discovery_work_tests::DISCOVERIES_OPENED.with(|n| n.set(n.get() + 1));
     let Some((ledger, by_spec)) = ledger_dirs(root)? else {
         return Ok(None);
     };
@@ -1604,6 +1672,12 @@ pub(crate) mod discovery_work_tests {
     use std::cell::Cell;
     thread_local! {
         pub(crate) static DIRECTORY_ENTRIES: Cell<usize> = const { Cell::new(0) };
+        /// Re-validations of a shared ownership inventory
+        /// ([`Inventory::current`]): each lists every folded spec's bindings
+        /// and stats every folded ledger. trace:BUG-2629 | ai:claude
+        pub(crate) static INVENTORY_CHECKS: Cell<usize> = const { Cell::new(0) };
+        /// Discoveries opened ([`open_discovery`]). trace:BUG-2629 | ai:claude
+        pub(crate) static DISCOVERIES_OPENED: Cell<usize> = const { Cell::new(0) };
         pub(crate) static LOSSY_READ_BYTES: Cell<u64> = const { Cell::new(0) };
         pub(crate) static READ_BYTES: Cell<u64> = const { Cell::new(0) };
         pub(crate) static PARSE_ATTEMPTS: Cell<usize> = const { Cell::new(0) };

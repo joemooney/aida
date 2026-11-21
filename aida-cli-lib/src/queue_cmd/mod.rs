@@ -128,6 +128,8 @@ mod recover;
 pub(crate) use recover::{handle_queue_recover, recover_action_label, recover_push_branch};
 mod remove_move;
 mod rework;
+// trace:BUG-2629 | ai:claude
+mod rework_bindings;
 #[cfg(test)]
 pub(crate) use rework::require_rework_pickable;
 pub(crate) use rework::{
@@ -136,6 +138,8 @@ pub(crate) use rework::{
     record_rework_ruling, rework_is_review_shelf, rework_smart_target, rework_triage_loop,
     run_aida_interactive, run_rework, DrainRunning, ReworkArgs, ReworkFlags, REWORK,
 };
+#[cfg(test)]
+pub(crate) use rework_bindings::ON_LEDGER_STEP;
 mod time_args;
 pub use rework::{requeue_project_root, rework_target_for_mode};
 pub use time_args::parse_lookback;
@@ -157,8 +161,8 @@ pub(crate) use work::{
     auto_complete_dispatch_authority_ok, auto_complete_head_candidates,
     auto_complete_head_candidates_with_blocked, auto_complete_head_candidates_with_roles,
     auto_complete_head_drivable, auto_complete_sibling_role_hint, build_queue_work_claude_command,
-    build_resolved_entry, change_verdict_bound_to, check_exited_branch_clone,
-    claude_posture_display, clear_standalone_reviewer_verdict, deferred_headless_launch_hint,
+    build_resolved_entry, check_exited_branch_clone, claude_posture_display,
+    clear_standalone_reviewer_verdict, deferred_headless_launch_hint,
     deferred_interactive_launch_hint, derive_queue_work_prompt_with_round,
     derive_rework_queue_work_prompt, derive_scope_from_entry, derive_scope_from_req_id,
     drain_preview_head_members, effective_auto_complete_role, end_finished_review,
@@ -199,8 +203,8 @@ pub(crate) use work::{
 };
 #[cfg(test)]
 pub(crate) use work::{
-    derive_queue_work_prompt, latest_ruling_comment, prepend_ruling, resolve_pickup_attempt,
-    rework_pr_head_branch_from_lookup,
+    change_verdict_bound_to, derive_queue_work_prompt, latest_ruling_comment, prepend_ruling,
+    resolve_pickup_attempt, rework_pr_head_branch_from_lookup,
 };
 pub(crate) use work::{
     effective_execution_mode, headless_plan_refusal, launcher_track,
