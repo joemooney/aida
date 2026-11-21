@@ -1714,7 +1714,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-18T22:36:19.412240417Z
+modified_at: 2026-11-21T02:57:35.972438813Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -2400,6 +2400,68 @@ comments:
   modified_at: 2026-11-15T21:03:44.977187260Z
   session_id: 01a1e102-33bf-7993-a7a1-f4664089251e
   harness_version: 2.1.325 (Claude Code)
+- id: 01a1fc09-e1ad-7441-815b-42ab46a73155
+  author: joe
+  content: |-
+    Advisor investigation of Joe's 87 listed review-follow-up drafts (2026-11-20).
+
+    Read all 87 full descriptions and their 19 source specs/comments, recent forge PR metadata, and selected current source/diffs. All 87 remain Draft, none queued, none has a comment. 35 attach to 11 Completed source specs; this does not prove each finding fixed. No task status changes in this audit.
+
+    Mechanism: trusted [review].blocking_tiers currently lists p1,data-loss,security-authority-bypass,unmet-claimed-ac. findings_gate.rs creates one Draft per deferred finding; retry dedup uses source plus exact text hash, not semantic issue identity. Reworded repeated findings become new tasks; rework corrections do not automatically settle older follow-up tasks.
+
+    Confirmed source corrections present in main (not fresh behavioral verification): TASK-3140, TASK-3144, TASK-3145, TASK-3146, TASK-3147, TASK-3148, TASK-3150, TASK-3152, TASK-3156, TASK-3158, TASK-3162, TASK-3163, TASK-3164, TASK-3165, TASK-3166, TASK-3167, TASK-3170, TASK-3178, TASK-3179.
+
+    Definite repeated issue pairs: TASK-3164/TASK-3165 (cross-project dead deputies, now filtered); TASK-3178/TASK-3179 (clock/overflow intent validation, now changed with regression source).
+
+    Already routed: TASK-3192, TASK-HOME-1154 and TASK-HOME-1155 are explicitly covered by TASK-3828, which is In Progress.
+
+    STORY-2897: advisor split ruling removed S3 effects implementation from integration and closed promotion #4384. Its 15 listed drafts need S3a/S3b reconciliation, not blind queueing. S3a PR #4389 is observational only; dev-build smoke hook dropped.
+
+    TASK-3172/TASK-3173: reviewer-model boost acceptance needs product verification on a head containing the config with model/effort overrides unset; Completed source status is not evidence that this happened.
+
+    Per-source coverage:
+
+    BUG-2619 [Completed]: TASK-3149, TASK-3151
+
+    BUG-2629 [Done]: TASK-HOME-1161, TASK-HOME-1162, TASK-HOME-1163, TASK-HOME-1181, TASK-HOME-1182, TASK-HOME-1183
+
+    BUG-2662 [Done]: TASK-3174, TASK-3176, TASK-3177, TASK-3189, TASK-HOME-1150, TASK-HOME-1151, TASK-HOME-1152, TASK-HOME-1177, TASK-HOME-1178, TASK-HOME-1179, TASK-HOME-1180
+
+    BUG-2672 [Completed]: TASK-3146, TASK-3148, TASK-3150, TASK-3152
+
+    BUG-2674 [Completed]: TASK-3147, TASK-3156, TASK-3157, TASK-3158
+
+    BUG-2684 [In Progress]: TASK-3154, TASK-3155
+
+    BUG-2688 [Needs Attention]: TASK-3159, TASK-HOME-1195, TASK-HOME-1196, TASK-HOME-1197, TASK-HOME-1198
+
+    BUG-2703 [Completed]: TASK-3170, TASK-3178, TASK-3179, TASK-3180, TASK-3192, TASK-HOME-1154, TASK-HOME-1155, TASK-HOME-1188, TASK-HOME-1189, TASK-HOME-1190, TASK-HOME-1191, TASK-HOME-1192
+
+    BUG-2706 [Done]: TASK-HOME-1174, TASK-HOME-1175
+
+    BUG-2707 [Needs Attention]: TASK-HOME-1184, TASK-HOME-1185, TASK-HOME-1186, TASK-HOME-1187, TASK-HOME-1193, TASK-HOME-1194, TASK-HOME-1199
+
+    STORY-2884 [Completed]: TASK-3167
+
+    STORY-2893 [Completed]: TASK-3160, TASK-3162, TASK-3163
+
+    STORY-2897 [Approved]: TASK-3175, TASK-3185, TASK-3186, TASK-3190, TASK-3191, TASK-3193, TASK-3195, TASK-3197, TASK-3198, TASK-HOME-1164, TASK-HOME-1165, TASK-HOME-1166, TASK-HOME-1168, TASK-HOME-1169, TASK-HOME-1173
+
+    STORY-2913 [Completed]: TASK-3140, TASK-3141, TASK-3145
+
+    TASK-3792 [Completed]: TASK-3166
+
+    TASK-3801 [Completed]: TASK-3164, TASK-3165
+
+    TASK-3820 [Completed]: TASK-3144
+
+    TASK-3823 [Completed]: TASK-3172, TASK-3173
+
+    TASK-3827 [In Progress]: TASK-3187, TASK-3188, TASK-HOME-1157, TASK-HOME-1160
+
+    Recommended advisor closeout: reconcile known corrections; link duplicates and TASK-3828 overlap; keep findings attached to live rework; separate S3b effect debt; validate remaining merged-source gaps. Do not approve/queue all 87 as independent implementations.
+  created_at: 2026-11-21T02:57:35.972438813Z
+  modified_at: 2026-11-21T02:57:35.972438813Z
 history:
 - id: 01a1d6a2-101a-76b0-8f1a-90d0013071f2
   author: joe
