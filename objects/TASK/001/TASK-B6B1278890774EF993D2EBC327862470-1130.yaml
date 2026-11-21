@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 36e1d02a7af0338feb8ff4c6de2f1ef92ecc5171
 
   [P2] Continue settlement maintenance while review-watch yields admission. aida-cli-lib/src/review_watch.rs:2881-2888 continues before store.prune and advance, so a waiting ship suppresses the maintenance needed to make prior attempts quiescent. In particular, a claimed Superseding attempt remains active even after every descendant exits: transition_classified deliberately leaves it Superseding, reap_dispatchers only terminalizes unclaimed attempts, and only advance confirms and clears it. admission_quiescent rejects active attempts before confirming process exit. Thus the ship's intent keeps the watcher from clearing the very attempt blocking that ship until the ship times out; an active drain can retain the condition for hours. Run settlement-only reconciliation while yielding, without discovery or new launches, and add a regression with a superseding claimed review whose descendants finish during the wait.
-status: Draft
+status: Completed
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T15:02:24.137671617Z
-modified_at: 2026-11-20T15:02:24.137671617Z
+modified_at: 2026-11-21T06:48:29.739670765Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -29,6 +29,13 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fcdd-152b-7390-9a5e-c03a23973a84
+  author: joe
+  timestamp: 2026-11-21T06:48:29.739657716Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Completed
 filed_at:
   code_sha: 36e1d02a7af0338feb8ff4c6de2f1ef92ecc5171
   branch: pr-4363
@@ -37,3 +44,6 @@ filed_at:
   aida_build_sha: 78b437097cb
   vendor: claude
   session: 01a1f976bead
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-21T06:48:17.288287044Z
