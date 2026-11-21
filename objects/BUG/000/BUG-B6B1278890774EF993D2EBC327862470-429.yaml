@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T21:16:12.378984111Z
-modified_at: 2026-11-18T16:44:52.913887291Z
+modified_at: 2026-11-21T06:31:04.443564500Z
 req_type: Bug
 tags:
 - landing
@@ -102,6 +102,11 @@ comments:
   modified_at: 2026-11-18T16:44:52.913887291Z
   session_id: 01a1ef833215
   harness_version: codex-cli 0.167.0
+- id: 01a1fccd-53a8-78e1-8989-ff4977849ffa
+  author: joe
+  content: 'Product live observation on Nov 20 at 23:29 MST: review-watch and live binaries both aa567732958. Advisor loops status reports 40 consecutive review-watch failures, last alert naming admission.lock contention, and review-watch admission held by controller 3281211 for 225m. Auto-train is waiting for supervisor, with no controller and two consecutive failures, and the advisor mailbox has repeated auto-train failure alerts. Land stalls sees 12 open changes, four stuck, and no landing for about 302m. This is live post-#4212 evidence of a stalled landing service. It does not establish that any specific PR was train-eligible. The sandbox cannot inspect the controller process or descendants on the host.'
+  created_at: 2026-11-21T06:31:04.443564500Z
+  modified_at: 2026-11-21T06:31:04.443564500Z
 history:
 - id: 01a1eb74-944e-7701-a8b0-4ace42203bde
   author: joe
