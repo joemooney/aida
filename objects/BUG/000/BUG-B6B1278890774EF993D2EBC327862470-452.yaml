@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-21T07:24:01.681003514Z
+modified_at: 2026-11-21T07:24:17.818203627Z
 req_type: Bug
 tags:
 - conflicts
@@ -952,6 +952,29 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the landed diff against pinned main aa567732958f and the BUG-2688 round-two brief. Early route refusal and rollback of an unspawned lane have regression coverage. Fresh recovery, replacement checkout and actionable refusal criteria remain incomplete. Doctor can release a reservation using stale or mismatched ownership evidence. Exact-head CI confirms the liveness, vendor and Git fixture guard failures. Review used source and existing CI logs only.. Triage reason: Requeue existing #4388 rework at fc4441ac7032. Preserve the signed limited recovery design. Exact-head FAST jobs 136682267310 and 136682267292 still fail on fixture Git writes (TASK-HOME-1198), typed vendor expansion (TASK-HOME-1197), and a new direct lane-liveness decision. Use existing guarded fixture, vendor and liveness boundaries rather than expanding the ratchets. Use the current recorded verdict for the reservation diagnostic and once-only admission findings. Keep exact-head independent review and CI gates.'
   created_at: 2026-11-21T07:24:01.680994981Z
   modified_at: 2026-11-21T07:24:01.680994981Z
+- id: 01a1fcfd-db98-7f90-9b1a-433d64e155f6
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: fc4441ac7032
+    Recorded: 2026-11-21T02:13:00.798932260+00:00
+    Findings:
+    1. [blocking_tier=unmet-claimed-ac; severity=P1; file=aida-cli-lib/src/seat_clone.rs] At lines 3420–3427 an existing MERGE_HEAD requires host journal evidence before fetching the remote head. Fresh pickup carries only a resume boolean into preparation and cannot set aside a retained merge and restart at the verified remote SHA. Preserve the retained state, log it, and start fresh from the fetched head as BUG-2688 AC3 requires.
+    2. [blocking_tier=unmet-claimed-ac; severity=P1; file=aida-cli-lib/src/seat_clone.rs] For a removed seat and missing journal, a replacement checked out on a stale local branch reaches the is-ancestor check in prepare_host_repair_admitted and refuses when the remote is ahead. The new tests create seats directly on an already-current local feat branch. Pin the replacement checkout to the fetched PR head and exercise pickup with resume both true and false, as AC2 and AC4 require.
+    3. [blocking_tier=unmet-claimed-ac; severity=P1; file=aida-cli-lib/src/seat_clone.rs] Lines 3495–3499 still give the generic diagnose-that-failure instruction that AC1 explicitly rejects. Listing leases does not repair a failed remote-head probe. Return the specific missing evidence and one runnable recovery command appropriate to that refusal.
+    4. [blocking_tier=security-authority-bypass; severity=P1; file=aida-cli-lib/src/repair_journal.rs] heal_dead_lane_reservation snapshots leases before acquiring RepairGuard and locates the target by PR and head only. While heal waits, a successor can hold the same seat or replace that reservation. Bind the finding to the scanned lane and reservation generation, and revalidate ownership under the lock immediately before releasing it. Add a regression that changes ownership between scan and heal.
+    5. [blocking_tier=security-authority-bypass; severity=P1; file=aida-cli-lib/src/lane_liveness.rs] headless_lane_run_alive accepts a parsed record without matching its lease_id and decides death with the legacy process_provably_dead reader. A different lane’s dead record or a PID invisible in the caller’s namespace can authorize release. Check the lease binding and use the namespace-aware ownership decision, retaining unknown results. Both exact-head liveness guards identify this new legacy call.
+    6. [blocking_tier=security-authority-bypass; severity=P1; file=aida-cli-lib/src/lane_liveness.rs] Line 816 follows links and reads the entire lane record with a blocking read_to_string. A dangling link becomes an absent run, and a FIFO can stall doctor while it holds the journal lock. Use a bounded nonblocking read of a verified regular file and treat invalid entries as unknown.
+    7. [blocking_tier=security-authority-bypass; severity=P1; file=aida-cli-lib/src/repair_journal.rs] The lease listing used by scan and heal at lines 433 and 449 calls Path::exists on the sessions directory and after entry read failures. A dangling sessions link or an inconclusive metadata lookup can yield an empty ownership result, allowing release. Require confirmed absence and keep the reservation when lookup fails.
+    8. [blocking_tier=unmet-claimed-ac; severity=P1; file=aida-cli-lib/src/repair_journal.rs] dead_lane_reservations filters out every reservation_holder reason, including unreadable lane evidence. A torn run record therefore makes doctor check report nothing and the recommended heal cannot explain why the retry is still blocked. Report a non-healable finding with the evidence path and recovery action.
+    9. [blocking_tier=unmet-claimed-ac; severity=P1; file=aida-cli-lib/src/queue_cmd/work.rs] apply_rework_conflict_route at line 932 repeats vendor and containment admission after preparation has reserved the head and modified the seat. If the second preflight fails, a retained setup can keep the new reservation. Carry successful admission through routing and verify it occurs once.
+    10. [blocking_tier=p2; severity=P2; file=aida-cli-lib/src/queue_cmd/work.rs] The exact-head fast compile log identifies prepare_and_route_rework_conflict’s new typed HeadlessVendor reference as the vendor-debt guard failure. Reuse the existing routing boundary without expanding the per-item ledger.
+    11. [blocking_tier=p2; severity=P2; file=aida-cli-lib/src/tests/bug_2688_repair_reservation_tests.rs] The fast-gates Git maintenance guard rejects the commit and push calls at lines 30, 31, 35, 36 and 260. The imported git_ok already uses test_git::git_command, but the guard cannot recognize that cross-file wrapper. Make those calls visibly use the recognized protected helper.
+    12. [blocking_tier=p2; severity=P2; file=aida-cli-lib/src/repair_journal.rs] During backup, heal reopens the validated journal path with unrestricted std::fs::read. A replacement between reads can make the backup differ from the journal being healed or block the locked operation. Retain the bounded bytes from the validated read for backup.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-21T07:24:17.688899454Z
+  modified_at: 2026-11-21T07:24:17.688899454Z
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
