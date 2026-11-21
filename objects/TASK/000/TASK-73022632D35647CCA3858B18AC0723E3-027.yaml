@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-21T06:44:06.978355607Z
+modified_at: 2026-11-21T07:22:05.389066664Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -556,6 +556,12 @@ comments:
     Product conflict preflight for #4387. A temporary-object Git merge-tree test pinned origin/main aa567732958 and PR head 509f5afbb29d. The only content conflict is fixture_tempdir in aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs. Main's overlapping bug_home_038_seat_publish_tests.rs change auto-merges. Resolve the fixture helper while preserving the isolated root outside Cargo target and seat TMPDIR, the existing bwrap fixture visibility needed by lane jobs, and the relocated-binary regression. Review the resolved diff and rerun the targeted fixture and required CI before landing. Prior advisor accepted the reported seat_clone:: runs at 509f5af, pending landing. No branch or worktree was changed by this preflight.
   created_at: 2026-11-21T06:44:06.978355607Z
   modified_at: 2026-11-21T06:44:06.978355607Z
+- id: 01a1fcfc-096b-7dc2-9e7f-225a7fb9c36d
+  author: joe
+  content: |
+    Advisor conflict brief for #4387 at 509f5afbb29d against main aa567732958. The content conflict is fixture_tempdir in aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs. Preserve the slice-3 fixture outside Cargo target and the inherited seat TMPDIR, while retaining the fixture-local store boundary, bwrap visibility and existing denial assertions. The accepted primary-host test evidence depends on a fixture main outside the real checkout's target/worktrees. Review the auto-merge of bug_home_038_seat_publish_tests.rs and retain both the host's changes and the watchdog child re-exec. Merge current main on the same PR branch without force-pushing. Check formatting and the targeted seat_clone fixture coverage; a changed behavioral resolution needs fresh primary-host and dell1 evidence. Require fresh independent review and green CI at the reconciled head before landing. Complete TASK-3133 only after landing because #4387 uses a Refs trailer.
+  created_at: 2026-11-21T07:22:05.389066664Z
+  modified_at: 2026-11-21T07:22:05.389066664Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
