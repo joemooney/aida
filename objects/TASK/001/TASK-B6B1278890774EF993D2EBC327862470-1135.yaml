@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-21T00:57:21.521693431Z
+modified_at: 2026-11-21T00:57:44.994961633Z
 req_type: Task
 tags:
 - codify
@@ -296,6 +296,29 @@ comments:
   created_at: 2026-11-21T00:56:56.120086318Z
   modified_at: 2026-11-21T00:56:56.120086318Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb9c-2757-7602-8c69-61a371c37462
+  author: joe
+  content: |-
+    AUTHORITATIVE R3 BRIEF (advisor-121, relayed by product 17:57):
+    # Rework brief: TASK-3826 / PR #4373 (aida lane relay), round 3 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 18:08 MST. Head reviewed: 2fe0aa1 (1 blocking + 9). Lane: CLAUDE+Fable. COMMIT your work. Fix ALL:
+     1 [BLOCKING ADR-76] tests for every new launch-gate path named in the review (standalone_implementer.rs:1582, session/headless.rs:1992,
+       queue_cmd/work.rs:4922/4971, lane_relay.rs:489/564/...): each refusal and the expected-head re-check after admission.
+     2 post_brief and report find the relay's OWN brief by a returned comment ID (not text equality); a failed re-read after a successful add is reported, not reposted.
+     3 begin pulls the host store (bounded) before `aida show`, or the relay pushes its store first, so the host resolves the spec against current data.
+     4 earlier briefs are marked SUPERSEDED only once the new lane actually launches; a host-side stop leaves them in force.
+     5 cmdline_runs_lane also recognises `queue rework SPEC --work` and other launch forms (spec anywhere in the argv after the subcommand); test each.
+     6 --pr N is validated against SPEC (the PR's spec IDs from its title or branch); a mismatch refuses.
+     7 --label rejects values starting with '-'.
+     8 exercise the Live spec-comment read and edit in the ssh stub test.
+     9 the discipline text lists every result that returns to the advisor (add FAIL..., as printed); make sync-templates.
+    10 update the PR body to the current behaviour.
+    cargo fmt; check-templates; check-store-writers.py; ratchets; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-21T00:57:44.994961633Z
+  modified_at: 2026-11-21T00:57:44.994961633Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
