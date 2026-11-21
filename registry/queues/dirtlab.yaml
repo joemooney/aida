@@ -65,14 +65,6 @@
   added_at: 2026-11-20T18:43:50.548080865Z
   for_role: implementer
 - user_id: dirtlab
-  requirement_id: 01a1fa75-947c-7ac2-b6d6-b9326919817d
-  position: 909000
-  added_by: dirtlab
-  note: auto-queued by `session end` (01a1fa43); covers 0 specs
-  added_at: 2026-11-20T19:36:29.308762801Z
-  for_role: reviewer
-  added_by_machine: disrad-dvp98b3puw
-- user_id: dirtlab
   requirement_id: 01a1faed-a9e7-7a81-a898-d263611cbfae
   position: 922000
   added_by: dirtlab
@@ -150,3 +142,11 @@
   added_by: dirtlab
   added_at: 2026-11-21T01:30:41.404920789Z
   for_role: implementer
+- user_id: dirtlab
+  requirement_id: 01a1fa75-947c-7ac2-b6d6-b9326919817d
+  position: 934000
+  added_by: dirtlab
+  note: auto-queue retry reused canonical review story; covers 0 specs
+  added_at: 2026-11-21T01:59:37.111074200Z
+  for_role: reviewer
+  added_by_machine: disrad-dvp98b3puw
