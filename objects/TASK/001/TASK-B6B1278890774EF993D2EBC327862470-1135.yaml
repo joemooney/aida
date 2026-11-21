@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-21T01:01:09.610939395Z
+modified_at: 2026-11-21T01:43:12.885513666Z
 req_type: Task
 tags:
 - codify
@@ -327,6 +327,40 @@ comments:
   modified_at: 2026-11-21T00:57:59.145624462Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fbc5-96f5-7711-b9d2-2386666f0572
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: 2a0c351161 (PR #4373, round 3, `(Refs TASK-3826)`); diff `origin/main...HEAD`, with this round's commit read line by line.
+
+    **Round-3 brief, 10 items: all addressed.**
+    1. [evidence: behavioral-test] Launch-gate paths through the real launchers: `task_3826_a_relayed_launch_is_gated_on_its_head_after_host_admission` (standalone and headless `admit_launch` sites: head-moved, pr-merged, pr-closed, pr-unreadable, relay-gate-invalid refuse and spawn no child; held head, fresh and ungated launches spawn; receipt carries the code), `task_3826_queue_work_holds_a_relayed_launch_to_its_gate` and `task_3826_relayed_fresh_work_does_not_resume_the_canonical_branch` (`route_launch` and the canonical-resume exclusion in `handle_queue_work`). Mutation check: disabling the call sites fails all three; disabling only the headless site fails the headless case.
+    2. [evidence: behavioral-test] `the_relays_own_brief_is_found_by_its_comment_id` (store text differs from sent text; re-read fails before and after launch; one brief posted).
+    3. [evidence: behavioral-test] `the_host_pulls_its_store_before_it_resolves_the_spec`, plus the real-`Machine` test asserting `db sync --pull` precedes `show`.
+    4. [evidence: behavioral-test] `earlier_briefs_stay_in_force_until_the_new_lane_starts` (six stop kinds leave the old brief; an admitted lane marks it and leaves a later-posted brief).
+    5. [evidence: behavioral-test] `a_lane_process_is_recognised_by_its_spec` (12 running forms, 15 negatives).
+    6. [evidence: behavioral-test] `a_pr_for_another_spec_is_refused_before_anything_is_posted`.
+    7. [evidence: behavioral-test] `a_label_is_never_an_option`, and `--label=-x` in `the_command_parses_its_documented_form`.
+    8. [evidence: behavioral-test] `the_live_relay_reaches_the_lane_host_through_ssh` now asserts the `show` read, `comment add --print-id` and `comment edit` calls.
+    9. [evidence: documentation-inspection] `two-seat-protocol.md` (template master and mirror) lists SKIPPED, REFUSED, UNCONFIRMED, FAILED as `Stop::verdict` prints them; `make check-templates` passes.
+    10. PR body rewritten to current behaviour.
+
+    **Probe findings.**
+    - Consistency: the `comment-id:` prefix is one shared constant for writer and reader; the `--pr` check uses the same `names_spec` as lane and receipt matching.
+    - Multiplicity: `supersede_earlier` handles zero and several earlier briefs; an own comment missing from the read is a logged warning, not a silent pass.
+    - Fail-open: a failed host store pull continues against the host's data (logged); an unresolvable spec still refuses. A PR naming no spec is refused. A gate value set but unreadable refuses in both launchers and in `queue work` (tested).
+    - One test removed, not weakened: `an_older_relay_does_not_mark_a_newer_relays_brief` asserted the round-tag comparison that item 4 made unnecessary; its two properties are covered in the item-4 test.
+
+    **Residual risks.**
+    - Item 4 covers spec comments only. Older pending brief files in the host mailbox are still retired at delivery, before the launch, and are not restored if the host then stops it.
+    - One intermittent failure seen once in a 192-test run: `lane_admission::tests::bug_2682_host_override_refuses_when_its_record_cannot_be_written`. It passed alone and on rerun; this round does not touch that code; cause not found.
+    - No live SSH or `/proc` run; lane detection is by argv only.
+    - Three fast source gates fail in this seat on sandbox permissions (containment conformance, store mutation channel, self-hosted routing fixtures); 44 of 48 pass, and the cargo ratchets pass through the lane job runner. `verify-manual.py` against this tree's binary was not run.
+    - The host's reported fast-gate failure at 2fe0aa1 was a `git fetch` DNS failure in `Help golden snapshot co-change guard`, not a tree defect; the guard passes at this head where the fetch works.
+  created_at: 2026-11-21T01:43:12.885513666Z
+  modified_at: 2026-11-21T01:43:12.885513666Z
+  session_id: 01a1fb9ed727
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
   author: joe
