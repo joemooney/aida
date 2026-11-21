@@ -470,20 +470,38 @@ step timing remains unknown.
 landed, approved with red CI, pushed but not reviewed, with changes requested
 and no lane, or conflicting with no owner. `aida land stalls` prints the same
 classification with every open change, the recent landings and the lanes per
-host. The classes, what each wait counts from and the red-CI reasoning are
-described in [Landing](../advanced/landing.md#stuck-changes-the-throughput-guard).
+host. The classes, what each wait counts from, how lanes on other hosts are
+read and the red-CI reasoning are described in
+[Landing](../advanced/landing.md#stuck-changes-the-throughput-guard).
 
 The check does nothing unless `[throughput_guard] enabled = true`. Settings,
 in minutes: `merge_mins` (default 20), `review_mins` (30), `rework_mins` (30),
 `conflict_mins` (30), `landings_window_mins` (60) and `escalate_after_mins`
 (120). `max_red_logs` (6) is the number of red changes whose job logs one run
 reads; a log read once is kept, so the rest are read on the following runs.
+Each value must be a whole number from 1 to 527040 (366 days in minutes); any
+other value keeps the default.
+
+To measure another lane host's memory, name it under
+`[throughput_guard.remote_hosts]` as `recorded-host-name = "ssh-alias"`. The
+name is the one that host's lane records carry (its `hostname`); the alias must
+work for a non-interactive `ssh <alias>` from the host the guard runs on. Both
+are plain names: letters, digits, `-`, `_` and `.`; an entry with anything else
+(a user name, a port, an option) is ignored, and at most 16 hosts are probed.
+Quote a name that contains a dot (`"host.example" = "alias"`). This table is
+read from the default branch's copy of the file only: it takes effect once the
+change that adds it has landed, and an edit in a checkout or on another branch
+names no host. No host is contacted unless it is named there.
+<!-- trace:TASK-3827 | ai:claude -->
 
 To run it on a schedule, add a job:
 
 ```toml
 [throughput_guard]
 enabled = true
+
+[throughput_guard.remote_hosts]
+lane-host-1 = "dell1"
 
 [[schedule.jobs]]
 name = "throughput-guard"

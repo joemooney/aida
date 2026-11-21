@@ -170,6 +170,48 @@ fn version(host: &str) -> Result<String> {
     read(cmd)
 }
 
+/// `/proc/meminfo` of a lane host, read over one bounded, non-interactive SSH
+/// call that forwards nothing (no agent, no X11, no ports). `host` is an SSH
+/// alias; anything else is refused before SSH runs. The caller answers for
+/// where the alias comes from: the throughput guard takes it only from the
+/// default branch's configuration.
+// trace:TASK-3827 | ai:claude
+pub(crate) fn meminfo(host: &str, timeout: Duration) -> Result<String> {
+    anyhow::ensure!(
+        valid_host(host),
+        "`{host}` is not an SSH host alias (no user names, ports or options)"
+    );
+    let mut cmd = Command::new("ssh");
+    cmd.args([
+        "-T",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=5",
+        "-o",
+        "ClearAllForwardings=yes",
+        "-o",
+        "ForwardAgent=no",
+        "-o",
+        "ForwardX11=no",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "UpdateHostKeys=no",
+        "-o",
+        "ControlPath=none",
+        "--",
+        host,
+        "exec cat /proc/meminfo",
+    ]);
+    let (status, bytes) =
+        aida_core::transport_policy::bounded(cmd, &[], 16384, Instant::now() + timeout)?;
+    if !status.success() {
+        bail!("ssh exited with {status}");
+    }
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
 pub(crate) fn run(root: &Path, hosts: &[String], json: bool) -> Result<()> {
     anyhow::ensure!(
         hosts.iter().all(|host| valid_host(host)),

@@ -259,6 +259,14 @@ pub(crate) trait Evidence {
     fn rounds(&self, pr: &Pr) -> std::result::Result<Rounds, String>;
     /// A live lane working the change's branch, described.
     fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String>;
+    /// [`Evidence::lane`], leaving out a claim another host recorded. This
+    /// host can probe its own lanes; what another host's record says is
+    /// judged in one place ([`crate::lane_hosts`]), which also knows when
+    /// the answer is "unknown".
+    // trace:TASK-3827 | ai:claude
+    fn lane_on_this_host(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        self.lane(pr)
+    }
     /// How many reviewers of this head were stopped for running too long.
     fn review_timeouts(&self, _pr: &Pr) -> u32 {
         0
@@ -364,6 +372,9 @@ impl Evidence for Memo<'_> {
     }
     fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
         memo(&self.lane, pr.id, || self.inner.lane(pr))
+    }
+    fn lane_on_this_host(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        self.inner.lane_on_this_host(pr)
     }
     fn review_timeouts(&self, pr: &Pr) -> u32 {
         self.inner.review_timeouts(pr)
@@ -980,6 +991,34 @@ impl Live {
         (!at.is_empty()).then_some(at)
     }
 
+    /// A live lane on the change: a child of `aida land run`, a lease of
+    /// this clone, or another clone's claim that `counts` accepts.
+    // trace:TASK-3827 | ai:claude
+    fn lane_among(
+        &self,
+        pr: &Pr,
+        counts: impl Fn(&crate::coordination::Claim) -> bool,
+    ) -> std::result::Result<Option<String>, String> {
+        if let Some(child) = self.book.lane(pr) {
+            return Ok(Some(child.describe()));
+        }
+        let Some(branch) = pr.branch.as_deref() else {
+            return Err("the change's branch is unknown".into());
+        };
+        if let Some(lease) = self
+            .local_leases()?
+            .iter()
+            .find(|lease| lease.branch == branch)
+        {
+            return Ok(Some(lease_actor(lease)));
+        }
+        Ok(self
+            .claims
+            .iter()
+            .find(|claim| counts(claim) && claim_covers(&claim.scope, pr))
+            .map(claim_actor))
+    }
+
     fn local_leases(&self) -> std::result::Result<&[crate::leases::SessionLease], String> {
         self.leases
             .get_or_init(|| crate::status_prs::live_owned_leases_strict(&self.root))
@@ -1012,23 +1051,44 @@ pub(crate) fn claim_actor(claim: &crate::coordination::Claim) -> String {
     )
 }
 
-/// Whether a claim's scope names one of the change's specs, or its branch
-/// (a lane's branch starts with its spec's canonical ID).
+/// Whether a claim's scope names one of the change's specs, or its branch.
+/// A lane's branch is its spec's canonical ID, alone or followed by a
+/// delimiter and more (`task-70-work`). The scope has to match that whole
+/// ID: `TASK-7` does not cover `task-70-work`, and `TASK-70` does.
+// trace:TASK-3827 | ai:claude
 pub(crate) fn claim_covers(scope: &str, pr: &Pr) -> bool {
     let scope = scope.trim();
     if scope.is_empty() {
         return false;
     }
-    if pr.branch.as_deref().is_some_and(|branch| {
-        branch
-            .to_ascii_uppercase()
-            .starts_with(&scope.to_ascii_uppercase())
-    }) {
+    if pr
+        .branch
+        .as_deref()
+        .is_some_and(|branch| branch_names(branch, scope))
+    {
         return true;
     }
     specs_of(pr)
         .iter()
         .any(|id| aida_core::id_identity::same_id(id, scope))
+}
+
+/// `branch` is `scope`, or starts with `scope` where `scope` is a whole ID
+/// (`PREFIX-…`, not a bare prefix such as `task`) and the next character is
+/// one no ID continues with. Compared without regard to ASCII case.
+fn branch_names(branch: &str, scope: &str) -> bool {
+    let (branch, scope) = (branch.as_bytes(), scope.as_bytes());
+    if branch.len() < scope.len() || !branch[..scope.len()].eq_ignore_ascii_case(scope) {
+        return false;
+    }
+    match branch.get(scope.len()) {
+        None => true,
+        Some(next) => {
+            !next.is_ascii_alphanumeric()
+                && scope.contains(&b'-')
+                && scope.last().is_some_and(u8::is_ascii_alphanumeric)
+        }
+    }
 }
 
 /// The specs a change's title names: those in its trailing parentheses when
@@ -1290,24 +1350,13 @@ impl Evidence for Live {
     }
 
     fn lane(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
-        if let Some(child) = self.book.lane(pr) {
-            return Ok(Some(child.describe()));
-        }
-        let Some(branch) = pr.branch.as_deref() else {
-            return Err("the change's branch is unknown".into());
-        };
-        if let Some(lease) = self
-            .local_leases()?
-            .iter()
-            .find(|lease| lease.branch == branch)
-        {
-            return Ok(Some(lease_actor(lease)));
-        }
-        Ok(self
-            .claims
-            .iter()
-            .find(|claim| claim_covers(&claim.scope, pr))
-            .map(claim_actor))
+        self.lane_among(pr, |_| true)
+    }
+
+    // trace:TASK-3827 | ai:claude
+    fn lane_on_this_host(&self, pr: &Pr) -> std::result::Result<Option<String>, String> {
+        let here = crate::coordination::hostname();
+        self.lane_among(pr, |claim| claim.host == here)
     }
 
     fn review_timeouts(&self, pr: &Pr) -> u32 {

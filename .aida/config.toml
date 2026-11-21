@@ -659,8 +659,13 @@ enabled = true
 # entry here. Every scheduled run saves the landings and each host's lanes and
 # memory in `.aida/throughput-guard/state.json`. `aida land stalls` prints the
 # same classification on demand.
+# A change whose spec a lane on another host holds is moving while that lane's
+# record on the shared store is inside its expiry; each host's lane count comes
+# from its own records, with the age of the newest. STUCK-REVIEW names the
+# cause seen on this host (the review watcher's log, a leftover reviewer
+# worktree or lease), or says it is unknown.
 # The guard ships off: both `enabled` lines below turn it on for this project.
-# trace:STORY-2906 | ai:claude
+# trace:STORY-2906 TASK-3827 | ai:claude
 [throughput_guard]
 enabled = true
 # Minutes a change may wait before it counts as stuck: from the approval
@@ -677,6 +682,15 @@ escalate_after_mins = 120
 # Red approved changes whose job logs one run reads; a log read once is kept,
 # so the rest are read on the following runs.
 max_red_logs = 6
+
+# Lane hosts whose memory each run measures with one bounded, read-only SSH
+# call (`cat /proc/meminfo`, nothing forwarded): the host name its lane records
+# carry = the SSH alias that reaches it. Only the copy of this table on the
+# default branch is used: an edit in a checkout or on another branch names no
+# host. A host not named here is never contacted, and its memory is reported
+# as unknown.
+[throughput_guard.remote_hosts]
+disrad-dvp98b3puw = "dell1"
 
 [[schedule.jobs]]
 name = "throughput-guard"

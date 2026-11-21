@@ -32,7 +32,7 @@ pub(crate) mod doctor_cmd_args;
 pub(crate) use doctor_cmd_args::*;
 
 #[path = "doctor/lane_binaries.rs"]
-mod lane_binaries;
+pub(crate) mod lane_binaries;
 
 use crate::cli::Command;
 use crate::db_block::{

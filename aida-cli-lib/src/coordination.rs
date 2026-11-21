@@ -636,7 +636,7 @@ fn refresh_store_or_stop(store_root: &Path, branch: &str) -> bool {
 }
 
 /// Directory under the store worktree holding the lease claims.
-fn leases_dir(store_root: &Path) -> PathBuf {
+pub(crate) fn leases_dir(store_root: &Path) -> PathBuf {
     store_root.join(LEASES_SUBDIR)
 }
 
@@ -858,10 +858,20 @@ fn implementer_refusal(scope: &str, holder: &Claim, path: &Path) -> String {
 /// Read + parse a claim file, if present and well-formed. A missing file or a
 /// parse error both yield `None` — a corrupt claim must never wedge a lease
 /// (treated as "no claim", i.e. reclaimable). trace:STORY-637
+///
+/// The claim is read as a bounded regular file, never through a symlink: the
+/// registry is a shared directory, and a FIFO or a device placed in it must
+/// not block or flood a reader (it reads as "no claim").
+// trace:TASK-3827 | ai:claude
 fn read_claim(path: &Path) -> Option<Claim> {
-    let raw = std::fs::read_to_string(path).ok()?;
+    let raw =
+        aida_core::seat_clone_detect::read_regular_file_result_with_limit(path, MAX_CLAIM_BYTES)
+            .ok()?;
     toml::from_str(&raw).ok()
 }
+
+/// The largest claim file read. A real one is under 1 KiB.
+const MAX_CLAIM_BYTES: u64 = 64 * 1024;
 
 /// Best-effort host name (informational; drives the same-host pid fast path).
 ///
