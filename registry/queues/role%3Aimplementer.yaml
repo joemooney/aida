@@ -169,13 +169,6 @@
   added_at: 2026-11-19T13:26:27.916977822Z
   for_role: implementer
 - user_id: role:implementer
-  requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
-  position: -884000
-  added_by: role:implementer
-  note: 'Round 4 (FINAL) for PR #4306. AUTHORITATIVE scope: .aida/tmp/brief-BUG-2688-fresh-r4.md: a working recovery from a restored dead orphan lease, with a real-path regression. CLAUDE, STRICT.'
-  added_at: 2026-11-19T13:07:38.498679138Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1ee98-e3fc-7f61-b28e-2fd201f1d28e
   position: -883000
   added_by: role:implementer
@@ -415,6 +408,114 @@
     Max cache size                       10 GiB
     lane sccache: server exited before sandbox teardown
   added_at: 2026-11-21T00:50:59.784349786Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  position: 0
+  added_by: fast-gate
+  note: |-
+    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Commit your fix and publish it to the existing branch before you finish; uncommitted edits are not published (only a seat whose AIDA_CONTAINMENT_POSTURE is native defers its commit to the host); retain all punt/hold instructions.
+    ----------------------------------------------------------------------
+    Traceback (most recent call last):
+      File "/home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-452/tests/test_git_maintenance_ratchet.py", line 482, in test_unguarded_write_class_git_sites_only_go_down
+        self.assertEqual(
+    AssertionError: Lists differ: [] != ['aida-cli-lib/src/tests/bug_2688_repair_r[127 chars]ush']
+
+    Second list contains 1 additional elements.
+    First extra element 0:
+    'aida-cli-lib/src/tests/bug_2688_repair_reservation_tests.rs: 5 > baseline 0\n    30: git commit\n    31: git push\n    35: git commit\n    36: git push\n    260: git push'
+
+    - []
+    + ['aida-cli-lib/src/tests/bug_2688_repair_reservation_tests.rs: 5 > baseline 0\n'
+    +  '    30: git commit\n'
+    +  '    31: git push\n'
+    +  '    35: git commit\n'
+    +  '    36: git push\n'
+    +  '    260: git push'] : New test git commit/merge/fetch/... without `-c maintenance.auto=false -c gc.auto=0`. Spawn it through the crate's test_git helper (or add the -c pair to the shell script):
+    aida-cli-lib/src/tests/bug_2688_repair_reservation_tests.rs: 5 > baseline 0
+        30: git commit
+        31: git push
+        35: git commit
+        36: git push
+        260: git push
+
+    ======================================================================
+    FAIL: test_no_new_legacy_sites (tests.test_ownership_liveness_ratchet.OwnershipLivenessRatchet.test_no_new_legacy_sites)
+    ----------------------------------------------------------------------
+    Traceback (most recent call last):
+      File "/home/dirtlab/ai/aida-worktrees/aida-seat-aida-bug-b6b1278890774ef993d2ebc327862470-452/tests/test_ownership_liveness_ratchet.py", line 83, in test_no_new_legacy_sites
+        self.assertFalse(growth, f"Route new liveness readers through ownership/: {growth}")
+    AssertionError: {'aida-cli-lib/src/lane_liveness.rs:headless_lane_run_alive:process_provably_dead': 1} is not false : Route new liveness readers through ownership/: {'aida-cli-lib/src/lane_liveness.rs:headless_lane_run_alive:process_provably_dead': 1}
+
+    ----------------------------------------------------------------------
+    Ran 10 tests in 13.556s
+
+    FAILED (failures=2)
+    FAIL  Test git auto-maintenance ratchet  (13.6s)
+            this is CI's own `Test git auto-maintenance ratchet` step, run locally.
+    make: *** [Makefile:567: check-ci-source] Error 1
+    lane sccache: final job statistics
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                      1
+    Compile requests executed             0
+    Cache hits                            0
+    Cache misses                          0
+    Cache hits rate                       -
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                          0
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                   1
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.000 s
+    Average compiler                  0.000 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  added_at: 2026-11-21T01:16:43.306180536Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
