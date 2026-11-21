@@ -874,6 +874,30 @@ comments:
   modified_at: 2026-11-21T01:29:30.018164446Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fbb9-9c34-73d2-86b1-7ee601d6383d
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 5029dd61e767
+    Recorded: 2026-11-21T01:27:08.606812203+00:00
+    Findings:
+    1. seat_clone.rs:3495 still wraps preparation errors with ‘diagnose that failure’ and a generic lease listing. An unfinished merge with missing journal evidence also says only to preserve it, and the self-publication refusal names a lane type without a runnable recovery command. Select one recovery action from the actual cause and test the complete user-visible refusal for aca42931.
+    2. Implement acc34a6d at the fresh pickup entry point. With MERGE_HEAD in the retained tree, prepare_host_repair_admitted requires resume; a fresh pickup does not log and set aside retained state and start at the fetched remote SHA. Preserve pending work while allocating the fresh seat.
+    3. Cover ac153421 and the Tests criterion through pickup. The new suite keeps the old journal when removing the seat, always passes resume=false, and creates the replacement worktree directly on the local branch. Exercise a removed seat plus missing journal with a remote head ahead of local, and exercise the journal-backed resume path through the same entry point. Trace the four supplied criterion IDs in their regression coverage.
+    4. repair_journal.rs:449 takes the lease snapshot before waiting for the journal lock. A successor lease created while heal waits is absent from the evidence used to release the reservation. Bind the heal to the scanned reservation generation and revalidate current lease ownership at the mutation boundary, coordinated with lease creation or transfer. Add a race regression.
+    5. lane_liveness.rs:824 decides death from the recorded PID in the caller's process view without validating the record's lease ID or PID namespace. A different lane's dead record or an invisible live PID can authorize release. Bind the record to the lane and use the namespace-aware ownership reader. Fast compile and fast gates both flag this new direct process_provably_dead call.
+    6. lane_liveness.rs:816 reads an arbitrary lane record with unbounded, blocking read_to_string. A FIFO can hang ordinary doctor scans and a heal holding the journal lock; a dangling symlink returns NotFound and counts as no run. Use a bounded nonblocking read of a verified regular file and distinguish a truly absent entry from unreadable or invalid evidence.
+    7. repair_journal.rs:433/449 relies on list_leases_strict_all for destructive release, but leases.rs uses Path::exists on the sessions directory and on failed entry reads. A dangling sessions link or a metadata error can become an empty lease listing. Require confirmed absence and retain the reservation on inconclusive directory or entry evidence.
+    8. repair_journal.rs:437 silently drops reservation_holder errors. A malformed lane record makes doctor check report nothing, and the recommended heal cannot act or say what to repair. Emit a non-healable finding identifying the missing or invalid evidence; update the test that currently expects an empty scan on a torn record.
+    9. queue_cmd/work.rs:932 repeats the effectful launch admission after preparation has reserved and merged. The second binary/containment preflight can refuse after state changes, particularly on retained setups that cannot roll back. Carry successful conflict admission through routing, and test that the check runs once.
+    10. queue_cmd/work.rs:885 introduces another typed HeadlessVendor reference in prepare_and_route_rework_conflict. The exact-head vendor debt guard rejects it. Reuse the existing routing boundary without expanding the per-item ledger.
+    11. The fast-gates Git maintenance guard rejects five commit/push call sites in bug_2688_repair_reservation_tests.rs (30, 31, 35, 36, 260). The imported git_ok already delegates to test_git::git_command, but the guard does not recognize the cross-file wrapper. Make the protected helper use visible to the guard without raising its baseline.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-21T01:30:07.796743694Z
+  modified_at: 2026-11-21T01:30:07.796743694Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
