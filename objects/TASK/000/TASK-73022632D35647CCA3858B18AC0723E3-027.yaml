@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-21T01:12:14.015806723Z
+modified_at: 2026-11-21T01:14:01.385359931Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -524,6 +524,11 @@ comments:
   created_at: 2026-11-21T01:12:14.015801350Z
   modified_at: 2026-11-21T01:12:14.015801350Z
   session_id: 01a1fb836f3c
+- id: 01a1fbaa-dc1c-7ec3-adbc-e08e4760f3ee
+  author: joe
+  content: PR-4387 at 509f5afbb29daaa8771237f5812e1aafd8e0493f conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-21T01:14:01.116472292Z
+  modified_at: 2026-11-21T01:14:01.116472292Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
