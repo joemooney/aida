@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T00:18:19.991419909Z
+modified_at: 2026-11-21T00:18:38.067037847Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -72,6 +72,26 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2707 — request changes. Reviewed the complete landed diff against protected main 29e77b852369. All findings also apply at the original head and are independent of the intervening base commit.. No triage reason was given.'
   created_at: 2026-11-21T00:18:19.991418298Z
   modified_at: 2026-11-21T00:18:19.991418298Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb78-2696-7621-b2a6-ec1dde7f0f8b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2707):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: acb62fdfa138
+    Recorded: 2026-11-21T00:14:41.389927927+00:00
+    Findings:
+    1. AC2: LaunchDraft::prompt makes check-draft a separate command after a raw file write. A reviewer can write the contradictory approval and exit normally. The new regression explicitly verifies launch.read() still accepts it. Bind validation to the supported submission/write operation and return the corrective diagnostic while the reviewer can retry. Exercise that entry point through failed submission and successful correction.
+    2. AC1: The standalone prompt still ends with an instruction to exit once the draft is written, and aida-core/templates/commands/aida-review.md likewise tells the reviewer to write and exit. The Codex-adapted workflow receives that instruction alongside the new check. Align both handoff instructions so every vendor exits only after successful validation.
+    3. AC1/AC2: handle_check_draft selects the policy from the current working directory, independently of the supplied draft and the parent project. Running the prescribed absolute-path command from a different AIDA checkout, or a private review clone with different default refs, can pass an approval which the parent rejects under its blocking list. Bind the check to the launch policy from the parent and cover divergent checkouts.
+    4. check_draft_file checks symlink_metadata and then reopens the path with an unbounded read_to_string. Replacement or growth between those operations defeats the regular-file and size checks and can hang or exhaust the reviewer. Open once with the existing no-follow/nonblocking reader, check the opened handle and limit the read to LIMIT + 1 as LaunchDraft::read does.
+    5. LaunchDraft::prompt interpolates the absolute path unquoted into its runnable shell command. Worktree paths containing spaces split into multiple arguments and shell metacharacters are interpreted. Quote the argument for the shell and cover a path containing whitespace and a quote.
+    6. The default-policy instructions in approval_refusal and the new skill paragraph say a registry blocking_tier is required for explicit deferral. Under an unset list apply_policy preserves the input and finding_is_deferred checks severity, disposition and rationale without requiring a tier. The existing example in the same skill omits it. Describe the actual default-policy rule and cover that documented example.
+    7. The tier-list refusal offers restructuring as a fix for findings outside the configured classes, even for ADR-76 sensitive test gaps and always-blocking security findings when their classes are absent from the list. These remain blocking after restructuring. Identify intrinsically blocking findings and give request-changes as the remedy for them.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-21T00:18:37.846702855Z
+  modified_at: 2026-11-21T00:18:37.846702855Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
