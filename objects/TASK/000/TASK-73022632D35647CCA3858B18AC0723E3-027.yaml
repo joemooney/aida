@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-21T01:14:01.385359931Z
+modified_at: 2026-11-21T01:30:03.594872019Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -529,6 +529,13 @@ comments:
   content: PR-4387 at 509f5afbb29daaa8771237f5812e1aafd8e0493f conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-21T01:14:01.116472292Z
   modified_at: 2026-11-21T01:14:01.116472292Z
+- id: 01a1fbb9-bd34-7fd0-8a39-41af2ebd6af5
+  author: joe
+  content: 'Product 18:30: PRIMARY-HOST evidence at #4387 head 509f5afbb29 (slice 3), imac, AIDA_CARGO_FORCE_BUILD=1, `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`: 382 passed / 0 failed / 3 ignored (329s), exit 0. Before slice 3 the same host gave 362/19/3 deterministically at 29e77b8. Runs 2 and 3 are in progress; they''ll follow as a separate comment.'
+  created_at: 2026-11-21T01:30:03.594872019Z
+  modified_at: 2026-11-21T01:30:03.594872019Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
