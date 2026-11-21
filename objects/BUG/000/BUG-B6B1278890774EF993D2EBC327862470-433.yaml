@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-21T00:21:35.262634052Z
+modified_at: 2026-11-21T00:42:37.630378753Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -353,6 +353,27 @@ comments:
   modified_at: 2026-11-21T00:18:01.844413123Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb8e-1ebe-7a62-8449-8028efc9fb81
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 190513dc5b (slice 1 / PR #4376, round 3 rework; Refs-only slice).
+
+    Findings addressed:
+    1. [D2] Lane write profile (launch/contained.rs WriteProfile::add): any writable mount ABOVE the receipt store or its lock directory is now followed by read-only binds of both (roots provisioned 0700 first), so the canonical cache directory bound after the read-only authority mount cannot expose them; a symlinked root under such a mount refuses the launch. Tests: bug_2669_a_writable_mount_above_the_receipt_store_is_resealed_read_only (mount order, native profile, symlinked parent, symlinked root refusal); the live containment test now remounts the authority directory read-write after sealing it, with a positive control that the remount was live.
+    2. Maintenance budget: listing capped at 4096 entries and half the time budget once a receipt is found; the first receipt of each run is examined regardless. Test: bug_2669_every_sweep_examines_a_receipt_however_little_budget_is_left.
+    3. Lock: O_NOFOLLOW|O_NONBLOCK open, regular-file fstat check before any wait, deadline starts before the open. Test: bug_2669_a_lock_name_that_is_not_a_regular_file_is_refused_without_blocking (FIFO without and with a reader, symlink).
+    4. Plan doc Receipt section: link_then_unlink fallback, its two-name window, parse's refusal, and the crash-in-window outcome.
+
+    Evidence: lane job cargo test -p aida-cli-lib --lib -- bug_2669 launch::contained: 137 passed, 1 failed. All 18 bug_2669 tests pass. The failure is task_3219_live_claude_interactive_grant ('child grant key is not possessed by the launcher'), which fails the same way in other lanes' job logs since 2026-11-07. cargo fmt and check-store-writers.py clean.
+
+    Not run: make check-ci-fast (needs about 90s and cargo; this lane caps a tool call at 60s) — CI at the PR head is the evidence. The live bwrap test may have skipped inside the lane sandbox.
+
+    Residual risks: (a) the re-seal covers the receipt and lock directories only; the grant store under a writable mount above the AIDA home relies on the existing mount order, as before. (b) With more than 4096 entries in the receipt directory, maintenance only sees the first 4096 in directory order per run. (c) A launcher killed inside the link-then-unlink fallback window leaves an unreadable receipt until the staged name is removed by hand (documented).
+  created_at: 2026-11-21T00:42:37.630378753Z
+  modified_at: 2026-11-21T00:42:37.630378753Z
+  session_id: 01a1fb79c714
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
