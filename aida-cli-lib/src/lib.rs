@@ -208,6 +208,8 @@ pub(crate) mod landing_policy;
 mod land_bindings;
 // trace:STORY-2903 | ai:claude
 pub(crate) mod land_mode;
+// trace:STORY-2897 | ai:claude
+pub(crate) mod main_watch;
 mod project_checks;
 
 // trace:TASK-3815 | ai:codex

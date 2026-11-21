@@ -38,6 +38,16 @@ mod commit_ci;
 mod throughput;
 pub(crate) use commit_ci::*;
 
+/// One CI job as [`Forge::run_job_report`] reads it; the log is an error
+/// string when it could not be read.
+// trace:STORY-2897 | ai:claude
+#[derive(Debug, Clone)]
+pub(crate) struct RunJobReport {
+    pub link: String,
+    pub failed_steps: Vec<String>,
+    pub log: std::result::Result<String, String>,
+}
+
 /// A supervised merge-hold deliberately refused a merge.
 ///
 /// Keep this as a typed error so orchestrator callers can distinguish a human
@@ -1056,6 +1066,21 @@ pub trait Forge {
     // trace:STORY-2912 | ai:claude
     fn run_job_failed_steps(&self, run_id: &str, job: &str) -> Result<Vec<String>> {
         anyhow::bail!("this forge cannot list the steps of job `{job}` in CI run {run_id}")
+    }
+
+    /// Job `job` of CI run `run_id` (its latest attempt): its link, its
+    /// failed steps and its log. Forges without job logs always err.
+    // trace:STORY-2897 | ai:claude
+    fn run_job_report(&self, run_id: &str, job: &str) -> Result<RunJobReport> {
+        anyhow::bail!("this forge cannot report job `{job}` of CI run {run_id}")
+    }
+
+    /// Ask the forge to re-run the failed jobs of CI run `run_id` (the
+    /// red-main watch's one confirming re-run). Forges without that always
+    /// err; the watch then confirms a red by time alone.
+    // trace:STORY-2897 | ai:claude
+    fn rerun_failed_jobs(&self, run_id: &str) -> Result<()> {
+        anyhow::bail!("this forge cannot re-run the failed jobs of CI run {run_id}")
     }
 
     /// STORY-516: branch-keyed CI probe (PR number + check rollup in one call)
@@ -3184,6 +3209,68 @@ impl Forge for GitHubForge {
         })?;
         let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
         github_run_job_failed_steps("{owner}/{repo}", run_id, job, &mut api)
+    }
+
+    // trace:STORY-2897 | ai:claude
+    fn run_job_report(&self, run_id: &str, job: &str) -> Result<RunJobReport> {
+        anyhow::ensure!(
+            !run_id.is_empty() && run_id.bytes().all(|b| b.is_ascii_digit()),
+            "invalid CI run id `{run_id}`"
+        );
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        // Every page, with the listing's completeness checked: the failed job
+        // can be past the first hundred.
+        let mut api = |endpoint: &str| commit_ci_api(&gh, &self.project_root, endpoint);
+        let jobs = github_run_jobs("{owner}/{repo}", run_id, &mut api)?;
+        let failed_steps = failed_steps_of(&jobs, job)?;
+        let found = jobs
+            .iter()
+            .find(|j| j["name"].as_str() == Some(job))
+            .with_context(|| format!("job `{job}` is not in CI run {run_id}"))?;
+        let id = found["id"].as_u64().context("the job has no id")?;
+        // Only the tail is kept while the log streams: the errors are at
+        // its end, and a large log never fills this process.
+        let log = commit_ci_api_tail(
+            &gh,
+            &self.project_root,
+            &format!("repos/{{owner}}/{{repo}}/actions/jobs/{id}/logs"),
+            JOB_LOG_TAIL,
+        )
+        .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
+        .map_err(|e| format!("{e:#}"));
+        Ok(RunJobReport {
+            link: found["html_url"].as_str().unwrap_or_default().to_string(),
+            failed_steps,
+            log,
+        })
+    }
+
+    // trace:STORY-2897 | ai:claude
+    fn rerun_failed_jobs(&self, run_id: &str) -> Result<()> {
+        anyhow::ensure!(
+            !run_id.is_empty() && run_id.bytes().all(|b| b.is_ascii_digit()),
+            "invalid CI run id `{run_id}`"
+        );
+        let gh = crate::resolve_forge_cli(ForgeKind::GitHub).ok_or_else(|| {
+            anyhow::anyhow!("could not invoke `gh` — is the GitHub CLI installed?")
+        })?;
+        let endpoint = format!("repos/{{owner}}/{{repo}}/actions/runs/{run_id}/rerun-failed-jobs");
+        let mut command = Command::new(&gh);
+        command
+            .args(["api", "-X", "POST", &endpoint])
+            .current_dir(&self.project_root)
+            .stdin(std::process::Stdio::null());
+        let out = crate::command_output_with_timeout(command, COMMIT_CI_API_TIMEOUT)
+            .with_context(|| format!("`gh api -X POST {endpoint}` timed out or failed to spawn"))?;
+        anyhow::ensure!(
+            out.status.success(),
+            "`gh api -X POST {endpoint}` failed ({}): {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        Ok(())
     }
 
     // trace:STORY-2912 | ai:claude
@@ -5608,6 +5695,76 @@ const ARTIFACT_DOWNLOAD_TIMEOUT: std::time::Duration = std::time::Duration::from
 // mutation commands so command-trust audits can identify these call sites.
 fn forge_read_command(cli: &Path) -> Command {
     Command::new(cli)
+}
+
+/// How much of a job log's end [`Forge::run_job_report`] keeps.
+// trace:STORY-2897 | ai:claude
+pub(crate) const JOB_LOG_TAIL: usize = 1024 * 1024;
+
+/// `<cli> api -X GET <endpoint>` keeping only the last `keep` bytes of its
+/// output as it streams, bounded by the same timeout (and scoped deadline)
+/// as [`commit_ci_api`]. A timeout kills the child and is an `Err`.
+// trace:STORY-2897 | ai:claude
+pub(crate) fn commit_ci_api_tail(
+    cli: &Path,
+    root: &Path,
+    endpoint: &str,
+    keep: usize,
+) -> Result<Vec<u8>> {
+    use std::io::Read;
+    crate::pr_train::before_train_forge_call("commit CI API read")?;
+    let mut command = forge_read_command(cli);
+    command
+        .args(["api", "-X", "GET", endpoint])
+        .current_dir(root)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    let timeout = match crate::forge_lookup::forge_lookup_deadline() {
+        Some(deadline) => {
+            COMMIT_CI_API_TIMEOUT.min(deadline.saturating_duration_since(std::time::Instant::now()))
+        }
+        None => COMMIT_CI_API_TIMEOUT,
+    };
+    anyhow::ensure!(
+        !timeout.is_zero(),
+        "the read deadline passed before `{endpoint}`"
+    );
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("`{} api {endpoint}` failed to spawn", cli.display()))?;
+    let mut stdout = child.stdout.take().context("no stdout pipe")?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut tail: std::collections::VecDeque<u8> = std::collections::VecDeque::new();
+        let mut chunk = [0u8; 64 * 1024];
+        loop {
+            match stdout.read(&mut chunk) {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    tail.extend(&chunk[..n]);
+                    let excess = tail.len().saturating_sub(keep);
+                    tail.drain(..excess);
+                }
+            }
+        }
+        let _ = tx.send(Vec::from(tail));
+    });
+    let tail = match rx.recv_timeout(timeout) {
+        Ok(tail) => tail,
+        Err(_) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            anyhow::bail!("`{} api {endpoint}` timed out", cli.display());
+        }
+    };
+    let status = child.wait()?;
+    anyhow::ensure!(
+        status.success(),
+        "`{} api {endpoint}` failed ({status})",
+        cli.display()
+    );
+    Ok(tail)
 }
 
 /// Run `<cli> api -X GET <endpoint>` in `root` for the commit-keyed reader;
