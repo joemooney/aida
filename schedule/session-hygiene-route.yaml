@@ -9,6 +9,6 @@ note: 'advisor-121 11:27: same kept item as 10:25 (TASK-2708 seat tree; commit e
 due_since: 2026-11-19T19:45:42.743327061Z
 due_reason: on CronJobFailed:session-hygiene
 due_failure:
-  trip_id: session-hygiene@2026-11-21T22:27:09.443024428Z
+  trip_id: session-hygiene@2026-11-21T23:27:16.741909359Z
   job: session-hygiene
   error: 'exit 1: '
