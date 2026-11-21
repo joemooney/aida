@@ -1345,23 +1345,23 @@ fn task1805_pickup_refuses_an_unknown_or_ambiguous_backing_id() {
     );
 }
 
-/// Exercise the actual fresh headless launch boundary, including prompt
-/// transport, data-only vendor output, parent recording and collection.
+/// A fresh headless launch with a forge, so the launcher pins the head,
+/// prepares a draft slot and registers its launch receipt. `script(launch,
+/// head)` is the mock reviewer.
 // trace:BUG-2564 | ai:codex
-#[test]
-fn standalone_review_verdict_structured_child_reaches_parent_canonical_record() {
-    if crate::test_env::run_path_isolated_test() {
-        return;
-    }
-    let tmp = tempfile::tempdir().unwrap();
-    let (result, project) = crate::with_review_pr_subject(
+// trace:BUG-2669 | ai:claude
+fn run_headless_reviewer_with_draft_slot(
+    tmp: &std::path::Path,
+    script: impl Fn(&Launch<'_>, &str) -> String,
+) -> (Result<()>, std::path::PathBuf) {
+    crate::with_review_pr_subject(
         crate::ReviewPrSubject {
             head_ref: "feature".into(),
             commit_subjects: vec!["change (STORY-77)".into()],
         },
         || {
             run_mock_reviewer_in(
-                tmp.path(),
+                tmp,
                 true,
                 |project, _| {
                     crate::test_git::commit_fixture(project);
@@ -1393,13 +1393,39 @@ fn standalone_review_verdict_structured_child_reaches_parent_canonical_record() 
                 "headRefOid":head,"headRefName":"feature","baseRefName":"main","state":"OPEN",
                 "isDraft":false,"labels":[]});
                     crate::test_exec::write_executable(
-                        &tmp.path().join("bin/gh"),
+                        &tmp.join("bin/gh"),
                         format!("#!/bin/sh\nprintf '%s' '{metadata}'\n"),
                     );
-                    let data = serde_json::json!({"version":1,"pr":59,"reviewed_sha":head,
-                "verdict":"approved","summary":"data-only child complete rationale","findings":[]});
-                    format!(
-                        r#"#!/bin/sh
+                    script(l, &head)
+                },
+            )
+        },
+    )
+}
+
+/// The launch receipts the fixture launcher left in its hermetic AIDA home.
+// trace:BUG-2669 | ai:claude
+fn launch_receipts(tmp: &std::path::Path) -> Vec<serde_json::Value> {
+    std::fs::read_dir(tmp.join("home/.aida/review-handoffs"))
+        .unwrap()
+        .map(|e| serde_json::from_slice(&std::fs::read(e.unwrap().path()).unwrap()).unwrap())
+        .collect()
+}
+
+/// Exercise the actual fresh headless launch boundary, including prompt
+/// transport, data-only vendor output, parent recording and collection.
+// trace:BUG-2564 | ai:codex
+#[test]
+fn standalone_review_verdict_structured_child_reaches_parent_canonical_record() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) = run_headless_reviewer_with_draft_slot(tmp.path(), |_, head| {
+        let data = serde_json::json!({"version":1,"pr":59,"reviewed_sha":head,
+            "verdict":"approved","summary":"data-only child complete rationale","findings":[]});
+        format!(
+            r#"#!/bin/sh
 unset AIDA_SESSION_GRANT AIDA_SESSION_ID AIDA_AGENT_TYPE AIDA_AGENT_NAME
 python3 - "$@" <<'PY'
 import json, pathlib, re, sys
@@ -1409,11 +1435,8 @@ assert pathlib.Path(path).is_absolute()
 pathlib.Path(path).write_text(json.dumps(json.loads(r'''{data}''')))
 PY
 "#
-                    )
-                },
-            )
-        },
-    );
+        )
+    });
     result.expect("the actual headless parent records its child's structured draft");
     let v = crate::gate::review_verdict::read_recorded_verdict(&project, "PR-59").unwrap();
     assert_eq!(
@@ -1423,4 +1446,63 @@ PY
     let att = v.attestation.unwrap();
     assert_eq!(att.seat.as_deref(), Some("reviewer"));
     assert!(att.grant_id.is_some());
+    // The launcher registered the draft slot before the spawn, sealed it
+    // with the digest it recorded, and closed it. trace:BUG-2669 | ai:claude
+    let receipts = launch_receipts(tmp.path());
+    assert_eq!(receipts.len(), 1, "{receipts:?}");
+    let receipt = &receipts[0];
+    assert_eq!(receipt["state"], "consumed", "{receipt}");
+    assert_eq!(receipt["pr"], 59);
+    assert_eq!(
+        receipt["head"].as_str(),
+        crate::resolve_commit_sha(&project, "HEAD").as_deref()
+    );
+    assert_eq!(receipt["child_grant"].as_str(), att.grant_id.as_deref());
+    let record = crate::gate::review_verdict::read_current_verdict_object(
+        &crate::gate::review_verdict::verdict_path(&project, "PR-59"),
+    )
+    .unwrap();
+    assert_eq!(receipt["launch"], record["reviewer_draft"]["launch"]);
+    assert_eq!(
+        receipt["seal"]["sha256"],
+        record["reviewer_draft"]["sha256"]
+    );
+    assert!(receipt["seal"]["sha256"].as_str().is_some());
+}
+
+/// A headless launch whose reviewer wrote no draft and recorded the legacy
+/// way: the verdict is collected, and the launch receipt is closed as unused,
+/// never as consumed, because nothing was recorded from a validated draft.
+// trace:BUG-2669 | ai:claude
+#[test]
+fn bug_2669_legacy_collection_without_a_draft_closes_the_receipt_as_unused() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let (result, project) = run_headless_reviewer_with_draft_slot(tmp.path(), |l, head| {
+        records_approval(l.worktree, "$AIDA_SESSION_GRANT", head, "")
+    });
+    result.expect("a verdict recorded the legacy way is still collected");
+    let v = crate::gate::review_verdict::read_recorded_verdict(&project, "PR-59").unwrap();
+    assert_eq!(v.kind, crate::gate::review_verdict::VerdictKind::Approved);
+    let record = crate::gate::review_verdict::read_current_verdict_object(
+        &crate::gate::review_verdict::verdict_path(&project, "PR-59"),
+    )
+    .unwrap();
+    assert!(
+        record.get("reviewer_draft").is_none(),
+        "no draft was recorded: {record:?}"
+    );
+
+    let receipts = launch_receipts(tmp.path());
+    assert_eq!(receipts.len(), 1, "{receipts:?}");
+    let receipt = &receipts[0];
+    assert_eq!(receipt["state"], "unused", "{receipt}");
+    assert!(receipt.get("seal").is_none(), "{receipt}");
+    let slot = std::path::PathBuf::from(receipt["worktree"].as_str().unwrap())
+        .join(".aida/review-verdicts")
+        .join(receipt["launch"].as_str().unwrap());
+    assert!(slot.is_dir());
+    assert!(!slot.join("draft.json").exists() && !slot.join("recorded.json").exists());
 }

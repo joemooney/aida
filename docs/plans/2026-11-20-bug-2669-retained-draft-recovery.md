@@ -1,0 +1,275 @@
+# Retained reviewer-draft recovery after the launcher exits
+
+Status: APPROVED 2026-11-20 (advisor signoff recorded on the spec). Rulings:
+D1 (a), with a `review-draft-recovered` wake event for every unsealed
+recovered approval (PR, head, verdict, sealed or unsealed, original launcher,
+recovered_by); sealed recoveries are logged without a wake. D2: the user's
+AIDA home, with a test that a contained lane cannot create or modify a
+receipt. D3: 24 hours. Slice 1 (receipt, seal, `aida review draft list`) is
+implemented in `aida-cli-lib/src/review_handoff.rs`; recovery (slices 2 and 3)
+is not, so a retained draft is still not recorded after a launcher restart.
+Slice-1 receipts are version 1 and are never eligible for automatic recovery
+(see "Receipt versions").
+
+<!-- trace:BUG-2669 | ai:claude -->
+
+## Problem
+
+A headless reviewer writes a data-only draft
+(`<review worktree>/.aida/review-verdicts/draft-<uuid>/draft.json`) and the
+launcher that spawned it records the verdict
+(`docs/plans/2026-11-13-bug-2564-reviewer-verdict-handoff.md`). Everything that
+authenticates the draft lives in the launcher process:
+
+- the directory descriptor opened before the spawn (`LaunchDraft`);
+- the reviewer child grant, bound to the launcher's process and, when
+  available, to a secret in its session keyring (`VerifiedReviewer`).
+
+When the launcher dies before recording, the draft is still on disk but no
+process can record it. Teardown keeps the checkout because it holds an
+unrecorded draft, the next launch creates a new draft directory and never
+looks at the old one, and a full review runs again. On 2026-11-20 an APPROVED
+draft for PR #4347 was stranded this way and recorded by hand.
+
+The regression
+`bug_2669_retained_draft_after_launcher_restart_is_not_recorded_and_stays_retained`
+(`aida-cli-lib/src/review_draft.rs`) pins that behaviour: nothing reaches the
+ledger, the old grant is refused, and the draft stays unconsumed.
+
+## Constraints
+
+1. No credential enters the vendor sandbox (unchanged from the handoff design).
+2. No impersonation. A later process never presents the first launch's
+   reviewer grant, never receives its key and never rebinds it. The grant
+   binding rules stay as they are.
+3. The ship gate accepts a grant-attested approval only when the attesting
+   grant was authorized at the record's `recorded_at`
+   (`grant_authorized_at`, `gate/review_authority.rs`). The first launch's grant
+   may be expired by recovery time, so a recovered record needs a grant that
+   is live when it is written.
+4. Every missing or inconsistent piece of evidence refuses. A refusal leaves
+   the draft where it is.
+
+## Proposal
+
+Recovery is a new act by the recovering launcher under its own authority, with
+durable evidence that an authorized launcher registered the draft slot before
+the reviewer ran. It does not continue the dead launch.
+
+### 1. Launch receipt
+
+Before spawning the reviewer, the launcher writes a receipt to
+`~/.aida/review-handoffs/<draft-uuid>.json`, beside `session-grants/`
+(exclusive create, mode 0600, same lock and atomic-write helpers as grants).
+A lane sandbox cannot write there: the lane write profile refuses a writable
+leaf inside that directory or `~/.aida/review-handoff-locks/` (those two
+resolved directories only, not any directory that shares a name).
+
+Fields: version, draft launch id, project root, canonical review worktree,
+the draft directory's device and inode, PR number, full head SHA, routed
+reviewer session id, launcher grant id, principal, creation time, state
+(`open`, `consumed`, `unused`, `superseded`, `discarded`). The reviewer child
+grant id is added at seal time, when the spawn has returned it; it is
+evidence, not a precondition.
+
+`consumed` means the launcher recorded the verdict from this slot's validated
+draft. `unused` means the launcher found no draft to read and collected a
+verdict the reviewer recorded itself; nothing was recorded from a draft, and
+a sealed receipt is never closed this way.
+
+The receipt is staged under a private name in the receipt directory and
+published to its final name without replacing anything; an existing receipt
+is an error, never an overwrite. On a filesystem with a no-replace rename
+(`renameat2(RENAME_NOREPLACE)` on Linux, `renamex_np(RENAME_EXCL)` on macOS)
+that is one atomic step, and the receipt has exactly one name from the moment
+it exists.
+
+Where the kernel or filesystem lacks that rename, publication falls back to
+`link_then_unlink`: hard-link the staged file to the final name (which fails
+if the name is taken), then unlink the staged name. That is not atomic. For
+the moment between the two calls the receipt has two names and a link count
+of two. The reader handles it by refusing: `parse` accepts only a singly
+linked regular file, so anything reading in that window (`load`, `seal`,
+`aida review draft list`, maintenance) sees an unreadable receipt, not a
+partial or forged one. `list` reports the row as unreadable and maintenance
+leaves it alone. The registering launcher reads the receipt back only after
+the unlink, so it never acts on the two-name state. If the unlink fails, the
+launcher removes the final name again and registration fails. If the launcher
+dies between the link and the unlink, the receipt stays doubly linked and
+unreadable until the stray staged name (`.draft-<uuid>.<uuid>.tmp`, in the
+receipt directory) is removed by hand: that launch has no usable receipt, so
+its draft is not recoverable, which is the fail-closed outcome.
+
+A reader rejects a receipt that fails any field rule (full 40-hex head,
+absolute paths, a non-empty reviewer session, a well-formed seal digest) as a
+whole.
+
+#### Receipt versions
+
+Version 1 is what slice 1 writes. A slice-1 launcher does not supersede the
+earlier drafts of a review checkout (section 4), so an unsealed version-1
+draft has no protection against a later vendor session launched in the same
+checkout. A version-1 receipt is therefore ineligible for automatic recovery
+whatever its seal, age or state: `automatic_recovery_eligible` is `false` for
+it in the code and in `aida review draft list --json`. Slice 2 raises the
+version its launchers write when it adds supersession, and automatic recovery
+accepts only that version or later. A version-1 draft stays a manual case,
+like a draft written before receipts existed.
+
+#### Receipt maintenance
+
+Receipts past 30 days whose draft directory holds no `draft.json` are removed
+with their locks. This runs after a review launch has finished, never before
+a reviewer is spawned. Each run reads at most 4096 directory entries and
+examines at most 16 of the receipts among them within 200 ms, starting at a
+random point so successive runs cover what was listed. Listing and
+examination share that budget: listing stops at half of it once it has found
+a receipt, and the first receipt of a run is examined whatever time is left,
+so a run over a non-empty store always examines at least one. A run never
+waits for a receipt lock, and leaves unreadable receipts and unreadable draft
+directories alone. The lock file is opened without following a symlink and
+without blocking, and only a regular file is locked, so a FIFO or device at
+a lock name is refused at once.
+
+The receipt holds no secret and is not a capability: reading or copying it
+grants nothing. It is the record that a launcher with reviewer delegation
+registered this slot for this PR, head and reviewer session.
+
+### 2. Seal
+
+When the reviewer exits and the launcher has read and validated the draft, it
+writes the draft's SHA-256 into the receipt before the first recording
+attempt. A draft whose recording or publication then fails terminally is
+sealed. A draft whose launcher died while the reviewer was still running is
+unsealed.
+
+### 3. Recovery
+
+Runs only in a process whose own grant delegates `reviewer`, the same
+`validate_child_delegation` check that gates launching a review. In order:
+
+1. Find the worktree's unconsumed drafts and load each receipt by launch id.
+   No receipt: not recoverable.
+2. Receipt matches the project root, worktree, PR and current principal, and
+   its launcher grant delegated `reviewer` when the receipt was created.
+3. Open the draft directory with the existing no-follow helpers; its device
+   and inode equal the receipt's. `draft.json` passes the existing checks
+   (bounded, regular, singly linked, closed schema) and names the receipt's
+   PR and head.
+4. Sealed: the digest matches. Unsealed: decision D1.
+5. The forge head still equals the receipt's head. Otherwise a fresh review
+   is required and the draft stays as a record of its findings.
+6. No newer verdict exists for the change (the existing replay check). If the
+   ledger already carries this launch's stamp with the same digest, only the
+   consumption marker is completed.
+7. Mint a new reviewer child grant under the recovering launcher and build the
+   existing `VerifiedReviewer` from it, with the receipt's reviewer session as
+   the recorder identity. The existing checks then run unchanged: the reviewer
+   identity must not overlap the launcher's, and an approval is refused when
+   that session authored the work.
+8. Record through `record_reviewer_draft`, verify with `verify_recorded_draft`,
+   rename the draft to `recorded.json`, mark the receipt consumed and revoke
+   the recovery grant.
+
+The record's `reviewer_draft` stamp gains
+`recovered: {receipt_sha256, original_launcher, recovered_by}`, so the ledger
+and `aida review verdict` show that the verdict was recovered and by whom. A
+lock on the receipt plus the existing launch-and-digest replay check make
+recovery exactly-once across concurrent launchers.
+
+### 4. Supersession
+
+Before a launcher registers a new receipt for a worktree, it either recovers
+each earlier draft there or marks its receipt `superseded`. A superseded
+unsealed draft is never recoverable. This closes the one path by which a
+non-reviewer could alter an unsealed draft: a later vendor session launched in
+the same worktree (for instance a resumed implementer thread, whose own draft
+is refused) editing the earlier draft so that it is recorded under the earlier
+independent session.
+
+### 5. Triggers
+
+- Reviewer launch for a PR: recover first. A recovered verdict at the current
+  head replaces the vendor run.
+- Teardown and reap, where an unrecorded draft pins the checkout today:
+  attempt recovery when the process holds reviewer delegation; otherwise keep
+  the checkout and name the command.
+- Operator commands `aida review draft list | recover | discard`, registered
+  from their own module. `discard` is the deliberate removal the retention
+  message already asks for.
+
+## Authority analysis
+
+| Path | Who can reach it | What stops a seat without the grant |
+|---|---|---|
+| Write a receipt | A launcher with reviewer delegation | Receipts live in the user's AIDA home, read-only in every lane sandbox: a writable lane mount inside the receipt or lock directory is refused, and one above them (such as a cache directory bound after the home is sealed) is followed by read-only binds of both |
+| Record a recovered draft | A process whose live grant delegates `reviewer` | `validate_child_delegation`, then the unchanged record-time checks |
+| Alter draft content | Whoever can write the review worktree | Seal digest; supersession; head pin; D1 for unsealed drafts |
+| Discard a draft | Operator command | Same delegation check; the findings file is renamed, not deleted |
+
+A recovering launcher could instead launch a new reviewer and record its
+draft, so recovery gives no seat a power it lacks, provided the draft is
+authentic. Authenticity rests on the receipt (not writable from a sandbox),
+the pinned directory identity and the seal.
+
+Residual exposure: an unsealed draft can be rewritten between the launcher's
+death and recovery by a process that can write the review worktree. The same
+writers can already do so during a live launch; the exposure grows in time
+only. Supersession removes later vendor sessions from that set; a host process
+running as the user is outside the model, as it is for the grant store.
+
+No path fails open: a missing receipt, an unreadable directory, a failed
+forge lookup, a lock timeout or an expired recovering grant all leave the
+draft unrecorded and retained.
+
+## Alternatives rejected
+
+- Store the first grant's key so a later process can present it: a durable
+  bearer credential that undoes the process binding.
+- A long-lived supervisor holding the grant: a new always-on authority holder.
+- Record under the recovering launcher's own seat grant: the verdict would no
+  longer be a reviewer-seat record independent of the launcher.
+- Keep discarding: costs a review round and strands the checkout.
+
+## Decisions needed
+
+- **D1, unsealed drafts.** (a) Recover any verdict automatically, relying on
+  the receipt, directory identity, head pin and supersession. (b) Recover
+  unsealed request-changes, rejected and waiting drafts automatically, and
+  require the operator command at a terminal for an unsealed approval.
+  (c) Never recover unsealed drafts. Recommended: (a). An approval stranded by a
+  launcher that died before collecting, as reported for PR #4347, is unsealed,
+  so (b) would still need a human for that case, though with one command.
+- **D2, receipt location.** The user's AIDA home (recommended: the same trust
+  root as grants, host-local like the worktree) or the project store (visible
+  to other hosts, but writable from lane sandboxes).
+- **D3, age cap.** Automatic recovery only within 24 hours of the receipt
+  (recommended, matching the maximum grant age); older drafts need the
+  operator command.
+
+## Slices after signoff
+
+1. Receipt, seal and `aida review draft list`. No authority change.
+2. Recovery core, supersession and the launch trigger. Strict-tier review.
+3. Teardown trigger, `recover` and `discard` commands, `docs/lifecycle.md` and
+   the review skill.
+
+Drafts written before slice 1 have no receipt and stay a manual case, and so
+do drafts registered by a slice-1 launcher (version-1 receipts).
+
+## Tests required
+
+- After a launcher restart, a sealed draft and (per D1) an unsealed draft are
+  recorded exactly once at the pinned head under the recovery grant, with the
+  original reviewer session as recorder identity and the `recovered` stamp.
+  This replaces the expectation of the current regression.
+- Refusals: no receipt; receipt for another PR, worktree, root or principal;
+  replaced draft directory; digest mismatch; moved head; newer verdict;
+  superseded receipt; recovering grant without reviewer delegation, expired or
+  revoked; reviewer session that authored the work; age over the cap.
+- Two concurrent recoveries produce one ledger record.
+- A recovered request-changes draft keeps its findings and arms the hold.
+- An interrupted recovery (recorded, not yet marked consumed) completes
+  without a second round.
+- Supersession: a new launch in the worktree makes the earlier unsealed draft
+  unrecoverable.

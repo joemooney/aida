@@ -36,6 +36,14 @@ impl ReviewerDraft {
         }
     }
 
+    /// SHA-256 of the validated draft's canonical serialization: the digest
+    /// in the ledger's handoff stamp and in a sealed launch receipt.
+    // trace:BUG-2669 | ai:claude
+    pub(crate) fn digest(&self) -> Result<String> {
+        use sha2::{Digest, Sha256};
+        Ok(format!("{:x}", Sha256::digest(serde_json::to_vec(self)?)))
+    }
+
     pub(crate) fn record_findings(&self) -> Vec<String> {
         if self.findings.is_empty()
             && rv::VerdictKind::parse(&self.verdict) != rv::VerdictKind::Waiting
@@ -171,6 +179,33 @@ impl LaunchDraft {
     pub(crate) fn path(&self) -> &Path {
         &self.path
     }
+
+    /// This launch's identity: the exclusive draft directory's name.
+    // trace:BUG-2669 | ai:claude
+    pub(crate) fn launch_id(&self) -> Result<String> {
+        Ok(self
+            .path
+            .parent()
+            .and_then(Path::file_name)
+            .context("missing draft launch identity")?
+            .to_string_lossy()
+            .to_string())
+    }
+
+    /// Device and inode of the draft directory held since before the spawn.
+    // trace:BUG-2669 | ai:claude
+    pub(crate) fn dir_identity(&self) -> Result<(u64, u64)> {
+        let meta = self.dir.metadata()?;
+        Ok((meta.dev(), meta.ino()))
+    }
+
+    pub(crate) fn pr(&self) -> u64 {
+        self.pr
+    }
+
+    pub(crate) fn head(&self) -> &str {
+        &self.head
+    }
 }
 
 /// The unconsumed reviewer handoffs (`draft-*/draft.json`) a review checkout
@@ -226,7 +261,7 @@ pub(crate) fn unconsumed_draft_retention(worktree: &Path) -> Option<String> {
     }
 }
 
-fn full_sha(sha: &str) -> bool {
+pub(crate) fn full_sha(sha: &str) -> bool {
     sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
@@ -270,20 +305,11 @@ impl VerifiedReviewer {
         launch: &LaunchDraft,
         draft: &ReviewerDraft,
     ) -> Result<Self> {
-        use sha2::{Digest, Sha256};
         ensure!(
             draft.pr == launch.pr && draft.reviewed_sha == launch.head,
             "draft launch mismatch"
         );
-        let id = launch
-            .path
-            .parent()
-            .and_then(Path::file_name)
-            .context("missing draft launch identity")?
-            .to_string_lossy()
-            .to_string();
-        let digest = format!("{:x}", Sha256::digest(serde_json::to_vec(draft)?));
-        self.handoff = Some((id, digest));
+        self.handoff = Some((launch.launch_id()?, draft.digest()?));
         Ok(self)
     }
 
@@ -1041,6 +1067,90 @@ mod standalone_review_verdict_parent_tests {
             },
             || assert!(f.reviewer().is_err()),
         );
+    }
+    /// Today's behaviour once the launcher that owns a draft is gone: the
+    /// draft is never recorded by a later launcher. The first launch's
+    /// reviewer grant stays bound to the dead launcher process, a restarted
+    /// launcher cannot present it, and its own launch reads only its own
+    /// (empty) draft directory. Nothing reaches the ledger; the draft stays
+    /// on disk, unconsumed, and keeps its checkout from being removed.
+    /// docs/plans/2026-11-20-bug-2669-retained-draft-recovery.md proposes the
+    /// authorized recovery that replaces this outcome.
+    // trace:BUG-2669 | ai:claude
+    #[test]
+    fn bug_2669_retained_draft_after_launcher_restart_is_not_recorded_and_stays_retained() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let mut f = Fixture::new();
+        let first = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+        let body = serde_json::json!({"version":1,"pr":59,"reviewed_sha":f.head,"verdict":"approved",
+            "summary":"complete child rationale","findings":[]});
+        std::fs::write(&first.path, body.to_string()).unwrap();
+        let retained = first.path.clone();
+        // The launcher exits before recording: its descriptor is gone and the
+        // reviewer grant remains bound to a process that no longer exists.
+        drop(first);
+        sa::test_support::rewrite_grant(&f.child, |g| {
+            g.binding = vec!["proc:4194399@1".into()];
+        });
+        assert!(
+            f.reviewer().is_err(),
+            "a grant bound to the dead launcher must not be presentable"
+        );
+
+        // A restarted launcher holds its own grant and issues its own child.
+        let restarted = sa::test_support::mint_grant_for(
+            &f.root,
+            &crate::current_user_id(None),
+            "advisor",
+            &["reviewer"],
+        );
+        f._env.set_key(sa::GRANT_ENV, &restarted);
+        let since = SystemTime::now();
+        let child = crate::launch::issue_launch_child(
+            &f.root,
+            "reviewer",
+            &crate::current_user_id(None),
+            false,
+        )
+        .unwrap()
+        .id;
+        assert!(
+            VerifiedReviewer::from_launch(
+                &f.root,
+                &f.child,
+                &restarted,
+                f.since,
+                "independent-review-session"
+            )
+            .is_err(),
+            "a later launcher must not record under the first launch's grant"
+        );
+        // Its own launch is sound, but sees no draft: the launcher treats
+        // this NotFound as "no handoff" and never adopts the earlier one.
+        assert!(VerifiedReviewer::from_launch(
+            &f.root,
+            &child,
+            &restarted,
+            since,
+            "second-review-session"
+        )
+        .is_ok());
+        let second = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+        let missing = second.read().unwrap_err();
+        assert!(
+            missing
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound),
+            "{missing:#}"
+        );
+
+        assert!(rv::read_recorded_verdict(&f.root, "PR-59").is_none());
+        assert_eq!(unconsumed_drafts(&f.root).unwrap(), vec![retained]);
+        assert!(unconsumed_draft_retention(&f.root)
+            .unwrap()
+            .contains("unrecorded reviewer draft"));
     }
     #[test]
     fn standalone_review_verdict_parent_rejects_resumed_implementer_identity() {

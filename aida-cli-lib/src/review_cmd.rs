@@ -65,6 +65,12 @@ fn run_review(
 ) -> anyhow::Result<crate::cmdkit::Flow> {
     use crate::handle_review_spec;
     use aida_core::Storage;
+    // Subcommands registered from their own module (`aida review draft`) are
+    // not `ReviewCommand` variants: dispatch them before decoding the rest.
+    // trace:BUG-2669 | ai:claude
+    if let Some(flow) = crate::command_registry::run_nested("review", matches, ctx) {
+        return flow;
+    }
     let args = <ReviewArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
         None => Ok(crate::cmdkit::Flow::Continue),
@@ -151,12 +157,23 @@ fn run_review(
 pub(crate) static REVIEW: crate::cmdkit::CommandReg = crate::cmdkit::CommandReg {
     name: "review",
     help_after: "trace",
-    command: <ReviewArgs as clap::CommandFactory>::command,
-    policy: |_| crate::cmdkit::CmdPolicy {
-        stakeholder: crate::stakeholder_role::StakeholderAction::Write,
-        per_write_auto_push: false,
-        skip_role_restore_prompt: false,
-        team_identity_write: false,
+    // trace:BUG-2669 | ai:claude — plus the subcommands registered from
+    // their own module, each answering for its own policy.
+    command: || {
+        crate::command_registry::with_nested(
+            "review",
+            <ReviewArgs as clap::CommandFactory>::command(),
+        )
+    },
+    policy: |matches| {
+        crate::command_registry::nested_policy("review", matches).unwrap_or(
+            crate::cmdkit::CmdPolicy {
+                stakeholder: crate::stakeholder_role::StakeholderAction::Write,
+                per_write_auto_push: false,
+                skip_role_restore_prompt: false,
+                team_identity_write: false,
+            },
+        )
     },
     run: crate::cmdkit::Handler::Store(run_review),
 };

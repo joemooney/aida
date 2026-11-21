@@ -291,6 +291,13 @@ impl WriteProfile {
                         || p.as_os_str() == "session-grant-locks"),
                 "canonical grants are host-only; directory-leaf refusal"
             );
+            // Launch receipts share the grant store's trust root: no
+            // writable leaf inside the host's receipt or receipt-lock
+            // directory. trace:BUG-2669 | ai:claude
+            anyhow::ensure!(
+                !crate::review_handoff::inside_host_only_root(path),
+                "review handoff receipts are host-only; directory-leaf refusal"
+            );
         }
         self.mounts.push(Mount {
             data: false,
@@ -298,6 +305,19 @@ impl WriteProfile {
             path: path.into(),
             writable,
         });
+        if writable {
+            // A writable bind replaces the view of everything beneath it,
+            // including a read-only authority mount made earlier (the
+            // canonical cache directory is bound after the AIDA home is
+            // sealed). Whenever the receipt store or its lock directory
+            // lies beneath this mount, bind it read-only again on top, so
+            // no mount order leaves it writable. trace:BUG-2669 | ai:claude
+            for root in crate::review_handoff::host_only_roots_beneath(path) {
+                crate::review_handoff::provision_host_only_root(&root)?;
+                ensure_dir(&root)?;
+                self.add(&std::fs::canonicalize(&root)?, false)?;
+            }
+        }
         Ok(())
     }
     fn args(&self, cwd: &Path) -> Vec<String> {
