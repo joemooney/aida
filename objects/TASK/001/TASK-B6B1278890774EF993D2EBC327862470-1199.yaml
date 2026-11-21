@@ -1,0 +1,31 @@
+id: 01a1fbd2-51a7-7ac1-acd8-5735ae83696c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1199
+title: 'Review follow-up: The new CLI test reads the ambient PATH in aida-cli/tests/bug_2707_submit_draft_cli.rs:43.'
+description: |-
+  From BUG-2707
+  Reviewed sha: 10854bb60da9a652cb41ceb7ebd70af1d179a4a8
+
+  The new CLI test reads the ambient PATH in aida-cli/tests/bug_2707_submit_draft_cli.rs:43. Fast-gates job 136686053267 identifies this exact var_os site as forbidden in test_repository_matches_exact_ledger. Give the subprocess a deterministic fixture PATH or omit the override when unnecessary.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-21T01:57:07.111355344Z
+modified_at: 2026-11-21T01:57:07.111355344Z
+req_type: Task
+tags:
+- carried-from:BUG-2707
+- finding-hash:ea7b4293
+- from-review:BUG-2707
+relationships:
+- rel_type: References
+  target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
+  created_at: 2026-11-21T01:57:19.770043217Z
+filed_at:
+  code_sha: 10854bb60da9a652cb41ceb7ebd70af1d179a4a8
+  branch: pr-4385
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 29e77b85236
+  vendor: claude
+  session: 01a1fbd04c28
