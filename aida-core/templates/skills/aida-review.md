@@ -737,8 +737,11 @@ checks and the rule above (an `approved` draft carrying an unresolved finding
 is refused) under the launching project's policy, while you can still fix the
 draft. If it refuses, fix `pending.json` as the message says and resubmit.
 Exit only after the submission is accepted: a draft the command has not
-accepted, or a `draft.json` written by hand, is not a submission and the
-parent records nothing from it. Do not run `aida review record` or add identity, grants,
+accepted is not a submission, and while `pending.json` holds an attempt it has
+not accepted the parent records nothing from the launch, not even an earlier
+accepted draft. Do not write `draft.json` by hand: the parent applies the same
+checks to whatever it collects, under its own copy of the policy, after you can
+no longer correct the draft. Do not run `aida review record` or add identity, grants,
 attestations, receipts, commands, covered specs, or ledger destinations. If a
 legacy record attempt was refused, still submit the draft. The parent validates
 and records the accepted draft; never claim recording succeeded inside the sandbox.

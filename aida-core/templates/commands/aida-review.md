@@ -28,8 +28,8 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 absolute `pending.json` path and an `aida review submit-draft <launch-dir>`
 command, write the closed version-1 data-only JSON contract to that path, then
 submit the draft with that command. If it refuses, fix the draft as the message
-says and resubmit. Exit only after the submission is accepted; a draft the
-command has not accepted is not a submission and nothing is recorded from it.
+says and resubmit. Exit only after the submission is accepted; while a draft the
+command has not accepted is pending, nothing is recorded from the launch.
 Include the full reviewed SHA, complete summary and all findings. Any
 unresolved finding means request-changes. This supersedes the record command
 below, including on resume or after a refused legacy record attempt. Do not add

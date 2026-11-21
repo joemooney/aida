@@ -1526,10 +1526,13 @@ and additional event vectors; these reads never rewrite ledger history.
 Standalone headless reviewer launches pin the change head and give fresh and
 resumed children an exclusive launch directory in their review tree; the child
 submits its draft there with `aida review submit-draft`, which validates it
-under the launching project's review policy and alone produces `draft.json`.
+under the launching project's review policy while the child can still correct
+it. That directory is reviewer-writable, so the submission is feedback, not
+authority.
 The closed version-1 draft carries data only; it supplies no identity or grant.
 After the child exits, the parent reads through the directory descriptor held
-since before spawn, refuses unsafe files and conflicting legacy evidence, and
+since before spawn, refuses unsafe files, an unaccepted later attempt, a draft
+that contradicts the policy it kept itself, and conflicting legacy evidence, and
 revalidates its issued reviewer grant and the current forge head. The normal
 record policy checks the routed session against authorship and derives recorder
 attestation and hold-release evidence from that child grant. Missing drafts can
