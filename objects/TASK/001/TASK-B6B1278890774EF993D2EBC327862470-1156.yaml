@@ -13,11 +13,32 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:55:07.495815470Z
-modified_at: 2026-11-20T20:55:54.872203398Z
+modified_at: 2026-11-21T01:27:58.554604463Z
 req_type: Task
 tags:
 - admission
 - linked:BUG-2703
+comments:
+- id: 01a1fbb7-dcd2-7d81-81c4-05dd687f0010
+  author: joe
+  content: |-
+    Product 18:28: fresh Claude (Fable) lane queued on dell1 now that #4363 has landed (aa56773). Brief:
+    # Brief: TASK-3828 (fresh; advisor-121 18:00; Claude+Fable, standard review)
+
+    Builds on #4363 (BUG-2703) AS LANDED. Start from origin/main at or after aa567732958 (#4363 landed 18:27 via train #4386); never from the BUG-2703 branch. Re-locate the cited lines in the landed code (line numbers may have moved).
+
+    Follow-up hardening for BUG-2703 (admission yield and drain), filed by advisor ruling after round 4 (cap):
+    - review_watch.rs:2900: an intentional drain or writer-preference yield is recorded separately from a discovery error; next_pass_report and pass_degradation do not mark the worker degraded or count a refused change.
+    - admission_drain.rs:226: a drain's effective expiry is bounded relative to OBSERVATION time (a backward clock step cannot extend it past the documented maximum).
+    - admission_owner.rs:740: an intent file with invalid UTF-8 (bounded, regular) follows the same stale-record policy as other malformed intents; it never blocks admission indefinitely.
+    Each with a regression. Claude lane, standard review.
+
+
+    Trailer (TASK-3828) if all three are met with regressions; otherwise (Refs TASK-3828). Before pushing, run make check-ci-fast plus one targeted cargo run of the touched tests. COMMIT your work.
+  created_at: 2026-11-21T01:27:58.554604463Z
+  modified_at: 2026-11-21T01:27:58.554604463Z
+  session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fabe-87ba-7a40-a129-42ec48c4fd58
   author: joe
