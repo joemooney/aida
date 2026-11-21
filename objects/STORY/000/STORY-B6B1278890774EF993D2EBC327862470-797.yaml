@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-21T00:09:28.551238165Z
+modified_at: 2026-11-21T01:37:03.570148334Z
 req_type: Story
 tags:
 - landing
@@ -928,6 +928,14 @@ comments:
     Ruling step 1 done: S3 (#4362 5a4a2dc, plus the post-merge test fix 5b9312d) reverted out of integration at 74644c2 (pushed, check-ci-fast exit 0); the tree equals main at 719aa49 (the only newer main commit is #4365, TASK-3133). #4384 closed with the ruling cited. ORDER: S3a first, then S1b. Reason: the signed S1b Q1 rule (a red Build is info only when an open red-main episode covers those checks) reads the watch episode state, which only S3a provides; S1b first would have to stub it. S3a reuses S3 at f037b9d minus every store effect (no fix spec, human item, completion, store spool; smoke evidence reported only) plus the in-scope p24 finding list. Starting S3a now on an integration branch.
   created_at: 2026-11-21T00:09:28.551238165Z
   modified_at: 2026-11-21T00:09:28.551238165Z
+  session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fbc0-26ce-7340-a6d7-ba73f54220d2
+  author: joe
+  content: |
+    S3a ready for STRICT review: PR #4389 (s3a-observational-watch at 964a98c -> integration), (Refs STORY-2897). Observational only: no store writes of any kind (no fix spec, human item, completion, smoke spool; dev-build smoke hook dropped). The PR body maps every in-scope p24 finding to its change and names the S3b findings as out of scope. 33 watch tests; check-ci-fast exit 0; ci:full added after the push run started. Next after S3a lands: S1b (signed).
+  created_at: 2026-11-21T01:37:03.570148334Z
+  modified_at: 2026-11-21T01:37:03.570148334Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
   harness_version: 2.1.328 (Claude Code)
 history:
