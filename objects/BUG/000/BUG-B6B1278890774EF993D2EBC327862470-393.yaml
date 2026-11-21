@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-20T23:58:25.274949303Z
+modified_at: 2026-11-21T00:36:12.895809568Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -759,6 +759,33 @@ comments:
   created_at: 2026-11-20T23:58:25.274937216Z
   modified_at: 2026-11-20T23:58:25.274937216Z
   session_id: 01a1fb27787b
+- id: 01a1fb88-3fdf-7683-a955-6fc87ecac029
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 367c23a772 (round 6, PR #4380)
+
+    Acceptance evidence
+    - AC3 [evidence: behavioral-test] rework_bindings_tests::bug_2629_one_discovery_checks_every_change_of_a_healthy_spec: 2 changes x 6 fingerprinted rounds plus 6 and 48 more bound changes; the inventory pass opens exactly 1 discovery, re-validates the shared inventory 0 times, lists <= 3x ledgers + 16 directory entries, reads < 3x the spec's ledger bytes, and pass and whole resolution each finish under 5 s. Fix: rework_bindings.rs Ownership (one checked::Discovery per inventory; newest verdict taken from the events in hand), work.rs resolve_rework_review_inner runs in one DiscoveryScope.
+    - Finding 2: bug_2629_a_misplaced_record_answers_nothing_in_recovery (foreign change key, unsupported version, non-advancing seq; approval and request-changes).
+    - Finding 3: bug_2629_a_linked_or_special_ledger_is_refused_not_read (symlink, hard link, FIFO; recovery and label pass) via checked::Pinned.
+    - Finding 4: bug_2629_a_round_without_a_verdict_keeps_the_wait_before_it.
+    - Finding 5: bug_2629_a_malformed_legacy_file_spends_the_recovery_budget (malformed and non-UTF-8).
+    - Finding 6: bug_2629_the_fallback_passes_stop_at_the_parse_ceiling.
+    - Finding 7: pickup_entry_tests::bug_2629_headless_queue_work_discovers_reviews_without_the_store_write_lock drives handle_queue_work.
+
+    Validation: cargo test -p aida-cli-lib --lib -- bug_2629: 33 passed, 0 failed. A wider run (gate::ledger rework review_verdict ...) had 663 passed, 9 failed; 5 of the 9 pass when run alone, 3 fail on the host disk-headroom floor and 1 needs a built CLI binary. Fast source gates: 43 ok including formatting, store-writer and portability ratchets; 3 fail on sandbox permission errors (containment conformance, store mutation channel, self-hosted routing fixtures); the cargo-based structural ratchet was not run.
+
+    Probe findings and residual risks
+    - The live 30-minute spin was not reproduced: the host ledger is not readable from this lane. The fix removes the per-change discovery the review identified; whether that is the whole live cause is unconfirmed.
+    - Readers after the inventory pass (current_verdict per bound key) still re-validate the shared inventory once per call: linear ledger reads, but stats and binding listings stay O(keys x changes).
+    - The new regressions were not run against the pre-fix code.
+    - The lock regression's second writer is a separate open file description in the test process, not a spawned process.
+    - A ledger ending in a torn line is now unknown in recovery, so a concurrent append during a failed-discovery recovery refuses until retried.
+  created_at: 2026-11-21T00:36:12.895809568Z
+  modified_at: 2026-11-21T00:36:12.895809568Z
+  session_id: 01a1fb68d643
+  harness_version: 2.1.319 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
