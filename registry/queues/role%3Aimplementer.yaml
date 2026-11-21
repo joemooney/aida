@@ -1,10 +1,4 @@
 - user_id: role:implementer
-  requirement_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
-  position: -946000
-  added_by: role:implementer
-  added_at: 2026-11-21T00:18:39.690046663Z
-  for_role: implementer
-- user_id: role:implementer
   requirement_id: 01a1ec45-5343-7720-a3ac-34f995c661c4
   position: -945000
   added_by: role:implementer
@@ -313,6 +307,114 @@
     mergeable=CONFLICTING: resolve the merge conflicts
     Address these blockers, commit and push. If disputing a finding, use `aida punt` and name that finding.
   added_at: 2026-11-13T23:15:49.538504509Z
+  for_role: implementer
+- user_id: role:implementer
+  requirement_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
+  position: 0
+  added_by: fast-gate
+  note: |-
+    The host's sandboxed configured fast-check command failed. This is your ONE fast-gate fix round. Fix the failing gates below and finish. Commit your fix and publish it to the existing branch before you finish; uncommitted edits are not published (only a seat whose AIDA_CONTAINMENT_POSTURE is native defers its commit to the host); retain all punt/hold instructions.
+    test gate::mandate_gates::story_1888_gate_paths_tests::no_unprotected_file_names_a_gate_only_authority_input ... ok
+    test gate::mandate_gates::story_1888_gate_paths_tests::drive_tick_authority_inputs_are_private_to_the_gate ... ok
+    test gate::mandate_gates::story_1888_gate_paths_tests::no_gate_module_glob_imports_outside_the_gate ... ok
+    test gate::mandate_gates::story_1888_gate_paths_tests::no_unprotected_file_mounts_a_gate_module ... ok
+    test gate::mandate_gates::story_1888_gate_paths_tests::gate_dispatch_reaches_outside_only_through_the_facade_or_listed_leaves ... ok
+    test gate::mandate_gates::story_1888_gate_paths_tests::no_unprotected_file_reexports_gate_items ... ok
+    test gate::mandate_gates::story_1888_gate_paths_tests::crate_root_mounts_the_gate_plainly_and_hides_no_macros ... ok
+    test gate::mandate_gates::story_1888_gate_paths_tests::dispatch_policy_suites_are_mounted_on_the_floor ... ok
+    test gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor ... FAILED
+
+    failures:
+
+    ---- gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor stdout ----
+
+    thread 'gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor' (2057347) panicked at aida-cli-lib/src/gate/../tests/story_1888_gate_paths_tests.rs:562:5:
+    gate-authority code outside the mandate's protected floor:
+      aida-cli-lib/src/review_draft.rs (defines `fn approval_refusal`)
+    Move it into aida-cli-lib/src/gate/ (the change then needs a human merge). Do not remove the marker or rename the function to get past this check.
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+    failures:
+        gate::mandate_gates::story_1888_gate_paths_tests::gate_authority_code_is_on_the_floor
+
+    test result: FAILED. 51 passed; 1 failed; 0 ignored; 0 measured; 14739 filtered out; finished in 1.72s
+
+    error: test failed, to rerun pass `-p aida-cli-lib --lib`
+    ratchets: 506.23s exit=101 passed=0
+    make: *** [Makefile:570: check-ratchets] Error 101
+    lane sccache: final job statistics
+    Compile requests                     26
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                  12
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.003 s
+    Average compiler                  2.279 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    incremental                           7
+    crate-type (bin)                      4
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                           10 GiB
+    Max cache size                       10 GiB
+    Stopping sccache server...
+    Compile requests                     26
+    Compile requests executed            14
+    Cache hits                            0
+    Cache misses                         14
+    Cache misses (Rust)                  14
+    Cache hits rate                    0.00 %
+    Cache hits rate (Rust)             0.00 %
+    Cache timeouts                        0
+    Cache read errors                     0
+    Forced recaches                       0
+    Cache write errors                    0
+    Cache errors                          0
+    Compilations                         14
+    Compilation failures                  0
+    Non-cacheable compilations            0
+    Non-cacheable calls                  12
+    Non-compilation calls                 0
+    Unsupported compiler calls            0
+    Average cache write               0.003 s
+    Average compiler                  2.279 s
+    Average cache read hit            0.000 s
+    Failed distributed compilations       0
+
+    Non-cacheable reasons:
+    incremental                           7
+    crate-type (bin)                      4
+    missing input                         1
+
+    Cache location                  Local disk: "/home/dirtlab/.cache/aida/lane-sccache"
+    Base directories                (none)
+    Use direct/preprocessor mode?   yes
+    Version (client)                0.19.0
+    Cache size                           10 GiB
+    Max cache size                       10 GiB
+    lane sccache: server exited before sandbox teardown
+  added_at: 2026-11-21T00:24:36.984637365Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1965c-3483-70e3-af35-1caaf7df3f96
