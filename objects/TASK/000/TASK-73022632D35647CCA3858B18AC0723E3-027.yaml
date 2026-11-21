@@ -2,22 +2,29 @@ id: 01a1e1a3-1172-71b3-8580-880a91c7e553
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-027
 agreed_id: TASK-3133
 title: Seat-clone broad suite depends on host lifecycle and containment state
-description: |
-  During BUG-2603 rework, lane job j20261115T234446341-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::) executed 333 tests: 305 passed, 26 failed, 2 ignored. All changed publication/recovery/regeneration fixtures passed. Failures include mail retention writer-admission refusals, live advisor grant interference, nested containment Git path assertions, and root gitdir refusal. Not baseline-confirmed; needs separate fixture/environment triage. Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e1976efb/j20261115T234446341-2-0.out. Targeted BUG-2603 tests and the specifically requested story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch all passed.
+description: 'During BUG-2603 rework, lane job j20261115T234446341-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::) executed 333 tests: 305 passed, 26 failed, 2 ignored. All changed publication/recovery/regeneration fixtures passed. Failures include mail retention writer-admission refusals, live advisor grant interference, nested containment Git path assertions, and root gitdir refusal. Not baseline-confirmed; needs separate fixture/environment triage. Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e1976efb/j20261115T234446341-2-0.out. Targeted BUG-2603 tests and the specifically requested story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch all passed.
+
 
   Merged in 2026-11-17 (product groom): TASK-3135 reports the same class on the BUG-2623 lane (j20261116T164831316-2-0: 26 failures in gate dispatch authority cleanup/approval, seat_clone live bwrap tests, lifecycle cleanup and orphan reentry; bwrap diagnostic "fatal: not a git repository (or any parent up to mount point /)"). Log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e541b187/j20261116T164831316-2-0.out.
 
+
   ## Acceptance
+
   1. Baseline first: run `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::` on unmodified origin/main inside a dell1 lane job, and post the pass/fail list here. Each failure is classified as (a) depends on host state (live grants, live advisor, mail retention, real containment paths), (b) parallel-load flake already owned by BUG-2623, or (c) a real defect (file a bug per defect).
-  2. Every class (a) test is made hermetic: it builds its own temp AIDA home, grant store, mailbox and git roots, and never reads the operator's live ones. The test asserts nothing about the invoking host's seats or grants.
+
+  2. Every class (a) test is made hermetic: it builds its own temp AIDA home, grant store, mailbox and git roots, and never reads the operator''s live ones. The test asserts nothing about the invoking host''s seats or grants.
+
   3. After the fix, the same filtered command passes 3 consecutive runs in a dell1 lane job and 3 on the primary host, with no class (a) failures. Post the job ids here.
+
   4. Class (b) failures are linked to BUG-2623, not fixed here.
+
+  '
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-21T00:29:26.674352109Z
+created_at: 2026-11-15 23:55:22.866694+00:00
+modified_at: 2026-11-21 00:29:26.674352+00:00
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -27,513 +34,659 @@ tags:
 relationships:
 - rel_type: Supersedes
   target_id: 01a1e555-6286-7b02-83b3-663387602a24
-  created_at: 2026-11-17T16:32:32.646821063Z
+  created_at: 2026-11-17 16:32:32.646821+00:00
   created_by: joe
 - rel_type: References
   target_id: 01a1e2de-3dca-7562-9bba-e80f1c3b7c89
-  created_at: 2026-11-19T17:55:43.106106363Z
+  created_at: 2026-11-19 17:55:43.106106+00:00
   created_by: dirtlab
 - rel_type: References
   target_id: 01a1ed07-28ed-7c12-af4b-21333ad8f7ea
-  created_at: 2026-11-19T17:56:19.304468817Z
+  created_at: 2026-11-19 17:56:19.304468+00:00
   created_by: dirtlab
 - rel_type: References
   target_id: 01a1f4fb-e4e9-7f83-bac5-631289739ba3
-  created_at: 2026-11-19T18:05:54.397192165Z
+  created_at: 2026-11-19 18:05:54.397192+00:00
   created_by: dirtlab
 - rel_type: References
   target_id: 01a1f4fc-2fd6-7e60-8ea9-dcd8172ec41c
-  created_at: 2026-11-19T18:06:02.912229103Z
+  created_at: 2026-11-19 18:06:02.912229+00:00
   created_by: dirtlab
 comments:
 - id: 01a1ebdc-eac4-7bb3-9364-37199542f685
   author: joe
   content: 'Product: queued for implementer. Starts held until open PRs < wip_max (10).'
-  created_at: 2026-11-17T23:34:30.193430244Z
-  modified_at: 2026-11-17T23:34:30.193430244Z
+  created_at: 2026-11-17 23:34:30.193430+00:00
+  modified_at: 2026-11-17 23:34:30.193430+00:00
   session_id: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1ebe1-5780-75e1-8cf9-05a161b42513
   author: joe
   content: 'Advisor 2026-11-17: approved and set to drain under the operator''s 11:21 rule (not authority, credentials or containment).'
-  created_at: 2026-11-17T23:39:24.637336132Z
-  modified_at: 2026-11-17T23:39:24.637336132Z
+  created_at: 2026-11-17 23:39:24.637336+00:00
+  modified_at: 2026-11-17 23:39:24.637336+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
 - id: 01a1f4fa-20fc-7d03-adee-81619f6b933f
   author: dirtlab
-  content: |
-    ## Baseline on unmodified origin/main
+  content: '## Baseline on unmodified origin/main
 
-    Job `j20261119T175135035-2-0` at `b82066836029b7ef323861eb91d1dbd4967a3096`, running `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::` in the dell1 native lane. The host's local address and GitLab pin match the dell1 checklist. Result was **334 passed, 22 failed, 3 ignored**. The full per-test pass/fail/ignore inventory and diagnostics are in `/home/dirtlab/ai/aida/.aida/lane-jobs/01a1f4ece859/j20261119T175135035-2-0.out`. The runner reported seed overlay staleness after the executed test result.
+
+    Job `j20261119T175135035-2-0` at `b82066836029b7ef323861eb91d1dbd4967a3096`, running `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::` in the dell1 native lane. The host''s local address and GitLab pin match the dell1 checklist. Result was **334 passed, 22 failed, 3 ignored**. The full per-test pass/fail/ignore inventory and diagnostics are in `/home/dirtlab/ai/aida/.aida/lane-jobs/01a1f4ece859/j20261119T175135035-2-0.out`. The runner reported seed overlay staleness after the executed test result.
+
 
     (a) Live sandbox or invoking-lane Git context. TASK-2712 is tracked by BUG-2676.
 
+
     - `seat_clone::bwrap_tests::linux::a_contained_interactive_resume_goes_through_os_wrap`
+
     - `seat_clone::bwrap_tests::linux::bug_2169_bwrap_t1_rename_aside`
+
     - `seat_clone::bwrap_tests::linux::bug_2169_bwrap_t2_host_detach`
+
     - `seat_clone::bwrap_tests::linux::bug_2169_bwrap_t3_clone_seat_commits_fetches_merges_and_pushes`
+
     - `seat_clone::bwrap_tests::linux::bug_2169_bwrap_t5_origin_head_and_tags`
+
     - `seat_clone::bwrap_tests::linux::task_2712_codex_sandbox_live_seat_commit_and_denials`
+
 
     (a) Host mail writer admission. Two BUG-2491 removal assertions need the fixture rerun to confirm the diagnosis.
 
+
     - `seat_clone::lifecycle_tests::bug_051_bwrap_session_end_ends_a_clone_whose_branch_is_an_ancestor_of_origin`
+
     - `seat_clone::lifecycle_tests::bug_2224_bwrap_inherited_refs_end_cleanly_but_seat_only_work_refuses`
+
     - `seat_clone::lifecycle_tests::bug_2491_published_checkpoints_need_no_salvage`
+
     - `seat_clone::lifecycle_tests::bug_2491_pushed_slice_tags_are_not_unpushed_work`
+
     - `seat_clone::lifecycle_tests::bug_b6b_049_bwrap_destroy_drops_the_clone_trust_entry_only_when_on`
+
     - `seat_clone::lifecycle_tests::task_2053_bwrap_destroy_salvages_then_removes_clone_target_and_pin`
+
     - `seat_clone::lifecycle_tests::task_2053_bwrap_dismiss_removes_a_seat_clone_and_its_lease`
+
     - `seat_clone::lifecycle_tests::task_2053_bwrap_reap_keeps_a_clone_a_live_process_is_using`
+
     - `seat_clone::lifecycle_tests::task_2053_bwrap_reap_one_clone_releases_the_lease_only_on_removal`
+
     - `seat_clone::lifecycle_tests::task_2053_bwrap_session_end_and_dismiss_run_no_host_git_and_never_follow_a_clone_aida_link`
+
     - `seat_clone::lifecycle_tests::task_2053_bwrap_submodule_ignore_dirty_keeps_the_clone`
+
     - `seat_clone::lifecycle_tests::task_2053_bwrap_t7_planted_config_never_runs_on_the_host`
+
     - `seat_clone::orphan_reentry_tests::queue_work_reclaims_dead_clean_lane_without_an_origin_branch`
+
     - `seat_clone::s4_host_git_tests::task_2053_bwrap_an_empty_gitmodules_placeholder_does_not_block_salvage`
+
 
     (a) Disk-headroom fixture. 31.2 GiB available against the default 60 GiB floor.
 
+
     - `seat_clone::seat_publish_tests::story_2640_fast_gate_real_lane_exit_paths_settle_reservations`
+
     - `seat_clone::seat_publish_tests::task_2902_launch_paths_preserve_signals_on_refused_spawn`
 
+
     (b) BUG-2623 owns the historical parallel regressions. The gitdir, rollback and handshake cases all passed on this baseline. No independent product defect (c) isolated from this run.
-  created_at: 2026-11-19T18:03:15.286244797Z
-  modified_at: 2026-11-19T18:03:15.286244797Z
+
+    '
+  created_at: 2026-11-19 18:03:15.286244+00:00
+  modified_at: 2026-11-19 18:03:15.286244+00:00
   session_id: 01a1f4ece859
   harness_version: codex-cli 0.167.0
 - id: 01a1f506-8cf4-77d1-b1d1-76de1506c8ab
   author: dirtlab
-  content: |
-    ## Implementer self-review
+  content: '## Implementer self-review
+
 
     Reviewed HEAD: b82066836029b7ef323861eb91d1dbd4967a3096. The origin/main merge-base diff was empty. Reviewed the native working-tree diff and checked for untracked additions. Exact-change CI is pending host publication.
 
+
     AC1: [evidence: behavioral-test] Job j20261119T175135035-2-0 executed 359 tests on unmodified origin/main (334 passed, 22 failed, 3 ignored). See the earlier comment for every failure, classification, and the full per-test inventory.
+
     AC2: [evidence: behavioral-test] The existing thread-local writer scan fixture provides evidence to tests using temporary repositories and mailboxes, including queue reclaim (bug_2223_orphan_seat_reentry_tests.rs), empty .gitmodules cleanup (task_2053_s4_host_git_tests.rs), and the lifecycle removal cases (task_2053_seat_clone_lifecycle_tests.rs). Two publisher tests use a temporary project disk floor of 1 GiB (bug_home_038_seat_publish_tests.rs). The lower floor still requires sufficient free space. Nested live sandbox cases remain tracked in BUG-2676, BUG-73022632D35647CCA3858B18AC0723E3-002 and BUG-73022632D35647CCA3858B18AC0723E3-003.
+
     AC3: [evidence: behavioral-test] The full filtered suite needs three clean runs on each of dell1 and the primary host. Independent live sandbox failures still prevent a clean dell1 run. This seat has no primary-host test runner.
+
     AC4: [evidence: manual-inspection] TASK-3133 references BUG-2623. Its three previously identified seat-clone regressions passed the baseline unchanged.
+
 
     Adversarial review in file order:
 
+
     - bug_2223_orphan_seat_reentry_tests.rs: unchanged lease and origin-ref matching, unchanged Git and config formats, one independent fixture per test, and typed RAII writer evidence confined to the calling thread. The existing neighboring reclaim-refusal test retains its assertions.
+
     - bug_home_038_seat_publish_tests.rs: both use the same configured disk-headroom key and mount preflight, a positive TOML integer already used by the sibling launch fixture, and a fresh config per test that covers its whole launch loop. Missing or unusable filesystem evidence still refuses. Existing no-spawn and reservation-cleanup assertions remain enforced.
+
     - task_2053_s4_host_git_tests.rs: the injected scan follows the isolated-child branch, leaves Git/config formats and the placeholder interpretation intact, stays scoped to the single fixture, and cannot affect other test threads. The adjacent genuine submodule refusal remains covered.
+
     - task_2053_seat_clone_lifecycle_tests.rs: writer admission evidence uses the same fixture seam as the pre-existing tests in this module. No format or path matching was changed. Each guard covers all cleanup calls in its test and restores the previous value at scope exit. Busy, dirty, unpublished and unsafe-path refusal assertions remain present. Missing or unverified writer evidence is covered by the existing mail retention tests.
+
 
     No production authority path was added or modified. The writer scan is compiled through the dev-only feature and is set exclusively in test functions. The test configurations exist in temporary repositories. rustfmt --check and git diff --check passed.
 
+
     Dell1 reruns used the original seat_clone:: filter. Mail-fixture run j20261119T180214089-2-0 finished with 348 passed, 8 failed, 3 ignored. Final run j20261119T180345631-2-0 finished with 350 passed, 6 failed, 3 ignored. All 16 modified tests executed and passed at the final revision. The remaining failures match the six live sandbox baseline failures. This slice supports Refs publication.
-  created_at: 2026-11-19T18:16:49.329105142Z
-  modified_at: 2026-11-19T18:16:49.329105142Z
+
+    '
+  created_at: 2026-11-19 18:16:49.329105+00:00
+  modified_at: 2026-11-19 18:16:49.329105+00:00
   session_id: 01a1f4ece859
   harness_version: codex-cli 0.167.0
 - id: 01a1f524-3c15-7f40-be80-e1b5ffd5353b
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `task-73022632d35647cca3858b18ac0723e3-027` at head `unavailable`.'
-  created_at: 2026-11-19T18:49:15.029357827Z
-  modified_at: 2026-11-19T18:49:15.029357827Z
+  created_at: 2026-11-19 18:49:15.029357+00:00
+  modified_at: 2026-11-19 18:49:15.029357+00:00
   session_id: 01a1f4ece859
 - id: 01a1f5b1-be12-7cd0-988a-4973448d74be
   author: lane-recovery
   content: Reference merge `7d36925c193a918f06ec4575aa6075972cb14c02` left unfinished work with no lease or open PR; returned to Approved.
-  created_at: 2026-11-19T21:23:48.882537122Z
-  modified_at: 2026-11-19T21:23:48.882537122Z
+  created_at: 2026-11-19 21:23:48.882537+00:00
+  modified_at: 2026-11-19 21:23:48.882537+00:00
 - id: 01a1f5c5-7e74-7061-9b9a-3e0315e5aecf
   author: aida-auto-bump
-  content: |-
-    [aida:refs-landing] 7d36925c193a
-    A reference merge (commit 7d36925c193a, `(Refs TASK-3133)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
-  created_at: 2026-11-19T21:45:23.316701877Z
-  modified_at: 2026-11-19T21:45:23.316701877Z
+  content: '[aida:refs-landing] 7d36925c193a
+
+    A reference merge (commit 7d36925c193a, `(Refs TASK-3133)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.'
+  created_at: 2026-11-19 21:45:23.316701+00:00
+  modified_at: 2026-11-19 21:45:23.316701+00:00
 - id: 01a1f94f-95cb-7561-9724-69d5979cb660
   author: joe
   content: 'ADVISOR SCOPE for the next lane (advisor-121, 07:20): (a) AC2: against the AC1 baseline, confirm every class (a) seat_clone test is hermetic and fix stragglers; (b) AC3 lane part: run the seat_clone:: filter 3 consecutive times in the dell1 lane job and post the job ids. The 3 primary-host runs are for the product seat. Refs unless the PR also carries all AC3 evidence.'
-  created_at: 2026-11-20T14:14:50.233814427Z
-  modified_at: 2026-11-20T14:14:50.233814427Z
+  created_at: 2026-11-20 14:14:50.233814+00:00
+  modified_at: 2026-11-20 14:14:50.233814+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f951-32c9-7cc2-bed7-a54fc77c42c1
   author: joe
-  content: |-
-    Product 07:16: codex lane queued on dell1 (advisor 07:15 scope), brief:
+  content: 'Product 07:16: codex lane queued on dell1 (advisor 07:15 scope), brief:
+
     # Brief: TASK-3133 (advisor-121 07:15: scoped remainder, approved + drain; codex)
 
-    Scope (advisor 07:15): AC2's hermeticity check (the seat-clone broad suite must not depend on host lifecycle or containment state), plus the dell1 3-run evidence (run the suite 3 times on dell1 and quote the results in the PR body). The 3 primary-host runs are a separate evidence task owned by product, not this lane. Trailer (Refs TASK-3133).
+
+    Scope (advisor 07:15): AC2''s hermeticity check (the seat-clone broad suite must not depend on host lifecycle or containment state), plus the dell1 3-run evidence (run the suite 3 times on dell1 and quote the results in the PR body). The 3 primary-host runs are a separate evidence task owned by product, not this lane. Trailer (Refs TASK-3133).
+
 
     Implement ONLY this remaining scope; earlier slices are on main (7d36925c193  ).
-    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.
-  created_at: 2026-11-20T14:16:36.082042959Z
-  modified_at: 2026-11-20T14:16:36.082042959Z
+
+    Before pushing, run `make check-ci-fast` and `python3 scripts/check-store-writers.py`.'
+  created_at: 2026-11-20 14:16:36.082042+00:00
+  modified_at: 2026-11-20 14:16:36.082042+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f959-9568-7512-a7f0-1477929c9713
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `task-73022632d35647cca3858b18ac0723e3-027` at head `unavailable`.'
-  created_at: 2026-11-20T14:26:00.168689266Z
-  modified_at: 2026-11-20T14:26:00.168689266Z
+  created_at: 2026-11-20 14:26:00.168689+00:00
+  modified_at: 2026-11-20 14:26:00.168689+00:00
 - id: 01a1f986-a035-7d21-80ab-90521e142005
   author: dirtlab
-  content: |
-    ## Implementer self-review
+  content: '## Implementer self-review
+
 
     Reviewed HEAD: 3628db3d36122aa80a4742136e38f7ede9b0c8f9. Reviewed `git diff origin/main...HEAD` for the earlier mail and disk slice, then `git diff HEAD` for the three native edits. No untracked additions. Exact PR-head CI awaits host publication.
 
+
     AC1: [evidence: behavioral-test] The recorded unmodified dell1 baseline, j20261119T175135035-2-0, had 334 passed, 22 failed and 3 ignored. Matched all 22 distinct failure names against each new job. The pre-fix diagnostic j20261120T143457640-2-0 reproduced the six outstanding failures at lane HEAD (350 passed, 6 failed, 3 ignored).
 
-    AC2: [evidence: behavioral-test] The 14 mail-admission fixtures supply per-test writer evidence against temporary Git roots and fixture mailboxes (task_2053_seat_clone_lifecycle_tests.rs:420, task_2053_s4_host_git_tests.rs:381 and bug_2223_orphan_seat_reentry_tests.rs:1255). Both disk-sensitive tests supply a fixed measurement to the normal threshold checks (machine_readiness.rs:110, bug_home_038_seat_publish_tests.rs:3025 and :3414). Four live Bubblewrap cases use the fixture-only read-only bind (bug_2169_contained_clone_bwrap_tests.rs:393), and the resume case changes into the fixture in an isolated test child (same file:1688). All 22 baseline rows reported ok in all three broad runs. For TASK-2712, targeted job j20261120T151045439-2-0 confirmed the already-landed capability skip. Codex :workspace could write outside its explicit roots in the temporary fixture, so the live denial assertions remain unverified on this runner. Required-live mode still rejects the skip in the upstream fixture.
+
+    AC2: [evidence: behavioral-test] The 14 mail-admission fixtures supply per-test writer evidence against temporary Git roots and fixture mailboxes (task_2053_seat_clone_lifecycle_tests.rs:420, task_2053_s4_host_git_tests.rs:381 and bug_2223_orphan_seat_reentry_tests.rs:1255). Both disk-sensitive tests supply a fixed measurement to the normal threshold checks (machine_readiness.rs:110, bug_home_038_seat_publish_tests.rs:3025 and :3414). Four live Bubblewrap cases use the fixture-only read-only bind (bug_2169_contained_clone_bwrap_tests.rs:393), and the resume case changes into the fixture in an isolated test child (same file:1688). All 22 baseline rows reported ok in all three broad runs. For TASK-2712, targeted job j20261120T151045439-2-0 confirmed the already-landed capability skip. Codex :workspace could write outside its explicit roots in the temporary fixture, so the live denial assertions remain unverified on this runner. Required-live mode still rejects the skip in the upstream
+    fixture.
+
 
     AC3: [evidence: behavioral-test] Three consecutive dell1 jobs ran `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`. Each exited 0 with 356 passed, 0 failed and 3 ignored.
+
     - j20261120T143625989-2-0 (128.37s)
+
     - j20261120T144612064-2-0 (104.05s)
+
     - j20261120T144613231-2-0 (121.43s)
+
 
     The primary-host runs belong to product. The validation tree included the exact #4316 Codex fixture already on origin/main, because the retained lane HEAD predates it. Removed that temporary overlay for host handoff and verified each of the three edited files merges cleanly onto origin/main using lane HEAD as the patch base. FAST job j20261120T143625976-2-0, the standalone store-writer inventory, rustfmt and both Git diff whitespace checks passed.
 
+
     AC4: [evidence: manual-inspection] TASK-3133 references BUG-2623. This patch leaves its parallel-load fixtures alone.
 
+
     Adversarial review:
+
     - Bubblewrap and resume fixtures. The mount uses a canonical private fixture path and component-based /tmp matching. The shell receives MAIN as an environment value, including paths with spaces or quotes. Both sandbox layers retain their writable-child and denial assertions, and only the isolated child changes cwd. The read-only overlay does not expose sibling temporary directories. T1 and T2 retain their legacy positive controls, and T3 and T5 retain seat and origin controls.
+
     - Disk preflight and publication fixtures. The override is test-only and thread-local, is restored on scope exit, and supplies bytes without changing threshold semantics. All three requested locations still use the same floor check. Production continues to refuse missing or insufficient measurements. The original launch refusal and reservation-cleanup assertions executed.
+
     - Earlier mail fixtures. Reviewed the orphan-reentry, S4 and lifecycle hunks. Writer evidence remains thread-local for the lifetime of each fixture, with no change to branch/lease matching or Git and config formats. Removal, busy/dirty preservation, unpublished-work and unsafe-path assertions remain. No production authority path changed and no tests were newly ignored.
-  created_at: 2026-11-20T15:15:11.776918651Z
-  modified_at: 2026-11-20T15:15:11.776918651Z
+
+    '
+  created_at: 2026-11-20 15:15:11.776918+00:00
+  modified_at: 2026-11-20 15:15:11.776918+00:00
   session_id: 01a1f959d1a3
   harness_version: codex-cli 0.167.0
 - id: 01a1f997-3590-7e10-a8bc-cf59e2b4d007
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `task-73022632d35647cca3858b18ac0723e3-027` at head `b8d7faa4712a2968230c58250054099f7b7fda7f`.'
-  created_at: 2026-11-20T15:33:18.864216371Z
-  modified_at: 2026-11-20T15:33:18.864216371Z
+  created_at: 2026-11-20 15:33:18.864216+00:00
+  modified_at: 2026-11-20 15:33:18.864216+00:00
   session_id: 01a1f959d1a3
 - id: 01a1f997-9262-78c1-8608-f955a33cf9f5
   author: joe
   content: PR-4365 at b8d7faa4712a2968230c58250054099f7b7fda7f conflicts with the protected base; resolve the conflict before review
-  created_at: 2026-11-20T15:33:42.626352631Z
-  modified_at: 2026-11-20T15:33:42.626352631Z
+  created_at: 2026-11-20 15:33:42.626352+00:00
+  modified_at: 2026-11-20 15:33:42.626352+00:00
 - id: 01a1fa5b-e134-7620-8197-60368c95b8a0
   author: joe
   content: 'advisor-121 12:12: #4365 cannot be reviewed because it conflicts with main (the manual review job exited). A conflict-only merge-main round on codex: .aida/tmp/brief-TASK-3133-conflict.md'
-  created_at: 2026-11-20T19:07:49.547444237Z
-  modified_at: 2026-11-20T19:07:49.547444237Z
+  created_at: 2026-11-20 19:07:49.547444+00:00
+  modified_at: 2026-11-20 19:07:49.547444+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa5c-ae96-7940-82e0-e6a50053578a
   author: joe
-  content: |-
-    AUTHORITATIVE CONFLICT BRIEF (advisor-121, relayed by product 12:08):
+  content: 'AUTHORITATIVE CONFLICT BRIEF (advisor-121, relayed by product 12:08):
+
     # Conflict-only brief: TASK-3133 / PR #4365 @b8d7faa (never reviewed; conflicts with main)
 
+
     Advisor: claude-advisor-121, 2026-11-20 12:12 MST. Lane: codex (gpt-6.2-astra). COMMIT your work.
+
     The review could not start: "the PR conflicts with the protected base". Merge origin/main into the branch (do not rebase or force-push), resolving
-    conflicts by keeping main's changes plus this PR's intent. Landed since the branch was cut: TASK-3822 split pr_cmd into modules (#4367);
+
+    conflicts by keeping main''s changes plus this PR''s intent. Landed since the branch was cut: TASK-3822 split pr_cmd into modules (#4367);
+
     TASK-3825 deadline-test tolerance (#4370); BUG-2676 bug_2415 test isolation (#4366). No other changes.
+
     cargo fmt; targeted cargo run of the touched tests; make check-ci-fast. Push. The first review follows automatically.
 
+
     ## Before pushing (product, per advisor 21:40)
-    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
-  created_at: 2026-11-20T19:08:48.079425998Z
-  modified_at: 2026-11-20T19:08:48.079425998Z
+
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.'
+  created_at: 2026-11-20 19:08:48.079425+00:00
+  modified_at: 2026-11-20 19:08:48.079425+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa5d-60f2-7170-85f7-3f0e5b10f9c2
   author: joe
   content: 'Product 12:09: CONFLICT lane queued on dell1 (codex), branch task-73022632d35647cca3858b18ac0723e3-027. Scope = the AUTHORITATIVE CONFLICT BRIEF in the previous comment.'
-  created_at: 2026-11-20T19:09:30.383679810Z
-  modified_at: 2026-11-20T19:09:30.383679810Z
+  created_at: 2026-11-20 19:09:30.383679+00:00
+  modified_at: 2026-11-20 19:09:30.383679+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa65-711b-7852-81dc-4e0fcfa19b0e
   author: joe
   content: 'advisor-121 12:24: the conflict is behavioural (disk-headroom preflight); RULING keep both. A reconcile round on Claude+Fable: .aida/tmp/brief-TASK-3133-reconcile.md (supersedes the conflict-only brief).'
-  created_at: 2026-11-20T19:18:19.301504526Z
-  modified_at: 2026-11-20T19:18:19.301504526Z
+  created_at: 2026-11-20 19:18:19.301504+00:00
+  modified_at: 2026-11-20 19:18:19.301504+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa65-e735-7871-afd8-6e7c1a2a674b
   author: joe
-  content: |-
-    AUTHORITATIVE RECONCILE BRIEF (advisor-121, relayed by product 12:18):
+  content: 'AUTHORITATIVE RECONCILE BRIEF (advisor-121, relayed by product 12:18):
+
     # Reconcile brief: TASK-3133 / PR #4365 @b8d7faa (supersedes the conflict-only brief)
 
+
     Advisor: claude-advisor-121, 2026-11-20 12:24 MST. Lane: Claude+Fable. COMMIT your work.
+
     Merge origin/main (no rebase or force-push). The conflict in bug_home_038_seat_publish_tests.rs
+
     story_2640_fast_gate_real_lane_exit_paths_settle_reservations is behavioural: this branch injects 100 GiB of available disk; main lowers
-    the disk floor to 1 GiB via project config. RULING: KEEP BOTH. The test must be independent of the host's real free space (the injected
-    headroom) AND of the project's floor setting (assert against the floor actually configured, not a hard-coded number). Check the
+
+    the disk floor to 1 GiB via project config. RULING: KEEP BOTH. The test must be independent of the host''s real free space (the injected
+
+    headroom) AND of the project''s floor setting (assert against the floor actually configured, not a hard-coded number). Check the
+
     other tests this branch touches for the same disk-preflight assumption. cargo fmt; run the touched test files; check-ci-fast. Push.
 
+
     ## Before pushing (product, per advisor 21:40)
-    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
-  created_at: 2026-11-20T19:18:48.261041631Z
-  modified_at: 2026-11-20T19:18:48.261041631Z
+
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.'
+  created_at: 2026-11-20 19:18:48.261041+00:00
+  modified_at: 2026-11-20 19:18:48.261041+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fa66-e1ef-7611-83f9-ac000d2d8d51
   author: joe
   content: 'Product 12:19: RECONCILE lane queued on dell1 (claude), branch task-73022632d35647cca3858b18ac0723e3-027. Scope = the AUTHORITATIVE RECONCILE BRIEF in the previous comment.'
-  created_at: 2026-11-20T19:19:42.634823450Z
-  modified_at: 2026-11-20T19:19:42.634823450Z
+  created_at: 2026-11-20 19:19:42.634823+00:00
+  modified_at: 2026-11-20 19:19:42.634823+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fab2-57ae-71c3-a072-91593c81d246
   author: joe
-  content: |-
-    AUTHORITATIVE RECONCILE-CODEX BRIEF (advisor-121, relayed by product 13:42):
+  content: 'AUTHORITATIVE RECONCILE-CODEX BRIEF (advisor-121, relayed by product 13:42):
+
     # Reconcile brief: TASK-3133 / PR #4365 @b8d7faa (supersedes the conflict-only brief)
 
+
     Advisor: claude-advisor-121, 2026-11-20 12:24 MST. Lane: Claude+Fable. COMMIT your work.
+
     Merge origin/main (no rebase or force-push). The conflict in bug_home_038_seat_publish_tests.rs
+
     story_2640_fast_gate_real_lane_exit_paths_settle_reservations is behavioural: this branch injects 100 GiB of available disk; main lowers
-    the disk floor to 1 GiB via project config. RULING: KEEP BOTH. The test must be independent of the host's real free space (the injected
-    headroom) AND of the project's floor setting (assert against the floor actually configured, not a hard-coded number). Check the
+
+    the disk floor to 1 GiB via project config. RULING: KEEP BOTH. The test must be independent of the host''s real free space (the injected
+
+    headroom) AND of the project''s floor setting (assert against the floor actually configured, not a hard-coded number). Check the
+
     other tests this branch touches for the same disk-preflight assumption. cargo fmt; run the touched test files; check-ci-fast. Push.
 
+
     ## Before pushing (product, per advisor 21:40)
-    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
-  created_at: 2026-11-20T20:42:20.390871057Z
-  modified_at: 2026-11-20T20:42:20.390871057Z
+
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.'
+  created_at: 2026-11-20 20:42:20.390871+00:00
+  modified_at: 2026-11-20 20:42:20.390871+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fab3-22ed-7860-8905-040a1edbf168
   author: joe
   content: 'Product 13:43: RECONCILE-CODEX lane queued on dell1 (codex), branch task-73022632d35647cca3858b18ac0723e3-027. Scope = the AUTHORITATIVE RECONCILE-CODEX BRIEF in the previous comment.'
-  created_at: 2026-11-20T20:43:09.343000330Z
-  modified_at: 2026-11-20T20:43:09.343000330Z
+  created_at: 2026-11-20 20:43:09.343000+00:00
+  modified_at: 2026-11-20 20:43:09.343000+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1facb-f3a2-7041-a4ba-f75e18a16c3e
   author: joe
-  content: |-
-    AUTHORITATIVE RECONCILE-CODEX-2 BRIEF (advisor-121, relayed by product 14:10):
+  content: 'AUTHORITATIVE RECONCILE-CODEX-2 BRIEF (advisor-121, relayed by product 14:10):
+
     # Reconcile brief: TASK-3133 / PR #4365 @b8d7faa (supersedes the conflict-only brief)
 
+
     Advisor: claude-advisor-121, 2026-11-20 12:24 MST. Lane: Claude+Fable. COMMIT your work.
+
     Merge origin/main (no rebase or force-push). The conflict in bug_home_038_seat_publish_tests.rs
+
     story_2640_fast_gate_real_lane_exit_paths_settle_reservations is behavioural: this branch injects 100 GiB of available disk; main lowers
-    the disk floor to 1 GiB via project config. RULING: KEEP BOTH. The test must be independent of the host's real free space (the injected
-    headroom) AND of the project's floor setting (assert against the floor actually configured, not a hard-coded number). Check the
+
+    the disk floor to 1 GiB via project config. RULING: KEEP BOTH. The test must be independent of the host''s real free space (the injected
+
+    headroom) AND of the project''s floor setting (assert against the floor actually configured, not a hard-coded number). Check the
+
     other tests this branch touches for the same disk-preflight assumption. cargo fmt; run the touched test files; check-ci-fast. Push.
 
+
     ## Before pushing (product, per advisor 21:40)
-    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
-  created_at: 2026-11-20T21:10:20.179516889Z
-  modified_at: 2026-11-20T21:10:20.179516889Z
+
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.'
+  created_at: 2026-11-20 21:10:20.179516+00:00
+  modified_at: 2026-11-20 21:10:20.179516+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1facc-92cc-7e23-bc33-8f135edc3773
   author: joe
   content: 'Product 14:11: RECONCILE-CODEX-2 lane queued on dell1 (codex), branch task-73022632d35647cca3858b18ac0723e3-027. Scope = the AUTHORITATIVE RECONCILE-CODEX-2 BRIEF in the previous comment.'
-  created_at: 2026-11-20T21:11:00.392018991Z
-  modified_at: 2026-11-20T21:11:00.392018991Z
+  created_at: 2026-11-20 21:11:00.392018+00:00
+  modified_at: 2026-11-20 21:11:00.392018+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fae3-ab40-7b03-97b0-2095f200e44d
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: b8d7faa4712a2968230c58250054099f7b7fda7f and the native working-tree merge with 719aa4947d0673e6507e823e43e47b20b07422c8. Reviewed the merge-base diff, the working tree against both parents, and untracked additions (none). Host publication is Refs-only.
 
+
     AC1: [evidence: behavioral-test] Used the existing 22-name dell1 baseline j20261119T175135035-2-0.
+
     AC2: [evidence: behavioral-test] All 22 baseline names reported ok on every reconciled-tree run. bug_home_038_seat_publish_tests.rs:3315 and :3709 retain both injected 100 GiB and a temporary project floor, and explicitly exercise lane_disk_preflight before launch. The missing-vendor refusal, grant cleanup and per-path reservation assertions remain. Threshold refusal/boundary test machine_readiness.rs:426 passed in j20261120T213601596-2-0 (3 passed). The existing live Codex capability skip limits evidence for live denials.
+
     AC3: [evidence: behavioral-test] Three consecutive dell1 seat_clone:: runs each executed 381 passed, 0 failed, 3 ignored: j20261120T211512410-2-0, j20261120T212839138-2-0, j20261120T213101763-2-0. Primary-host repeats remain with product.
+
     AC4: [evidence: manual-inspection] BUG-2623 remains linked; class (b) fixtures unchanged by this repair.
 
-    Probe findings: Both launch fixtures call the same threshold reader as production. TOML has one disk table and positive integer floor per fixture. The check covers all preflight paths and the injected measurement is restored by the thread-local guard. Ambient free space cannot change the result. No authority change or weakened refusal assertion. Existing sandbox tests retain fixture-local read-only mounts, separate writable binds and isolated cwd. Mail cleanup fixtures retain thread-local writer evidence and their dirty/busy refusal assertions. Working-tree marker scan, formatting, merge-parent whitespace check and store-writer inventory passed (3821 sites). The full old-HEAD diff flags an existing trailing blank line from the incoming docs/configuration-guide.md. All 48 FAST source gates passed; make check-ci-fast ratchets still running.
-  created_at: 2026-11-20T21:36:25.399800660Z
-  modified_at: 2026-11-20T21:36:25.399800660Z
+
+    Probe findings: Both launch fixtures call the same threshold reader as production. TOML has one disk table and positive integer floor per fixture. The check covers all preflight paths and the injected measurement is restored by the thread-local guard. Ambient free space cannot change the result. No authority change or weakened refusal assertion. Existing sandbox tests retain fixture-local read-only mounts, separate writable binds and isolated cwd. Mail cleanup fixtures retain thread-local writer evidence and their dirty/busy refusal assertions. Working-tree marker scan, formatting, merge-parent whitespace check and store-writer inventory passed (3821 sites). The full old-HEAD diff flags an existing trailing blank line from the incoming docs/configuration-guide.md. All 48 FAST source gates passed; make check-ci-fast ratchets still running.'
+  created_at: 2026-11-20 21:36:25.399800+00:00
+  modified_at: 2026-11-20 21:36:25.399800+00:00
   session_id: 01a1facee455
   harness_version: codex-cli 0.167.0
 - id: 01a1fb4d-9b8e-7321-9b54-1dc3bc28fd7c
   author: joe
   content: 'advisor-121 16:45: slice 2 #4365 landed (29e77b8), after #4326. COMPLETION GATE: one targeted run on dell1 of ''cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::'' at current main, in a lane environment. All pass means the advisor completes TASK-3133; any remaining failures get a fresh slice brief from the failure list.'
-  created_at: 2026-11-20T23:31:57.464844188Z
-  modified_at: 2026-11-20T23:31:57.464844188Z
+  created_at: 2026-11-20 23:31:57.464844+00:00
+  modified_at: 2026-11-20 23:31:57.464844+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb4f-aa2e-72c0-a08b-186b4226414b
   author: joe
-  content: |-
-    Product 16:36: evidence-only Claude lane queued on dell1 (lane-job run of the seat_clone:: suite at origin/main with AIDA_CARGO_FORCE_BUILD=1; post counts and failing names; no code), brief:
-    # Brief: TASK-3133 completion-gate EVIDENCE lane (advisor-121 16:32). NO CODE CHANGES.
-
-    Goal: produce the lane-job evidence the advisor needs to complete TASK-3133. Do not edit any file.
-    1. In your seat (at current origin/main, which includes #4365 29e77b8), run the suite AS A LANE JOB, inside the contained lane environment:
-       `AIDA_CARGO_FORCE_BUILD=1 aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`
-       (use `aida lane job wait` if it outlives --wait). AIDA_CARGO_FORCE_BUILD=1 is REQUIRED: without it the cargo wrapper skips an unmodified main checkout and reports a fake 1-second pass.
-    2. Post ONE comment on TASK-3133 with: the lane job id, the passed/failed/ignored counts, and the exact names of every failing test (classified as the spec's AC1 classes a/b/c where you can).
-    3. Then punt with "evidence posted", making no commits and opening no PR.
-  created_at: 2026-11-20T23:34:11.964154003Z
-  modified_at: 2026-11-20T23:34:11.964154003Z
+  content: "Product 16:36: evidence-only Claude lane queued on dell1 (lane-job run of the seat_clone:: suite at origin/main with AIDA_CARGO_FORCE_BUILD=1; post counts and failing names; no code), brief:\n# Brief: TASK-3133 completion-gate EVIDENCE lane (advisor-121 16:32). NO CODE CHANGES.\n\nGoal: produce the lane-job evidence the advisor needs to complete TASK-3133. Do not edit any file.\n1. In your seat (at current origin/main, which includes #4365 29e77b8), run the suite AS A LANE JOB, inside the contained lane environment:\n   `AIDA_CARGO_FORCE_BUILD=1 aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`\n   (use `aida lane job wait` if it outlives --wait). AIDA_CARGO_FORCE_BUILD=1 is REQUIRED: without it the cargo wrapper skips an unmodified main checkout and reports a fake 1-second pass.\n2. Post ONE comment on TASK-3133 with: the lane job id, the passed/failed/ignored counts, and the exact names of every failing test (classified as the spec's AC1\
+    \ classes a/b/c where you can).\n3. Then punt with \"evidence posted\", making no commits and opening no PR."
+  created_at: 2026-11-20 23:34:11.964154+00:00
+  modified_at: 2026-11-20 23:34:11.964154+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb4f-d26b-7942-aced-5b5a20562158
   author: aida-auto-bump
-  content: |-
-    [aida:refs-landing] 29e77b852369
-    A reference merge (commit 29e77b852369, `(Refs TASK-3133)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
-  created_at: 2026-11-20T23:34:34.859805753Z
-  modified_at: 2026-11-20T23:34:34.859805753Z
+  content: '[aida:refs-landing] 29e77b852369
+
+    A reference merge (commit 29e77b852369, `(Refs TASK-3133)`) landed while this spec was Needs Attention, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.'
+  created_at: 2026-11-20 23:34:34.859805+00:00
+  modified_at: 2026-11-20 23:34:34.859805+00:00
 - id: 01a1fb6a-eaaa-7420-9db6-6cd4409c8b9e
   author: dirtlab
-  content: |-
-    ## Lane-job evidence: seat_clone:: on origin/main 29e77b8 (includes #4365)
+  content: '## Lane-job evidence: seat_clone:: on origin/main 29e77b8 (includes #4365)
+
 
     Seat tree is identical to origin/main 29e77b8523 (empty diff; no edits, no commits). Command, run three consecutive times as a contained dell1 lane job (bubblewrap, lane target overlay) with AIDA_CARGO_FORCE_BUILD=1:
+
     `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`
 
+
     | run | lane job id | passed | failed | ignored | time |
+
     |---|---|---|---|---|---|
+
     | 1 | j20261120T235009601-3-0 | 381 | 0 | 3 | 118.51s |
+
     | 2 | j20261121T000039418-3-0 | 381 | 0 | 3 | 121.71s |
+
     | 3 | j20261121T000244880-3-0 | 381 | 0 | 3 | 69.44s |
+
 
     Failing tests: none in any run, so there are no class (a), (b) or (c) failures to classify. 14402 filtered out each run; all three exited 0.
 
+
     Ignored (same 3 each run, all by design): rework_merge_tests::portable_renderer_child (child entry point), seat_clone_handshake_tests::grouped_repeat_regression (explicit ten-run repeat), seat_publish_tests::bug_2488_seat_handshake_refusals_child (run by its watchdog parent).
 
-    Observations: run 1 printed over-60-seconds notices for 8 tests (bug_2552_bwrap_refused_holder_requires_dead_clean_pushed_clone, five orphan_reentry_tests, two review_repickup_tests); all passed. Runs ended with the note 'seed: overlay-stale' (primary rewrote a seed file in place; affects only this seat's build).
+
+    Observations: run 1 printed over-60-seconds notices for 8 tests (bug_2552_bwrap_refused_holder_requires_dead_clean_pushed_clone, five orphan_reentry_tests, two review_repickup_tests); all passed. Runs ended with the note ''seed: overlay-stale'' (primary rewrote a seed file in place; affects only this seat''s build).
+
 
     Logs: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1fb516582/<job id>.out
 
-    Not covered here: the 3 primary-host runs of AC3 (assigned to the product seat).
-  created_at: 2026-11-21T00:04:10.538219886Z
-  modified_at: 2026-11-21T00:04:10.538219886Z
+
+    Not covered here: the 3 primary-host runs of AC3 (assigned to the product seat).'
+  created_at: 2026-11-21 00:04:10.538219+00:00
+  modified_at: 2026-11-21 00:04:10.538219+00:00
   session_id: 01a1fb516582
   harness_version: 2.1.319 (Claude Code)
 - id: 01a1fb6b-63d4-78e2-9721-418f654c4b33
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `task-73022632d35647cca3858b18ac0723e3-027` at head `0bb18969d5f83ebffd8149ac5e43c33a99562d45`.'
-  created_at: 2026-11-21T00:04:41.556768423Z
-  modified_at: 2026-11-21T00:04:41.556768423Z
+  created_at: 2026-11-21 00:04:41.556768+00:00
+  modified_at: 2026-11-21 00:04:41.556768+00:00
   session_id: 01a1fb516582
 - id: 01a1fb6b-8be2-7821-aa11-1817cd06b0ed
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `task-73022632d35647cca3858b18ac0723e3-027` at head `0bb18969d5f83ebffd8149ac5e43c33a99562d45`.'
-  created_at: 2026-11-21T00:04:51.810698942Z
-  modified_at: 2026-11-21T00:04:51.810698942Z
+  created_at: 2026-11-21 00:04:51.810698+00:00
+  modified_at: 2026-11-21 00:04:51.810698+00:00
   session_id: 01a1fb516582
 - id: 01a1fb7b-77b4-7f02-87e9-453c2216db3d
   author: joe
-  content: |-
-    Product 17:24: AC3 PRIMARY-HOST EVIDENCE at origin/main 29e77b8 (#4365 landed). FAIL, deterministic.
+  content: 'Product 17:24: AC3 PRIMARY-HOST EVIDENCE at origin/main 29e77b8 (#4365 landed). FAIL, deterministic.
+
 
     Command (detached worktree ~/ai/aida-worktrees/task3133-evidence, primary host imac; AIDA_CARGO_FORCE_BUILD=1 because the wrapper otherwise skips an unmodified main checkout, see BUG-2708):
+
     `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::`
+
 
     Results, 3 consecutive runs: identical, 362 passed / 19 failed / 3 ignored each (313s, 199s, 259s). The same 19 names fail every time, so nothing is flaky; it is all one class.
 
+
     Failing (18 in seat_clone::bwrap_tests::linux, plus 1 publish test):
+
     - seat_clone::bwrap_tests::linux::a_clone_is_recorded_only_for_its_own_launchers_main
+
     - seat_clone::bwrap_tests::linux::a_clone_launched_from_inside_itself_keeps_its_boundary
+
     - seat_clone::bwrap_tests::linux::agent_new_scopes_the_contained_boundary_to_the_seat_tree
+
     - seat_clone::bwrap_tests::linux::a_host_recorded_clone_keeps_its_own_git_writable_and_main_git_denied
+
     - seat_clone::bwrap_tests::linux::bug_2169_bwrap_a_genuine_main_lease_naming_another_cargo_target_dir_grants_nothing
+
     - seat_clone::bwrap_tests::linux::bug_2169_bwrap_clone_seat_cargo_build_uses_its_own_target_dir
+
     - seat_clone::bwrap_tests::linux::bug_2169_bwrap_only_the_host_lease_makes_a_host_recorded_clone
+
     - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t1_rename_aside
+
     - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t2_host_detach
+
     - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t3_clone_seat_commits_fetches_merges_and_pushes
+
     - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t4_objects_and_alternates
+
     - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t5_origin_head_and_tags
+
     - seat_clone::bwrap_tests::linux::bug_2169_bwrap_t8_main_config_and_hooks
+
     - seat_clone::bwrap_tests::linux::task_2032_every_queue_work_launch_arm_keeps_the_clone_boundary
+
     - seat_clone::bwrap_tests::linux::task_2712_agent_new_rescopes_the_codex_write_set_to_the_seat
+
     - seat_clone::bwrap_tests::linux::task_2712_headless_reviewer_argv_carries_the_gate_ledger
+
     - seat_clone::bwrap_tests::linux::task_2712_native_codex_clone_gets_the_claude_write_set_and_no_git
+
     - seat_clone::bwrap_tests::linux::task_2712_native_codex_implementer_gets_no_gate_ledger
+
     - seat_clone::seat_publish_tests::bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize
 
+
     Root cause (dominant, rs:329 and siblings in aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs):
+
     `contained launch refused: <fixture>/seats/aida-seat-aida-task-2169 has a .git directory or symlink that resolves to <fixture>/aida, and it is not a seat clone the host recorded for that checkout`
 
-    Reading: the fixture builds its own main plus seat clone, but crate::seat_clone::launcher_main() (used in settings_for and the launch path) resolves from the REAL process/test-binary location. On the primary host the test binary lives under /home/joe/ai/aida/target/worktrees/<wt>/agent, i.e. inside the real primary checkout, so the 'recorded clone' check consults the real main's records rather than the fixture's. On dell1 lane seats the binary is not under a primary checkout, which plausibly explains host-specific results. The fix direction is to make launcher_main() injectable or env-overridable in the bwrap fixtures (AIDA_LAUNCHER_MAIN-style), pinned to the fixture main.
-    Separate: bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize panics at bug_home_038_seat_publish_tests.rs:4487 with 'handshake refusal child failed: exit status: 2' (child exits 2; probably the same launcher-main resolution, unconfirmed).
 
-    The dell1 lane-job (contained) evidence run is in flight on an evidence-only lane; its counts will follow as a separate comment.
-  created_at: 2026-11-21T00:22:02.821639443Z
-  modified_at: 2026-11-21T00:22:02.821639443Z
+    Reading: the fixture builds its own main plus seat clone, but crate::seat_clone::launcher_main() (used in settings_for and the launch path) resolves from the REAL process/test-binary location. On the primary host the test binary lives under /home/joe/ai/aida/target/worktrees/<wt>/agent, i.e. inside the real primary checkout, so the ''recorded clone'' check consults the real main''s records rather than the fixture''s. On dell1 lane seats the binary is not under a primary checkout, which plausibly explains host-specific results. The fix direction is to make launcher_main() injectable or env-overridable in the bwrap fixtures (AIDA_LAUNCHER_MAIN-style), pinned to the fixture main.
+
+    Separate: bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize panics at bug_home_038_seat_publish_tests.rs:4487 with ''handshake refusal child failed: exit status: 2'' (child exits 2; probably the same launcher-main resolution, unconfirmed).
+
+
+    The dell1 lane-job (contained) evidence run is in flight on an evidence-only lane; its counts will follow as a separate comment.'
+  created_at: 2026-11-21 00:22:02.821639+00:00
+  modified_at: 2026-11-21 00:22:02.821639+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb7b-ead5-7fa3-adcb-3ac9aaaba96a
   author: joe
   content: 'advisor-121 17:35: NOT complete. Primary-host evidence: 19 deterministic failures (18 bwrap fixtures resolving the host main from the real binary location). Slice 3 brief (codex): .aida/tmp/brief-TASK-3133-s3.md. The dell1 lane-job results get appended as an addendum.'
-  created_at: 2026-11-21T00:22:32.529507286Z
-  modified_at: 2026-11-21T00:22:32.529507286Z
+  created_at: 2026-11-21 00:22:32.529507+00:00
+  modified_at: 2026-11-21 00:22:32.529507+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb7c-8739-7461-91ca-8c5a4c051488
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: other: evidence posted: seat_clone:: lane-job runs on origin/main 29e77b8 (j20261120T235009601-3-0, j20261121T000039418-3-0, j20261121T000244880-3-0) each 381 passed / 0 failed / 3 ignored; see the TASK-3133 comment. No commits, no PR. Remaining for completion: the 3 primary-host runs of AC3 (product seat).. No triage reason was given.'
-  created_at: 2026-11-21T00:23:24.729133545Z
-  modified_at: 2026-11-21T00:23:24.729133545Z
+  created_at: 2026-11-21 00:23:24.729133+00:00
+  modified_at: 2026-11-21 00:23:24.729133+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb7f-bec1-7b60-ab43-61ebcaed4261
   author: joe
-  content: |-
-    Product 17:30: slice 3 CODEX (gpt-6.2-astra) lane, FRESH from origin/main, queued on dell1. Brief:
+  content: 'Product 17:30: slice 3 CODEX (gpt-6.2-astra) lane, FRESH from origin/main, queued on dell1. Brief:
+
     # Slice 3 brief: TASK-3133 (seat_clone suite environment-independence)
 
+
     Advisor: claude-advisor-121, 2026-11-20 17:35 MST. Lane: CODEX (gpt-6.2-astra), fresh from origin/main. (Refs TASK-3133); use (TASK-3133) only if the
+
     completion gate below passes in this PR. COMMIT your work.
+
     Evidence (product, primary host imac, 29e77b8, AIDA_CARGO_FORCE_BUILD=1, 3 identical runs): 362 pass / 19 fail / 3 ignored. 18 are
+
     seat_clone::bwrap_tests::linux::* (bug_2169_bwrap_t1..t5/t8, a_clone_*, agent_new_*, task_2032_*, 4 task_2712_*), panicking at
+
     bug_2169_contained_clone_bwrap_tests.rs:329 and siblings: "contained launch refused: <fixture>/seats/... resolves to <fixture>/aida, and it is not a
+
     seat clone the host recorded for that checkout". The 19th: seat_publish_tests::bug_2488_seat_handshakes_refuse_fifo_symlink_and_oversize (rs:4487,
+
     handshake child exit 2).
-    Diagnosis to VERIFY first: seat_clone::launcher_main() resolves from the real test binary location (under the real primary checkout's target/), not the
-    fixture's main, so the recorded-clone check reads the wrong project.
+
+    Diagnosis to VERIFY first: seat_clone::launcher_main() resolves from the real test binary location (under the real primary checkout''s target/), not the
+
+    fixture''s main, so the recorded-clone check reads the wrong project.
+
     Fix: make launcher_main (and anything else that derives the host main from current_exe) injectable for fixtures; the bwrap fixtures set it to their fixture
+
     main. Production behaviour unchanged. Confirm or fix the 19th the same way.
+
     Completion gate in this PR: run `AIDA_CARGO_FORCE_BUILD=1 cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::` on the primary host AND as a dell1
+
     lane job; post both counts in the PR body. Any dell1-only failures reported by the in-flight evidence lane are appended to this brief as an addendum.
 
-    Addendum (product 17:30): dell1 CONTAINED lane-job evidence at 29e77b8 (jobs j20261120T235009601-3-0, j20261121T000039418-3-0, j20261121T000244880-3-0): 381 passed / 0 failed / 3 ignored, three times. There are NO dell1-only failures; all 19 failures are primary-host-only, which is consistent with launcher_main() resolving from the test binary's location inside a real primary checkout. Your regression must reproduce the primary-host shape on any host: test binary under <real main>/target/..., fixture main elsewhere.
-  created_at: 2026-11-21T00:26:41.574825697Z
-  modified_at: 2026-11-21T00:26:41.574825697Z
+
+    Addendum (product 17:30): dell1 CONTAINED lane-job evidence at 29e77b8 (jobs j20261120T235009601-3-0, j20261121T000039418-3-0, j20261121T000244880-3-0): 381 passed / 0 failed / 3 ignored, three times. There are NO dell1-only failures; all 19 failures are primary-host-only, which is consistent with launcher_main() resolving from the test binary''s location inside a real primary checkout. Your regression must reproduce the primary-host shape on any host: test binary under <real main>/target/..., fixture main elsewhere.'
+  created_at: 2026-11-21 00:26:41.574825+00:00
+  modified_at: 2026-11-21 00:26:41.574825+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1fb82-3d93-7c43-ab85-804d821a32db
   author: joe
   content: 'advisor-121 17:40: the lane-environment AC is MET at 29e77b8 (dell1 contained lane jobs j20261120T235009601-3-0, j20261121T000039418-3-0, j20261121T000244880-3-0: 381/0/3, three times). The only remaining scope is primary-host AC3 (19 failures, launcher_main resolving from the real binary''s checkout): slice 3 (codex, launched 17:30). It completes on slice 3''s landing if its primary-host gate is green.'
-  created_at: 2026-11-21T00:29:26.674352109Z
-  modified_at: 2026-11-21T00:29:26.674352109Z
+  created_at: 2026-11-21 00:29:26.674352+00:00
+  modified_at: 2026-11-21 00:29:26.674352+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
-  timestamp: 2026-11-16T00:01:47.053039333Z
+  timestamp: 2026-11-16 00:01:47.053039+00:00
   changes: []
 - id: 01a1ea58-7391-7531-8ab3-129ac3efaf5b
   author: joe
-  timestamp: 2026-11-17T16:30:27.729952170Z
+  timestamp: 2026-11-17 16:30:27.729952+00:00
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
   changes:
   - field_name: description
     old_value: 'During BUG-2603 rework, lane job j20261115T234446341-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::) executed 333 tests: 305 passed, 26 failed, 2 ignored. All changed publication/recovery/regeneration fixtures passed. Failures include mail retention writer-admission refusals, live advisor grant interference, nested containment Git path assertions, and root gitdir refusal. Not baseline-confirmed; needs separate fixture/environment triage. Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e1976efb/j20261115T234446341-2-0.out. Targeted BUG-2603 tests and the specifically requested story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch all passed.'
-    new_value: |
-      During BUG-2603 rework, lane job j20261115T234446341-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::) executed 333 tests: 305 passed, 26 failed, 2 ignored. All changed publication/recovery/regeneration fixtures passed. Failures include mail retention writer-admission refusals, live advisor grant interference, nested containment Git path assertions, and root gitdir refusal. Not baseline-confirmed; needs separate fixture/environment triage. Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e1976efb/j20261115T234446341-2-0.out. Targeted BUG-2603 tests and the specifically requested story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch all passed.
+    new_value: 'During BUG-2603 rework, lane job j20261115T234446341-2-0 (cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::) executed 333 tests: 305 passed, 26 failed, 2 ignored. All changed publication/recovery/regeneration fixtures passed. Failures include mail retention writer-admission refusals, live advisor grant interference, nested containment Git path assertions, and root gitdir refusal. Not baseline-confirmed; needs separate fixture/environment triage. Full log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e1976efb/j20261115T234446341-2-0.out. Targeted BUG-2603 tests and the specifically requested story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch all passed.
+
 
       Merged in 2026-11-17 (product groom): TASK-3135 reports the same class on the BUG-2623 lane (j20261116T164831316-2-0: 26 failures in gate dispatch authority cleanup/approval, seat_clone live bwrap tests, lifecycle cleanup and orphan reentry; bwrap diagnostic "fatal: not a git repository (or any parent up to mount point /)"). Log: /home/dirtlab/ai/aida/.aida/lane-jobs/01a1e541b187/j20261116T164831316-2-0.out.
 
+
       ## Acceptance
+
       1. Baseline first: run `cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::` on unmodified origin/main inside a dell1 lane job, and post the pass/fail list here. Each failure is classified as (a) depends on host state (live grants, live advisor, mail retention, real containment paths), (b) parallel-load flake already owned by BUG-2623, or (c) a real defect (file a bug per defect).
-      2. Every class (a) test is made hermetic: it builds its own temp AIDA home, grant store, mailbox and git roots, and never reads the operator's live ones. The test asserts nothing about the invoking host's seats or grants.
+
+      2. Every class (a) test is made hermetic: it builds its own temp AIDA home, grant store, mailbox and git roots, and never reads the operator''s live ones. The test asserts nothing about the invoking host''s seats or grants.
+
       3. After the fix, the same filtered command passes 3 consecutive runs in a dell1 lane job and 3 on the primary host, with no class (a) failures. Post the job ids here.
+
       4. Class (b) failures are linked to BUG-2623, not fixed here.
+
+      '
 - id: 01a1ea5a-bbbc-7842-b511-37df53cd616d
   author: joe
-  timestamp: 2026-11-17T16:32:57.276798703Z
+  timestamp: 2026-11-17 16:32:57.276798+00:00
   session_id: 01a1ea51-b920-74c3-9d84-aced445f3009
   harness_version: 2.1.326 (Claude Code)
   changes: []
 - id: 01a1ebdc-4edb-7712-a4d5-a7972ba5e2ac
   author: joe
-  timestamp: 2026-11-17T23:34:06.299497782Z
+  timestamp: 2026-11-17 23:34:06.299497+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes:
@@ -542,65 +695,65 @@ history:
     new_value: Approved
 - id: 01a1ebe1-245e-7a31-b02e-5e081542e315
   author: joe
-  timestamp: 2026-11-17T23:39:23.102230431Z
+  timestamp: 2026-11-17 23:39:23.102230+00:00
   session_id: 01a1ea42-5db8-7eb3-8298-76b71499aa8b
   harness_version: 2.1.326 (Claude Code)
   changes: []
 - id: 01a1f4ed-1637-7381-aa91-564e6f52ed75
   author: aida-session-start
-  timestamp: 2026-11-19T17:49:00.855420371Z
+  timestamp: 2026-11-19 17:49:00.855420+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f4f3-4cb4-73e2-81e9-10ecb8ba9bdb
   author: dirtlab
-  timestamp: 2026-11-19T17:55:48.020752649Z
+  timestamp: 2026-11-19 17:55:48.020752+00:00
   session_id: 01a1f4ece859
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1f4f3-deeb-71e1-89b1-4f0ffb86995e
   author: dirtlab
-  timestamp: 2026-11-19T17:56:25.451461109Z
+  timestamp: 2026-11-19 17:56:25.451461+00:00
   session_id: 01a1f4ece859
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1f4fc-a28d-7800-adf3-6cc0826d8cb9
   author: dirtlab
-  timestamp: 2026-11-19T18:05:59.821156766Z
+  timestamp: 2026-11-19 18:05:59.821156+00:00
   session_id: 01a1f4ece859
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1f4fc-c50d-7780-bcba-d62e0e621bee
   author: dirtlab
-  timestamp: 2026-11-19T18:06:08.653120429Z
+  timestamp: 2026-11-19 18:06:08.653120+00:00
   session_id: 01a1f4ece859
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a1f5b1-be12-7cd0-988a-498e016c14c9
   author: lane-recovery
-  timestamp: 2026-11-19T21:23:48.882547018Z
+  timestamp: 2026-11-19 21:23:48.882547+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a1f95a-0001-77b0-b91f-e0dc88bc09b5
   author: aida-session-start
-  timestamp: 2026-11-20T14:26:27.457632004Z
+  timestamp: 2026-11-20 14:26:27.457632+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1f997-5bcb-7433-8b2b-8c183d6f063d
   author: joe
-  timestamp: 2026-11-20T15:33:28.651304474Z
+  timestamp: 2026-11-20 15:33:28.651304+00:00
   changes:
   - field_name: status
     old_value: InProgress
     new_value: Approved
 - id: 01a1fa5c-4879-7c03-a836-ffdd29777a4a
   author: joe
-  timestamp: 2026-11-20T19:08:34.297298227Z
+  timestamp: 2026-11-20 19:08:34.297298+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
@@ -609,14 +762,14 @@ history:
     new_value: Approved
 - id: 01a1fa5f-c550-7290-b9b7-17499d7d2017
   author: aida-session-start
-  timestamp: 2026-11-20T19:12:22.864840649Z
+  timestamp: 2026-11-20 19:12:22.864840+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a1fa60-b65c-7af0-a3fc-fc5b37cc5c5b
   author: dirtlab
-  timestamp: 2026-11-20T19:13:24.572273617Z
+  timestamp: 2026-11-20 19:13:24.572273+00:00
   session_id: 01a1fa5f8f3f
   harness_version: codex-cli 0.167.0
   changes:
@@ -625,19 +778,26 @@ history:
     new_value: NeedsAttention
 - id: 01a1fb6b-1cea-7db0-8bb6-6f1c94d688a1
   author: dirtlab
-  timestamp: 2026-11-21T00:04:23.402713143Z
+  timestamp: 2026-11-21 00:04:23.402713+00:00
   session_id: 01a1fb516582
   harness_version: 2.1.319 (Claude Code)
   changes: []
 - id: 01a1fb7c-8739-7461-91ca-8c4c865138b1
   author: joe
-  timestamp: 2026-11-21T00:23:24.729121182Z
+  timestamp: 2026-11-21 00:23:24.729121+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a1fb83-ac77-7b41-b9dc-6182c427b432
+  author: aida-session-start
+  timestamp: 2026-11-21 00:31:13.015355+00:00
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
