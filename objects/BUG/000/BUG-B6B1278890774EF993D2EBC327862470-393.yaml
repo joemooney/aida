@@ -9,12 +9,12 @@ description: |-
   1. aida queue rework finishes in under 10s on this repo's current gate ledger (658 PR ledgers), or prints progress and names the slow phase.
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-21T00:51:39.626114130Z
+modified_at: 2026-11-21T00:52:26.716769963Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -811,6 +811,13 @@ comments:
   modified_at: 2026-11-21T00:51:39.626114130Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb97-1bdc-7e13-a5dc-dbe6db39bb2c
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2629 passes the slow-phase progress and early track-refusal criteria by source inspection. The end-to-end scan still performs quadratic work on healthy and recovery paths, and incomplete review evidence can admit an implementer pickup. CI pending at review time.. No triage reason was given.'
+  created_at: 2026-11-21T00:52:26.716760459Z
+  modified_at: 2026-11-21T00:52:26.716760459Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
@@ -1079,6 +1086,15 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a1fb97-1bdc-7e13-a5dc-dbd70a94a5f1
+  author: joe
+  timestamp: 2026-11-21T00:52:26.716747022Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
+  harness_version: 2.1.328 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
@@ -1089,11 +1105,3 @@ filed_at:
   vendor: claude
   session: 01a1e30d-99f2-77d1-b9f3-5fe9c78e5d3f
   harness_version: 2.1.325 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: BUG-2629 passes the slow-phase progress and early track-refusal criteria by source inspection. The end-to-end scan still performs quadratic work on healthy and recovery paths, and incomplete review evidence can admit an implementer pickup. CI pending at review time.
-  recovery_hint: address the review findings, move BUG-2629 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-21T00:51:09.333089060Z
