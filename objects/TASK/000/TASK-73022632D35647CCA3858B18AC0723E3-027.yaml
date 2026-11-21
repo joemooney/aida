@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694188Z
-modified_at: 2026-11-21T00:26:41.574825697Z
+modified_at: 2026-11-21T00:29:26.674352109Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -494,6 +494,13 @@ comments:
   created_at: 2026-11-21T00:26:41.574825697Z
   modified_at: 2026-11-21T00:26:41.574825697Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb82-3d93-7c43-ab85-804d821a32db
+  author: joe
+  content: 'advisor-121 17:40: the lane-environment AC is MET at 29e77b8 (dell1 contained lane jobs j20261120T235009601-3-0, j20261121T000039418-3-0, j20261121T000244880-3-0: 381/0/3, three times). The only remaining scope is primary-host AC3 (19 failures, launcher_main resolving from the real binary''s checkout): slice 3 (codex, launched 17:30). It completes on slice 3''s landing if its primary-host gate is green.'
+  created_at: 2026-11-21T00:29:26.674352109Z
+  modified_at: 2026-11-21T00:29:26.674352109Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
