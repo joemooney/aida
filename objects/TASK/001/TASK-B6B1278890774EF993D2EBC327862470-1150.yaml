@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 74968c72e1561fe74733bbfa090db8a6c7b99433
 
   aida-cli-lib/src/gate/ledger/store.rs:944 — The unbound append calls read_unbound before its review_check callback. This reads the whole file with read_to_string and parses it without a byte or event budget before the checked reader can reject an oversized ledger. Reuse the bounded validated events for the decision, deduplication and next sequence number.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T20:52:48.835282426Z
-modified_at: 2026-11-20T20:52:48.835282426Z
+modified_at: 2026-11-21T08:35:54.038183182Z
 req_type: Task
 tags:
 - carried-from:BUG-2662
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T20:53:01.666515792Z
+- rel_type: SupersededBy
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-21T08:35:41.325343974Z
+  created_by: joe
+history:
+- id: 01a1fd3f-34bd-7682-8e77-41abdb6b5267
+  author: joe
+  timestamp: 2026-11-21T08:35:40.349285811Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd3f-a1a4-7c92-b11c-c45d67aacb4d
+  author: joe
+  timestamp: 2026-11-21T08:36:08.228199022Z
+  changes: []
+implementation_summary: 'Consolidated into signed BUG-2662 rework. Round 3 item 3 requires unbound append to decide from the bounded validated reader within the same budget. Keep validation on PR #4378.'
 filed_at:
   code_sha: 74968c72e1561fe74733bbfa090db8a6c7b99433
   branch: pr-4378

@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-21T08:26:59.584554705Z
+modified_at: 2026-11-21T08:40:21.918996544Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -37,6 +37,38 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a1fb41-bf99-7653-9172-77cc719ccf28
   created_at: 2026-11-21T08:26:46.800546187Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fa70-0e30-75a2-bcc1-8ff4b89f6561
+  created_at: 2026-11-21T08:31:25.231824615Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fa6f-bfa0-7591-a768-7666e58eb88c
+  created_at: 2026-11-21T08:32:35.460296127Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fa6f-641e-7012-b882-2e9069c7fe34
+  created_at: 2026-11-21T08:33:47.891825742Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fb07-b735-7002-a175-5a2aaebead3d
+  created_at: 2026-11-21T08:34:57.918925755Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fabb-b843-73d3-8b82-15ea1c375a20
+  created_at: 2026-11-21T08:36:10.339926011Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fabb-ebde-7712-9435-290985edc453
+  created_at: 2026-11-21T08:37:21.564998445Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fabc-1f0b-73c0-a32b-ab550fa6d677
+  created_at: 2026-11-21T08:38:32.273022373Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fb08-10de-7892-ad2d-12bab9d23d55
+  created_at: 2026-11-21T08:39:43.420613496Z
   created_by: joe
 comments:
 - id: 01a1ebd8-b3bc-7cd1-aa92-e6eecc444ee9
@@ -593,6 +625,12 @@ comments:
   created_at: 2026-11-21T00:13:44.533844930Z
   modified_at: 2026-11-21T00:13:44.533844930Z
   session_id: 01a1fb497e70
+- id: 01a1fd43-b1a4-7fa3-8df3-523827d85adb
+  author: joe
+  content: |
+    Independent source evidence for the existing round-5 exactly-once requirement, PR #4378 head 4602d292b515. TASK-HOME-1178 remains open. announce_review_once locks concurrent recorders and preserves retry after a failed append, but a successful event append and the completion mark are separate writes. Interruption or mark-write failure after append leaves a pending mark. The retry appends again because the sink does not reconcile the recorded-act identity. Existing tests cover failed emit before delivery and concurrent recorders where the first finishes. Keep the original round-5 scope and require a regression for the successful-append/failed-mark boundary before accepting its exactly-once criterion.
+  created_at: 2026-11-21T08:40:21.918996544Z
+  modified_at: 2026-11-21T08:40:21.918996544Z
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
@@ -761,6 +799,38 @@ history:
 - id: 01a1fd37-7a96-79c0-ba30-cdd7d8740be7
   author: joe
   timestamp: 2026-11-21T08:27:13.942618777Z
+  changes: []
+- id: 01a1fd3b-b875-75d1-b9c2-1323c1beaee2
+  author: joe
+  timestamp: 2026-11-21T08:31:51.925710077Z
+  changes: []
+- id: 01a1fd3c-ca6d-7701-93b6-4202996e63ea
+  author: joe
+  timestamp: 2026-11-21T08:33:02.061323121Z
+  changes: []
+- id: 01a1fd3d-e6f1-75f1-9127-8ee4fc376428
+  author: joe
+  timestamp: 2026-11-21T08:34:14.897593699Z
+  changes: []
+- id: 01a1fd3e-f7e7-74d1-8aa9-cfa72d4253ee
+  author: joe
+  timestamp: 2026-11-21T08:35:24.775083380Z
+  changes: []
+- id: 01a1fd40-12d5-7132-bfa4-74a280c66e93
+  author: joe
+  timestamp: 2026-11-21T08:36:37.205033836Z
+  changes: []
+- id: 01a1fd41-2856-7ec1-965f-cc53127f262f
+  author: joe
+  timestamp: 2026-11-21T08:37:48.246409809Z
+  changes: []
+- id: 01a1fd42-3d8a-7902-a753-0254202d4aa3
+  author: joe
+  timestamp: 2026-11-21T08:38:59.210597633Z
+  changes: []
+- id: 01a1fd43-54be-72c1-9d8b-5f96333c9a39
+  author: joe
+  timestamp: 2026-11-21T08:40:10.686102695Z
   changes: []
 execution_mode: drain
 filed_at:

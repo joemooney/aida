@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: d21536f1c46bd0168f00444bbedc68c90d93cbd7
 
   At review_commands.rs:3711, repeat && placed is used as evidence that this refusal was never announced. An already announced refusal whose hold was subsequently released also satisfies that condition on retry, producing a second ReviewVerdictRecorded event for the same verdict. Conversely, a failed mixed filing with an equivalent pre-existing hold can miss the announcement on successful retry. Track announcement by the recorded act independently of hold placement.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T22:15:49.301850508Z
-modified_at: 2026-11-20T22:15:49.301850508Z
+modified_at: 2026-11-21T08:34:42.933438556Z
 req_type: Task
 tags:
 - carried-from:BUG-2662
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T22:16:11.350821948Z
+- rel_type: SupersededBy
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-21T08:34:30.295029203Z
+  created_by: joe
 history:
 - id: 01a1fb7d-3979-7f82-b78d-fe76e0fa0d9e
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fd3e-1f60-7073-8033-7eb5dec2f889
+  author: joe
+  timestamp: 2026-11-21T08:34:29.344708357Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd3e-8b68-7853-b5ce-57e1a07cf7b5
+  author: joe
+  timestamp: 2026-11-21T08:34:57.000568425Z
+  changes: []
+implementation_summary: 'Consolidated into signed BUG-2662 rework. Round 4 item 4 explicitly carries both the hold-release retry and failed mixed filing cases and requires a marker keyed by the verdict event. Keep independent verification on PR #4378.'
 filed_at:
   code_sha: d21536f1c46bd0168f00444bbedc68c90d93cbd7
   branch: pr-4378

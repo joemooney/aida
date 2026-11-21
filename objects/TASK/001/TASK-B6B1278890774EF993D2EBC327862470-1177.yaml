@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: d21536f1c46bd0168f00444bbedc68c90d93cbd7
 
   Line 1457 says a failed standalone filing leaves the ledger empty. The new failed-delivery fixture also covers an existing refusal, which stays on the ledger. Describe the recovery evidence as the retained draft and the absence of a new verdict event, so operators can reconcile a nonempty ledger correctly.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T22:16:12.254484937Z
-modified_at: 2026-11-20T22:16:12.254484937Z
+modified_at: 2026-11-21T08:39:28.410515487Z
 req_type: Task
 tags:
 - carried-from:BUG-2662
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T22:16:34.024666869Z
+- rel_type: SupersededBy
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-21T08:39:15.554945103Z
+  created_by: joe
+history:
+- id: 01a1fd42-79a3-7d20-b1f5-71970ffbad77
+  author: joe
+  timestamp: 2026-11-21T08:39:14.595455870Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd42-e6d3-7fe3-9d72-a04582210127
+  author: joe
+  timestamp: 2026-11-21T08:39:42.547070647Z
+  changes: []
+implementation_summary: Consolidated into signed BUG-2662 rework. Round 4 item 5 explicitly defines the recovery evidence as retained draft and absence of a new verdict event, including when the ledger already contains a prior event.
 filed_at:
   code_sha: d21536f1c46bd0168f00444bbedc68c90d93cbd7
   branch: pr-4378

@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: ccaa61189ceee258f860e576bd59e662a859f618
 
   The opening comment on record_verdict_at still says a pending barrier is persisted before touching the sweep and retained after failure. Update it to distinguish direct approvals from mixed refusals and launcher collection.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T19:30:10.096523533Z
-modified_at: 2026-11-20T19:30:10.096523533Z
+modified_at: 2026-11-21T08:31:10.275136028Z
 req_type: Task
 tags:
 - carried-from:BUG-2662
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T19:30:24.362797845Z
+- rel_type: SupersededBy
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-21T08:30:57.736928764Z
+  created_by: joe
 history:
 - id: 01a1fa87-6466-7e72-aaa9-4be298d29e5e
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fd3a-df40-7cd2-9ff8-96578566fa61
+  author: joe
+  timestamp: 2026-11-21T08:30:56.320377748Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd3b-4ce8-73c3-adb1-e5cff397b065
+  author: joe
+  timestamp: 2026-11-21T08:31:24.392908742Z
+  changes: []
+implementation_summary: 'Consolidated into signed BUG-2662 rework. Round 2 item 11 explicitly corrects the record_verdict_at comment. Preserve the distinction among direct approvals, mixed refusals and launcher collection in the review of PR #4378.'
 filed_at:
   code_sha: ccaa61189ceee258f860e576bd59e662a859f618
   branch: pr-4378

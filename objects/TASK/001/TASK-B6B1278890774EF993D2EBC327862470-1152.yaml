@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 74968c72e1561fe74733bbfa090db8a6c7b99433
 
   aida-core/templates/skills/aida-review.md:1451 — The skill says a contained reviewer's collecting launcher persists a sweep_pending barrier before filing. The standalone draft parent actually uses the direct review-record path, and standalone_review_verdict_parent_completes_deferred_approval_after_failed_delivery now asserts an empty ledger after failure. Distinguish that draft retry from legacy record_collected_verdict collection so operators know which recovery evidence exists.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T20:53:15.147485246Z
-modified_at: 2026-11-20T20:53:15.147485246Z
+modified_at: 2026-11-21T08:38:17.188122359Z
 req_type: Task
 tags:
 - carried-from:BUG-2662
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T20:53:27.859403263Z
+- rel_type: SupersededBy
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-21T08:38:04.733857367Z
+  created_by: joe
+history:
+- id: 01a1fd41-6511-7060-940e-76e8933827de
+  author: joe
+  timestamp: 2026-11-21T08:38:03.793039843Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd41-d101-7203-b8ae-aae84009035e
+  author: joe
+  timestamp: 2026-11-21T08:38:31.425657153Z
+  changes: []
+implementation_summary: 'Consolidated into signed BUG-2662 rework. Round 3 item 5 explicitly corrects the skill template for the standalone draft parent using direct review-record and syncs generated copies. PR #4378 retains this work.'
 filed_at:
   code_sha: 74968c72e1561fe74733bbfa090db8a6c7b99433
   branch: pr-4378

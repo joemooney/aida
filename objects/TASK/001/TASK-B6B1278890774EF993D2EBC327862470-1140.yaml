@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: ccaa61189ceee258f860e576bd59e662a859f618
 
   At a human terminal a new persistent receipt is allocated before detecting an identical repeat. The repeat discards its ID and leaves an unreferenced receipt per invocation. Validate and reuse the standing receipt for the same act before allocating a replacement.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T19:29:49.984468114Z
-modified_at: 2026-11-20T19:29:49.984468114Z
+modified_at: 2026-11-21T08:32:20.608541261Z
 req_type: Task
 tags:
 - carried-from:BUG-2662
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T19:30:09.755589218Z
+- rel_type: SupersededBy
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-21T08:32:08.110368101Z
+  created_by: joe
 history:
 - id: 01a1fa87-c69a-7562-8e1d-9a87def2364b
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fd3b-f166-7122-86c2-f7e27f6a878d
+  author: joe
+  timestamp: 2026-11-21T08:32:06.502042240Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd3c-5f24-75a3-bd79-4262ab99a95d
+  author: joe
+  timestamp: 2026-11-21T08:32:34.596095934Z
+  changes: []
+implementation_summary: 'Consolidated into signed BUG-2662 rework. Round 2 items 9 and 10 and round 3 item 2 cover reuse of a valid standing receipt before allocating, under the lock, and the absent or invalid receipt cases. PR #4378 retains this work.'
 filed_at:
   code_sha: ccaa61189ceee258f860e576bd59e662a859f618
   branch: pr-4378

@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 74968c72e1561fe74733bbfa090db8a6c7b99433
 
   aida-cli-lib/src/review_commands.rs:3730 — A repeated refusal skips forge label reconciliation whenever the last local label_state was Synced. Removing a hold label on the forge leaves that cached state intact. The repeat used to restore the missing label and now silently skips it. Verify current forge labels before skipping reconciliation while keeping an already synchronized repeat free of ledger writes.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T20:53:02.046193751Z
-modified_at: 2026-11-20T20:53:02.046193751Z
+modified_at: 2026-11-21T08:37:06.497227267Z
 req_type: Task
 tags:
 - carried-from:BUG-2662
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
   created_at: 2026-11-20T20:53:14.783819139Z
+- rel_type: SupersededBy
+  target_id: 01a1eaa6-6f63-72c2-99a6-80440fb6ed8c
+  created_at: 2026-11-21T08:36:53.868283664Z
+  created_by: joe
+history:
+- id: 01a1fd40-500f-73e2-a75a-3da951979e2e
+  author: joe
+  timestamp: 2026-11-21T08:36:52.879305739Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd40-bcbc-7271-88fe-1de1fc47e82a
+  author: joe
+  timestamp: 2026-11-21T08:37:20.700409862Z
+  changes: []
+implementation_summary: Consolidated into signed BUG-2662 rework. Round 3 item 4 explicitly requires checking current forge labels before skipping reconciliation and restoring a missing hold label. The round 2 invariant keeps a synchronized repeat free of redundant ledger writes.
 filed_at:
   code_sha: 74968c72e1561fe74733bbfa090db8a6c7b99433
   branch: pr-4378
