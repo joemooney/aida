@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-21T07:34:20.993276586Z
+modified_at: 2026-11-21T07:49:27.809899119Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -562,6 +562,21 @@ comments:
     Advisor conflict brief for #4387 at 509f5afbb29d against main aa567732958. The content conflict is fixture_tempdir in aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs. Preserve the slice-3 fixture outside Cargo target and the inherited seat TMPDIR, while retaining the fixture-local store boundary, bwrap visibility and existing denial assertions. The accepted primary-host test evidence depends on a fixture main outside the real checkout's target/worktrees. Review the auto-merge of bug_home_038_seat_publish_tests.rs and retain both the host's changes and the watchdog child re-exec. Merge current main on the same PR branch without force-pushing. Check formatting and the targeted seat_clone fixture coverage; a changed behavioral resolution needs fresh primary-host and dell1 evidence. Require fresh independent review and green CI at the reconciled head before landing. Complete TASK-3133 only after landing because #4387 uses a Refs trailer.
   created_at: 2026-11-21T07:22:05.389066664Z
   modified_at: 2026-11-21T07:22:05.389066664Z
+- id: 01a1fd15-1902-71b3-9612-93533a8d2dd2
+  author: joe
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 509f5afbb29daaa8771237f5812e1aafd8e0493f, with the host-staged merge of origin/main aa567732958f669b69ec5848863ea0b13c800db5 and the resolved working tree. Reviewed the origin/main merge-base diff, the working diff against HEAD, and the resolved tree against MERGE_HEAD. No untracked additions. The two paths differing from MERGE_HEAD are byte-identical to the prior PR head. Main's disk-headroom fixtures and the PR's watchdog current-executable re-exec both survive the merge.
+
+    AC1: [evidence: behavioral-test] The recorded baseline inventory and classifications stand. This conflict repair preserves the tested slice-3 fixture behavior.
+    AC2: [evidence: behavioral-test] bug_2169_contained_clone_bwrap_tests.rs:76 creates a unique fixture directly under /tmp, outside Cargo target and the inherited TMPDIR. The store walk test at line 117, read-only fixture rebind at line 384, and relocated executable regression at line 517 remain. The original clone-write/main-Git denial test at line 594 passed. bug_home_038_seat_publish_tests.rs:4480 re-execs the watchdog child. The FIFO, symlink and oversize refusal child ran and passed. The two disk-headroom publication tests passed with the test-only injection from machine_readiness.rs:106.
+    AC3: [evidence: behavioral-test] On the reconciled working tree, imac lane job j20261121T073529539-2-0 ran AIDA_CARGO_FORCE_BUILD=1 cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::. It exited 0 with 382 passed, 0 failed, 3 ignored. The advisor accepted the existing three imac and three dell1 runs for the unchanged slice-3 fixture behavior. Independent review and green CI at the reconciled published head are still required before landing. This lane declares Refs only.
+    AC4: [evidence: manual-inspection] The BUG-2623 relationship and prior classification remain in the spec. This repair addresses only the merge conflict.
+
+    Deep-pass findings: The fixture and child paths use separate argv values, the store path retains TOML quoting, and the fixture roots are unique per invocation. The disk-space injection is test-only, thread-local and restored by the guard. The fixture read-only rebind follows the /tmp mount and precedes the ordinary writable binds. The exact child selector, watchdog deadline, positive control and denial assertions remain. No actionable defect found. The existing Bubblewrap capability gate still applies. rustfmt, whitespace checks against both parents and the conflict-marker scan passed.
+  created_at: 2026-11-21T07:49:27.809899119Z
+  modified_at: 2026-11-21T07:49:27.809899119Z
+  session_id: 01a1fd06c235
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
