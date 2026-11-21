@@ -82,6 +82,29 @@ pub(crate) fn decide_capacity(available: u64, required: u64, warn_only: bool) ->
     }
 }
 
+// trace:TASK-3133 | ai:codex
+#[cfg(test)]
+mod lane_space_fixture {
+    thread_local! {
+        pub(super) static AVAILABLE_BYTES: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+    }
+
+    pub(crate) struct Guard(Option<u64>);
+
+    pub(crate) fn set(bytes: u64) -> Guard {
+        Guard(AVAILABLE_BYTES.replace(Some(bytes)))
+    }
+
+    impl Drop for Guard {
+        fn drop(&mut self) {
+            AVAILABLE_BYTES.set(self.0);
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) use lane_space_fixture::set as test_lane_available_bytes;
+
 /// Recheck at each lane launch, including standalone launches and resumes.
 // trace:BUG-2651 | ai:codex
 pub(crate) fn lane_disk_preflight(main: &Path) -> Result<()> {
@@ -92,6 +115,11 @@ pub(crate) fn lane_disk_preflight(main: &Path) -> Result<()> {
         main.join("target"),
         std::env::temp_dir(),
     ] {
+        #[cfg(test)]
+        if let Some(available) = lane_space_fixture::AVAILABLE_BYTES.get() {
+            require_lane_space(&requested, available, floor)?;
+            continue;
+        }
         let probe = nearest_existing(requested.clone());
         let stats = crate::disk_emergency::fs_stats(&probe).ok_or_else(|| {
             anyhow::anyhow!("cannot measure lane disk headroom at {}", probe.display())
