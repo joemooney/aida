@@ -1,14 +1,7 @@
 job: landing-health-guard-route
-last_run: 2026-11-19T17:56:46.351180691Z
+last_run: 2026-11-21T06:42:41.014916693Z
 last_by:
-  seat: advisor
-  session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
-  vendor: claude
+  seat: product
+  vendor: codex
 result: done
-note: 'advisor-121 10:58: timeout, not a finding (hand run 123 s, 0 findings). Evidence and recommended fix noted on STORY-2849.'
-due_since: 2026-11-19T19:45:42.743327061Z
-due_reason: on CronJobFailed:landing-health-guard
-due_failure:
-  trip_id: landing-health-guard@2026-11-21T06:33:18.927743839Z
-  job: landing-health-guard
-  error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
+note: 'Reran landing-health. Its three-PR shared signature is the aggregate and the FAST step wrapper. Exact logs show distinct structural-selection, execution-context, and Git/liveness/vendor failures. Main FULL is green. Landing gap 315m, 12 open PRs. No headroom finding; #4389 coverage unknown. Recorded evidence on BUG-2669, BUG-2707 and BUG-2688. Escalated admission-lock and driver-authority blockers to Joe.'
