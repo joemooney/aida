@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 81cbe3ada1c6b53f5e155c698a2a61d90c062cca
 
   [P2] Paginate the workflow jobs used for failure evidence. forge.rs:3223-3235 reads only the first 100 jobs and never checks total_count. A failed job on a later page is reported as absent on every retry, so its link/log and any unbuildable trigger never reach the alert or fix spec. The pre-existing github_run_job_failed_steps already has bounded pagination and completeness checks; reuse that approach for the report and cover a failed job on page two.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T20:52:15.134653723Z
-modified_at: 2026-11-20T20:52:15.134653723Z
+modified_at: 2026-11-21T09:01:35.532728771Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T20:52:15.134692802Z
+- rel_type: SupersededBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-21T09:01:23.001937779Z
+  created_by: joe
 history:
 - id: 01a1fb7e-0119-71b1-a201-b3cc519c5249
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fd56-b905-7aa1-a123-059a3986c66e
+  author: joe
+  timestamp: 2026-11-21T09:01:21.541695537Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd57-2668-76d1-9020-ac4961f55613
+  author: joe
+  timestamp: 2026-11-21T09:01:49.544165203Z
+  changes: []
+implementation_summary: 'Consolidated into STORY-2897. S3 post-cap item 4 covers bounded pagination and completeness checks for workflow jobs, including a failed job on page two. S3a #4389 at 964a98c30ed calls github_run_jobs from run_job_report before finding the failed job and fetching its evidence. Keep that regression in parent review.'
 filed_at:
   code_sha: 81cbe3ada1c6b53f5e155c698a2a61d90c062cca
   branch: pr-4362

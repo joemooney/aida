@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
 
   The episode can name the wrong first red commit and never corrects it. A commit older than the first red one that reads as unknown (CI cancelled by a newer push, a transient forge error, or the pass deadline turning the remaining reads into errors) is skipped, the episode opens at a newer red commit, and its PR and specs go into the alert and the fix spec's `fixes` links. Later passes skip everything older than red_sha (`!past_red`, main_watch.rs:620-621), so an older commit that later reads red is ignored. The alert does not say that unjudged commits lie between the held green commit and the named one.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:05.561059711Z
-modified_at: 2026-11-20T21:52:05.561059711Z
+modified_at: 2026-11-21T08:47:42.604716648Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T21:52:05.561100673Z
+- rel_type: SupersededBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-21T08:47:30.277319895Z
+  created_by: joe
 history:
 - id: 01a1fb44-e654-7b22-ad0c-9d07f2c5b4cf
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fd4a-0435-7061-81af-33fedb229e98
+  author: joe
+  timestamp: 2026-11-21T08:47:28.821729065Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd4a-7008-78e0-a28d-051b80d765b2
+  author: joe
+  timestamp: 2026-11-21T08:47:56.424943801Z
+  changes: []
+implementation_summary: 'Consolidated into existing signed rework. The signed S3 split explicitly carries cursor gaps and first-red attribution into S3a, PR #4389. Verify that an unresolved older commit cannot silently be skipped and misattribute the episode. Any resulting fix links remain in S3b, under the same story and its separate effects signoff.'
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362

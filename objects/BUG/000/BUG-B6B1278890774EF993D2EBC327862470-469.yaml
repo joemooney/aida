@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T08:24:37.103860137Z
+modified_at: 2026-11-21T09:15:55.576129597Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -30,6 +30,18 @@ relationships:
 - rel_type: Supersedes
   target_id: 01a1fbd2-51a7-7ac1-acd8-5735ae83696c
   created_at: 2026-11-21T08:24:24.360543632Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fb75-158d-7f72-9d0d-1d4e8f955305
+  created_at: 2026-11-21T08:50:35.410032325Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1fba5-e125-7801-812f-5f4271302468
+  created_at: 2026-11-21T08:51:46.502873806Z
+  created_by: joe
+- rel_type: Blocks
+  target_id: 01a1fb75-7597-74d1-a709-c1b05ad5e105
+  created_at: 2026-11-21T09:15:42.928469977Z
   created_by: joe
 comments:
 - id: 01a1fb3d-811f-7da2-85b6-22442bafccbd
@@ -534,6 +546,22 @@ history:
 - id: 01a1fd35-4efe-7b13-935f-e95a9ef3638c
   author: joe
   timestamp: 2026-11-21T08:24:51.710525419Z
+  changes: []
+- id: 01a1fd4d-44dc-7183-a113-1a71653128ea
+  author: joe
+  timestamp: 2026-11-21T08:51:01.981001683Z
+  changes: []
+- id: 01a1fd4e-5b38-7e20-9cf5-64da04b0232b
+  author: joe
+  timestamp: 2026-11-21T08:52:13.240523755Z
+  changes: []
+- id: 01a1fd64-13d0-74a2-9b92-477a310194a0
+  author: joe
+  timestamp: 2026-11-21T09:15:56.752191992Z
+  changes: []
+- id: 01a1fd64-4c73-7801-aba4-cdf0a2bd2881
+  author: joe
+  timestamp: 2026-11-21T09:16:11.251544572Z
   changes: []
 execution_mode: drain
 filed_at:

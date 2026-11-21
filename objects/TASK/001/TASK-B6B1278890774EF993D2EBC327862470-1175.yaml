@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 9a5565b17c8552116a9ba459a9f8a31a7011af43
 
   The spec's advisor selected the claim heartbeat as the shared visibility source for TASK-3827 and requested a documented claim-to-holder/host/age API. The new remote_standing and Standing are private to the review gate and the live result omits age. Expose the shared observation from coordination so the throughput reader can reuse the interpretation without duplicating review policy.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:55:22.686568278Z
-modified_at: 2026-11-20T21:55:22.686568278Z
+modified_at: 2026-11-21T08:46:33.071769368Z
 req_type: Task
 tags:
 - carried-from:BUG-2706
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
   created_at: 2026-11-20T21:55:35.282983334Z
+- rel_type: SupersededBy
+  target_id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
+  created_at: 2026-11-21T08:46:20.361315568Z
+  created_by: joe
+history:
+- id: 01a1fd48-f399-72e0-88ee-199b0b06e28b
+  author: joe
+  timestamp: 2026-11-21T08:46:19.033029958Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd49-60c1-7851-abf8-061d30828f44
+  author: joe
+  timestamp: 2026-11-21T08:46:46.977852314Z
+  changes: []
+implementation_summary: 'Consolidated into existing signed rework. The signed round-2 brief item 9 explicitly owns a shared coordination API for holder, host, heartbeat age and freshness, consumed by the review gate and throughput guard. PR #4382 remains open.'
 filed_at:
   code_sha: 9a5565b17c8552116a9ba459a9f8a31a7011af43
   branch: pr-4382

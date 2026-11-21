@@ -2,17 +2,23 @@ id: 01a1faf2-0249-74f3-8855-d051a75e6344
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1170
 agreed_id: TASK-3195
 title: 'Review follow-up: write_state (main_watch.rs:341-347) renames a temp file that was never synced, while the j'
-description: |-
+description: |
   From STORY-2897
   Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
 
   write_state (main_watch.rs:341-347) renames a temp file that was never synced, while the journal is fsynced. After a power loss the state file can be empty or truncated, and every later pass then fails until someone repairs it by hand (see the silent-failure finding). Sync the temp file (and the directory) before the rename.
-status: Draft
+
+  Advisor scope and acceptance
+
+  Recheck the persistence protocol after STORY-2897 lands. The S3a head 964a98c30ed already syncs the temporary state data before rename. The watch state replacement there returns after rename without syncing the directory entry. A directory sync after publication is needed for that rename's durability.
+
+  If the shipped rework still has this gap, complete the atomic state replacement under the trusted watch directory using the existing persistence helper where it fits. Propagate failures and preserve restart consistency between the cursor, episode and pending journal transitions. Cover failures at the publication boundary with the existing watch failpoint/restart pattern. Keep this limited to the residual durability requirement.
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.729374870Z
-modified_at: 2026-11-20T21:52:06.729374870Z
+modified_at: 2026-11-21T09:19:15.135277938Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -22,12 +28,48 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T21:52:06.729418079Z
+- rel_type: BlockedBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-21T09:19:02.758266706Z
+  created_by: joe
 history:
 - id: 01a1fb7e-3363-7680-855c-25ffe7cdf61a
   author: joe
   timestamp: 2026-11-21T00:25:14.339785304Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+  changes: []
+- id: 01a1fd66-aba9-75b2-9048-f3accddf530e
+  author: joe
+  timestamp: 2026-11-21T09:18:46.697784931Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a1fd66-dc7e-7cc1-8057-25aac1ff9d9a
+  author: joe
+  timestamp: 2026-11-21T09:18:59.198761747Z
+  changes:
+  - field_name: description
+    old_value: |-
+      From STORY-2897
+      Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+      write_state (main_watch.rs:341-347) renames a temp file that was never synced, while the journal is fsynced. After a power loss the state file can be empty or truncated, and every later pass then fails until someone repairs it by hand (see the silent-failure finding). Sync the temp file (and the directory) before the rename.
+    new_value: |
+      From STORY-2897
+      Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+      write_state (main_watch.rs:341-347) renames a temp file that was never synced, while the journal is fsynced. After a power loss the state file can be empty or truncated, and every later pass then fails until someone repairs it by hand (see the silent-failure finding). Sync the temp file (and the directory) before the rename.
+
+      Advisor scope and acceptance
+
+      Recheck the persistence protocol after STORY-2897 lands. The S3a head 964a98c30ed already syncs the temporary state data before rename. The watch state replacement there returns after rename without syncing the directory entry. A directory sync after publication is needed for that rename's durability.
+
+      If the shipped rework still has this gap, complete the atomic state replacement under the trusted watch directory using the existing persistence helper where it fits. Propagate failures and preserve restart consistency between the cursor, episode and pending journal transitions. Cover failures at the publication boundary with the existing watch failpoint/restart pattern. Keep this limited to the residual durability requirement.
+- id: 01a1fd67-5147-7421-926f-90888d2b226e
+  author: joe
+  timestamp: 2026-11-21T09:19:29.095461843Z
   changes: []
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af

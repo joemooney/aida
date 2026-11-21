@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-21T00:13:33.927548789Z
+modified_at: 2026-11-21T08:47:00.370274348Z
 req_type: Bug
 tags:
 - lanes
@@ -36,6 +36,14 @@ relationships:
 - rel_type: BlockedBy
   target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
   created_at: 2026-11-20T22:50:05.955270708Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1faf4-cd12-7623-8726-a729ba6606ad
+  created_at: 2026-11-21T08:45:36.084408628Z
+  created_by: joe
+- rel_type: Supersedes
+  target_id: 01a1faf4-ffbe-7dc2-a0f9-98d2545ce978
+  created_at: 2026-11-21T08:46:47.744336245Z
   created_by: joe
 comments:
 - id: 01a1fab9-02e6-7182-8ee3-a12a38436644
@@ -382,6 +390,14 @@ history:
   timestamp: 2026-11-20T22:50:33.170504420Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+  changes: []
+- id: 01a1fd48-b548-7311-a11d-7cda77e16b35
+  author: joe
+  timestamp: 2026-11-21T08:46:03.080787104Z
+  changes: []
+- id: 01a1fd49-cb39-7690-8274-674b9ff093c2
+  author: joe
+  timestamp: 2026-11-21T08:47:14.233157166Z
   changes: []
 execution_mode: drain
 filed_at:

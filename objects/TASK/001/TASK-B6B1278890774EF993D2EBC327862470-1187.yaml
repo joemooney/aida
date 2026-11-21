@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
 
   The tier-list refusal offers restructuring as a fix for findings outside the configured classes, even for ADR-76 sensitive test gaps and always-blocking security findings when their classes are absent from the list. These remain blocking after restructuring. Identify intrinsically blocking findings and give request-changes as the remedy for them.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-21T00:15:58.380379324Z
-modified_at: 2026-11-21T00:15:58.380379324Z
+modified_at: 2026-11-21T09:15:06.166474132Z
 req_type: Task
 tags:
 - carried-from:BUG-2707
@@ -21,6 +21,29 @@ relationships:
 - rel_type: References
   target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
   created_at: 2026-11-21T00:16:12.239862265Z
+- rel_type: SupersededBy
+  target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
+  created_at: 2026-11-21T09:14:53.579370325Z
+  created_by: joe
+comments:
+- id: 01a1fd62-e19b-7583-be6e-a9300e32a95d
+  author: joe
+  content: |
+    Advisor disposition against PR #4385 at bdd60daf20ca. The parent implementation now distinguishes intrinsic blockers from unclassified findings and tells the reviewer to use request-changes whenever an intrinsic blocker is present. The draft validator's BUG-2707 regressions assert this for a security finding, a sensitive test gap, an ADR-76 tier, and a mix with a restructurable finding. Carry this coverage through the existing validate-only rework and verify it at the eventual merge head. The PR and its gates remain open.
+  created_at: 2026-11-21T09:14:25.803045091Z
+  modified_at: 2026-11-21T09:14:25.803045091Z
+history:
+- id: 01a1fd63-19b6-7db1-91bc-7fa873f7de94
+  author: joe
+  timestamp: 2026-11-21T09:14:52.726631738Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd63-a313-7761-8dfd-c64902b0c39e
+  author: joe
+  timestamp: 2026-11-21T09:15:27.891178877Z
+  changes: []
 filed_at:
   code_sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
   branch: pr-4385

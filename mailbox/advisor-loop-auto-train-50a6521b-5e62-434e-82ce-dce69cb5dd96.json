@@ -1,0 +1,18 @@
+{
+  "id": "advisor-loop-auto-train-50a6521b-5e62-434e-82ce-dce69cb5dd96",
+  "thread_id": "advisor-loop-auto-train-50a6521b-5e62-434e-82ce-dce69cb5dd96",
+  "from": "auto-train",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795251403541,
+  "body": "auto-train failed 3 consecutive times. Last failure: review-watch lock busy: admission.lock: Resource temporarily unavailable (os error 11). Inspect aida advisor loops status and train-status, and .aida/auto-train/service.log; renew/rebind the advisor grant if authority ended.",
+  "subject": "auto-train: repeated service failure",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

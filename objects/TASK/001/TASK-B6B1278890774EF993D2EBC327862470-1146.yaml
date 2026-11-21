@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 81cbe3ada1c6b53f5e155c698a2a61d90c062cca
 
   [P2] Retain failed confirming rerun requests for retry. main_watch.rs:868-878 sets rerun_requested=true even when rerun_failed returns an error. A temporary API failure (or a pass deadline exhausted before the POST) permanently suppresses the promised confirming rerun; a flake instead ages into a fix BUG/operator alert at 30 minutes without ever being rerun. Track successful requests per run and retry failed runs on later passes without repeating successful requests. Cover a failed POST followed by success.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T20:52:14.912429181Z
-modified_at: 2026-11-20T20:52:14.912429181Z
+modified_at: 2026-11-21T09:00:23.862466445Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T20:52:14.912481051Z
+- rel_type: SupersededBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-21T09:00:11.274887670Z
+  created_by: joe
 history:
 - id: 01a1fb7d-9d97-7ae0-b240-81d00d7c0af8
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fd55-a0d5-7f72-9e9f-242afacb3865
+  author: joe
+  timestamp: 2026-11-21T09:00:09.813539231Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd56-0f8a-7663-a886-241ac0738aaf
+  author: joe
+  timestamp: 2026-11-21T09:00:38.154570322Z
+  changes: []
+implementation_summary: 'Consolidated into STORY-2897. S3 post-cap item 2 required retry after a failed or skipped rerun and no repeat after success. The S3a replacement #4389 at 964a98c30ed marks each run only inside the successful rerun arm and logs failures for next pass. Keep the fail-then-succeed regression in STORY-2897 review.'
 filed_at:
   code_sha: 81cbe3ada1c6b53f5e155c698a2a61d90c062cca
   branch: pr-4362

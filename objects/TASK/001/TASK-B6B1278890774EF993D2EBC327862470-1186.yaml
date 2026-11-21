@@ -1,17 +1,24 @@
 id: 01a1fb75-7597-74d1-a709-c1b05ad5e105
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1186
 title: 'Review follow-up: The default-policy instructions in approval_refusal and the new skill paragraph say a regi'
-description: |-
+description: |
   From BUG-2707
   Reviewed sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
 
   The default-policy instructions in approval_refusal and the new skill paragraph say a registry blocking_tier is required for explicit deferral. Under an unset list apply_policy preserves the input and finding_is_deferred checks severity, disposition and rationale without requiring a tier. The existing example in the same skill omits it. Describe the actual default-policy rule and cover that documented example.
-status: Draft
+
+  Advisor scope and acceptance
+
+  Run after BUG-2707 lands. At #4385 bdd60daf20ca, the submission guidance at the top of the reviewer skill and approval_refusal already explain explicit deferral without blocking_tier when the list is unset. The Finding disposition and approval-time sweep section still describes a blanket requirement that contradicts them.
+
+  - Align the finding-disposition section and the review prompt's unset-list explanation with the recorder's effective policy. With the list unset, a complete explicit deferral uses text, severity, disposition deferred, and a nonempty one-line rationale. The configured-list and invalid-policy branches must remain accurately described.
+  - Exercise the documented example without blocking_tier through the validator and the recorder's policy rule. Keep the implementation to guidance and regression coverage. Preserve the recorder's classification and approval rules.
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-21T00:15:41.463610485Z
-modified_at: 2026-11-21T00:15:41.463610485Z
+modified_at: 2026-11-21T09:15:26.844091865Z
 req_type: Task
 tags:
 - carried-from:BUG-2707
@@ -21,6 +28,44 @@ relationships:
 - rel_type: References
   target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
   created_at: 2026-11-21T00:15:58.334594497Z
+- rel_type: BlockedBy
+  target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
+  created_at: 2026-11-21T09:15:14.360616002Z
+  created_by: joe
+history:
+- id: 01a1fd63-39c8-7d92-8c87-3edb915acbf2
+  author: joe
+  timestamp: 2026-11-21T09:15:00.936325347Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a1fd63-6b22-7d60-b452-5800c20104ca
+  author: joe
+  timestamp: 2026-11-21T09:15:13.570462280Z
+  changes:
+  - field_name: description
+    old_value: |-
+      From BUG-2707
+      Reviewed sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
+
+      The default-policy instructions in approval_refusal and the new skill paragraph say a registry blocking_tier is required for explicit deferral. Under an unset list apply_policy preserves the input and finding_is_deferred checks severity, disposition and rationale without requiring a tier. The existing example in the same skill omits it. Describe the actual default-policy rule and cover that documented example.
+    new_value: |
+      From BUG-2707
+      Reviewed sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
+
+      The default-policy instructions in approval_refusal and the new skill paragraph say a registry blocking_tier is required for explicit deferral. Under an unset list apply_policy preserves the input and finding_is_deferred checks severity, disposition and rationale without requiring a tier. The existing example in the same skill omits it. Describe the actual default-policy rule and cover that documented example.
+
+      Advisor scope and acceptance
+
+      Run after BUG-2707 lands. At #4385 bdd60daf20ca, the submission guidance at the top of the reviewer skill and approval_refusal already explain explicit deferral without blocking_tier when the list is unset. The Finding disposition and approval-time sweep section still describes a blanket requirement that contradicts them.
+
+      - Align the finding-disposition section and the review prompt's unset-list explanation with the recorder's effective policy. With the list unset, a complete explicit deferral uses text, severity, disposition deferred, and a nonempty one-line rationale. The configured-list and invalid-policy branches must remain accurately described.
+      - Exercise the documented example without blocking_tier through the validator and the recorder's policy rule. Keep the implementation to guidance and regression coverage. Preserve the recorder's classification and approval rules.
+- id: 01a1fd63-dac4-7da2-ad68-5e79c980fb82
+  author: joe
+  timestamp: 2026-11-21T09:15:42.148537937Z
+  changes: []
 filed_at:
   code_sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
   branch: pr-4385

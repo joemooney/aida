@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 1f53ccdae5191f51e6dc905d6cb1be5c5cb8681e
 
   The required fast-gates job 136668421203 fails the Rust test portability ratchet on the two unguarded /bin/sh calls at lines 1225 and 1239 in bug_2707_prompt_command_is_shell_quoted_and_gates_exit_on_acceptance. Apply the Unix cfg guard recognized by the ratchet or use a portable fixture.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-21T01:08:34.725218124Z
-modified_at: 2026-11-21T01:08:34.725218124Z
+modified_at: 2026-11-21T08:51:30.539190145Z
 req_type: Task
 tags:
 - carried-from:BUG-2707
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
   created_at: 2026-11-21T01:08:53.004833116Z
+- rel_type: SupersededBy
+  target_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
+  created_at: 2026-11-21T08:51:17.905305565Z
+  created_by: joe
+history:
+- id: 01a1fd4d-7f96-7040-8f00-25a2f2a78c19
+  author: joe
+  timestamp: 2026-11-21T08:51:17.014190161Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd4d-eb8b-7eb2-963d-8d94988c14fb
+  author: joe
+  timestamp: 2026-11-21T08:51:44.651280589Z
+  changes: []
+implementation_summary: 'Consolidated into BUG-2707. At pinned PR #4385 head bdd60daf20ca, the exact test named in failed job 136668421203 carries cfg(unix), covering both /bin/sh invocations. Preserve the guard or use an equivalent portable fixture in final rework.'
 filed_at:
   code_sha: 1f53ccdae5191f51e6dc905d6cb1be5c5cb8681e
   branch: pr-4385

@@ -1,17 +1,24 @@
 id: 01a1faf1-fc35-7e70-981a-b6dcc983f147
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1166
 title: 'Review follow-up: A watch that keeps failing is silent. A corrupt state file (`fix or remove it`, main_watch'
-description: |-
+description: |
   From STORY-2897
   Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
 
   A watch that keeps failing is silent. A corrupt state file (`fix or remove it`, main_watch.rs:332-339), an invalid journal line (read_journal fails flush at line 553), a failing `git fetch` (history, line 1462) or lapsed gh credentials fail every pass, and the only record is the schedule ledger: .aida/config.toml adds no `on = ["CronJobFailed:red-main-watch"]` route job, unlike hub-drift-guard, landing-health-guard, dev-autopromote and the other guards. A red main is then never reported and nobody is told the watch is down.
-status: Draft
+
+  Advisor scope and acceptance
+
+  Recheck after STORY-2897 lands. At S3a #4389 964a98c30ed the red-main-watch substrate job has no failure route. Handle job failures through the existing routed CronJobFailed mechanism. Keep the observation pass independent of requirement-store writes.
+
+  - Route a failed red-main-watch invocation to the advisor seat with the failed job name and existing trip evidence. Include scheduler timeouts through the same route. Point the recipient to the failed step and preserve its diagnostic within the existing display bounds.
+  - Check that the route qualifies exactly for red-main-watch failures and that a successful pass produces no failure item. Use existing scheduler cadence and deduplication, and preserve other jobs' routes.
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:05.173596810Z
-modified_at: 2026-11-20T21:52:05.173596810Z
+modified_at: 2026-11-21T09:21:26.041729587Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -21,6 +28,44 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T21:52:05.173635867Z
+- rel_type: BlockedBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-21T09:21:13.362204002Z
+  created_by: joe
+history:
+- id: 01a1fd68-b1dd-78c2-a574-7b1a9c2b6017
+  author: joe
+  timestamp: 2026-11-21T09:20:59.357189894Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a1fd68-e345-7de2-9637-3cab53d073e4
+  author: joe
+  timestamp: 2026-11-21T09:21:12.005913264Z
+  changes:
+  - field_name: description
+    old_value: |-
+      From STORY-2897
+      Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+      A watch that keeps failing is silent. A corrupt state file (`fix or remove it`, main_watch.rs:332-339), an invalid journal line (read_journal fails flush at line 553), a failing `git fetch` (history, line 1462) or lapsed gh credentials fail every pass, and the only record is the schedule ledger: .aida/config.toml adds no `on = ["CronJobFailed:red-main-watch"]` route job, unlike hub-drift-guard, landing-health-guard, dev-autopromote and the other guards. A red main is then never reported and nobody is told the watch is down.
+    new_value: |
+      From STORY-2897
+      Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+      A watch that keeps failing is silent. A corrupt state file (`fix or remove it`, main_watch.rs:332-339), an invalid journal line (read_journal fails flush at line 553), a failing `git fetch` (history, line 1462) or lapsed gh credentials fail every pass, and the only record is the schedule ledger: .aida/config.toml adds no `on = ["CronJobFailed:red-main-watch"]` route job, unlike hub-drift-guard, landing-health-guard, dev-autopromote and the other guards. A red main is then never reported and nobody is told the watch is down.
+
+      Advisor scope and acceptance
+
+      Recheck after STORY-2897 lands. At S3a #4389 964a98c30ed the red-main-watch substrate job has no failure route. Handle job failures through the existing routed CronJobFailed mechanism. Keep the observation pass independent of requirement-store writes.
+
+      - Route a failed red-main-watch invocation to the advisor seat with the failed job name and existing trip evidence. Include scheduler timeouts through the same route. Point the recipient to the failed step and preserve its diagnostic within the existing display bounds.
+      - Check that the route qualifies exactly for red-main-watch failures and that a successful pass produces no failure item. Use existing scheduler cadence and deduplication, and preserve other jobs' routes.
+- id: 01a1fd69-5096-70f0-a699-5f46d505f416
+  author: joe
+  timestamp: 2026-11-21T09:21:39.990669014Z
+  changes: []
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362

@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 81cbe3ada1c6b53f5e155c698a2a61d90c062cca
 
   [P2] Distinguish an unrelated green commit from a landed fix when closing an episode. main_watch.rs:1101-1107 labels every confirmed episode followed by a different green SHA as fixed, without consulting FixState.completed or checking that the fix spec landed in the closing range. For example, after a persistent load flake creates a fix BUG, an unrelated docs commit whose CI succeeds is recorded as a successful fix even while that BUG remains Approved. The signed S3 sketch distinguishes cleared from fix_landed using the completed fix and its closing-range evidence. Preserve that distinction and add an unrelated-green/incomplete-fix case alongside the actual-fix case.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T20:52:15.237213514Z
-modified_at: 2026-11-20T20:52:15.237213514Z
+modified_at: 2026-11-21T09:02:45.792390964Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -22,6 +22,10 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T20:52:15.237252214Z
+- rel_type: SupersededBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-21T09:02:33.438675484Z
+  created_by: joe
 history:
 - id: 01a1fb7e-97fd-7150-940e-98f118000c8f
   author: joe
@@ -29,6 +33,18 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fd57-cc42-77c2-857a-b91791dc75ab
+  author: joe
+  timestamp: 2026-11-21T09:02:32.002527950Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd58-391d-7041-baf4-090f80fc926d
+  author: joe
+  timestamp: 2026-11-21T09:02:59.869390671Z
+  changes: []
+implementation_summary: Consolidated into STORY-2897. S3 post-cap item 5 requires explicit evidence of a completed fix or a closing commit naming it before calling it fixed. S3a has no store effects and reports recovery. Preserve the unrelated-green/incomplete-fix and actual-fix cases in STORY-2897 S3b before any fix attribution returns.
 filed_at:
   code_sha: 81cbe3ada1c6b53f5e155c698a2a61d90c062cca
   branch: pr-4362

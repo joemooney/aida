@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-02T19:20:59.253007269Z
-modified_at: 2026-11-07T23:44:30.292983946Z
+modified_at: 2026-11-21T09:51:57.174768666Z
 req_type: Story
 tags:
 - architecture
@@ -879,6 +879,14 @@ comments:
   modified_at: 2026-11-07T23:44:27.289390010Z
   session_id: 01a1b848-940b-7bd2-8acd-52e428b182b8
   harness_version: 2.1.319 (Claude Code)
+- id: 01a1fd85-3b9a-7cd2-afca-8c03074d2df8
+  author: joe
+  content: |
+    Advisor evidence from 2026-11-21: the scheduled dispatch host claimed take ab38830d for #4380 (BUG-2629) and take 165a23f0 for #4388 (BUG-2688), prepared take-4380 and take-4388 at the exact PR heads, and failed both with “this dispatch vendor requires the supervised agent launcher”. The trusted posture is contained Claude. The legacy process builder in dispatch.rs refuses that posture after checkout because it lacks the supervisor receipt path. No implementer started. A direct agent launch then respected BUG-2629's drain mode and refused. The normal BUG-2629 drain stopped before launch on the existing-branch adoption check. BUG-2629 was restored to Approved on its implementer queue. Neither checkout was retired or modified by hand.
+
+    Route an admitted contained take through the supervised launcher with the frozen brief, existing ownership checks and a launch receipt. Move unsupported posture/mode diagnosis before preparing any new checkout. When a later launch step fails, preserve pre-existing work and identify the exact retained checkout and supported recovery. Test this through a scheduler-driven existing-PR request and include a live-owner refusal. The existing containment and independent review gates apply. I attempted to file a separate defect, but local requirement ID allocation is read-only. This comment is the durable evidence until host filing is available.
+  created_at: 2026-11-21T09:51:57.174768666Z
+  modified_at: 2026-11-21T09:51:57.174768666Z
 history:
 - id: 01a19ed2-a170-7d52-94f3-7c4ff46f38c4
   author: joe

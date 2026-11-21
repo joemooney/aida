@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: 9a5565b17c8552116a9ba459a9f8a31a7011af43
 
   SessionClaimHeartbeat::drop joins a thread that may be inside a fetch or push using an unbounded Git subprocess. A stalled remote during a refresh can keep an otherwise finished launcher from returning, and a stalled pull holds the shared writer lock. Bound or cancel the refresh I/O and join on shutdown within a defined deadline.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:55:09.714589697Z
-modified_at: 2026-11-20T21:55:09.714589697Z
+modified_at: 2026-11-21T08:45:21.127136554Z
 req_type: Task
 tags:
 - carried-from:BUG-2706
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
   created_at: 2026-11-20T21:55:22.355490718Z
+- rel_type: SupersededBy
+  target_id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
+  created_at: 2026-11-21T08:45:08.487964526Z
+  created_by: joe
+history:
+- id: 01a1fd47-d87a-76f3-87ab-1e557fbbf5ff
+  author: joe
+  timestamp: 2026-11-21T08:45:06.554659319Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd48-4908-70c1-ac24-9f14df11e361
+  author: joe
+  timestamp: 2026-11-21T08:45:35.368551197Z
+  changes: []
+implementation_summary: 'Consolidated into existing signed rework. The signed round-2 brief item 8 explicitly owns bounded fetch and push, a deadline for heartbeat shutdown, and keeping stalled pulls outside the store writer lock. PR #4382 and its BUG-2629 dependency remain open.'
 filed_at:
   code_sha: 9a5565b17c8552116a9ba459a9f8a31a7011af43
   branch: pr-4382

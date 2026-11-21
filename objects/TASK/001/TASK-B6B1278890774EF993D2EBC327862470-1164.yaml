@@ -11,7 +11,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:04.379681074Z
-modified_at: 2026-11-20T21:52:04.379681074Z
+modified_at: 2026-11-21T09:23:18.983043634Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -21,6 +21,13 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T21:52:04.379734241Z
+comments:
+- id: 01a1fd6b-0498-7eb2-b671-9e2e818f6b0b
+  author: joe
+  content: |
+    Advisor scope at S3a #4389 964a98c30ed. The watch command and land metrics now resolve the same main checkout on the invoking host. That covers linked worktrees on one host. The files still live under that checkout's .aida/land directory and the periodic job has no host restriction. Distinct primary clones can therefore retain separate episode histories under failover. A follow-up sketch should pick one scheduler/state owner across eligible hosts (including failover semantics) or define one authoritative shared history. Verify from two independent primary clones and from a linked worktree. Require a single episode identity, stable original observation time across a handoff, and an explicit unavailable result where a metrics reader cannot consult the authoritative history. Duplicate fix-spec or attention filing, reruns and smoke spool delivery belong to the separately gated S3b effects design.
+  created_at: 2026-11-21T09:23:18.983043634Z
+  modified_at: 2026-11-21T09:23:18.983043634Z
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362

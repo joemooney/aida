@@ -1,0 +1,19 @@
+{
+  "id": "7974ab77-19ca-4576-bb2e-10ee519659ac",
+  "thread_id": "7974ab77-19ca-4576-bb2e-10ee519659ac",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795254427125,
+  "body": "Dispatch request 165a23f0-bebd-4f5c-ab6e-640b6804ef18 (take PR #4388) failed: failed to spawn implementer launcher: this dispatch vendor requires the supervised agent launcher\nreason: failed to spawn implementer launcher: this dispatch vendor requires the supervised agent launcher\nlog: logs/165a23f0-bebd-4f5c-ab6e-640b6804ef18.log",
+  "subject": "dispatch take PR #4388: failed (165a23f0)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

@@ -11,16 +11,16 @@ description: |
 
   ## Acceptance
   1. `aida queue work SPEC --salvage` (or `aida seat salvage SPEC`) finds the spec's retained seat clone on the local host or the named lane host. It reports its branch, head, staged and unstaged changes, and whether a merge is in progress.
-  2. With confirmation (or --yes), it relaunches the implementer INSIDE that seat clone, on the vendor of choice, with a prompt that names the retained state. A staged merge is committed first as "merge origin/main (salvaged)", never discarded.
+  2. With confirmation (or --yes), resume in the retained seat clone on the owning host. If changes are still required, launch the selected vendor in that clone with a brief naming the retained state. A fully resolved, host-managed repair that only needs an interrupted or failed regeneration retried can resume at that host step without a vendor conversation. Preserve the staged resolution and require the existing repair preparation, regeneration and staged-tree checks before any host-managed repair commit or publication.
   3. It refuses with a clear reason if the clone is dirty with unexpected changes, belongs to a live session, or its branch has moved on the remote.
   4. When the lane exits again without publishing, the clone is retained again (no data loss).
-  5. Tests: salvage of a staged merge; refusal on a live owner; refusal when the remote moved.
+  5. Tests: salvage of a staged merge; refusal on a live owner; refusal when the remote moved. Also cover a terminal native Codex lane with successful preparation, failed host regeneration and a staged resolution. A retry must preserve the original conflict inventory and staged work, respect the owning host and the exact lease/journal identity, keep publication refused while regeneration fails, and allow the normal publication gate to continue once successful regeneration is recorded for that exact staged tree.
 status: Draft
 priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-18T11:27:32.690201732Z
-modified_at: 2026-11-21T08:10:12.859101126Z
+modified_at: 2026-11-21T09:28:53.445342161Z
 req_type: Story
 tags:
 - lanes
@@ -41,6 +41,38 @@ comments:
     Additional retained-repair case on November 21: TASK-3133 / PR #4387 at 509f5afbb29d. Native Codex lane 01a1fd06c235 resolved the host-staged merge with aa567732958, passed the targeted seat_clone suite (382 passed, 0 failed, 3 ignored), exited successfully, and left a Refs-only publication declaration. Host post-exit regeneration returned “repair regeneration failed or timed out.” The recorded original conflict path and staged merge survived; the repair journal recorded preparation_success=true and regeneration_success=false. The documented ship --from-seat --commit-pending retry refused with “resume pickup to retry regeneration before publication.” The queue work --resume preview then reported no recorded Claude conversation and no adoptable orphan for this Codex scope. GitHub still shows the original conflicting head. A recovery path should work on this exact retained-native sequence while preserving the staged resolution, regeneration checks and ownership guards.
   created_at: 2026-11-21T08:10:12.859101126Z
   modified_at: 2026-11-21T08:10:12.859101126Z
+history:
+- id: 01a1fd6f-edc5-7cf2-b558-787f1c14cd00
+  author: joe
+  timestamp: 2026-11-21T09:28:53.445341470Z
+  changes:
+  - field_name: description
+    old_value: |
+      Observed 2026-11-17/18 overnight. When a headless implementer lane exits with work only in its retained seat clone (a staged merge resolution, uncommitted edits), nothing in AIDA can continue from it:
+      - `aida queue work SPEC --resume` resumes only the vendor CONVERSATION, not the retained seat clone or its working tree.
+      - A fresh lane cannot check out the branch while the retained clone holds it.
+      - No `salvage`/`adopt` verb exists.
+      Cases tonight: BUG-2618 (#4137) seat …-382 holds the S1 publication-guard work with the main merge 485219c staged, so a hand salvage was needed (product asked the integration seat). The BUG-2679 empty-rework lanes (#4158, #4139, #4137) left resolved merges uncommitted on dell1, and the advisor's first instinct was a hand "salvage resume".
+
+      ## Acceptance
+      1. `aida queue work SPEC --salvage` (or `aida seat salvage SPEC`) finds the spec's retained seat clone on the local host or the named lane host. It reports its branch, head, staged and unstaged changes, and whether a merge is in progress.
+      2. With confirmation (or --yes), it relaunches the implementer INSIDE that seat clone, on the vendor of choice, with a prompt that names the retained state. A staged merge is committed first as "merge origin/main (salvaged)", never discarded.
+      3. It refuses with a clear reason if the clone is dirty with unexpected changes, belongs to a live session, or its branch has moved on the remote.
+      4. When the lane exits again without publishing, the clone is retained again (no data loss).
+      5. Tests: salvage of a staged merge; refusal on a live owner; refusal when the remote moved.
+    new_value: |
+      Observed 2026-11-17/18 overnight. When a headless implementer lane exits with work only in its retained seat clone (a staged merge resolution, uncommitted edits), nothing in AIDA can continue from it:
+      - `aida queue work SPEC --resume` resumes only the vendor CONVERSATION, not the retained seat clone or its working tree.
+      - A fresh lane cannot check out the branch while the retained clone holds it.
+      - No `salvage`/`adopt` verb exists.
+      Cases tonight: BUG-2618 (#4137) seat …-382 holds the S1 publication-guard work with the main merge 485219c staged, so a hand salvage was needed (product asked the integration seat). The BUG-2679 empty-rework lanes (#4158, #4139, #4137) left resolved merges uncommitted on dell1, and the advisor's first instinct was a hand "salvage resume".
+
+      ## Acceptance
+      1. `aida queue work SPEC --salvage` (or `aida seat salvage SPEC`) finds the spec's retained seat clone on the local host or the named lane host. It reports its branch, head, staged and unstaged changes, and whether a merge is in progress.
+      2. With confirmation (or --yes), resume in the retained seat clone on the owning host. If changes are still required, launch the selected vendor in that clone with a brief naming the retained state. A fully resolved, host-managed repair that only needs an interrupted or failed regeneration retried can resume at that host step without a vendor conversation. Preserve the staged resolution and require the existing repair preparation, regeneration and staged-tree checks before any host-managed repair commit or publication.
+      3. It refuses with a clear reason if the clone is dirty with unexpected changes, belongs to a live session, or its branch has moved on the remote.
+      4. When the lane exits again without publishing, the clone is retained again (no data loss).
+      5. Tests: salvage of a staged merge; refusal on a live owner; refusal when the remote moved. Also cover a terminal native Codex lane with successful preparation, failed host regeneration and a staged resolution. A retry must preserve the original conflict inventory and staged work, respect the owning host and the exact lease/journal identity, keep publication refused while regeneration fails, and allow the normal publication gate to continue once successful regeneration is recorded for that exact staged tree.
 filed_at:
   code_sha: e5a81ace48239fa02828c3ed2b61d956de0f2e22
   branch: main

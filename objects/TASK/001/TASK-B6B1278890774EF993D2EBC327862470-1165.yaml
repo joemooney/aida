@@ -1,17 +1,25 @@
 id: 01a1faf1-fab2-7931-b4ce-9cfff8712da3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1165
 title: 'Review follow-up: The pass budget equals the scheduler''s kill ceiling, so a slow pass is killed instead of d'
-description: |-
+description: |
   From STORY-2897
   Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
 
   The pass budget equals the scheduler's kill ceiling, so a slow pass is killed instead of degrading. PASS_BUDGET is 120 s (main_watch.rs:52) and SCHEDULED_COMMAND_TIMEOUT is 120 s (maintenance_schedule.rs:3876). While an episode is open the scan does not stop at a green commit: every pass re-reads the checks of every commit since last_green, up to 50 (main_watch.rs:561-570), each costing several `gh api` calls, before advance() runs (line 637). In a long episode with many merges the child is killed during the scan on every pass, so confirmation, the fix spec, the fix-window escalation and the close never run, exactly when they matter. The fetch and git calls (30 s each) are also outside the forge deadline. Suggested fix: make PASS_BUDGET clearly shorter than the job timeout, and run the time-based part of advance() before or independently of the full rescan (or cache verdicts of commits already judged green/red at a completed attempt).
-status: Draft
+
+  Advisor scope and acceptance
+
+  Recheck after STORY-2897 lands. The S3a rework owns the individual child deadline and partial-read classification. This follow-up owns the overall scheduled-pass deadline. At #4389 964a98c30ed the pass and scheduler both allow 120 seconds, and Git uses a separate per-call timeout.
+
+  - Establish sufficient headroom before the scheduler kill ceiling for a pass to stop optional work, report partial progress and persist justified transitions. The same overall deadline must cover fetch, Git, forge calls and repeated scans.
+  - Check a slow or repeatedly pending production-equivalent pass with a controlled clock and bounded child fixtures. It should return a diagnostic before the outer kill deadline and resume without advancing past unresolved evidence. Preserve time-based observational transitions when the scan uses the remaining budget.
+  - Keep this follow-up observational. Spec filing, rerun initiation and store-mutating escalation retain their separate S3b gate.
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:04.786390252Z
-modified_at: 2026-11-20T21:52:04.786390252Z
+modified_at: 2026-11-21T09:22:07.239221333Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -21,6 +29,45 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T21:52:04.786437928Z
+- rel_type: BlockedBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-21T09:21:54.848936545Z
+  created_by: joe
+history:
+- id: 01a1fd69-49b3-7a42-88e5-dd4c224420bd
+  author: joe
+  timestamp: 2026-11-21T09:21:38.227433913Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a1fd69-8316-71c1-aef7-f9b1ff9655f4
+  author: joe
+  timestamp: 2026-11-21T09:21:52.918386167Z
+  changes:
+  - field_name: description
+    old_value: |-
+      From STORY-2897
+      Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+      The pass budget equals the scheduler's kill ceiling, so a slow pass is killed instead of degrading. PASS_BUDGET is 120 s (main_watch.rs:52) and SCHEDULED_COMMAND_TIMEOUT is 120 s (maintenance_schedule.rs:3876). While an episode is open the scan does not stop at a green commit: every pass re-reads the checks of every commit since last_green, up to 50 (main_watch.rs:561-570), each costing several `gh api` calls, before advance() runs (line 637). In a long episode with many merges the child is killed during the scan on every pass, so confirmation, the fix spec, the fix-window escalation and the close never run, exactly when they matter. The fetch and git calls (30 s each) are also outside the forge deadline. Suggested fix: make PASS_BUDGET clearly shorter than the job timeout, and run the time-based part of advance() before or independently of the full rescan (or cache verdicts of commits already judged green/red at a completed attempt).
+    new_value: |
+      From STORY-2897
+      Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
+
+      The pass budget equals the scheduler's kill ceiling, so a slow pass is killed instead of degrading. PASS_BUDGET is 120 s (main_watch.rs:52) and SCHEDULED_COMMAND_TIMEOUT is 120 s (maintenance_schedule.rs:3876). While an episode is open the scan does not stop at a green commit: every pass re-reads the checks of every commit since last_green, up to 50 (main_watch.rs:561-570), each costing several `gh api` calls, before advance() runs (line 637). In a long episode with many merges the child is killed during the scan on every pass, so confirmation, the fix spec, the fix-window escalation and the close never run, exactly when they matter. The fetch and git calls (30 s each) are also outside the forge deadline. Suggested fix: make PASS_BUDGET clearly shorter than the job timeout, and run the time-based part of advance() before or independently of the full rescan (or cache verdicts of commits already judged green/red at a completed attempt).
+
+      Advisor scope and acceptance
+
+      Recheck after STORY-2897 lands. The S3a rework owns the individual child deadline and partial-read classification. This follow-up owns the overall scheduled-pass deadline. At #4389 964a98c30ed the pass and scheduler both allow 120 seconds, and Git uses a separate per-call timeout.
+
+      - Establish sufficient headroom before the scheduler kill ceiling for a pass to stop optional work, report partial progress and persist justified transitions. The same overall deadline must cover fetch, Git, forge calls and repeated scans.
+      - Check a slow or repeatedly pending production-equivalent pass with a controlled clock and bounded child fixtures. It should return a diagnostic before the outer kill deadline and resume without advancing past unresolved evidence. Preserve time-based observational transitions when the scan uses the remaining budget.
+      - Keep this follow-up observational. Spec filing, rerun initiation and store-mutating escalation retain their separate S3b gate.
+- id: 01a1fd69-fb69-77c0-8fb3-74b8d8025def
+  author: joe
+  timestamp: 2026-11-21T09:22:23.721356203Z
+  changes: []
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362

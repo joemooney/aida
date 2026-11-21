@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T21:32:16.773640117Z
-modified_at: 2026-11-20T21:32:26.375669085Z
+modified_at: 2026-11-21T09:54:34.389866048Z
 req_type: Story
 relationships:
 - rel_type:
@@ -31,6 +31,13 @@ relationships:
   target_id: 01a1ef57-0cf9-7932-b4e9-057aa44fb917
   created_at: 2026-11-20T21:32:26.375626179Z
   created_by: dirtlab
+comments:
+- id: 01a1fd87-a2a7-7e81-bd6c-9cf8a318188e
+  author: joe
+  content: |
+    Advisor gate check for PR #4364. The current PR head is 1e8528ae2bf28abc784f51a41eba0367fd1cb3f9. The change ledger view still returns a verdict at 6b9dc7f8191a939fe1ef896b731ab43c067ed743, before the two follow-up commits that changed reviewer lease-completion and verdict gathering. The present head has FAST checks only and omits current main aa567732958f669b69ec5848863ea0b13c800db5, one commit ahead of the included main tip. A file-list comparison found no paths touched on both sides. Update from current main through the authorized branch owner, then obtain the fresh independent review and full validation required for the reviewer-worktree deletion path. Prior approval and FAST results are insufficient for that landing gate. This is still a Refs-only slice.
+  created_at: 2026-11-21T09:54:34.389866048Z
+  modified_at: 2026-11-21T09:54:34.389866048Z
 history:
 - id: 01a1fae0-0e45-71e2-bcef-1b6e7290b7db
   author: dirtlab

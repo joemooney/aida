@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
 
   Misleading pass text. With no new commits, pass() prints `main CI unknown (no new commits)` (main_watch.rs:571-580) just before `aida land watch` prints `main is green at ...`. judge() also reports `a re-run is in progress` for a first attempt whose run has not finished (main_watch.rs:258-271), where no re-run was asked for.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:07.896944671Z
-modified_at: 2026-11-20T21:52:07.896944671Z
+modified_at: 2026-11-21T09:17:41.086271464Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -21,6 +21,29 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T21:52:07.896986659Z
+- rel_type: SupersededBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-21T09:17:28.698022867Z
+  created_by: joe
+comments:
+- id: 01a1fd65-3d96-7562-a8c6-2c14bb38bb37
+  author: joe
+  content: |
+    Advisor exact-head disposition for S3a #4389 at 964a98c30ed. The command now renders the persisted tip verdict after every pass, including an empty one. The old empty-pass unknown message is gone. Verdict::Pending reports that the watch is waiting on the commit and the pending reason, without asserting a rerun is in progress. The parent status regression asserts a first-attempt pending tip alongside the previous green commit and confirms that an open red episode is reported as red. Retain that behavior in the signed S3a rework and verify at its eventual merge head.
+  created_at: 2026-11-21T09:17:00.471794048Z
+  modified_at: 2026-11-21T09:17:00.471794048Z
+history:
+- id: 01a1fd65-7566-76c0-90c0-40a4fe6b19c7
+  author: joe
+  timestamp: 2026-11-21T09:17:27.270046775Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd65-f1fa-7523-802a-5cc7202b8998
+  author: joe
+  timestamp: 2026-11-21T09:17:59.162151733Z
+  changes: []
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362

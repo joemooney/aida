@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: fb1e88018a70046786f06bb53ac4528bd3926c8d
 
   aida-cli-lib/src/queue_cmd/rework_bindings.rs:256 — The fallback enforces a byte ceiling but omits the existing 200,000-attempt ceiling. parse_ledger tries every nonblank line and retains every failed line. Many short malformed lines can force millions of parses and a large vector even within the byte limit. Share an attempt counter across the fallback pass and refuse when it runs out.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T23:40:26.202385263Z
-modified_at: 2026-11-20T23:40:26.202385263Z
+modified_at: 2026-11-21T08:58:00.176503427Z
 req_type: Task
 tags:
 - carried-from:BUG-2629
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
   created_at: 2026-11-20T23:40:38.875125513Z
+- rel_type: SupersededBy
+  target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
+  created_at: 2026-11-21T08:57:47.755271016Z
+  created_by: joe
+history:
+- id: 01a1fd53-712d-7521-a892-37f0462eaf5a
+  author: joe
+  timestamp: 2026-11-21T08:57:46.541116856Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd53-dde4-75f2-831b-0d133afb07c9
+  author: joe
+  timestamp: 2026-11-21T08:58:14.372297492Z
+  changes: []
+implementation_summary: Consolidated into BUG-2629 rework. The bounded recovery scope in BUG-2629 includes the shared parse-attempt ceiling. Pinned head 367c23a7723a ties MAX_PARSE_ATTEMPTS to the checked selection ceiling and puts it in the per-pass ReadBudget. Preserve the count for malformed attempts when round 5 changes the cache.
 filed_at:
   code_sha: fb1e88018a70046786f06bb53ac4528bd3926c8d
   branch: pr-4380

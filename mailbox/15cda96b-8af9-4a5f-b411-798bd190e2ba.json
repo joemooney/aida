@@ -1,0 +1,19 @@
+{
+  "id": "15cda96b-8af9-4a5f-b411-798bd190e2ba",
+  "thread_id": "15cda96b-8af9-4a5f-b411-798bd190e2ba",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795254424833,
+  "body": "Dispatch request 269864c5-c194-4308-8723-6038af27a601 (take PR #4389) refused: cannot launch takeover on PR #4389: worktree /home/joe/ai/aida-worktrees/integration is currently occupied by live registered agent `codex-implementer-683` (pid 3287840)\nreason: cannot launch takeover on PR #4389: worktree /home/joe/ai/aida-worktrees/integration is currently occupied by live registered agent `codex-implementer-683` (pid 3287840)\nlog: logs/269864c5-c194-4308-8723-6038af27a601.log",
+  "subject": "dispatch take PR #4389: refused (269864c5)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

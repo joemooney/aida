@@ -2,17 +2,23 @@ id: 01a1fa01-12a6-7370-a80d-1e279fef87b0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1137
 agreed_id: TASK-3173
 title: 'Review follow-up: TASK-3823.acb3be0a: no CLI or launch line naming the effective reviewer model was obtained'
-description: |-
+description: |
   From TASK-3823
   Reviewed sha: b4dccb59840c4b1b6aa0d00faacc1919f4e1baa8
 
   TASK-3823.acb3be0a: no CLI or launch line naming the effective reviewer model was obtained, and the codex CLI's acceptance of `gpt-6.2-astra` is unverified (AIDA passes model names through unvalidated, so a rejected name fails every codex reviewer launch on a head carrying this block). The spec comment of 2026-11-20T16:31Z moves this evidence post-landing, but its premise is wrong: `[agents.<vendor>.seats]` is NOT read from the default branch. `queue work --role reviewer` chdirs into the review worktree (aida-cli-lib/src/queue_cmd/work.rs:6614) and resolves tuning from that checkout's `.aida/config.toml` (aida-cli-lib/src/session/headless.rs:493, aida-core/src/agents_config.rs:112; registered as a worktree-channel key in scripts/config-trust.toml:910-913). The post-landing check as written ('first review-watch reviewer launch after landing must name the model, else revert') can therefore fail for a correct config: a PR whose head predates the landing does not carry the block, and the codex headless log inspected for PR-4369's first reviewer contains no model field at all. Run the check on a PR whose head contains the landed commit, with AIDA_AGENT_MODEL and AIDA_AGENT_EFFORT unset in the launching environment, and read the composed vendor argv (codex `-m gpt-6.2-astra`; claude `--model claude-fable-5-2 --effort high`). This review's own launch log names claude-fable-5-2, but the launch carried AIDA_AGENT_MODEL=claude-fable-5-2, so it does not prove the config path.
-status: Draft
+
+  Advisor acceptance handoff
+
+  This is TASK-3823's pending post-landing acceptance check for the product seat. Use an already-needed, admitted review-watch reviewer launch with a PR head carrying 012b95ef890 and the exact reviewer settings. All 12 PR heads inspected on 2026-11-21 carried those settings. A PR-4373 pickup preview resolved Codex but printed no model or effort, so the preview does not satisfy this check.
+
+  Record the exact PR head, checkout, vendor and effective model and effort arguments from the real launch, with AIDA_AGENT_MODEL and AIDA_AGENT_EFFORT clear in the launching environment. Verify that the vendor accepted the configured model and the reviewer began normally. Capture one eligible launch per vendor while the boost remains in force, or explicitly report which vendor was not exercised. Record only the evidence fields needed for acceptance and omit credential material. TASK-3171 covers adding a diagnostic. TASK-3824 retains the scheduled rollback.
+status: Approved
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T17:28:56.742501296Z
-modified_at: 2026-11-20T17:28:56.742501296Z
+modified_at: 2026-11-21T09:26:52.940408901Z
 req_type: Task
 tags:
 - carried-from:TASK-3823
@@ -22,6 +28,13 @@ relationships:
 - rel_type: References
   target_id: 01a1f99c-9c75-7a33-b419-667d975fdc7b
   created_at: 2026-11-20T17:28:56.742561535Z
+comments:
+- id: 01a1fd5f-3aa8-75e1-8faf-38248f4f4a77
+  author: joe
+  content: |
+    Advisor validation, 2026-11-21: agent-new reviewer previews for Codex and Claude from main, with AIDA_AGENT_MODEL and AIDA_AGENT_EFFORT unset, still omit model and effort argv. They use the interactive preview route and prove no headless reviewer acceptance. Current config show likewise omits effective reviewer tuning. TASK-3171 is queued for read-only diagnostics using the actual headless resolver. TASK-3173 remains open for an actual launch from a PR worktree containing the tuning commit without env overrides.
+  created_at: 2026-11-21T09:10:26.427212544Z
+  modified_at: 2026-11-21T09:10:26.427212544Z
 history:
 - id: 01a1fa0a-df31-7a52-a9db-d0f3a2dd4b37
   author: joe
@@ -29,6 +42,34 @@ history:
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
   changes: []
+- id: 01a1fd6d-e519-76b3-bea9-46829db03ed9
+  author: joe
+  timestamp: 2026-11-21T09:26:40.153301851Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Approved
+- id: 01a1fd6e-170c-7231-8a54-920a18ee5176
+  author: joe
+  timestamp: 2026-11-21T09:26:52.940408213Z
+  changes:
+  - field_name: description
+    old_value: |-
+      From TASK-3823
+      Reviewed sha: b4dccb59840c4b1b6aa0d00faacc1919f4e1baa8
+
+      TASK-3823.acb3be0a: no CLI or launch line naming the effective reviewer model was obtained, and the codex CLI's acceptance of `gpt-6.2-astra` is unverified (AIDA passes model names through unvalidated, so a rejected name fails every codex reviewer launch on a head carrying this block). The spec comment of 2026-11-20T16:31Z moves this evidence post-landing, but its premise is wrong: `[agents.<vendor>.seats]` is NOT read from the default branch. `queue work --role reviewer` chdirs into the review worktree (aida-cli-lib/src/queue_cmd/work.rs:6614) and resolves tuning from that checkout's `.aida/config.toml` (aida-cli-lib/src/session/headless.rs:493, aida-core/src/agents_config.rs:112; registered as a worktree-channel key in scripts/config-trust.toml:910-913). The post-landing check as written ('first review-watch reviewer launch after landing must name the model, else revert') can therefore fail for a correct config: a PR whose head predates the landing does not carry the block, and the codex headless log inspected for PR-4369's first reviewer contains no model field at all. Run the check on a PR whose head contains the landed commit, with AIDA_AGENT_MODEL and AIDA_AGENT_EFFORT unset in the launching environment, and read the composed vendor argv (codex `-m gpt-6.2-astra`; claude `--model claude-fable-5-2 --effort high`). This review's own launch log names claude-fable-5-2, but the launch carried AIDA_AGENT_MODEL=claude-fable-5-2, so it does not prove the config path.
+    new_value: |
+      From TASK-3823
+      Reviewed sha: b4dccb59840c4b1b6aa0d00faacc1919f4e1baa8
+
+      TASK-3823.acb3be0a: no CLI or launch line naming the effective reviewer model was obtained, and the codex CLI's acceptance of `gpt-6.2-astra` is unverified (AIDA passes model names through unvalidated, so a rejected name fails every codex reviewer launch on a head carrying this block). The spec comment of 2026-11-20T16:31Z moves this evidence post-landing, but its premise is wrong: `[agents.<vendor>.seats]` is NOT read from the default branch. `queue work --role reviewer` chdirs into the review worktree (aida-cli-lib/src/queue_cmd/work.rs:6614) and resolves tuning from that checkout's `.aida/config.toml` (aida-cli-lib/src/session/headless.rs:493, aida-core/src/agents_config.rs:112; registered as a worktree-channel key in scripts/config-trust.toml:910-913). The post-landing check as written ('first review-watch reviewer launch after landing must name the model, else revert') can therefore fail for a correct config: a PR whose head predates the landing does not carry the block, and the codex headless log inspected for PR-4369's first reviewer contains no model field at all. Run the check on a PR whose head contains the landed commit, with AIDA_AGENT_MODEL and AIDA_AGENT_EFFORT unset in the launching environment, and read the composed vendor argv (codex `-m gpt-6.2-astra`; claude `--model claude-fable-5-2 --effort high`). This review's own launch log names claude-fable-5-2, but the launch carried AIDA_AGENT_MODEL=claude-fable-5-2, so it does not prove the config path.
+
+      Advisor acceptance handoff
+
+      This is TASK-3823's pending post-landing acceptance check for the product seat. Use an already-needed, admitted review-watch reviewer launch with a PR head carrying 012b95ef890 and the exact reviewer settings. All 12 PR heads inspected on 2026-11-21 carried those settings. A PR-4373 pickup preview resolved Codex but printed no model or effort, so the preview does not satisfy this check.
+
+      Record the exact PR head, checkout, vendor and effective model and effort arguments from the real launch, with AIDA_AGENT_MODEL and AIDA_AGENT_EFFORT clear in the launching environment. Verify that the vendor accepted the configured model and the reviewer began normally. Capture one eligible launch per vendor while the boost remains in force, or explicitly report which vendor was not exercised. Record only the evidence fields needed for acceptance and omit credential material. TASK-3171 covers adding a diagnostic. TASK-3824 retains the scheduled rollback.
 filed_at:
   code_sha: b4dccb59840c4b1b6aa0d00faacc1919f4e1baa8
   branch: pr-4369

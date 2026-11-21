@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: ccb4768ffb5cdc991267cc009deb368679d1fca2
 
   rework_bindings.rs:84 — Recovery collects every related verdict payload in memory at once, then clones events for each view. There is no aggregate byte limit, even when recovery was triggered by a discovery-budget refusal. Stream the evidence or bound retained payloads and handle exhaustion explicitly.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:48:35.128538161Z
-modified_at: 2026-11-20T21:48:35.128538161Z
+modified_at: 2026-11-21T08:53:15.050367766Z
 req_type: Task
 tags:
 - carried-from:BUG-2629
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
   created_at: 2026-11-20T21:48:48.063015858Z
+- rel_type: SupersededBy
+  target_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
+  created_at: 2026-11-21T08:53:02.386694766Z
+  created_by: joe
+history:
+- id: 01a1fd4f-17a6-77a3-b38f-9e726c979dbe
+  author: joe
+  timestamp: 2026-11-21T08:53:01.478122617Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd4f-837a-7652-b158-f30454e71e60
+  author: joe
+  timestamp: 2026-11-21T08:53:29.082596302Z
+  changes: []
+implementation_summary: 'Consolidated into BUG-2629 rework. Round 2 item 2 explicitly requires an aggregate retained-payload byte ceiling and named refusal on exhaustion. PR #4380 head 367c23a7723a uses a shared MAX_RECOVERY_BYTES budget. Keep coverage in the round-5 cache review.'
 filed_at:
   code_sha: ccb4768ffb5cdc991267cc009deb368679d1fca2
   branch: pr-4380

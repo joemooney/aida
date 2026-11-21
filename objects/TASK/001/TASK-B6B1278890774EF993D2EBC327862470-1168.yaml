@@ -6,12 +6,12 @@ description: |-
   Reviewed sha: f037b9d28788d3673950b9986e88d91d0d0e42af
 
   Revert detection matches only a subject starting `Revert "<red subject>` (main_watch.rs:1111-1127). A revert landed as a squash with this project's commit format (for example `[AI:claude] revert(...): ... (SPEC)`) closes as `fixed` or `unattributed`, so the reverted count in `aida land metrics` and the `stays open: re-scope it` note are wrong for it.
-status: Draft
+status: Superseded
 priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:05.949388688Z
-modified_at: 2026-11-20T21:52:05.949388688Z
+modified_at: 2026-11-21T09:08:10.977050906Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -21,6 +21,23 @@ relationships:
 - rel_type: References
   target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
   created_at: 2026-11-20T21:52:05.949426404Z
+- rel_type: SupersededBy
+  target_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  created_at: 2026-11-21T09:07:58.584528024Z
+  created_by: joe
+history:
+- id: 01a1fd5c-bfdc-73d0-a740-577634d3335a
+  author: joe
+  timestamp: 2026-11-21T09:07:56.508092213Z
+  changes:
+  - field_name: status
+    old_value: Draft
+    new_value: Superseded
+- id: 01a1fd5d-2ec4-72c2-b9a5-f1043de72267
+  author: joe
+  timestamp: 2026-11-21T09:08:24.900667976Z
+  changes: []
+implementation_summary: 'Consolidated into STORY-2897 S3a, finding 17 at PR #4389 head 964a98c30ed. The pinned rework requires revert attribution bound to the reverted SHA, including squash commits with edited subjects. Missing evidence stays unattributed. Keep these cases in review.'
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362
