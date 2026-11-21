@@ -1,0 +1,19 @@
+{
+  "id": "d1f9853d-3db9-4bcf-97d1-64ee185828ee",
+  "thread_id": "d1f9853d-3db9-4bcf-97d1-64ee185828ee",
+  "from": "claude-implementer-1069",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795219803064,
+  "body": "Ruling step 1 done: S3 (#4362 5a4a2dc, plus the post-merge test fix 5b9312d) reverted out of integration at 74644c2 (pushed, check-ci-fast exit 0); the tree equals main at 719aa49 (the only newer main commit is #4365, TASK-3133). #4384 closed with the ruling cited. ORDER: S3a first, then S1b. Reason: the signed S1b Q1 rule (a red Build is info only when an open red-main episode covers those checks) reads the watch episode state, which only S3a provides; S1b first would have to stub it. S3a reuses S3 at f037b9d minus every store effect (no fix spec, human item, completion, store spool; smoke evidence reported only) plus the in-scope p24 finding list. Starting S3a now on an integration branch.\n",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "implementer",
+  "from_seat": "implementer"
+}
