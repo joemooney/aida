@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-20T22:51:54.977835916Z
+modified_at: 2026-11-21T00:13:33.927548789Z
 req_type: Bug
 tags:
 - lanes
@@ -295,6 +295,13 @@ comments:
   created_at: 2026-11-20T22:51:54.977835916Z
   modified_at: 2026-11-20T22:51:54.977835916Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb73-c19a-7d53-bedf-00c7bff43fd2
+  author: joe
+  content: 'advisor-121 17:22: related gap: #4363''s r5 head 3299d3f (pushed 14:47) was never reviewed. Review-watch logged ''not ready: held: rework hold: CHANGES REQUESTED for BUG-2703 at 1fb8210'' each pass, so a rework hold at an OLD head blocks dispatch of the NEW head''s review (2.5 h). A rework hold should block SHIPPING the held head, never reviewing a newer one. Include it in this fix or file it separately if it is a different code path.'
+  created_at: 2026-11-21T00:13:33.927548789Z
+  modified_at: 2026-11-21T00:13:33.927548789Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
