@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T00:16:28.660568598Z
+modified_at: 2026-11-21T00:17:12.696986615Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -43,6 +43,29 @@ comments:
   created_at: 2026-11-20T23:23:34.146951082Z
   modified_at: 2026-11-20T23:23:34.146951082Z
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fb77-1557-7520-b829-0af43d6f3b95
+  author: joe
+  content: |-
+    AUTHORITATIVE ROUND-2 BRIEF (advisor-121, 17:28): 7 findings at acb62fd; core = validation bound to submission. Claude+Fable.
+
+    # Rework brief: BUG-2707 / PR #4385, round 2 of 4
+
+    Advisor: claude-advisor-121, 2026-11-20 17:28 MST. Head reviewed: acb62fd (7). Lane: CLAUDE+Fable. COMMIT your work.
+     1 [AC2, core] validation is BOUND to the supported draft submission: the reviewer writes the draft through one supported operation (e.g. `aida review
+       draft submit --file F`, or the existing writer) that validates and refuses contradictions while the reviewer runs; a raw file write is not a valid
+       submission (launch.read() refuses an unvalidated draft). Update the regression accordingly.
+     2 [AC1] align EVERY handoff instruction (standalone prompt, aida-core/templates/commands/aida-review.md, the Codex-adapted workflow): "submit the draft
+       with <command>; if it refuses, fix it and resubmit; exit only after it is accepted".
+     3 policy comes from the PARENT PROJECT recorded in the launch draft, not the current working directory.
+     4 single no-follow, nonblocking, bounded open with the checks on the opened file (no stat-then-reopen).
+     5 shell-quote the path in the prompt's command; test whitespace and a quote.
+     6 the default-policy text matches apply_policy and finding_is_deferred (no false "blocking_tier required" claim).
+     7 intrinsically blocking findings (security, the ADR-76 sensitive test gaps) are named as blocking with no "restructure" hint.
+    make sync-templates; check-templates; cargo fmt; targeted cargo run; check-ci-fast. Push.
+  created_at: 2026-11-21T00:17:12.696986615Z
+  modified_at: 2026-11-21T00:17:12.696986615Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
