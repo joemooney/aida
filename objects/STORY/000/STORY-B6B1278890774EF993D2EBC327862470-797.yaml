@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-21T01:37:03.570148334Z
+modified_at: 2026-11-21T01:37:38.718009828Z
 req_type: Story
 tags:
 - landing
@@ -937,6 +937,13 @@ comments:
   created_at: 2026-11-21T01:37:03.570148334Z
   modified_at: 2026-11-21T01:37:03.570148334Z
   session_id: 01a1f4a0-b6f1-7ae2-a492-a6e1aaea6377
+  harness_version: 2.1.328 (Claude Code)
+- id: 01a1fbc0-afbe-7371-af98-425c1c36c340
+  author: joe
+  content: 'advisor-121 18:50, REVIEWER SCOPE for S3a #4389: per the 17:00 split ruling, review for (1) NO store writes and (2) the listed in-scope p24 findings. Store-effect observations are S3b follow-ups, NOT blockers.'
+  created_at: 2026-11-21T01:37:38.718009828Z
+  modified_at: 2026-11-21T01:37:38.718009828Z
+  session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
