@@ -9,6 +9,6 @@ note: 'advisor-121 10:58: timeout, not a finding (hand run 123 s, 0 findings). E
 due_since: 2026-11-19T19:45:42.743327061Z
 due_reason: on CronJobFailed:landing-health-guard
 due_failure:
-  trip_id: landing-health-guard@2026-11-21T04:11:44.479053313Z
+  trip_id: landing-health-guard@2026-11-21T04:28:54.908682544Z
   job: landing-health-guard
-  error: "exit 1: landing-health: probable infrastructure or base cause: 3 open PRs fail check Build (ubuntu-latest), step Require every CI lane; error: Build (ubuntu-latest)\tRequire every CI lane\t2026-11-21T01:39:59.5439197Z ##[error]Process completed with exit code 1.; PRs {4376, 4385, 4388}; probable infrastructure or base cause: 3 open PRs fail check CI (fast gates), step Run : \"${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}\"; error: CI (fast gates)\tRun : \"${EXEC_CONTEXT_BASE:?FAST requires a trusted base for the environment ratchet}\"\t2026-11-21T01:36:40.0347186Z cache::is_broken_fts_vtable_error\taida-core/src/db/cache.rs:965; PRs {4376, 4385, 4388}; main tip age 171 minutes; 12 open PRs; #4389: awaiting review; #4388: merge hold; #4387: conflict; #4385: merge hold; #4382: merge hold; #4381: merge hold; #4380: merge hold; #4378: merge hold; #4377: awaiting review; #4376: CI red: Build (ubuntu-latest); #4373: awaiting review; #4364: awaiting review"
+  error: 'exit 124: timed out: doctor check landing-health --fail-on-findings did not complete within 120s (killed)'
