@@ -5,10 +5,10 @@ last_by:
   session: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   vendor: claude
 result: done
-note: '[STUCK-REWORK] #4376 has changes requested at dd743edf (round 2) and no lane or session on it for 55 min -> route rework of #4376 to a lane; [STUCK-CONFLICT] #4306 at b6315683 conflicts with its base and nobody owns it, for 1332 min -> route a lane to resolve the conflict on #4306'
+note: '[STUCK-REVIEW] #4376 at 190513dc has had no verdict, no reviewer and no lane for 44 min, and its CI is red (Build (ubuntu-latest), CI (fast compile), CI (fast gates); base not fresh: CI run 44845618874''s tested base is unknown: GitHub CI evidence unavailable at repos/joemooney/aida/actions/jobs/136664509542/logs) -> launch a reviewer for #4376 at 190513dc, or route a lane for its red CI; [STUCK-CONFLICT] #4387 at 509f5afb conflicts with its base and nobody owns it, for 32 min -> route a lane to resolve the conflict on #4387'
 due_since: 2026-11-21T00:21:31.924132151Z
 due_reason: on CronJobFired:throughput-guard-route-advisor
 due_failure:
-  trip_id: throughput-guard-route-advisor@2026-11-21T00:21:31Z
+  trip_id: throughput-guard-route-advisor@2026-11-21T01:26:46Z
   job: throughput-guard
-  error: '[STUCK-REWORK] #4376 has changes requested at dd743edf (round 2) and no lane or session on it for 55 min -> route rework of #4376 to a lane; [STUCK-CONFLICT] #4306 at b6315683 conflicts with its base and nobody owns it, for 1332 min -> route a lane to resolve the conflict on #4306'
+  error: '[STUCK-REVIEW] #4376 at 190513dc has had no verdict, no reviewer and no lane for 44 min, and its CI is red (Build (ubuntu-latest), CI (fast compile), CI (fast gates); base not fresh: CI run 44845618874''s tested base is unknown: GitHub CI evidence unavailable at repos/joemooney/aida/actions/jobs/136664509542/logs) -> launch a reviewer for #4376 at 190513dc, or route a lane for its red CI; [STUCK-CONFLICT] #4387 at 509f5afb conflicts with its base and nobody owns it, for 32 min -> route a lane to resolve the conflict on #4387'
