@@ -1336,7 +1336,8 @@ pub(super) fn run(start: &Path, args: &super::land_args::RunArgs) -> Result<()> 
     let _admission = if args.dry_run {
         None
     } else {
-        Some(crate::admission_owner::acquire(&root, "land run", false)?)
+        // trace:BUG-2703 | ai:claude
+        Some(crate::admission_owner::land_admission(&root)?)
     };
     let mut other_run = false;
     let _lock = if args.dry_run {
