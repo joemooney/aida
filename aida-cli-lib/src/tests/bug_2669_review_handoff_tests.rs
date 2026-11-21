@@ -321,7 +321,7 @@ fn bug_2669_load_refuses_tampered_misnamed_and_linked_receipts() {
         assert_eq!(json["unreadable"][0]["file"], name.as_str(), "{json}");
         assert!(json["unreadable"][0]["error"].as_str().is_some());
         assert_eq!(
-            sweep_from(Utc::now(), "", usize::MAX, far()),
+            sweep_from(Utc::now(), "", unbounded()),
             0,
             "an unreadable receipt is left alone"
         );
@@ -473,7 +473,7 @@ fn bug_2669_a_failed_draft_lookup_is_unreadable_and_never_swept() {
     let denied = aged(&denied);
     assert!(!expired(&denied, Utc::now()));
 
-    assert_eq!(sweep_from(Utc::now(), "", usize::MAX, far()), 0);
+    assert_eq!(sweep_from(Utc::now(), "", unbounded()), 0);
     std::fs::set_permissions(&slot, searchable_mode).unwrap();
     for receipt in [&looped, &denied] {
         assert!(f.file(receipt).exists(), "{}", receipt.launch);
@@ -517,8 +517,13 @@ fn bug_2669_list_from_a_linked_checkout_shows_the_projects_receipts() {
     assert!(rows(&linked).is_empty());
 }
 
-fn far() -> Instant {
-    Instant::now() + Duration::from_secs(60)
+/// Limits no test store reaches.
+fn unbounded() -> SweepLimits {
+    SweepLimits {
+        batch: usize::MAX,
+        scan: usize::MAX,
+        budget: Duration::from_secs(60),
+    }
 }
 
 #[test]
@@ -557,9 +562,23 @@ fn bug_2669_sweep_removes_only_expired_receipts_with_no_draft_within_its_budget(
     assert!(f.file(&done).exists() && f.file(&done_too).exists());
 
     let now = Utc::now();
-    // An exhausted time budget, or a zero work budget, removes nothing.
-    assert_eq!(sweep_from(now, "", usize::MAX, Instant::now()), 0);
-    assert_eq!(sweep_from(now, "", 0, far()), 0);
+    // A zero work budget, or a zero listing bound, removes nothing.
+    let batch = |batch| SweepLimits {
+        batch,
+        ..unbounded()
+    };
+    assert_eq!(sweep_from(now, "", batch(0)), 0);
+    assert_eq!(
+        sweep_from(
+            now,
+            "",
+            SweepLimits {
+                scan: 0,
+                ..unbounded()
+            }
+        ),
+        0
+    );
     assert!(f.file(&done).exists() && f.file(&done_too).exists());
 
     // A receipt whose lock is held is skipped at once, not waited for.
@@ -568,9 +587,9 @@ fn bug_2669_sweep_removes_only_expired_receipts_with_no_draft_within_its_budget(
     // the pivot points, wrapping round the store.
     let id = |receipt: &Receipt| receipt.launch.trim_start_matches("draft-").to_string();
     let started = Instant::now();
-    assert_eq!(sweep_from(now, &id(&done), 1, far()), 1);
+    assert_eq!(sweep_from(now, &id(&done), batch(1)), 1);
     assert!(!f.file(&done).exists() && f.file(&done_too).exists());
-    assert_eq!(sweep_from(now, "", usize::MAX, far()), 1);
+    assert_eq!(sweep_from(now, "", unbounded()), 1);
     assert!(
         started.elapsed() < LOCK_WAIT,
         "maintenance never waits for a receipt lock"
@@ -592,10 +611,121 @@ fn bug_2669_sweep_removes_only_expired_receipts_with_no_draft_within_its_budget(
     assert!(garbage.exists());
 
     // Once free, the busy one goes; the public entry point is bounded too.
-    assert_eq!(sweep_from(now, "ffffffff", usize::MAX, far()), 1);
+    assert_eq!(sweep_from(now, "ffffffff", unbounded()), 1);
     assert!(!f.file(&busy).exists());
     assert_eq!(sweep(), 0);
     assert_eq!(list().unwrap().0.len(), 4);
+}
+
+/// Listing the store and examining receipts share one budget, and neither
+/// starves the other: a run whose time is already spent, or whose listing is
+/// cut short, still examines one receipt, so repeated runs always drain an
+/// expired store.
+#[test]
+fn bug_2669_every_sweep_examines_a_receipt_however_little_budget_is_left() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(&["reviewer"]);
+    let expired_receipt = || {
+        let (_draft, receipt) = f.registered();
+        let mut aged = mark_consumed(&receipt.launch).unwrap();
+        aged.created_at = Utc::now() - chrono::Duration::days(31);
+        std::fs::write(f.file(&receipt), serde_json::to_vec(&aged).unwrap()).unwrap();
+    };
+    let remaining = || list().unwrap().0.len();
+    let now = Utc::now();
+
+    // No time at all: listing stops at the first receipt it finds, and that
+    // receipt is still examined (and, being expired, removed).
+    for _ in 0..3 {
+        expired_receipt();
+    }
+    let spent = SweepLimits {
+        budget: Duration::ZERO,
+        ..unbounded()
+    };
+    for left in [2, 1, 0] {
+        assert_eq!(sweep_from(now, "", spent), 1);
+        assert_eq!(remaining(), left);
+    }
+    assert_eq!(sweep_from(now, "", spent), 0, "an empty store");
+
+    // A listing cut short by its entry bound leaves time to examine what it
+    // found: one entry listed, one receipt examined, per run.
+    for _ in 0..2 {
+        expired_receipt();
+    }
+    let one_entry = SweepLimits {
+        scan: 1,
+        ..unbounded()
+    };
+    for left in [1, 0] {
+        assert_eq!(sweep_from(now, "ffffffff", one_entry), 1);
+        assert_eq!(remaining(), left);
+    }
+}
+
+/// The lock is opened without blocking and only a regular file is locked: a
+/// FIFO or a symlink planted at the lock name is refused at once, within the
+/// caller's wait, instead of hanging the launcher or maintenance.
+#[test]
+fn bug_2669_a_lock_name_that_is_not_a_regular_file_is_refused_without_blocking() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new(&["reviewer"]);
+    let (_draft, receipt) = f.registered();
+    mark_consumed(&receipt.launch).unwrap();
+    let path = lock_path(&receipt.launch).unwrap();
+    let plant_fifo = || {
+        let _ = std::fs::remove_file(&path);
+        let name = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+        // SAFETY: `name` is a valid NUL-terminated path.
+        assert_eq!(unsafe { libc::mkfifo(name.as_ptr(), 0o600) }, 0);
+    };
+
+    // No reader: a blocking write-only open would wait for one for ever.
+    plant_fifo();
+    let started = Instant::now();
+    assert!(lock(&receipt.launch, LOCK_WAIT).is_err());
+    // Closing an already consumed receipt is otherwise a no-op that succeeds.
+    assert!(mark_consumed(&receipt.launch).is_err());
+    // With a reader the open succeeds, and the file type check refuses it.
+    let reader = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(&path)
+        .unwrap();
+    let refused = lock(&receipt.launch, LOCK_WAIT).unwrap_err();
+    assert!(
+        format!("{refused:#}").contains("not a regular file"),
+        "{refused:#}"
+    );
+    drop(reader);
+    assert!(
+        started.elapsed() < LOCK_WAIT,
+        "a planted FIFO is refused without waiting"
+    );
+
+    // A symlink to a regular file elsewhere is not followed.
+    std::fs::remove_file(&path).unwrap();
+    let elsewhere = f.home.join("elsewhere.lock");
+    std::fs::write(&elsewhere, "").unwrap();
+    std::os::unix::fs::symlink(&elsewhere, &path).unwrap();
+    assert!(lock(&receipt.launch, Duration::ZERO).is_err());
+
+    // The receipt itself was never touched, and an expired one behind a
+    // planted lock name is left for a later run, not waited for.
+    assert_eq!(load(&receipt.launch).unwrap().state, State::Consumed);
+    let mut aged = load(&receipt.launch).unwrap();
+    aged.created_at = Utc::now() - chrono::Duration::days(31);
+    std::fs::write(f.file(&receipt), serde_json::to_vec(&aged).unwrap()).unwrap();
+    plant_fifo();
+    assert_eq!(sweep_from(Utc::now(), "", unbounded()), 0);
+    assert!(f.file(&receipt).exists());
+    std::fs::remove_file(&path).unwrap();
+    assert_eq!(sweep_from(Utc::now(), "", unbounded()), 1);
 }
 
 /// The lane write-profile refusal covers the host's receipt store and lock
@@ -631,6 +761,31 @@ fn bug_2669_host_only_roots_are_the_resolved_receipt_and_lock_directories() {
     }
     assert!(!inside_host_only_root(&aida));
     assert!(!inside_host_only_root(&aida.join("grant-notices")));
+
+    // The other direction: a mount above the store contains both roots, by
+    // resolved location and through a symlinked path; a mount beside or
+    // inside the store contains neither.
+    let roots = |name: &str| aida.canonicalize().unwrap().join(name);
+    let both = vec![roots("review-handoffs"), roots("review-handoff-locks")];
+    assert_eq!(host_only_roots_beneath(&aida), both);
+    assert_eq!(host_only_roots_beneath(&f.home), both);
+    assert_eq!(host_only_roots_beneath(f._tmp.path()), both);
+    assert_eq!(
+        host_only_roots_beneath(&f.home.join("alias-review-handoffs")),
+        both
+    );
+    for beside in [
+        aida.join("grant-notices"),
+        aida.join("review-handoffs"),
+        aida.join("review-handoffs/nested"),
+        f.root.clone(),
+    ] {
+        assert!(
+            host_only_roots_beneath(&beside).is_empty(),
+            "{}",
+            beside.display()
+        );
+    }
 }
 
 /// `aida review draft` is registered from its own module through the

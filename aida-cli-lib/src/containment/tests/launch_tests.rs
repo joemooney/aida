@@ -66,6 +66,85 @@ fn bug_2669_directory_leaf_refuses_review_handoff_receipts() {
     }
 }
 
+/// A writable mount ABOVE the receipt store replaces whatever read-only
+/// mount protected it before (the canonical cache directory is bound after
+/// the AIDA home is sealed). Every such mount is followed by read-only binds
+/// of the receipt store and its lock directory, so the last mount covering
+/// either one is never writable, whatever the order.
+// trace:BUG-2669 | ai:claude
+#[test]
+fn bug_2669_a_writable_mount_above_the_receipt_store_is_resealed_read_only() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let base = tmp.path().canonicalize().unwrap();
+    let home = base.join("home");
+    let authority = home.join(".aida");
+    std::fs::create_dir_all(&authority).unwrap();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(home.to_str().unwrap()))]);
+    let roots = [
+        authority.join("review-handoffs"),
+        authority.join("review-handoff-locks"),
+    ];
+    // The last mount at or above `path` decides what the lane can do there.
+    let writable = |profile: &WriteProfile, path: &Path| {
+        profile
+            .mounts
+            .iter()
+            .rfind(|m| path.starts_with(&m.path))
+            .is_some_and(|m| m.writable)
+    };
+    // A cache directory that resolves to the AIDA home's state directory,
+    // to the home, or to a directory above it, bound read-write after the
+    // authority mount.
+    for cache in [authority.clone(), home.clone(), base.clone()] {
+        let mut profile = WriteProfile::new();
+        profile.add(&authority, false).unwrap();
+        assert!(!writable(&profile, &roots[0]));
+        profile.add(&cache, true).unwrap();
+        // The remount took effect for everything else beneath it.
+        assert!(writable(&profile, &authority.join("cache-db")));
+        for root in &roots {
+            assert!(root.is_dir(), "provisioned so the lane cannot create it");
+            assert!(!writable(&profile, root), "{}", cache.display());
+            assert!(!writable(&profile, &root.join("new.json")));
+            let native: toml::Value = toml::from_str(&profile.native()).unwrap();
+            assert_eq!(
+                native["permissions"]["aida"]["filesystem"][root.to_str().unwrap()].as_str(),
+                Some("read")
+            );
+        }
+        // A writable leaf inside the store is still refused outright.
+        assert!(profile.add(&roots[0], true).is_err());
+    }
+    // Reached through a symlinked parent, the mount still contains the
+    // store: the two read-only binds follow it.
+    let alias = base.join("cache-link");
+    std::os::unix::fs::symlink(&home, &alias).unwrap();
+    let mut profile = WriteProfile::new();
+    profile.add(&alias.join(".aida"), true).unwrap();
+    let after: Vec<_> = profile.mounts[1..]
+        .iter()
+        .map(|m| (m.path.clone(), m.writable))
+        .collect();
+    assert_eq!(after, roots.clone().map(|root| (root, false)));
+    // A receipt root that is a symlink is a name the lane could replace
+    // under a writable mount of the home: the mount is refused.
+    let outside = base.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::remove_dir(&roots[1]).unwrap();
+    std::os::unix::fs::symlink(&outside, &roots[1]).unwrap();
+    assert!(WriteProfile::new().add(&authority, true).is_err());
+    std::fs::remove_file(&roots[1]).unwrap();
+    // A writable mount that does not contain the store adds nothing.
+    let beside = base.join("project");
+    std::fs::create_dir_all(&beside).unwrap();
+    let mut profile = WriteProfile::new();
+    profile.add(&beside, true).unwrap();
+    assert_eq!(profile.mounts.len(), 1);
+}
+
 /// An operator/CI lane that must exercise the live boundary sets this; a
 /// skip is then a failure instead of a silent pass.
 // trace:TASK-2708 | ai:claude
@@ -931,6 +1010,10 @@ refused(lambda: os.rename('.aida/grant-notices/11111111-1111-4111-8111-111111111
 refused(lambda: os.link(existing, '.aida/review-handoffs/linked.json'))
 refused(lambda: os.mkdir('.aida/review-handoffs/dir'))
 refused(lambda: os.rename('.aida/review-handoffs', '.aida/review-handoffs-moved'))
+refused(lambda: os.rename('.aida/review-handoff-locks', '.aida/review-handoff-locks-moved'))
+# The authority directory itself was remounted read-write (as a cache
+# directory resolving there would be): the remount is live, the store is not.
+Path('.aida/remounted-control').write_text('writable')
 Path('.aida/grant-notices/11111111-1111-4111-8111-111111111111/notice.json').write_text('informational')
 "#;
     let mut plan = fixture(script, "print('seat_grant_valid=true expected_seat=true')");
@@ -955,6 +1038,11 @@ Path('.aida/grant-notices/11111111-1111-4111-8111-111111111111/notice.json').wri
             crate::test_env::EnvVarsGuard::apply(&[("AIDA_HOME", Some(home.to_str().unwrap()))]);
         assert!(plan.profile.add(&receipts, true).is_err());
         assert!(plan.profile.add(&locks, true).is_err());
+        // The canonical cache directory is bound read-write AFTER the
+        // read-only authority mount; one that resolves to the authority
+        // directory would expose the store through that later mount. The
+        // profile binds the store read-only again on top of it.
+        plan.profile.add(&authority, true).unwrap();
     }
     let args: Vec<_> = plan.command.get_args().map(|a| a.to_os_string()).collect();
     let mut cfg: serde_json::Value = serde_json::from_str(args[5].to_str().unwrap()).unwrap();
@@ -989,6 +1077,11 @@ Path('.aida/grant-notices/11111111-1111-4111-8111-111111111111/notice.json').wri
     };
     assert_eq!(names(&receipts), [existing.file_name().unwrap()]);
     assert!(names(&locks).is_empty());
+    // Positive control: the read-write remount above the store was live.
+    assert_eq!(
+        std::fs::read_to_string(authority.join("remounted-control")).unwrap(),
+        "writable"
+    );
     // Positive control: the lane ran and its one writable leaf took a write.
     assert_eq!(
         std::fs::read_to_string(notice.join("notice.json")).unwrap(),

@@ -77,10 +77,32 @@ draft. `unused` means the launcher found no draft to read and collected a
 verdict the reviewer recorded itself; nothing was recorded from a draft, and
 a sealed receipt is never closed this way.
 
-The receipt is staged under a private name and published by a no-replace
-rename, so it has exactly one name from the moment it exists. A reader
-rejects a receipt that fails any field rule (full 40-hex head, absolute
-paths, a non-empty reviewer session, a well-formed seal digest) as a whole.
+The receipt is staged under a private name in the receipt directory and
+published to its final name without replacing anything; an existing receipt
+is an error, never an overwrite. On a filesystem with a no-replace rename
+(`renameat2(RENAME_NOREPLACE)` on Linux, `renamex_np(RENAME_EXCL)` on macOS)
+that is one atomic step, and the receipt has exactly one name from the moment
+it exists.
+
+Where the kernel or filesystem lacks that rename, publication falls back to
+`link_then_unlink`: hard-link the staged file to the final name (which fails
+if the name is taken), then unlink the staged name. That is not atomic. For
+the moment between the two calls the receipt has two names and a link count
+of two. The reader handles it by refusing: `parse` accepts only a singly
+linked regular file, so anything reading in that window (`load`, `seal`,
+`aida review draft list`, maintenance) sees an unreadable receipt, not a
+partial or forged one. `list` reports the row as unreadable and maintenance
+leaves it alone. The registering launcher reads the receipt back only after
+the unlink, so it never acts on the two-name state. If the unlink fails, the
+launcher removes the final name again and registration fails. If the launcher
+dies between the link and the unlink, the receipt stays doubly linked and
+unreadable until the stray staged name (`.draft-<uuid>.<uuid>.tmp`, in the
+receipt directory) is removed by hand: that launch has no usable receipt, so
+its draft is not recoverable, which is the fail-closed outcome.
+
+A reader rejects a receipt that fails any field rule (full 40-hex head,
+absolute paths, a non-empty reviewer session, a well-formed seal digest) as a
+whole.
 
 #### Receipt versions
 
@@ -98,10 +120,16 @@ like a draft written before receipts existed.
 
 Receipts past 30 days whose draft directory holds no `draft.json` are removed
 with their locks. This runs after a review launch has finished, never before
-a reviewer is spawned. Each run examines at most 16 receipts within 200 ms,
-starts at a random point so successive runs cover the store, never waits for
-a receipt lock, and leaves unreadable receipts and unreadable draft
-directories alone.
+a reviewer is spawned. Each run reads at most 4096 directory entries and
+examines at most 16 of the receipts among them within 200 ms, starting at a
+random point so successive runs cover what was listed. Listing and
+examination share that budget: listing stops at half of it once it has found
+a receipt, and the first receipt of a run is examined whatever time is left,
+so a run over a non-empty store always examines at least one. A run never
+waits for a receipt lock, and leaves unreadable receipts and unreadable draft
+directories alone. The lock file is opened without following a symlink and
+without blocking, and only a regular file is locked, so a FIFO or device at
+a lock name is refused at once.
 
 The receipt holds no secret and is not a capability: reading or copying it
 grants nothing. It is the record that a launcher with reviewer delegation
@@ -174,7 +202,7 @@ independent session.
 
 | Path | Who can reach it | What stops a seat without the grant |
 |---|---|---|
-| Write a receipt | A launcher with reviewer delegation | Receipts live in the user's AIDA home, outside every lane sandbox |
+| Write a receipt | A launcher with reviewer delegation | Receipts live in the user's AIDA home, read-only in every lane sandbox: a writable lane mount inside the receipt or lock directory is refused, and one above them (such as a cache directory bound after the home is sealed) is followed by read-only binds of both |
 | Record a recovered draft | A process whose live grant delegates `reviewer` | `validate_child_delegation`, then the unchanged record-time checks |
 | Alter draft content | Whoever can write the review worktree | Seal digest; supersession; head pin; D1 for unsealed drafts |
 | Discard a draft | Operator command | Same delegation check; the findings file is renamed, not deleted |

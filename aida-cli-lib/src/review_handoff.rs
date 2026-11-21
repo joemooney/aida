@@ -36,10 +36,24 @@ const FIRST_AUTO_RECOVERY_VERSION: u32 = 2;
 const RECEIPT_LIMIT: u64 = 64 * 1024;
 /// How long one seal or close waits for its own receipt's lock.
 const LOCK_WAIT: Duration = Duration::from_secs(2);
-/// Receipt maintenance examines at most this many receipts per run, within
+/// Receipt maintenance examines at most [`SWEEP_BATCH`] receipts per run,
+/// chosen from at most [`SWEEP_SCAN`] directory entries, within
 /// [`SWEEP_BUDGET`], and never waits for a lock.
 const SWEEP_BATCH: usize = 16;
+const SWEEP_SCAN: usize = 4096;
 const SWEEP_BUDGET: Duration = Duration::from_millis(200);
+
+/// The bounds of one maintenance run.
+#[derive(Debug, Clone, Copy)]
+struct SweepLimits {
+    /// Receipts examined at most.
+    batch: usize,
+    /// Directory entries read at most, whatever they are.
+    scan: usize,
+    /// Listing the directory may use the first half; examination ends with
+    /// the whole.
+    budget: Duration,
+}
 /// How long a receipt is kept once nothing waits on it.
 const RETENTION: chrono::Duration = chrono::Duration::days(30);
 /// A draft older than this is outside the automatic recovery window.
@@ -142,9 +156,13 @@ fn lock_path(launch: &str) -> Result<PathBuf> {
 }
 
 /// The per-receipt lock, beside (never inside) the receipt directory. A
-/// zero `wait` tries once.
+/// zero `wait` tries once. `wait` bounds the whole call: the open never
+/// blocks (a FIFO or device planted at the lock name fails or is refused at
+/// once instead of hanging the caller), and nothing but a regular file is
+/// ever locked.
 fn lock(launch: &str, wait: Duration) -> Result<std::fs::File> {
     use fs2::FileExt;
+    let deadline = Instant::now() + wait;
     let path = lock_path(launch)?;
     create_private_dir(path.parent().context("lock path has no parent")?)?;
     let file = std::fs::OpenOptions::new()
@@ -152,10 +170,15 @@ fn lock(launch: &str, wait: Duration) -> Result<std::fs::File> {
         .create(true)
         .truncate(false)
         .mode(0o600)
-        .custom_flags(libc::O_NOFOLLOW)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
         .open(path)
         .context("cannot open the review handoff receipt lock")?;
-    let deadline = Instant::now() + wait;
+    ensure!(
+        file.metadata()
+            .context("cannot inspect the review handoff receipt lock")?
+            .is_file(),
+        "the review handoff receipt lock is not a regular file"
+    );
     loop {
         match file.try_lock_exclusive() {
             Ok(()) => return Ok(file),
@@ -269,9 +292,12 @@ pub(crate) fn load(launch: &str) -> Result<Receipt> {
 /// Register the draft slot before the reviewer is spawned. `Ok(None)` when
 /// this process holds no grant delegating `reviewer`: only a launcher with
 /// that delegation may register a slot, and the spawn itself reports the
-/// missing authority. The receipt is published under its one name by a
-/// no-replace rename: an existing one is an error, never an overwrite, and
-/// the returned receipt is the one read back from that name.
+/// missing authority. The receipt is published under its one name without
+/// replacing anything: an existing one is an error, never an overwrite, and
+/// the returned receipt is the one read back from that name. Where the
+/// filesystem has no no-replace rename the publication links the staged
+/// file to the name and then unlinks the staged name, so for that moment
+/// the receipt has two names and [`parse`] refuses it as not singly linked.
 pub(crate) fn register(
     project_root: &Path,
     worktree: &Path,
@@ -341,20 +367,29 @@ fn receipt_id(name: &str) -> Option<&str> {
 
 /// Bounded maintenance, called after a review launch has finished and never
 /// before a reviewer is spawned: drop expired receipts and their locks so
-/// one file per launch does not accumulate for ever. Each run examines at
-/// most [`SWEEP_BATCH`] receipts within [`SWEEP_BUDGET`], starting at a
-/// random point so successive runs cover the whole store, and skips a
-/// receipt whose lock is busy. Returns how many receipts it removed.
+/// one file per launch does not accumulate for ever. Each run reads at most
+/// [`SWEEP_SCAN`] directory entries and examines at most [`SWEEP_BATCH`] of
+/// the receipts among them within [`SWEEP_BUDGET`], starting at a random
+/// point so successive runs cover what was listed, and skips a receipt whose
+/// lock is busy. Listing and examination share the budget so that neither
+/// starves the other: listing stops at half of it once it has found a
+/// receipt, and the first receipt of a run is examined whatever time is
+/// left, so a run over a non-empty store always examines at least one.
+/// Returns how many receipts it removed.
 pub(crate) fn sweep() -> usize {
     sweep_from(
         Utc::now(),
         &uuid::Uuid::new_v4().to_string(),
-        SWEEP_BATCH,
-        Instant::now() + SWEEP_BUDGET,
+        SweepLimits {
+            batch: SWEEP_BATCH,
+            scan: SWEEP_SCAN,
+            budget: SWEEP_BUDGET,
+        },
     )
 }
 
-fn sweep_from(now: DateTime<Utc>, pivot: &str, batch: usize, deadline: Instant) -> usize {
+fn sweep_from(now: DateTime<Utc>, pivot: &str, limits: SweepLimits) -> usize {
+    let started = Instant::now();
     let Ok(dir) = receipt_dir() else {
         return 0;
     };
@@ -362,21 +397,26 @@ fn sweep_from(now: DateTime<Utc>, pivot: &str, batch: usize, deadline: Instant) 
         return 0;
     };
     // Names only: no receipt is opened until it is one of this run's batch.
+    // The entry count is the hard bound; the time bound applies only once
+    // there is a receipt to examine.
+    let listing_ends = started + limits.budget / 2;
     let mut ids = Vec::new();
-    for entry in entries.flatten() {
-        if Instant::now() >= deadline {
-            break;
-        }
+    for entry in entries.flatten().take(limits.scan) {
         let name = entry.file_name().to_string_lossy().to_string();
         if let Some(id) = receipt_id(&name) {
             ids.push(id.to_string());
         }
+        if !ids.is_empty() && Instant::now() >= listing_ends {
+            break;
+        }
     }
     ids.sort_unstable();
     let start = ids.partition_point(|id| id.as_str() < pivot);
+    let deadline = started + limits.budget;
     let mut removed = 0;
-    for id in ids.iter().cycle().skip(start).take(batch.min(ids.len())) {
-        if Instant::now() >= deadline {
+    let batch = limits.batch.min(ids.len());
+    for (examined, id) in ids.iter().cycle().skip(start).take(batch).enumerate() {
+        if examined > 0 && Instant::now() >= deadline {
             break;
         }
         if sweep_one(&dir, &format!("draft-{id}"), now).unwrap_or(false) {
@@ -581,7 +621,8 @@ pub(crate) fn draft_files(receipt: &Receipt) -> DraftFiles {
 /// directories: an unrelated directory that merely shares a name is not
 /// refused. When the user's AIDA home cannot be resolved there is no store
 /// to compare against, and any path with a component of either name is
-/// refused instead.
+/// refused instead. A writable mount ABOVE either directory is the other
+/// half of the rule: see [`host_only_roots_beneath`].
 pub(crate) fn inside_host_only_root(path: &Path) -> bool {
     let Ok(home) = aida_dir() else {
         return path
@@ -593,6 +634,39 @@ pub(crate) fn inside_host_only_root(path: &Path) -> bool {
         let root = home.join(name);
         path.starts_with(&root) || resolved.starts_with(resolve(&root))
     })
+}
+
+/// The host's receipt store and lock directory, by resolved location, when
+/// a mount at `path` would contain them. A writable mount there exposes
+/// them whatever read-only mount came before it (a later bind replaces the
+/// view of everything beneath it), so the lane write profile binds each one
+/// read-only again after any such mount. Empty when the user's AIDA home
+/// cannot be resolved: there is then no store to protect.
+pub(crate) fn host_only_roots_beneath(path: &Path) -> Vec<PathBuf> {
+    let Ok(home) = aida_dir() else {
+        return Vec::new();
+    };
+    let resolved = resolve(path);
+    let mut roots = Vec::new();
+    for name in [RECEIPT_DIR, LOCK_DIR] {
+        // Both the name in the home and wherever it resolves: a root that
+        // is a symlink is a name the lane could replace under a writable
+        // mount of the home, so the name counts as well as its target (the
+        // write profile then refuses the symlink instead of binding it).
+        for root in [resolve(&home).join(name), resolve(&home.join(name))] {
+            if root != resolved && root.starts_with(&resolved) && !roots.contains(&root) {
+                roots.push(root);
+            }
+        }
+    }
+    roots
+}
+
+/// Create a host-only root (private, like the store itself) so it can be
+/// bound read-only: an absent directory under a writable mount is one the
+/// lane could create.
+pub(crate) fn provision_host_only_root(root: &Path) -> Result<()> {
+    create_private_dir(root)
 }
 
 /// `path` with its longest existing prefix canonicalized, so a directory
