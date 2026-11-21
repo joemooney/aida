@@ -1714,7 +1714,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-13T20:01:56.623034248Z
-modified_at: 2026-11-21T02:57:35.972438813Z
+modified_at: 2026-11-21T03:00:10.238879546Z
 req_type: Task
 tags:
 - carried-finding:BUG-2531:059e4a00
@@ -2462,6 +2462,11 @@ comments:
     Recommended advisor closeout: reconcile known corrections; link duplicates and TASK-3828 overlap; keep findings attached to live rework; separate S3b effect debt; validate remaining merged-source gaps. Do not approve/queue all 87 as independent implementations.
   created_at: 2026-11-21T02:57:35.972438813Z
   modified_at: 2026-11-21T02:57:35.972438813Z
+- id: 01a1fc0c-3ca4-7391-9f5e-6a12812263b3
+  author: joe
+  content: 'Closeout update 2026-11-20: source/evidence review supports 20 Completed closures, one duplicate rejection (TASK-3165 -> TASK-3164), and three supersessions into existing TASK-3828 (TASK-3192, TASK-HOME-1154, TASK-HOME-1155). This would reduce the listed open set from 87 to 63. No statuses changed: CLI refused the first TASK-3140 transition because this otherwise valid advisor session is AIDA_ROLE_INSTANCE=companion; role_authority::has_advisor_authority explicitly denies companions. Fresh verification: cargo fmt check passed; store-writers reconciled 3841 sites; exec-context/executable-fixture suites 27 passed; gate-dependency/store-inventory suites 70 passed. Remaining findings require live-rework, S3a/S3b scope or behavioral-evidence decisions; do not bulk-close them based only on source status. The per-item batch is at /tmp/advisor-review-closeout-batch.json on this host.'
+  created_at: 2026-11-21T03:00:10.238879546Z
+  modified_at: 2026-11-21T03:00:10.238879546Z
 history:
 - id: 01a1d6a2-101a-76b0-8f1a-90d0013071f2
   author: joe
