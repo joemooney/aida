@@ -4994,7 +4994,9 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let _admission = if opts.dry_run {
         None
     } else {
-        crate::admission_owner::cooperative_train(
+        // A manual train waits a bounded time for the auto-train to yield.
+        // trace:BUG-2703 | ai:claude
+        crate::admission_owner::manual_train_admission(
             &main_worktree,
             ADVISOR_LOOP.with(std::cell::Cell::get),
         )?
