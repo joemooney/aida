@@ -1,4 +1,11 @@
 - user_id: role:implementer
+  requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
+  position: -956000
+  added_by: role:implementer
+  note: 'Requeue the previously authorized round-5 rework for PR #4380. At current head 367c23a7723a the round-4 Changes Requested verdict is still exact; the later Done event cites that identical commit. The signed round-5 scope is one per-invocation discovery cache, bounded ledger consumption, and the real queue work lock-contention regression. BUG-2706 remains blocked on this fix. Preserve the independent review and CI gates.'
+  added_at: 2026-11-21T08:44:09.482646835Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   position: -955000
   added_by: role:implementer
@@ -24,12 +31,6 @@
   position: -949000
   added_by: role:implementer
   added_at: 2026-11-21T00:57:36.215307326Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
-  position: -948000
-  added_by: role:implementer
-  added_at: 2026-11-21T00:52:43.556054625Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1ef57-0cf9-7932-b4e9-057aa44fb917
