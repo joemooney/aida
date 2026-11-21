@@ -225,6 +225,23 @@ pub enum AdvisorLoopsCommand {
         #[clap(long)]
         json: bool,
     },
+    /// Drain both loops' admission claims for a bounded, audited time.
+    ///
+    /// Review-watch and auto-train give up their claims at their next pass
+    /// boundary, so a land or ship can run; running reviews and trains finish
+    /// first. Exited loop workers are not restarted until the drain ends.
+    // trace:BUG-2703 | ai:claude
+    Drain {
+        /// Reason to record in the audit history.
+        #[clap(long)]
+        reason: String,
+        /// Drain duration, e.g. 3600, 30m or 2h (default 1h, maximum 24h).
+        #[clap(long = "for", value_name = "DURATION")]
+        duration: Option<String>,
+    },
+    /// End an active drain; the loops take their admission claims again.
+    // trace:BUG-2703 | ai:claude
+    Resume,
     #[clap(hide = true)]
     TrainWorker,
     #[clap(hide = true)]
