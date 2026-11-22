@@ -729,6 +729,8 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
                 mutation.poll()
             ready, _, _ = select.select([broker, notification, proxy], [], [], 0.1)
             if notification in ready:
+                # trace:BUG-2717 | ai:codex
+                require(not _hung_up(notification), 'preflight notification listener hung up')
                 broker_connect_contained(notification, state_fd, state_prefix, connector, port,
                                          lane_net, lane_user, mutation)
             if proxy in ready:

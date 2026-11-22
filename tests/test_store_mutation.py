@@ -54,6 +54,17 @@ class ContainedHostShutdownTests(unittest.TestCase):
                 self.assertIn('notification-shutdown-ok', result.stdout)
 
 
+class ContainedHostPreflightTests(unittest.TestCase):
+    # trace:BUG-2717 | ai:codex
+    def test_notification_listener_before_exec(self):
+        for mode in ('open', 'hangup'):
+            with self.subTest(mode=mode):
+                result = subprocess.run(
+                    [sys.executable, '-m', 'tests.test_store_mutation', '--preflight-helper', mode],
+                    capture_output=True, text=True, timeout=10)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+
 class StoreMutationTests(unittest.TestCase):
     def setUp(self):
         self.identity = Identity()
@@ -718,6 +729,69 @@ while True:
             self.assertEqual(len(self.service.accepted), 1)
 
 
+def preflight_helper(mode):
+    """Exercise the production preflight through its exec release, after privileged setup."""
+    import contextlib
+    from unittest.mock import Mock
+
+    tree = ast.parse((SOURCE / 'containment/contained_host.py').read_text())
+    host = next(node for node in tree.body if getattr(node, 'name', '') == 'host_contained')
+    body = next(node.body for node in host.body if isinstance(node, ast.Try))
+    start = next(i for i, node in enumerate(body) if isinstance(node, ast.While)
+                 and 'preflight did not complete' in ast.unparse(node))
+    end = next(i for i, node in enumerate(body) if ast.unparse(node) == "broker.send(b'exec-v1')")
+    code = compile(ast.Module(body=body[start:end + 1], type_ignores=[]), 'host-preflight', 'exec')
+    with contextlib.ExitStack() as stack:
+        def pair():
+            return tuple(stack.enter_context(s) for s in socket.socketpair(
+                socket.AF_UNIX, socket.SOCK_SEQPACKET))
+
+        notification, sender = pair()
+        broker, shim = pair()
+        proxy, _ = pair()
+        broker.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+        shim.send(b'preflight-v1')
+        if mode == 'hangup':
+            sender.close()
+        else:
+            sender.send(b'N')
+
+        def service(fd, *args):
+            assert fd.recv(1) == b'N', 'entered receive on a hung-up listener'
+            fd.send(b'R')
+
+        receipt_r, receipt_w = os.pipe()
+        acceptance, writer = os.pipe()
+        os.write(writer, b'R')
+        os.close(writer)
+        context = dict(ns, notification=notification, broker=broker, proxy=proxy,
+                       end=time.monotonic() + 65, process=Mock(pid=1, poll=lambda: None),
+                       mutation=None, state_fd=-1, state_prefix=b'', connector=None, port=0,
+                       lane_net=None, lane_user=None, broker_connect_contained=service,
+                       identity=[line.split() for line in Path('/proc/self/uid_map').read_text().splitlines()],
+                       namespaces={'net': os.readlink('/proc/self/ns/net')}, cfg={'policy_sha': 'fixture'},
+                       receipt_fd=receipt_w, acceptance_fd=acceptance, credential_deadline=lambda: None)
+        if mode == 'open':
+            exec(code, context)
+            assert sender.recv(1) == b'R'
+            assert shim.recv(32) == b'exec-v1'
+        else:
+            try:
+                exec(code, context)
+            except RuntimeError as error:
+                assert 'hung up' in str(error), error
+            else:
+                raise AssertionError('hung-up listener passed preflight')
+            shim.setblocking(False)
+            try:
+                released = shim.recv(32)
+            except BlockingIOError:
+                pass
+            else:
+                raise AssertionError(f'unexpected exec release: {released!r}')
+        os.close(receipt_r)
+
+
 def shutdown_helper(mode):
     """Run the production supervision loop with real readiness/HUP and a lane
     process, without requiring keyrings, namespaces or a vendor. Extract only
@@ -903,6 +977,9 @@ print('live-store-channel-ok',flush=True)
 
 
 if __name__ == '__main__':
+    if len(sys.argv) == 3 and sys.argv[1] == '--preflight-helper':
+        preflight_helper(sys.argv[2])
+        sys.exit(0)
     if len(sys.argv) == 3 and sys.argv[1] == '--shutdown-helper':
         assert sys.argv[2] in ('hangup', 'notification', 'cancelled')
         shutdown_helper(sys.argv[2])
