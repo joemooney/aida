@@ -3461,7 +3461,14 @@ impl ReworkHeads {
             }
             Ok(())
         };
-        verify().context("could not verify the pinned rework refs; retry pickup after origin and the forge agree")
+        verify().with_context(|| {
+            format!(
+                "could not verify the pinned rework refs; inspect origin with `git -C {} ls-remote --refs origin {} {}` and retry pickup after origin and the forge agree",
+                crate::shell_quote(&main.to_string_lossy()),
+                crate::shell_quote(&base_ref),
+                crate::shell_quote(&head_ref),
+            )
+        })
     }
 }
 

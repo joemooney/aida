@@ -940,7 +940,16 @@ fn bug_2688_fresh_pickup_refuses_head_movement_without_replacing_its_pin() {
         .map(|_| ())
     });
     let error = result.unwrap_err();
-    assert!(format!("{error:#}").contains("origin refs/heads/feat no longer matches pinned"));
+    let diagnostic = format!("{error:#}");
+    assert!(
+        diagnostic.contains("origin refs/heads/feat no longer matches pinned"),
+        "{diagnostic}"
+    );
+    let inspect_origin = format!(
+        "`git -C {} ls-remote --refs origin refs/heads/main refs/heads/feat`",
+        crate::shell_quote(&fx.main.to_string_lossy()),
+    );
+    assert!(diagnostic.contains(&inspect_origin), "{diagnostic}");
     assert!(rolled_back);
     assert!(!fresh.exists());
     assert_eq!(git_ok(&archive, &["rev-parse", "MERGE_HEAD"]), merge);
