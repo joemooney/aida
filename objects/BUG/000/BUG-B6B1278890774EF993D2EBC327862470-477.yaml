@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:50.241345704Z
-modified_at: 2026-11-22T21:57:23.985800377Z
+modified_at: 2026-11-22T23:49:48.505708208Z
 req_type: Bug
 tags:
 - authority
@@ -47,6 +47,11 @@ comments:
   created_at: 2026-11-22T21:57:23.985796869Z
   modified_at: 2026-11-22T21:57:23.985796869Z
   session_id: 01a2054260bc
+- id: 01a205aa-7b59-7cc0-960d-adc5314cfcdd
+  author: joe
+  content: 'Product code inspection of main (2026-11-22 16:50, per the advisor-122 16:55 ruling): the AUTHORIZATION part is already safe on main. A negative SCM_PIDFD value reaches Identity.check(sender_fd=...), where poll.register(sender_fd) raises ValueError, caught at aida-cli-lib/src/store_mutation/service.py:225-226, so check() returns False and dispatch is refused (lines 206-207, 284/296). But AC2 is a REAL defect on main: the finally block at service.py:372-373 calls os.close() on every collected sender fd, including a negative one (the kernel delivers a negative errno in SCM_PIDFD when pidfd creation fails). That raises OSError out of poll(), which can kill the broker loop (availability, not authority). Re-scope: AC1/AC3 are already satisfied on main; AC2 (close only valid fds; a negative value doesn''t crash the loop) is unit-testable by driving poll() with a stub channel whose recvmsg returns an SCM_PIDFD cmsg holding -1. No special host is needed.'
+  created_at: 2026-11-22T23:49:48.505708208Z
+  modified_at: 2026-11-22T23:49:48.505708208Z
 history:
 - id: 01a2052b-d43c-7761-9620-191b4708745f
   author: joe
