@@ -1,0 +1,26 @@
+id: 01a20526-50da-75a0-a7fc-31669eca2301
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1222
+agreed_id: TASK-3840
+title: 'Hygiene from work CI report: verify-manual handles, aida-term cfg(test), tomllib fallback'
+description: |
+  Low-priority hygiene items from the same work-branch report: (1) scripts/verify-manual.py leaks file handles, so use context managers; (2) an aida-term macro that's used only in tests needs cfg(test); (3) Python TOML loading needs a tomllib/tomli fallback for older interpreters, and test_ci_tiers.py's PATH should include the running interpreter's directory. Source: the operator's work-side AIDA CI branch fixed this on 2026-11 (report reviewed by product-15, 2026-11-22). That branch is not reachable from this clone, so reproduce on main first; if main already behaves correctly, close with evidence.
+
+  ## Acceptance
+  - AC1: Each item is fixed or closed with evidence that main already handles it; warnings for these are gone in a normal build or test run.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T21:25:26.874188951Z
+modified_at: 2026-11-22T21:25:26.874188951Z
+req_type: Task
+tags:
+- from-work-ci
+- hygiene
+filed_at:
+  code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
