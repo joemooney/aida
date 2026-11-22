@@ -354,8 +354,8 @@ impl RepairGuard {
         pr: u64,
         branch: &str,
         leases: &[crate::leases::SessionLease],
-    ) -> Result<Option<String>> {
-        let mut id = None;
+    ) -> Result<Option<&RepairEntry>> {
+        let mut reservation = None;
         for entry in self.journal.entries.iter().filter(|entry| {
             entry.spawn != SpawnOutcome::ProvenDead
                 && (entry.tree_path == seat
@@ -365,7 +365,10 @@ impl RepairGuard {
                         .is_ok_and(|path| path == seat))
         }) {
             anyhow::ensure!(
-                id.is_none() && entry.key.pr == pr && entry.branch == branch,
+                reservation.is_none()
+                    && entry.key.repository == main
+                    && entry.key.pr == pr
+                    && entry.branch == branch,
                 "retained seat {} has a different or ambiguous repair reservation; inspect it with `aida doctor check {HEAL_CATEGORY}`",
                 seat.display()
             );
@@ -375,9 +378,9 @@ impl RepairGuard {
                 "lane {} still owns retained seat {}; once its owner exits run `aida session end {}`",
                 entry.lane_id, seat.display(), entry.lane_id,
             );
-            id = Some(reservation_id(entry));
+            reservation = Some(entry);
         }
-        Ok(id)
+        Ok(reservation)
     }
 
     #[cfg(test)]
@@ -426,7 +429,7 @@ pub(crate) fn release_unspawned_lane(main: &Path, lane_id: &str) {
 /// Bind doctor confirmation to the precise reservation generation, including
 /// ownership transferred to a different lane after a scan.
 // trace:BUG-2688 | ai:codex
-fn reservation_id(entry: &RepairEntry) -> String {
+pub(crate) fn reservation_id(entry: &RepairEntry) -> String {
     use sha2::{Digest, Sha256};
 
     let mut generation = Sha256::new();

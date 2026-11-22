@@ -435,10 +435,13 @@ A replacement seat starts from the fetched PR head even when the conversation
 resumes. Verified adoption can continue a retained merge with matching journal
 evidence. An explicit `aida queue work <SPEC> --fresh` can move an unleased,
 idle retained merge to a sibling `.retained-<id>` path before building the
-replacement. Pickup verifies the remote head and admits the conflict route
-before moving the seat or releasing its reservation. A private clone also
-needs a matching project marker and object alternates. Pickup reports where
-it preserved the files, index and merge state.
+replacement. Pickup pins the open PR's head and fetched base before moving
+the seat or releasing its reservation. It admits the conflict route before
+moving the seat and rechecks the pinned refs and PR before preparing the
+replacement. If they changed, pickup reports the refusal and any archive
+stays at the location already reported. A private clone needs a matching
+project marker and object alternates, plus a host pin for the exact scope
+path and PR head or a host journal entry matching the retained repair.
 <!-- trace:BUG-2688 | ai:codex -->
 
 **Expired exited-worker claims.** `aida doctor check leases` also reports shared

@@ -2136,6 +2136,8 @@ pub(crate) enum SessionBase<'a> {
     QueueBranch(&'a str),
     /// Auto-selected stack parents or launcher-supplied revisions.
     Local(&'a str),
+    /// The head pinned before fresh conflict rework archived the previous seat.
+    PinnedRework(&'a str),
 }
 
 // trace:BUG-2188 | ai:codex
@@ -2188,7 +2190,8 @@ pub(crate) fn session_start_with_receipt(
     let base = session_base.map(|base| match base {
         SessionBase::Explicit(branch)
         | SessionBase::QueueBranch(branch)
-        | SessionBase::Local(branch) => branch,
+        | SessionBase::Local(branch)
+        | SessionBase::PinnedRework(branch) => branch,
     });
     let explicit_origin_base = match session_base {
         // Direct session starts also accept origin-qualified branch names.
@@ -2200,6 +2203,10 @@ pub(crate) fn session_start_with_receipt(
                 .unwrap_or(branch),
         ),
         Some(SessionBase::QueueBranch(branch)) => Some(branch),
+        _ => None,
+    };
+    let pinned_rework_head = match session_base {
+        Some(SessionBase::PinnedRework(head)) => Some(head),
         _ => None,
     };
     let adopt_orphan = path_reentry == PathReentry::AdoptOrphan;
@@ -2824,10 +2831,15 @@ pub(crate) fn session_start_with_receipt(
             Some(&branch_name),
             (clone_reentry || reuse_existing_worktree_path).then_some(worktree_path.as_path()),
         )?;
-        if !branch_exists_anywhere(&project_root, &branch_name) {
+        if pinned_rework_head.is_none() && !branch_exists_anywhere(&project_root, &branch_name) {
             anyhow::bail!("open change head `{branch_name}` is unavailable locally and on origin; refusing to fork from the default branch");
         }
-        align_reused_pr_branch(&project_root, &branch_name)?;
+        // Fresh rework already fetched this PR. Its preparation owns alignment
+        // against the pinned commit, outside the placement lock.
+        // trace:BUG-2688 | ai:codex
+        if pinned_rework_head.is_none() {
+            align_reused_pr_branch(&project_root, &branch_name)?;
+        }
     }
 
     // TASK-245: decide whether to fork a new branch or check out an
@@ -2837,7 +2849,8 @@ pub(crate) fn session_start_with_receipt(
     // `git worktree add -b` collision error never surfaces. An
     // auto-derived branch name is never reused — resolve_session_branch
     // already dodged collisions. trace:TASK-245 | ai:claude
-    let branch_preexists = branch_exists_anywhere(&project_root, &branch_name);
+    let branch_preexists =
+        pinned_rework_head.is_some() || branch_exists_anywhere(&project_root, &branch_name);
     let reuse_existing = should_reuse_branch(reuse_branch, branch.is_some(), branch_preexists);
 
     // A fresh clone validates its explicit base through the fetch itself.
@@ -2879,7 +2892,9 @@ pub(crate) fn session_start_with_receipt(
             if session_git_ref_exists(&project_root, &format!("refs/heads/{branch_name}")) {
                 branch_name.clone()
             } else {
-                format!("origin/{branch_name}")
+                pinned_rework_head
+                    .map(str::to_owned)
+                    .unwrap_or_else(|| format!("origin/{branch_name}"))
             }
         } else {
             match base {
@@ -3285,7 +3300,7 @@ pub(crate) fn session_start_with_receipt(
                 branch_name
             );
         }
-        if base.is_some() {
+        if base.is_some() && pinned_rework_head.is_none() {
             eprintln!(
                 "{} --base is ignored when checking out the existing branch `{}`",
                 crate::glyph(crate::glyphs::Glyph::Info).cyan(),
@@ -3302,16 +3317,29 @@ pub(crate) fn session_start_with_receipt(
             );
         }
         // BUG-1270: keep the next round on the branch the PR actually tracks.
-        align_reused_pr_branch(&project_root, &branch_name)?;
-        // `git worktree add <path> <branch>` checks out an existing
-        // local branch, or creates a local branch from a unique remote match.
-        // Suppress the inferred upstream for the remote-only case.
-        // trace:BUG-2211 | ai:codex
-        let mut args = vec!["worktree", "add"];
-        if rollback_branch_absent(&project_root, &branch_name)? {
-            args.push("--no-track");
+        if pinned_rework_head.is_none() {
+            align_reused_pr_branch(&project_root, &branch_name)?;
         }
-        args.extend(["--", worktree_path.to_str().unwrap(), branch_name.as_str()]);
+        // Create a missing local PR branch at the pinned commit. An existing
+        // branch goes through preparation's clean/ancestry checks.
+        // trace:BUG-2211 BUG-2688 | ai:codex
+        let mut args = vec!["worktree", "add"];
+        let local_absent = rollback_branch_absent(&project_root, &branch_name)?;
+        if let Some(head) = pinned_rework_head.filter(|_| local_absent) {
+            args.extend([
+                "--no-track",
+                "-b",
+                &branch_name,
+                "--",
+                worktree_path.to_str().unwrap(),
+                head,
+            ]);
+        } else {
+            if local_absent {
+                args.push("--no-track");
+            }
+            args.extend(["--", worktree_path.to_str().unwrap(), branch_name.as_str()]);
+        }
         let res = transactional_worktree_add(
             &project_root,
             &args,

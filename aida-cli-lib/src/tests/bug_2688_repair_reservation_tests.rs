@@ -504,7 +504,7 @@ fn bug_2688_fresh_pickup_refused_route_keeps_retained_seat_and_reservation() {
     let branch = git_ok(&fx.main, &["rev-parse", "refs/heads/feat"]);
 
     let error = launch(HeadlessVendor::Claude, true)
-        .preserve_for_fresh_pickup(&fx.main, "main")
+        .preserve_for_fresh_pickup(&fx.main, &branch)
         .unwrap_err();
     assert!(
         error
@@ -546,6 +546,9 @@ fn retained_private_clone(main: &Path, path: &Path) {
 
 #[test]
 fn bug_2688_fresh_pickup_preserves_project_private_clone_without_a_lease() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
     let fx = fixture();
     let head = conflicting_pr(&fx);
     let retained = clone_path(&fx.main, "bug-2688").unwrap();
@@ -608,7 +611,7 @@ fn bug_2688_fresh_pickup_refuses_wrong_main_or_unverified_private_clone() {
         marker.main.clone_from(marker_main);
         std::fs::write(&marker_path, toml::to_string(&marker).unwrap()).unwrap();
         let error = launch(HeadlessVendor::Codex, true)
-            .preserve_for_fresh_pickup(&fx.main, "main")
+            .preserve_for_fresh_pickup(&fx.main, &head)
             .unwrap_err();
         assert!(
             format!("{error:#}").contains("lacks matching marker and object alternates"),
@@ -623,6 +626,9 @@ fn bug_2688_fresh_pickup_refuses_wrong_main_or_unverified_private_clone() {
 
 #[test]
 fn bug_2688_explicit_fresh_archives_the_retained_linked_merge() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
     let fx = fixture();
     let head = conflicting_pr(&fx);
     let retained = seat(&fx, "retained");
@@ -715,4 +721,277 @@ fn bug_2688_explicit_fresh_archives_the_retained_linked_merge() {
     assert_eq!(git_ok(&fresh, &["rev-parse", "HEAD"]), head);
     assert!(merging(&fresh));
     assert!(merging(&archive));
+}
+
+// trace:BUG-2688 | ai:codex
+#[test]
+fn bug_2688_matching_private_clone_metadata_without_host_proof_is_preserved() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let retained = clone_path(&fx.main, "bug-2688").unwrap();
+    retained_private_clone(&fx.main, &retained);
+    git_ok(
+        &fx.main,
+        &["update-ref", "-d", &pin_ref(&retained).unwrap()],
+    );
+    assert!(host_recorded_clone(&fx.main, &retained).is_none());
+    assert_eq!(clone_marker_main(&retained), Some(fx.main.clone()));
+    let index = git_ok(&retained, &["ls-files", "--stage"]);
+
+    let error = archive_retained_rework_with(
+        &fx.main,
+        "BUG-2688",
+        PR,
+        "feat",
+        &head,
+        || Ok(()),
+        |_| Ok(()),
+    )
+    .unwrap_err();
+    assert!(format!("{error:#}").contains("no matching host pin or exact repair reservation"));
+    assert_eq!(git_ok(&retained, &["ls-files", "--stage"]), index);
+    assert!(merging(&retained));
+    assert!(journal(&fx.main).is_empty());
+    assert_eq!(git_ok(&fx.main, &["for-each-ref", PIN_PREFIX]), "");
+
+    // An exact journal generation supplies the missing host binding.
+    let base = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
+    RepairGuard::lock(&fx.main)
+        .unwrap()
+        .reserve(crate::repair_journal::RepairEntry {
+            key: crate::repair_journal::RepairKey {
+                repository: fx.main.clone(),
+                pr: PR,
+                original_head: head.clone(),
+            },
+            dispatched_by: "direct-rework".into(),
+            reserved_at: chrono::Utc::now().to_rfc3339(),
+            lane_id: "retained-lane".into(),
+            tree_path: retained.clone(),
+            branch: "feat".into(),
+            base,
+            spawn: SpawnOutcome::Unknown,
+            original_conflict_paths: vec!["README.md".into()],
+            regeneration_success: None,
+            regenerated_tree: None,
+            preparation_success: None,
+            validation: None,
+            refusal_notice: None,
+        })
+        .unwrap();
+    let archive = archive_retained_rework_with(
+        &fx.main,
+        "BUG-2688",
+        PR,
+        "feat",
+        &head,
+        || Ok(()),
+        |_| Ok(()),
+    )
+    .unwrap()
+    .pop()
+    .unwrap();
+    assert!(!retained.exists());
+    assert!(merging(&archive));
+    assert_eq!(git_ok(&archive, &["ls-files", "--stage"]), index);
+    assert!(host_recorded_clone(&fx.main, &archive).is_none());
+}
+
+#[test]
+fn bug_2688_fresh_pickup_refuses_head_movement_without_replacing_its_pin() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let retained = seat(&fx, "retained");
+    assert_eq!(
+        admitted_prepare(&fx, &retained, "retained-lane").unwrap(),
+        ["README.md"]
+    );
+    let index = git_ok(&retained, &["ls-files", "--stage"]);
+    let merge = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
+    let mut metadata =
+        verify_rework_metadata("feat", fixture_rework_metadata("feat", "main")).unwrap();
+    metadata.head_sha.clone_from(&head);
+    let heads = ReworkHeads::fetch(&fx.main, metadata.clone(), "feat").unwrap();
+    let mut retargeted = metadata.clone();
+    retargeted.base_ref = "integration".into();
+    assert!(heads.require_same_change(&retargeted).is_err());
+
+    let archive = archive_retained_rework_with(
+        &fx.main,
+        "BUG-2688",
+        PR,
+        "feat",
+        &heads.head,
+        || Ok(()),
+        |_| Ok(()),
+    )
+    .unwrap()
+    .pop()
+    .unwrap();
+
+    // Move origin after archival, with no new forge observation available.
+    git_ok(&fx.main, &["push", "--force", "origin", "main:feat"]);
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &[],
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    // Force the remote-only placement path to distinguish the pinned commit
+    // from the newer origin/feat seen by ordinary session setup.
+    git_ok(&fx.main, &["branch", "-D", "feat"]);
+    let scope = "TASK-926881";
+    let receipt = crate::session_start::session_start_with_receipt(
+        scope,
+        Some("feat"),
+        Some(crate::session_start::SessionBase::PinnedRework(&heads.head)),
+        false,
+        None,
+        None,
+        "auto",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        None,
+        false,
+        Some(false),
+        true,
+        None,
+        false,
+        true,
+        crate::session_start::PathReentry::None,
+        Some(Some((PR, "feat".into()))),
+        false,
+    )
+    .unwrap();
+    let (lane, fresh) = lease_tree(&fx.main, scope);
+    assert_eq!(git_ok(&fresh, &["rev-parse", "HEAD"]), head);
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |_| {
+        prepare_rework_merge(
+            &fx.main,
+            &fresh,
+            "feat",
+            ReworkSeat::Fresh,
+            PR,
+            &lane,
+            scope,
+            Some(&heads),
+            &|| panic!("admission must not repeat"),
+        )
+        .map(|_| ())
+    });
+    let error = result.unwrap_err();
+    assert!(format!("{error:#}").contains("origin refs/heads/feat no longer matches pinned"));
+    assert!(rolled_back);
+    assert!(!fresh.exists());
+    assert_eq!(git_ok(&archive, &["rev-parse", "MERGE_HEAD"]), merge);
+    assert_eq!(git_ok(&archive, &["ls-files", "--stage"]), index);
+    assert!(journal(&fx.main).iter().all(|entry| entry.0 != lane));
+
+    // The same movement before the first fetch refuses the stale forge observation.
+    let error = ReworkHeads::fetch(&fx.main, metadata, "feat")
+        .err()
+        .unwrap();
+    assert!(format!("{error:#}").contains("differs from the observed PR head"));
+}
+
+#[test]
+fn bug_2688_divergent_linked_branch_recovery_preserves_tip_and_frees_branch() {
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let retained = seat(&fx, "local-divergence");
+    git_ok(&retained, &["reset", "--hard", "HEAD^"]);
+    git_ok(
+        &retained,
+        &["commit", "--allow-empty", "-qm", "unpublished history"],
+    );
+    let local = git_ok(&retained, &["rev-parse", "HEAD"]);
+
+    let error = admitted_prepare(&fx, &retained, "divergent-lane").unwrap_err();
+    let diagnostic = format!("{error:#}");
+    let command = diagnostic.split('`').nth(1).unwrap();
+    let backup = command.split_whitespace().last().unwrap();
+    assert!(command.contains(" branch -m -- "));
+    git_ok(&fx.main, &["branch", "-m", "--", "feat", backup]);
+    assert_eq!(
+        git_ok(&retained, &["symbolic-ref", "--short", "HEAD"]),
+        backup
+    );
+    assert_eq!(git_ok(&retained, &["rev-parse", "HEAD"]), local);
+    assert!(journal(&fx.main).is_empty());
+    git_ok(&fx.main, &["branch", "feat", "origin/feat"]);
+    let replacement = seat(&fx, "replacement");
+    assert_eq!(git_ok(&replacement, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        admitted_prepare(&fx, &replacement, "replacement").unwrap(),
+        ["README.md"]
+    );
+}
+
+#[test]
+fn bug_2688_unobservable_merge_names_the_pinned_probe_and_keeps_state() {
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let base = git_ok(&fx.main, &["rev-parse", "origin/main"]);
+    let tree = seat(&fx, "probe");
+    let execute = |args: &[&str]| {
+        if args[0] == "merge-tree" {
+            anyhow::bail!("injected merge-tree failure");
+        }
+        Ok(git_ok(&tree, args))
+    };
+    let error = prepare_host_repair_with(
+        &fx.main,
+        &tree,
+        PR,
+        "probe",
+        &execute,
+        "feat",
+        false,
+        |_| panic!("unexpected publication"),
+        |_, _| panic!("unexpected regeneration"),
+        || Ok((base.clone(), head.clone())),
+    )
+    .unwrap_err();
+    let diagnostic = format!("{error:#}");
+    assert!(diagnostic.contains("no reservation created"));
+    assert!(diagnostic.contains(&format!(
+        "merge-tree --write-tree --name-only -z {} {}",
+        crate::shell_quote(&head),
+        crate::shell_quote(&base)
+    )));
+    let probe = crate::test_git::git_command()
+        .current_dir(&fx.main)
+        .args([
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            "-z",
+            &head,
+            &base,
+        ])
+        .output()
+        .unwrap();
+    assert_eq!(probe.status.code(), Some(1), "{probe:?}");
+    assert!(
+        repair_merge_tree_paths(std::str::from_utf8(&probe.stdout).unwrap())
+            .unwrap()
+            .contains(&"README.md".into())
+    );
+    assert!(!merging(&tree));
+    assert!(journal(&fx.main).is_empty());
+    assert_eq!(
+        admitted_prepare(&fx, &tree, "probe").unwrap(),
+        ["README.md"]
+    );
 }

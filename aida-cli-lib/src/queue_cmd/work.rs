@@ -851,14 +851,13 @@ pub(crate) struct ReworkConflictLaunch<'a> {
 impl ReworkConflictLaunch<'_> {
     // Verify the remote head and admit the route before relocating a retained seat.
     // trace:BUG-2688 | ai:codex
-    pub(crate) fn preserve_for_fresh_pickup(self, main: &Path, base: &str) -> Result<Vec<PathBuf>> {
-        let (_, head) = crate::seat_clone::fetch_rework_heads(main, base, self.branch)?;
+    pub(crate) fn preserve_for_fresh_pickup(self, main: &Path, head: &str) -> Result<Vec<PathBuf>> {
         crate::seat_clone::archive_retained_rework(
             main,
             self.scope,
             self.pr,
             self.branch,
-            &head,
+            head,
             || admit_rework_conflict_launch(self),
         )
     }
@@ -6302,13 +6301,20 @@ pub(crate) fn handle_queue_work(
                 pr: *pr,
                 branch,
             });
-        let preserved_rework = if let Some(conflict) = conflict_launch.filter(|_| fresh_rework) {
+        let (pinned_rework, preserved_rework) = if let Some(conflict) =
+            conflict_launch.filter(|_| fresh_rework)
+        {
             let pr = conflict.pr;
-            let pr_base = crate::seat_clone::rework_base_branch(&project_root, pr, conflict.branch)
-                .with_context(|| format!("missing open PR #{pr} base/head metadata; retry `aida queue work {} --fresh` once the forge can return it", shell_quote(&plan.scope)))?;
-            conflict.preserve_for_fresh_pickup(&project_root, &pr_base)?
+            let heads = crate::seat_clone::ReworkHeads::observe(&project_root, pr, conflict.branch)
+                    .with_context(|| format!("could not pin open PR #{pr}; retry `aida queue work {} --fresh` once the forge and origin agree", shell_quote(&plan.scope)))?;
+            // A concurrent fetch can change the shared remote-tracking refs.
+            // Check both pins against origin before taking the placement lock.
+            // trace:BUG-2688 | ai:codex
+            heads.verify_origin(&project_root, conflict.branch)?;
+            let archives = conflict.preserve_for_fresh_pickup(&project_root, &heads.head)?;
+            (Some(heads), archives)
         } else {
-            Vec::new()
+            (None, Vec::new())
         };
 
         // session_start handles worktree creation, lease persistence, env
@@ -6322,13 +6328,17 @@ pub(crate) fn handle_queue_work(
             crate::session_start::session_start_with_receipt(
                 &plan.scope,
                 session_branch_override,
-                resolved_base
-                    .as_deref()
-                    .map(|branch| match (base.is_some(), contained) {
-                        (true, true) => crate::session_start::SessionBase::QueueBranch(branch),
-                        (true, false) => crate::session_start::SessionBase::Explicit(branch),
-                        (false, _) => crate::session_start::SessionBase::Local(branch),
-                    }),
+                if let Some(heads) = &pinned_rework {
+                    Some(crate::session_start::SessionBase::PinnedRework(&heads.head))
+                } else {
+                    resolved_base
+                        .as_deref()
+                        .map(|branch| match (base.is_some(), contained) {
+                            (true, true) => crate::session_start::SessionBase::QueueBranch(branch),
+                            (true, false) => crate::session_start::SessionBase::Explicit(branch),
+                            (false, _) => crate::session_start::SessionBase::Local(branch),
+                        })
+                },
                 /* reuse_branch */ false,
                 path_override,
                 /* forge_override */ None,
@@ -6430,6 +6440,7 @@ pub(crate) fn handle_queue_work(
                             conflict.pr,
                             &lease.id,
                             &plan.scope,
+                            pinned_rework.as_ref(),
                             admit_conflict,
                         )
                     },
