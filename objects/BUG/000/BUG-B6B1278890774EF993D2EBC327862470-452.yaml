@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T18:13:39.214351242Z
+modified_at: 2026-11-22T18:27:37.713744530Z
 req_type: Bug
 tags:
 - conflicts
@@ -1128,6 +1128,33 @@ comments:
   content: 'Product 11:13: R4FINAL lane queued on dell1 (codex), branch bug-2688-journal-loop. Scope = the AUTHORITATIVE R4FINAL BRIEF in the previous comment.'
   created_at: 2026-11-22T18:13:39.214351242Z
   modified_at: 2026-11-22T18:13:39.214351242Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20483-b487-7e00-8f51-bb7875a05081
+  author: joe
+  content: |-
+    AUTHORITATIVE R4FINAL BRIEF (advisor-122, relayed by product 11:27):
+    # BUG-2688 r4 (advisor-122 routing 2026-11-22 10:30 MST; relayed by product-15)
+
+    Scope: PR #4388 at head d49e95064e4b. Fix exactly the BLOCKING findings below from the verdict recorded against d49e95064e4b (gate ledger PR-4388). Deferred p2 findings stay out of scope (already filed as follow-ups). Also turn the red fast compile/fast gates on this head green.
+    This is the FINAL round under the 4-round cap: a further changes-requested verdict parks the spec for the advisor.
+
+    ## Blocking findings
+    1. [p1/security-authority-bypass] aida-cli-lib/src/queue_cmd/work.rs: At the admission callback around line 6438, a nonempty archive makes the callback succeed unconditionally. admit_pinned_rework explicitly skips admission for a clean host merge-tree result. A host-configured merge driver and the private clone’s sanitized Git config can give different conflict results for identical commits. If preparation then finds a conflict, a self-publishing route can receive the conflict task without the required host-publication check. Call the pure route check on every actual conflict. Cover a clean archive probe followed by a conflicting preparation on a refused route.
+    2. [p1/data-loss] aida-cli-lib/src/seat_clone.rs: The fast-forward and predicted-clean merge use --no-overwrite-ignore, but their errors are propagated without PreserveReworkSeat. An ignored file colliding with a tracked incoming file causes Git to stop to protect the file. run_pickup_launch then rolls back the owned setup, which forcibly removes the worktree or clone and the ignored file. Keep the seat on these failures and test the bytes and lease through run_pickup_launch for both paths. The added preservation test covers only the predicted-conflict branch.
+    3. [p1/unmet-claimed-ac] aida-cli-lib/src/seat_clone.rs: acc34a6d: archive_retained_rework_with skips a reserved seat that has disappeared when no linked registration remains. A dead lane with an Unknown journal entry for the current PR head therefore survives --fresh and the replacement hits the same already-reserved error. Reconcile the exact dead generation under lock before creating the replacement, retaining live or unknown ownership. Exercise queue pickup with --fresh, a removed seat, no Git registration and the old journal still present.
+    4. [p2/unmet-claimed-ac] aida-cli-lib/src/seat_clone.rs: aca42931: require_retained_clone_main reports only that the marker and alternates do not match and the seat was left in place. The malformed MERGE_HEAD check likewise supplies no corrective command. The typed self-publication refusal says to use a contained Codex lane without giving the invocation. Supply one actionable, scope-specific command at each refusal and assert it in the corresponding negative tests.
+    5. [p1/security-authority-bypass] aida-cli-lib/src/repair_journal.rs: reservation_for_relocation checks headless_lane_run_alive only for a matching journal entry. With no journal, an unleased seat can still have a live headless record naming its seat_path. A worker temporarily outside the checkout with no open seat files will pass the filesystem holder scan, and pickup can move its seat and reuse its path. Check matching worker records independently of journal presence under the placement lock. Cover a live recorded worker with no journal and no current filesystem holder.
+    6. [p1/data-loss] aida-cli-lib/src/seat_clone.rs: move_rework_worktree authenticates the registered path and branch from the host inventory but resolves HEAD and MERGE_HEAD using Git discovery from the directory currently at that path. A stale registration whose path has been reused by another linked checkout on a same-named branch can therefore cause the unrelated directory to be relocated before repair is attempted. Verify the reciprocal .git pointer, worktree admin directory and common repository against the host registration before moving, then recheck that identity at mutation time.
+
+    ## Done means
+    - Each finding has a targeted regression test that fails before the fix.
+    - One targeted cargo run plus `make check-ci-fast` green, then push. Do not run the full suite.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-22T18:27:37.713744530Z
+  modified_at: 2026-11-22T18:27:37.713744530Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
