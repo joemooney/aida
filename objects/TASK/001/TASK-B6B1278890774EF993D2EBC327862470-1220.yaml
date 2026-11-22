@@ -1,0 +1,30 @@
+id: 01a20526-09b7-77d1-a6cc-b125462b05f7
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1220
+agreed_id: TASK-3838
+title: Disposable bwrap fixture scratch outside CARGO_TARGET_DIR and the /tmp grant (shared test_env helper)
+description: |
+  Nested-bubblewrap test fixtures (e.g. bug_2169_contained_clone_bwrap_tests, bug_2383_*) put scratch under target/ or a hidden private /tmp. On the dell1 runner the job seeds CARGO_TARGET_DIR from a cache (ci.yml ~223-271), so leftover or unreadable fixture directories can poison later runs, and /tmp placement interacts with the containment write grant (see TASK-3133 r2). Source: the operator's work-side AIDA CI branch fixed this on 2026-11 (report reviewed by product-15, 2026-11-22). That branch is not reachable from this clone, so reproduce on main first; if main already behaves correctly, close with evidence.
+
+  ## Acceptance
+  - AC1: A shared test_env.rs helper allocates disposable fixture scratch outside CARGO_TARGET_DIR and outside the ambient /tmp write grant (e.g. /var/tmp), and the bwrap fixtures use it.
+  - AC2: Under CI=true the helper refuses to fall back into CARGO_TARGET_DIR, with a clear error.
+  - AC3: After the affected tests run, a scan finds no fixture directories left under target/.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T21:25:08.663864382Z
+modified_at: 2026-11-22T21:25:08.663864382Z
+req_type: Task
+tags:
+- containment
+- dell1
+- from-work-ci
+- tests
+filed_at:
+  code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
