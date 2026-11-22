@@ -553,6 +553,10 @@ stale_base = "refuse-on-conflict"
 # trace:STORY-2763 | ai:codex
 freshness = "fast"
 freshness_strict_paths = []
+mass_change_mode = "on"
+mass_change_started_at = "2026-11-22T19:10:29Z"
+mass_change_started_by = "joe"
+mass_change_expires_at = "2026-11-25T19:10:29Z"
 
 [review_watch]
 # trace:TASK-3472 BUG-2644 | ai:codex
