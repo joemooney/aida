@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T04:57:31.564960778Z
+modified_at: 2026-11-22T17:28:28.918478108Z
 req_type: Bug
 tags:
 - conflicts
@@ -997,6 +997,11 @@ comments:
   created_at: 2026-11-22T00:33:43.885296611Z
   modified_at: 2026-11-22T00:33:43.885296611Z
   harness_version: codex-cli 0.171.0
+- id: 01a2044d-5df6-7d31-a21b-f9ab7a1d4cf8
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes. Assessed landed tree 042756f83a8d09c6838ef36ee959f5f46a76b7e9 against protected main aa567732958f669b69ec5848863ea0b13c800db5. Existing CI compiled the test targets, then both fast jobs failed the same writer inventory check. Evidence below is source inspection, with no local builds or test execution.. No triage reason was given.'
+  created_at: 2026-11-22T17:28:28.918465905Z
+  modified_at: 2026-11-22T17:28:28.918465905Z
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -1367,6 +1372,13 @@ history:
   timestamp: 2026-11-22T04:57:31.773244312Z
   session_id: 01a20199d5f5
   changes: []
+- id: 01a2044d-5df6-7d31-a21b-f9961faa8782
+  author: joe
+  timestamp: 2026-11-22T17:28:28.918450234Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
@@ -1377,16 +1389,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Request changes. Assessed landed tree 042756f83a8d09c6838ef36ee959f5f46a76b7e9 against protected main aa567732958f669b69ec5848863ea0b13c800db5. Existing CI compiled the test targets, then both fast jobs failed the same writer inventory check. Evidence below is source inspection, with no local builds or test execution.
-    BUG-b6b1278890774ef993d2ebc327862470-452.aca42931 — unverified. Several preparation refusals still omit the required corrective command.
-    BUG-b6b1278890774ef993d2ebc327862470-452.ac153421 — verified by the removed-seat and absent-journal fixture, including exact head, MERGE_HEAD and conflict-path assertions. Focused command: cargo test -p aida-cli-lib bug_2688_replacement_pickup_pins_remote_for_new_and_resumed_conversations
-    BUG-b6b1278890774ef993d2ebc327862470-452.acc34a6d — unverified. The pin and archive tests cover a present seat, but a dead reservation for a removed seat can still block explicit fresh pickup.
-    BUG-b6b1278890774ef993d2ebc327862470-452.Tests — verified by source inspection of the same replacement fixture, which exercises a clean replacement on a conflicting remote PR, a removed seat without a journal, and subsequent adoption with the matching journal. The supplied criterion trace report does not index those assertions.
-  recovery_hint: address the review findings, move BUG-2688 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-22T04:57:31.564960778Z
