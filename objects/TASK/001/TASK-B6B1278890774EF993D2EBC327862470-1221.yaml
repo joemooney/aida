@@ -1,0 +1,28 @@
+id: 01a20526-2e0d-7821-b20b-b056d6f70aae
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1221
+agreed_id: TASK-3839
+title: Rejection tests build secret-shaped dummy values at runtime (no full secret literals in source)
+description: |
+  Some rejection tests embed complete secret-shaped dummy literals (e.g. aida-cli-lib origin_prompt.rs, task_3096_intake_transport.rs), which trip secret scanners on CI hosts that run them and in history scans. Build the dummy values at runtime from fragments so no full secret-shaped literal exists in source, keeping the refusal assertions unchanged. Source: the operator's work-side AIDA CI branch fixed this on 2026-11 (report reviewed by product-15, 2026-11-22). That branch is not reachable from this clone, so reproduce on main first; if main already behaves correctly, close with evidence.
+
+  ## Acceptance
+  - AC1: Those files contain no complete secret-shaped literals; a gitleaks run over the tree reports none from them.
+  - AC2: The rejection assertions are unchanged and still pass.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T21:25:17.965996587Z
+modified_at: 2026-11-22T21:25:17.965996587Z
+req_type: Task
+tags:
+- from-work-ci
+- secrets
+- tests
+filed_at:
+  code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
