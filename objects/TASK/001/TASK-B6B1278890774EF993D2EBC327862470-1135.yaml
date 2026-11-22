@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-22T19:17:35.727240628Z
+modified_at: 2026-11-22T19:19:38.644405981Z
 req_type: Task
 tags:
 - codify
@@ -372,6 +372,40 @@ comments:
   content: 'Product (advisor-122 mass-change ruling 12:15): findings deferred from the PR #4373 final round are filed as TASK-3831. Final-round brief: .aida/tmp/brief-TASK-3826-final-1222.md'
   created_at: 2026-11-22T19:16:19.529609587Z
   modified_at: 2026-11-22T19:16:19.529609587Z
+- id: 01a204b3-54d4-7601-9f22-e751b83f90d6
+  author: joe
+  content: |-
+    AUTHORITATIVE FINAL-MASSCHANGE BRIEF (advisor-122, relayed by product-15 12:19):
+    # TASK-3826 / PR #4373: ONE FINAL ROUND under MASS-CHANGE mode (advisor-122 ruling 2026-11-22 12:15 MST; relayed by product-15). Lane: CODEX.
+
+    Base: the Changes Requested verdict recorded against 2a0c351161 (gate ledger PR-4373). Under mass-change mode, classify every finding; unmet-AC defers. Another blocking CR after this round parks the spec.
+
+    ## Rules
+    (a) Fix ONLY findings that are p1, data loss or security/authority bypass (listed below).
+    (b) Every unmet-claimed-AC, p2, p3, test-gap or style finding is a deferred follow-up. Product filed it as a follow-up spec (named on TASK-3826). Do NOT fix those here.
+    (c) Where a finding cluster sits in an optional mechanism, REMOVE that code rather than patching it (here: fresh routing and admission attribution). Removal must keep the claimed core behaviour and its tests passing.
+    (d) The next review is scoped to these prior findings plus this round's own diff. Keep the diff minimal.
+
+    ## Fix (blocking under mass-change)
+    1. [p1/unmet-claimed-ac] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:1501 — TASK-3826 AC2. Launch passes only fresh or PR/head to the detached launcher. If round A queues for a cold-start slot and round B takes the next round at the same PR head, A still passes admit_launch and starts with the superseded brief. Carry the spec and host round through admission and verify ownership at the actual start boundary. Cover a newer Begin during the slot wait with the head unchanged.
+    2. [p1/unmet-claimed-ac] aida-cli-lib/src/lane_result.rs aida-cli-lib/src/lane_result.rs:506 — TASK-3826 AC6. admission_since selects the newest receipt for the spec after a timestamp. A second pickup can create a receipt before its own admission checks. Its refusal can mask the relayed lane starting, or its success can cause the relay to mark older briefs superseded after its own launcher failed. Bind the launch and watch to one attempt ID and cover two overlapping receipts.
+    3. [p1/unmet-claimed-ac] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:846 — TASK-3826 AC2/3. If B begins after A places its brief but before A launches, A gets relay-superseded and skips retraction. If B then stops before placement, A’s .md stays eligible for implicit pickup despite its spec comment saying not to act on it. Retract the superseded round’s exact file using a round-specific identity that cannot affect B.
+    4. [p1/unmet-claimed-ac] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:1861 — TASK-3826 AC2. lane_running relies solely on argv containing the spec. A headless queue work pickup of the queue head can be working this spec with no spec argument, so both the probe and the pre-launch check report idle and the relay proceeds with --force-claim. Include the resolved live lease or run ownership in the host check and cover a queue-head pickup.
+    5. [p1/security-authority-bypass] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:1407 — The host compares a canonicalized brief with a canonicalized mailbox, so a symlinked vendor mailbox is accepted as its own trusted destination. place_brief writes through it and retract can rename a file outside the project. This contradicts pickup_mailboxes’ existing no-symlink boundary. Pin and validate the real mailbox directory for placement, launch and retraction, and require the file to belong to this spec and round.
+
+    ## Deferred (do not fix; follow-up spec)
+    - [p2/unmet-claimed-ac] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:1434 — TASK-3826 AC3, round-3 item 4. place_brief retires previous pending files across vendors before publishing the new file. A subsequent head-gate refusal removes th...
+    - [p2/unmet-claimed-ac] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:508 — TASK-3826 fresh routing. Fresh checks for an open change at queue routing, then admit returns immediately for Fresh. An open change appearing while the launcher wa...
+    - [p2/unmet-claimed-ac] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:650 — TASK-3826 AC5. nap returns true even after sleeping the entire remaining budget, and the next probe or admission read uses its own timeout (150 seconds over SSH). ...
+
+    ## Done means
+    - Each fixed finding has a regression test that fails before the fix.
+    - One targeted cargo run, then `make check-ci-fast` green, then push on the existing PR branch. Never the full suite. COMMIT your work.
+    - Run `python3 scripts/check-store-writers.py` and classify any new store-writer site.
+  created_at: 2026-11-22T19:19:38.644405981Z
+  modified_at: 2026-11-22T19:19:38.644405981Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
   author: joe
