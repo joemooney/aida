@@ -14,17 +14,15 @@ pub(crate) const DEFAULT_UNKNOWN_DEFER_MINS: i64 = 20;
 const MAX_UNKNOWN_DEFER_MINS: i64 = 24 * 60;
 /// How far ahead of this host's clock another host's heartbeat may be and
 /// still count. Past this the timestamp is not evidence of anything.
-const CLOCK_SKEW_SECS: i64 = 300;
-/// How long after a bound lapses the lapse is still worth explaining. Older
-/// unreleased claims are ordinary leftovers and cost no forge lookup.
-const LAPSE_REPORT_MINS: i64 = 30;
-
+#[cfg(test)]
+use crate::lane_hosts::CLOCK_SKEW_SECS;
 /// What is known about a lane that holds the change's spec or branch.
 // trace:BUG-2706 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Standing {
     /// Positively live: a local process, or a fresh heartbeat from its host.
     Live,
+    Unreadable(String),
     /// On another host, claim unreleased, heartbeat past its TTL: the lane's
     /// state cannot be read. Deferred until `until`.
     Unknown {
@@ -32,7 +30,9 @@ enum Standing {
         until: DateTime<Utc>,
     },
     /// As `Unknown`, but the bound has passed: the head is reviewed.
-    Lapsed { silent_mins: i64 },
+    Lapsed {
+        silent_mins: i64,
+    },
 }
 
 #[derive(Debug)]
@@ -70,6 +70,7 @@ fn local_holders(root: &Path) -> Result<Vec<Holder>> {
 // trace:BUG-2706 | ai:claude
 #[derive(Debug, Default, PartialEq, Eq)]
 struct Decision {
+    unreadable: Option<String>,
     reason: Option<String>,
     /// One `(lane, explanation)` per lane whose bound lapsed.
     lapsed: Vec<(String, String)>,
@@ -91,7 +92,7 @@ fn decision(holders: &[Holder], branch: &str, specs: &[String], grace_mins: i64)
                 "deferred: implementer lane live ({}, {})",
                 h.host, h.lease
             )),
-            lapsed: Vec::new(),
+            ..Decision::default()
         };
     }
     let unknown = on_change
@@ -109,11 +110,12 @@ fn decision(holders: &[Holder], branch: &str, specs: &[String], grace_mins: i64)
                 h.lease,
                 until.format("%H:%M")
             )),
-            lapsed: Vec::new(),
+            ..Decision::default()
         };
     }
     Decision {
         reason: None,
+        unreadable: on_change.iter().find_map(|h| match &h.standing { Standing::Unreadable(why) => Some(why.clone()), _ => None }),
         lapsed: on_change
             .iter()
             .filter_map(|h| match h.standing {
@@ -156,52 +158,130 @@ fn unknown_defer_mins(root: &Path) -> i64 {
 // trace:STORY-2705 | ai:codex
 // trace:BUG-2706 | ai:claude
 pub(crate) fn deferred(root: &Path, number: u64, gitlab: bool) -> Result<Option<String>> {
-    deferred_with_metadata(root, || {
-        let kind = if gitlab {
-            crate::forge::ForgeKind::GitLab
-        } else {
-            crate::forge::ForgeKind::GitHub
-        };
-        let meta = crate::forge::forge_for_kind(root, kind)
-            .change_metadata(number, &mut crate::network_retry::NoopSink)
-            .context("cannot establish implementer review deferral: change metadata unavailable")?;
-        Ok((meta.title, meta.head_ref))
-    })
+    deferred_change(
+        root,
+        &format!("{}-{number}", if gitlab { "MR" } else { "PR" }),
+        || {
+            let kind = if gitlab {
+                crate::forge::ForgeKind::GitLab
+            } else {
+                crate::forge::ForgeKind::GitHub
+            };
+            let meta = crate::forge::forge_for_kind(root, kind)
+                .change_metadata(number, &mut crate::network_retry::NoopSink)
+                .context(
+                    "cannot establish implementer review deferral: change metadata unavailable",
+                )?;
+            Ok((meta.title, meta.head_ref))
+        },
+    )
 }
 
+#[cfg(test)]
 pub(crate) fn deferred_with_metadata(
     root: &Path,
     metadata: impl FnOnce() -> Result<(String, String)>,
 ) -> Result<Option<String>> {
-    let grace_mins = unknown_defer_mins(root);
-    let mut branch = String::new();
-    let decision = decide(
-        root,
-        &crate::coordination::hostname(),
-        Utc::now(),
-        grace_mins,
-        || {
-            let (title, head) = metadata()?;
-            branch.clone_from(&head);
-            Ok((title, head))
-        },
-    )?;
-    // Say once per change and lane why a head went to review with a lane
-    // claim still standing. trace:BUG-2706 | ai:claude
-    static REPORTED: std::sync::Mutex<std::collections::BTreeSet<String>> =
-        std::sync::Mutex::new(std::collections::BTreeSet::new());
-    for (lane, line) in &decision.lapsed {
-        if REPORTED
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .insert(format!("{branch} {lane}"))
-        {
-            eprintln!("{branch}: {line}");
-        }
-    }
-    Ok(decision.reason)
+    deferred_change(root, "fixture", metadata)
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Default, PartialEq)]
+struct Episode {
+    held: bool,
+    unreadable_since: Option<DateTime<Utc>>,
+}
+
+fn deferred_change(
+    root: &Path,
+    key: &str,
+    metadata: impl FnOnce() -> Result<(String, String)>,
+) -> Result<Option<String>> {
+    let grace = unknown_defer_mins(root);
+    let now = Utc::now();
+    let episodes = crate::review_watch::Directory::lane_episodes(root)?;
+    let previously_held = episodes
+        .read(key)?
+        .as_deref()
+        .map(serde_json::from_slice::<Episode>)
+        .transpose()?
+        .is_some_and(|episode| episode.held);
+    let decision = observe_change(
+        root,
+        &crate::coordination::hostname(),
+        now,
+        grace,
+        previously_held,
+        metadata,
+    )?;
+    settle_episode(root, key, decision, now, grace)
+}
+
+fn settle_episode(
+    root: &Path,
+    key: &str,
+    decision: Decision,
+    now: DateTime<Utc>,
+    grace: i64,
+) -> Result<Option<String>> {
+    let dir = crate::review_watch::Directory::lane_episodes(root)?;
+    let _lock = dir.lock("episodes.lock")?;
+    let bytes = dir.read(key)?;
+    let mut episode: Episode = bytes
+        .as_deref()
+        .map(serde_json::from_slice)
+        .transpose()?
+        .unwrap_or_default();
+    let mut reason = decision.reason;
+    if let Some(detail) = decision.unreadable.as_deref().filter(|_| reason.is_none()) {
+        let since = *episode.unreadable_since.get_or_insert(now);
+        if now.signed_duration_since(since) < Duration::minutes(grace) {
+            reason = Some(format!(
+                "deferred: implementer lane state unknown: {detail}"
+            ));
+        }
+    } else {
+        episode.unreadable_since = None;
+    }
+    let released = episode.held && reason.is_none();
+    episode.held = reason.is_some();
+    if episode != Episode::default() {
+        let new = serde_json::to_vec(&episode)?;
+        if bytes.as_deref() != Some(new.as_slice()) {
+            dir.write(key, &new)?;
+        }
+    } else if bytes.is_some() {
+        dir.remove(key)?;
+    }
+    if released && decision.unreadable.is_some() {
+        eprintln!("{key}: implementer lane evidence unreadable past the {grace}-minute bound; reviewing ({})", decision.unreadable.as_deref().unwrap_or_default());
+    } else if released {
+        let detail = decision
+            .lapsed
+            .first()
+            .map(|(_, detail)| detail.as_str())
+            .unwrap_or("implementer lane released; reviewing");
+        eprintln!("{key}: {detail}");
+    }
+    Ok(reason)
+}
+
+fn observed_claims(root: &Path) -> Result<crate::lane_hosts::Inventory> {
+    let store = root.join(".aida-store");
+    if !store.try_exists()? {
+        anyhow::ensure!(!store.is_symlink(), "shared claim store is unavailable");
+        return Ok(crate::lane_hosts::Inventory::default());
+    }
+    if store.is_file() {
+        return Ok(crate::lane_hosts::Inventory::default());
+    }
+    if store.join(".git").try_exists()? && aida_core::git_ops::probe_remote(&store, "origin")? {
+        crate::lane_hosts::published_claims(&store)
+    } else {
+        crate::coordination::strict_claims(&store)
+    }
+}
+
+#[cfg(test)]
 fn decide(
     root: &Path,
     host: &str,
@@ -209,8 +289,23 @@ fn decide(
     grace_mins: i64,
     metadata: impl FnOnce() -> Result<(String, String)>,
 ) -> Result<Decision> {
+    observe_change(root, host, now, grace_mins, true, metadata)
+}
+
+fn observe_change(
+    root: &Path,
+    host: &str,
+    now: DateTime<Utc>,
+    grace_mins: i64,
+    previously_held: bool,
+    metadata: impl FnOnce() -> Result<(String, String)>,
+) -> Result<Decision> {
     let mut holders = local_holders(root)?;
-    for claim in crate::coordination::list_claims(&root.join(".aida-store")) {
+    let inventory = observed_claims(root).unwrap_or_else(|error| crate::lane_hosts::Inventory {
+        claims: Vec::new(),
+        incomplete: Some(error.to_string()),
+    });
+    for claim in inventory.claims {
         // Legacy spec claims omitted the scope-derived role. Keep those
         // conservative until their existing liveness evidence expires.
         // trace:STORY-2705 | ai:codex
@@ -228,18 +323,35 @@ fn decide(
             if !claim.clone_path.is_empty() && clone != root && clone.is_dir() {
                 holders.extend(local_holders(clone)?);
             }
-        } else if let Some(standing) = remote_standing(&claim, now, host, grace_mins) {
+        } else {
+            let (standing, lease) = match crate::lane_hosts::judge(&claim, now, host) {
+                crate::lane_hosts::Judged::NotForeign => continue,
+                crate::lane_hosts::Judged::Invalid(why) => (
+                    Standing::Unreadable(why),
+                    claim.lease_id.or(claim.claim_id).unwrap_or(claim.node_id),
+                ),
+                crate::lane_hosts::Judged::Lane(lane) => (
+                    lane_standing(&lane, now, grace_mins),
+                    lane.lease().to_owned(),
+                ),
+            };
+            if !previously_held && matches!(standing, Standing::Lapsed { .. }) {
+                continue;
+            }
             holders.push(Holder {
                 scope: claim.scope,
                 branch: None,
                 host: claim.host,
-                lease: claim.claim_id.unwrap_or(claim.node_id),
+                lease,
                 standing,
             });
         }
     }
     if holders.is_empty() {
-        return Ok(Decision::default());
+        return Ok(Decision {
+            unreadable: inventory.incomplete,
+            ..Decision::default()
+        });
     }
     let (title, branch) = metadata()?;
     let mut specs = crate::pr_ship::extract_authorship_spec_ids_from_subject(&title);
@@ -252,43 +364,39 @@ fn decide(
             }
         }
     }
-    Ok(decision(&holders, &branch, &specs, grace_mins))
+    let mut result = decision(&holders, &branch, &specs, grace_mins);
+    result.unreadable = result.unreadable.or(inventory.incomplete);
+    Ok(result)
 }
 
-/// What another host's implementer claim says about its lane, or `None` when
-/// it says nothing: no host, an unusable timestamp, or a bound that lapsed too
-/// long ago to be worth a mention.
-// trace:BUG-2706 | ai:claude
+#[cfg(test)]
 fn remote_standing(
     claim: &crate::coordination::Claim,
     now: DateTime<Utc>,
     host: &str,
     grace_mins: i64,
 ) -> Option<Standing> {
-    // Invalid/future timestamps are not affirmative liveness evidence. A few
-    // minutes ahead is another host's clock, not the future.
-    let heartbeat = DateTime::parse_from_rfc3339(&claim.heartbeat_at)
-        .ok()?
-        .with_timezone(&Utc);
-    if claim.host.is_empty() || heartbeat > now + Duration::seconds(CLOCK_SKEW_SECS) {
-        return None;
+    match crate::lane_hosts::judge(claim, now, host) {
+        crate::lane_hosts::Judged::Lane(lane) => Some(lane_standing(&lane, now, grace_mins)),
+        _ => None,
     }
-    if crate::coordination::claim_staleness(claim, now, host, |_, _| false, |_| false).is_none() {
-        return Some(Standing::Live);
+}
+
+fn lane_standing(lane: &crate::lane_hosts::Lane, now: DateTime<Utc>, grace_mins: i64) -> Standing {
+    if lane.state == crate::lane_hosts::State::Reporting {
+        return Standing::Live;
     }
-    // The claim was never released, so the lane did not end cleanly as far as
-    // this host can tell: its launcher may be down, or the store out of date.
-    let ttl = Duration::try_seconds(i64::try_from(claim.ttl_secs).ok()?)?;
-    let until = heartbeat
-        .checked_add_signed(ttl)?
-        .checked_add_signed(Duration::try_minutes(grace_mins)?)?;
-    let silent_mins = now.signed_duration_since(heartbeat).num_minutes();
+    let Some(until) = lane
+        .expires
+        .checked_add_signed(Duration::minutes(grace_mins))
+    else {
+        return Standing::Unreadable("invalid claim expiry".into());
+    };
+    let silent_mins = lane.age_mins(now);
     if now < until {
-        Some(Standing::Unknown { silent_mins, until })
-    } else if now.signed_duration_since(until) <= Duration::minutes(LAPSE_REPORT_MINS) {
-        Some(Standing::Lapsed { silent_mins })
+        Standing::Unknown { silent_mins, until }
     } else {
-        None
+        Standing::Lapsed { silent_mins }
     }
 }
 
@@ -483,7 +591,10 @@ mod tests {
             standing(&claim, now + Duration::minutes(50)),
             Some(Standing::Lapsed { silent_mins: 50 })
         );
-        assert_eq!(standing(&claim, now + Duration::minutes(81)), None);
+        assert_eq!(
+            standing(&claim, now + Duration::minutes(81)),
+            Some(Standing::Lapsed { silent_mins: 81 })
+        );
         // Another host's clock may run a little ahead; the far future and an
         // unreadable or hostless record are no evidence.
         assert_eq!(
@@ -553,7 +664,7 @@ mod tests {
                     reason: Some(
                         "deferred: implementer lane live (lane-host-fixture, lease-two)".into()
                     ),
-                    lapsed: Vec::new(),
+                    ..Decision::default()
                 }
             );
             // A change for another spec is not held by this lane.
@@ -573,6 +684,27 @@ mod tests {
             .unwrap(),
             Decision::default()
         );
+    }
+
+    #[test]
+    fn bug2706_unreadable_interval_survives_restart_and_recovers() {
+        let root = observer(None);
+        let now = Utc::now();
+        let path = crate::coordination::claim_path(&root.path().join(".aida-store"), "broken");
+        let pass = |mins| {
+            let at = now + Duration::minutes(mins);
+            let decision = decide(root.path(), "observer", at, 20, metadata).unwrap();
+            settle_episode(root.path(), "PR-1", decision, at, 20).unwrap()
+        };
+        for start in [0, 100] {
+            std::fs::write(&path, "[").unwrap();
+            assert!(pass(start).is_some());
+            assert!(pass(start + 19).is_some());
+            assert!(pass(start + 60).is_none());
+            assert!(pass(start + 61).is_none());
+            std::fs::remove_file(&path).unwrap();
+            assert!(pass(start + 62).is_none());
+        }
     }
 
     // AC3: an unreadable lane defers for the configured bound and no longer,

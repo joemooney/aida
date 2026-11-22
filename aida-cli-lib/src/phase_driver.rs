@@ -185,6 +185,10 @@ pub(crate) struct RealPhaseDriver {
     pub(crate) json: bool,
     pub(crate) branch: Option<String>,
     pub(crate) implementer_lease: Option<String>,
+    /// The driver owns the guard across phase transitions. Each tick resolves
+    /// the session's current lease, so release stops publication.
+    // trace:BUG-2706 | ai:codex
+    pub(crate) claim_heartbeat: Option<crate::coordination::SessionClaimHeartbeat>,
     pub(crate) pr_number: Option<u32>,
     /// BUG-1244: PR proven by phase 1 (or explicitly seeded resume) for this
     /// run. CI/reviewer probes must remain on this PR.
@@ -703,6 +707,7 @@ impl RealPhaseDriver {
             json,
             branch: None,
             implementer_lease: None,
+            claim_heartbeat: None,
             pr_number: None,
             phase_done_pr: None,
             phase_done_head: None,

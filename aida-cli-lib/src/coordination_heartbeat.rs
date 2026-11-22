@@ -14,8 +14,8 @@ use anyhow::Result;
 use chrono::Utc;
 
 use super::{
-    commit_pending_admission_writes, hostname, leases_dir, read_claim, refresh_store, Claim,
-    DEFAULT_TTL_SECS, LEASES_SUBDIR,
+    commit_pending_admission_writes, hostname, refresh_store, Claim, DEFAULT_TTL_SECS,
+    LEASES_SUBDIR,
 };
 
 /// Seconds between refreshes: a third of the claim TTL, so two refreshes in a
@@ -23,17 +23,130 @@ use super::{
 /// sees the claim expire.
 pub(crate) const SESSION_HEARTBEAT_INTERVAL_SECS: u64 = DEFAULT_TTL_SECS / 3;
 
-/// The claim file this host holds for local lease `lease_id`, if any.
-fn bound_claim(store_root: &Path, lease_id: &str, host: &str) -> Option<(PathBuf, Claim)> {
-    let entries = std::fs::read_dir(leases_dir(store_root)).ok()?;
-    entries
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.extension().and_then(|e| e.to_str()) == Some("toml"))
-        .filter_map(|path| read_claim(&path).map(|claim| (path, claim)))
-        .find(|(_, claim)| {
-            !claim.review_verb && claim.host == host && claim.lease_id.as_deref() == Some(lease_id)
-        })
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Write};
+use std::os::fd::AsRawFd;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+
+const MAX_CLAIM_BYTES: u64 = 65536;
+
+struct BoundClaim {
+    directory: File,
+    file: File,
+    path: PathBuf,
+    claim: Claim,
+}
+
+fn handle_path(file: &File) -> PathBuf {
+    PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()))
+}
+
+fn bound_claim(store_root: &Path, lease_id: &str, host: &str) -> Result<Option<BoundClaim>> {
+    let mut matched = None;
+    let incomplete = scan_claims(store_root, |directory, file, path, claim| {
+        if !claim.review_verb && claim.host == host && claim.lease_id.as_deref() == Some(lease_id) {
+            anyhow::ensure!(matched.is_none(), "ambiguous lease claim");
+            let directory = directory.try_clone()?;
+            let path = handle_path(&directory).join(path.file_name().unwrap());
+            matched = Some(BoundClaim {
+                directory,
+                file,
+                path,
+                claim,
+            });
+        }
+        Ok(())
+    })?;
+    if let Some(detail) = incomplete {
+        anyhow::bail!("{detail}");
+    }
+    Ok(matched)
+}
+
+pub(super) fn strict_claims(store_root: &Path) -> Result<crate::lane_hosts::Inventory> {
+    let mut claims = Vec::new();
+    let incomplete = scan_claims(store_root, |_, _, _, claim| {
+        claims.push(claim);
+        Ok(())
+    })?;
+    Ok(crate::lane_hosts::Inventory { claims, incomplete })
+}
+
+fn scan_claims(
+    store_root: &Path,
+    mut visit: impl FnMut(&File, File, PathBuf, Claim) -> Result<()>,
+) -> Result<Option<String>> {
+    let mut directory = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY)
+        .open(store_root)?;
+    let mut total = 0u64;
+    for component in LEASES_SUBDIR.split('/') {
+        directory = match OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+            .open(handle_path(&directory).join(component))
+        {
+            Ok(file) => file,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.into()),
+        };
+    }
+    let mut incomplete = None;
+    for (index, entry) in std::fs::read_dir(handle_path(&directory))?.enumerate() {
+        anyhow::ensure!(index < 20_000, "claim inventory limit exceeded");
+        let path = entry?.path();
+        if path.extension().is_none_or(|ext| ext != "toml") {
+            continue;
+        }
+        let (file, claim) = match read_record(&path, &mut total) {
+            Ok(pair) => pair,
+            Err(_) => {
+                incomplete = Some("invalid or unreadable claim file".into());
+                anyhow::ensure!(total <= 32 << 20, "claim inventory too large");
+                continue;
+            }
+        };
+        visit(&directory, file, path, claim)?;
+    }
+    Ok(incomplete)
+}
+
+fn read_record(path: &Path, total: &mut u64) -> Result<(File, Claim)> {
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)?;
+    let meta = file.metadata()?;
+    anyhow::ensure!(
+        meta.is_file() && meta.nlink() == 1 && meta.len() <= MAX_CLAIM_BYTES,
+        "invalid claim file"
+    );
+    let mut data = String::new();
+    (&file)
+        .take(MAX_CLAIM_BYTES + 1)
+        .read_to_string(&mut data)?;
+    anyhow::ensure!(data.len() as u64 <= MAX_CLAIM_BYTES, "oversized claim");
+    *total += data.len() as u64;
+    anyhow::ensure!(*total <= 32 << 20, "claim inventory too large");
+    let claim: Claim = toml::from_str(&data)?;
+    Ok((file, claim))
+}
+
+impl BoundClaim {
+    fn replace(&self) -> Result<()> {
+        let mut sibling = tempfile::NamedTempFile::new_in(handle_path(&self.directory))?;
+        sibling.write_all(toml::to_string_pretty(&self.claim)?.as_bytes())?;
+        sibling.as_file().sync_all()?;
+        let old = self.file.metadata()?;
+        let current = std::fs::symlink_metadata(&self.path)?;
+        anyhow::ensure!(
+            current.ino() == old.ino() && current.dev() == old.dev() && current.nlink() == 1,
+            "claim changed during refresh"
+        );
+        sibling.persist(&self.path)?;
+        Ok(())
+    }
 }
 
 /// Refresh `heartbeat_at` on the session claim this host holds for `lease_id`,
@@ -46,32 +159,38 @@ fn bound_claim(store_root: &Path, lease_id: &str, host: &str) -> Option<(PathBuf
 /// tracked changes cannot be refreshed from its origin.
 // trace:BUG-2706 | ai:claude
 pub(crate) fn heartbeat_session_claim(store_root: &Path, lease_id: &str) -> Result<bool> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    aida_core::git_ops::with_remote_deadline(deadline, crate::command_output_with_timeout, || {
+        refresh(store_root, lease_id)
+    })
+}
+
+fn refresh(store_root: &Path, lease_id: &str) -> Result<bool> {
     if lease_id.is_empty()
         || !store_root.join(".git").try_exists().unwrap_or(false)
         || !aida_core::git_ops::has_remote(store_root, "origin")
     {
         return Ok(false);
     }
-    let branch =
-        aida_core::git_ops::current_branch(store_root).unwrap_or_else(|_| "aida-store".to_string());
+    let branch = aida_core::git_ops::current_branch(store_root)?;
     let host = hostname();
     let committed_sha =
-        aida_core::db::with_store_write_lock(store_root, || -> Result<Option<String>> {
+        aida_core::db::with_store_write_lock_bounded(store_root, || -> Result<Option<String>> {
             commit_pending_admission_writes(store_root)?;
             if refresh_store(store_root, &branch)?.is_err() {
                 return Ok(None);
             }
-            let Some((path, mut claim)) = bound_claim(store_root, lease_id, &host) else {
+            let Some(mut bound) = bound_claim(store_root, lease_id, &host)? else {
                 return Ok(None);
             };
-            claim.heartbeat_at = Utc::now().to_rfc3339();
-            std::fs::write(&path, toml::to_string_pretty(&claim)?)?;
-            let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+            bound.claim.heartbeat_at = Utc::now().to_rfc3339();
+            bound.replace()?;
+            let Some(name) = bound.path.file_name().and_then(|n| n.to_str()) else {
                 return Ok(None);
             };
             let rel = format!("{LEASES_SUBDIR}/{name}");
             aida_core::git_ops::add(store_root, &[&rel])?;
-            let msg = format!("chore(coordination): heartbeat lease {}", claim.scope);
+            let msg = format!("chore(coordination): heartbeat lease {}", bound.claim.scope);
             if !aida_core::git_ops::commit(store_root, &msg)? {
                 return Ok(None);
             }
@@ -98,19 +217,48 @@ impl SessionClaimHeartbeat {
     /// [`SESSION_HEARTBEAT_INTERVAL_SECS`]. The claim was written moments ago
     /// at session start, so the first refresh is one interval away.
     pub(crate) fn start(store_root: PathBuf, lease_id: String) -> Self {
-        Self::start_every(
+        let project = store_root.parent().map(Path::to_owned);
+        Self::watch(
             store_root,
-            lease_id,
+            std::time::Duration::from_secs(SESSION_HEARTBEAT_INTERVAL_SECS),
+            move || {
+                let lease =
+                    crate::leases::read_exact_lease(project.as_deref()?, &lease_id).ok()??;
+                (!lease.review_verb).then_some(lease.id)
+            },
+        )
+    }
+
+    #[cfg(test)]
+    fn start_every(store_root: PathBuf, lease_id: String, interval: std::time::Duration) -> Self {
+        Self::watch(store_root, interval, move || Some(lease_id.clone()))
+    }
+
+    pub(crate) fn drain(root: PathBuf, session: String) -> Self {
+        Self::drain_every(
+            root,
+            session,
             std::time::Duration::from_secs(SESSION_HEARTBEAT_INTERVAL_SECS),
         )
     }
 
-    fn start_every(store_root: PathBuf, lease_id: String, interval: std::time::Duration) -> Self {
+    fn drain_every(root: PathBuf, session: String, interval: std::time::Duration) -> Self {
+        Self::watch(root.join(".aida-store"), interval, move || {
+            crate::find_orchestrated_lease(&root, &session).map(|(id, _, _, _)| id)
+        })
+    }
+
+    fn watch(
+        store_root: PathBuf,
+        interval: std::time::Duration,
+        lease: impl Fn() -> Option<String> + Send + 'static,
+    ) -> Self {
         let (stop, stopped) = std::sync::mpsc::channel::<()>();
         let handle = std::thread::spawn(move || {
             while let Err(std::sync::mpsc::RecvTimeoutError::Timeout) =
                 stopped.recv_timeout(interval)
             {
+                let Some(lease_id) = lease() else { continue };
                 if let Err(error) = heartbeat_session_claim(&store_root, &lease_id) {
                     eprintln!(
                         "warning: could not refresh the shared claim for lease {lease_id}: {error:#}"
@@ -130,14 +278,22 @@ impl Drop for SessionClaimHeartbeat {
         // A refresh already under way finishes first; it is one store commit.
         drop(self.stop.take());
         if let Some(handle) = self.handle.take() {
-            let _ = handle.join();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(12);
+            while !handle.is_finished() && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            if handle.is_finished() {
+                let _ = handle.join();
+            } else {
+                eprintln!("warning: claim heartbeat still finishing local store work at shutdown");
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::super::{acquire_claim_bound, claim_path};
+    use super::super::{acquire_claim_bound, claim_path, read_claim};
     use super::*;
 
     /// A project whose store has a bare origin, as two hosts would share.
@@ -288,6 +444,173 @@ mod tests {
         });
         assert!(!heartbeat_session_claim(&store, "lease-mine").unwrap());
         assert_eq!(read_claim(&path).unwrap(), review);
+    }
+
+    #[test]
+    fn bug2706_verified_claim_replacement_keeps_old_readers_and_refuses_links() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let (root, store) = shared_store(temp.path());
+        acquire_claim_bound(
+            &store,
+            "BUG-2706",
+            &root,
+            "implementer",
+            false,
+            false,
+            Some("mine"),
+        )
+        .unwrap();
+        let path = claim_path(&store, "BUG-2706");
+        let mut bound = bound_claim(&store, "mine", &hostname()).unwrap().unwrap();
+        let old = bound.claim.clone();
+        bound.claim.heartbeat_at = Utc::now().to_rfc3339();
+        bound.replace().unwrap();
+        let mut previous = String::new();
+        use std::io::{Seek, SeekFrom};
+        bound.file.seek(SeekFrom::Start(0)).unwrap();
+        bound.file.read_to_string(&mut previous).unwrap();
+        assert_eq!(toml::from_str::<Claim>(&previous).unwrap(), old);
+        assert_eq!(read_claim(&path).unwrap(), bound.claim);
+        let outside = temp.path().join("outside");
+        std::fs::rename(&path, &outside).unwrap();
+        std::os::unix::fs::symlink(&outside, &path).unwrap();
+        assert!(bound.replace().is_err());
+        assert!(bound_claim(&store, "mine", &hostname()).is_err());
+        assert_eq!(read_claim(&outside).unwrap(), bound.claim);
+        std::fs::remove_file(&path).unwrap();
+        let fifo = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
+        // SAFETY: fifo is a live NUL-terminated pathname.
+        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+        assert!(bound_claim(&store, "mine", &hostname()).is_err());
+    }
+
+    #[test]
+    fn bug2706_observer_reads_first_claim_and_refresh_from_origin_without_pulling() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let (root, store) = shared_store(temp.path());
+        let observer = temp.path().join("observer");
+        let status = crate::test_git::git_command()
+            .args(["clone", "--branch", "aida-store"])
+            .arg(temp.path().join("hub.git"))
+            .arg(&observer)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let tip = aida_core::git_ops::head_sha(&observer).unwrap();
+        acquire_claim_bound(
+            &store,
+            "BUG-2706",
+            &root,
+            "implementer",
+            false,
+            false,
+            Some("mine"),
+        )
+        .unwrap();
+        let aged = age(&store, "BUG-2706", 70);
+        assert_eq!(
+            crate::lane_hosts::published_claims(&observer)
+                .unwrap()
+                .claims,
+            vec![aged.clone()]
+        );
+        assert!(heartbeat_session_claim(&store, "mine").unwrap());
+        let claims = crate::lane_hosts::published_claims(&observer).unwrap();
+        assert_ne!(claims.claims[0].heartbeat_at, aged.heartbeat_at);
+        assert_eq!(aida_core::git_ops::head_sha(&observer).unwrap(), tip);
+    }
+
+    #[test]
+    fn bug2706_slow_fetch_releases_the_store_lock_at_the_remote_deadline() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let (_, store) = shared_store(temp.path());
+        fn stalled_fetch(
+            command: std::process::Command,
+            timeout: std::time::Duration,
+        ) -> Option<std::process::Output> {
+            assert!(command.get_args().any(|arg| arg == "fetch"));
+            let mut stalled = std::process::Command::new("sleep");
+            stalled.arg("60");
+            crate::command_output_with_timeout(stalled, timeout)
+        }
+        let start = std::time::Instant::now();
+        let refreshed = aida_core::git_ops::with_remote_deadline(
+            start + std::time::Duration::from_millis(500),
+            stalled_fetch,
+            || refresh(&store, "mine"),
+        )
+        .unwrap();
+        assert!(!refreshed);
+        assert!(start.elapsed() >= std::time::Duration::from_millis(500));
+        assert!(start.elapsed() < std::time::Duration::from_secs(5));
+        aida_core::db::with_store_write_lock_bounded(&store, || Ok(())).unwrap();
+    }
+
+    #[test]
+    fn bug2706_long_drain_refreshes_the_lease_bound_to_its_session() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let temp = tempfile::tempdir().unwrap();
+        let (root, store) = shared_store(temp.path());
+        let id = "019e9999-cccc";
+        let session = "session-for-drain";
+        let sessions = root.join(".aida/sessions");
+        std::fs::create_dir_all(&sessions).unwrap();
+        std::fs::write(
+            sessions.join(format!("{id}.toml")),
+            format!("id = '{id}'\nbranch = 'bug-2706'\nworktree_path = '.'\n"),
+        )
+        .unwrap();
+        let manifest = crate::session_manifest::SessionManifest {
+            session_id: id.into(),
+            planned_at: Utc::now(),
+            plan_source: "queue work".into(),
+            claude_session_id: Some(session.into()),
+            batch_name: None,
+            agent_name: None,
+            plan: None,
+            seat: None,
+            items: vec![],
+        };
+        crate::session_manifest::save(
+            &crate::session_manifest::manifest_path(&root, id),
+            &manifest,
+        )
+        .unwrap();
+        acquire_claim_bound(
+            &store,
+            "BUG-2706",
+            &root,
+            "implementer",
+            false,
+            false,
+            Some(id),
+        )
+        .unwrap();
+        let aged = age(&store, "BUG-2706", 75);
+        let _guard = SessionClaimHeartbeat::drain_every(
+            root,
+            session.into(),
+            std::time::Duration::from_millis(200),
+        );
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        while published(&store, "BUG-2706").heartbeat_at == aged.heartbeat_at {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "drain lease did not refresh"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
     }
 
     #[test]

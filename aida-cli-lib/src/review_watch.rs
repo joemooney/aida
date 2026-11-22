@@ -528,10 +528,21 @@ fn effective_uid() -> u32 {
 
 /// Pin runtime directories, then open files relative to the pinned handle.
 /// In particular a FIFO or symlink can never make a state read block or escape.
-struct Directory {
+pub(crate) struct Directory {
     handle: File,
 }
 impl Directory {
+    pub(crate) fn lane_episodes(root: &Path) -> Result<Self> {
+        let runtime = Self::shared(&root.join(".aida"))?;
+        Self::open(&runtime.path().join("review-lane-episodes"))
+    }
+
+    pub(crate) fn remove(&self, name: &str) -> Result<()> {
+        std::fs::remove_file(self.path().join(name))?;
+        self.handle.sync_all()?;
+        Ok(())
+    }
+
     fn open(path: &Path) -> Result<Self> {
         match std::fs::DirBuilder::new().mode(0o700).create(path) {
             Ok(()) => {}
@@ -610,7 +621,7 @@ impl Directory {
         );
         Ok(file)
     }
-    fn read(&self, name: &str) -> Result<Option<Vec<u8>>> {
+    pub(crate) fn read(&self, name: &str) -> Result<Option<Vec<u8>>> {
         self.read_file(name, false)
     }
     fn read_file(&self, name: &str, history: bool) -> Result<Option<Vec<u8>>> {
@@ -632,7 +643,7 @@ impl Directory {
         );
         Ok(Some(bytes))
     }
-    fn write(&self, name: &str, bytes: &[u8]) -> Result<()> {
+    pub(crate) fn write(&self, name: &str, bytes: &[u8]) -> Result<()> {
         anyhow::ensure!(
             bytes.len() as u64 <= LIMIT,
             "review-watch state exceeds size limit"
@@ -644,7 +655,7 @@ impl Directory {
         self.handle.sync_all()?;
         Ok(())
     }
-    fn lock(&self, name: &str) -> Result<RuntimeLock> {
+    pub(crate) fn lock(&self, name: &str) -> Result<RuntimeLock> {
         let file = self.file(name, true)?;
         // Retry brief concurrent transactions; a holder that outlasts the
         // bounded retry window still yields WouldBlock to the caller.
@@ -755,7 +766,19 @@ impl Store {
     /// its deterministic mailbox ID and is not duplicated.
     // trace:TASK-1993 | ai:claude
     fn prune(&self, open: &BTreeSet<String>) -> Result<usize> {
-        self.settle(Some(open))
+        let removed = self.settle(Some(open))?;
+        let episodes = Directory::lane_episodes(&self.root)?;
+        let _lock = episodes.lock("episodes.lock")?;
+        for entry in std::fs::read_dir(episodes.path())? {
+            let name = entry?.file_name();
+            if let Some(key) = name
+                .to_str()
+                .filter(|key| parse_key(key).is_ok() && !open.contains(*key))
+            {
+                episodes.remove(key)?;
+            }
+        }
+        Ok(removed)
     }
     /// Reconcile lost dispatchers under the admission lock, against the
     /// state as it is under that lock, and drop nothing: for a watcher that

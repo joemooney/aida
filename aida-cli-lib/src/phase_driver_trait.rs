@@ -346,6 +346,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
         // advisor tier resolves the fork, `resume_implementer` `--resume`s
         // exactly this session. trace:STORY-306 | ai:claude
         self.implementer_session = Some(session_uuid.clone());
+        self.claim_heartbeat = Some(crate::coordination::SessionClaimHeartbeat::drain(
+            self.project_root.clone(),
+            session_uuid.clone(),
+        ));
         // trace:BUG-2386 | ai:claude
         self.implementer_vendor = Some(headless_vendor);
 
@@ -3564,6 +3568,10 @@ impl auto_complete::PhaseDriver for RealPhaseDriver {
                 "advisor tier: no implementer session id to resume",
             )
         })?;
+        self.claim_heartbeat = Some(crate::coordination::SessionClaimHeartbeat::drain(
+            self.project_root.clone(),
+            session_id.clone(),
+        ));
         let worktree = self.implementer_worktree.clone().ok_or_else(|| {
             PhaseFailure::of(
                 FailureKind::Internal,

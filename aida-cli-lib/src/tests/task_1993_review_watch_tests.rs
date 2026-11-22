@@ -3382,6 +3382,45 @@ fn story2705_parked_merge_head_is_unreserved_then_admitted_once_after_lease_ends
     assert_eq!(store.load().unwrap().entries["PR-1"].attempts.len(), 1);
 }
 
+// trace:BUG-2706 | ai:codex
+#[test]
+fn bug2706_only_fixed_head_is_admitted_after_foreign_lane_release() {
+    let (temp, store) = fixture();
+    let claims = temp.path().join(".aida-store/coordination/leases");
+    std::fs::create_dir_all(&claims).unwrap();
+    let path = claims.join("BUG-2706.toml");
+    let now = chrono::Utc::now().to_rfc3339();
+    let claim = serde_json::json!({"scope":"BUG-2706", "node_id":"peer", "clone_path":"", "host":"foreign-host", "pid":1, "agent":"implementer", "started_at":now, "heartbeat_at":now, "ttl_secs":1800});
+    std::fs::write(&path, toml::to_string(&claim).unwrap()).unwrap();
+    let gate = || {
+        crate::review_implementer_gate::deferred_with_metadata(temp.path(), || {
+            Ok(("fix (BUG-2706)".into(), "bug-2706".into()))
+        })
+        .unwrap()
+    };
+    let merge = change(1, 2, false);
+    let fix = change(1, 3, false);
+    for head in [&merge, &fix] {
+        let reason = gate().expect("foreign lane holds both heads");
+        record_skip(&store, head, Some(&reason)).unwrap();
+        assert!(store.load().unwrap().entries["PR-1"].attempts.is_empty());
+    }
+    std::fs::write(&path, "[").unwrap();
+    assert!(gate().unwrap().contains("unknown"));
+    std::fs::remove_file(path).unwrap();
+    assert!(gate().is_none());
+    record_skip(&store, &fix, None).unwrap();
+    assert_eq!(
+        dispatch(select(&store, &fix, None, 2).unwrap()).head,
+        fix.head
+    );
+    assert!(matches!(
+        select(&store, &fix, None, 2).unwrap(),
+        Action::Skip(_)
+    ));
+    assert_eq!(store.load().unwrap().entries["PR-1"].attempts.len(), 1);
+}
+
 // trace:BUG-2518 | ai:codex
 #[test]
 fn bug2518_local_preclaim_exits_preserve_started_attempt_budget() {

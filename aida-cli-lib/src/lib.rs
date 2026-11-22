@@ -126,6 +126,7 @@ mod containment;
 mod context_prompt;
 mod coordination;
 mod criteria;
+mod lane_hosts;
 // trace:STORY-1487 | ai:claude
 mod criteria_coverage;
 mod criteria_gate;

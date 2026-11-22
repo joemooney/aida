@@ -582,6 +582,9 @@ pub(crate) fn sanitize_scope(scope: &str) -> String {
 #[path = "coordination_heartbeat.rs"]
 mod heartbeat;
 pub(crate) use heartbeat::SessionClaimHeartbeat;
+pub(crate) fn strict_claims(store: &Path) -> Result<crate::lane_hosts::Inventory> {
+    heartbeat::strict_claims(store)
+}
 
 /// Best-effort store refresh for a coordination write. An unreachable store
 /// keeps the local-only path (`Ok`); a store-sync refusal (hypothesis evidence

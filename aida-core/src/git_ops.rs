@@ -96,7 +96,44 @@ fn remote_git_with_env(
     args: &[&str],
     envs: &[(&str, &str)],
 ) -> Result<GitResult> {
-    run_git_result(host_remote_git_command(cwd, remote), args, envs)
+    let mut cmd = host_remote_git_command(cwd, remote);
+    if let Some((deadline, runner)) = REMOTE_LIMIT.get() {
+        cmd.env("AIDA_STORE_WRITE_GUARD", env!("CARGO_PKG_VERSION"))
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .envs(envs.iter().copied())
+            .args(args);
+        let remaining = deadline
+            .checked_duration_since(std::time::Instant::now())
+            .context("remote Git deadline expired")?;
+        let output = runner(cmd, remaining).context("remote Git failed or timed out")?;
+        return Ok(git_result(output));
+    }
+    run_git_result(cmd, args, envs)
+}
+
+type RemoteRunner = fn(Command, Duration) -> Option<std::process::Output>;
+thread_local! {
+    static REMOTE_LIMIT: std::cell::Cell<Option<(std::time::Instant, RemoteRunner)>> = const { std::cell::Cell::new(None) };
+}
+/// Apply a caller's process-group runner and one wall-clock deadline to remote
+/// Git on this thread. Local store transactions retain their recovery semantics.
+// trace:BUG-2706 | ai:codex
+pub fn with_remote_deadline<T>(
+    deadline: std::time::Instant,
+    runner: RemoteRunner,
+    work: impl FnOnce() -> T,
+) -> T {
+    struct Restore(Option<(std::time::Instant, RemoteRunner)>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            REMOTE_LIMIT.set(self.0);
+        }
+    }
+    let deadline = REMOTE_LIMIT
+        .get()
+        .map_or(deadline, |(outer, _)| outer.min(deadline));
+    let _restore = Restore(REMOTE_LIMIT.replace(Some((deadline, runner))));
+    with_config_read_deadline(Some(deadline), work)
 }
 
 fn run_git_result(mut cmd: Command, args: &[&str], envs: &[(&str, &str)]) -> Result<GitResult> {
@@ -107,12 +144,16 @@ fn run_git_result(mut cmd: Command, args: &[&str], envs: &[(&str, &str)]) -> Res
         .output()
         .with_context(|| format!("Failed to run: git {}", args.join(" ")))?;
 
-    Ok(GitResult {
+    Ok(git_result(output))
+}
+
+fn git_result(output: std::process::Output) -> GitResult {
+    GitResult {
         success: output.status.success(),
         stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
         code: output.status.code(),
-    })
+    }
 }
 
 /// The one way to build a host `git` command over a repository that may be an
