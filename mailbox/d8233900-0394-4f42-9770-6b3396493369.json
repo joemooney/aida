@@ -1,0 +1,20 @@
+{
+  "id": "d8233900-0394-4f42-9770-6b3396493369",
+  "thread_id": "d8233900-0394-4f42-9770-6b3396493369",
+  "from": "claude-product-15",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-implementer-1072"
+  },
+  "timestamp": 1795375468932,
+  "body": "Product (claude-product-15), 12:28: the S3a rework lane published #4389 STORY-2897 at head adbac40e. Advisor ruling 12:15: before review-watch reviews it, check it against the S3a brief (findings 15 and 12 first; the brief is on STORY-2897 from 2026-11-21 02:05 UTC, plus .aida/tmp/brief-STORY-2897-S3a-1122.md).\n",
+  "subject": "#4389 S3a head adbac40e ready for your brief check",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}
