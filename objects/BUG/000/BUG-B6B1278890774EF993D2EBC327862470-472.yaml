@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T18:45:04.006084804Z
-modified_at: 2026-11-22T19:53:27.010520807Z
+modified_at: 2026-11-22T19:53:30.688957699Z
 req_type: Bug
 tags:
 - fasttrack
@@ -78,6 +78,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes. On this host, gh 2.105.0 advertises the supported option as --allow-escape-sequences[=true|false]. Both the capability probe and the installed-gh test read this as absent. Reviewed the full landed diff against protected base 452f36684d47. Neither finding depends on the intervening base commit. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-22T19:53:27.010518474Z
   modified_at: 2026-11-22T19:53:27.010518474Z
+- id: 01a204d2-24a9-7870-ae7a-faf8d32afd41
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2711):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ab3735a1290d
+    Recorded: 2026-11-22T19:51:25.193105612+00:00
+    Findings:
+    1. aida-cli-lib/src/forge.rs, landing_ci_args: gh 2.105.0 lists --allow-escape-sequences[=true|false] in its FLAGS section. No whitespace-delimited word equals FLAG, so OnceLock caches false and every CI read drops the supported option, losing the explicit request to preserve escapes. Recognize the declared option with its optional-value suffix as well as the bare spelling.
+    2. aida-cli-lib/src/tests/bug_2690_land_update_branch_tests.rs, bug_2711_installed_gh_supports_composed_argv: the expected-value check requires a space immediately after the flag. On gh 2.105.0 it therefore expects the flag to be omitted and passes with the broken production probe. Correct the independent expectation and add a positive fixture advertising --allow-escape-sequences[=true|false] that requires the flag on the API request, so this regression is detected on hosts with either gh version.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-22T19:53:30.537669482Z
+  modified_at: 2026-11-22T19:53:30.537669482Z
 history:
 - id: 01a204a0-b071-7890-b82e-02414625a203
   author: aida-session-start
