@@ -1,0 +1,36 @@
+id: 01a204d9-30fd-7752-8b22-956ce56089f3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1216
+agreed_id: TASK-3834
+title: 'Deferred findings 3, 4, 6-10 from PR #4389 (STORY-2897 S3a) CR at adbac40e'
+description: |
+  Deferred from the PR #4389 (STORY-2897 S3a) CR at adbac40e under the advisor-122 ruling (2026-11-22 13:03 MST). The S3a final round fixes only findings 1, 2 and 5.
+
+  ## Findings
+  3. [P2, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:1395. If A and then B are red and A reruns green while B remains red, A closes at the observation time and B opens at its earlier commit time on replay. Summing both episode durations counts the overlap twice, even in a window where main was red for the entire window. Compute red minutes from the union of the clipped intervals and assert the metric for this existing rerun scenario.
+  4. [P2, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:978. A failure of the actual CI step “Minimal aida-cli build for docs-only guards” in CI (gates) or CI (contracts) cannot match either compile prefix, although it runs cargo build. A confirmed build failure therefore misses the documented immediate unbuildable recommendation. Cover the workflow’s compile steps with a fixture tied to their real names.
+  6. [P2] aida-cli-lib/src/main_watch.rs:307. The aggregate contributor allowlist duplicates ci.yml job names without a drift check. A renamed shard can lose diagnostic and compile-trigger coverage. Tie the mapping to the workflow or check it against the aggregate dependencies.
+  7. [P2, test-gap] aida-cli-lib/src/tests/story_2897_main_watch_tests.rs:394. The rewrite fixture starts without an open episode. Cover a proved rewrite with an open episode and verify that its journal closes as unattributed and its old baseline is cleared.
+  8. [P2, test-gap] aida-cli-lib/src/tests/story_2897_main_watch_tests.rs:622. The crash fixture counts red_start only. Verify cursor and red_merge contents after opening and rewind/replay after a crash closing a green rerun. Also assert historical source timestamps separately from detection/confirmation times during catch-up.
+  9. [P2, test-gap] aida-cli-lib/src/tests/story_2897_main_watch_tests.rs:1072. The production history test does not set conflicting Git repository-routing variables. Verify that the pinned checkout still supplies the history with a foreign GIT_DIR and GIT_WORK_TREE.
+  10. [P2, test-gap] aida-cli-lib/src/tests/story_2897_main_watch_tests.rs:790. The guard covers prefixed train and ship modules but still omits orchestrator.rs. Include that landing entry point so a direct watch call there fails the guard.
+
+  ## Acceptance
+  - AC1: Each finding above is fixed with a regression test that fails before the fix, or closed with advisor sign-off as not applicable to the landed code.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T20:01:12.445755266Z
+modified_at: 2026-11-22T20:01:12.445755266Z
+req_type: Task
+tags:
+- main-watch
+- mass-change
+- review-follow-up
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
