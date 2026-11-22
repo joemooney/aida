@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T18:45:04.006084804Z
-modified_at: 2026-11-22T19:53:30.688957699Z
+modified_at: 2026-11-22T19:55:18.518984938Z
 req_type: Bug
 tags:
 - fasttrack
@@ -91,6 +91,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-22T19:53:30.537669482Z
   modified_at: 2026-11-22T19:53:30.537669482Z
+- id: 01a204d3-fbe8-7bc1-b4cb-e52d99ce8bb8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:55):
+    # BUG-2711 / PR #4391 r2 (advisor-122 ruling 2026-11-22 12:53 MST; relayed by product-15). Lane: CODEX. Fasttrack, small diff.
+
+    The CR at ab3735a1 is valid. Fix exactly these two findings. Reviewer scope = these two plus this round's diff.
+    1. [p1] aida-cli-lib/src/forge.rs landing_ci_args probe: gh 2.105.0's help lists `--allow-escape-sequences[=true|false]`. The whitespace-word match never equals the flag, so the OnceLock caches false and drops the flag on EVERY host. Match the flag as a token prefix followed by `[`, `=`, whitespace or end of line.
+    2. [p2] aida-cli-lib/src/tests/bug_2690_land_update_branch_tests.rs bug_2711_installed_gh_supports_composed_argv: the independent expectation has the same space-after-flag bug, so it passes against broken code. Fix it the same way, and add a positive fixture with the literal 2.105.0 help line `--allow-escape-sequences[=true|false]` that requires the flag on the API request. Keep the without-flag (2.81.0-style) fixture.
+    Under mass-change mode, classify every finding; unmet-AC defers. One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-22T19:55:18.518984938Z
+  modified_at: 2026-11-22T19:55:18.518984938Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a204a0-b071-7890-b82e-02414625a203
   author: aida-session-start
