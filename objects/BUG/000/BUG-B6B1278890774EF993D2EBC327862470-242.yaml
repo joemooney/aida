@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-07T04:29:21.829119860Z
-modified_at: 2026-11-07T07:21:10.681410149Z
+modified_at: 2026-11-22T21:25:36.817056426Z
 req_type: Bug
 relationships:
 - rel_type: Child
@@ -33,6 +33,11 @@ comments:
   created_at: 2026-11-07T05:56:42.177765171Z
   modified_at: 2026-11-07T05:56:42.177765171Z
   session_id: 01a1b47c2a9c
+- id: 01a20526-77b1-72c3-8ab5-a6f0050f83d5
+  author: joe
+  content: 'Follow-up from the operator''s work-side CI report (product-15, 2026-11-22): the same ambient-environment test class recurred on foreign runners. These fixtures depended on runner identity, host PID namespace, live remotes or operator env: agent_handle.rs, agent_launch.rs, mandate.rs, bug_013_*, bug_044_*, queue_work_dry_run.rs, mailbox_identity_tests.rs, test_work_mirror_sync.py. The work-side fix used literal test principals, impossible PIDs (u32::MAX) with an explicit pid-namespace stamp, local git responders instead of live remotes, a fresh subprocess env, and test-only wait overrides. Suggested ratchet: forbid getuid and ambient-principal lookups in test fixtures.'
+  created_at: 2026-11-22T21:25:36.817056426Z
+  modified_at: 2026-11-22T21:25:36.817056426Z
 history:
 - id: 01a1b444-c55a-7471-81b1-e959b0bd0cbb
   author: joe
