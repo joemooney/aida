@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-22T17:41:10.807791964Z
+modified_at: 2026-11-22T17:51:16.162853482Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -410,6 +410,18 @@ comments:
   modified_at: 2026-11-22T17:39:11.479388522Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20462-3bcb-79b2-b2c9-6008f2566603
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: deb4412eb16722e96a7a6a697d193748af4db9fb plus the uncommitted FAST manifest change. CI repair for the Refs-only receipt slice.
+    AC1: [evidence: behavioral-test] scripts/ratchet-set.json:267 selects the existing receipt-store remount test at aida-cli-lib/src/containment/tests/launch_tests.rs:76 by its full function name. Launcher job j20261122T174226501-2-0 executed one test and passed. Both previously failing cover checks passed in the 90-test ratchet fixture run.
+    AC2: [evidence: configuration-validation] Classifier regeneration produced an identical document and --check passed. The logged fixture::new_classifier diagnostic belongs to the passing negative fixture. The failed hosted fast compile step on both 190513dc and deb4412eb1 names the missing selection.
+    Probes: checked the exact filter, JSON shape, zero/one/multiple match guards and mixed-module mutation checks. The edit selects a test without changing receipt authority, dispatch or exclusions. Store-writer check reconciled 3854 sites. Hosted post-fix CI awaits publication. Recovery and supersession are deferred to later slices.
+  created_at: 2026-11-22T17:51:16.162853482Z
+  modified_at: 2026-11-22T17:51:16.162853482Z
+  session_id: 01a20458c92c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
