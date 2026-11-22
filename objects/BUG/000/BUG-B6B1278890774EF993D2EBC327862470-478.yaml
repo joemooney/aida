@@ -1,0 +1,29 @@
+id: 01a20525-e502-7780-b830-e0c8a3d6888e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-478
+agreed_id: BUG-2717
+title: Containment preflight blocks forever on a seccomp receive after the listener hangs up
+description: |
+  The containment launch preflight (contained_host.py, the preflight loop around line 721) can block indefinitely on a seccomp-notify receive after the listener has hung up, hanging the launch. A `_hung_up()` helper exists but the preflight loop doesn't consult it. Source: the operator's work-side AIDA CI branch fixed this on 2026-11 (report reviewed by product-15, 2026-11-22). That branch is not reachable from this clone, so reproduce on main first; if main already behaves correctly, close with evidence.
+
+  ## Acceptance
+  - AC1: When the preflight listener has hung up, preflight refuses within 10 s and the model process never starts. A test asserts the bound.
+  - AC2: An open listener still completes preflight normally (positive control).
+  - AC3: The refusal names the hangup as the reason.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T21:24:59.266972566Z
+modified_at: 2026-11-22T21:24:59.266972566Z
+req_type: Bug
+tags:
+- containment
+- from-work-ci
+- launch
+filed_at:
+  code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
