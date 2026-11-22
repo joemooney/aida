@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-21T08:40:21.918996544Z
+modified_at: 2026-11-22T18:42:34.062861476Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -631,6 +631,13 @@ comments:
     Independent source evidence for the existing round-5 exactly-once requirement, PR #4378 head 4602d292b515. TASK-HOME-1178 remains open. announce_review_once locks concurrent recorders and preserves retry after a failed append, but a successful event append and the completion mark are separate writes. Interruption or mark-write failure after append leaves a pending mark. The retry appends again because the sink does not reconcile the recorded-act identity. Existing tests cover failed emit before delivery and concurrent recorders where the first finishes. Keep the original round-5 scope and require a regression for the successful-append/failed-mark boundary before accepting its exactly-once criterion.
   created_at: 2026-11-21T08:40:21.918996544Z
   modified_at: 2026-11-21T08:40:21.918996544Z
+- id: 01a20491-64b9-73d1-8648-1f777ae4452e
+  author: joe
+  content: 'LIVE REPRO (product-15, 2026-11-22): two operator `aida review record` approvals of PR-4377 @1a5f69f0 at 18:41:48Z each wrote a request-changes event followed by an approved event in .aida/gate-ledger/PR-4377.jsonl (4 lines, same timestamp). A ledger tail watcher saw the verdict flip CR, approved, CR, approved. This is the one-approval-two-events defect #4378 fixes.'
+  created_at: 2026-11-22T18:42:34.062861476Z
+  modified_at: 2026-11-22T18:42:34.062861476Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe
