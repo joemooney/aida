@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-22T18:24:11.975725111Z
+modified_at: 2026-11-22T18:37:17.947789692Z
 req_type: Bug
 tags:
 - dell1
@@ -1096,6 +1096,19 @@ comments:
   modified_at: 2026-11-22T18:21:34.411929057Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2048c-6151-70d1-9cac-8259428f010e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 68a073d901b604e74bbf5c4ce43c14e64fc4f814 plus native worktree diff. No untracked additions. Refs-only final scope.
+    Finding 2 [evidence: behavioral-test] bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup recreates a deleted default checkout with the Git prunable registration present. Preflight is read-only. Cleanup requires a unique default registration, no matching leases, no lock and covered branch tip.
+    Findings 4 and 5 [evidence: behavioral-test] bug_2684_each_local_verdict_source_counts_as_recorded_at_its_head rejects both heads sharing a recorded prefix and accepts the exact checked-ledger verdict despite a malformed archived round. Short IDs refuse. Reviewed empty, multiple, spec-only and WAITING evidence, symlink handling, missing checkout and live/replacement-holder refusals. Draft retention and publication tests passed.
+    New gone-tree lease-release implementation, conflict-loop changes and associated tests removed. Existing session-start and session-reap behavior matches merge base. Product owns the separate lease-release sketch.
+    Targeted lane run: 11 passed, zero failed. All 48 fast source gates and store writer inventory passed; additional make ratchets running.
+  created_at: 2026-11-22T18:37:17.947789692Z
+  modified_at: 2026-11-22T18:37:17.947789692Z
+  session_id: 01a20480090c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ef5b-38ff-76f3-853e-f805337d7996
   author: joe
