@@ -1,5 +1,6 @@
 id: 01a2053a-30b5-7770-8210-55da6d0192d9
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-200
+agreed_id: STORY-3007
 title: 'Review PR-4395: [AI:codex] fix(rework): publish the base merge with the first fix (BUG-2714)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20501`) for branch `bug-b6b1278890774ef993d2ebc327862470-475`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-22T21:47:20.522924023Z
   session_id: 01a20501f488
+  changes: []
+- id: 01a20542-0f94-7e90-a7e2-753b9a6361ad
+  author: joe
+  timestamp: 2026-11-22T21:55:45.172845050Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 30da58d4f9b68ed52201e60a99f4a4330abc07bf
