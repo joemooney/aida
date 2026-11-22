@@ -322,7 +322,8 @@ fn bug_2684_unrecorded_reviewer_draft_survives_exit_teardown_and_next_pickup() {
     let head = git_ok(&tree, &["rev-parse", "HEAD"]);
 
     // The launch's real handoff, written in full by the reviewer.
-    let launch = crate::review_draft::LaunchDraft::prepare(&tree, 2457, head.clone()).unwrap();
+    let launch =
+        crate::review_draft::LaunchDraft::prepare_local(&tree, 2457, head.clone()).unwrap();
     let body = serde_json::json!({
         "version": 1,
         "pr": 2457,
@@ -332,7 +333,7 @@ fn bug_2684_unrecorded_reviewer_draft_survives_exit_teardown_and_next_pickup() {
         "findings": ["[P1] first complete finding", "[P2] second complete finding"],
     })
     .to_string();
-    std::fs::write(launch.path(), &body).unwrap();
+    launch.submit(&body).unwrap();
     assert!(launch.read().is_ok());
     assert_eq!(git_ok(&tree, &["status", "--porcelain"]), "");
 
