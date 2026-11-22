@@ -258,6 +258,18 @@
       "tests": [
         "every_time_bound_flag_is_classified"
       ]
+    },
+    {
+      "package": "aida-cli-lib",
+      "target": [
+        "--lib"
+      ],
+      "scope": "filter",
+      "filter": "bug_2669_a_writable_mount_above_the_receipt_store_is_resealed_read_only",
+      "source": "aida-cli-lib/src/containment/tests/launch_tests.rs",
+      "tests": [
+        "bug_2669_a_writable_mount_above_the_receipt_store_is_resealed_read_only"
+      ]
     }
   ],
   "shared_modules": {
