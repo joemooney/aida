@@ -195,13 +195,6 @@
   added_at: 2026-11-07T23:52:11.360480213Z
   for_role: human
 - user_id: role:human
-  requirement_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
-  position: 45000
-  added_by: aida:defer-resurface
-  note: 'operator hold retained; date:2026-11-19: met (today is 2026-11-19)'
-  added_at: 2026-11-19T14:56:14.997298044Z
-  for_role: human
-- user_id: role:human
   requirement_id: 01a1ebf2-d884-7621-9a80-25344ab14aab
   position: 46000
   added_by: aida:defer-resurface
