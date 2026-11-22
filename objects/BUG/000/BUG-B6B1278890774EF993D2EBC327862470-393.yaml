@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-22T20:04:40.341647282Z
+modified_at: 2026-11-22T22:00:20.198228578Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -1060,6 +1060,18 @@ comments:
   modified_at: 2026-11-22T20:04:40.341647282Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20546-445e-7f11-a67b-07e4dbb969f1
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 0cac11581cff1f5fd2f853a43a2646d3baa16d17 plus the uncommitted pickup-test delta.
+    Finding 1 [evidence: behavioral-test] bug_2629_selected_ownership_failure_checks_other_spec_changes observed the newer PR-42 WAITING reason after selected PR-41 ownership failed. discover_with_cache consults the spec inventory before recovery.
+    Finding 2 [evidence: behavioral-test] bug_2629_selected_malformed_ledger_is_unknown_even_without_fingerprints observed a refusal naming the sole indexed PR-41 ledger for both malformed JSON and invalid UTF-8. queue_change_events checks the physical ledger before witness filtering.
+    Both production fixes were present in 94cf1439. The delta exercises pickup_rework_review with a selected change. Both tests passed, 48 FAST source gates passed, and 3842 store writer sites reconciled. The full FAST lane job is running. The prior-head failure was assessed by source inspection. AC3 and mirrored-history scaling remain outside this mass-change delta.
+  created_at: 2026-11-22T22:00:20.198228578Z
+  modified_at: 2026-11-22T22:00:20.198228578Z
+  session_id: 01a2053bf4f9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e480-054f-7f43-a2eb-7961f6a780ad
   author: joe
