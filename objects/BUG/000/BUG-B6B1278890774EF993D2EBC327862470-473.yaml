@@ -17,13 +17,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269342Z
-modified_at: 2026-11-22T19:22:13.005269342Z
+modified_at: 2026-11-22T19:24:58.581879612Z
 req_type: Bug
 tags:
 - mass-change
 - p1
 - review
 - throughput
+comments:
+- id: 01a204b8-370d-7752-8e4b-0925ca4ca85a
+  author: joe
+  content: 'Advisor-122 12:26 addition (relayed by product-15): AC5. The recorder must also demote to deferred any finding marked blocking whose class is not in the configured blocking-tier list (data-loss, p1, security-authority-bypass, unmet-claimed-ac). Today such classes (mutation-kill, untested-path) block, as on PR-4387 at aa380d29. Brief: .aida/tmp/brief-BUG-2712-1222.md'
+  created_at: 2026-11-22T19:24:58.581879612Z
+  modified_at: 2026-11-22T19:24:58.581879612Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
