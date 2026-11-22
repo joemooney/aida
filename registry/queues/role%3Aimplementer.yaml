@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
+  position: -962000
+  added_by: role:implementer
+  added_at: 2026-11-22T17:29:49.946789496Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1ec45-5343-7720-a3ac-34f995c661c4
   position: -961000
   added_by: role:implementer
@@ -268,14 +274,6 @@
   added_by: role:implementer
   note: Use the documented manual recovery option. Describe how an authorized operator retains the unreadable journal for audit and restores a valid journal using the existing commands. Keep automatic observation fail-closed until recovery. Add an isolated regression exercising the documented recovery and valid-journal status. Any new command authority or automatic recovery needs a separate sketch.
   added_at: 2026-11-21T07:39:48.282171020Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1ec72-622a-79b1-832d-24fa68ec7ffe
-  position: 636000
-  added_by: role:implementer
-  note: 'S3a rework only: continue PR #4389 to integration at 964a98c30edf, using the pinned 19-finding rework brief. Leave S1b and S3b to their separately signed scope.'
-  added_at: 2026-11-21T09:05:19.483907804Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
