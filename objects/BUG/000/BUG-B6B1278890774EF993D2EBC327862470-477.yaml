@@ -1,0 +1,30 @@
+id: 01a20525-c1c1-7c61-89cd-4a84f8ca2c89
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-477
+agreed_id: BUG-2716
+title: 'Store mutation broker accepts a negative sender pidfd: refuse before dispatch, close only valid fds'
+description: |
+  The store mutation broker (store_mutation/service.py) accepts a negative sender pidfd from a request, can dispatch with it, and closes it without checking validity. A negative or invalid pidfd must be refused before dispatch, and only valid fds may be closed. This is a fail-open at an authority boundary. Source: the operator's work-side AIDA CI branch fixed this on 2026-11 (report reviewed by product-15, 2026-11-22). That branch is not reachable from this clone, so reproduce on main first; if main already behaves correctly, close with evidence.
+
+  ## Acceptance
+  - AC1: Requests carrying a negative sender pidfd (-1, -2 and INT_MIN-like values) are refused before any dispatch, with a clear error.
+  - AC2: close() is called only on fds that were validly received. A test asserts no close on the refused values.
+  - AC3: A valid pidfd request still dispatches (positive control).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T21:24:50.241345704Z
+modified_at: 2026-11-22T21:24:50.241345704Z
+req_type: Bug
+tags:
+- authority
+- from-work-ci
+- security
+- store-mutation
+filed_at:
+  code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
