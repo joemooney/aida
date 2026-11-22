@@ -2168,7 +2168,9 @@ true"#;
             // /var/tmp without changing the host mount or the Codex write set.
             Err(err) if err.kind() == std::io::ErrorKind::ReadOnlyFilesystem => {
                 assert!(
-                    std::env::var_os("AIDA_TEST_PRIVATE_VAR_TMP").is_none(),
+                    aida_core::exec_context::Environment::capture()
+                        .get("AIDA_TEST_PRIVATE_VAR_TMP")
+                        .is_none(),
                     "{err}"
                 );
                 let thread = std::thread::current();
