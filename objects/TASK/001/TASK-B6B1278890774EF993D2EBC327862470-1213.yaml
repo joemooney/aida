@@ -16,11 +16,17 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T19:16:21.498334452Z
-modified_at: 2026-11-22T19:16:21.498334452Z
+modified_at: 2026-11-22T21:31:45.062141628Z
 req_type: Task
 tags:
 - mass-change
 - review-follow-up
+comments:
+- id: 01a2052c-1626-7c22-8d26-88d0b837e087
+  author: joe
+  content: Finding 2 (noexec /tmp) is superseded by TASK-3838 and folded into it (advisor-122 14:34). This task keeps the remaining items only.
+  created_at: 2026-11-22T21:31:45.062141628Z
+  modified_at: 2026-11-22T21:31:45.062141628Z
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
