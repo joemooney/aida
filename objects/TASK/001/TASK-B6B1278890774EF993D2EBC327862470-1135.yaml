@@ -21,13 +21,14 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-22T23:58:39.649978473Z
+modified_at: 2026-11-22T23:59:20.614902939Z
 req_type: Task
 tags:
 - codify
 - docs:impacted
 - lanes
 - linked:STORY-2906
+- operator-held
 - product-intake
 relationships:
 - rel_type: Child
@@ -525,6 +526,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a205b3-3685-76e3-9730-804265f07dee
+  author: joe
+  timestamp: 2026-11-22T23:59:20.709788424Z
+  changes: []
+deferred: true
+deferred_at: 2026-11-22T23:59:20.614902939Z
+deferred_until: date:2026-12-15
+deferred_reason: 'PR #4373 closed under the round cap; revisit inside STORY-2660 (lane host pool), not as a standalone relay'
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
