@@ -1968,7 +1968,7 @@ pub(crate) fn run_vendor_headless_to_exit(
     // spawn, so it is marked as such: the pickup then rolls back its setup
     // (and releases its shared claim) although its launch mark is already set.
     // trace:BUG-2697 | ai:claude
-    let (startup, mut _fast_gate) = (|| -> anyhow::Result<_> {
+    let ((startup, relay_fence), mut _fast_gate) = (|| -> anyhow::Result<_> {
         // trace:TASK-2902 | ai:codex
         let startup = if let Some((_, (tree, _))) = implementer_job_lane(seat, lease_id, lane_tree)
         {
@@ -1989,14 +1989,14 @@ pub(crate) fn run_vendor_headless_to_exit(
             )?;
             // trace:TASK-3826 | ai:claude — a relayed rework's head, re-checked
             // after the slot wait.
-            crate::lane_relay::admit_launch(&record_root)?;
+            let fence = crate::lane_relay::admit_launch(&record_root)?;
             if vendor == HeadlessVendor::Codex {
                 crate::native_publication::prepare(&main, tree)?;
             }
             // Prior-attempt signals remain until the final spawn boundary below.
-            Some(startup)
+            (Some(startup), fence)
         } else {
-            None
+            (None, None)
         };
         // trace:STORY-2640 | ai:codex
         let fast_gate = implementer_job_lane(seat, lease_id, lane_tree)
@@ -2008,6 +2008,7 @@ pub(crate) fn run_vendor_headless_to_exit(
         Ok((startup, fast_gate))
     })()
     .map_err(crate::lane_admission::refused_before_spawn)?;
+    let relay_fence = std::cell::RefCell::new(relay_fence);
     let result = with_implementer_jobs(
         &main_root,
         seat,
@@ -2036,6 +2037,9 @@ pub(crate) fn run_vendor_headless_to_exit(
                         &HeadlessChildHooks {
                             customize: Some(apply_lane_env),
                             on_delivery,
+                            on_spawn: Some(&|_| {
+                                relay_fence.borrow_mut().take();
+                            }),
                             before_spawn: Some(&|| {
                                 if !resume {
                                     if let Some((lease, (tree, _))) =

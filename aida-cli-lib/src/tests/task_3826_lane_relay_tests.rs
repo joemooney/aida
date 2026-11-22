@@ -35,6 +35,18 @@ struct HostState {
 }
 
 impl HostState {
+    fn owner(&self) -> RelayOwner {
+        let env = self.spawn_env.borrow();
+        let value = &env
+            .last()
+            .unwrap()
+            .iter()
+            .find(|(k, _)| k == OWNER_ENV)
+            .unwrap()
+            .1;
+        serde_json::from_str(value).unwrap()
+    }
+
     /// The gate the last launcher was started under.
     fn gate(&self) -> LaunchGate {
         let env = self.spawn_env.borrow();
@@ -75,7 +87,7 @@ impl HostSys for FakeSys {
         ids.push(spec.to_string());
         Ok(ids)
     }
-    fn lane_running(&self, _ids: &[String]) -> bool {
+    fn lane_running(&self, _root: &Path, _ids: &[String]) -> bool {
         self.0.running.get()
     }
     fn shortfall(&self) -> Option<String> {
@@ -165,8 +177,8 @@ impl FakeWorld {
 
     /// The started launcher records an attempt and `then` says how it went.
     fn launcher_records(&self, then: impl Fn(&Attempt) + 'static) {
-        *self.host.on_spawn.borrow_mut() = Some(Box::new(move |root, _| {
-            then(&Attempt::begin(root, SPEC, None).unwrap());
+        *self.host.on_spawn.borrow_mut() = Some(Box::new(move |root, host| {
+            then(&Attempt::begin_with_id(root, SPEC, None, host.owner().attempt).unwrap());
         }));
     }
 
@@ -719,6 +731,21 @@ fn earlier_briefs_stay_in_force_until_the_new_lane_starts() {
     assert_eq!(outcome, Outcome::Stopped(Stop::Superseded));
     unmarked(&world, "relay-superseded");
 
+    // The newer relay takes a round but stops before delivering anything.
+    let mut world = with_old_brief();
+    let file = round_file(&world, SPEC);
+    world.on_reply = Box::new(move |op, _| {
+        if matches!(op, RelayHostCommand::PlaceBrief { .. }) {
+            std::fs::write(&file, "2").unwrap();
+        }
+    });
+    let args = world.args(None, "round two");
+    assert_eq!(
+        relay(&args, &plan_for("claude"), &mut world).unwrap(),
+        Outcome::Stopped(Stop::Superseded)
+    );
+    assert!(world.pending("claude").is_empty());
+
     // The launcher's own gate stops it after host admission.
     let mut world = with_old_brief();
     launcher_applies_its_gate(&world, Some((4373, "task-9-branch")));
@@ -1225,7 +1252,7 @@ fn only_a_relayed_heading_counts_as_a_round_brief() {
 /// applies the gate it was started under, as a real launcher does.
 fn launcher_applies_its_gate(world: &FakeWorld, open_change: Option<(u64, &'static str)>) {
     *world.host.on_spawn.borrow_mut() = Some(Box::new(move |root, mut host| {
-        let attempt = Attempt::begin(root, SPEC, None).unwrap();
+        let attempt = Attempt::begin_with_id(root, SPEC, None, host.owner().attempt).unwrap();
         let gate = host.gate();
         let gated = gate.route(open_change).and_then(|()| gate.admit(&mut host));
         match gated {
@@ -1270,7 +1297,7 @@ fn a_head_that_moves_after_host_admission_stops_the_launch() {
     );
     // The launcher recorded a refusal before any agent started.
     let record =
-        crate::lane_result::admission_since(&world.root, DateTime::<Utc>::MIN_UTC, &|id| {
+        crate::lane_result::admission_for(&world.root, world.host.owner().attempt, &|id| {
             id == SPEC
         })
         .unwrap();
@@ -1461,11 +1488,22 @@ fn a_relay_superseded_by_a_later_one_launches_nothing() {
     assert_eq!(place(first, &mut sys)["stop"], "relay-superseded");
     assert_eq!(launch(first, &brief, &mut sys)["stop"], "relay-superseded");
     assert!(world.host.spawned.borrow().is_empty());
+    let old = PathBuf::from(&brief);
+    let retract = RelayHostCommand::Retract {
+        spec: SPEC.into(),
+        round: first,
+        vendor: "claude".into(),
+        brief: None,
+    };
+    host_op(&world.root, &retract, &mut sys).unwrap();
+    assert!(!old.exists());
     // The newest round is refused too while a lane for the spec runs.
     let brief = place(second, &mut sys)["path"]
         .as_str()
         .unwrap()
         .to_string();
+    host_op(&world.root, &retract, &mut sys).unwrap();
+    assert!(Path::new(&brief).exists());
     world.host.running.set(true);
     assert_eq!(
         launch(second, &brief, &mut sys)["stop"],
@@ -1491,8 +1529,10 @@ fn the_spec_is_matched_by_any_of_its_ids_on_the_host() {
     .unwrap();
     // The launcher records its attempt under the canonical id, although the
     // relay was given the display id.
-    *world.host.on_spawn.borrow_mut() = Some(Box::new(|root, _| {
-        Attempt::begin(root, CANONICAL, None).unwrap().started(1);
+    *world.host.on_spawn.borrow_mut() = Some(Box::new(|root, host| {
+        Attempt::begin_with_id(root, CANONICAL, None, host.owner().attempt)
+            .unwrap()
+            .started(1);
     }));
     let args = world.args(None, "do the work");
 
@@ -2081,4 +2121,129 @@ esac
             .unwrap()
             .contains("admitted: TASK-9 (R 2) is running on lanehost")
     );
+}
+
+#[test]
+fn a_new_begin_invalidates_the_owner_sent_to_the_launcher() {
+    let mut world = FakeWorld::new();
+    world.prs.push_back(open(H0));
+    world.launcher_records(|a| a.started(1));
+    let args = world.args(Some(7), "rework");
+    relay(&args, &plan_for("claude"), &mut world).unwrap();
+    let owner = world.host.owner();
+    drop(owner.lock_current(&world.root).unwrap());
+    host_op(
+        &world.root,
+        &RelayHostCommand::Begin { spec: SPEC.into() },
+        &mut FakeSys(world.host.clone()),
+    )
+    .unwrap();
+    assert!(
+        matches!(owner.lock_current(&world.root), Err(e) if gate_refusal_code(&e) == Some("relay-superseded"))
+    );
+}
+
+#[test]
+fn another_pickup_receipt_cannot_supply_admission() {
+    for relay_starts in [true, false] {
+        let mut world = FakeWorld::new();
+        world.launcher_records(move |attempt| {
+            if relay_starts {
+                attempt.started(1);
+            } else {
+                attempt
+                    .finish(
+                        Kind::RefusedBeforeStart,
+                        "relay-refused",
+                        "fixture refusal",
+                        None,
+                        None,
+                        true,
+                    )
+                    .unwrap();
+            }
+        });
+        let root = world.root.clone();
+        world.on_reply = Box::new(move |op, _| {
+            if matches!(op, RelayHostCommand::Launch { .. }) {
+                let other = Attempt::begin(&root, SPEC, None).unwrap();
+                if relay_starts {
+                    other
+                        .finish(
+                            Kind::RefusedBeforeStart,
+                            "other-refused",
+                            "fixture refusal",
+                            None,
+                            None,
+                            true,
+                        )
+                        .unwrap();
+                } else {
+                    other.started(2);
+                }
+            }
+        });
+        let args = world.args(None, "this round");
+        let outcome = relay(&args, &plan_for("claude"), &mut world).unwrap();
+        if relay_starts {
+            assert!(matches!(outcome, Outcome::Admitted { .. }));
+        } else {
+            assert!(
+                matches!(outcome, Outcome::Stopped(Stop::AdmissionRefused {reason, ..}) if reason == "relay-refused")
+            );
+        }
+    }
+}
+
+#[test]
+fn symlinked_mailbox_refuses_placement() {
+    let world = FakeWorld::new();
+    let dir = world.root.join(".aida/agent-briefs");
+    std::fs::create_dir_all(&dir).unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(outside.path(), dir.join("claude")).unwrap();
+    let result = place_brief(
+        &world.root,
+        &[SPEC.into()],
+        SPEC,
+        1,
+        "claude",
+        "R1",
+        "body",
+        Utc::now(),
+    );
+    assert!(result.is_err());
+    assert_eq!(outside.path().read_dir().unwrap().count(), 0);
+}
+
+#[test]
+fn queue_head_pickup_with_a_resolved_live_lease_blocks_the_relay() {
+    let root = tempfile::tempdir().unwrap();
+    let id = "TASK-91919191";
+    let ids = vec![id.to_owned()];
+    let machine = Machine::new("aida".into());
+    assert!(!cmdline_runs_lane(
+        &[
+            "aida".into(),
+            "queue".into(),
+            "work".into(),
+            "--headless".into()
+        ],
+        &ids
+    ));
+    assert!(!machine.lane_running(root.path(), &ids));
+    let dir = crate::leases::leases_dir(root.path());
+    std::fs::create_dir_all(&dir).unwrap();
+    let lease: crate::leases::SessionLease = serde_json::from_value(serde_json::json!({
+        "id":"queue-head-worker", "scope":id, "slug":"queue-head", "owner":"operator",
+        "worktree_path":root.path(), "branch":"work", "started_at":Utc::now(),
+        "hostname":"host", "active_pid":std::process::id()
+    }))
+    .unwrap();
+    std::fs::write(
+        dir.join("queue-head-worker.toml"),
+        toml::to_string(&lease).unwrap(),
+    )
+    .unwrap();
+    assert!(machine.lane_running(root.path(), &ids));
 }

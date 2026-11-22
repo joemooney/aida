@@ -1095,9 +1095,10 @@ pub(crate) struct PickupBrief {
     path: std::path::PathBuf,
     body: String,
     consume: bool,
+    directory: Option<std::sync::Arc<std::fs::File>>,
 }
 
-fn read_pickup_brief(path: &std::path::Path) -> Result<String> {
+pub(crate) fn read_pickup_brief(path: &std::path::Path) -> Result<String> {
     use std::io::Read;
     use std::os::unix::fs::OpenOptionsExt;
 
@@ -1150,7 +1151,10 @@ fn pickup_brief_filename_matches(filename_id: &str, spec: &str, display: &str) -
 
 impl PickupBrief {
     pub(crate) fn read_explicit(path: &std::path::Path, spec: &str, display: &str) -> Result<Self> {
-        let body = read_pickup_brief(path)?;
+        let (directory, body) = match crate::lane_relay::read_relay_brief(path)? {
+            Some((dir, body)) => (Some(dir), body),
+            None => (None, read_pickup_brief(path)?),
+        };
         if let Some(id) = frontmatter_value(&body, "spec_id") {
             anyhow::ensure!(
                 pickup_brief_matches(&id, spec, display),
@@ -1159,7 +1163,12 @@ impl PickupBrief {
             );
         }
         Ok(Self {
-            path: path.canonicalize()?,
+            path: if directory.is_some() {
+                path.to_owned()
+            } else {
+                path.canonicalize()?
+            },
+            directory,
             body,
             consume: false,
         })
@@ -1214,6 +1223,7 @@ pub(crate) fn pickup_briefs(
                 && explicit.path.extension().is_some_and(|ext| ext == "md")
         });
         return Ok(vec![PickupBrief {
+            directory: explicit.directory.clone(),
             path: explicit.path.clone(),
             body: explicit.body.clone(),
             consume,
@@ -1256,6 +1266,7 @@ pub(crate) fn pickup_briefs(
                     path,
                     body,
                     consume: true,
+                    directory: None,
                 });
             }
         }
@@ -1293,7 +1304,7 @@ pub(crate) fn retire_brief(path: &std::path::Path) -> Result<Option<std::path::P
 /// round next to the newest. Returns the retired paths.
 // trace:TASK-3826 | ai:claude
 pub(crate) fn supersede_pending_briefs(
-    root: &std::path::Path,
+    mailbox_root: &std::path::Path,
     ids: &[String],
 ) -> Result<Vec<std::path::PathBuf>> {
     let names = |id: &str, by_filename: bool| {
@@ -1305,9 +1316,9 @@ pub(crate) fn supersede_pending_briefs(
             }
         })
     };
-    let mailbox_root = root.join(".aida/agent-briefs");
+
     let mut retired = Vec::new();
-    let mailboxes = match std::fs::read_dir(&mailbox_root) {
+    let mailboxes = match std::fs::read_dir(mailbox_root) {
         Ok(entries) => entries,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(retired),
         Err(err) => {
@@ -1320,7 +1331,13 @@ pub(crate) fn supersede_pending_briefs(
         if !mailbox.file_type()?.is_dir() {
             continue;
         }
-        for entry in std::fs::read_dir(mailbox.path())? {
+        use std::os::unix::fs::OpenOptionsExt;
+        let directory = std::fs::OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+            .open(mailbox.path())?;
+        let pinned = crate::lane_relay::descriptor_path(&directory);
+        for entry in std::fs::read_dir(pinned)? {
             let entry = entry?;
             let path = entry.path();
             if path.extension().is_none_or(|ext| ext != "md") || !entry.file_type()?.is_file() {
@@ -1339,7 +1356,12 @@ pub(crate) fn supersede_pending_briefs(
                 Err(_) => named_for_spec,
             };
             if matches {
-                retired.extend(retire_brief(&path)?);
+                if let Some(moved) = retire_brief(&path)? {
+                    retired.push(
+                        std::path::PathBuf::from(mailbox.file_name())
+                            .join(moved.file_name().unwrap()),
+                    );
+                }
             }
         }
     }
@@ -1359,7 +1381,10 @@ pub(crate) fn append_pickup_briefs(prompt: &mut String, briefs: &[PickupBrief]) 
 pub(crate) fn consume_pickup_briefs(briefs: &[PickupBrief]) {
     for brief in briefs.iter().filter(|brief| brief.consume) {
         let acknowledge = || -> Result<()> {
-            let path = &brief.path;
+            let pinned = brief.directory.as_ref().map(|dir| {
+                crate::lane_relay::descriptor_path(dir).join(brief.path.file_name().unwrap())
+            });
+            let path = pinned.as_ref().unwrap_or(&brief.path);
             if !path.try_exists()? {
                 return Ok(());
             }

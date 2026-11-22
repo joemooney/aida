@@ -343,7 +343,7 @@ relays (the product seat's machine). Claude and Codex lanes take the same path.
    the change is still open at the recorded head. A moved head, a merged or
    closed change, and a change that cannot be read all stop the relay.
 6. **Deliver and launch.** The brief is written to the vendor's mailbox on the
-   host (`.aida/agent-briefs/<vendor>/<SPEC>-<time>.md`); any older pending
+   host (`.aida/agent-briefs/<vendor>/<SPEC>-r<round>.md`); any older pending
    brief for the spec, in either vendor's mailbox, is renamed `*.superseded`.
    The lane is started detached with that file as its explicit `--brief`, so
    the agent is handed that brief and no other, and the brief is acknowledged
@@ -356,9 +356,11 @@ relays (the product seat's machine). Claude and Codex lanes take the same path.
    the head moved or the change is no longer open. Fresh work stops if the
    spec has an open change, and never resumes the spec's existing branch (a
    leftover unmerged branch refuses the launch instead). No agent starts in
-   either case. A custom `launcher` must pass that variable through to
-   `aida queue work`; one that clears its environment removes the gate.
-8. **Admission.** It watches the new lane's attempt record for up to
+   either case. The launcher checks the spec's round after the slot wait and
+   holds the round lock until the worker starts. A custom `launcher` must
+   pass both `AIDA_LANE_RELAY_GATE` and `AIDA_LANE_RELAY_OWNER` through
+   to `aida queue work`. The latter carries the round and the attempt UUID.
+8. **Admission.** It watches the receipt for that attempt UUID for up to
    `--admission-timeout` seconds (40 minutes). The host's cold-start cap
    (`max_concurrent_cold_starts`) is applied by the lane launch itself, which
    queues for a slot; the relay adds no limit of its own. Once the lane has
@@ -371,7 +373,8 @@ under and the store's canonical id), so the running-lane check, the round and
 the admission record agree whichever one the relay or a lane was given.
 A running lane is a process on the host whose arguments are `aida queue work`,
 `aida queue rework … --work` or a `lane-run.sh` wrapper, with the spec named
-anywhere after the subcommand.
+anywhere after the subcommand. The host also checks live leases for the resolved
+spec, including a queue-head pickup that omitted the spec from its arguments.
 
 The command prints its progress, appends it to `.aida/lane-relay/relay.log`,
 exits 0 once the lane is admitted and exits 2 on a stop. Every stop is

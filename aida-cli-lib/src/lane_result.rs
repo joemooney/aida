@@ -54,7 +54,18 @@ pub(crate) struct Attempt {
 
 impl Attempt {
     pub(crate) fn begin(main: &Path, spec: &str, branch: Option<&str>) -> Result<Self> {
-        let id = uuid::Uuid::new_v4();
+        let id = crate::lane_relay::RelayOwner::from_env()?
+            .map(|o| o.attempt)
+            .unwrap_or_else(uuid::Uuid::new_v4);
+        Self::begin_with_id(main, spec, branch, id)
+    }
+
+    pub(crate) fn begin_with_id(
+        main: &Path,
+        spec: &str,
+        branch: Option<&str>,
+        id: uuid::Uuid,
+    ) -> Result<Self> {
         let attempt = Self {
             path: crate::main_worktree_root_from(main)
                 .join(".aida/lane-results")
@@ -82,7 +93,10 @@ impl Attempt {
             start_error: RefCell::new(None),
             seat_tree: RefCell::new(None),
         };
-        attempt.persist()?;
+        std::fs::create_dir_all(attempt.path.parent().unwrap())?;
+        let mut initial = tempfile::NamedTempFile::new_in(attempt.path.parent().unwrap())?;
+        serde_json::to_writer_pretty(&mut initial, &*attempt.receipt.borrow())?;
+        initial.persist_noclobber(&attempt.path)?;
         Ok(attempt)
     }
 
@@ -469,7 +483,7 @@ impl Attempt {
     }
 }
 
-/// What the newest attempt for a spec recorded about its admission.
+/// What one launch attempt recorded about its admission.
 // trace:TASK-3826 | ai:claude
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct AdmissionRecord {
@@ -479,37 +493,23 @@ pub(crate) struct AdmissionRecord {
     pub(crate) detail: Option<String>,
 }
 
-/// The newest attempt created at or after `since` whose recorded spec
-/// `names_spec` accepts, for a caller that started a lane and watches
-/// whether the host admitted it. A receipt records whichever id the pickup
-/// resolved (the display id once routed, the launcher's argument before), so
-/// the caller decides identity with the resolver it uses everywhere else.
-/// Unreadable receipts are skipped: they belong to other attempts or are
-/// mid-write.
+/// Read only the launched attempt, including when its resolved spec is an alias.
 // trace:TASK-3826 | ai:claude
-pub(crate) fn admission_since(
+pub(crate) fn admission_for(
     main: &Path,
-    since: chrono::DateTime<chrono::Utc>,
+    attempt: uuid::Uuid,
     names_spec: &dyn Fn(&str) -> bool,
 ) -> Option<AdmissionRecord> {
-    let dir = crate::main_worktree_root_from(main).join(".aida/lane-results");
-    std::fs::read_dir(dir)
-        .ok()?
-        .filter_map(|entry| {
-            let path = entry.ok()?.path();
-            if path.extension()? != "json" {
-                return None;
-            }
-            serde_json::from_slice::<Receipt>(&std::fs::read(path).ok()?).ok()
-        })
-        .filter(|r| r.created_at >= since && names_spec(&r.spec))
-        .max_by_key(|r| r.created_at)
-        .map(|r| AdmissionRecord {
-            started: r.started,
-            result: r.result,
-            reason_code: r.reason_code,
-            detail: r.detail,
-        })
+    let path = crate::main_worktree_root_from(main)
+        .join(".aida/lane-results")
+        .join(format!("{attempt}.json"));
+    let r: Receipt = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    (r.attempt == attempt && names_spec(&r.spec)).then_some(AdmissionRecord {
+        started: r.started,
+        result: r.result,
+        reason_code: r.reason_code,
+        detail: r.detail,
+    })
 }
 
 // Clone seats an early refusal may have left for this scope: those on the

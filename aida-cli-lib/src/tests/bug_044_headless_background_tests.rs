@@ -1913,7 +1913,7 @@ fn task_3826_a_relayed_launch_is_gated_on_its_head_after_host_admission() {
     let rework = format!("rework:7:{RELAYED}");
     for mode in [0u8, 1] {
         // (gate, what the forge says once the host admitted, refusal code)
-        let cases: [(Option<&str>, Result<PrView, String>, Option<&str>); 9] = [
+        let cases: [(Option<&str>, Result<PrView, String>, Option<&str>); 10] = [
             (Some(&rework), at("OPEN", MOVED), Some("head-moved")),
             (Some(&rework), at("MERGED", RELAYED), Some("pr-merged")),
             (Some(&rework), at("CLOSED", RELAYED), Some("pr-closed")),
@@ -1928,6 +1928,7 @@ fn task_3826_a_relayed_launch_is_gated_on_its_head_after_host_admission() {
             // Fresh work has no head to hold; an ungated launch is not asked.
             (Some("fresh"), at("OPEN", MOVED), None),
             (None, at("CLOSED", MOVED), None),
+            (Some(&rework), at("OPEN", RELAYED), Some("relay-superseded")),
         ];
         for (case, (gate, forge, refusal)) in cases.into_iter().enumerate() {
             let fx = Fixture::new(&format!("t3826gate{mode}{case}"));
@@ -1937,14 +1938,25 @@ fn task_3826_a_relayed_launch_is_gated_on_its_head_after_host_admission() {
                 "[forge]\nprovider = \"pure-git\"\n[doctor.disk_headroom]\nmin_free_gib = 1\n",
             )
             .unwrap();
-            // The host admits at once: the gate is what decides.
+            let superseded = refusal == Some("relay-superseded");
+            let prefix = TestHost::prefix();
+            let mut held = superseded.then(|| TestHost::hold(&prefix, 0));
+            let counter = fx.project.join(".aida/lane-relay/STORY-9.round");
+            let owner = superseded.then(|| {
+                std::fs::create_dir_all(counter.parent().unwrap()).unwrap();
+                std::fs::write(&counter, "1").unwrap();
+                serde_json::json!({"canonical":"STORY-9", "spec":"STORY-9", "vendor":"claude", "round":1, "attempt":uuid::Uuid::new_v4()}).to_string()
+            });
             TEST_HOST.with(|h| {
                 *h.borrow_mut() = Some(TestHost {
-                    max_concurrent_cold_starts: 4,
+                    max_concurrent_cold_starts: 1,
                     min_memory_headroom_gib: 1,
-                    prefix: TestHost::prefix(),
+                    prefix,
                     memory_gib: std::rc::Rc::new(std::cell::Cell::new(64)),
-                    on_wait: Box::new(|| panic!("a free slot does not queue")),
+                    on_wait: Box::new(move || {
+                        assert!(held.take().is_some());
+                        std::fs::write(&counter, "2").unwrap();
+                    }),
                 })
             });
             let marker = fx.path("child-ran");
@@ -1959,7 +1971,10 @@ fn task_3826_a_relayed_launch_is_gated_on_its_head_after_host_admission() {
                 crate::session::HeadlessVendor::Claude,
                 false,
                 mode,
-                &[(GATE_ENV, gate)],
+                &[
+                    (GATE_ENV, gate),
+                    (crate::lane_relay::OWNER_ENV, owner.as_deref()),
+                ],
             );
             TEST_LAUNCH_PR.with(|p| p.borrow_mut().take());
             si::TEST_PR.with(|p| *p.borrow_mut() = None);

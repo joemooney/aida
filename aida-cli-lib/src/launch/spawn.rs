@@ -80,6 +80,7 @@ pub(crate) fn spawn_agent(ctx: &LaunchContext) -> Result<Command> {
     cmd.env_remove(crate::lane_admission::OVERRIDE_ENV);
     // The relay's gate covers the one launch it started. trace:TASK-3826 | ai:claude
     cmd.env_remove(crate::lane_relay::GATE_ENV);
+    cmd.env_remove(crate::lane_relay::OWNER_ENV);
     cmd.args(ctx.argv());
     if ctx.sets_cwd() {
         cmd.current_dir(ctx.cwd());

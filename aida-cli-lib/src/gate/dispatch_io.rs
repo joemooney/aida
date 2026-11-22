@@ -113,7 +113,7 @@ pub(crate) fn write_private_atomic(path: &Path, body: &[u8]) -> Result<()> {
 /// without following symlinks (`mkdirat` + `openat(O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)`),
 /// verifying it is owned by the current uid.
 // trace:STORY-1917 | ai:agy
-fn open_or_create_pinned_child_dir(
+pub(crate) fn open_or_create_pinned_child_dir(
     parent: &std::fs::File,
     name: &str,
     display_path: &Path,

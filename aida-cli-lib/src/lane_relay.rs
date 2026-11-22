@@ -427,7 +427,7 @@ pub(crate) fn gate_refusal_code(error: &anyhow::Error) -> Option<&'static str> {
 }
 
 /// Reason codes a launcher records for a [`GateRefusal`].
-const GATE_CODES: [&str; 7] = [
+const GATE_CODES: [&str; 8] = [
     "head-moved",
     "pr-merged",
     "pr-closed",
@@ -435,6 +435,7 @@ const GATE_CODES: [&str; 7] = [
     "fresh-blocked",
     "rework-mismatch",
     "relay-gate-invalid",
+    "relay-superseded",
 ];
 
 /// What a relayed launch is for, carried to the launcher in [`GATE_ENV`] so
@@ -576,14 +577,74 @@ impl HeadSource for ForgeHead<'_> {
     }
 }
 
-/// In a launcher, right after the host admitted the launch (which may have
-/// waited for a start slot): a relayed rework goes on only if its change is
-/// still open at the relayed head. Launches the relay did not start pass.
-pub(crate) fn admit_launch(root: &Path) -> Result<()> {
+pub(crate) const OWNER_ENV: &str = "AIDA_LANE_RELAY_OWNER";
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(crate) struct RelayOwner {
+    canonical: String,
+    spec: String,
+    vendor: String,
+    round: u64,
+    pub(crate) attempt: uuid::Uuid,
+}
+
+impl RelayOwner {
+    pub(crate) fn from_env() -> Result<Option<Self>> {
+        aida_core::exec_context::Environment::capture()
+            .get(OWNER_ENV)
+            .map(|v| serde_json::from_str(&v.to_string_lossy()))
+            .transpose()
+            .map_err(Into::into)
+    }
+
+    fn lock_current(&self, root: &Path) -> Result<Fence> {
+        spec_file_stem(&self.canonical)?;
+        let mut fence = Fence::hold(root, std::slice::from_ref(&self.canonical))?;
+        if fence.current()? != self.round {
+            return Err(GateRefusal {
+                code: "relay-superseded",
+                detail: "a later relay owns this spec".into(),
+            }
+            .into());
+        }
+        Ok(fence)
+    }
+}
+
+fn validate_round_file(path: &Path, spec: &str, round: u64) -> Result<String> {
+    let body = crate::brief::read_pickup_brief(path)?;
+    anyhow::ensure!(
+        crate::brief::frontmatter_value(&body, "spec_id").as_deref() == Some(spec),
+        "brief names another spec"
+    );
+    anyhow::ensure!(
+        crate::brief::frontmatter_value(&body, "relay_round").and_then(|s| s.parse().ok())
+            == Some(round),
+        "brief names another round"
+    );
+    Ok(body)
+}
+
+pub(crate) fn read_relay_brief(
+    path: &Path,
+) -> Result<Option<(std::sync::Arc<std::fs::File>, String)>> {
+    let Some(owner) = RelayOwner::from_env()? else {
+        return Ok(None);
+    };
+    let mailbox = Mailbox::open(&crate::find_main_worktree_root()?, &owner.vendor)?;
+    let pinned = mailbox.resolve(&owner.spec, owner.round, Some(path))?;
+    let body = validate_round_file(&pinned, &owner.spec, owner.round)?;
+    Ok(Some((std::sync::Arc::new(mailbox.directory), body)))
+}
+
+/// Recheck the head after admission and hold the round fence until child spawn.
+pub(crate) fn admit_launch(root: &Path) -> Result<Option<Fence>> {
     if let Some(gate) = LaunchGate::from_env()? {
         gate.admit(&mut ForgeHead(root))?;
     }
-    Ok(())
+    RelayOwner::from_env()?
+        .map(|owner| owner.lock_current(root))
+        .transpose()
 }
 
 /// In a launcher, once the pickup's open change is known: whether a relayed
@@ -677,6 +738,7 @@ fn file_stamp(now: DateTime<Utc>) -> String {
 /// here, on both sides of the relay.
 fn frame_brief(
     spec: &str,
+    round: u64,
     vendor: &str,
     label: &str,
     body: &str,
@@ -687,7 +749,7 @@ fn frame_brief(
         "the brief must be nonempty text"
     );
     let framed = format!(
-        "---\nspec_id: {}\nagent: {vendor}\ngenerated_at: {}\ngenerated_by: {}\nnote: |-\n{}---\n",
+        "---\nspec_id: {}\nrelay_round: {round}\nagent: {vendor}\ngenerated_at: {}\ngenerated_by: {}\nnote: |-\n{}---\n",
         crate::brief::yaml_scalar(spec),
         file_stamp(now),
         crate::brief::yaml_scalar(&format!("aida lane relay ({label})")),
@@ -846,7 +908,7 @@ fn report(world: &mut dyn World, spec: &str, vendor: &str, round: &Round, stop: 
             }
         }
         // A delivery whose reply was lost may still have stored the brief.
-        if round.delivering && *stop != Stop::Superseded {
+        if round.delivering {
             let retract = RelayHostCommand::Retract {
                 spec: spec.into(),
                 round: round.number,
@@ -1169,7 +1231,14 @@ pub(crate) fn relay(args: &RelayArgs, plan: &Plan, world: &mut dyn World) -> Res
         delivering: false,
         placed: None,
     };
-    frame_brief(spec, &plan.vendor, &round.label, &body, Utc::now())?;
+    frame_brief(
+        spec,
+        round.number,
+        &plan.vendor,
+        &round.label,
+        &body,
+        Utc::now(),
+    )?;
 
     let mode = match args.pr {
         None => Ok(Mode::Fresh),
@@ -1261,7 +1330,7 @@ pub(crate) trait HostSys {
     /// means the host cannot tell, which no step treats as "no match".
     fn spec_ids(&self, root: &Path, spec: &str) -> Result<Vec<String>>;
     /// Whether a lane launcher for the spec named by `ids` is running.
-    fn lane_running(&self, ids: &[String]) -> bool;
+    fn lane_running(&self, root: &Path, ids: &[String]) -> bool;
     /// Why the host is below its memory floor, if it is.
     fn shortfall(&self) -> Option<String>;
     /// Start `argv` detached in `cwd` with `env` added, its output appended
@@ -1338,7 +1407,7 @@ fn ids_for(root: &Path, spec: &str, sys: &dyn HostSys) -> Result<Vec<String>> {
 /// The spec's relay round on this host, held under an exclusive lock: the
 /// number the newest relay took. A relay whose number is lower has been
 /// superseded and may place or start nothing.
-struct Fence {
+pub(crate) struct Fence {
     file: std::fs::File,
     path: PathBuf,
 }
@@ -1401,53 +1470,72 @@ fn mailbox(root: &Path, vendor: &str) -> Result<PathBuf> {
     Ok(root.join(".aida/agent-briefs").join(vendor_name(vendor)?))
 }
 
-/// Only a brief this host stored for this vendor is handed to a lane or
-/// withdrawn.
-fn mailbox_brief(root: &Path, vendor: &str, brief: &Path) -> Result<PathBuf> {
-    let dir = mailbox(root, vendor)?.canonicalize()?;
-    let brief = brief
-        .canonicalize()
-        .with_context(|| format!("no brief at {}", brief.display()))?;
-    anyhow::ensure!(
-        brief.parent() == Some(dir.as_path()),
-        "brief {} is not in {}",
-        brief.display(),
-        dir.display()
-    );
-    Ok(brief)
+/// Access a directory by handle while its owner holds the file open.
+pub(crate) fn descriptor_path(file: &std::fs::File) -> PathBuf {
+    use std::os::fd::AsRawFd;
+    PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()))
 }
 
-/// Store `body` as the spec's one pending brief for `vendor`.
+struct Mailbox {
+    parent: std::fs::File,
+    directory: std::fs::File,
+    path: PathBuf,
+}
+
+impl Mailbox {
+    fn open(root: &Path, vendor: &str) -> Result<Self> {
+        use crate::gate::dispatch_io::open_or_create_pinned_child_dir as child;
+        let path = mailbox(root, vendor)?;
+        let aida = child(&std::fs::File::open(root)?, ".aida", &root.join(".aida"))?;
+        let parent = child(&aida, "agent-briefs", path.parent().unwrap())?;
+        let directory = child(&parent, &vendor_name(vendor)?, &path)?;
+        Ok(Self {
+            parent,
+            directory,
+            path,
+        })
+    }
+
+    fn name(spec: &str, round: u64) -> Result<String> {
+        Ok(format!("{}-r{round}.md", spec_file_stem(spec)?))
+    }
+
+    fn resolve(&self, spec: &str, round: u64, brief: Option<&Path>) -> Result<PathBuf> {
+        let name = Self::name(spec, round)?;
+        anyhow::ensure!(
+            brief.is_none_or(|p| p == self.path.join(&name)),
+            "wrong spec or round brief"
+        );
+        Ok(descriptor_path(&self.directory).join(name))
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 fn place_brief(
     root: &Path,
     ids: &[String],
     spec: &str,
+    round: u64,
     vendor: &str,
     label: &str,
     body: &str,
     now: DateTime<Utc>,
 ) -> Result<serde_json::Value> {
-    let stem = spec_file_stem(spec)?;
-    let framed = frame_brief(spec, vendor, label, body, now)?;
-    let dir = mailbox(root, vendor)?;
-    std::fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
-    let superseded = crate::brief::supersede_pending_briefs(root, ids)?;
-    let path = dir.join(format!("{stem}-{}.md", file_stamp(now)));
-    let staged = dir.join(format!(
-        ".{stem}-{}.relay-{}",
-        file_stamp(now),
-        std::process::id()
-    ));
-    std::fs::write(&staged, framed)
-        .with_context(|| format!("cannot write {}", staged.display()))?;
-    if let Err(err) = aida_core::mailbox_lifecycle::rename_noreplace(&staged, &path) {
-        let _ = std::fs::remove_file(&staged);
-        return Err(err).with_context(|| format!("cannot publish brief {}", path.display()));
-    }
-    Ok(serde_json::json!({
-        "path": path,
-        "superseded": superseded,
-    }))
+    use std::io::Write;
+    let framed = frame_brief(spec, round, vendor, label, body, now)?;
+    let mailbox = Mailbox::open(root, vendor)?;
+    let pinned = descriptor_path(&mailbox.directory);
+    let file = Mailbox::name(spec, round)?;
+    let mut staged = tempfile::NamedTempFile::new_in(&pinned)?;
+    staged.write_all(framed.as_bytes())?;
+    let superseded =
+        crate::brief::supersede_pending_briefs(&descriptor_path(&mailbox.parent), ids)?;
+    let superseded: Vec<_> = superseded
+        .into_iter()
+        .map(|path| mailbox.path.parent().unwrap().join(path))
+        .collect();
+    staged.persist_noclobber(pinned.join(&file))?;
+    Ok(serde_json::json!({"path": mailbox.path.join(file), "superseded": superseded}))
 }
 
 fn launcher(home: Option<&Path>) -> Result<Vec<String>> {
@@ -1464,6 +1552,7 @@ fn launcher(home: Option<&Path>) -> Result<Vec<String>> {
 #[allow(clippy::too_many_arguments)]
 fn launch(
     root: &Path,
+    owner: &RelayOwner,
     spec: &str,
     vendor: &str,
     branch: Option<&str>,
@@ -1473,7 +1562,12 @@ fn launch(
     sys: &mut dyn HostSys,
 ) -> Result<serde_json::Value> {
     let stem = spec_file_stem(spec)?;
-    let brief = mailbox_brief(root, vendor, brief)?;
+    let mailbox = Mailbox::open(root, vendor)?;
+    validate_round_file(
+        &mailbox.resolve(spec, owner.round, Some(brief))?,
+        spec,
+        owner.round,
+    )?;
     let mut argv: Vec<String> = launcher(sys.home().as_deref())?
         .iter()
         .map(|arg| arg.replace("{spec}", spec).replace("{vendor}", vendor))
@@ -1496,9 +1590,17 @@ fn launch(
     let since = sys.now();
     let logs = root.join(".aida/lane-relay");
     std::fs::create_dir_all(&logs).with_context(|| format!("cannot create {}", logs.display()))?;
-    let log = logs.join(format!("{stem}-{}.log", file_stamp(since)));
+    let log = logs.join(format!("{stem}-{}.log", owner.attempt));
     let gate = gate.encode();
-    sys.spawn(&argv, &[(GATE_ENV.to_string(), gate.clone())], root, &log)?;
+    sys.spawn(
+        &argv,
+        &[
+            (GATE_ENV.to_string(), gate.clone()),
+            (OWNER_ENV.into(), serde_json::to_string(owner)?),
+        ],
+        root,
+        &log,
+    )?;
     Ok(serde_json::json!({
         "since": since.to_rfc3339(),
         "log": log,
@@ -1535,11 +1637,21 @@ fn admission(
     sys: &dyn HostSys,
 ) -> Result<serde_json::Value> {
     use crate::lane_result::Kind;
-    let since = DateTime::parse_from_rfc3339(since)
-        .with_context(|| format!("invalid launch time `{since}`"))?
-        .with_timezone(&Utc);
+    DateTime::parse_from_rfc3339(since)
+        .with_context(|| format!("invalid launch time `{since}`"))?;
+    let stem = log
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .context("missing relay log name")?;
+    let attempt = ids
+        .iter()
+        .find_map(|id| {
+            stem.strip_prefix(&format!("{id}-"))
+                .and_then(|s| uuid::Uuid::parse_str(s).ok())
+        })
+        .context("missing relay attempt ID")?;
     let record =
-        crate::lane_result::admission_since(root, since, &|recorded| names_spec(ids, recorded));
+        crate::lane_result::admission_for(root, attempt, &|recorded| names_spec(ids, recorded));
     let reply = match record {
         Some(r) if r.result == Some(Kind::RefusedBeforeStart) => serde_json::json!({
             "state": "refused",
@@ -1552,7 +1664,7 @@ fn admission(
             "reason": r.reason_code,
         }),
         Some(r) if r.started => serde_json::json!({ "state": "started" }),
-        _ if sys.lane_running(ids) => serde_json::json!({ "state": "pending" }),
+        _ if sys.lane_running(root, ids) => serde_json::json!({ "state": "pending" }),
         _ => serde_json::json!({ "state": "vanished", "log_tail": log_tail(root, log) }),
     };
     Ok(reply)
@@ -1584,7 +1696,7 @@ pub(crate) fn host_op(
             let current = Fence::hold(root, &ids)?.current()?;
             Ok(serde_json::json!({
                 "current": current == *round,
-                "running": sys.lane_running(&ids),
+                "running": sys.lane_running(root, &ids),
                 "shortfall": sys.shortfall(),
             }))
         }
@@ -1604,7 +1716,7 @@ pub(crate) fn host_op(
             if let Some(stop) = fence.superseded(*round)? {
                 return Ok(stop);
             }
-            place_brief(root, &ids, spec, vendor, label, &body, sys.now())
+            place_brief(root, &ids, spec, *round, vendor, label, &body, sys.now())
         }
         RelayHostCommand::Launch {
             spec,
@@ -1634,11 +1746,18 @@ pub(crate) fn host_op(
             if let Some(stop) = fence.superseded(*round)? {
                 return Ok(stop);
             }
-            if sys.lane_running(&ids) {
+            if sys.lane_running(root, &ids) {
                 return Ok(serde_json::json!({ "stop": "lane-still-running" }));
             }
             launch(
                 root,
+                &RelayOwner {
+                    canonical: ids[0].clone(),
+                    spec: spec.clone(),
+                    vendor: vendor.clone(),
+                    round: *round,
+                    attempt: uuid::Uuid::new_v4(),
+                },
                 spec,
                 vendor,
                 branch.as_deref(),
@@ -1655,20 +1774,19 @@ pub(crate) fn host_op(
             brief,
         } => {
             let ids = ids_for(root, spec, sys)?;
-            let mut fence = Fence::hold(root, &ids)?;
-            // A later round's delivery already retired this one's brief, and
-            // what is pending now is that round's.
-            if fence.current()? != *round {
-                return Ok(serde_json::json!({ "retired": [] }));
-            }
-            let retired = match brief {
-                None => crate::brief::supersede_pending_briefs(root, &ids)?,
-                Some(brief) => match mailbox_brief(root, vendor, brief) {
-                    Ok(brief) => crate::brief::retire_brief(&brief)?.into_iter().collect(),
-                    // Already taken by a lane, or already withdrawn.
-                    Err(_) if !brief.exists() => Vec::new(),
-                    Err(err) => return Err(err),
-                },
+            let _fence = Fence::hold(root, &ids)?;
+            let mailbox = Mailbox::open(root, vendor)?;
+            let path = mailbox.resolve(spec, *round, brief.as_deref())?;
+            let retired: Vec<_> = match std::fs::symlink_metadata(&path) {
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+                Err(e) => return Err(e.into()),
+                Ok(_) => {
+                    validate_round_file(&path, spec, *round)?;
+                    crate::brief::retire_brief(&path)?
+                        .into_iter()
+                        .map(|p| mailbox.path.join(p.file_name().unwrap()))
+                        .collect()
+                }
             };
             Ok(serde_json::json!({ "retired": retired }))
         }
@@ -1858,7 +1976,16 @@ impl HostSys for Machine {
         shown_ids(&shown).with_context(|| format!("{spec} has no id in this host's store"))
     }
 
-    fn lane_running(&self, ids: &[String]) -> bool {
+    fn lane_running(&self, root: &Path, ids: &[String]) -> bool {
+        let scopes: Vec<_> = ids.iter().map(String::as_str).collect();
+        let sessions = std::cell::OnceCell::new();
+        let leases = crate::leases::list_leases_strict_all(root);
+        let ownership = crate::leases::requeue_lease_gate_from(leases, None, &scopes, |lease| {
+            crate::leases::requeue_lease_liveness(lease, &sessions, Utc::now())
+        });
+        if !matches!(ownership, crate::leases::RequeueLeaseCheck::Clear) {
+            return true;
+        }
         // An unreadable process table is not evidence that no lane runs.
         let Ok(processes) = std::fs::read_dir("/proc") else {
             return true;
@@ -2158,4 +2285,4 @@ pub(crate) fn run(args: &RelayArgs) -> Result<()> {
 
 #[cfg(test)]
 #[path = "tests/task_3826_lane_relay_tests.rs"]
-mod tests;
+mod task_3826_lane_relay_tests;

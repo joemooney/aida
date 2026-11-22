@@ -1579,7 +1579,7 @@ fn run(
     // A relayed rework is re-checked against its change's head here, after
     // any wait for a start slot and before anything is claimed or started.
     // trace:TASK-3826 | ai:claude
-    crate::lane_relay::admit_launch(&main_root)?;
+    let relay_fence = std::cell::RefCell::new(crate::lane_relay::admit_launch(&main_root)?);
     claim_spec(launch.project_root, launch.spec);
     let worktree = lease_worktree(launch.project_root, launch.lease_id);
     // Resolve transport now, but retain the prior veto until command policy
@@ -1655,6 +1655,7 @@ fn run(
     // vendor, so `aida ps` reads the lane as live (signoff C6), and record
     // it as the lease's worker (BUG-1918).
     let on_spawn = |pid: u32| {
+        relay_fence.borrow_mut().take();
         attempt.started(pid); // trace:STORY-2690 | ai:codex
         if let Some(on_started) = on_started {
             on_started();
