@@ -14,12 +14,25 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-22T21:24:59.266972566Z
+modified_at: 2026-11-22T21:29:30.938720154Z
 req_type: Bug
 tags:
 - containment
 - from-work-ci
 - launch
+comments:
+- id: 01a2052a-3aea-74d3-b185-8d161d888366
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:29):
+    # BUG-2717: small fix from the operator's work-side CI report (product-15, 2026-11-22; Joe-delegated). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2717` for the problem and ACs. First reproduce on main. If main already behaves correctly, add the regression test anyway, then ship it with a PR body that says so. Keep the diff small and on the named file. Add `// trace:BUG-2717 | ai:codex`, or `# trace:BUG-2717 | ai:codex` for Python. Commit `[AI:codex] fix(...): ... (BUG-2717)`. One targeted test run (cargo or pytest), then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+    Under mass-change mode, classify every finding; unmet-AC defers.
+  created_at: 2026-11-22T21:29:30.938720154Z
+  modified_at: 2026-11-22T21:29:30.938720154Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
