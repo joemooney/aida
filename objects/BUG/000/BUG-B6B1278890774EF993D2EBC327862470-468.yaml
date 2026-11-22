@@ -15,12 +15,12 @@ description: |
   - AC2: a head whose only new commit is a merge of the base, while such a lane is live, is never reviewed; once the lane exits, the newest head is reviewed.
   - AC3: when the lane-host state cannot be read, review-watch defers for a bounded time (a setting, default 20 min) and then reviews, logging why.
   - Regressions for AC1-AC3 with a fake foreign lane host.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T22:39:19.292229020Z
+modified_at: 2026-11-22T23:49:05.056716698Z
 req_type: Bug
 tags:
 - lanes
@@ -492,6 +492,11 @@ comments:
   created_at: 2026-11-22T22:39:19.292224422Z
   modified_at: 2026-11-22T22:39:19.292224422Z
   session_id: 01a20568cda7
+- id: 01a205a9-d1a0-7bf0-a02c-095d456f1df8
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: Finding 3: cannot attest that direct reviewer pickup avoids a hard command failure on an unavailable snapshot. During the persisted grace interval queue_cmd/work.rs returns anyhow::bail! and the invocation exits nonzero. Advisor brief requires stopping here. Clarify whether this retryable nonzero refusal is the intended pickup contract before repairing the fixture.. No triage reason was given.'
+  created_at: 2026-11-22T23:49:05.056707577Z
+  modified_at: 2026-11-22T23:49:05.056707577Z
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
@@ -660,6 +665,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a205a9-d1a0-7bf0-a02c-094e97627b33
+  author: joe
+  timestamp: 2026-11-22T23:49:05.056685407Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
@@ -675,8 +687,3 @@ implementation_info:
   implemented_at: 2026-11-20T21:47:47.832017Z
   implemented_by: dirtlab
   reopened_at_sha: aa567732958f669b69ec5848863ea0b13c800db5
-attention_reason:
-  category: design-fork
-  detail: 'Finding 3: cannot attest that direct reviewer pickup avoids a hard command failure on an unavailable snapshot. During the persisted grace interval queue_cmd/work.rs returns anyhow::bail! and the invocation exits nonzero. Advisor brief requires stopping here. Clarify whether this retryable nonzero refusal is the intended pickup contract before repairing the fixture.'
-  raised_by: implementer
-  raised_at: 2026-11-22T22:39:00.517773288Z
