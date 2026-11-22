@@ -1,0 +1,32 @@
+id: 01a2053a-30b5-7770-8210-55da6d0192d9
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-200
+title: 'Review PR-4395: [AI:codex] fix(rework): publish the base merge with the first fix (BUG-2714)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20501`) for branch `bug-b6b1278890774ef993d2ebc327862470-475`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4395>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-475` → `main`
+
+  ## Covers
+
+  - BUG-2714
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4395` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T21:47:09.365908555Z
+modified_at: 2026-11-22T21:47:09.365908555Z
+req_type: Story
+filed_at:
+  code_sha: 30da58d4f9b68ed52201e60a99f4a4330abc07bf
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 30da58d4f9
+  session: 01a20501f488
