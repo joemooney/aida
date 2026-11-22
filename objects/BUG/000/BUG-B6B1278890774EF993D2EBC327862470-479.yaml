@@ -1,0 +1,29 @@
+id: 01a20527-91e4-7892-9f87-43aaf661c18a
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-479
+agreed_id: BUG-2718
+title: An approval recorded under the PR key does not release a rework merge hold recorded under the spec key
+description: |
+  Found by the advisor (claude-advisor-122, 2026-11-22 14:28 MST). PR #4391 (BUG-2711) stayed merge-held after its reviewer approved at ac2b6edc. The approval was recorded in the gate ledger under the PR-4391 key only (gate-ledger seq 12, spec None), but the rework merge hold is read through the BUG-2711 spec key, so `merge-hold auto-release` refused. The advisor mirrored the approval under BUG-2711 by hand and the hold auto-released. Same family as the duplicate verdict writes (BUG-2662): verdict identity is split across PR and spec keys.
+
+  ## Acceptance
+  - AC1: An approval recorded under a change key (PR-N / MR-N) releases a rework hold recorded under the change's spec key, and vice versa, when both name the same change and head.
+  - AC2: merge-hold auto-release reports which key it read and why it refused, naming the approval it found under the other key if there is one.
+  - AC3: A regression test records an approval with spec None under PR-N while the hold sits under SPEC, and asserts the hold auto-releases.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T21:26:49.060117976Z
+modified_at: 2026-11-22T21:26:49.060117976Z
+req_type: Bug
+tags:
+- gate-ledger
+- merge-hold
+- review
+filed_at:
+  code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
