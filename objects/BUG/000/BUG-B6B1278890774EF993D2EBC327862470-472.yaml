@@ -1,0 +1,35 @@
+id: 01a20493-7b86-72b2-9e24-da9aeeca5115
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-472
+agreed_id: BUG-2711
+title: 'Landing CI evidence reads fail on gh < flag support: landing_ci_api passes --allow-escape-sequences, which gh 2.81.0 rejects (every PR reads UNKNOWN)'
+description: |
+  Root cause found by the advisor (claude-advisor-122, 2026-11-22 11:44 MST) and verified by product: every open PR reads UNKNOWN in `aida land stalls` / `land status` ("tested base unknown: GitHub CI evidence unavailable at .../logs").
+
+  `landing_ci_api` (aida-cli-lib/src/forge.rs:2316) runs `gh api --allow-escape-sequences PATH`. The installed gh on imac is 2.81.0 (2025-10-01), which rejects the flag: `unknown flag: --allow-escape-sequences`. So every CI-evidence read fails on imac. dell1 runs gh 2.103.3 (2026-10-26). The flag arrived with BUG-2690 (#4301, Nov 19). Its tests use a fake gh that accepts any argv (bug_2690_land_update_branch_tests.rs:12,182; story_2768_land_tests.rs:907-908), so they never caught this.
+
+  Impact: the reconciler and throughput guard can't classify CI on any PR. If the train reads CI through landing_ci_api, approved PRs can't board.
+
+  ## Acceptance
+  - AC1: landing_ci_api works with a gh that lacks `--allow-escape-sequences`. It probes support once per process (e.g. `gh api --help` lists the flag) and passes the flag only when supported. With the flag unavailable, raw log bytes are still read, and escape handling stays the reader's job.
+  - AC2: The two fake-gh fixtures (bug_2690_land_update_branch_tests.rs, story_2768_land_tests.rs) accept both argv shapes. A test covers the without-flag path.
+  - AC3: A test checks the composed argv against the real `gh api --help` on the test host and skips with a clear message when gh is absent, so a flag the installed gh lacks fails CI.
+  - AC4: On imac (gh 2.81.0), `aida land stalls` reads at least one open PR's CI state as something other than UNKNOWN-for-evidence.
+status: Approved
+priority: High
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T18:45:04.006084804Z
+modified_at: 2026-11-22T18:45:04.006084804Z
+req_type: Bug
+tags:
+- fasttrack
+- forge
+- landing
+- p1
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
