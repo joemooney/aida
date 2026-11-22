@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-21T08:17:08.483787387Z
+modified_at: 2026-11-22T19:15:18.155925592Z
 req_type: Task
 tags:
 - landing
@@ -434,6 +434,11 @@ comments:
   created_at: 2026-11-21T00:28:09.145848643Z
   modified_at: 2026-11-21T00:28:09.145848643Z
   session_id: 01a1fb4428f4
+- id: 01a204af-2a0c-7b11-a61f-9a98f5fa3743
+  author: joe
+  content: 'Product (advisor-122 mass-change ruling 12:15): findings deferred from the PR #4381 final round are filed as TASK-3829. Final-round brief: .aida/tmp/brief-TASK-3827-final-1222.md'
+  created_at: 2026-11-22T19:15:18.155925592Z
+  modified_at: 2026-11-22T19:15:18.155925592Z
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
