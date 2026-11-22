@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T20:53:16.533250569Z
+modified_at: 2026-11-22T20:53:21.690084413Z
 req_type: Bug
 tags:
 - conflicts
@@ -1216,6 +1216,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2688 has source coverage for rebuilding a removed seat from the fetched head and resuming a journal-bound retained merge (AC2 and AC4). Fresh placement pins the PR head, but conflict preparation can overwrite ignored local data, and the registration-mismatch refusal lacks the recovery evidence command required by AC1. Both findings apply to the landed tree independently of the two intervening base commits. CI fast gates passed and fast compile was pending at review time.. No triage reason was given.'
   created_at: 2026-11-22T20:53:16.533238712Z
   modified_at: 2026-11-22T20:53:16.533238712Z
+- id: 01a20508-f014-7a20-b8d8-c5817354910a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 291758c19b1f
+    Recorded: 2026-11-22T20:51:29.677272312+00:00
+    Findings:
+    1. [P1, data-loss] aida-cli-lib/src/seat_clone.rs:5044 — When merge-tree reports a conflict, preparation reserves the repair and invokes merge without calling protect_ignored on the observed result tree. A base can add a tracked file at the path of an ignored local file while conflicting on a different file. The ort merge can overwrite the ignored bytes as it stages the nonconflicting addition, even with --no-overwrite-ignore. Preserving the seat after the merge cannot restore those bytes. Check the observed result for ignored-path collisions before reserving or merging, and cover the mixed conflict/addition case. The existing conflict failure fixture stops at strategy selection and never writes the incoming file.
+    2. [P2, unmet-claimed-ac] aida-cli-lib/src/seat_clone.rs:4299 — If a retained registration points to a path now occupied by another repository’s worktree, fresh pickup refuses with “does not match host registration” and gives no command for obtaining the missing evidence. The reused-path regression explicitly exercises this case but checks only the generic message. Include the expected host registration and one quoted, read-only command that displays the conflicting registration evidence, and assert that diagnostic in the regression (BUG-2688 AC1).
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-22T20:53:21.556075913Z
+  modified_at: 2026-11-22T20:53:21.556075913Z
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
