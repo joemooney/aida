@@ -1,0 +1,18 @@
+{
+  "id": "a88166dd-8fb2-4de3-81bd-79c883295d0d",
+  "thread_id": "a88166dd-8fb2-4de3-81bd-79c883295d0d",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795384992582,
+  "body": "- [STUCK-MERGE] #4391 is approved at ef59d904 and has not landed for 23 min (approved at ac2b6edcf87b, carried over clean merges of `main`)\n  -> land #4391 (the reconciler shows READY: add to next train)\n- [STUCK-REVIEW] #4364 at 1517e2e7 has had no verdict and no reviewer for 45 min\n  -> launch a reviewer for #4364 at 1517e2e7\n- [STUCK-REVIEW] #4373 at dd044db0 has had no verdict and no reviewer for 45 min\n  -> launch a reviewer for #4373 at dd044db0\n- [STUCK-REVIEW] #4382 at 93329588 has had no verdict, no reviewer and no lane for 37 min, and its CI is red (Build (ubuntu-latest), CI (cli-0); base not fresh: CI run 45072095060 tested base 30da58d4f9b6, current base is 6be38166be85)\n  -> launch a reviewer for #4382 at 93329588, or route a lane for its red CI\n- [STUCK-REVIEW] #4387 at f41a18b0 has had no verdict and no reviewer for 38 min\n  -> launch a reviewer for #4387 at f41a18b0\n- [STUCK-REVIEW] #4389 at 78d0e918 has had no verdict and no reviewer for 41 min\n  -> launch a reviewer for #4389 at 78d0e918\n\n7 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 6 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
