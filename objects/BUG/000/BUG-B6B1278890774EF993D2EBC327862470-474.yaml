@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-22T20:09:31.574297944Z
+modified_at: 2026-11-22T22:15:13.218338786Z
 req_type: Bug
 tags:
 - hygiene
@@ -27,6 +27,18 @@ comments:
   content: 'ROOT-CAUSE EVIDENCE (advisor-122, 2026-11-22 ~13:09 MST; recorded by product-15). With Joe''s delegated OK the advisor ran `aida session end 01a1abbf6456 --yes --force`. The lease is gone, but the tree was KEPT: ''mail retention refused for ...-658: the checkout is not in a Git repository this host can verify, so its mail cannot be fenced and retained''. So the empty ''has uncommitted changes:'' refusal was really a HOST VERIFICATION failure of the seat clone being reported as dirt. AC1 therefore needs: when the clone''s Git repository can''t be verified, say that (with the reason) instead of reporting uncommitted changes. Evidence: .aida/salvage/session-01a1abbf6456-evidence.txt (clean status, 0 commits not on origin, lease toml). The leftover clone -658 is deliberately kept as the reproduction fixture; don''t remove it until the fix is verified against it.'
   created_at: 2026-11-22T20:09:31.574297944Z
   modified_at: 2026-11-22T20:09:31.574297944Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20554-10aa-7291-bfc9-4b62336b53a0
+  author: joe
+  content: |-
+    More reproduction cases (product-15, 2026-11-22 15:15 MST; advisor-122: keep them, do not force). Four dead-pid, clean reviewer leases that session end refuses:
+    - 01a170875974 (PR-2910, ~/ai/aida-review-2910-codex1, Oct 25) and 01a1709f69bf (PR-2913, ~/ai/aida-review-2913-codex1, Oct 25): 'mail retention refused ...: mail must be retained: queued/undelivered mail, delivery acknowledgement or canonical preservation not verified (CorruptMessage); deliver queued mail, acknowledge all local deliveries and digest messages to the canonical store before retrying; the tree was kept'. The reason code CorruptMessage names no message and gives no command to inspect it.
+    - 01a1d5f38755 (PR-3935, ~/ai/aida-worktrees/aida-pr-3935, Nov 13): 'cannot establish remote commit coverage; session was NOT ended: cannot read HEAD'. It gives no path, git error or fix.
+    - 01a17087db33 (PR-2906, ~/ai/aida-review-pr2906-codex, Oct 25): session end prints nothing useful and the lease stays: [  - run `git worktree remove /home/joe/ai/aida-review-pr2906-codex` (branch codex/review-pr2906-3707 kept; merge/discard manually) error: "mail retention refused for /home/joe/ai/aida-review-pr2906-codex: mail must be retained: queued/undelivered mail, delivery acknowledgement or canonical preservat]
+    AC1 should cover all three shapes: name the message, path or git error, plus the one command that resolves it.
+  created_at: 2026-11-22T22:15:13.218338786Z
+  modified_at: 2026-11-22T22:15:13.218338786Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 filed_at:
