@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-22T19:17:11.212649044Z
+modified_at: 2026-11-22T19:19:07.861853288Z
 req_type: Task
 tags:
 - landing
@@ -461,6 +461,39 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-22T19:17:11.037740047Z
   modified_at: 2026-11-22T19:17:11.037740047Z
+- id: 01a204b2-ddb6-73e2-845f-d318d117deea
+  author: joe
+  content: |-
+    AUTHORITATIVE FINAL-MASSCHANGE BRIEF (advisor-122, relayed by product-15 12:19):
+    # TASK-3827 / PR #4381: ONE FINAL ROUND under MASS-CHANGE mode (advisor-122 ruling 2026-11-22 12:15 MST; relayed by product-15). Lane: CODEX.
+
+    Base: the Changes Requested verdict recorded against 160e9b17ed (gate ledger PR-4381). Under mass-change mode, classify every finding; unmet-AC defers. Another blocking CR after this round parks the spec.
+
+    ## Rules
+    (a) Fix ONLY findings that are p1, data loss or security/authority bypass (listed below).
+    (b) Every unmet-claimed-AC, p2, p3, test-gap or style finding is a deferred follow-up. Product filed it as a follow-up spec (named on TASK-3827). Do NOT fix those here.
+    (c) Where a finding cluster sits in an optional mechanism, REMOVE that code rather than patching it (here: MR-N/symlink-store edge paths). Removal must keep the claimed core behaviour and its tests passing.
+    (d) The next review is scoped to these prior findings plus this round's own diff. Keep the diff minimal.
+
+    ## Fix (blocking under mass-change)
+    1. [p1/security-authority-bypass]  coordination.rs:866 — The new bounded read converts a refusal to None even in acquire_lock_claim. A valid existing drain or solo lock over 64 KiB used to be parsed and protected. Now decide_claim(None) grants acquisition and the writer replaces the live holder without force. A symlink refusal also reaches the path-based writer. Distinguish absence from refused evidence for lock mutation and cover preservation of the existing holder.
+
+    ## Deferred (do not fix; follow-up spec)
+    - [p2/unmet-claimed-ac]  leases.rs:812 — The guard still has a blocking session-lease read. live_pass_with partitions shared claims before attaching lane evidence. For a same-host sibling clone, probe_session_liveness_with ca...
+    - [p2/unmet-claimed-ac]  lane_hosts.rs:249 — After 24 hours View::holder discards an unreleased expired claim, and View::hosts drops it too. A long-running lane without heartbeat renewal then gets a second STUCK-REWORK route....
+    - [p2/unmet-claimed-ac]  land.rs:1087 — branch_names still treats a hyphen inside a multipart spec ID as a delimiter. A TASK-1 claim therefore holds task-1-216-work, suppressing a stall for TASK-1-216. Branch-only matching al...
+    - [p2/unmet-claimed-ac]  lane_hosts.rs:144 — judge validates heartbeat_at.trim() and computes expires, then recomputes the state through claim_staleness, whose heartbeat_age_secs parses the untrimmed value. Whitespace around ...
+    - [p2/unmet-claimed-ac]  land_stalls.rs:1375 — build_report sanitizes unknown lines before it appends the landing-history failure. landing_times returns Git stderr verbatim, so a failed git log can still add multiline, unboun...
+    - [p2/unmet-claimed-ac]  lane_hosts.rs:458 — The routed-text filter leaves invisible formatting characters such as U+206A through U+206F and U+034F in host names, errors and messages. These values can still display identicall...
+
+    ## Done means
+    - Each fixed finding has a regression test that fails before the fix.
+    - One targeted cargo run, then `make check-ci-fast` green, then push on the existing PR branch. Never the full suite. COMMIT your work.
+    - Run `python3 scripts/check-store-writers.py` and classify any new store-writer site.
+  created_at: 2026-11-22T19:19:07.861853288Z
+  modified_at: 2026-11-22T19:19:07.861853288Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
