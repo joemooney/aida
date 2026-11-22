@@ -271,9 +271,7 @@ fn observed_claims(root: &Path) -> Result<crate::lane_hosts::Inventory> {
         anyhow::ensure!(!store.is_symlink(), "shared claim store is unavailable");
         return Ok(crate::lane_hosts::Inventory::default());
     }
-    if store.is_file() {
-        return Ok(crate::lane_hosts::Inventory::default());
-    }
+    anyhow::ensure!(store.is_dir(), "shared claim store is not a directory");
     if store.join(".git").try_exists()? && aida_core::git_ops::probe_remote(&store, "origin")? {
         crate::lane_hosts::published_claims(&store)
     } else {
@@ -684,6 +682,24 @@ mod tests {
             .unwrap(),
             Decision::default()
         );
+    }
+
+    #[test]
+    fn bug2706_reporting_claim_then_file_shaped_store_holds_for_grace() {
+        let now = Utc::now();
+        let root = observer(Some(&remote_claim(now)));
+        let pass = |mins| {
+            let at = now + Duration::minutes(mins);
+            let decision = decide(root.path(), "observer", at, 20, metadata).unwrap();
+            settle_episode(root.path(), "PR-1", decision, at, 20).unwrap()
+        };
+        assert!(pass(0).unwrap().contains("lane live"));
+        let store = root.path().join(".aida-store");
+        std::fs::rename(&store, root.path().join("previous-store")).unwrap();
+        std::fs::write(store, "invalid").unwrap();
+        assert!(pass(1).is_some());
+        assert!(pass(20).is_some());
+        assert!(pass(21).is_none());
     }
 
     #[test]

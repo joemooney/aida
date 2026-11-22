@@ -41,26 +41,40 @@ fn handle_path(file: &File) -> PathBuf {
     PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd()))
 }
 
-fn bound_claim(store_root: &Path, lease_id: &str, host: &str) -> Result<Option<BoundClaim>> {
-    let mut matched = None;
-    let incomplete = scan_claims(store_root, |directory, file, path, claim| {
-        if !claim.review_verb && claim.host == host && claim.lease_id.as_deref() == Some(lease_id) {
-            anyhow::ensure!(matched.is_none(), "ambiguous lease claim");
-            let directory = directory.try_clone()?;
-            let path = handle_path(&directory).join(path.file_name().unwrap());
-            matched = Some(BoundClaim {
-                directory,
-                file,
-                path,
-                claim,
-            });
+fn bound_claim(
+    store_root: &Path,
+    scope: &str,
+    lease_id: &str,
+    host: &str,
+) -> Result<Option<BoundClaim>> {
+    let Some(directory) = claim_directory(store_root)? else {
+        return Ok(None);
+    };
+    let path = handle_path(&directory).join(format!("{}.toml", super::sanitize_scope(scope)));
+    let (file, claim) = match read_record(&path, &mut 0) {
+        Ok(pair) => pair,
+        Err(error)
+            if error
+                .downcast_ref::<std::io::Error>()
+                .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
+        {
+            return Ok(None)
         }
-        Ok(())
-    })?;
-    if let Some(detail) = incomplete {
-        anyhow::bail!("{detail}");
+        Err(error) => return Err(error),
+    };
+    if claim.scope != scope
+        || claim.review_verb
+        || claim.host != host
+        || claim.lease_id.as_deref() != Some(lease_id)
+    {
+        return Ok(None);
     }
-    Ok(matched)
+    Ok(Some(BoundClaim {
+        directory,
+        file,
+        path,
+        claim,
+    }))
 }
 
 pub(super) fn strict_claims(store_root: &Path) -> Result<crate::lane_hosts::Inventory> {
@@ -72,15 +86,11 @@ pub(super) fn strict_claims(store_root: &Path) -> Result<crate::lane_hosts::Inve
     Ok(crate::lane_hosts::Inventory { claims, incomplete })
 }
 
-fn scan_claims(
-    store_root: &Path,
-    mut visit: impl FnMut(&File, File, PathBuf, Claim) -> Result<()>,
-) -> Result<Option<String>> {
+fn claim_directory(store_root: &Path) -> Result<Option<File>> {
     let mut directory = OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_DIRECTORY)
         .open(store_root)?;
-    let mut total = 0u64;
     for component in LEASES_SUBDIR.split('/') {
         directory = match OpenOptions::new()
             .read(true)
@@ -92,6 +102,17 @@ fn scan_claims(
             Err(e) => return Err(e.into()),
         };
     }
+    Ok(Some(directory))
+}
+
+fn scan_claims(
+    store_root: &Path,
+    mut visit: impl FnMut(&File, File, PathBuf, Claim) -> Result<()>,
+) -> Result<Option<String>> {
+    let Some(directory) = claim_directory(store_root)? else {
+        return Ok(None);
+    };
+    let mut total = 0u64;
     let mut incomplete = None;
     for (index, entry) in std::fs::read_dir(handle_path(&directory))?.enumerate() {
         anyhow::ensure!(index < 20_000, "claim inventory limit exceeded");
@@ -158,14 +179,18 @@ impl BoundClaim {
 /// the store writes its contained lanes left pending; a store with pending
 /// tracked changes cannot be refreshed from its origin.
 // trace:BUG-2706 | ai:claude
-pub(crate) fn heartbeat_session_claim(store_root: &Path, lease_id: &str) -> Result<bool> {
+pub(crate) fn heartbeat_session_claim(
+    store_root: &Path,
+    scope: &str,
+    lease_id: &str,
+) -> Result<bool> {
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     aida_core::git_ops::with_remote_deadline(deadline, crate::command_output_with_timeout, || {
-        refresh(store_root, lease_id)
+        refresh(store_root, scope, lease_id)
     })
 }
 
-fn refresh(store_root: &Path, lease_id: &str) -> Result<bool> {
+fn refresh(store_root: &Path, scope: &str, lease_id: &str) -> Result<bool> {
     if lease_id.is_empty()
         || !store_root.join(".git").try_exists().unwrap_or(false)
         || !aida_core::git_ops::has_remote(store_root, "origin")
@@ -180,7 +205,7 @@ fn refresh(store_root: &Path, lease_id: &str) -> Result<bool> {
             if refresh_store(store_root, &branch)?.is_err() {
                 return Ok(None);
             }
-            let Some(mut bound) = bound_claim(store_root, lease_id, &host)? else {
+            let Some(mut bound) = bound_claim(store_root, scope, lease_id, &host)? else {
                 return Ok(None);
             };
             bound.claim.heartbeat_at = Utc::now().to_rfc3339();
@@ -224,14 +249,16 @@ impl SessionClaimHeartbeat {
             move || {
                 let lease =
                     crate::leases::read_exact_lease(project.as_deref()?, &lease_id).ok()??;
-                (!lease.review_verb).then_some(lease.id)
+                (!lease.review_verb).then_some((lease.scope, lease.id))
             },
         )
     }
 
     #[cfg(test)]
     fn start_every(store_root: PathBuf, lease_id: String, interval: std::time::Duration) -> Self {
-        Self::watch(store_root, interval, move || Some(lease_id.clone()))
+        Self::watch(store_root, interval, move || {
+            Some(("BUG-2706".into(), lease_id.clone()))
+        })
     }
 
     pub(crate) fn drain(root: PathBuf, session: String) -> Self {
@@ -244,22 +271,26 @@ impl SessionClaimHeartbeat {
 
     fn drain_every(root: PathBuf, session: String, interval: std::time::Duration) -> Self {
         Self::watch(root.join(".aida-store"), interval, move || {
-            crate::find_orchestrated_lease(&root, &session).map(|(id, _, _, _)| id)
+            let (id, _, _, _) = crate::find_orchestrated_lease(&root, &session)?;
+            let lease = crate::leases::read_exact_lease(&root, &id).ok()??;
+            (!lease.review_verb).then_some((lease.scope, lease.id))
         })
     }
 
     fn watch(
         store_root: PathBuf,
         interval: std::time::Duration,
-        lease: impl Fn() -> Option<String> + Send + 'static,
+        lease: impl Fn() -> Option<(String, String)> + Send + 'static,
     ) -> Self {
         let (stop, stopped) = std::sync::mpsc::channel::<()>();
         let handle = std::thread::spawn(move || {
             while let Err(std::sync::mpsc::RecvTimeoutError::Timeout) =
                 stopped.recv_timeout(interval)
             {
-                let Some(lease_id) = lease() else { continue };
-                if let Err(error) = heartbeat_session_claim(&store_root, &lease_id) {
+                let Some((scope, lease_id)) = lease() else {
+                    continue;
+                };
+                if let Err(error) = heartbeat_session_claim(&store_root, &scope, &lease_id) {
                     eprintln!(
                         "warning: could not refresh the shared claim for lease {lease_id}: {error:#}"
                     );
@@ -375,10 +406,11 @@ mod tests {
             .unwrap();
         }
         // 45 minutes in: past the 30-minute TTL, as a long lane's claim was.
+        std::fs::write(claim_path(&store, "BUG-2"), "[").unwrap();
         let mine = age(&store, "BUG-2706", 45);
         let other = age(&store, "BUG-1", 45);
 
-        assert!(heartbeat_session_claim(&store, "lease-mine").unwrap());
+        assert!(heartbeat_session_claim(&store, "BUG-2706", "lease-mine").unwrap());
 
         let refreshed = published(&store, "BUG-2706");
         let beat = chrono::DateTime::parse_from_rfc3339(&refreshed.heartbeat_at).unwrap();
@@ -402,9 +434,12 @@ mod tests {
         let temp = tempfile::tempdir().unwrap();
         let (root, store) = shared_store(temp.path());
         // No claim at all, an empty lease id, and no store are all no-ops.
-        assert!(!heartbeat_session_claim(&store, "lease-mine").unwrap());
-        assert!(!heartbeat_session_claim(&store, "").unwrap());
-        assert!(!heartbeat_session_claim(&temp.path().join("absent"), "lease-mine").unwrap());
+        assert!(!heartbeat_session_claim(&store, "BUG-2706", "lease-mine").unwrap());
+        assert!(!heartbeat_session_claim(&store, "BUG-2706", "").unwrap());
+        assert!(
+            !heartbeat_session_claim(&temp.path().join("absent"), "BUG-2706", "lease-mine")
+                .unwrap()
+        );
 
         acquire_claim_bound(
             &store,
@@ -428,21 +463,21 @@ mod tests {
         };
         // The same lease id minted on another host is that host's to refresh.
         let foreign = rewrite(&|claim| claim.host = "other-lane-host".into());
-        assert!(!heartbeat_session_claim(&store, "lease-mine").unwrap());
+        assert!(!heartbeat_session_claim(&store, "BUG-2706", "lease-mine").unwrap());
         assert_eq!(read_claim(&path).unwrap(), foreign);
         // A successor lease took the spec over.
         let successor = rewrite(&|claim| {
             claim.host = hostname();
             claim.lease_id = Some("lease-next".into());
         });
-        assert!(!heartbeat_session_claim(&store, "lease-mine").unwrap());
+        assert!(!heartbeat_session_claim(&store, "BUG-2706", "lease-mine").unwrap());
         assert_eq!(read_claim(&path).unwrap(), successor);
         // A review claim is not a lane.
         let review = rewrite(&|claim| {
             claim.lease_id = Some("lease-mine".into());
             claim.review_verb = true;
         });
-        assert!(!heartbeat_session_claim(&store, "lease-mine").unwrap());
+        assert!(!heartbeat_session_claim(&store, "BUG-2706", "lease-mine").unwrap());
         assert_eq!(read_claim(&path).unwrap(), review);
     }
 
@@ -464,7 +499,9 @@ mod tests {
         )
         .unwrap();
         let path = claim_path(&store, "BUG-2706");
-        let mut bound = bound_claim(&store, "mine", &hostname()).unwrap().unwrap();
+        let mut bound = bound_claim(&store, "BUG-2706", "mine", &hostname())
+            .unwrap()
+            .unwrap();
         let old = bound.claim.clone();
         bound.claim.heartbeat_at = Utc::now().to_rfc3339();
         bound.replace().unwrap();
@@ -478,13 +515,13 @@ mod tests {
         std::fs::rename(&path, &outside).unwrap();
         std::os::unix::fs::symlink(&outside, &path).unwrap();
         assert!(bound.replace().is_err());
-        assert!(bound_claim(&store, "mine", &hostname()).is_err());
+        assert!(bound_claim(&store, "BUG-2706", "mine", &hostname()).is_err());
         assert_eq!(read_claim(&outside).unwrap(), bound.claim);
         std::fs::remove_file(&path).unwrap();
         let fifo = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
         // SAFETY: fifo is a live NUL-terminated pathname.
         assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
-        assert!(bound_claim(&store, "mine", &hostname()).is_err());
+        assert!(bound_claim(&store, "BUG-2706", "mine", &hostname()).is_err());
     }
 
     #[test]
@@ -520,8 +557,14 @@ mod tests {
                 .claims,
             vec![aged.clone()]
         );
-        assert!(heartbeat_session_claim(&store, "mine").unwrap());
+        assert!(heartbeat_session_claim(&store, "BUG-2706", "mine").unwrap());
+        std::fs::write(claim_path(&store, "BUG-1"), vec![b'x'; 65537]).unwrap();
+        aida_core::git_ops::add(&store, &[LEASES_SUBDIR]).unwrap();
+        aida_core::git_ops::commit(&store, "oversized sibling").unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", "aida-store").unwrap());
         let claims = crate::lane_hosts::published_claims(&observer).unwrap();
+        assert!(claims.incomplete.is_some());
+        assert_eq!(claims.claims, vec![published(&store, "BUG-2706")]);
         assert_ne!(claims.claims[0].heartbeat_at, aged.heartbeat_at);
         assert_eq!(aida_core::git_ops::head_sha(&observer).unwrap(), tip);
     }
@@ -546,7 +589,7 @@ mod tests {
         let refreshed = aida_core::git_ops::with_remote_deadline(
             start + std::time::Duration::from_millis(500),
             stalled_fetch,
-            || refresh(&store, "mine"),
+            || refresh(&store, "BUG-2706", "mine"),
         )
         .unwrap();
         assert!(!refreshed);
@@ -568,7 +611,7 @@ mod tests {
         std::fs::create_dir_all(&sessions).unwrap();
         std::fs::write(
             sessions.join(format!("{id}.toml")),
-            format!("id = '{id}'\nbranch = 'bug-2706'\nworktree_path = '.'\n"),
+            format!("id = '{id}'\nbranch = 'bug-2706'\nworktree_path = '.'\nscope = 'BUG-2706'\nslug = 'bug-2706'\nowner = 'fixture'\nhostname = 'fixture'\nstarted_at = '2026-01-01T00:00:00Z'\n"),
         )
         .unwrap();
         let manifest = crate::session_manifest::SessionManifest {

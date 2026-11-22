@@ -181,10 +181,11 @@ pub(crate) fn published_claims(store: &std::path::Path) -> anyhow::Result<Invent
             continue;
         }
         let size: usize = fields[3].parse()?;
-        ensure!(
-            size <= 65536 && sizes.len() < 20000,
-            "claim inventory limit exceeded"
-        );
+        if size > 65536 {
+            inventory.incomplete = Some("oversized claim record".into());
+            continue;
+        }
+        ensure!(sizes.len() < 20000, "claim inventory limit exceeded");
         total += size + 1;
         ensure!(total < 32 << 20, "claim snapshot too large");
         sizes.push(size);
