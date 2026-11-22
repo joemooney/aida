@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  position: -959000
+  added_by: role:implementer
+  added_at: 2026-11-22T17:28:32.579926013Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
   position: -958000
   added_by: role:implementer
@@ -10,13 +16,6 @@
   added_by: role:implementer
   note: The host prepared take-4380 at the existing PR head, but its legacy launcher refused contained Claude. The normal drain aborted before launch when it refused to adopt bug-2629-fresh. Restore the existing approved cap-exception rework to the implementer queue. The scope, exact-head review and merge hold remain in force.
   added_at: 2026-11-21T09:51:32.742429731Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
-  position: -955000
-  added_by: role:implementer
-  note: 'Requeue existing #4388 rework at fc4441ac7032. Preserve the signed limited recovery design. Exact-head FAST jobs 136682267310 and 136682267292 still fail on fixture Git writes (TASK-HOME-1198), typed vendor expansion (TASK-HOME-1197), and a new direct lane-liveness decision. Use existing guarded fixture, vendor and liveness boundaries rather than expanding the ratchets. Use the current recorded verdict for the reservation diagnostic and once-only admission findings. Keep exact-head independent review and CI gates.'
-  added_at: 2026-11-21T07:24:18.670965283Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e1a3-1172-71b3-8580-880a91c7e553
