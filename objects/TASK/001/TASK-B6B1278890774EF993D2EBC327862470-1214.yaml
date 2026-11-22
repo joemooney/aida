@@ -1,0 +1,31 @@
+id: 01a204b2-3563-76c1-abd5-a38738bfec17
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1214
+title: 'Review follow-up: read_record charges the 32 MiB inventory budget only after read_to_string succeeds at line'
+description: |-
+  From BUG-2706
+  Reviewed sha: 0dd153cdba571ded54199aac9b4953967ac3237f
+
+  read_record charges the 32 MiB inventory budget only after read_to_string succeeds at lines 125–131. Invalid UTF-8 payloads consume I/O but never count, so a scan under the store writer lock can read more than a gigabyte across the permitted entry count. Charge actual bytes read before decoding or parsing and stop at the aggregate ceiling.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-22T19:18:37.667948353Z
+modified_at: 2026-11-22T19:18:37.667948353Z
+req_type: Task
+tags:
+- carried-from:BUG-2706
+- finding-hash:16de1607
+- from-review:BUG-2706
+relationships:
+- rel_type: References
+  target_id: 01a1fab3-9311-7d80-a6a0-032d48c96af1
+  created_at: 2026-11-22T19:18:50.529031775Z
+filed_at:
+  code_sha: 0dd153cdba571ded54199aac9b4953967ac3237f
+  branch: pr-4382
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
+  session: 01a204af87d1
