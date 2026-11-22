@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T22:11:15.965625784Z
+modified_at: 2026-11-22T22:21:49.977620389Z
 req_type: Bug
 tags:
 - fasttrack
@@ -113,6 +113,23 @@ comments:
     One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
   created_at: 2026-11-22T22:11:15.965625784Z
   modified_at: 2026-11-22T22:11:15.965625784Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a2055a-1e8e-7992-b44e-9293a92aa911
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:21):
+    # BUG-2714 / PR #4395 r2 (advisor-122 ruling 2026-11-22 15:06 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier (pr-ship/publish), so expect a STRICT review.
+
+    CR at 35e37ef9. All four findings block. Fix all four. The reviewer scope is these four plus the r2 diff.
+    1. finish.rs:276: if the base advances between preparation and the linked-worktree ship, `git rebase` flattens the merge+fix. Preserve ancestry through the final push (merge, never rebase) and add a test that advances the base mid-round.
+    2. ship_from_seat.rs:2530 / seat_clone.rs:4033: decide "merge-only" from the rework round's RECORDED head/base and history, not from the tip subject or parent count. Cover a resumed seat whose leftover preparation merge is present. It must NOT refuse a legitimate merge outside a rework lane (add that positive-control test).
+    3. ship_from_seat.rs:2209: an automatic queue exit with only the local merge is NoChange plus a drain receipt, not a publication error.
+    4. Retire the test-only pre-launch-push callback and move the race assertion onto the real ship path.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-22T22:21:49.977620389Z
+  modified_at: 2026-11-22T22:21:49.977620389Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
