@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:50.241345704Z
-modified_at: 2026-11-22T23:55:21.541275838Z
+modified_at: 2026-11-22T23:59:26.815922635Z
 req_type: Bug
 tags:
 - authority
@@ -57,6 +57,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: The brief requires a failing reproduction of an authorization bypass on main before any fix. This lane cannot exercise that bypass. Reproduction remains unverified. Supply independently obtained failure evidence and authorize proceeding from it.. No triage reason was given.'
   created_at: 2026-11-22T23:55:21.541271529Z
   modified_at: 2026-11-22T23:55:21.541271529Z
+- id: 01a205b3-8192-7011-a116-0c424122889e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:59):
+    # BUG-2716: SMALL robustness fix, AC2 only (advisor-122 ruling 2026-11-22 16:58 MST; relayed by product-15). Lane: CODEX. Broker code, so a STRICT review scoped to AC2. New branch, new PR.
+
+    Product's code inspection is on the spec. Authorization is already safe on main: Identity.check() returns False for a negative sender_fd (service.py:206-207, 225-226). The real defect is the finally block at aida-cli-lib/src/store_mutation/service.py:372-373, which calls os.close() on every collected sender fd, including a negative one (the kernel puts a negative errno in SCM_PIDFD when pidfd creation fails). That raises OSError out of poll() and can kill the broker loop that every mediated store write depends on.
+    Fix: close only fds >= 0, keeping the refusal path exactly as it is. Add a Python test that drives poll() with a stub channel whose recvmsg returns an SCM_PIDFD cmsg holding -1 (plus valid SCM_CREDENTIALS), and assert: the request is refused (InvalidRequest or an identity refusal), no exception escapes poll(), the channel stays serviceable for a following valid request, and os.close is never called with a negative fd.
+    Add `# trace:BUG-2716 | ai:codex`. Commit `[AI:codex] fix(store-mutation): close only valid sender pidfds (BUG-2716)`. One targeted pytest run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+  created_at: 2026-11-22T23:59:26.815922635Z
+  modified_at: 2026-11-22T23:59:26.815922635Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2052b-d43c-7761-9620-191b4708745f
   author: joe
