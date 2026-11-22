@@ -46,6 +46,8 @@ pub(crate) mod train_service;
 
 #[path = "review_watch_pause.rs"]
 mod pause;
+// trace:BUG-2703 | ai:claude
+pub(crate) use pause::control_actor;
 
 #[derive(Args, Debug, Clone)]
 pub struct ReviewWatchArgs {
@@ -753,6 +755,24 @@ impl Store {
     /// its deterministic mailbox ID and is not duplicated.
     // trace:TASK-1993 | ai:claude
     fn prune(&self, open: &BTreeSet<String>) -> Result<usize> {
+        self.settle(Some(open))
+    }
+    /// Reconcile lost dispatchers under the admission lock, against the
+    /// state as it is under that lock, and drop nothing: for a watcher that
+    /// has yielded admission and so has no fresh list of open changes.
+    /// It never judges an entry closed. A set of keys read before the lock
+    /// was taken would not do instead: another watcher still finishing a pass
+    /// can reserve a new change in between, and that reservation, not yet
+    /// claimed by its dispatcher, would be discarded as closed (review round
+    /// 4, finding 5).
+    // trace:BUG-2703 | ai:claude
+    fn reconcile(&self) -> Result<()> {
+        self.settle(None).map(|_| ())
+    }
+    /// `open`: the changes discovery lists as open; entries of any other
+    /// change are dropped once nothing of theirs can still be running.
+    /// `None` drops no entry.
+    fn settle(&self, open: Option<&BTreeSet<String>>) -> Result<usize> {
         // Every writer takes the global lock first, so it alone excludes them.
         let _global = self.dir.lock("admission.lock")?;
         let mut state = self.load()?;
@@ -760,7 +780,7 @@ impl Store {
         self.reconcile_lost_dispatchers(&mut state);
         let before = state.entries.len();
         state.entries.retain(|key, entry| {
-            open.contains(key)
+            open.is_none_or(|open| open.contains(key))
                 || entry.attempts.iter().any(|attempt| {
                     // Closed changes cannot retain local orphan reservations.
                     // Keep live/unknown descendants and distributed claims: a
@@ -2843,18 +2863,26 @@ pub(crate) fn run_with_program(
         println!("{key}: released {released} recorded review attempt(s); its current head can be reviewed again.");
         return Ok(Vec::new());
     }
+    // The shared claim is held per pass, not for the watcher's lifetime: a
+    // waiting land/ship or a drain makes the watcher give it up at the next
+    // pass boundary (never mid-dispatch), and no pass runs without it.
     // trace:STORY-2857 | ai:codex
-    let _admission = crate::admission_owner::acquire(&root, "legacy review-watch", true)?;
+    // trace:BUG-2703 | ai:claude
+    let mut admission = None;
+    if let Some(reason) = hold_admission(&root, &mut admission, args.once)? {
+        eprintln!("review-watch: waiting for admission: {reason}");
+    }
     // Resolve once per watcher, before discovery or admission.
     // trace:TASK-3472 | ai:codex
     let mut resolved = args.clone();
     resolved.max_concurrent = Some(resolve_max_concurrent(&root, args.max_concurrent)?);
     let args = &resolved;
     // trace:TASK-1955 | ai:claude (TASK-1-413)
-    let swept = forge::sweep_probe_refs(&root);
-    if swept > 0 {
-        eprintln!("review-watch: removed {swept} leaked probe ref(s)");
-    }
+    // Only under the claim, as before, and once: a watcher that starts
+    // yielded sweeps the first time it takes its claim.
+    // trace:BUG-2703 | ai:claude
+    let mut swept = false;
+    sweep_on_first_claim(&root, admission.is_some(), &mut swept);
     let mut children = Vec::<Dispatcher>::new();
     let mut reported_trains = BTreeSet::new();
     loop {
@@ -2862,9 +2890,25 @@ pub(crate) fn run_with_program(
         for outcome in reap_dispatchers(&store, &mut children) {
             service::controller_dispatch(&root, outcome.as_deref(), outcome.is_none())?;
         }
+        // trace:BUG-2703 | ai:claude
+        if let Some(reason) = hold_admission(&root, &mut admission, args.once)? {
+            // Yielding stops discovery and launches only. Settlement keeps
+            // running, so prior attempts (a claimed superseding review whose
+            // processes have exited, a lost dispatcher) become quiescent and
+            // the waiting land/ship can get in. trace:BUG-2703 | ai:claude
+            settle_while_yielded(&store)?;
+            service::record_pass(
+                &root,
+                &service::PassCounts::default(),
+                &[format!("admission yielded: {reason}")],
+            );
+            idle_yielding(&root, &store, args.interval, &mut admission)?;
+            continue;
+        }
+        sweep_on_first_claim(&root, admission.is_some(), &mut swept);
         // trace:STORY-2492 | ai:codex
         if !sync_pass(&root, args.once)? {
-            service::idle(&root, args.interval)?;
+            idle_yielding(&root, &store, args.interval, &mut admission)?;
             continue;
         }
         let changes = match observe_pass_input(&root, "discovery", repo.discover(&root)) {
@@ -2878,7 +2922,7 @@ pub(crate) fn run_with_program(
                     &service::PassCounts::default(),
                     &[format!("discovery refused: {error:#}")],
                 );
-                service::idle(&root, args.interval)?;
+                idle_yielding(&root, &store, args.interval, &mut admission)?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -2973,8 +3017,146 @@ pub(crate) fn run_with_program(
         if args.once {
             return Ok(children.into_iter().map(|d| d.child).collect());
         }
-        service::idle(&root, args.interval)?;
+        idle_yielding(&root, &store, args.interval, &mut admission)?;
     }
+}
+
+const ADMISSION_PURPOSE: &str = "legacy review-watch";
+
+/// Projects whose worker loops a test has asked to stop (test builds only):
+/// the loops' controller check fails there, as for a withdrawn controller.
+// trace:BUG-2703 | ai:claude
+#[cfg(test)]
+static TEST_STOPPED_LOOPS: std::sync::Mutex<Vec<PathBuf>> = std::sync::Mutex::new(Vec::new());
+
+#[cfg(test)]
+pub(crate) fn test_loop_stopped(root: &Path) -> bool {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    TEST_STOPPED_LOOPS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .contains(&root)
+}
+
+#[cfg(test)]
+pub(crate) fn stop_test_loops(root: &Path) {
+    let root = root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    TEST_STOPPED_LOOPS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .push(root);
+}
+
+/// Settlement-only reconciliation for a watcher that has yielded admission:
+/// no discovery, no forge read, no reservation and no launch. No entry is
+/// dropped (this watcher has no list of open changes to judge by); lost
+/// dispatchers are reconciled and every superseding attempt is advanced
+/// (confirmed gone and cleared, or signalled on its schedule), exactly as a
+/// normal pass would.
+// trace:BUG-2703 | ai:claude
+fn settle_while_yielded(store: &Store) -> Result<()> {
+    match store.reconcile() {
+        Ok(()) => {}
+        Err(error) if is_busy(&error) => eprintln!("review-watch settlement deferred: busy"),
+        Err(error) => return Err(error),
+    }
+    for (key, token) in store.load()?.superseding() {
+        match advance(store, &key, &token) {
+            Ok(Some(cause)) => eprintln!("{key}: {cause}"),
+            Ok(None) => {}
+            Err(error) if is_busy(&error) => eprintln!("{key}: watcher admission is busy"),
+            Err(error) if stops_watcher(&error) => return Err(error),
+            Err(error) => eprintln!("{key}: refused: {error:#}"),
+        }
+    }
+    Ok(())
+}
+
+/// Remove leaked probe refs once per watcher, the first time it holds its
+/// claim (at startup, or at the first pass after it started yielded).
+/// Returns how many were removed.
+// trace:BUG-2703 | ai:claude
+fn sweep_on_first_claim(root: &Path, held: bool, swept: &mut bool) -> usize {
+    if !held || *swept {
+        return 0;
+    }
+    *swept = true;
+    let removed = forge::sweep_probe_refs(root);
+    if removed > 0 {
+        eprintln!("review-watch: removed {removed} leaked probe ref(s)");
+    }
+    removed
+}
+
+/// At a pass boundary: give up the shared claim when a land/ship is waiting
+/// or the loops are drained, and otherwise retake it. `Ok(Some(reason))`
+/// means this pass must not run. A one-shot watcher refuses instead.
+// trace:BUG-2703 | ai:claude
+fn hold_admission(
+    root: &Path,
+    admission: &mut Option<crate::admission_owner::Claim>,
+    once: bool,
+) -> Result<Option<String>> {
+    if let Some(reason) = crate::admission_owner::yield_reason(root, ADMISSION_PURPOSE) {
+        if admission.take().is_some() {
+            eprintln!("review-watch: admission yielded: {reason}");
+        }
+        anyhow::ensure!(!once, "review-watch admission yielded: {reason}");
+        return Ok(Some(reason));
+    }
+    if admission.is_none() {
+        match crate::admission_owner::acquire(root, ADMISSION_PURPOSE, true) {
+            Ok(claim) => *admission = Some(claim),
+            Err(error)
+                if !once
+                    && error
+                        .downcast_ref::<crate::admission_owner::AdmissionBusy>()
+                        .is_some() =>
+            {
+                return Ok(Some(format!("{error:#}")));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(None)
+}
+
+/// How often an idle watcher settles prior attempts, whatever its discovery
+/// interval: well inside the default 180-second bound of a waiting ship.
+// trace:BUG-2703 | ai:claude
+const SETTLEMENT_CADENCE_SECS: u64 = 5;
+
+/// Idle between passes, releasing the shared claim within a second of a
+/// waiting land/ship or a drain. No review is launched while idle, and
+/// nothing is discovered. Settlement does not wait for the next pass: it
+/// runs as soon as the claim is given up and then every
+/// [`SETTLEMENT_CADENCE_SECS`], claim or no claim, so with a long
+/// `--interval` a review whose processes exit during the sleep becomes
+/// quiescent within seconds and a waiting land/ship gets in (review round 4,
+/// AC ac6ca3ea).
+// trace:BUG-2703 | ai:claude
+fn idle_yielding(
+    root: &Path,
+    store: &Store,
+    seconds: u64,
+    admission: &mut Option<crate::admission_owner::Claim>,
+) -> Result<()> {
+    for slice in 1..=seconds {
+        service::idle(root, 1)?;
+        let mut yielded = false;
+        if admission.is_some() {
+            if let Some(reason) = crate::admission_owner::yield_reason(root, ADMISSION_PURPOSE) {
+                admission.take();
+                yielded = true;
+                eprintln!("review-watch: admission yielded: {reason}");
+            }
+        }
+        // Not after the last slice: the pass that follows settles anyway.
+        if yielded || (slice < seconds && slice % SETTLEMENT_CADENCE_SECS == 0) {
+            settle_while_yielded(store)?;
+        }
+    }
+    Ok(())
 }
 
 // Count every synchronous dispatch refusal as it occurs, including several
@@ -4248,14 +4430,51 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
     let Some(dir) = Directory::existing(&root.join(".aida/review-watch"))? else {
         return Ok(());
     };
-    let _lock = dir.lock("admission.lock")?;
+    // Running or unproven reviews are a typed busy refusal, so a bounded
+    // land/ship wait retries until they settle; other errors still refuse.
+    // trace:BUG-2703 | ai:claude
+    let busy = |why: String| -> anyhow::Error { crate::admission_owner::AdmissionBusy(why).into() };
+    let _lock = match dir.lock("admission.lock") {
+        Ok(lock) => lock,
+        Err(error) if is_busy(&error) => {
+            return Err(busy("review-watch admission lock is busy".into()))
+        }
+        Err(error) => return Err(error),
+    };
     match dir.read(STATE)? {
         Some(body) => {
             let state: State = serde_json::from_slice(&body)?;
             validate_state(&state, &state.repository)?;
-            for attempt in state.entries.values().flat_map(|e| &e.attempts) {
-                anyhow::ensure!(!active(attempt),
-                    "admission busy: prior review attempts are not quiescent; inspect review watch and release settled attempts");
+            // Each refusal names its change and any process still alive: once
+            // the loop workers have yielded, a running review is the only
+            // thing a land or ship is waiting for (review round 4, finding 2).
+            // trace:BUG-2703 | ai:claude
+            for (key, attempt) in state
+                .entries
+                .iter()
+                .flat_map(|(key, e)| e.attempts.iter().map(move |a| (key, a)))
+            {
+                if active(attempt) {
+                    let alive: Vec<String> = attempt
+                        .recorded()
+                        .into_iter()
+                        .filter(|process| process.alive())
+                        .map(|process| format!("PID {}", process.pid))
+                        .collect();
+                    return Err(busy(format!(
+                        "prior review attempts are not quiescent: the review of {key} is {} ({}); inspect review watch and release settled attempts",
+                        match attempt.phase {
+                            Phase::Reserved => "reserved and not yet running",
+                            Phase::Superseding => "being superseded",
+                            _ => "running",
+                        },
+                        if alive.is_empty() {
+                            "no live process recorded".to_string()
+                        } else {
+                            alive.join(", ")
+                        }
+                    )));
+                }
                 // Terminal phase alone does not attest descendant exit. A failed
                 // pre-spawn attempt needs no process proof; all other attempts
                 // use the same identities/group proof as explicit release.
@@ -4265,9 +4484,9 @@ pub(crate) fn admission_quiescent(root: &Path) -> Result<()> {
                     || attempt.pgid.is_some()
                 {
                     confirm(attempt).map_err(|why| {
-                        anyhow::anyhow!(
-                            "admission busy: prior review attempt is not quiescent: {why}"
-                        )
+                        busy(format!(
+                            "prior review attempt for {key} is not quiescent: {why}"
+                        ))
                     })?;
                 }
             }

@@ -62,6 +62,8 @@ hermetic audit. `JSON not honoured` means unsupported and explicitly rejected.
 | `aida advisor loops status` | JSON honoured | advisor loops status (not configured) |
 | `aida advisor loops rebind` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida advisor loops train-status` | JSON honoured | advisor loops train-status (not configured) |
+| `aida advisor loops drain` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
+| `aida advisor loops resume` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida advisor loops train-worker` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida advisor loops worker` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
 | `aida advisor register` | JSON not honoured | Explicitly rejected before dispatch (no local --json contract) |
