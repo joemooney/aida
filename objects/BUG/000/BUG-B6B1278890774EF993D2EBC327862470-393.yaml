@@ -14,7 +14,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-22T19:52:49.572242536Z
+modified_at: 2026-11-22T19:55:34.559747823Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -994,6 +994,38 @@ comments:
     - Run `python3 scripts/check-store-writers.py` and classify any new store-writer site.
   created_at: 2026-11-22T19:19:23.496574498Z
   modified_at: 2026-11-22T19:19:23.496574498Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a204d4-40fb-7132-8435-0a8e95691b8e
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:55):
+    # BUG-2629 / PR #4380: ONE FINAL ROUND under MASS-CHANGE mode (advisor-122 ruling 2026-11-22 12:15 MST; relayed by product-15). Lane: CODEX.
+
+    Base: the Changes Requested verdict recorded against 367c23a772 (gate ledger PR-4380). Under mass-change mode, classify every finding; unmet-AC defers. Another blocking CR after this round parks the spec.
+
+    ## Rules
+    (a) Fix ONLY findings that are p1, data loss or security/authority bypass (listed below).
+    (b) Every unmet-claimed-AC, p2, p3, test-gap or style finding is a deferred follow-up. Product filed it as a follow-up spec (named on BUG-2629). Do NOT fix those here.
+    (c) Where a finding cluster sits in an optional mechanism, REMOVE that code rather than patching it. Removal must keep the claimed core behaviour and its tests passing.
+    (d) The next review is scoped to these prior findings plus this round's own diff. Keep the diff minimal.
+
+    The PR head (94cf1439) is newer than the reviewed sha. First check which findings below 94cf1439 already fixes, and say so in the PR body.
+
+    ## Fix (blocking under mass-change)
+    1. [major/p1]  aida-cli-lib/src/queue_cmd/rework_bindings.rs:926 — When queue work supplies a selected change, discover skips the spec inventory. If ownership filtering that selected change fails, recover builds the spec-label view from the selected ledger and the unbound file alone. A newer WAITING review recorded for the spec on a sibling change is invisible. For example, give the selected change an older fingerprinted approval, a sibling a newer phase-3 wait, and another bound sibling a malformed ledger. Recovery can return Unavailable, which refuse_waiting_pickup admits. Recover the full label view, or refuse pickup when its completeness cannot be established. Cover this through selected-change pickup.
+    2. [major/p1]  aida-cli-lib/src/queue_cmd/rework_bindings.rs:770 — Ownership::events uses store::read_file, which returns an empty vector for unreadable or non-UTF-8 input and drops malformed lines. With no surviving fingerprint, needs_witnesses is false and the method reports success. For a certified, indexed change whose only WAITING round is in a ledger with invalid UTF-8, no recovery or named refusal is triggered. The ordinary projection also loses the wait, and implementer admission proceeds. Use an error-preserving, bounded read for inventoried ledgers before the witness fast path, and cover a sole unreadable bound change without another ledger to trigger recovery.
+
+    ## Deferred (do not fix; follow-up spec)
+    - [major/unmet-claimed-ac]  aida-cli-lib/src/queue_cmd/work.rs:3328 — BUG-2629 AC3 still fails for N fingerprinted changes bound to one spec. reconcile_waiting_verdicts calls current_verdict for each review key. Each local chang...
+    - [major/unmet-claimed-ac]  aida-cli-lib/src/queue_cmd/rework_bindings.rs:454 — Recovery also has quadratic per-spec rescans. For N distinct reviews present in both a change ledger and the unbound ledger, each unbound event scan...
+
+    ## Done means
+    - Each fixed finding has a regression test that fails before the fix.
+    - One targeted cargo run, then `make check-ci-fast` green, then push on the existing PR branch. Never the full suite. COMMIT your work.
+    - Run `python3 scripts/check-store-writers.py` and classify any new store-writer site.
+  created_at: 2026-11-22T19:55:34.559747823Z
+  modified_at: 2026-11-22T19:55:34.559747823Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
