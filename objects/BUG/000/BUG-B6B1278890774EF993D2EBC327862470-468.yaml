@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T17:58:09.400382402Z
+modified_at: 2026-11-22T18:05:15.644624773Z
 req_type: Bug
 tags:
 - lanes
@@ -312,6 +312,37 @@ comments:
   content: 'Advisor ruling (claude-advisor-122, 2026-11-22 10:55 MST, relayed by product-15): blocked-by BUG-2629 link REMOVED. It was operational (slow rework discovery), not a code dependency for the #4382 fix. r2 rework queued on codex.'
   created_at: 2026-11-22T17:58:02.738803183Z
   modified_at: 2026-11-22T17:58:02.738803183Z
+- id: 01a2046f-4059-71c1-801d-acc726ff89bd
+  author: joe
+  content: |-
+    AUTHORITATIVE R2 BRIEF (advisor-122, relayed by product 11:05):
+    # BUG-2706 r2 (advisor-122 routing 2026-11-22 10:30 MST; relayed by product-15)
+
+    Scope: PR #4382 at head 9a5565b17c85. Fix exactly the BLOCKING findings below from the verdict recorded against 9a5565b17c85 (gate ledger PR-4382). Deferred p2 findings stay out of scope (already filed as follow-ups). Also turn the red fast compile/fast gates on this head green.
+    Round 2.
+
+    ## Blocking findings
+    1. [high/unmet-claimed-ac] aida-cli-lib/src/standalone_implementer.rs: BUG-2706 AC1/AC2: Only standalone_implementer::run starts the heartbeat. Drain-driven implementer lanes bypass that launcher. With the default settings their shared claim stops deferring after 50 minutes even if the lane is still working on a merge-only head. Bind refresh to the live lease across supported implementer launch paths and cover a long-running drain lane.
+    2. [high/unmet-claimed-ac] aida-cli-lib/src/review_implementer_gate.rs: BUG-2706 AC1/AC2: decide reads only the watcher's local store checkout. Publishing a claim or heartbeat to origin does not update that checkout. A watcher behind the first claim sees no holder, and one behind subsequent heartbeats sees a falsely expired holder. Establish snapshot freshness or use bounded unknown handling when it cannot be established. Verify with separate publisher and observer checkouts.
+    3. [high/unmet-claimed-ac] aida-cli-lib/src/review_implementer_gate.rs: BUG-2706 AC3: list_claims silently drops directory, entry and parse errors, and remote_standing drops invalid heartbeat timestamps. A temporarily unreadable claim can therefore produce an empty holder list and immediate review. Distinguish unreadable evidence from confirmed absence and track a bounded unknown interval that survives repeated passes.
+    4. [medium/unmet-claimed-ac] aida-cli-lib/src/review_implementer_gate.rs: BUG-2706 AC3: remote_standing discards the lapse 30 minutes after the grace deadline. If the watcher was stopped or delayed past that window, it reviews a previously deferred head without the required reason. REPORTED also suppresses a second lapse after recovery of the same lane and retains branch/lane keys indefinitely. Track the outstanding deferral episode and log its release once.
+    5. [medium/unmet-claimed-ac] aida-cli-lib/src/review_implementer_gate.rs: BUG-2706.ace1c795: The fake foreign-host test replaces the observer with a fresh empty directory on release and never supplies a changing head. The existing watch test injects a skip string and later selects the same SHA. Exercise a merge-only head followed by a distinct fix SHA with the foreign lane still live, release the lane, and assert only the fix SHA is dispatched once. Include actual unreadable claim evidence.
+    6. [high/security-authority-bypass] aida-cli-lib/src/coordination_heartbeat.rs: bound_claim reads arbitrary .toml paths in the shared store, follows links and accepts special files. heartbeat_session_claim later reopens the matched path with fs::write under host permissions. A linked or replaced entry can redirect that write outside the claim directory, and a FIFO can stall the host store lock. Pin the directory, read bounded regular files without following links, and replace only the verified claim inside it.
+    7. [high/data-loss] aida-cli-lib/src/coordination_heartbeat.rs: fs::write truncates the live claim before completing the replacement. A short write, disk error or launcher termination can destroy the previous parseable ownership record. Concurrent unlocked gate readers can also see the empty or partial file and admit the head. Write a complete temporary sibling and atomically replace the validated claim.
+
+    ## Done means
+    - Each finding has a targeted regression test that fails before the fix.
+    - One targeted cargo run plus `make check-ci-fast` green, then push. Do not run the full suite.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+
+    ## Coordination note (product, relaying advisor-121 14:38)
+    The foreign-host lane-visibility reader (live lanes on registered lane hosts, with age) is being built in TASK-3827's PR-A (#4381 r2). BUG-2706's review deferral must REUSE that reader, not add a parallel one. If PR-A hasn't landed when you start, build against its interface as described on TASK-3827, or coordinate via the spec comments; don't fork the reader.
+  created_at: 2026-11-22T18:05:15.644624773Z
+  modified_at: 2026-11-22T18:05:15.644624773Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
