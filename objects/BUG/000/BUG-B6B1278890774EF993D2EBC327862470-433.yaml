@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-22T20:50:51.700326288Z
+modified_at: 2026-11-22T21:16:13.018264671Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -433,6 +433,19 @@ comments:
   content: PR-4376 at 660c0e87e696e0560b23715a1cbda490ad330edc conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-22T20:50:51.545090360Z
   modified_at: 2026-11-22T20:50:51.545090360Z
+- id: 01a2051e-0fb0-7f13-8e29-31c0b5bd5ba6
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:16):
+    # BUG-2669 / PR #4376: CONFLICT REPAIR ONLY (advisor-122 ruling 2026-11-22 14:18 MST; relayed by product-15). Lane: CODEX.
+
+    PR #4376 (head 660c0e87e6) now conflicts with main after today's landings: #4377 (STORY-2695), #4385 (BUG-2707), and possibly #4393, #4382 and #4391 if they've landed. Merge origin/main into the existing branch and resolve the conflicts, keeping main's changes plus this PR's intent. Do NOT rebase or force-push. Make NO other changes: no new fixes, no scope. The merged head is the head the pending review examines, scoped to the PR's prior findings.
+    Under mass-change mode, classify every finding; unmet-AC defers.
+    cargo fmt; one targeted cargo run of the tests in the conflicted files; `make check-ci-fast`; push. COMMIT your work.
+  created_at: 2026-11-22T21:16:13.018264671Z
+  modified_at: 2026-11-22T21:16:13.018264671Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
