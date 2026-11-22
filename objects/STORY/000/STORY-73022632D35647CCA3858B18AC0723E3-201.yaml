@@ -1,0 +1,44 @@
+id: 01a20581-704a-7ea2-af52-cc6b7962cb18
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-201
+title: 'Review PR-4396: [AI:codex] fix(review): preserve strict blockers during mass-change deferral (BUG-2712)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20545`) for branch `bug-b6b1278890774ef993d2ebc327862470-473`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4396>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-473` → `main`
+
+  ## Covers
+
+  - BUG-2712
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4396` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T23:04:58.698675936Z
+modified_at: 2026-11-22T23:05:04.387066475Z
+req_type: Story
+relationships:
+- rel_type:
+    custom: implements
+  target_id: 01a204b5-7e8d-7833-baec-b160042a8c66
+  created_at: 2026-11-22T23:05:04.387048167Z
+  created_by: dirtlab
+history:
+- id: 01a20581-8de3-7872-a193-0d09b066522d
+  author: dirtlab
+  timestamp: 2026-11-22T23:05:06.275629644Z
+  session_id: 01a205451a9c
+  changes: []
+filed_at:
+  code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6be38166be
+  session: 01a205451a9c

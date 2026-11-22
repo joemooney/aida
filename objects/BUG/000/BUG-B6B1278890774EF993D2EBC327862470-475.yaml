@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T22:43:16.129233239Z
+modified_at: 2026-11-22T23:04:27.540470521Z
 req_type: Bug
 tags:
 - fasttrack
@@ -132,6 +132,22 @@ comments:
   modified_at: 2026-11-22T22:21:49.977620389Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20580-f7d6-7243-a60e-34cabd1fa0ac
+  author: dirtlab
+  content: |
+    ## Implementer self-review
+    Reviewed HEAD: f03d2d79f5310dd3123b51f72da8361849d94637 plus the native working-tree diff (SHA-256 c4aa6e5aeb60034b9421c79390c9188b57170a16c595b43e30f2d800e9e94881). Reviewed origin/main...HEAD and git diff HEAD. No untracked additions.
+
+    AC1: [evidence: behavioral-test] seat_clone.rs:4039 drives real preparation in a linked worktree. A concurrent PR update after fetch survives pickup.
+    AC2: [evidence: behavioral-test] pr_cmd/finish.rs:447 merges the newly fetched base, verifies ancestry against the checked fix tip and pushes the pinned descendant without force. The test rejects a non-fast-forward push, retains the competing head, then verifies both the base and fix are ancestors after successful ship.
+    AC3: [evidence: behavioral-test] ship_from_seat.rs:2553 uses lease-bound head/base history. The linked fixture rejects an unmarked legacy preparation on resume and permits an unrelated same-subject merge to ship. tests/bug_home_038_seat_publish_tests.rs:2507 checks direct refusal, actual automatic NoChange and its consumed drain receipt, and the unchanged remote.
+    AC4: [evidence: behavioral-test] The clone fixture checks the remote before ship and proves it equals the exact merge-plus-fix tip afterwards. Lane job j20261122T225849786-2-0 executed both regressions: 2 passed, 0 failed.
+
+    Findings 1 and 2 (P1 ancestry loss and round classification), 3 (P2 exit receipt), and 4 (P2 race coverage) addressed. Replaced the pre-launch push simulation with real preparation and ship. Checked differing subjects, zero and multiple commit histories, remote races, malformed protection policy, and the reserved-branch refusal. The round record is host-side, atomically replaced before the clean merge, and read as a bounded, owner-only regular file. Fast-gate matching, trailer checks, host ownership and remote non-fast-forward refusal remain on the publication path. The fixture trailer was corrected after the real trailer gate rejected an absent spec. Source gates and shared structural tests passed. Full PR CI at the host commit is pending.
+  created_at: 2026-11-22T23:04:27.540470521Z
+  modified_at: 2026-11-22T23:04:27.540470521Z
+  session_id: 01a2056d59b1
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
   author: aida-session-start

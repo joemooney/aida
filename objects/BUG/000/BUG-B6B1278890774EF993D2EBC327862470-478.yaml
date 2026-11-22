@@ -9,12 +9,12 @@ description: |
   - AC1: When the preflight listener has hung up, preflight refuses within 10 s and the model process never starts. A test asserts the bound.
   - AC2: An open listener still completes preflight normally (positive control).
   - AC3: The refusal names the hangup as the reason.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-22T21:31:34.273956015Z
+modified_at: 2026-11-22T23:01:14.068814357Z
 req_type: Bug
 tags:
 - containment
@@ -34,6 +34,19 @@ comments:
   modified_at: 2026-11-22T21:29:30.938720154Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2057e-0560-7f13-bfd4-7e1400d8dfb3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6be38166be85fb474a3c5ba8036c4b2eb853db5f (main and origin/main), including native working diff and untracked inventory. On unchanged production code, python3 -m unittest tests.test_store_mutation.ContainedHostPreflightTests failed only for hangup: AssertionError: entered receive on a hung-up listener.
+    AC1: [evidence: behavioral-test] tests/test_store_mutation.py:59 gives the refusal a 10-second watchdog and the fixture checks the shim receives no exec release. contained_lane.py:382 requires that exact release before exec.
+    AC2: [evidence: behavioral-test] tests/test_store_mutation.py:773 exercises an open readable listener, notification reply and successful exec release.
+    AC3: [evidence: behavioral-test] tests/test_store_mutation.py:782 checks the runtime refusal names the hangup. Both targeted preflight and shutdown tests passed (1.980 s).
+    Deep pass: both loops use the same poll helper. No serialized format or authority grant changed. A ready shim receipt concurrent with listener hangup is covered, as is ordinary notification readiness. The guard runs before any broker receive or receipt handling at contained_host.py:733. Existing tests remain intact. The fixture uses kernel socket readiness with a synthetic receive and omits privileged setup. It covers hangup already observable at dispatch.
+  created_at: 2026-11-22T23:01:14.068814357Z
+  modified_at: 2026-11-22T23:01:14.068814357Z
+  session_id: 01a2057c2f43
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2052b-ec01-7e52-b8ec-fc4cd8951a76
   author: joe
@@ -42,6 +55,19 @@ history:
   - field_name: tags
     old_value: containment, from-work-ci, launch
     new_value: containment, from-work-ci, launch, strict
+- id: 01a2057c-5fb1-7740-895d-1e90945544d6
+  author: aida-session-start
+  timestamp: 2026-11-22T22:59:26.769674972Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
+- id: 01a2057c-d0ad-73e2-891d-42cce2f3c6f8
+  author: dirtlab
+  timestamp: 2026-11-22T22:59:55.693727744Z
+  session_id: 01a2057c2f43
+  harness_version: codex-cli 0.167.0
+  changes: []
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main

@@ -24,6 +24,12 @@ tags:
 - p1
 - review
 - throughput
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a20581-704a-7ea2-af52-cc6b7962cb18
+  created_at: 2026-11-22T23:05:07.730200929Z
+  created_by: dirtlab
 comments:
 - id: 01a204b8-370d-7752-8e4b-0925ca4ca85a
   author: joe
@@ -144,11 +150,23 @@ comments:
   modified_at: 2026-11-22T22:12:04.436397643Z
   session_id: 01a205451a9c
   harness_version: codex-cli 0.167.0
+- id: 01a20581-3167-74d0-85f8-4261d130936a
+  author: aida-publication-done
+  content: Implementer push 2cf202f09fc6 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-22T23:04:42.599244344Z
+  modified_at: 2026-11-22T23:04:42.599244344Z
+  session_id: 01a205451a9c
 - id: 01a20582-5540-7fd3-8025-f82cdebe191d
   author: joe
   content: PR-4396 at 2cf202f09fc60bc85e3c8e088a24372728349b2a conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-22T23:05:57.312774286Z
   modified_at: 2026-11-22T23:05:57.312774286Z
+- id: 01a20582-8528-70a3-a5a4-5dad5c4c4850
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-473` at head `2cf202f09fc60bc85e3c8e088a24372728349b2a`.'
+  created_at: 2026-11-22T23:06:09.576157414Z
+  modified_at: 2026-11-22T23:06:09.576157414Z
+  session_id: 01a205451a9c
 - id: 01a20582-a440-7bc3-b690-4280981e7e91
   author: joe
   content: PR-4396 at 2cf202f09fc60bc85e3c8e088a24372728349b2a conflicts with the protected base; resolve the conflict before review
@@ -196,6 +214,19 @@ history:
   timestamp: 2026-11-22T22:00:02.752064993Z
   session_id: 01a205451a9c
   harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a20581-3167-74d0-85f8-425bb3905e29
+  author: aida-publication-done
+  timestamp: 2026-11-22T23:04:42.599242156Z
+  session_id: 01a205451a9c
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
+- id: 01a20581-9af9-7642-88d1-31e279130586
+  author: dirtlab
+  timestamp: 2026-11-22T23:05:09.625494796Z
+  session_id: 01a205451a9c
   changes: []
 - id: 01a20582-1e0d-73e0-8001-ae6b34cb1fd9
   author: joe
