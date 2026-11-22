@@ -1518,10 +1518,15 @@ fn bug2618_head_guard_binds_publication_to_live_head_with_stale_local_refs() {
 }
 
 // trace:BUG-2629 | ai:codex
-#[test]
-fn bug_2629_pickup_refuses_signed_authority_movement_during_terminal_lookup() {
+pub(crate) fn check_pickup_signed_authority_movement<E: std::fmt::Debug>(
+    pickup: impl Fn(
+        &Path,
+        &str,
+        &str,
+        &mut dyn FnMut(ChangeKey) -> Option<(crate::forge::ChangeState, String)>,
+    ) -> Result<(), E>,
+) {
     use crate::forge::ChangeState;
-    use crate::queue_cmd::{resolve_rework_review_with, rework_bindings::DiscoveryCache};
 
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum Movement {
@@ -1621,47 +1626,36 @@ fn bug_2629_pickup_refuses_signed_authority_movement_during_terminal_lookup() {
         }
 
         let mut observed = Vec::new();
-        let mut cache = DiscoveryCache::default();
-        let result = resolve_rework_review_with(
-            &mut cache,
-            &f.a,
-            display,
-            spec_id,
-            None,
-            false,
-            |root, keys, reviews| {
-                crate::review_waiting::reconcile_waiting_with(root, keys, reviews, |change| {
-                    observed.push(change);
-                    if change != terminal {
-                        return None;
-                    }
-                    match movement {
-                        Movement::Stable => {}
-                        Movement::Sync => f.sync(&f.a),
-                        Movement::Alias => {
-                            let path = super::super::canon::RETIRED_IDS_REL;
-                            write(
-                                &store,
-                                path,
-                                format!(
-                                    "[[retired]]\nold = \"{display}\"\nuuid = \"{}\"\n",
-                                    f.spec.id,
-                                ),
-                            );
-                            git_ok(&store, &["add", path]);
-                            git_ok(&store, &["commit", "-qm", "map retired spec ID"]);
-                        }
-                        Movement::Branch => {
-                            git_ok(&f.a, &["update-ref", "refs/remotes/origin/main", &f.sha]);
-                        }
-                        Movement::Origin => {
-                            git_ok(&f.a, &["remote", "set-url", "origin", &origin]);
-                        }
-                    }
-                    Some((state, f.sha.clone()))
-                });
-            },
-        );
+        let result = pickup(&f.a, display, spec_id, &mut |change| {
+            observed.push(change);
+            if change != terminal {
+                return None;
+            }
+            match movement {
+                Movement::Stable => {}
+                Movement::Sync => f.sync(&f.a),
+                Movement::Alias => {
+                    let path = super::super::canon::RETIRED_IDS_REL;
+                    write(
+                        &store,
+                        path,
+                        format!(
+                            "[[retired]]\nold = \"{display}\"\nuuid = \"{}\"\n",
+                            f.spec.id,
+                        ),
+                    );
+                    git_ok(&store, &["add", path]);
+                    git_ok(&store, &["commit", "-qm", "map retired spec ID"]);
+                }
+                Movement::Branch => {
+                    git_ok(&f.a, &["update-ref", "refs/remotes/origin/main", &f.sha]);
+                }
+                Movement::Origin => {
+                    git_ok(&f.a, &["remote", "set-url", "origin", &origin]);
+                }
+            }
+            Some((state, f.sha.clone()))
+        });
         assert!(observed.contains(&terminal), "{movement:?}: {observed:?}");
         let annotated = ledger::store::read_file(&root, terminal)
             .iter()

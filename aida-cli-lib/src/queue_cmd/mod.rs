@@ -482,4 +482,26 @@ pub(crate) fn production_sources() -> Vec<(String, String)> {
 }
 
 #[cfg(test)]
-pub(crate) use work::resolve_rework_review_with;
+mod signed_review_tests {
+    use super::{rework_bindings::DiscoveryCache, work::resolve_rework_review_with};
+    use crate::gate::review_publication::check_pickup_signed_authority_movement;
+
+    // trace:BUG-2629 | ai:codex
+    #[test]
+    fn bug_2629_pickup_refuses_signed_authority_movement_during_terminal_lookup() {
+        check_pickup_signed_authority_movement(|root, display, spec_id, observe| {
+            resolve_rework_review_with(
+                &mut DiscoveryCache::default(),
+                root,
+                display,
+                spec_id,
+                None,
+                false,
+                |root, keys, reviews| {
+                    crate::review_waiting::reconcile_waiting_with(root, keys, reviews, observe)
+                },
+            )
+            .map(|_| ())
+        });
+    }
+}

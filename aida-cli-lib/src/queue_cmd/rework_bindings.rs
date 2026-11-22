@@ -1306,8 +1306,18 @@ impl DiscoveryCache {
         }
     }
 
-    // Revalidate the sources under the ledger write lock before appending
-    // annotations. Metadata comparisons reuse the checked discovery.
+    // Reuse the checked discovery to fence cached evidence after forge lookup.
+    // trace:BUG-2629 | ai:codex
+    fn revalidate_wait_evidence(&mut self, root: &Path) -> std::io::Result<()> {
+        self.check_signed_generation(root)?;
+        self.evidence.revalidate()?;
+        if let Some(Ok(Some(discovery))) = &self.discovery {
+            discovery.revalidate_queue_evidence()?;
+        }
+        Ok(())
+    }
+
+    // Hold the ledger write lock across revalidation and annotation appends.
     // trace:BUG-2629 | ai:codex
     pub(super) fn close_waits(
         &mut self,
@@ -1315,15 +1325,11 @@ impl DiscoveryCache {
         waits: &[(String, ChangeKey, rv::CurrentVerdict)],
     ) -> std::io::Result<()> {
         if waits.is_empty() || ledger::contained() {
-            return self.check_signed_generation(root);
+            return self.revalidate_wait_evidence(root);
         }
         let store_root = self.root.clone().unwrap_or_else(|| root.to_path_buf());
         store::with_exclusive(&store_root, || {
-            self.check_signed_generation(root)?;
-            self.evidence.revalidate()?;
-            if let Some(Ok(Some(discovery))) = &self.discovery {
-                discovery.revalidate_queue_evidence()?;
-            }
+            self.revalidate_wait_evidence(root)?;
             for (key, change, source) in waits {
                 let annotation = rv::append_terminal_wait(root, &store_root, key, *change, source)?;
                 self.closures.insert(key.clone(), annotation);

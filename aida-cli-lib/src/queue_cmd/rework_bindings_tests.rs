@@ -1802,6 +1802,54 @@ fn bug_2629_pickup_terminal_lookup_does_not_close_superseded_wait() {
 
 // trace:BUG-2629 | ai:codex
 #[test]
+fn bug_2629_pickup_revalidates_local_evidence_without_terminal_annotations() {
+    use crate::forge::ChangeState;
+    use crate::queue_cmd::work::resolve_rework_review_with;
+    use crate::rework_direction::ReviewResult;
+
+    for superseded in [false, true] {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 41, SPEC, &record("waiting", -60));
+        append(&root, 42, SPEC, &record("approved", -30));
+        let mut cache = super::DiscoveryCache::default();
+        let mut observed = Vec::new();
+        let result = resolve_rework_review_with(
+            &mut cache,
+            &root,
+            SPEC,
+            SPEC,
+            Some("PR-42"),
+            false,
+            |root, keys, reviews| {
+                crate::review_waiting::reconcile_waiting_with(root, keys, reviews, |change| {
+                    observed.push(change);
+                    assert_eq!(change, ChangeKey::pr(41));
+                    if superseded {
+                        append(root, 42, SPEC, &record("waiting", -10));
+                    }
+                    Some((ChangeState::Open, HEAD.into()))
+                });
+                assert!(reviews.terminal.is_empty());
+            },
+        );
+        assert_eq!(observed, [ChangeKey::pr(41)]);
+        if superseded {
+            assert!(
+                matches!(&result, Err(ReworkReviewError::Waiting(why))
+                    if why.contains("changed during terminal lookup")),
+                "{result:?}"
+            );
+        } else {
+            assert!(
+                matches!(result, Ok(ReviewResult::ClearedByApproval)),
+                "{result:?}"
+            );
+        }
+    }
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
 fn bug_2629_pickup_refuses_unsafe_index_for_ownership_free_records() {
     use crate::gate::ledger::checked::MAX_INDEX_BYTES;
     for kind in [

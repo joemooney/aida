@@ -1740,6 +1740,9 @@ pub(crate) fn publish_local(pr: u64, labels: &[String], findings: &[String]) -> 
 #[path = "tests/story_2492_publication_tests.rs"]
 mod tests;
 
+#[cfg(test)]
+pub(crate) use tests::check_pickup_signed_authority_movement;
+
 // Keep entry-point coverage mounted on the protected gate floor.
 // trace:STORY-2492 | ai:codex
 #[cfg(test)]
