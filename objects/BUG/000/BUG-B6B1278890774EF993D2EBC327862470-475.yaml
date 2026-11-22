@@ -14,12 +14,12 @@ description: |
   - AC2: At ship, the merge and the fix commits are pushed together in one push, so the first new PR head after a rework round always contains the round's fix.
   - AC3: A lane whose only new commit is the merge pushes nothing and reports "no fix commits; nothing published".
   - AC4: A regression test drives a rework pickup whose base needs a main merge and asserts the remote branch head is unchanged until ship, then equals the merge-plus-fix tip.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T21:21:47.806173353Z
+modified_at: 2026-11-22T21:46:51.963120726Z
 req_type: Bug
 tags:
 - fasttrack
@@ -60,6 +60,12 @@ comments:
   modified_at: 2026-11-22T21:21:47.806173353Z
   session_id: 01a20501f488
   harness_version: codex-cli 0.167.0
+- id: 01a20539-ecbb-7450-a8df-1e0585e61a8e
+  author: aida-publication-done
+  content: Implementer push 35e37ef945c3 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-22T21:46:51.963119614Z
+  modified_at: 2026-11-22T21:46:51.963119614Z
+  session_id: 01a20501f488
 history:
 - id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
   author: aida-session-start
@@ -74,6 +80,14 @@ history:
   session_id: 01a20501f488
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20539-ecbb-7450-a8df-1df3c5609a29
+  author: aida-publication-done
+  timestamp: 2026-11-22T21:46:51.963112622Z
+  session_id: 01a20501f488
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
