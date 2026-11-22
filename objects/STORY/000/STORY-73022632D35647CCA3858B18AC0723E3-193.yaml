@@ -23,7 +23,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T21:32:16.773640117Z
-modified_at: 2026-11-21T09:54:34.389866048Z
+modified_at: 2026-11-22T00:57:47.479139935Z
 req_type: Story
 relationships:
 - rel_type:
@@ -38,6 +38,16 @@ comments:
     Advisor gate check for PR #4364. The current PR head is 1e8528ae2bf28abc784f51a41eba0367fd1cb3f9. The change ledger view still returns a verdict at 6b9dc7f8191a939fe1ef896b731ab43c067ed743, before the two follow-up commits that changed reviewer lease-completion and verdict gathering. The present head has FAST checks only and omits current main aa567732958f669b69ec5848863ea0b13c800db5, one commit ahead of the included main tip. A file-list comparison found no paths touched on both sides. Update from current main through the authorized branch owner, then obtain the fresh independent review and full validation required for the reviewer-worktree deletion path. Prior approval and FAST results are insufficient for that landing gate. This is still a Refs-only slice.
   created_at: 2026-11-21T09:54:34.389866048Z
   modified_at: 2026-11-21T09:54:34.389866048Z
+- id: 01a200c2-8e85-7dd0-8b0b-fcc68e07465b
+  author: joe
+  content: |
+    Advisor relay of an independent read-only Codex review executed on dell1 for PR #4364 at head 1e8528ae2bf28abc784f51a41eba0367fd1cb3f9 against main aa567732958f669b69ec5848863ea0b13c800db5. This is advisory evidence, not a recorded verdict or merge clearance. The read-only three-way merge found no conflicts. Three issues need resolution before landing:
+    - session_start.rs:1021 and session_reap.rs:1725: the preliminary legacy gone-tree sweep can release a lease before strict ownership evaluation when the worker is dead but the creator or a replacement is live. Exercise the full pickup path with an exact successor.
+    - session_start.rs:197 and session_reap.rs:1695: gone-tree retirement proves a snapshot and releases by lease ID without comparing the live lease generation under the write boundary. Refresh between proof and deletion could remove the successor's lease and grant. Revalidate exact generation and add a deterministic race test.
+    - gate/review_verdict.rs:1621 and :1024: a seven-character prefix comparison grants retirement based on abbreviated evidence. Resolve exact OIDs and refuse ambiguous or unverifiable verdict identities before mutation.
+    Run the touched reviewer pickup and lifecycle suites on a trusted host, then FULL CI on a replacement head. The reviewer ran Git inspection only. The report is retained on dell1 at /home/dirtlab/aida-4364-review.VXM4Pd/review.md.
+  created_at: 2026-11-22T00:57:47.479139935Z
+  modified_at: 2026-11-22T00:57:47.479139935Z
 history:
 - id: 01a1fae0-0e45-71e2-bcef-1b6e7290b7db
   author: dirtlab

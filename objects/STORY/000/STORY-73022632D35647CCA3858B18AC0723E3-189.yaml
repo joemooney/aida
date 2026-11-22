@@ -24,7 +24,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T19:36:12.156272591Z
-modified_at: 2026-11-20T19:36:22.690112881Z
+modified_at: 2026-11-22T00:58:48.231995090Z
 req_type: Story
 relationships:
 - rel_type:
@@ -32,6 +32,21 @@ relationships:
   target_id: 01a1f9b6-5637-7c23-9223-6c63e4f889f8
   created_at: 2026-11-20T19:36:22.690093144Z
   created_by: dirtlab
+comments:
+- id: 01a200c3-7cf9-7343-ba5a-1b37456261e9
+  author: joe
+  content: |
+    Advisor relay of a read-only Codex review run on dell1 for PR #4373 at exact head 2a0c351161e3915331b66c1ae8e684f068aff6a9, protected main aa567732958f669b69ec5848863ea0b13c800db5, synthetic landing tree 7dc3057a0a118732f4f1a527be3368e59ae4adf1. This is advisory evidence, not a recorded verdict. Verdict recommendation is Request Changes. AIDA's attested reviewer launch refused stale lease 01a1fb8e4b61 because its holder records no witness.
+
+    1. lane_relay.rs:1618, :1896 and standalone_implementer.rs:1576: the detached launch is missing its round fence and attempt identity at admission. A round superseded while waiting for a slot can still start, and a repeated launch lacks durable deduplication.
+    2. lane_relay.rs:542 and session_start.rs:597: the open/head probe does not bind checkout to repository, base and exact prepared SHA. Cover fork/source identity, same-SHA base movement and prepared checkout identity through pickup.
+    3. lane_relay.rs:1491 and session_start.rs:2765: normal relay requests always pass force-claim and can bypass an existing live spec claim. Require separate explicit takeover authority where applicable.
+    4. lane_relay.rs:1421 and :848: staging a proposed brief retires older pending briefs before launch acceptance. Stage away from ordinary pickup and make supersession/cleanup round- and file-bound.
+    5. lane_result.rs:489 and lane_relay.rs:975: spec-and-time receipt lookup can credit another attempt. Match the durable attempt ID and exercise bounded waiting on the standalone cap.
+
+    The findings are present in the PR head and independent of the four current-base overlaps. Store-writer inventory passed. The review ran no Cargo tests. The full report and acceptance breakdown are on dell1 at /home/dirtlab/aida-4373-review.hGJiWz/review.md.
+  created_at: 2026-11-22T00:58:48.231995090Z
+  modified_at: 2026-11-22T00:58:48.231995090Z
 history:
 - id: 01a1fa75-cc2b-75f0-a38e-2f47b3463b77
   author: dirtlab

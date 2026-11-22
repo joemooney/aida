@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-21T22:59:38.966531252Z
+modified_at: 2026-11-22T00:33:43.885296611Z
 req_type: Bug
 tags:
 - conflicts
@@ -991,6 +991,12 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-21T07:24:17.688899454Z
   modified_at: 2026-11-21T07:24:17.688899454Z
+- id: 01a200ac-89c5-7fa2-bd2f-1765e6cff2a9
+  author: joe
+  content: Commit aa567732958 references this requirement
+  created_at: 2026-11-22T00:33:43.885296611Z
+  modified_at: 2026-11-22T00:33:43.885296611Z
+  harness_version: codex-cli 0.171.0
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
