@@ -9,12 +9,12 @@ description: |-
   1. aida queue rework finishes in under 10s on this repo's current gate ledger (658 PR ledgers), or prints progress and names the slow phase.
   2. A track refusal (other-track) is decided before any gate-ledger scan.
   3. A regression test or bench with a ledger of more than 1000 entries bounds the scan (no quadratic per-spec rescans).
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-16T08:14:06.473117Z
-modified_at: 2026-11-22T19:15:40.467495827Z
+modified_at: 2026-11-22T19:17:21.267306286Z
 req_type: Bug
 tags:
 - area:cli-friction
@@ -1312,6 +1312,13 @@ history:
   author: joe
   timestamp: 2026-11-22T17:58:00.175036821Z
   changes: []
+- id: 01a204b1-0b7b-7822-9959-a8edd660b0e6
+  author: joe
+  timestamp: 2026-11-22T19:17:21.403997915Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: f5dab5c14ca31db11a468398c26eb5234c4c3b29
