@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:25:08.663864382Z
-modified_at: 2026-11-22T21:31:41.581869428Z
+modified_at: 2026-11-22T21:31:43.341285063Z
 req_type: Task
 tags:
 - containment
@@ -22,6 +22,12 @@ tags:
 - from-work-ci
 - operator-held
 - tests
+comments:
+- id: 01a2052c-0f6d-7ee0-bb6e-0c1320aa81c7
+  author: joe
+  content: 'Fold-in (advisor-122 14:34): TASK-3832 finding 2 (the libtest binary launched from a noexec /tmp fails EACCES before any fixture) is now in scope here. The disposable scratch location must also be exec-capable for copied test binaries, or the test must not exec from it. Add AC4 for that.'
+  created_at: 2026-11-22T21:31:43.341285063Z
+  modified_at: 2026-11-22T21:31:43.341285063Z
 history:
 - id: 01a2052c-0908-7240-9211-47e82adf9e5e
   author: joe
