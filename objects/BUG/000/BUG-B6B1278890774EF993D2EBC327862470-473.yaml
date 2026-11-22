@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269342Z
-modified_at: 2026-11-22T20:01:49.132710460Z
+modified_at: 2026-11-22T20:03:44.973251665Z
 req_type: Bug
 tags:
 - mass-change
@@ -86,6 +86,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: AC5 requires every out-of-list finding to defer, including mutation-kill and untested-path. Approved operator ADR-76 requires those same findings to block in gate and sensitive code even when the configured list omits test-gap. The working patch defers ordinary gaps but preserves that path-scoped refusal. Please settle precedence for a finding with explicit sensitive file evidence.. No triage reason was given.'
   created_at: 2026-11-22T20:01:49.132707186Z
   modified_at: 2026-11-22T20:01:49.132707186Z
+- id: 01a204db-b66d-78c0-87b8-89713b39bffc
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:03):
+    # BUG-2712: RESUME and ship (advisor-122 ruling 2026-11-22 13:00 MST; relayed by product-15). Lane: CODEX. New PR from the existing branch.
+
+    The previous codex lane implemented AC1-AC5 (6 files, +171/-41, targeted tests passing), then punted on an AC5 conflict with the ADR-76 sensitive-path floor. Its work is now committed on this branch as 5779904749 (a wip commit). Start from it; do not redo it.
+    RULING, the ADR-76 floor wins. ADR-76 is Joe's 2026-10-13 decision: the strict tier (sandbox/confinement, authority/grants/identity, credentials, gate/guard, lease/claim safety) blocks on mutation-kill, untested-path, fail-open, race and incomplete-fix. So:
+    - AC5 demotes out-of-tier classes ONLY in the standard tier. Strict-tier findings with those classes stay blocking. task_3814_sensitive_class_aliases_keep_p2_blocking must keep passing.
+    - Mass-change's unmet-claimed-ac deferral (AC1/AC2) applies only where the finding is NOT also a strict-tier fail-open, race or data-loss.
+    Add tests: a strict-tier mutation-kill stays blocking, a standard-tier mutation-kill defers, and a strict-tier fail-open unmet-AC stays blocking under mass-change. Reword the wip commit or add a fix commit as `[AI:codex] fix(review): ... (BUG-2712)`. One targeted cargo run, then `make check-ci-fast`, then ship a NEW PR. COMMIT your work.
+  created_at: 2026-11-22T20:03:44.973251665Z
+  modified_at: 2026-11-22T20:03:44.973251665Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
