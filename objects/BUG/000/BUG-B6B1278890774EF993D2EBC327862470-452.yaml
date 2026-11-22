@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T17:32:15.512842081Z
+modified_at: 2026-11-22T17:57:28.032783747Z
 req_type: Bug
 tags:
 - conflicts
@@ -1057,6 +1057,11 @@ comments:
   modified_at: 2026-11-22T17:32:15.512842081Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20467-e760-7e10-9b6d-3cfd96a8b53c
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-2688-journal-loop` at head `unavailable`.'
+  created_at: 2026-11-22T17:57:28.032774140Z
+  modified_at: 2026-11-22T17:57:28.032774140Z
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
