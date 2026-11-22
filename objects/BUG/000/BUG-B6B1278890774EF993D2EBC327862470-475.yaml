@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T23:51:27.524520395Z
+modified_at: 2026-11-22T23:53:05.400074272Z
 req_type: Bug
 tags:
 - fasttrack
@@ -167,6 +167,28 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-22T23:51:27.377024859Z
   modified_at: 2026-11-22T23:51:27.377024859Z
+- id: 01a205ad-addd-7600-a507-268ed1a31bd1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:53):
+    # BUG-2714 / PR #4395 r3 FINAL: DESIGN SIMPLIFICATION (advisor-122 ruling 2026-11-22 16:58 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier.
+
+    CR at f4749143 (r2): both P1s are more holes in INFERRING "merge-only" from history. Replace that inference with a TREE rule:
+    - At publish time, compute T0 = `git merge-tree --write-tree <current base> <recorded PR head>`, which is what a pure base merge would produce.
+    - If HEAD^{tree} == T0, the round is merge-only: push nothing and return NoChange with a drain receipt.
+    - Otherwise, publish.
+    - If merge-tree reports a CONFLICT, publish, because a conflict resolution is real work.
+    This rule is independent of parents, subjects, resume state, or later base syncs.
+    DELETE the subject, parent-count and rev-list exclusion logic and its tests. KEEP AC1 (the merge stays local at pickup) and the NoChange receipt.
+    Tests: dirty resume plus advanced base; a lane that syncs the base twice; a legitimate fix (publishes); a conflict resolution (publishes); a non-rework merge outside lanes (unaffected).
+    The p3 (.rework sidecar not retired with the lease): fix it if the rule still needs the sidecar, otherwise delete the sidecar.
+    The reviewer scope is the tree rule plus the diff. Another blocking CR parks the PR.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-22T23:53:05.400074272Z
+  modified_at: 2026-11-22T23:53:05.400074272Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
   author: aida-session-start
