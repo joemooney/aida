@@ -1,5 +1,6 @@
 id: 01a1fad9-1554-77e3-9f13-99422a225f0b
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-192
+agreed_id: STORY-2998
 title: 'Review PR-4381: [AI:claude] feat(landing): throughput guard reports flaky tests that failed again, lane exits nobody followed up and dead claims (TASK-3827)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1fa8a`) for branch `task-b6b1278890774ef993d2ebc327862470-1136`.
@@ -35,6 +36,10 @@ history:
   timestamp: 2026-11-20T21:25:20.213618438Z
   session_id: 01a1fa8a98f8
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a204f5-fef1-72a3-8436-babcd6612a4d
+  author: joe
+  timestamp: 2026-11-22T20:32:40.177899423Z
   changes: []
 filed_at:
   code_sha: dc2c2ee634dd971732f0d1e8c765ff630bdbea30

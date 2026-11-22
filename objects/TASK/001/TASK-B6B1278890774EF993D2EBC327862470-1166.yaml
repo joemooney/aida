@@ -1,5 +1,6 @@
 id: 01a1faf1-fc35-7e70-981a-b6dcc983f147
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1166
+agreed_id: TASK-3218
 title: 'Review follow-up: A watch that keeps failing is silent. A corrupt state file (`fix or remove it`, main_watch'
 description: |
   From STORY-2897
@@ -65,6 +66,10 @@ history:
 - id: 01a1fd69-5096-70f0-a699-5f46d505f416
   author: joe
   timestamp: 2026-11-21T09:21:39.990669014Z
+  changes: []
+- id: 01a204f5-fcb1-73e0-a119-d6daa8cfc7b5
+  author: joe
+  timestamp: 2026-11-22T20:32:39.601125515Z
   changes: []
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af

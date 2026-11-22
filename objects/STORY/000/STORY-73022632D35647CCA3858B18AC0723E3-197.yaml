@@ -1,5 +1,6 @@
 id: 01a1fbd0-709f-7921-a128-c444a14e7910
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-197
+agreed_id: STORY-3005
 title: 'Review PR-4385: [AI:claude] fix(review): refuse an approved-with-findings reviewer draft while the reviewer runs (BUG-2707)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1fbaa`) for branch `bug-b6b1278890774ef993d2ebc327862470-469`.
@@ -33,6 +34,10 @@ history:
 - id: 01a20451-dae5-7193-a408-c1c117d6d037
   author: dirtlab
   timestamp: 2026-11-22T17:33:23.045439585Z
+  changes: []
+- id: 01a204f5-ffe2-7fb3-bc9a-21c3619a4ebe
+  author: joe
+  timestamp: 2026-11-22T20:32:40.418013732Z
   changes: []
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5

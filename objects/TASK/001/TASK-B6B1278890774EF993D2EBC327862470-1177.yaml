@@ -1,5 +1,6 @@
 id: 01a1fb08-10de-7892-ad2d-12bab9d23d55
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1177
+agreed_id: TASK-3245
 title: 'Review follow-up: Line 1457 says a failed standalone filing leaves the ledger empty. The new failed-delivery'
 description: |-
   From BUG-2662
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd42-e6d3-7fe3-9d72-a04582210127
   author: joe
   timestamp: 2026-11-21T08:39:42.547070647Z
+  changes: []
+- id: 01a204f5-fcf8-74b3-83e7-5c09fbb39ea5
+  author: joe
+  timestamp: 2026-11-22T20:32:39.672011685Z
   changes: []
 implementation_summary: Consolidated into signed BUG-2662 rework. Round 4 item 5 explicitly defines the recovery evidence as retained draft and absence of a new verdict event, including when the ledger already contains a prior event.
 filed_at:

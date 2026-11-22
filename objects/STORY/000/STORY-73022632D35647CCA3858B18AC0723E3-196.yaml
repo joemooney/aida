@@ -1,5 +1,6 @@
 id: 01a1fba8-f823-79a3-b4ba-e5d996db807d
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-196
+agreed_id: STORY-3004
 title: 'Review PR-4388: [AI:claude] fix(rework): conflict-repair reservations no longer block retries (BUG-2688)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1fb8a`) for branch `bug-2688-journal-loop`.
@@ -35,6 +36,10 @@ history:
   timestamp: 2026-11-21T01:12:02.405159617Z
   session_id: 01a1fb8af8a3
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a204f5-ffa4-70c1-b6f0-056cafa98b6e
+  author: joe
+  timestamp: 2026-11-22T20:32:40.356332450Z
   changes: []
 filed_at:
   code_sha: 5029dd61e7670f7a73ae69527f97218de96a942e

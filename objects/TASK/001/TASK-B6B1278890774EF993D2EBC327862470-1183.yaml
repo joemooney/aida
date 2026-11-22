@@ -1,5 +1,6 @@
 id: 01a1fb55-610a-7e51-bf73-d29432841808
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1183
+agreed_id: TASK-3230
 title: 'Review follow-up: aida-cli-lib/src/tests/queue_work_tests.rs:5114 — The lock-contention regression calls ref'
 description: |-
   From BUG-2629
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd38-28c5-77b0-8bd8-faf1f3f0cb07
   author: joe
   timestamp: 2026-11-21T08:27:58.533502190Z
+  changes: []
+- id: 01a204f5-fcc7-7ce1-8d8d-b9cccc1e2801
+  author: joe
+  timestamp: 2026-11-22T20:32:39.623919537Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2629 round 5. The signed ruling requires waiting-verdict discovery outside store-write.lock and a contention regression through real queue work. PR #4380 remains open.'
 filed_at:

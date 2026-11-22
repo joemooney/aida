@@ -1,5 +1,6 @@
 id: 01a1faf1-fab2-7931-b4ce-9cfff8712da3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1165
+agreed_id: TASK-3209
 title: 'Review follow-up: The pass budget equals the scheduler''s kill ceiling, so a slow pass is killed instead of d'
 description: |
   From STORY-2897
@@ -67,6 +68,10 @@ history:
 - id: 01a1fd69-fb69-77c0-8fb3-74b8d8025def
   author: joe
   timestamp: 2026-11-21T09:22:23.721356203Z
+  changes: []
+- id: 01a204f5-fc6c-70b3-9dd6-5a3426a38fd8
+  author: joe
+  timestamp: 2026-11-22T20:32:39.532118266Z
   changes: []
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af

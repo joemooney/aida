@@ -1,5 +1,6 @@
 id: 01a1fb83-8dde-7c00-bf7d-8e0469b620fc
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1192
+agreed_id: TASK-3243
 title: 'Review follow-up: Cleanups in aida-cli-lib/src/admission_owner.rs. (a) `train` and `cooperative_train` (line'
 description: |-
   From BUG-2703
@@ -29,6 +30,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a204f5-fcf5-7093-b67c-dbe3a0808f7f
+  author: joe
+  timestamp: 2026-11-22T20:32:39.669652234Z
+  changes: []
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363

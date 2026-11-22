@@ -1,5 +1,6 @@
 id: 01a1fabc-1f0b-73c0-a32b-ab550fa6d677
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1152
+agreed_id: TASK-3256
 title: 'Review follow-up: aida-core/templates/skills/aida-review.md:1451 — The skill says a contained reviewer''s col'
 description: |-
   From BUG-2662
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd41-d101-7203-b8ae-aae84009035e
   author: joe
   timestamp: 2026-11-21T08:38:31.425657153Z
+  changes: []
+- id: 01a204f5-fd17-7490-b613-ac7ac3cc71fa
+  author: joe
+  timestamp: 2026-11-22T20:32:39.703416882Z
   changes: []
 implementation_summary: 'Consolidated into signed BUG-2662 rework. Round 3 item 5 explicitly corrects the skill template for the standalone draft parent using direct review-record and syncs generated copies. PR #4378 retains this work.'
 filed_at:

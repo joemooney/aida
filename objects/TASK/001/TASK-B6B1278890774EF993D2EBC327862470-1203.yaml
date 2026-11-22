@@ -1,5 +1,6 @@
 id: 01a2019d-96f1-75a1-bbf8-0dcc6c9c6409
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1203
+agreed_id: TASK-3213
 title: 'Review follow-up: The supplied criteria report still lists all four worksheet entries as untraced. The diff '
 description: |-
   From BUG-2688
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   created_at: 2026-11-22T04:57:14.737957166Z
+history:
+- id: 01a204f5-fc9f-7f81-9190-47846418dfc8
+  author: joe
+  timestamp: 2026-11-22T20:32:39.583696552Z
+  changes: []
 filed_at:
   code_sha: d49e95064e4bf518480e260c7798e998e93e965e
   branch: review-4388-d49e95064e4b

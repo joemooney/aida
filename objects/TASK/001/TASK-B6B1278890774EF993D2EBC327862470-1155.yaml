@@ -1,5 +1,6 @@
 id: 01a1fabc-ed9c-79e0-8dce-d6f31e5f037b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1155
+agreed_id: TASK-3229
 title: 'Review follow-up: admission_owner.rs:740, intents: A regular intent file with invalid UTF-8 fails in read_re'
 description: |-
   From BUG-2703
@@ -36,6 +37,10 @@ history:
 - id: 01a1fce6-5276-7432-a5f1-71b4b1e0fad8
   author: joe
   timestamp: 2026-11-21T06:58:35.254122131Z
+  changes: []
+- id: 01a204f5-fcc2-72d1-a3bb-66d9790361e1
+  author: joe
+  timestamp: 2026-11-22T20:32:39.618023217Z
   changes: []
 implementation_summary: Consolidated into existing TASK-3828, whose description explicitly includes stale malformed UTF-8 intent handling and requires a regression. Source remains unfinished; this closes only duplicate intake, not the underlying work.
 filed_at:

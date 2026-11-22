@@ -1,5 +1,6 @@
 id: 01a2019d-9210-7ef0-83af-35f6fd21dad9
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1200
+agreed_id: TASK-3250
 title: 'Review follow-up: rework_worktree_inventory decodes the entire NUL-delimited inventory as UTF-8. inspect_que'
 description: |-
   From BUG-2688
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   created_at: 2026-11-22T04:57:13.488620428Z
+history:
+- id: 01a204f5-fd0b-7ee3-a7a4-c2d375bd4329
+  author: joe
+  timestamp: 2026-11-22T20:32:39.691631076Z
+  changes: []
 filed_at:
   code_sha: d49e95064e4bf518480e260c7798e998e93e965e
   branch: review-4388-d49e95064e4b

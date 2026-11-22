@@ -1,5 +1,6 @@
 id: 01a1fb41-bf99-7653-9172-77cc719ccf28
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1180
+agreed_id: TASK-3238
 title: 'Review follow-up: aida-cli-lib/src/gate/review_authority.rs, HumanReceiptSettlement::receipt_id — When remov'
 description: |-
   From BUG-2662
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd37-0d32-7d91-af51-8f475d241ea1
   author: joe
   timestamp: 2026-11-21T08:26:45.938228133Z
+  changes: []
+- id: 01a204f5-fcd8-7831-8293-0b849c47b9f9
+  author: joe
+  timestamp: 2026-11-22T20:32:39.640349877Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2662 round 5 item 4. The signed rework requires adopting or refusing a prior receipt if unlink fails, without overwriting its recovery pointer. PR #4378 remains open.'
 filed_at:

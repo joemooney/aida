@@ -1,5 +1,6 @@
 id: 01a1fabb-ebde-7712-9435-290985edc453
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1151
+agreed_id: TASK-3244
 title: 'Review follow-up: aida-cli-lib/src/review_commands.rs:3730 — A repeated refusal skips forge label reconcilia'
 description: |-
   From BUG-2662
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd40-bcbc-7271-88fe-1de1fc47e82a
   author: joe
   timestamp: 2026-11-21T08:37:20.700409862Z
+  changes: []
+- id: 01a204f5-fcf7-71f1-b58f-e0051db55a28
+  author: joe
+  timestamp: 2026-11-22T20:32:39.671430230Z
   changes: []
 implementation_summary: Consolidated into signed BUG-2662 rework. Round 3 item 4 explicitly requires checking current forge labels before skipping reconciliation and restoring a missing hold label. The round 2 invariant keeps a synchronized repeat free of redundant ledger writes.
 filed_at:

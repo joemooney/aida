@@ -1,5 +1,6 @@
 id: 01a1fbb7-6ba6-7ae3-a9f4-bc57efe4f1b1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1197
+agreed_id: TASK-3216
 title: 'Review follow-up: queue_cmd/work.rs:885 introduces another typed HeadlessVendor reference in prepare_and_rou'
 description: |-
   From BUG-2688
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd31-9fe7-7a83-a1a1-37577a3d8615
   author: joe
   timestamp: 2026-11-21T08:20:50.279983605Z
+  changes: []
+- id: 01a204f5-fca5-7463-829d-63b93e00e1b8
+  author: joe
+  timestamp: 2026-11-22T20:32:39.589795873Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2688 round 2 CI item (a): remove the new typed HeadlessVendor use and route through the guarded boundary without growing the vendor ledger. This remains a gate on PR #4388.'
 filed_at:

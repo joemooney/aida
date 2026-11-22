@@ -1,5 +1,6 @@
 id: 01a1faf1-ff3d-7ea1-8234-d50f462ce0f1
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1168
+agreed_id: TASK-3242
 title: 'Review follow-up: Revert detection matches only a subject starting `Revert "<red subject>` (main_watch.rs:11'
 description: |-
   From STORY-2897
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd5d-2ec4-72c2-b9a5-f1043de72267
   author: joe
   timestamp: 2026-11-21T09:08:24.900667976Z
+  changes: []
+- id: 01a204f5-fcf3-72a3-b2f4-1fef9ad1985d
+  author: joe
+  timestamp: 2026-11-22T20:32:39.667755612Z
   changes: []
 implementation_summary: 'Consolidated into STORY-2897 S3a, finding 17 at PR #4389 head 964a98c30ed. The pinned rework requires revert attribution bound to the reverted SHA, including squash commits with edited subjects. Missing evidence stays unattributed. Keep these cases in review.'
 filed_at:

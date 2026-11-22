@@ -1,5 +1,6 @@
 id: 01a1fbb7-a7de-77d1-8b1e-fde9f4a0f8ad
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1198
+agreed_id: TASK-3221
 title: 'Review follow-up: The fast-gates Git maintenance guard rejects five commit/push call sites in bug_2688_repai'
 description: |-
   From BUG-2688
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd32-b2f0-7931-9773-33d07748e25a
   author: joe
   timestamp: 2026-11-21T08:22:00.688819498Z
+  changes: []
+- id: 01a204f5-fcb4-71a2-ac64-e01f6a1a6afd
+  author: joe
+  timestamp: 2026-11-22T20:32:39.604412969Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2688 round 2 CI item (b): use the recognized test_git helper for the same five fixture writes without increasing the maintenance baseline. This remains a gate on PR #4388.'
 filed_at:

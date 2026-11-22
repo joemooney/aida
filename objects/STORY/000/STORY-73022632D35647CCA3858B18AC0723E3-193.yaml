@@ -1,5 +1,6 @@
 id: 01a1fadf-da05-7d33-a760-aedab1a3f961
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-193
+agreed_id: STORY-3002
 title: 'Review PR-4364: [AI:claude] fix(review): retire a recorded reviewer''s stale tree; release dead gone-tree reviewer leases without prompting (Refs BUG-2684)'
 description: |
   Auto-filed by `aida session end` (backup trigger) (session `01a1fa7d`) for branch `bug-b6b1278890774ef993d2ebc327862470-448-2026-11-20`.
@@ -52,6 +53,10 @@ history:
 - id: 01a1fae0-0e45-71e2-bcef-1b6e7290b7db
   author: dirtlab
   timestamp: 2026-11-20T21:32:30.149911592Z
+  changes: []
+- id: 01a204f5-ff8a-7283-8b7c-bce609cb986e
+  author: joe
+  timestamp: 2026-11-22T20:32:40.330088583Z
   changes: []
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8

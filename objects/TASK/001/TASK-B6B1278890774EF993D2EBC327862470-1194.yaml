@@ -1,5 +1,6 @@
 id: 01a1fba5-e125-7801-812f-5f4271302468
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1194
+agreed_id: TASK-3201
 title: 'Review follow-up: The required fast-gates job 136668421203 fails the Rust test portability ratchet on the tw'
 description: |-
   From BUG-2707
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd4d-eb8b-7eb2-963d-8d94988c14fb
   author: joe
   timestamp: 2026-11-21T08:51:44.651280589Z
+  changes: []
+- id: 01a204f5-fc49-7c00-b7d1-19d5d047829f
+  author: joe
+  timestamp: 2026-11-22T20:32:39.497460935Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2707. At pinned PR #4385 head bdd60daf20ca, the exact test named in failed job 136668421203 carries cfg(unix), covering both /bin/sh invocations. Preserve the guard or use an equivalent portable fixture in final rework.'
 filed_at:

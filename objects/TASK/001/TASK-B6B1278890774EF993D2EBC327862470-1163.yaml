@@ -1,5 +1,6 @@
 id: 01a1faef-2f1b-7432-b6d5-9a85a3a88d66
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1163
+agreed_id: TASK-3235
 title: 'Review follow-up: rework_bindings_tests.rs — The new acceptance tests have only a bug-level trace. Add the i'
 description: |-
   From BUG-2629
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd51-af05-7520-b01c-d1eab08e2662
   author: joe
   timestamp: 2026-11-21T08:55:51.301881264Z
+  changes: []
+- id: 01a204f5-fcd0-73c3-b18b-039095d87d31
+  author: joe
+  timestamp: 2026-11-22T20:32:39.632198485Z
   changes: []
 implementation_summary: Consolidated into BUG-2629 rework. Round 2 item 8 explicitly adds worksheet criterion IDs to acceptance test trace comments. Pinned head 367c23a7723a has criterion traces in rework_bindings_tests.rs. Keep the mapped checks in the BUG-2629 acceptance review.
 filed_at:

@@ -1,5 +1,6 @@
 id: 01a1fb83-8cef-7180-be40-a310b4a3ecd5
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1191
+agreed_id: TASK-3210
 title: 'Review follow-up: aida-cli-lib/src/review_watch_pause.rs:247-251 with aida-cli-lib/src/gate/test_support.rs:'
 description: |-
   From BUG-2703
@@ -29,6 +30,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a204f5-fc96-7612-8a51-e88ed10eb36e
+  author: joe
+  timestamp: 2026-11-22T20:32:39.574126150Z
+  changes: []
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363

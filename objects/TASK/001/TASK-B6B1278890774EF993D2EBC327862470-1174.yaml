@@ -1,5 +1,6 @@
 id: 01a1faf4-cd12-7623-8726-a729ba6606ad
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1174
+agreed_id: TASK-3247
 title: 'Review follow-up: SessionClaimHeartbeat::drop joins a thread that may be inside a fetch or push using an unb'
 description: |-
   From BUG-2706
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd48-4908-70c1-ac24-9f14df11e361
   author: joe
   timestamp: 2026-11-21T08:45:35.368551197Z
+  changes: []
+- id: 01a204f5-fd01-7542-8fe5-e346bb1a87dc
+  author: joe
+  timestamp: 2026-11-22T20:32:39.681575555Z
   changes: []
 implementation_summary: 'Consolidated into existing signed rework. The signed round-2 brief item 8 explicitly owns bounded fetch and push, a deadline for heartbeat shutdown, and keeping stalled pulls outside the store writer lock. PR #4382 and its BUG-2629 dependency remain open.'
 filed_at:

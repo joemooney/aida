@@ -1,5 +1,6 @@
 id: 01a1fbb7-33a7-7e12-a50a-96cb62e2a090
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1196
+agreed_id: TASK-3249
 title: 'Review follow-up: queue_cmd/work.rs:932 repeats the effectful launch admission after preparation has reserve'
 description: |-
   From BUG-2688
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd30-863b-7e72-9616-e45787b1ccbc
   author: joe
   timestamp: 2026-11-21T08:19:38.171118699Z
+  changes: []
+- id: 01a204f5-fd08-7101-ab9f-d7a43f7e9fe6
+  author: joe
+  timestamp: 2026-11-22T20:32:39.688806435Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2688 round 2 behavior item 6: carry successful admission through conflict routing and test once-only effectful preflight. PR #4388 still carries that work.'
 filed_at:

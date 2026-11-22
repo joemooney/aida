@@ -1,5 +1,6 @@
 id: 01a1faf1-f91b-7590-8a21-3f36232f079f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1164
+agreed_id: TASK-3233
 title: 'Review follow-up: Watch state is per checkout but the job is scheduled across clones. STATE/JOURNAL/SMOKE_SP'
 description: |-
   From STORY-2897
@@ -28,6 +29,11 @@ comments:
     Advisor scope at S3a #4389 964a98c30ed. The watch command and land metrics now resolve the same main checkout on the invoking host. That covers linked worktrees on one host. The files still live under that checkout's .aida/land directory and the periodic job has no host restriction. Distinct primary clones can therefore retain separate episode histories under failover. A follow-up sketch should pick one scheduler/state owner across eligible hosts (including failover semantics) or define one authoritative shared history. Verify from two independent primary clones and from a linked worktree. Require a single episode identity, stable original observation time across a handoff, and an explicit unavailable result where a metrics reader cannot consult the authoritative history. Duplicate fix-spec or attention filing, reruns and smoke spool delivery belong to the separately gated S3b effects design.
   created_at: 2026-11-21T09:23:18.983043634Z
   modified_at: 2026-11-21T09:23:18.983043634Z
+history:
+- id: 01a204f5-fcce-74a0-88d1-a9ef8490b383
+  author: joe
+  timestamp: 2026-11-22T20:32:39.630092432Z
+  changes: []
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362

@@ -1,5 +1,6 @@
 id: 01a1fb54-fdaa-72e2-8784-a68bfd5d04d3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1181
+agreed_id: TASK-3240
 title: 'Review follow-up: aida-cli-lib/src/queue_cmd/rework_bindings.rs:543 — The legacy byte budget is debited only'
 description: |-
   From BUG-2629
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd52-c572-7e53-9359-0082c3e5a14d
   author: joe
   timestamp: 2026-11-21T08:57:02.578719589Z
+  changes: []
+- id: 01a204f5-fcdc-7103-abc8-e1fd4806edfd
+  author: joe
+  timestamp: 2026-11-22T20:32:39.644835155Z
   changes: []
 implementation_summary: Consolidated into BUG-2629 rework. The bounded recovery scope in BUG-2629 includes the legacy budget. Pinned head 367c23a7723a charges bytes consumed by checked_legacy_record before branching on parse success, absence or read failure. The round-5 cache must preserve that behavior.
 filed_at:

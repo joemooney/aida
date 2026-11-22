@@ -1,5 +1,6 @@
 id: 01a1fabb-b843-73d3-8b82-15ea1c375a20
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1150
+agreed_id: TASK-3253
 title: 'Review follow-up: aida-cli-lib/src/gate/ledger/store.rs:944 — The unbound append calls read_unbound before i'
 description: |-
   From BUG-2662
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd3f-a1a4-7c92-b11c-c45d67aacb4d
   author: joe
   timestamp: 2026-11-21T08:36:08.228199022Z
+  changes: []
+- id: 01a204f5-fd11-7f81-b9bf-c9eb381ac746
+  author: joe
+  timestamp: 2026-11-22T20:32:39.697435910Z
   changes: []
 implementation_summary: 'Consolidated into signed BUG-2662 rework. Round 3 item 3 requires unbound append to decide from the bounded validated reader within the same budget. Keep validation on PR #4378.'
 filed_at:

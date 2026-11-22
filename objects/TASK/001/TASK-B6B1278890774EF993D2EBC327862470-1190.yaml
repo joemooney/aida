@@ -1,5 +1,6 @@
 id: 01a1fb83-8bfe-7d93-988c-c26b7d07a7c0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1190
+agreed_id: TASK-3211
 title: 'Review follow-up: aida-cli-lib/src/admission_owner.rs tests: three new tests depend on sub-second scheduling'
 description: |-
   From BUG-2703
@@ -29,6 +30,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a204f5-fc9e-7b53-96dd-a7b5a693972d
+  author: joe
+  timestamp: 2026-11-22T20:32:39.582570433Z
+  changes: []
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363

@@ -1,5 +1,6 @@
 id: 01a1fb55-2eda-7750-90d5-54b0d2bd60d7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1182
+agreed_id: TASK-3255
 title: 'Review follow-up: aida-cli-lib/src/queue_cmd/rework_bindings.rs:256 — The fallback enforces a byte ceiling b'
 description: |-
   From BUG-2629
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd53-dde4-75f2-831b-0d133afb07c9
   author: joe
   timestamp: 2026-11-21T08:58:14.372297492Z
+  changes: []
+- id: 01a204f5-fd14-7103-a42a-0d672d26f22b
+  author: joe
+  timestamp: 2026-11-22T20:32:39.700975669Z
   changes: []
 implementation_summary: Consolidated into BUG-2629 rework. The bounded recovery scope in BUG-2629 includes the shared parse-attempt ceiling. Pinned head 367c23a7723a ties MAX_PARSE_ATTEMPTS to the checked selection ceiling and puts it in the per-pass ReadBudget. Preserve the count for malformed attempts when round 5 changes the cache.
 filed_at:

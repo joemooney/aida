@@ -1,5 +1,6 @@
 id: 01a2019d-9556-71d0-ab70-a10d708dc14b
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1202
+agreed_id: TASK-3215
 title: 'Review follow-up: The manual promises that a replacement starts at the fetched PR head even on conversation '
 description: |-
   From BUG-2688
@@ -21,6 +22,11 @@ relationships:
 - rel_type: References
   target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   created_at: 2026-11-22T04:57:14.326101880Z
+history:
+- id: 01a204f5-fca2-7b43-a699-22fc20d7d8e4
+  author: joe
+  timestamp: 2026-11-22T20:32:39.586742211Z
+  changes: []
 filed_at:
   code_sha: d49e95064e4bf518480e260c7798e998e93e965e
   branch: review-4388-d49e95064e4b

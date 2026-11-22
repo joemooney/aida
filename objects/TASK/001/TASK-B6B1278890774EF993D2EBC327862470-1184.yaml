@@ -1,5 +1,6 @@
 id: 01a1fb74-b564-7ad1-bde9-bb13a4dd50d2
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1184
+agreed_id: TASK-3226
 title: 'Review follow-up: check_draft_file checks symlink_metadata and then reopens the path with an unbounded read_'
 description: |-
   From BUG-2707
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd33-c4cd-7153-b08e-c87fa435fdc7
   author: joe
   timestamp: 2026-11-21T08:23:10.797829975Z
+  changes: []
+- id: 01a204f5-fcb5-7280-885f-f87e03fdb344
+  author: joe
+  timestamp: 2026-11-22T20:32:39.605906545Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2707 final rework for PR #4385. Validate-only submission requires a single bounded, no-follow read of the opened regular draft, with no mutation of the launch directory. Verify against the published replacement head.'
 filed_at:

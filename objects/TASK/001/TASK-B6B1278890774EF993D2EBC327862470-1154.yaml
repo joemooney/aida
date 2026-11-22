@@ -1,5 +1,6 @@
 id: 01a1fabc-bbf3-7260-8728-f518efd81d3f
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1154
+agreed_id: TASK-3227
 title: 'Review follow-up: admission_drain.rs:226: A drain issued just before a backward host-clock adjustment remain'
 description: |-
   From BUG-2703
@@ -36,6 +37,10 @@ history:
 - id: 01a1fce5-4233-7e52-b650-73acd7534823
   author: joe
   timestamp: 2026-11-21T06:57:25.555653636Z
+  changes: []
+- id: 01a204f5-fcb6-7662-b818-96cb755546b7
+  author: joe
+  timestamp: 2026-11-22T20:32:39.606485425Z
   changes: []
 implementation_summary: Consolidated into existing TASK-3828, whose description explicitly includes observer-clock bounded drain expiry and requires a regression. Source remains unfinished; this closes only duplicate intake, not the underlying work.
 filed_at:

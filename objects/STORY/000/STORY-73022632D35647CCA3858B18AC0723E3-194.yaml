@@ -1,5 +1,6 @@
 id: 01a1faed-a9e7-7a81-a898-d263611cbfae
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-194
+agreed_id: STORY-3000
 title: 'Review PR-4382: [AI:claude] fix(review-watch): defer review behind a lane on another host for as long as it runs (BUG-2706)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1fabb`) for branch `bug-b6b1278890774ef993d2ebc327862470-468`.
@@ -35,6 +36,10 @@ history:
   timestamp: 2026-11-20T21:47:33.005554685Z
   session_id: 01a1fabbb213
   harness_version: 2.1.319 (Claude Code)
+  changes: []
+- id: 01a204f5-ff0b-72a1-afa4-48a1c466a8b7
+  author: joe
+  timestamp: 2026-11-22T20:32:40.203560540Z
   changes: []
 filed_at:
   code_sha: 9a5565b17c8552116a9ba459a9f8a31a7011af43

@@ -1,5 +1,6 @@
 id: 01a1faf2-00c4-75f0-a9e9-36c4ea7fad25
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1169
+agreed_id: TASK-3228
 title: 'Review follow-up: `aida land metrics` now fails as a whole when the watch journal has one invalid committed '
 description: |
   From STORY-2897
@@ -65,6 +66,10 @@ history:
 - id: 01a1fd66-29eb-7f21-a739-64666d732331
   author: joe
   timestamp: 2026-11-21T09:18:13.483839337Z
+  changes: []
+- id: 01a204f5-fcb7-7f91-b8d2-221b8fa23131
+  author: joe
+  timestamp: 2026-11-22T20:32:39.607186558Z
   changes: []
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af

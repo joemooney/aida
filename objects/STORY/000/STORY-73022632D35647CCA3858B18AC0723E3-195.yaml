@@ -1,5 +1,6 @@
 id: 01a1fba8-1d0a-74f0-941c-466e6c0a7d20
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-195
+agreed_id: STORY-3003
 title: 'Review PR-4387: [AI:codex] test(seat-clone): isolate fixture roots and watchdog re-exec (Refs TASK-3133)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a1fb83`) for branch `task-73022632d35647cca3858b18ac0723e3-027`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-21T01:11:20.704341721Z
   session_id: 01a1fb836f3c
+  changes: []
+- id: 01a204f5-ff97-7f23-93fa-648805e53374
+  author: joe
+  timestamp: 2026-11-22T20:32:40.343975348Z
   changes: []
 filed_at:
   code_sha: 29e77b85236996104a3a46113bcd11f31506ff83

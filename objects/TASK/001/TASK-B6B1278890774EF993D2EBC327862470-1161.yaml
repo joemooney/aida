@@ -1,5 +1,6 @@
 id: 01a1faee-c7b8-7e11-9976-05ed3f799bf8
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1161
+agreed_id: TASK-3252
 title: 'Review follow-up: rework_bindings.rs:84 — Recovery collects every related verdict payload in memory at once,'
 description: |-
   From BUG-2629
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd4f-837a-7652-b158-f30454e71e60
   author: joe
   timestamp: 2026-11-21T08:53:29.082596302Z
+  changes: []
+- id: 01a204f5-fd10-7591-b12b-f82c1af0187a
+  author: joe
+  timestamp: 2026-11-22T20:32:39.696726592Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2629 rework. Round 2 item 2 explicitly requires an aggregate retained-payload byte ceiling and named refusal on exhaustion. PR #4380 head 367c23a7723a uses a shared MAX_RECOVERY_BYTES budget. Keep coverage in the round-5 cache review.'
 filed_at:

@@ -1,5 +1,6 @@
 id: 01a1fae2-69b8-7b90-be8d-f9835b869684
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1157
+agreed_id: TASK-3236
 title: 'Review follow-up: Policy accepts any positive TOML i64 for flake_window_hours and lane_outcome_mins. Duratio'
 description: |-
   From TASK-3827
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd2c-f268-7bb3-b176-7cfc9814563b
   author: joe
   timestamp: 2026-11-21T08:15:43.720439350Z
+  changes: []
+- id: 01a204f5-fcd2-74b0-9b7d-8cc82cadd142
+  author: joe
+  timestamp: 2026-11-22T20:32:39.634310167Z
   changes: []
 implementation_summary: Consolidated into TASK-3827. The signed safety scope demands validated policy duration ranges or checked arithmetic, with no overflow panic. Apply the same gate when flake_window_hours and lane_outcome_mins return in their authorized slices.
 filed_at:

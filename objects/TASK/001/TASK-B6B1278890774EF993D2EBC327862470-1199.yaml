@@ -1,5 +1,6 @@
 id: 01a1fbd2-51a7-7ac1-acd8-5735ae83696c
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1199
+agreed_id: TASK-3200
 title: 'Review follow-up: The new CLI test reads the ambient PATH in aida-cli/tests/bug_2707_submit_draft_cli.rs:43.'
 description: |-
   From BUG-2707
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd34-dc59-7643-8b55-cca5aae20bb8
   author: joe
   timestamp: 2026-11-21T08:24:22.361958347Z
+  changes: []
+- id: 01a204f5-fc42-70c0-9956-39b66740dada
+  author: joe
+  timestamp: 2026-11-22T20:32:39.490212304Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2707 final rework for PR #4385. The authoritative brief explicitly replaces the same ambient PATH read with a deterministic fixture or removes it if unnecessary. Fast-gates job 136691046541 remains the exact-head failure evidence.'
 filed_at:

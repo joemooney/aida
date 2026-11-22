@@ -1,5 +1,6 @@
 id: 01a1fb75-7597-74d1-a709-c1b05ad5e105
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1186
+agreed_id: TASK-3257
 title: 'Review follow-up: The default-policy instructions in approval_refusal and the new skill paragraph say a regi'
 description: |
   From BUG-2707
@@ -65,6 +66,10 @@ history:
 - id: 01a1fd63-dac4-7da2-ad68-5e79c980fb82
   author: joe
   timestamp: 2026-11-21T09:15:42.148537937Z
+  changes: []
+- id: 01a204f5-fd18-7440-acb9-07552e0d35cc
+  author: joe
+  timestamp: 2026-11-22T20:32:39.704161126Z
   changes: []
 filed_at:
   code_sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886

@@ -1,5 +1,6 @@
 id: 01a1fb75-b7ac-77c3-a5b6-8260f2dfd1e0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1187
+agreed_id: TASK-3237
 title: 'Review follow-up: The tier-list refusal offers restructuring as a fix for findings outside the configured cl'
 description: |-
   From BUG-2707
@@ -43,6 +44,10 @@ history:
 - id: 01a1fd63-a313-7761-8dfd-c64902b0c39e
   author: joe
   timestamp: 2026-11-21T09:15:27.891178877Z
+  changes: []
+- id: 01a204f5-fcd4-7810-9a85-e79a49f55999
+  author: joe
+  timestamp: 2026-11-22T20:32:39.636772873Z
   changes: []
 filed_at:
   code_sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886

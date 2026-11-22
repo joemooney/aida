@@ -1,5 +1,6 @@
 id: 01a1fbb6-fc93-7723-8cff-66bb801685a8
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1195
+agreed_id: TASK-3204
 title: 'Review follow-up: repair_journal.rs:437 silently drops reservation_holder errors. A malformed lane record ma'
 description: |-
   From BUG-2688
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd2f-7192-7b90-a149-082dffa6f206
   author: joe
   timestamp: 2026-11-21T08:18:27.346240366Z
+  changes: []
+- id: 01a204f5-fc5a-75f0-bab0-0ad610a6cadc
+  author: joe
+  timestamp: 2026-11-22T20:32:39.514283384Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2688 round 2 safety item 5: turn reservation-holder errors into a non-healable finding that names missing or invalid evidence. PR #4388 still carries that work.'
 filed_at:

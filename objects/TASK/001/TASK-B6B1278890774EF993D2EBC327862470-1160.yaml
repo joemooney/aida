@@ -1,5 +1,6 @@
 id: 01a1fae2-ffaf-7be1-a910-3f10f3b5ea15
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1160
+agreed_id: TASK-3239
 title: 'Review follow-up: Each tick reads and sorts all historical receipts and scans all historical attempt identit'
 description: |-
   From TASK-3827
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd2e-0893-7e92-8b6a-1db5e48003f1
   author: joe
   timestamp: 2026-11-21T08:16:54.931755959Z
+  changes: []
+- id: 01a204f5-fcd9-7a70-a7b1-506c89d0248f
+  author: joe
+  timestamp: 2026-11-22T20:32:39.641020559Z
   changes: []
 implementation_summary: Consolidated into TASK-3827 PR-C. The signed LANE-OUTCOME scope explicitly carries bounded and indexed receipt ingestion plus retention of unresolved exits. This draft tracks that same requirement.
 filed_at:

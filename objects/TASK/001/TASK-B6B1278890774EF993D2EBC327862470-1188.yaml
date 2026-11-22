@@ -1,5 +1,6 @@
 id: 01a1fb83-8574-7782-9809-fc86b22eb521
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1188
+agreed_id: TASK-3246
 title: 'Review follow-up: aida-cli-lib/src/admission_drain.rs:102-134, 208-217, 282-290: an unreadable or invalid dr'
 description: |-
   From BUG-2703
@@ -29,6 +30,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a204f5-fcfb-7ee3-a30c-0ed0c25c8c14
+  author: joe
+  timestamp: 2026-11-22T20:32:39.675864888Z
+  changes: []
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363

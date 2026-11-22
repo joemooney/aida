@@ -1,5 +1,6 @@
 id: 01a1fb41-8a7b-73e2-a6a1-ec15c0636cf7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1179
+agreed_id: TASK-3234
 title: 'Review follow-up: aida-cli-lib/src/review_commands.rs:3524 — emit_review_verdict_recorded uses events::emit,'
 description: |-
   From BUG-2662
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd35-f8ab-7b80-bb4b-c83f6b0e032d
   author: joe
   timestamp: 2026-11-21T08:25:35.147475803Z
+  changes: []
+- id: 01a204f5-fccf-7610-a32a-c3cd876094f3
+  author: joe
+  timestamp: 2026-11-22T20:32:39.631057163Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2662 round 5 item 3. The signed rework calls for a fallible event append, marking done only on confirmed delivery, and retrying pending announcements. PR #4378 remains open.'
 filed_at:

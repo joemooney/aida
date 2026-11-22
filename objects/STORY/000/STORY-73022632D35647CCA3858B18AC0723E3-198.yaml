@@ -1,5 +1,6 @@
 id: 01a204a3-4e77-77a3-a123-8a62c9b1611b
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-198
+agreed_id: STORY-3001
 title: 'Review PR-4389: [AI:claude] feat(land): observational red-main watch (S3a) (Refs STORY-2897)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20470`) for branch `s3a-observational-watch`.
@@ -36,6 +37,10 @@ history:
   author: dirtlab
   timestamp: 2026-11-22T19:02:43.217005753Z
   session_id: 01a204703c77
+  changes: []
+- id: 01a204f5-ff88-75c1-b58f-274b05d804b7
+  author: joe
+  timestamp: 2026-11-22T20:32:40.328127768Z
   changes: []
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5

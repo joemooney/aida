@@ -1,5 +1,6 @@
 id: 01a1fb75-158d-7f72-9d0d-1d4e8f955305
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1185
+agreed_id: TASK-3214
 title: 'Review follow-up: LaunchDraft::prompt interpolates the absolute path unquoted into its runnable shell comman'
 description: |-
   From BUG-2707
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd4c-d9d8-7501-873c-79d463eb5683
   author: joe
   timestamp: 2026-11-21T08:50:34.584674959Z
+  changes: []
+- id: 01a204f5-fca2-7b43-a699-22e11efa00ed
+  author: joe
+  timestamp: 2026-11-22T20:32:39.586031991Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2707. Pinned PR #4385 head bdd60daf20ca constructs the submit command with shell_quote and has a test using a path with whitespace and a quote. The final validate-only rewrite must retain that behavior and test.'
 filed_at:

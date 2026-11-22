@@ -1,5 +1,6 @@
 id: 01a1faee-fbe6-7392-bd62-eacc87d88c86
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1162
+agreed_id: TASK-3254
 title: 'Review follow-up: rework_bindings.rs:115 — The first recovery loop consults all change keys, including entri'
 description: |-
   From BUG-2629
@@ -36,6 +37,10 @@ history:
 - id: 01a1fd50-9657-78d1-9f02-ecc85f30c9ac
   author: joe
   timestamp: 2026-11-21T08:54:39.447931158Z
+  changes: []
+- id: 01a204f5-fd12-70c3-954f-f35cc37024ce
+  author: joe
+  timestamp: 2026-11-22T20:32:39.698170886Z
   changes: []
 implementation_summary: 'Consolidated into BUG-2629 rework. Round 2 item 4 explicitly requires proof of binding before accepting a change-keyed wait. PR #4380 head 367c23a7723a gates judgment by proof or applicable spec evidence. Keep the wrong-spec write-ahead binding regression in parent review.'
 filed_at:

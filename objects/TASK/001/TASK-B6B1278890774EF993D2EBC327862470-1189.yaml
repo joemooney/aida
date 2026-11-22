@@ -1,5 +1,6 @@
 id: 01a1fb83-8b0b-7491-b154-6bd8598e48f6
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1189
+agreed_id: TASK-3241
 title: 'Review follow-up: scripts/config-trust.toml: the new branch-local key `[admission] wait_secs` (read in aida-'
 description: |-
   From BUG-2703
@@ -29,6 +30,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a204f5-fce5-7f83-aa3e-16c3b21a2d87
+  author: joe
+  timestamp: 2026-11-22T20:32:39.653366459Z
+  changes: []
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
