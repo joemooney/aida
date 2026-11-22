@@ -33,7 +33,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-22T20:18:08.381668657Z
+modified_at: 2026-11-22T21:25:40.781887720Z
 req_type: Story
 tags:
 - area:ci
@@ -560,6 +560,11 @@ comments:
     A reference merge (commit 452f36684d47, `(Refs STORY-2695)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-22T20:18:08.381662347Z
   modified_at: 2026-11-22T20:18:08.381662347Z
+- id: 01a20526-872d-79f1-a280-f3ae325cdaac
+  author: joe
+  content: 'Dell1 runner hardening ideas from the operator''s work-side CI report (product-15, 2026-11-22): (1) a cache budget guard: key the compiler cache on compiler, lockfile and profile, take a project lock, and when the disk/cache/scratch budget is exceeded FAIL the job and never delete unknown data; (2) a runner preflight that checks required tools, identity, capabilities and scratch before tests, so capability gaps fail clearly instead of as misleading test failures; (3) an exclusive nextest group (no timeout change) for machine-wide tests that race concurrent writers, plus a ratchet. Related: BUG-2684 overlay GC.'
+  created_at: 2026-11-22T21:25:40.781887720Z
+  modified_at: 2026-11-22T21:25:40.781887720Z
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
