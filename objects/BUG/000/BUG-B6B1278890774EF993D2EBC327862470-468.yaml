@@ -20,7 +20,7 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T17:57:54.679660168Z
+modified_at: 2026-11-22T17:58:02.738803183Z
 req_type: Bug
 tags:
 - lanes
@@ -307,6 +307,11 @@ comments:
   modified_at: 2026-11-21T00:13:33.927548789Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a20468-6ef2-7e31-8be3-9f9686ec74b5
+  author: joe
+  content: 'Advisor ruling (claude-advisor-122, 2026-11-22 10:55 MST, relayed by product-15): blocked-by BUG-2629 link REMOVED. It was operational (slow rework discovery), not a code dependency for the #4382 fix. r2 rework queued on codex.'
+  created_at: 2026-11-22T17:58:02.738803183Z
+  modified_at: 2026-11-22T17:58:02.738803183Z
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
