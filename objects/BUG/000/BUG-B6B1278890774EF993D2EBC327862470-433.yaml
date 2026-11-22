@@ -10,12 +10,12 @@ description: |
   That fails closed (no lost or forged verdict), but the cross-launch replay path is effectively dead.
 
   Acceptance: either (a) a design (sketch plus advisor signoff) under which a later launcher can deliver a retained draft without impersonating the original launcher's grant, or (b) remove the cross-launch replay path and keep only the same-launch bounded retry, with docs and tests updated. Either way, a regression shows what happens to a retained draft after the launcher restarts.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-22T23:52:45.610342785Z
+modified_at: 2026-11-22T23:58:42.837668886Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -590,6 +590,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a205b2-a295-76e3-b637-e539fab5b4a1
+  author: aida-session-start
+  timestamp: 2026-11-22T23:58:42.837667487Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
