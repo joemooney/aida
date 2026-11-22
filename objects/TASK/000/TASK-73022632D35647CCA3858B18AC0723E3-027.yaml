@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-22T20:46:47.957701098Z
+modified_at: 2026-11-22T21:08:33.165382523Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -640,6 +640,18 @@ comments:
   modified_at: 2026-11-22T20:04:00.145431184Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20516-dba9-7e93-a07c-58b48d3eb32e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d1282e70b997273ca848fca946ee6fc82741f2c3 plus the native working-tree diff. Reviewed origin/main...HEAD and untracked additions (none).
+    AC1: [evidence: behavioral-test] bug_2169_contained_clone_bwrap_tests.rs:521 checks the direct parent. In an isolated Rust run, the original helper returned a parent ending in bug-2169-bwrap and failed the exact assertion. The current helper passed. The relocated libtest still runs its denial case.
+    AC2: [evidence: behavioral-test] Same file:2194 checks the canonical parent of the live fixture. The previous placement failed this assertion (/tmp versus /var/tmp). Codex receives TMPDIR=/tmp. An ungranted sibling write fails preflight. A read-only /var/tmp selects a private mount for the exact test child. Required-live still refuses unsupported environments.
+    Both findings classified ADR-76 strict tier, fixed in this slice. Cross-references, paths, retries, failed setup, subprocess cardinality, and denials reviewed. No production authority changes. Kept the seat-publish watchdog re-exec. Final targeted lane job j20261122T210115809-2-0: 26 passed, live Codex subcase skipped (bwrap unavailable). Formatting, diff check and store-writer inventory passed. Primary-host and dell1 live evidence, independent review, and exact-head CI remain outstanding. Noexec /tmp remains TASK-3832.
+  created_at: 2026-11-22T21:08:33.165382523Z
+  modified_at: 2026-11-22T21:08:33.165382523Z
+  session_id: 01a20502b973
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
