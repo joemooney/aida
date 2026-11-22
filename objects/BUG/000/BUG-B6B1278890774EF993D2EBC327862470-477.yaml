@@ -14,13 +14,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:24:50.241345704Z
-modified_at: 2026-11-22T21:29:01.013205356Z
+modified_at: 2026-11-22T21:31:28.188278664Z
 req_type: Bug
 tags:
 - authority
 - from-work-ci
 - security
 - store-mutation
+- strict
 comments:
 - id: 01a20529-c79c-71a2-b698-0a692b74fd51
   author: joe
@@ -34,6 +35,14 @@ comments:
   modified_at: 2026-11-22T21:29:01.013205356Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a2052b-d43c-7761-9620-191b4708745f
+  author: joe
+  timestamp: 2026-11-22T21:31:28.188278144Z
+  changes:
+  - field_name: tags
+    old_value: authority, from-work-ci, security, store-mutation
+    new_value: authority, from-work-ci, security, store-mutation, strict
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
