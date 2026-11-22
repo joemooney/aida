@@ -160,7 +160,10 @@ mod linux {
     }
 
     fn fixture() -> Fixture {
-        let tmp = fixture_tempdir();
+        fixture_from_tempdir(fixture_tempdir())
+    }
+
+    fn fixture_from_tempdir(tmp: tempfile::TempDir) -> Fixture {
         let root = tmp.path().canonicalize().unwrap();
         let main = root.join("aida");
         std::fs::create_dir_all(&main).unwrap();
@@ -515,6 +518,7 @@ mod linux {
     // trace:TASK-3133 | ai:codex
     #[test]
     fn recorded_clone_fixture_is_independent_of_the_test_binary_checkout() {
+        assert_eq!(fixture_tempdir().path().parent(), Some(Path::new("/tmp")));
         let host = tempfile::tempdir_in("/tmp").unwrap();
         git_ok(host.path(), &["init", "-q"]);
         let profile = host.path().join("target/worktrees/evidence/agent/deps");
@@ -522,7 +526,14 @@ mod linux {
         let running = crate::aida_bin::current_executable_path().unwrap();
         let binary = profile.join(running.file_name().unwrap());
         if std::fs::hard_link(&running, &binary).is_err() {
-            std::fs::copy(&running, &binary).unwrap();
+            // Keep the writable executable handle out of this parallel test
+            // process so a concurrently forked child cannot inherit it.
+            assert!(Command::new("cp")
+                .arg(&running)
+                .arg(&binary)
+                .status()
+                .unwrap()
+                .success());
         }
         let case = concat!(
             "seat_clone::bwrap_tests::linux::",
@@ -2150,7 +2161,38 @@ true"#;
             "AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 needs AIDA_TEST_AIDA_BIN (the `aida` to claim \
              with inside the sandbox)"
         );
-        let fx = fixture();
+        // Keep denial targets outside both Cargo worktrees and Codex temporary write grants.
+        let tmp = match tempfile::tempdir_in("/var/tmp") {
+            Ok(tmp) => tmp,
+            // Lane jobs mount /var read-only. Give this test process its own
+            // /var/tmp without changing the host mount or the Codex write set.
+            Err(err) if err.kind() == std::io::ErrorKind::ReadOnlyFilesystem => {
+                assert!(
+                    std::env::var_os("AIDA_TEST_PRIVATE_VAR_TMP").is_none(),
+                    "{err}"
+                );
+                let thread = std::thread::current();
+                let case = thread.name().unwrap();
+                let out = Command::new("bwrap")
+                    .args(["--bind", "/", "/", "--tmpfs", "/var/tmp", "--"])
+                    .arg(crate::aida_bin::current_executable_path().unwrap())
+                    .args(["--exact", case, "--nocapture"])
+                    .env("AIDA_TEST_PRIVATE_VAR_TMP", "1")
+                    .output()
+                    .unwrap();
+                let stdout = String::from_utf8_lossy(&out.stdout);
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                eprint!("{stderr}");
+                assert!(
+                    out.status.success() && stdout.contains("1 passed"),
+                    "{stdout}{stderr}"
+                );
+                return;
+            }
+            Err(err) => panic!("create live Codex fixture under /var/tmp: {err}"),
+        };
+        let fx = fixture_from_tempdir(tmp);
+        assert_eq!(fx.root.parent(), Some(Path::new("/var/tmp")));
         let codex_home = fx.root.join("codex-home");
         let control_workspace = fx.root.join("codex-control-workspace");
         let extra_root = fx.root.join("codex-control-extra");
@@ -2165,7 +2207,9 @@ true"#;
         }
         let codex_command = || {
             let mut cmd = Command::new(&codex);
-            cmd.env("CODEX_HOME", &codex_home).env("LC_ALL", "C");
+            cmd.env("CODEX_HOME", &codex_home)
+                .env("TMPDIR", "/tmp")
+                .env("LC_ALL", "C");
             cmd
         };
         let sandbox = |cwd: &Path, dirs: &[PathBuf]| {
@@ -2177,8 +2221,7 @@ true"#;
             let mut cmd = codex_command();
             cmd.args(["sandbox", "-P", ":workspace", "-C"])
                 .arg(cwd)
-                // Lane jobs can place the whole fixture under /tmp. Request
-                // explicit roots only, then verify that with a write control.
+                // Request explicit roots only and verify with a sibling write control.
                 .args([
                     "-c",
                     "sandbox_workspace_write.exclude_slash_tmp=true",
@@ -2218,11 +2261,6 @@ true"#;
             && (stderr.contains("Read-only file system") || stderr.contains("Permission denied"))
         {
             Some("Codex :workspace denied a configured extra writable root")
-        } else if control.status.code() == Some(43)
-            && ungranted_probe.is_file()
-            && fx.root.starts_with("/tmp")
-        {
-            Some("Codex :workspace can write outside explicit roots in the /tmp fixture")
         } else if !control.status.success()
             && stderr.contains(
                 "app-server socket directory must be a user-owned directory with mode 0700",
