@@ -1814,17 +1814,21 @@ fn bug_2688_clean_archive_probe_does_not_admit_conflicting_preparation() {
 
 // trace:BUG-b6b1278890774ef993d2ebc327862470-452.aca42931 | ai:codex
 #[test]
-fn bug_2688_ignored_collision_preserves_bytes_and_lease_for_both_clean_paths() {
+fn bug_2688_ignored_collision_refuses_before_advance_or_merge() {
     if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
         return;
     }
-    for advance in [true, false] {
+    for (advance, conflict) in [(true, false), (false, false), (false, true)] {
         let fx = fixture();
         let seed = git_ok(&fx.main, &["rev-parse", "HEAD"]);
-        git_ok(&fx.main, &["checkout", "-qb", "feat"]);
-        git_ok(&fx.main, &["commit", "--allow-empty", "-qm", "feature"]);
-        if !advance {
-            git_ok(&fx.main, &["checkout", "-q", "main"]);
+        if conflict {
+            conflicting_pr(&fx);
+        } else {
+            git_ok(&fx.main, &["checkout", "-qb", "feat"]);
+            git_ok(&fx.main, &["commit", "--allow-empty", "-qm", "feature"]);
+            if !advance {
+                git_ok(&fx.main, &["checkout", "-q", "main"]);
+            }
         }
         std::fs::write(fx.main.join("incoming"), "tracked").unwrap();
         git_ok(&fx.main, &["add", "incoming"]);
@@ -1856,8 +1860,10 @@ fn bug_2688_ignored_collision_preserves_bytes_and_lease_for_both_clean_paths() {
                 "info/exclude",
             ],
         );
-        std::fs::write(exclude, "incoming\n").unwrap();
+        let existing_excludes = std::fs::read_to_string(&exclude).unwrap();
+        std::fs::write(exclude, format!("{existing_excludes}\nincoming\n")).unwrap();
         std::fs::write(tree.join("incoming"), "private bytes").unwrap();
+        assert_eq!(git_ok(&tree, &["status", "--porcelain"]), "");
         let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |_| {
             prepare_rework_merge_fixture_for_seat(
                 &fx.main,
@@ -1875,6 +1881,12 @@ fn bug_2688_ignored_collision_preserves_bytes_and_lease_for_both_clean_paths() {
             err.downcast_ref::<PreserveReworkSeat>().is_some(),
             "{err:#}"
         );
+        assert!(
+            format!("{err:#}").contains("ignored path \"incoming\""),
+            "{err:#}"
+        );
+        assert!(journal(&fx.main).is_empty());
+        assert!(!merging(&tree));
         assert!(!rolled_back);
         assert_eq!(std::fs::read(lease).unwrap(), lease_bytes);
         assert_eq!(

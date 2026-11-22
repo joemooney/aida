@@ -5020,6 +5020,14 @@ fn prepare_host_repair_admitted(
             tree.display()
         );
     }
+    // Git's ort strategy can replace ignored files even with --no-overwrite-ignore.
+    // The validated first merge-tree field identifies the incoming result tree.
+    let merged_tree = observation.split('\0').next().unwrap_or_default();
+    protect_ignored(merged_tree).with_context(|| {
+        PreserveReworkSeat(format!(
+            "cannot safely merge; preserve ignored files before retrying `{fresh_command}`"
+        ))
+    })?;
     if !observed_paths.is_empty() {
         let mut journal = RepairGuard::lock(main)?;
         journal
@@ -5080,14 +5088,6 @@ fn prepare_host_repair_admitted(
             }
         }
     } else {
-        // Git's ort strategy can replace ignored files even with --no-overwrite-ignore.
-        // The validated first merge-tree field identifies the incoming result tree.
-        let merged_tree = observation.split('\0').next().unwrap_or_default();
-        protect_ignored(merged_tree).with_context(|| {
-            PreserveReworkSeat(format!(
-                "cannot safely merge; preserve ignored files before retrying `{fresh_command}`"
-            ))
-        })?;
         execute(&[
             "merge",
             "--no-edit",
