@@ -8,8 +8,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:55:19.345403417Z
-modified_at: 2026-11-22T20:55:19.345403417Z
+modified_at: 2026-11-22T22:20:36.194767730Z
 req_type: Task
+comments:
+- id: 01a20558-cfe2-7770-8249-1be89fdb1625
+  author: joe
+  content: 'Added by advisor-122 ruling 2026-11-22 15:24 (relayed by product-15): PR #4382 finding 1 at e07f437c, deferred here with the same reasoning (worst case is an early non-counting review, not an unsafe merge): BUG-2706 AC3: observed_claims (line 270) returns a complete empty inventory when .aida-store disappears. After a live dell1 claim held the previous pass, temporarily moving the store aside immediately clears the hold and admits the head. Preserve the distinction between losing the observed store and successfully reading a snapshot in which the claim was released. Cover the live-to-missing transition through the configured deadline.'
+  created_at: 2026-11-22T22:20:36.194767730Z
+  modified_at: 2026-11-22T22:20:36.194767730Z
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
