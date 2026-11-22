@@ -19,12 +19,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T18:20:25.943756248Z
-modified_at: 2026-11-22T18:20:25.943756248Z
+modified_at: 2026-11-22T21:31:39.709083064Z
 req_type: Story
 tags:
 - leases
 - needs-sketch
 - review
+comments:
+- id: 01a2052c-013d-7601-a339-4c4b793c2044
+  author: joe
+  content: 'Related: BUG-2715 (ownership reader treats malformed holder evidence as death). If the death-evidence predicate is shared, BUG-2715 fixes it first and this story builds on it (advisor-122 14:34).'
+  created_at: 2026-11-22T21:31:39.709083064Z
+  modified_at: 2026-11-22T21:31:39.709083064Z
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
