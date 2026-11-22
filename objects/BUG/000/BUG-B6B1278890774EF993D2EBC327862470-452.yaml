@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T21:23:36.254232147Z
+modified_at: 2026-11-22T21:58:54.572009924Z
 req_type: Bug
 tags:
 - conflicts
@@ -1258,6 +1258,12 @@ comments:
   modified_at: 2026-11-22T21:23:36.254232147Z
   session_id: 01a2051b6fe5
   harness_version: codex-cli 0.167.0
+- id: 01a20544-f36c-7e81-8ed3-2703bc85f49a
+  author: aida-publication-done
+  content: Implementer push 10c94367b4ba declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-22T21:58:54.572008862Z
+  modified_at: 2026-11-22T21:58:54.572008862Z
+  session_id: 01a2051b6fe5
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -1672,6 +1678,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20544-f36c-7e81-8ed3-26f4bec5e94d
+  author: aida-publication-done
+  timestamp: 2026-11-22T21:58:54.572006542Z
+  session_id: 01a2051b6fe5
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
