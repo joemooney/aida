@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-21T09:22:37.331702961Z
+modified_at: 2026-11-22T17:35:51.869037068Z
 req_type: Story
 tags:
 - landing
@@ -1016,6 +1016,32 @@ comments:
     Use the original numbered verdict as the review checklist. Run cargo fmt --all -- --check and the targeted watch and GitHub attempt-evidence tests through the lane job runner. Use the normal host fast gates, with make test-touched when the touched surface requires it. Publish a Refs-only replacement head on #4389 and obtain fresh independent review. The earlier full-tier result belongs to 964a98c30ed.
   created_at: 2026-11-21T09:05:05.327617775Z
   modified_at: 2026-11-21T09:05:05.327617775Z
+- id: 01a20454-5218-79d2-a125-37b49bab1de4
+  author: joe
+  content: |-
+    AUTHORITATIVE S3a-REWORK BRIEF (advisor-122, relayed by product 10:35):
+    # STORY-2897 S3a / PR #4389 rework (advisor-122 2026-11-22 10:33 MST; relayed by product-15). Lane: CODEX. Refs-only head.
+
+    ORDER: do finding 15 (remove the forge rerun POST from the scheduled S3a pass) and finding 12 (multiply-linked journal truncation, the data-loss one) FIRST, then the rest.
+    Read the full numbered Changes Requested verdict at 964a98c in .aida/gate-ledger/PR-4389.jsonl (do NOT trust `aida review verdict STORY-2897`, which shows a stale f037b9d approval). COMMIT your work.
+
+    AUTHORITATIVE S3a REWORK BRIEF for existing PR #4389, head 964a98c30edfd0c67a5712f8e52dcc99f8a8d22d, base integration. Use the existing PR branch and the exact-head Changes Requested verdict recorded at 01:54 UTC. The signed S3a scope remains observational. S1b and S3b retain their separate gates.
+
+    1. Findings 1–6, main_watch.rs history and transitions. Start with the oldest candidate when there is no verified green anchor. Distinguish a proved rewrite from an inconclusive Git probe, use first-parent membership, and reconcile the old episode on a proved rewrite. Retrieve the oldest bounded batch through the production history reader. Keep historical source times distinct from observation times, and commit cursor and episode transitions together across restart boundaries.
+    2. Findings 7–10, main_watch.rs, forge.rs and forge_commit_ci.rs. Bind evidence to the exact job, run and attempt. Establish carried-forward jobs from authoritative evidence and preserve unknown metadata. Use only current contributing jobs for the unbuildable trigger, with coverage for partial reruns and unrelated optional jobs in a shared run.
+    3. Findings 11–14 and 18, state, journal and Git. Pin the trusted watch directories by handle, use bounded nonblocking reads of validated regular files, reject multiply linked journals before mutation, and distinguish NotFound from inaccessible evidence. Sanitize Git routing variables and pin one fetched tip per pass.
+    4. Finding 15, keep the scheduled S3a pass free of forge and requirement-store mutations. Remove its rerun POST, observe independently initiated reruns, and test that a red observation invokes no rerun. TASK-3191's retry-on-failure and one-accepted-rerun behavior remains in the separately authorized S3b effects scope, if rerun initiation is approved there.
+    5. Findings 16–19, deadline, attribution and guard coverage. Keep the child deadline through process exit and report partial reads as incomplete. Attribute reverts only with evidence bound to the reverted SHA. Extend the production no-watch-on-landing guard to the omitted paths. Preserve the per-job pagination and exact attempt checks together.
+
+    Use the original numbered verdict as the review checklist. Run cargo fmt --all -- --check and the targeted watch and GitHub attempt-evidence tests through the lane job runner. Use the normal host fast gates, with make test-touched when the touched surface requires it. Publish a Refs-only replacement head on #4389 and obtain fresh independent review. The earlier full-tier result belongs to 964a98c30ed.
+
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-22T17:35:51.869037068Z
+  modified_at: 2026-11-22T17:35:51.869037068Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
