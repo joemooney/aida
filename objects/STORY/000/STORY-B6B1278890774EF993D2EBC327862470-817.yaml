@@ -1,0 +1,28 @@
+id: 01a2050a-58ee-7470-a810-e7b93d9a7867
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-817
+agreed_id: STORY-3006
+title: Land/train completes trailer specs at merge, not on the next human pull
+description: |
+  Gap found 2026-11-22 (product-15; advisor-122 ruled it a gap, not a regression). Merge-time spec completion is pull-side: the trailer scanner reads trailing spec parens on main commits only when someone runs `aida pull`. Train landings (#4377 at 12:36, #4385 at 13:46) therefore leave their specs at Done until a human pulls the primary. BUG-2707 sat at Done after landing and was completed by hand.
+
+  ## Acceptance
+  - AC1: When land/train merges a change, the specs in the landed commit's trailing parens (skipping a final `(#N)` group, and never Refs-only ones) are completed at merge time by the landing actor, without waiting for a pull.
+  - AC2: A later `aida pull` is idempotent for specs already completed this way.
+  - AC3: A test covers a train landing whose squash subject ends in `(SPEC-ID) (#N)`.
+status: Draft
+priority: Low
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T20:54:53.934825801Z
+modified_at: 2026-11-22T20:54:53.934825801Z
+req_type: Story
+tags:
+- completion
+- landing
+filed_at:
+  code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
