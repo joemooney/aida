@@ -1,0 +1,30 @@
+id: 01a204df-8448-7ae2-8010-4c61e57987fc
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-474
+agreed_id: BUG-2713
+title: session end refuses a clean seat with "has uncommitted changes:" and an empty list; hygiene trip evidence is a bare "exit 1:"
+description: |
+  Reported by the advisor (claude-advisor-122, 2026-11-22 13:12 MST). The hourly session-hygiene pass fails on one item every hour: the dead TASK-2708 seat 01a1abbf6456 (clone -658, branch task-2708-ac1). The advisor verified the clone is CLEAN: `git status --porcelain` is empty, there's no stash, 0 commits are missing from origin, the mailbox is empty, and the store has 0 unpushed commits. Yet `aida session end 01a1abbf6456 --yes` refuses with "has uncommitted changes:" followed by an EMPTY list, and hygiene's trip evidence is just "exit 1:". So the dirty check reports dirt it cannot name, and the operator is left choosing between --force and hourly noise. Possibly related: BUG-2340 (ignored-only differences treated as dirt), completed 2026-10-30. A dirty predicate that counts something its renderer doesn't print (ignored files, index-only stat changes, a submodule or nested clone) would produce exactly this.
+
+  ## Acceptance
+  - AC1: Whenever session end refuses for uncommitted changes, the refusal names each dirty path with its status code. An empty list is impossible: if the predicate finds dirt it can't name, it says which check fired.
+  - AC2: For a seat clone, the uncommitted-changes predicate matches `git status --porcelain` (untracked included, ignored excluded) run in that clone. A regression test covers a clone that is clean by porcelain but was refused before, reproducing the -658 shape.
+  - AC3: Hygiene trip evidence carries the refusal text (dirty paths), not a bare "exit 1:".
+  - AC4: Once fixed, seat 01a1abbf6456 ends through normal hygiene without --force.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T20:08:06.984078687Z
+modified_at: 2026-11-22T20:08:06.984078687Z
+req_type: Bug
+tags:
+- hygiene
+- seat-clone
+- sessions
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
