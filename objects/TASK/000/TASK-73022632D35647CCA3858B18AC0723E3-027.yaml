@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-22T19:57:39.913098711Z
+modified_at: 2026-11-22T20:02:02.043940446Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -608,6 +608,19 @@ comments:
   content: 'Product (advisor-122 mass-change ruling 12:15): findings deferred from the PR #4387 final round are filed as TASK-3832. Final-round brief: .aida/tmp/brief-TASK-3133-final-1222.md'
   created_at: 2026-11-22T19:16:55.901810943Z
   modified_at: 2026-11-22T19:16:55.901810943Z
+- id: 01a204d9-f227-7973-8fd4-084bf6c99b43
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3133):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: e871fa8e0f24
+    Recorded: 2026-11-22T19:57:31.092363656+00:00
+    Findings:
+    1. ADR-76 strict tier. The regression at line 517 passes if the previous fixture_tempdir is restored. Assert that the fixture root is a direct child of the designated private-fixture base under /tmp, or drive the old target-selection input with a controlled workspace, and show that restoring the old helper fails.
+    2. ADR-76 strict tier (containment coverage). Moving fixture_tempdir to /tmp moves the TASK-2712 live Codex denial test under the ambient /tmp write grant, where its preflight skips, so primary hosts can silently lose live denial coverage. Give that live test a fixture location outside both the ambient temporary write grant and target/worktrees.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-22T20:02:01.895549194Z
+  modified_at: 2026-11-22T20:02:01.895549194Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
