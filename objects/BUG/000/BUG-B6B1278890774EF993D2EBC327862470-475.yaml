@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T22:11:08.621284145Z
+modified_at: 2026-11-22T22:11:11.305035748Z
 req_type: Bug
 tags:
 - fasttrack
@@ -83,6 +83,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes for BUG-2714 (BUG-b6b1278890774ef993d2ebc327862470-475). Reviewed the full landed diff against protected base 6be38166be85. None of the findings depends on the two intervening base commits. CI pending at review time (fast compile). Source and existing validation evidence only.. No triage reason was given.'
   created_at: 2026-11-22T22:11:08.621280588Z
   modified_at: 2026-11-22T22:11:08.621280588Z
+- id: 01a20550-309b-7e33-b733-a650b82d7153
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2714):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 35e37ef945c3
+    Recorded: 2026-11-22T22:01:03.103627044+00:00
+    Findings:
+    1. [unmet-claimed-ac, P1] BUG-2714.AC2, aida-cli-lib/src/pr_cmd/finish.rs:276. The linked-worktree guard checks HEAD before fetching and running plain git rebase. If the base advances again between pickup and ship, rebase can flatten the preparation merge and replay the fix, then force-with-lease pushes that rewritten tip. The published branch no longer contains the local merge-plus-fix tip promised by AC2. Preserve that ancestry through the final push and cover a base advance between preparation and linked-worktree ship.
+    2. [unmet-claimed-ac, P1] BUG-2714.AC3, aida-cli-lib/src/ship_from_seat.rs:2530 and seat_clone.rs:4033. The guard infers a round's work solely from the tip subject and parent count. A resumed seat with an unpublished preparation merge made by the preceding implementation (for example after its pre-launch push failed) has Git's ordinary merge subject. If the base is unchanged, resume leaves that commit in place and ship admits it, even though the only new commit is the merge. The converse also affects unrelated shipping: a legitimate merge with the reserved subject is refused outside any rework lane. Scope the decision to the rework round and use its recorded head/base and commit history. Cover an unmarked resumed preparation and an unrelated same-subject merge.
+    3. [p2] aida-cli-lib/src/ship_from_seat.rs:2209. A clean automatic queue exit with only the local preparation merge appears as unpushed work, routes through publish_queue_exit_with into publication, and propagates the new guard's error. It skips the normal QueueExitOutcome::NoChange result and drain receipt in record_queue_exit. Handle this expected no-publication outcome in automatic exit handling, report the requested message and cover the receipt as well as the unchanged remote.
+    4. [test-gap, P2, file=aida-cli-lib/src/seat_clone.rs] At lines 4055 and 4926 the test-only preparation and publication implementation still pushes before launch. The remote-race test explicitly claims production coverage and requires a pre-launch push rejection, even though production now defers that push. Move the race assertion to the actual ship path and use real preparation to verify pickup preserves the concurrent remote head. Retire the obsolete callback simulation so passing gate tests exercise the behavior shipped.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-22T22:11:11.131854122Z
+  modified_at: 2026-11-22T22:11:11.131854122Z
 history:
 - id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
   author: aida-session-start
