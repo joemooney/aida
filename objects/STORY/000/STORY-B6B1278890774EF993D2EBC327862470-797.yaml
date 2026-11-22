@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-22T17:35:51.869037068Z
+modified_at: 2026-11-22T17:36:07.319731979Z
 req_type: Story
 tags:
 - landing
@@ -1040,6 +1040,13 @@ comments:
     Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
   created_at: 2026-11-22T17:35:51.869037068Z
   modified_at: 2026-11-22T17:35:51.869037068Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20454-8dac-76b3-8c32-0dee41dd7feb
+  author: joe
+  content: 'Product 10:36: S3a-REWORK lane queued on dell1 (codex), branch s3a-observational-watch. Scope = the AUTHORITATIVE S3a-REWORK BRIEF in the previous comment.'
+  created_at: 2026-11-22T17:36:07.319731979Z
+  modified_at: 2026-11-22T17:36:07.319731979Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
