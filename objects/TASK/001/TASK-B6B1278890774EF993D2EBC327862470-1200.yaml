@@ -1,0 +1,31 @@
+id: 01a2019d-9210-7ef0-83af-35f6fd21dad9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1200
+title: 'Review follow-up: rework_worktree_inventory decodes the entire NUL-delimited inventory as UTF-8. inspect_que'
+description: |-
+  From BUG-2688
+  Reviewed sha: d49e95064e4bf518480e260c7798e998e93e965e
+
+  rework_worktree_inventory decodes the entire NUL-delimited inventory as UTF-8. inspect_queue_work_branch now uses it for ordinary branch pickups too. One unrelated worktree with a non-UTF-8 pathname blocks pickups on every other branch. Parse the records as bytes, preserve pathname bytes with OsStr, and scope any refusal to relevant evidence. Add a case with a non-UTF-8 worktree on an unrelated branch.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-22T04:57:13.488562226Z
+modified_at: 2026-11-22T04:57:13.488562226Z
+req_type: Task
+tags:
+- carried-from:BUG-2688
+- finding-hash:9bb56170
+- from-review:BUG-2688
+relationships:
+- rel_type: References
+  target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  created_at: 2026-11-22T04:57:13.488620428Z
+filed_at:
+  code_sha: d49e95064e4bf518480e260c7798e998e93e965e
+  branch: review-4388-d49e95064e4b
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
+  session: 01a20199d5f5

@@ -1,0 +1,31 @@
+id: 01a2019d-9556-71d0-ab70-a10d708dc14b
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1202
+title: 'Review follow-up: The manual promises that a replacement starts at the fetched PR head even on conversation '
+description: |-
+  From BUG-2688
+  Reviewed sha: d49e95064e4bf518480e260c7798e998e93e965e
+
+  The manual promises that a replacement starts at the fetched PR head even on conversation resume. Only explicit fresh placement uses PinnedRework. prepare_host_repair_admitted accepts a clean local tip ahead of the PR for ReworkSeat::Replacement when the merge probe is clean. Qualify the documented guarantee or consistently place replacements at the pin while preserving local commits.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-22T04:57:14.326061663Z
+modified_at: 2026-11-22T04:57:14.326061663Z
+req_type: Task
+tags:
+- carried-from:BUG-2688
+- finding-hash:49679ebd
+- from-review:BUG-2688
+relationships:
+- rel_type: References
+  target_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
+  created_at: 2026-11-22T04:57:14.326101880Z
+filed_at:
+  code_sha: d49e95064e4bf518480e260c7798e998e93e965e
+  branch: review-4388-d49e95064e4b
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
+  session: 01a20199d5f5
