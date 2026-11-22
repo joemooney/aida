@@ -15,12 +15,12 @@ description: |
   - AC2: a head whose only new commit is a merge of the base, while such a lane is live, is never reviewed; once the lane exits, the newest head is reviewed.
   - AC3: when the lane-host state cannot be read, review-watch defers for a bounded time (a setting, default 20 min) and then reviews, logging why.
   - Regressions for AC1-AC3 with a fake foreign lane host.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T18:08:17.263427678Z
+modified_at: 2026-11-22T18:46:28.313326528Z
 req_type: Bug
 tags:
 - lanes
@@ -463,6 +463,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20494-c4d9-7060-97e3-fc1e6242b52e
+  author: aida-orchestrator
+  timestamp: 2026-11-22T18:46:28.313341456Z
+  session_id: 01a20492e433
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
@@ -478,3 +486,11 @@ implementation_info:
   implemented_at: 2026-11-20T21:47:47.832017Z
   implemented_by: dirtlab
   reopened_at_sha: aa567732958f669b69ec5848863ea0b13c800db5
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2706 remains incomplete at the pinned merge-only head. FAST gates, compilation and the aggregate Build check passed. Source inspection confirms all seven round-two blockers remain. The spec also records a watcher dispatch for this SHA while the dell1 rework lane was active. The advisor designated that incident non-counting for the round cap.
+  recovery_hint: address the review findings, move BUG-2706 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-22T18:46:28.313326528Z
