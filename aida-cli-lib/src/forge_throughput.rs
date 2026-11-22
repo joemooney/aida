@@ -188,6 +188,7 @@ mod tests {
             run_id: Some(run.into()),
             workflow_id: None,
             cancelled: false,
+            job_id: None,
             run_attempt: None,
             run_in_progress: false,
         };

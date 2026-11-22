@@ -1,6 +1,6 @@
 //! The red-main watch (STORY-2897 S3a): an OBSERVATIONAL watch of the
 //! default branch's CI. It judges each merged commit, attributes a red main
-//! to its first red commit, re-runs the failed jobs once to tell a flake
+//! to its first red commit, observes independent re-runs to tell a flake
 //! from a real red, mails the advisor role, recommends a revert on the fixed
 //! triggers, and records red-main episodes for `aida land metrics`. It
 //! writes nothing to the requirement store: filing fix specs and `aida human`
@@ -58,16 +58,19 @@ pub(crate) const CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_s
 pub(crate) const PASS_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
 
 /// One default-branch commit.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Commit {
     pub sha: String,
     pub subject: String,
+    pub body: String,
     pub at: DateTime<Utc>,
 }
 
 /// What one failed CI job shows.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Evidence {
+    #[serde(default)]
+    pub job_id: Option<u64>,
     pub workflow: Option<String>,
     pub run_id: String,
     pub attempt: u64,
@@ -101,14 +104,15 @@ pub(crate) trait Ports {
     /// First-parent commits in `(from, to]`.
     fn range(&mut self, from: &str, to: &str) -> Result<Vec<Commit>>;
     fn checks(&mut self, sha: &str) -> Result<CommitChecks>;
-    fn job(&mut self, run_id: &str, job: &str) -> Result<JobReport>;
-    fn rerun_failed(&mut self, run_id: &str) -> Result<()>;
+    fn job(&mut self, run_id: &str, job: &str, id: u64, attempt: u64) -> Result<JobReport>;
     /// Urgent mail to the advisor role; idempotent by `key`.
     fn mail(&mut self, key: &str, subject: &str, body: &str) -> Result<()>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct FailedCheck {
+    #[serde(default)]
+    pub job_id: Option<u64>,
     pub name: String,
     pub workflow: Option<String>,
     pub run_id: Option<String>,
@@ -118,10 +122,11 @@ pub(crate) struct FailedCheck {
 impl FailedCheck {
     fn key(&self) -> Option<String> {
         Some(format!(
-            "{}:{}:{}:{}",
+            "{}:{}:{}:{}:{}",
             self.workflow.as_deref().unwrap_or("-"),
             self.run_id.as_deref()?,
-            self.attempt.unwrap_or(0),
+            self.attempt?,
+            self.job_id?,
             self.name
         ))
     }
@@ -152,6 +157,9 @@ pub(crate) enum Verdict {
 pub(crate) struct State {
     /// The newest commit with a final verdict; the next pass starts after it.
     pub cursor: Option<String>,
+    /// Inclusive starting point until the first candidate has a final verdict.
+    #[serde(default)]
+    first_candidate: Option<Commit>,
     pub last_green: Option<String>,
     /// The tip seen by the last pass and its CI, reported apart from the
     /// last green commit.
@@ -174,13 +182,13 @@ pub(crate) struct Episode {
     pub failed: Vec<FailedCheck>,
     pub contributing: Vec<FailedCheck>,
     pub diagnostics: Vec<String>,
+    #[serde(default)]
+    pub source_at: Option<DateTime<Utc>>,
     pub opened_at: DateTime<Utc>,
     /// The newest green commit before the red: the live binary stays there.
     pub held_green: Option<String>,
     /// Required check run id -> its attempt when the episode opened.
     pub attempts: BTreeMap<String, u64>,
-    /// Runs whose re-run request the forge accepted.
-    pub reruns_done: BTreeSet<String>,
     pub confirmed_at: Option<DateTime<Utc>>,
     pub evidence: Vec<Evidence>,
     /// Keys (workflow:run:attempt:job) whose evidence, log included, is read.
@@ -221,7 +229,7 @@ pub(crate) struct Event {
 }
 
 fn short(sha: &str) -> &str {
-    &sha[..sha.len().min(12)]
+    sha.get(..12).unwrap_or(sha)
 }
 
 /// PURE: the `(#N)` a squash subject ends with.
@@ -263,6 +271,7 @@ pub(crate) fn judge(
         c.outcome == CheckOutcome::Failed && !c.cancelled && !c.run_in_progress
     };
     let row = |c: &crate::forge::CommitCheck| FailedCheck {
+        job_id: c.job_id,
         name: c.name.clone(),
         workflow: c.workflow_id.clone(),
         run_id: c.run_id.clone(),
@@ -293,7 +302,28 @@ pub(crate) fn judge(
         let (contributing, other): (Vec<_>, Vec<_>) = latest
             .iter()
             .filter(|c| !is_required(c) && failed(c))
-            .partition(|c| c.run_id.as_deref().is_some_and(|r| runs.contains(r)));
+            .partition(|c| {
+                c.run_id.as_deref().is_some_and(|r| runs.contains(r))
+                    && failed_required.iter().any(|f| {
+                        f.name == crate::forge::CI_AGGREGATOR_CHECK
+                            && f.run_id == c.run_id
+                            && f.workflow == c.workflow_id
+                    })
+                    && matches!(
+                        c.name.as_str(),
+                        "CI (lib-0)"
+                            | "CI (lib-1)"
+                            | "CI (cli-0)"
+                            | "CI (cli-1)"
+                            | "CI (rest)"
+                            | "CI (gates)"
+                            | "CI (contracts)"
+                            | "CI (fast gates)"
+                            | "CI (fast compile)"
+                            | "ci-tier: fast"
+                            | "ci-tier: full"
+                    )
+            });
         return Verdict::Red {
             required: failed_required,
             contributing: contributing.into_iter().map(|c| row(c)).collect(),
@@ -349,27 +379,63 @@ pub(crate) fn failpoint(_name: &str) -> Result<()> {
     Ok(())
 }
 
-/// `.aida/land` under `root`, created when missing. Each component must be
-/// a real directory, never a link.
-fn land_dir(root: &Path) -> Result<PathBuf> {
-    let aida = root.join(".aida");
-    let land = aida.join("land");
-    for dir in [&aida, &land] {
-        match std::fs::symlink_metadata(dir) {
-            Ok(meta) if meta.file_type().is_symlink() || !meta.is_dir() => {
-                anyhow::bail!(
-                    "{} is not a plain directory; the watch will not use it",
-                    dir.display()
-                )
-            }
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                std::fs::create_dir(dir).with_context(|| format!("creating {}", dir.display()))?
-            }
-            Err(e) => return Err(e).with_context(|| format!("reading {}", dir.display())),
-        }
+struct PinnedDir {
+    _handle: std::fs::File,
+    path: PathBuf,
+}
+impl std::ops::Deref for PinnedDir {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.path
     }
-    Ok(land)
+}
+
+fn pin_dir(path: &Path) -> std::io::Result<PinnedDir> {
+    use std::os::{fd::AsRawFd, unix::fs::OpenOptionsExt};
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .open(path)?;
+    Ok(PinnedDir {
+        path: PathBuf::from(format!("/proc/self/fd/{}", file.as_raw_fd())),
+        _handle: file,
+    })
+}
+
+fn watch_directory(root: &Path, create: bool) -> std::io::Result<PinnedDir> {
+    let mut dir = pin_dir(root)?;
+    for name in [".aida", "land"] {
+        let child = dir.join(name);
+        if create {
+            match std::fs::create_dir(&child) {
+                Ok(()) => (),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => (),
+                Err(e) => return Err(e),
+            }
+        }
+        dir = pin_dir(&child)?;
+    }
+    Ok(dir)
+}
+
+fn land_dir(root: &Path) -> Result<PinnedDir> {
+    Ok(watch_directory(root, true)?)
+}
+
+const WATCH_FILE_LIMIT: u64 = 64 * 1024 * 1024;
+
+fn read_bounded(file: &mut std::fs::File) -> Result<Vec<u8>> {
+    anyhow::ensure!(
+        file.metadata()?.len() <= WATCH_FILE_LIMIT,
+        "watch file exceeds 64 MiB"
+    );
+    let mut bytes = Vec::new();
+    file.take(WATCH_FILE_LIMIT + 1).read_to_end(&mut bytes)?;
+    anyhow::ensure!(
+        bytes.len() as u64 <= WATCH_FILE_LIMIT,
+        "watch file exceeds 64 MiB"
+    );
+    Ok(bytes)
 }
 
 /// Open `path` without following a link, and require a regular file.
@@ -377,7 +443,7 @@ fn open_plain(path: &Path, options: &mut std::fs::OpenOptions) -> Result<std::fs
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW);
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
     let file = options
         .open(path)
@@ -387,23 +453,34 @@ fn open_plain(path: &Path, options: &mut std::fs::OpenOptions) -> Result<std::fs
         "{} is not a regular file",
         path.display()
     );
+    use std::os::unix::fs::MetadataExt;
+    anyhow::ensure!(
+        file.metadata()?.nlink() == 1,
+        "{} has multiple links",
+        path.display()
+    );
     Ok(file)
 }
 
 fn read_state(land: &Path) -> Result<State> {
     let path = land.join(STATE_FILE);
-    if std::fs::symlink_metadata(&path).is_err() {
+    if matches!(std::fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+    {
         return Ok(State::default());
     }
     let mut file = open_plain(&path, std::fs::OpenOptions::new().read(true))?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
+    let bytes = read_bounded(&mut file)?;
     serde_json::from_slice(&bytes)
         .with_context(|| format!("{STATE} is not valid; fix or remove it"))
 }
 
 fn write_state(land: &Path, state: &State) -> Result<()> {
     failpoint("state")?;
+    let bytes = serde_json::to_vec_pretty(state)?;
+    anyhow::ensure!(
+        bytes.len() as u64 <= WATCH_FILE_LIMIT,
+        "watch state exceeds 64 MiB"
+    );
     let temp = land.join(format!(
         "{STATE_FILE}.{}.{}.tmp",
         std::process::id(),
@@ -413,11 +490,13 @@ fn write_state(land: &Path, state: &State) -> Result<()> {
         &temp,
         std::fs::OpenOptions::new().write(true).create_new(true),
     )?;
-    file.write_all(&serde_json::to_vec_pretty(state)?)?;
+    file.write_all(&bytes)?;
     file.sync_data()?;
     drop(file);
     // rename replaces whatever is at the target; it never follows a link.
-    std::fs::rename(&temp, land.join(STATE_FILE)).with_context(|| format!("writing {STATE}"))
+    std::fs::rename(&temp, land.join(STATE_FILE)).with_context(|| format!("writing {STATE}"))?;
+    std::fs::File::open(land)?.sync_all()?;
+    Ok(())
 }
 
 fn append(land: &Path, event: &Event) -> Result<()> {
@@ -433,21 +512,30 @@ fn append(land: &Path, event: &Event) -> Result<()> {
     // An unterminated tail is an append a crash cut short: cut it, and only
     // it, before appending.
     let len = file.metadata()?.len();
+    anyhow::ensure!(len <= WATCH_FILE_LIMIT, "watch journal exceeds 64 MiB");
+    let mut committed = len;
     if len > 0 {
         let mut last = [0u8; 1];
         file.seek(SeekFrom::Start(len - 1))?;
         file.read_exact(&mut last)?;
         if last[0] != b'\n' {
-            let mut bytes = Vec::new();
             file.seek(SeekFrom::Start(0))?;
-            file.read_to_end(&mut bytes)?;
+            let bytes = read_bounded(&mut file)?;
             let keep = bytes.iter().rposition(|b| *b == b'\n').map_or(0, |p| p + 1);
-            file.set_len(keep as u64)?;
+            committed = keep as u64;
         }
     }
-    file.seek(SeekFrom::End(0))?;
+
     let mut line = serde_json::to_vec(event)?;
     line.push(b'\n');
+    anyhow::ensure!(
+        committed + line.len() as u64 <= WATCH_FILE_LIMIT,
+        "watch journal exceeds 64 MiB"
+    );
+    if committed != len {
+        file.set_len(committed)?;
+    }
+    file.seek(SeekFrom::Start(committed))?;
     file.write_all(&line)?;
     file.sync_data()?;
     Ok(())
@@ -457,12 +545,23 @@ fn append(land: &Path, event: &Event) -> Result<()> {
 /// Only newline-terminated lines are committed; the boundary is found in
 /// bytes, so a crash inside a multibyte character never blocks a read.
 pub(crate) fn read_journal(root: &Path) -> Result<Vec<Event>> {
-    let path = root.join(JOURNAL);
-    if std::fs::symlink_metadata(&path).is_err() {
+    match watch_directory(root, false) {
+        Ok(dir) => journal_in(&dir),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e.into()),
+    }
+}
+
+fn journal_in(land: &Path) -> Result<Vec<Event>> {
+    let path = land.join(JOURNAL_FILE);
+    if matches!(std::fs::symlink_metadata(&path), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+    {
         return Ok(Vec::new());
     }
-    let mut bytes = Vec::new();
-    open_plain(&path, std::fs::OpenOptions::new().read(true))?.read_to_end(&mut bytes)?;
+    let bytes = read_bounded(&mut open_plain(
+        &path,
+        std::fs::OpenOptions::new().read(true),
+    )?)?;
     let committed = bytes
         .iter()
         .rposition(|b| *b == b'\n')
@@ -482,11 +581,11 @@ pub(crate) fn read_journal(root: &Path) -> Result<Vec<Event>> {
 
 /// Append every pending transition the journal does not hold yet, then
 /// clear the pending list. Safe to repeat at any point.
-fn flush(root: &Path, land: &Path, state: &mut State) -> Result<()> {
+fn flush(land: &Path, state: &mut State) -> Result<()> {
     if state.pending.is_empty() {
         return Ok(());
     }
-    let journaled: BTreeSet<String> = read_journal(root)?.into_iter().map(|e| e.id).collect();
+    let journaled: BTreeSet<String> = journal_in(land)?.into_iter().map(|e| e.id).collect();
     for event in &state.pending {
         if !journaled.contains(&event.id) {
             append(land, event)?;
@@ -499,11 +598,11 @@ fn flush(root: &Path, land: &Path, state: &mut State) -> Result<()> {
 
 /// Commit a transition: the state (with every in-memory change the caller
 /// made) and the event are written first, then the event is journaled.
-fn record(root: &Path, land: &Path, state: &mut State, mut event: Event) -> Result<()> {
+fn record(land: &Path, state: &mut State, mut event: Event) -> Result<()> {
     event.id = uuid::Uuid::new_v4().to_string();
     state.pending.push(event);
     write_state(land, state)?;
-    flush(root, land, state)
+    flush(land, state)
 }
 
 fn event(at: DateTime<Utc>, kind: &str, red_sha: &str) -> Event {
@@ -605,7 +704,7 @@ pub(crate) fn pass(
     };
     let mut state = read_state(&land)?;
     let mut notes = Vec::new();
-    flush(root, &land, &mut state)?;
+    flush(&land, &mut state)?;
     deliver(&land, &mut state, ports, &mut notes)?;
     let now = ports.now();
     let recent = ports.recent(BATCH)?;
@@ -618,20 +717,50 @@ pub(crate) fn pass(
     };
 
     // First pass: anchor at the newest green commit read, or the oldest.
-    if state.cursor.is_none() {
+    if state.cursor.is_none() && state.first_candidate.is_none() {
         let green = recent
             .iter()
             .find(|c| judged(ports, c) == Verdict::Green)
             .cloned();
-        if let Some(anchor) = green.as_ref().or(recent.last()) {
-            if green.is_some() {
-                state.last_green = Some(anchor.sha.clone());
-            }
+        if let Some(anchor) = green {
+            state.last_green = Some(anchor.sha.clone());
             state.cursor = Some(anchor.sha.clone());
+        } else {
+            state.first_candidate = recent.last().cloned();
+        }
+        if !recent.is_empty() {
             write_state(&land, &state)?;
         }
     }
 
+    let candidates = match &state.cursor {
+        Some(cursor) => ports.after(cursor, BATCH)?,
+        None => match &state.first_candidate {
+            Some(first) => ports.after(&first.sha, BATCH - 1)?.map(|mut later| {
+                later.insert(0, first.clone());
+                later
+            }),
+            None => Some(Vec::new()),
+        },
+    };
+    let Some(mut batch) = candidates else {
+        notes.push(format!(
+            "red-main watch: {} is no longer on the default branch; re-anchoring next pass",
+            short(state.cursor.as_deref().unwrap_or_default())
+        ));
+        state.first_candidate = None;
+        state.cursor = None;
+        state.last_green = None;
+        state.tip = None;
+        if let Some(episode) = state.episode.take() {
+            let mut end = event(now, "red_end", &episode.red_sha);
+            end.outcome = Some("unattributed".into());
+            record(&land, &mut state, end)?;
+        } else {
+            write_state(&land, &state)?;
+        }
+        return Ok(notes);
+    };
     // The open episode's red commit first: a green re-run closes it as a
     // flake, and the scan resumes from it so the commits after it are
     // judged again on their own.
@@ -639,13 +768,17 @@ pub(crate) fn pass(
         let red = Commit {
             sha: episode.red_sha.clone(),
             subject: episode.subject.clone(),
-            at: episode.opened_at,
+            body: String::new(),
+            at: episode.source_at.unwrap_or(episode.opened_at),
         };
         match judged(ports, &red) {
             Verdict::Green => {
-                close(root, &land, &mut state, &red, true, now, ports, &mut notes)?;
                 state.cursor = Some(red.sha.clone());
-                write_state(&land, &state)?;
+                state.last_green = Some(red.sha.clone());
+                close(&land, &mut state, &red, true, now, ports, &mut notes)?;
+                batch = ports
+                    .after(&red.sha, BATCH)?
+                    .context("verified red left the pinned first-parent history")?;
             }
             Verdict::Red {
                 required: failed,
@@ -653,7 +786,9 @@ pub(crate) fn pass(
                 diagnostics,
             } => {
                 let mut episode = episode;
-                if (&episode.failed, &episode.contributing) != (&failed, &contributing) {
+                if (&episode.failed, &episode.contributing, &episode.diagnostics)
+                    != (&failed, &contributing, &diagnostics)
+                {
                     episode.failed = failed;
                     episode.contributing = contributing;
                     episode.diagnostics = diagnostics;
@@ -665,69 +800,53 @@ pub(crate) fn pass(
         }
     }
 
-    // The ordered scan from the cursor.
-    if let Some(cursor) = state.cursor.clone() {
-        match ports.after(&cursor, BATCH)? {
-            None => {
+    for commit in batch {
+        let verdict = judged(ports, &commit);
+        if !matches!(verdict, Verdict::Pending(_)) {
+            state.first_candidate = None;
+            state.cursor = Some(commit.sha.clone());
+        }
+        match &verdict {
+            Verdict::Pending(why) => {
                 notes.push(format!(
-                    "red-main watch: {} is no longer on the default branch; re-anchoring next pass",
-                    short(&cursor)
+                    "red-main watch: waiting on {} ({why}); later commits wait for it",
+                    short(&commit.sha)
                 ));
-                state.cursor = None;
-                write_state(&land, &state)?;
+                break;
             }
-            Some(batch) => {
-                for commit in batch {
-                    let verdict = judged(ports, &commit);
-                    match &verdict {
-                        Verdict::Pending(why) => {
-                            notes.push(format!(
-                                "red-main watch: waiting on {} ({why}); later commits wait for it",
-                                short(&commit.sha)
-                            ));
-                            break;
-                        }
-                        Verdict::Green => {
-                            if state.episode.is_some() {
-                                close(
-                                    root, &land, &mut state, &commit, false, now, ports, &mut notes,
-                                )?;
-                            }
-                            state.last_green = Some(commit.sha.clone());
-                        }
-                        Verdict::Red {
-                            required: failed,
-                            contributing,
-                            diagnostics,
-                        } => {
-                            if state.episode.is_none() {
-                                open(
-                                    root,
-                                    &land,
-                                    &mut state,
-                                    &commit,
-                                    (failed, contributing, diagnostics),
-                                    now,
-                                    ports,
-                                    &mut notes,
-                                )?;
-                            } else {
-                                joined(root, &land, &mut state, &commit, now)?;
-                            }
-                        }
-                        Verdict::Skipped(_) => {
-                            if state.episode.is_some() {
-                                joined(root, &land, &mut state, &commit, now)?;
-                            }
-                        }
-                    }
-                    state.cursor = Some(commit.sha.clone());
-                    write_state(&land, &state)?;
+            Verdict::Green => {
+                state.last_green = Some(commit.sha.clone());
+                if state.episode.is_some() {
+                    close(&land, &mut state, &commit, false, now, ports, &mut notes)?;
+                }
+            }
+            Verdict::Red {
+                required: failed,
+                contributing,
+                diagnostics,
+            } => {
+                if state.episode.is_none() {
+                    open(
+                        &land,
+                        &mut state,
+                        &commit,
+                        (failed, contributing, diagnostics),
+                        now,
+                        ports,
+                        &mut notes,
+                    )?;
+                } else {
+                    joined(&land, &mut state, &commit)?;
+                }
+            }
+            Verdict::Skipped(_) => {
+                if state.episode.is_some() {
+                    joined(&land, &mut state, &commit)?;
                 }
             }
         }
+        write_state(&land, &state)?;
     }
-
     // The tip, reported apart from the last green commit.
     if let Some(tip) = recent.first() {
         let text = verdict_text(&judged(ports, tip));
@@ -737,21 +856,19 @@ pub(crate) fn pass(
         }
     }
 
-    if state.episode.is_some() {
-        advance(root, &land, &mut state, window, now, ports, &mut notes)?;
+    if state
+        .episode
+        .as_ref()
+        .is_some_and(|ep| matches!(verdicts.get(&ep.red_sha), Some(Verdict::Red { .. })))
+    {
+        advance(&land, &mut state, window, now, ports, &mut notes)?;
     }
     deliver(&land, &mut state, ports, &mut notes)?;
     Ok(notes)
 }
 
 /// A commit that landed while the episode was open.
-fn joined(
-    root: &Path,
-    land: &Path,
-    state: &mut State,
-    commit: &Commit,
-    now: DateTime<Utc>,
-) -> Result<()> {
+fn joined(land: &Path, state: &mut State, commit: &Commit) -> Result<()> {
     let Some(episode) = state.episode.as_mut() else {
         return Ok(());
     };
@@ -759,9 +876,9 @@ fn joined(
         return Ok(());
     }
     episode.red_merges.push(commit.sha.clone());
-    let mut e = event(now, "red_merge", &episode.red_sha);
+    let mut e = event(commit.at, "red_merge", &episode.red_sha);
     e.sha = Some(commit.sha.clone());
-    record(root, land, state, e)
+    record(land, state, e)
 }
 
 /// Read the evidence of each failed required or contributing job whose
@@ -782,16 +899,19 @@ fn probe(
         .cloned()
         .collect();
     for f in jobs {
-        let (Some(key), Some(run)) = (f.key(), f.run_id.clone()) else {
+        let (Some(key), Some(run), Some(id), Some(attempt)) =
+            (f.key(), f.run_id.clone(), f.job_id, f.attempt)
+        else {
             continue;
         };
         if episode.evidence_keys.contains(&key) {
             continue;
         }
-        match ports.job(&run, &f.name) {
+        match ports.job(&run, &f.name, id, attempt) {
             Ok(report) => {
                 changed = true;
                 let found = Evidence {
+                    job_id: Some(id),
                     workflow: f.workflow.clone(),
                     run_id: run.clone(),
                     attempt: f.attempt.unwrap_or(0),
@@ -841,7 +961,9 @@ fn current_evidence(episode: &Episode) -> Vec<&Evidence> {
                 e.workflow == f.workflow
                     && Some(&e.run_id) == f.run_id.as_ref()
                     && e.check == f.name
-                    && e.attempt == f.attempt.unwrap_or(0)
+                    && Some(e.attempt) == f.attempt
+                    && e.job_id.is_some()
+                    && e.job_id == f.job_id
             })
         })
         .collect()
@@ -912,7 +1034,6 @@ fn held_text(episode: &Episode) -> String {
 
 #[allow(clippy::too_many_arguments)]
 fn open(
-    root: &Path,
     land: &Path,
     state: &mut State,
     commit: &Commit,
@@ -929,13 +1050,13 @@ fn open(
         failed: failed.clone(),
         contributing: contributing.clone(),
         diagnostics: diagnostics.clone(),
+        source_at: Some(commit.at),
         opened_at: now,
         held_green: state.last_green.clone(),
         attempts: failed
             .iter()
             .filter_map(|f| Some((f.run_id.clone()?, f.attempt?)))
             .collect(),
-        reruns_done: BTreeSet::new(),
         confirmed_at: None,
         evidence: Vec::new(),
         evidence_keys: BTreeSet::new(),
@@ -946,8 +1067,7 @@ fn open(
     probe(&mut episode, ports, notes);
     episode.alerted = true;
     let body = format!(
-        "Main is red at {} ({}).\nPR: {}\nSpecs: {}\nFailing:\n{}{}\n\nThe failed jobs are re-run \
-         once; if the red survives that re-run or 30 minutes it is confirmed. Merging continues \
+        "Main is red at {} ({}).\nPR: {}\nSpecs: {}\nFailing:\n{}{}\n\nIf the red survives an independent re-run or 30 minutes it is confirmed. Merging continues \
          meanwhile.",
         episode.red_sha,
         episode.subject,
@@ -975,15 +1095,14 @@ fn open(
         short(&episode.red_sha),
         names(&episode.failed)
     ));
-    let start = event(now, "red_start", &episode.red_sha);
+    let start = event(commit.at, "red_start", &episode.red_sha);
     state.episode = Some(episode);
-    record(root, land, state, start)
+    record(land, state, start)
 }
 
 /// Move an open episode on: the confirming re-run, the evidence, the
 /// confirmation and the revert recommendations (mail only).
 fn advance(
-    root: &Path,
     land: &Path,
     state: &mut State,
     window: std::time::Duration,
@@ -994,22 +1113,6 @@ fn advance(
     let Some(mut episode) = state.episode.clone() else {
         return Ok(());
     };
-    // One accepted re-run per required run; a failed request is asked again.
-    for run in episode.attempts.keys().cloned().collect::<Vec<_>>() {
-        if episode.reruns_done.contains(&run) {
-            continue;
-        }
-        match ports.rerun_failed(&run) {
-            Ok(()) => {
-                episode.reruns_done.insert(run);
-                state.episode = Some(episode.clone());
-                write_state(land, state)?;
-            }
-            Err(e) => notes.push(format!(
-                "red-main watch: CI run {run} was not re-run; asked again next pass: {e:#}"
-            )),
-        }
-    }
     let (read, late) = if episode.opened_at == now {
         (false, Vec::new())
     } else {
@@ -1080,7 +1183,7 @@ fn advance(
         } else {
             "30 minutes".into()
         });
-        record(root, land, state, e)?;
+        record(land, state, e)?;
         notes.push(format!(
             "red-main watch: the red at {} is confirmed",
             short(&episode.red_sha)
@@ -1124,7 +1227,7 @@ fn advance(
         state.episode = Some(episode.clone());
         let mut e = event(now, "revert_recommended", &episode.red_sha);
         e.reason = Some(key.into());
-        record(root, land, state, e)?;
+        record(land, state, e)?;
         notes.push(format!("red-main watch: revert recommended ({key})"));
     }
     Ok(())
@@ -1132,7 +1235,6 @@ fn advance(
 
 #[allow(clippy::too_many_arguments)]
 fn close(
-    root: &Path,
     land: &Path,
     state: &mut State,
     green: &Commit,
@@ -1156,8 +1258,11 @@ fn close(
     } else {
         match ports.range(&episode.red_sha, &green.sha) {
             Ok(closing) => {
-                let revert = format!("Revert \"{}", episode.subject);
-                if closing.iter().any(|c| c.subject.starts_with(&revert)) {
+                let revert = format!("This reverts commit {}.", episode.red_sha);
+                if closing
+                    .iter()
+                    .any(|c| c.body.lines().any(|line| line == revert))
+                {
                     "reverted"
                 } else if confirmed {
                     "recovered"
@@ -1187,10 +1292,14 @@ fn close(
     );
     state.episode = None;
     state.last_green = Some(green.sha.clone());
-    let mut e = event(now, "red_end", &episode.red_sha);
+    let mut e = event(
+        if rerun_green { now } else { green.at },
+        "red_end",
+        &episode.red_sha,
+    );
     e.sha = Some(green.sha.clone());
     e.outcome = Some(outcome.into());
-    record(root, land, state, e)?;
+    record(land, state, e)?;
     notes.push(format!("red-main watch: {body}"));
     Ok(())
 }
@@ -1199,7 +1308,11 @@ fn close(
 /// and the last green commit apart, and the open episode if any. It never
 /// says green while an episode is open.
 pub(crate) fn status_line(root: &Path) -> Result<String> {
-    let state = read_state(&root.join(".aida").join("land"))?;
+    let state = match watch_directory(root, false) {
+        Ok(dir) => read_state(&dir)?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => State::default(),
+        Err(e) => return Err(e.into()),
+    };
     let tip = match &state.tip {
         Some((sha, text)) => format!("tip {}: {text}", short(sha)),
         None => "tip: not read yet".to_string(),
@@ -1337,9 +1450,11 @@ pub(crate) fn excerpt(log: &str, step: Option<&str>) -> String {
 }
 
 /// The production ports.
+// trace:STORY-2897 | ai:codex
 pub(crate) struct Live {
     pub root: PathBuf,
     pub forge: Box<dyn crate::forge::Forge>,
+    pinned_tip: Option<String>,
     /// The ceiling on each git call.
     pub call_timeout: std::time::Duration,
 }
@@ -1347,12 +1462,22 @@ pub(crate) struct Live {
 impl Live {
     fn git(&self, args: &[&str]) -> Result<String> {
         let mut cmd = std::process::Command::new("git");
+        crate::review_watch::forge::clear_routing(&mut cmd);
         cmd.args(args)
             .current_dir(&self.root)
             .stdin(std::process::Stdio::null())
             .env("GIT_TERMINAL_PROMPT", "0");
-        match crate::command_output_with_timeout_capped(cmd, self.call_timeout, 16 * 1024 * 1024) {
+        let timeout = crate::forge_lookup::forge_lookup_deadline().map_or(self.call_timeout, |d| {
+            self.call_timeout
+                .min(d.saturating_duration_since(std::time::Instant::now()))
+        });
+        anyhow::ensure!(!timeout.is_zero(), "pass deadline reached");
+        match crate::command_output_with_timeout_capped(cmd, timeout, 16 * 1024 * 1024) {
             crate::BoundedCommandOutput::Completed(out) if out.status.success() => {
+                anyhow::ensure!(
+                    out.stdout.len() <= 16 * 1024 * 1024,
+                    "git output was truncated"
+                );
                 Ok(String::from_utf8_lossy(&out.stdout).into_owned())
             }
             crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
@@ -1372,30 +1497,27 @@ impl Live {
         }
     }
 
-    fn tip(&self) -> String {
-        format!(
-            "origin/{}",
-            aida_core::git_ops::default_branch_name(&self.root)
-        )
-    }
-
     fn log(&self, args: &[&str]) -> Result<Vec<Commit>> {
-        let mut full = vec!["log", "--first-parent", "--format=%H%x09%cI%x09%s"];
+        let mut full = vec![
+            "log",
+            "-z",
+            "--first-parent",
+            "--format=%H%x00%cI%x00%s%x00%b",
+        ];
         full.extend_from_slice(args);
-        Ok(self
-            .git(&full)?
-            .lines()
-            .filter_map(|line| {
-                let mut parts = line.splitn(3, '\t');
-                let sha = parts.next()?;
-                let at = DateTime::parse_from_rfc3339(parts.next()?).ok()?;
-                Some(Commit {
-                    sha: sha.to_string(),
-                    at: at.with_timezone(&Utc),
-                    subject: parts.next().unwrap_or_default().to_string(),
-                })
-            })
-            .collect())
+        let raw = self.git(&full)?;
+        let mut fields = raw.split_terminator('\0');
+        let mut commits = Vec::new();
+        while let Some(sha) = fields.next() {
+            let at = DateTime::parse_from_rfc3339(fields.next().context("missing commit date")?)?;
+            commits.push(Commit {
+                sha: sha.into(),
+                at: at.with_timezone(&Utc),
+                subject: fields.next().context("missing commit subject")?.into(),
+                body: fields.next().context("missing commit body")?.into(),
+            });
+        }
+        Ok(commits)
     }
 }
 
@@ -1405,22 +1527,48 @@ impl Ports for Live {
     }
 
     fn recent(&mut self, max: usize) -> Result<Vec<Commit>> {
-        let branch = aida_core::git_ops::default_branch_name(&self.root);
-        self.git(&["fetch", "--quiet", "origin", &branch])?;
-        let tip = self.tip();
+        let remote = self.git(&["ls-remote", "--symref", "origin", "HEAD"])?;
+        let tip = remote
+            .lines()
+            .find_map(|l| {
+                l.strip_suffix("\tHEAD").filter(|sha| {
+                    matches!(sha.len(), 40 | 64) && sha.bytes().all(|b| b.is_ascii_hexdigit())
+                })
+            })
+            .context("origin did not advertise a default tip")?
+            .to_owned();
+        self.git(&["fetch", "--quiet", "--no-write-fetch-head", "origin", &tip])?;
+        self.pinned_tip = Some(tip.clone());
         self.log(&[&format!("--max-count={max}"), &tip])
     }
 
     fn after(&mut self, cursor: &str, max: usize) -> Result<Option<Vec<Commit>>> {
-        let tip = self.tip();
-        if self
-            .git(&["merge-base", "--is-ancestor", cursor, &tip])
-            .is_err()
-        {
+        let tip = self.pinned_tip.as_ref().context("no fetched tip")?;
+        anyhow::ensure!(
+            cursor.len() == tip.len() && cursor.bytes().all(|c| c.is_ascii_hexdigit()),
+            "invalid cursor"
+        );
+        let distance: usize = self
+            .git(&[
+                "rev-list",
+                "--first-parent",
+                "--count",
+                &format!("{cursor}..{tip}"),
+            ])?
+            .trim()
+            .parse()?;
+        let ancestor = self.git(&[
+            "rev-list",
+            "--first-parent",
+            "--max-count=1",
+            &format!("--skip={distance}"),
+            tip,
+        ])?;
+        if ancestor.trim() != cursor {
             return Ok(None);
         }
-        let mut commits = self.log(&["--reverse", &format!("{cursor}..{tip}")])?;
-        commits.truncate(max);
+        let end = format!("{tip}~{}", distance.saturating_sub(max));
+        let commits = self.log(&["--reverse", &format!("{cursor}..{end}")])?;
         Ok(Some(commits))
     }
 
@@ -1429,11 +1577,11 @@ impl Ports for Live {
     }
 
     fn checks(&mut self, sha: &str) -> Result<CommitChecks> {
-        self.forge.commit_checks(sha)
+        self.forge.watch_commit_checks(sha)
     }
 
-    fn job(&mut self, run_id: &str, job: &str) -> Result<JobReport> {
-        let report = self.forge.run_job_report(run_id, job)?;
+    fn job(&mut self, run_id: &str, job: &str, id: u64, attempt: u64) -> Result<JobReport> {
+        let report = self.forge.run_job_report(run_id, job, id, attempt)?;
         let (excerpt, log_complete) = match &report.log {
             Ok(log) => (
                 excerpt(log, report.failed_steps.first().map(String::as_str)),
@@ -1447,10 +1595,6 @@ impl Ports for Live {
             excerpt,
             log_complete,
         })
-    }
-
-    fn rerun_failed(&mut self, run_id: &str) -> Result<()> {
-        self.forge.rerun_failed_jobs(run_id)
     }
 
     fn mail(&mut self, key: &str, subject: &str, body: &str) -> Result<()> {
@@ -1504,6 +1648,7 @@ pub(crate) fn live_pass(root: &Path) -> Result<Vec<String>> {
         let mut ports = Live {
             root: root.to_path_buf(),
             forge: crate::forge::forge_for(root),
+            pinned_tip: None,
             call_timeout: CALL_TIMEOUT,
         };
         pass(

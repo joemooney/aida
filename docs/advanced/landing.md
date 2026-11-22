@@ -71,7 +71,7 @@ It judges each merged commit in order. A commit is red when a check the CI-gated
 
 When main goes red:
 
-1. AIDA mails the advisor role at once, as urgent. The mail names the first red commit, its pull request and specs, and the failing checks with their links and the error lines of their logs. It also names the last green commit, where the live binary stays. AIDA re-runs the failed jobs once.
+1. AIDA mails the advisor role at once, as urgent. The mail names the first red commit, its pull request and specs, and the failing checks with their links and the error lines of their logs. It also names the last green commit, where the live binary stays. The watch observes independently initiated re-runs.
 2. If a green re-run clears the red, the episode is recorded as a flake.
 3. If the red survives the re-run, or 30 minutes pass, the red is confirmed and the advisor gets a second mail.
 4. Merging continues while main is red. The live binary stays on the newest green commit.

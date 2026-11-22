@@ -20,6 +20,7 @@ fn checks(rows: &[(&str, CheckOutcome, Option<&str>)]) -> CommitChecks {
                 run_id: run.map(str::to_string),
                 workflow_id: Some("ci".to_string()),
                 cancelled: false,
+                job_id: None,
                 run_attempt: None,
                 run_in_progress: false,
             })

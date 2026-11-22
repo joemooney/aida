@@ -94,8 +94,8 @@ The red-main watch reports a red main in both modes. It runs only as its own
 scheduled job (`land watch`, every 5 minutes where the project enables it) or
 by hand (`aida land watch`), never inside a landing path, so nothing that
 merges waits on it. It observes and mails the advisor role; it writes nothing
-to the requirement store. It names the first red commit, re-runs the failed
-jobs once to tell a flake from a real red, and recommends a revert by mail,
+to the requirement store. It names the first red commit, observes independent
+re-runs to tell a flake from a real red, and recommends a revert by mail,
 never performing one, when main does not build or is still red
 `[landing] red_main.fix_window` after the red was confirmed.
 

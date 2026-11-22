@@ -29,6 +29,7 @@ fn check(name: &str, outcome: CheckOutcome, run: &str, attempt: u64) -> CommitCh
         run_id: Some(run.into()),
         workflow_id: Some("ci".into()),
         cancelled: false,
+        job_id: Some(1),
         run_attempt: Some(attempt),
         run_in_progress: false,
     }
@@ -57,10 +58,8 @@ struct Fake {
     checks: HashMap<String, Vec<CommitCheck>>,
     jobs: HashMap<(String, String), JobReport>,
     log_failures: usize,
-    reruns: Vec<String>,
     mails: Vec<(String, String, String)>,
     fail_mail: bool,
-    fail_rerun: bool,
     fail_range: bool,
 }
 
@@ -69,6 +68,7 @@ impl Fake {
         self.commits.push(Commit {
             sha: sha(n),
             subject: subject.into(),
+            body: String::new(),
             at: self.now.unwrap_or_else(t0),
         });
         self.checks.insert(sha(n), checks);
@@ -116,7 +116,7 @@ impl Ports for Fake {
             checks,
         })
     }
-    fn job(&mut self, run_id: &str, job: &str) -> Result<JobReport> {
+    fn job(&mut self, run_id: &str, job: &str, _id: u64, _attempt: u64) -> Result<JobReport> {
         let mut report = self
             .jobs
             .get(&(run_id.to_string(), job.to_string()))
@@ -133,11 +133,6 @@ impl Ports for Fake {
             report.log_complete = false;
         }
         Ok(report)
-    }
-    fn rerun_failed(&mut self, run_id: &str) -> Result<()> {
-        anyhow::ensure!(!self.fail_rerun, "deadline reached");
-        self.reruns.push(run_id.into());
-        Ok(())
     }
     fn mail(&mut self, key: &str, subject: &str, body: &str) -> Result<()> {
         anyhow::ensure!(!self.fail_mail, "mailbox unavailable");
@@ -226,7 +221,7 @@ fn judging_follows_the_required_checks_and_keeps_others_as_diagnostics() {
     // A required failure is red; same-run failures contribute, others are
     // diagnostics only.
     let mut mixed = red("1", 1);
-    mixed.push(check("docs-lint", CheckOutcome::Failed, "9", 1));
+    mixed.push(check("docs-lint", CheckOutcome::Failed, "1", 1));
     let Verdict::Red {
         required: req,
         contributing,
@@ -283,12 +278,14 @@ fn a_result_older_than_its_runs_latest_attempt_is_not_final() {
             // A re-run started (and finished) after b's failure was listed.
             json!({"id": 8, "head_sha": head, "workflow_id": 3, "run_attempt": 2,
                    "status": "completed", "run_started_at": "2026-11-20T10:05:00Z"})
+        } else if endpoint.contains("/jobs?") {
+            json!({"total_count": 0, "jobs": []})
         } else {
             json!({"sha": head, "total_count": 0, "statuses": []})
         };
         Ok(serde_json::to_vec(&body).unwrap())
     };
-    let checks = crate::forge::github_commit_checks("o/r", &head, &mut api).unwrap();
+    let checks = crate::forge::github_checks_with_attempts("o/r", &head, &mut api, true).unwrap();
     let by = |n: &str| checks.checks.iter().find(|c| c.name == n).unwrap().clone();
     assert!(by("a").cancelled && !by("a").run_in_progress);
     assert_eq!(by("b").outcome, CheckOutcome::Failed, "gates are unchanged");
@@ -322,7 +319,7 @@ fn the_first_pass_anchors_at_the_newest_green_and_mails_nobody() {
 }
 
 #[test]
-fn a_red_opens_one_episode_mails_the_advisor_once_with_evidence_and_reruns_once() {
+fn a_red_opens_one_episode_mails_the_advisor_once_with_evidence_without_initiating_a_rerun() {
     let (dir, mut fake) = red_on_green();
     run(dir.path(), &mut fake);
     fake.at(5);
@@ -338,7 +335,7 @@ fn a_red_opens_one_episode_mails_the_advisor_once_with_evidence_and_reruns_once(
     assert!(body.contains("https://ci.example/runs/200/"), "{body}");
     assert!(body.contains("test foo ... FAILED"), "{body}");
     assert!(body.contains(&sha(1)[..12]), "held green: {body}");
-    assert_eq!(fake.reruns, vec!["200".to_string()]);
+    assert!(!include_str!("../forge.rs").contains("/rerun-failed-jobs"));
     assert_eq!(count(dir.path(), "red_start"), 1);
 }
 
@@ -455,6 +452,7 @@ fn a_confirmed_red_recovers_reverts_or_is_unattributed_by_its_closing_range() {
         "Revert \"fix(x): break main (STORY-2) (#11)\" (#13)",
         green("300"),
     );
+    fake.commits.last_mut().unwrap().body = format!("This reverts commit {}.", sha(2));
     fake.push(4, "docs: later (#14)", green("400"));
     run(dir.path(), &mut fake);
     assert_eq!(outcomes(dir.path()), vec!["reverted".to_string()]);
@@ -487,17 +485,14 @@ fn a_red_surviving_its_rerun_is_confirmed_and_mailed_once() {
 }
 
 #[test]
-fn a_failed_rerun_request_is_asked_again_and_an_accepted_one_never() {
-    let (dir, mut fake) = red_on_green();
-    fake.fail_rerun = true;
-    run(dir.path(), &mut fake);
-    assert!(fake.reruns.is_empty());
-    fake.fail_rerun = false;
-    fake.at(2);
-    run(dir.path(), &mut fake);
-    fake.at(4);
-    run(dir.path(), &mut fake);
-    assert_eq!(fake.reruns, vec!["200".to_string()]);
+fn multiply_linked_journal_is_refused_before_tail_repair() {
+    let dir = tempfile::tempdir().unwrap();
+    let land = land_dir(dir.path()).unwrap();
+    let original = dir.path().join("original");
+    std::fs::write(&original, b"unfinished").unwrap();
+    std::fs::hard_link(&original, land.join(JOURNAL_FILE)).unwrap();
+    assert!(append(&land, &event(t0(), "red_start", &sha(1))).is_err());
+    assert_eq!(std::fs::read(original).unwrap(), b"unfinished");
 }
 
 #[test]
@@ -801,6 +796,14 @@ fn no_merge_or_landing_path_reads_or_calls_the_red_main_watch() {
         "pr_train",
         "pr_ship",
         "land_run",
+        "land_housekeeping",
+        "dev_autopromote",
+        "dev_build",
+        "drain_cmd",
+        "land_bindings",
+        "upgrade_cmd",
+        "land_ci_base",
+        "promotion_failures",
         "auto_complete",
         "burndown_run",
         "upgrade_release",
@@ -815,7 +818,17 @@ fn no_merge_or_landing_path_reads_or_calls_the_red_main_watch() {
     for entry in std::fs::read_dir(&src).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap().to_string_lossy().to_string();
-        if name.starts_with("advisor_loop") {
+        if [
+            "advisor_loop",
+            "drain_",
+            "burndown_",
+            "pr_train_",
+            "pr_ship_",
+            "land_run_",
+        ]
+        .iter()
+        .any(|prefix| name.starts_with(prefix))
+        {
             stack.push(path);
         }
     }
@@ -863,6 +876,7 @@ fn a_stalled_fetch_returns_within_the_call_timeout() {
     git(&["config", "protocol.ext.allow", "always"]);
     git(&["remote", "add", "origin", "ext::sh -c sleep% 60"]);
     let mut live = Live {
+        pinned_tip: None,
         root: root.to_path_buf(),
         forge: crate::forge::forge_for(root),
         call_timeout: std::time::Duration::from_secs(1),
@@ -979,4 +993,181 @@ fn the_excerpt_keeps_the_error_lines() {
 fn subject_pr_reads_the_squash_suffix() {
     assert_eq!(subject_pr("feat: x (STORY-1) (#4324)"), Some(4324));
     assert_eq!(subject_pr("feat: x (STORY-1)"), None);
+}
+
+#[test]
+fn first_pass_with_only_red_history_includes_oldest_candidate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fake = Fake::default();
+    fake.push(1, "first red", red("1", 1));
+    fake.at(12);
+    fake.push(2, "still red", red("2", 1));
+    fake.at(20);
+    run(dir.path(), &mut fake);
+    let episode = state(dir.path()).episode.unwrap();
+    assert_eq!(episode.red_sha, sha(1));
+    assert_eq!(episode.red_merges, vec![sha(2)]);
+    assert_eq!(episode.opened_at, t0() + Duration::minutes(20));
+    assert_eq!(journal(dir.path())[0].at, t0());
+    assert_eq!(journal(dir.path())[1].at, t0() + Duration::minutes(12));
+}
+
+#[test]
+fn closing_stdout_does_not_release_the_job_log_deadline() {
+    let dir = tempfile::tempdir().unwrap();
+    let cli = dir.path().join("fake-gh");
+    crate::test_exec::write_executable(&cli, "#!/bin/sh\nexec 1>&-\nexec sleep 10\n");
+    let start = std::time::Instant::now();
+    let result = crate::forge_lookup::with_forge_lookup_deadline(
+        std::time::Duration::from_millis(150),
+        || crate::forge::commit_ci_api_tail(&cli, dir.path(), "endpoint", 64),
+    );
+    assert!(result.is_err());
+    assert!(start.elapsed() < std::time::Duration::from_secs(5));
+}
+
+#[test]
+fn github_attempt_evidence_preserves_carried_job_and_rejects_replaced_job() {
+    use serde_json::json;
+    let head = sha(1);
+    let mut api = |endpoint: &str| -> Result<Vec<u8>> {
+        let body = if endpoint.contains("/check-runs") {
+            let rows: Vec<_> = [(1, "carried"), (2, "replaced"), (3, "current")]
+                .into_iter()
+                .map(|(id, name)| {
+                    json!({"id": id, "name": name, "head_sha": head,
+                    "status": "completed", "conclusion": "success",
+                    "details_url": format!("https://github.com/o/r/actions/runs/7/job/{id}")})
+                })
+                .collect();
+            json!({"total_count": rows.len(), "check_runs": rows})
+        } else if endpoint.contains("/jobs?") {
+            assert!(endpoint.contains("filter=all"));
+            json!({"total_count": 4, "jobs": [
+                {"id": 2, "run_id": 7, "run_attempt": 1, "status":"completed", "name": "replaced"},
+                {"id": 1, "run_id": 7, "run_attempt": 1, "status":"completed", "name": "carried"},
+                {"id": 4, "run_id": 7, "run_attempt": 2, "status":"completed", "name": "replaced"},
+                {"id": 3, "run_id": 7, "run_attempt": 2, "status":"completed", "name": "current"}
+            ]})
+        } else if endpoint.ends_with("/actions/runs/7") {
+            json!({"id": 7, "head_sha": head, "workflow_id": 3, "run_attempt": 2, "status": "completed"})
+        } else {
+            json!({"sha": head, "total_count": 0, "statuses": []})
+        };
+        Ok(serde_json::to_vec(&body)?)
+    };
+    let checks = crate::forge::github_checks_with_attempts("o/r", &head, &mut api, true)
+        .unwrap()
+        .checks;
+    assert_eq!(
+        checks
+            .iter()
+            .map(|c| (c.run_attempt, c.run_in_progress))
+            .collect::<Vec<_>>(),
+        vec![(Some(1), false), (None, true), (Some(2), false)]
+    );
+}
+
+#[test]
+fn production_history_returns_oldest_bounded_batch_and_rejects_side_parent() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(root)
+            .env("GIT_AUTHOR_NAME", "fixture")
+            .env("GIT_COMMITTER_NAME", "fixture")
+            .env("GIT_AUTHOR_EMAIL", "fixture@example.org")
+            .env("GIT_COMMITTER_EMAIL", "fixture@example.org")
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{:?}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "root"]);
+    let cursor = git(&["rev-parse", "HEAD"]);
+    git(&["checkout", "-q", "-b", "side"]);
+    git(&["commit", "-q", "--allow-empty", "-m", "side"]);
+    let side = git(&["rev-parse", "HEAD"]);
+    git(&["checkout", "-q", "main"]);
+    for name in ["one", "two", "three"] {
+        git(&["commit", "-q", "--allow-empty", "-m", name]);
+    }
+    git(&["merge", "-q", "--no-ff", "side", "-m", "merge"]);
+    let mut live = Live {
+        root: root.into(),
+        forge: crate::forge::forge_for(root),
+        pinned_tip: Some(git(&["rev-parse", "HEAD"])),
+        call_timeout: std::time::Duration::from_secs(5),
+    };
+    let batch = live.after(&cursor, 2).unwrap().unwrap();
+    assert_eq!(
+        batch.iter().map(|c| c.subject.as_str()).collect::<Vec<_>>(),
+        ["one", "two"]
+    );
+    assert!(live.after(&side, 2).unwrap().is_none());
+    assert!(live.after(&"f".repeat(40), 2).is_err());
+}
+
+#[test]
+fn github_attempt_evidence_reads_page_two_and_refuses_another_attempt() {
+    use serde_json::json;
+    let mut api = |endpoint: &str| -> Result<Vec<u8>> {
+        assert!(endpoint.contains("/runs/17/attempts/2/jobs?per_page=100&page="));
+        let jobs = if endpoint.ends_with("page=1") {
+            (0..100).map(|id| json!({"id":id})).collect::<Vec<_>>()
+        } else {
+            vec![
+                json!({"id":110, "name":"CI (rest)", "run_id":17, "run_attempt":2,
+                "status":"completed", "conclusion":"failure", "html_url":"job",
+                "steps":[{"name":"Build skipped","conclusion":"skipped"},{"name":"Run tests","conclusion":"failure"}]}),
+            ]
+        };
+        Ok(serde_json::to_vec(
+            &json!({"total_count":101, "jobs":jobs}),
+        )?)
+    };
+    let report =
+        crate::forge::github_watch_job("o/r", "17", 2, 110, "CI (rest)", &mut api).unwrap();
+    assert_eq!(report, ("job".into(), vec!["Run tests".into()]));
+    let mut stale = |_: &str| {
+        Ok(serde_json::to_vec(&json!({"total_count":1,"jobs":[{
+        "id":110,"name":"CI (rest)", "run_id":17,"run_attempt":1, "status":"completed",
+        "conclusion":"failure","steps":[] }]}))?)
+    };
+    assert!(crate::forge::github_watch_job("o/r", "17", 2, 110, "CI (rest)", &mut stale).is_err());
+}
+
+#[test]
+fn journal_reads_stay_with_pinned_directory_and_refuse_oversized_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let pinned = land_dir(dir.path()).unwrap();
+    let visible = dir.path().join(".aida/land");
+    std::fs::rename(&visible, dir.path().join(".aida/original")).unwrap();
+    std::fs::create_dir(&visible).unwrap();
+    append(&pinned, &event(t0(), "red_start", &sha(1))).unwrap();
+    assert_eq!(journal_in(&pinned).unwrap().len(), 1);
+    assert!(read_journal(dir.path()).unwrap().is_empty());
+    let journal = std::fs::File::create(visible.join(JOURNAL_FILE)).unwrap();
+    journal.set_len(WATCH_FILE_LIMIT + 1).unwrap();
+    assert!(read_journal(dir.path()).is_err());
+}
+
+#[test]
+fn a_pending_first_candidate_survives_restart_and_a_later_green() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut fake = Fake::default();
+    fake.push(1, "first", pending("1"));
+    run(dir.path(), &mut fake);
+    fake.checks.insert(sha(1), red("1", 1));
+    fake.push(2, "second", green("2"));
+    run(dir.path(), &mut fake);
+    assert_eq!(count(dir.path(), "red_start"), 1);
+    assert_eq!(count(dir.path(), "red_end"), 1);
 }

@@ -36,6 +36,7 @@ pub(crate) struct CommitCheck {
     /// watch tells the two apart (a cancelled run is not a red main).
     // trace:STORY-2897 | ai:claude
     pub cancelled: bool,
+    pub job_id: Option<u64>,
     /// The attempt of the owning GitHub Actions run (1 for the first run, 2
     /// after one re-run), verified from that run; `None` elsewhere.
     // trace:STORY-2897 | ai:claude
@@ -294,6 +295,15 @@ pub(crate) fn github_commit_checks(
     sha: &str,
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<CommitChecks> {
+    github_checks_with_attempts(repo, sha, api, false)
+}
+
+pub(crate) fn github_checks_with_attempts(
+    repo: &str,
+    sha: &str,
+    api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
+    verify_jobs: bool,
+) -> Result<CommitChecks> {
     let mut checks = Vec::new();
     // run id -> (workflow, attempt, in progress, when the latest attempt started)
     #[allow(clippy::type_complexity)]
@@ -306,6 +316,7 @@ pub(crate) fn github_commit_checks(
             Option<chrono::DateTime<chrono::Utc>>,
         ),
     >::new();
+    let mut rerun_jobs = std::collections::HashMap::new();
     let mut total = None;
     let mut seen = 0usize;
     for page in 1..=MAX_PAGES {
@@ -383,7 +394,20 @@ pub(crate) fn github_commit_checks(
                         (Some(done), Some(started)) => done < *started,
                         _ => false,
                     };
-                    check.run_in_progress = *in_progress || stale;
+                    check.run_in_progress =
+                        *in_progress || stale || (verify_jobs && attempt.is_none_or(|n| n == 0));
+                    if let Some(current) = attempt.filter(|n| verify_jobs && *n > 1 && !in_progress)
+                    {
+                        if !rerun_jobs.contains_key(run) {
+                            let jobs = github_jobs_page_list(repo, run, "jobs?filter=all&", api)?;
+                            rerun_jobs.insert(run.to_owned(), effective_jobs(&jobs, run, current)?);
+                        }
+                        let actual = rerun_jobs[run].get(&check.name).and_then(|(attempt, id)| {
+                            (id.is_some() && *id == check.job_id).then_some(*attempt)
+                        });
+                        check.run_attempt = actual;
+                        check.run_in_progress = actual.is_none();
+                    }
                 }
             }
             checks.push(check);
@@ -455,6 +479,10 @@ pub(crate) fn parse_gh_check_runs(
             outcome,
             workflow_id: None,
             cancelled: outcome == CheckOutcome::Failed && conclusion == Some("cancelled"),
+            job_id: run
+                .get("details_url")
+                .and_then(|v| v.as_str())
+                .and_then(crate::ci_gate::job_id_from_check_link),
             run_attempt: None,
             run_in_progress: false,
             run_id: run
@@ -511,6 +539,7 @@ pub(crate) fn parse_gh_commit_status(
                 run_id: None,
                 workflow_id: None,
                 cancelled: false,
+                job_id: None,
                 run_attempt: None,
                 run_in_progress: false,
             })
@@ -607,6 +636,7 @@ pub(crate) fn parse_glab_commit_statuses(
             run_id: None,
             workflow_id: None,
             cancelled,
+            job_id: None,
             run_attempt: None,
             run_in_progress: false,
         })
@@ -635,6 +665,15 @@ pub(crate) fn github_run_jobs(
     run: &str,
     api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
 ) -> Result<Vec<serde_json::Value>> {
+    github_jobs_page_list(repo, run, "jobs?filter=latest&", api)
+}
+
+fn github_jobs_page_list(
+    repo: &str,
+    run: &str,
+    path: &str,
+    api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
+) -> Result<Vec<serde_json::Value>> {
     anyhow::ensure!(
         !run.is_empty() && run.bytes().all(|b| b.is_ascii_digit()),
         "invalid CI run id `{run}`"
@@ -643,7 +682,7 @@ pub(crate) fn github_run_jobs(
     let mut total = None;
     for page in 1..=MAX_PAGES {
         let body = api(&format!(
-            "repos/{repo}/actions/runs/{run}/jobs?filter=latest&per_page={PER_PAGE}&page={page}"
+            "repos/{repo}/actions/runs/{run}/{path}per_page={PER_PAGE}&page={page}"
         ))?;
         let value = json(&body, "workflow jobs")?;
         let count = value
@@ -672,6 +711,80 @@ pub(crate) fn github_run_jobs(
         }
     }
     anyhow::bail!("jobs of workflow run {run} exceed {MAX_PAGES} pages")
+}
+
+/// A job can carry forward only if no later attempt replaced it. A duplicate
+/// name within the most recent attempt leaves the job identity ambiguous.
+fn effective_jobs(
+    jobs: &[serde_json::Value],
+    run: &str,
+    current: u64,
+) -> Result<std::collections::HashMap<String, (u64, Option<u64>)>> {
+    let mut newest = std::collections::HashMap::new();
+    let mut seen = std::collections::HashSet::new();
+    for job in jobs {
+        let id = job["id"].as_u64().context("missing job identity")?;
+        anyhow::ensure!(seen.insert(id), "job listing repeated id {id}");
+        let name = job["name"].as_str().context("missing job name")?;
+        let attempt = job["run_attempt"]
+            .as_u64()
+            .filter(|n| *n > 0 && *n <= current)
+            .context("unknown job attempt")?;
+        anyhow::ensure!(
+            job["run_id"].as_u64().map(|n| n.to_string()).as_deref() == Some(run),
+            "job belongs to another run"
+        );
+        let id = (job["status"].as_str() == Some("completed")).then_some(id);
+        let entry = newest.entry(name.to_owned()).or_insert((0, None));
+        if attempt > entry.0 {
+            *entry = (attempt, id);
+        } else if attempt == entry.0 {
+            entry.1 = None;
+        }
+    }
+    Ok(newest)
+}
+
+/// Verify a failed Actions job on its immutable run attempt before using its log or steps.
+pub(crate) fn github_watch_job(
+    repo: &str,
+    run: &str,
+    attempt: u64,
+    id: u64,
+    name: &str,
+    api: &mut dyn FnMut(&str) -> Result<Vec<u8>>,
+) -> Result<(String, Vec<String>)> {
+    let jobs = github_jobs_page_list(repo, run, &format!("attempts/{attempt}/jobs?"), api)?;
+    let mut matches = jobs.iter().filter(|j| j["id"].as_u64() == Some(id));
+    let job = matches
+        .next()
+        .context("expected job missing from run attempt")?;
+    anyhow::ensure!(
+        matches.next().is_none()
+            && job["name"].as_str() == Some(name)
+            && job["run_id"].as_u64().map(|n| n.to_string()).as_deref() == Some(run)
+            && job["run_attempt"].as_u64() == Some(attempt)
+            && job["status"].as_str() == Some("completed")
+            && matches!(
+                job["conclusion"].as_str(),
+                Some("failure" | "timed_out" | "action_required")
+            ),
+        "failed job identity, attempt or result changed"
+    );
+    let steps = job["steps"]
+        .as_array()
+        .context("failed job lists no steps")?
+        .iter()
+        .filter(|step| step["conclusion"].as_str() == Some("failure"))
+        .map(|step| {
+            step["name"]
+                .as_str()
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .context("failed step missing name")
+        })
+        .collect::<Result<Vec<_>>>()?;
+    Ok((job["html_url"].as_str().unwrap_or_default().into(), steps))
 }
 
 /// The not-succeeded steps of the one job named `job` in `jobs` (GitHub
