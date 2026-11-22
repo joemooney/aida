@@ -16,12 +16,12 @@ description: |
   6. Admission check: after launch it watches the lane's admission result and, on a refusal (e.g. holder state Unknown, a dirty retained seat), records the typed reason on the spec and notifies the advisor instead of failing silently.
   7. Tests through the real command path: head moved -> SKIPPED; PR closed -> SKIPPED; prior lane still live -> waits, then fires; brief delivered for each vendor; admission refusal reported.
   8. The product seat's .aida/tmp/relay-rework.sh is retired, and the discipline doc for the product role points at `aida lane relay`.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-22T19:19:38.644405981Z
+modified_at: 2026-11-22T19:49:22.420788378Z
 req_type: Task
 tags:
 - codify
@@ -498,6 +498,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a204ce-5b74-7972-8dae-eb8252451f12
+  author: aida-session-start
+  timestamp: 2026-11-22T19:49:22.420787283Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
