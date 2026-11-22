@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a205a9-745f-7fb3-a173-fa8092ecf8e3",
+  "thread_id": "deputy-01a205a9-745f-7fb3-a173-fa8092ecf8e3",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "claude-product-15"
+  },
+  "timestamp": 1795391447996,
+  "body": "Script deputy \"product\" finished script job 01a205a9-745f-7fb3-a173-fa8092ecf8e3: rc 0 (ok).\nScript: cd /home/joe/ai/aida\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a205a9-745f-7fb3-a173-fa8092ecf8e3/transcript.log\nRead it with `aida deputy shell log 01a205a9-745f-7fb3-a173-fa8092ecf8e3 --name product`.\n",
+  "subject": "deputy script job 01a205a9 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
