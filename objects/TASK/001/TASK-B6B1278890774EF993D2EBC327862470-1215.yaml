@@ -1,0 +1,33 @@
+id: 01a204b4-9bdf-7053-bffb-bbcbef678e24
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1215
+agreed_id: TASK-3833
+title: 'Deferred findings 1, 5, 6 from PR #4382 (BUG-2706) r2 verdict'
+description: |
+  Deferred from the PR #4382 (BUG-2706) r2 counting verdict at 0dd153cd under the advisor-122 ruling (2026-11-22 12:22 MST). #4382 r3 fixes only findings 2-4.
+
+  ## Findings
+  1. [high/unmet-claimed-ac] aida-cli-lib/src/standalone_implementer.rs: BUG-2706 AC1/AC2. The guard at line 1571 is reachable from queue pickup only for a fresh standalone headless implementer. is_standalone_implementer excludes guided pickups, and queue_cmd/work.rs requires QueueWorkLaunch::Fresh before calling run_recorded. An interactive foreign implementer can therefore keep working past the 30-minute TTL plus 20-minute grace while its merge-only head becomes eligible. Bind heartbeat ownership to the live implementer lease on these paths and cover a guided pickup beyond the grace period.
+  5. [medium/unmet-claimed-ac] aida-cli-lib/src/review_implementer_gate.rs: BUG-2706 AC3. A configured zero-minute grace admits the first unreadable observation without logging why: settle_episode lines 235–256 sets no reason, and released is false because the episode was never held. Emit a single explanation for immediate admission on unreadable evidence and deduplicate it until recovery. Cover the zero-grace case with a malformed claim.
+  6. [medium/p2] aida-cli-lib/src/coordination_heartbeat.rs: read_record charges the 32 MiB inventory budget only after read_to_string succeeds at lines 125–131. Invalid UTF-8 payloads consume I/O but never count, so a scan under the store writer lock can read more than a gigabyte across the permitted entry count. Charge actual bytes read before decoding or parsing and stop at the aggregate ceiling.
+
+  ## Acceptance
+  - AC1: Guided and interactive implementer pickups keep the shared claim heartbeat bound to the live lease past TTL plus grace (finding 1), covered by a guided-pickup test.
+  - AC2: Zero-grace admission on unreadable evidence logs one deduplicated reason (finding 5).
+  - AC3: read_record charges actual bytes read against the aggregate budget before decoding (finding 6).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T19:21:14.975468819Z
+modified_at: 2026-11-22T19:21:14.975468819Z
+req_type: Task
+tags:
+- mass-change
+- review-follow-up
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
