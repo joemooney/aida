@@ -992,3 +992,45 @@ fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
     );
     assert_eq!(row.state, State::CiFailed);
 }
+
+// trace:TASK-3827 | ai:codex
+#[test]
+fn task_3827_live_gitlab_reviewer_before_marker_publication() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    aida_core::git_ops::init(root).unwrap();
+    assert!(crate::test_git::git_command()
+        .current_dir(root)
+        .args([
+            "remote",
+            "add",
+            "origin",
+            "https://gitlab.com/owner/repo.git"
+        ])
+        .status()
+        .unwrap()
+        .success());
+    let lease = serde_json::from_value(serde_json::json!({
+        "scope":"MR-7", "id":"active", "slug":"mr-7", "owner":"tester",
+        "worktree_path": root, "branch":"review", "started_at": chrono::Utc::now(),
+        "hostname":"here", "role":"reviewer"
+    }))
+    .unwrap();
+    let repo = crate::review_watch::forge::Repository::load(root).unwrap();
+    let live = Live {
+        root: root.into(),
+        pins: Err("unused".into()),
+        gitlab: repo.github_slug().is_none(),
+        repo,
+        github_checks: Default::default(),
+        leases: std::cell::OnceCell::from(Ok(vec![lease])),
+        claims: vec![],
+        book: Default::default(),
+        merge_trees: Default::default(),
+        review_after_merge: crate::integration_cmd::review::Reader::new(root),
+    };
+    assert_eq!(
+        live.reviewing(&pr("main", "feature")).unwrap().as_deref(),
+        Some("reviewer@here (active) launched, no claim yet")
+    );
+}

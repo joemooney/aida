@@ -276,22 +276,10 @@ impl View {
 /// Resolving it creates nothing. A project without one (a single-file store,
 /// or none yet) is refused with the reason: it has no record of other hosts.
 pub(crate) fn store_root(root: &Path) -> Result<PathBuf, String> {
-    let store = crate::detect_distributed_store_from(root).ok_or_else(|| {
+    crate::detect_distributed_store_from(root).ok_or_else(|| {
         "this project has no shared store directory, so lanes on other hosts are not recorded here"
             .to_string()
-    })?;
-    match std::fs::symlink_metadata(&store) {
-        Ok(meta) if meta.is_dir() => Ok(store),
-        Ok(_) => Err(format!(
-            "the shared store at {} is not a directory",
-            routed(&store.display().to_string(), 200)
-        )),
-        Err(error) => Err(format!(
-            "the shared store at {} could not be read ({})",
-            routed(&store.display().to_string(), 200),
-            routed(&error.to_string(), 120)
-        )),
-    }
+    })
 }
 
 /// Reads the lanes other hosts have on record in the shared store of the
@@ -734,6 +722,25 @@ mod tests {
         }
         assert!(!line.contains("notes.txt") && !line.contains("good.toml"));
         assert!(!line.contains('\n'));
+    }
+
+    // trace:TASK-3827 | ai:codex
+    #[test]
+    fn task_3827_reads_lane_in_configured_symlink_store() {
+        let now = Utc::now();
+        let record = toml::to_string(&claim("remote", "TASK-1", now)).unwrap();
+        let store = store_with(&[("holder.toml", record)]);
+        let project = tempfile::tempdir().unwrap();
+        std::fs::create_dir(project.path().join(".aida")).unwrap();
+        std::fs::write(
+            project.path().join(".aida/config.toml"),
+            "store_path = 'shared'",
+        )
+        .unwrap();
+        std::os::unix::fs::symlink(store.path(), project.path().join("shared")).unwrap();
+        let view = read(project.path(), "here", now);
+        assert!(view.unreadable.is_empty(), "{:?}", view.unreadable);
+        assert_eq!(view.lanes.len(), 1);
     }
 
     #[test]

@@ -1156,6 +1156,11 @@ pub(crate) fn hold_of(root: &Path, pr: &Pr) -> std::result::Result<Option<Hold>,
     }))
 }
 
+// trace:TASK-3827 | ai:codex
+pub(super) fn reviewer_key(gitlab: bool, number: u64) -> String {
+    format!("{}-{number}", if gitlab { "MR" } else { "PR" })
+}
+
 impl Evidence for Live {
     // trace:STORY-2897 | ai:claude
     fn ci_gates_landing(&self) -> bool {
@@ -1201,7 +1206,7 @@ impl Evidence for Live {
         }
         // A reviewer that has launched but not yet claimed the head holds a
         // lease scoped to the change.
-        let scope = format!("PR-{}", pr.id);
+        let scope = reviewer_key(self.gitlab, pr.id);
         let leases = self
             .local_leases()
             .map_err(|why| format!("reviewer leases unreadable ({why})"))?;

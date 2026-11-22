@@ -241,7 +241,7 @@ impl Evidence {
     /// The key the forge, the watcher's log and a reviewer's lease give
     /// change `pr`.
     pub(crate) fn key(&self, pr: u64) -> String {
-        format!("{}-{pr}", if self.gitlab { "MR" } else { "PR" })
+        crate::land::reviewer_key(self.gitlab, pr)
     }
 
     /// What the path `tree` (named `aida-pr-N`) is: `Ok(Some(cause))` for a

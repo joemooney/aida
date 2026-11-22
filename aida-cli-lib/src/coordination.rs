@@ -855,19 +855,27 @@ fn implementer_refusal(scope: &str, holder: &Claim, path: &Path) -> String {
     )
 }
 
-/// Read + parse a claim file, if present and well-formed. A missing file or a
-/// parse error both yield `None` — a corrupt claim must never wedge a lease
-/// (treated as "no claim", i.e. reclaimable). trace:STORY-637
-///
-/// The claim is read as a bounded regular file, never through a symlink: the
-/// registry is a shared directory, and a FIFO or a device placed in it must
-/// not block or flood a reader (it reads as "no claim").
-// trace:TASK-3827 | ai:claude
+/// Best-effort observation for callers that can skip unreadable records.
 fn read_claim(path: &Path) -> Option<Claim> {
-    let raw =
-        aida_core::seat_clone_detect::read_regular_file_result_with_limit(path, MAX_CLAIM_BYTES)
-            .ok()?;
-    toml::from_str(&raw).ok()
+    read_claim_checked(path).ok().flatten()
+}
+
+// Lock acquisition needs positive evidence of absence before creating a claim.
+// trace:TASK-3827 | ai:codex
+fn read_claim_checked(path: &Path) -> Result<Option<Claim>> {
+    let raw = match aida_core::seat_clone_detect::read_regular_file_result_with_limit(
+        path,
+        MAX_CLAIM_BYTES,
+    ) {
+        Ok(raw) => raw,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => {
+            return Err(error).with_context(|| format!("could not read claim {}", path.display()))
+        }
+    };
+    toml::from_str(&raw)
+        .map(Some)
+        .with_context(|| format!("invalid claim {}", path.display()))
 }
 
 /// The largest claim file read. A real one is under 1 KiB.
@@ -1752,7 +1760,7 @@ pub(crate) fn acquire_lock_claim(
                     )));
                 }
 
-                let existing = read_claim(&path);
+                let existing = read_claim_checked(&path)?;
                 let outcome_note = if force {
                     existing
                         .as_ref()
@@ -2946,6 +2954,45 @@ mod tests {
             .to_string();
         assert!(err.contains("invalid shared claim"), "{err}");
         assert_eq!(std::fs::read_to_string(path).unwrap(), "broken = [");
+    }
+
+    // trace:TASK-3827 | ai:codex
+    #[test]
+    fn task_3827_lock_acquisition_preserves_refused_holder_evidence() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = bug2586_store(dir.path());
+        let drain = lock_claim_path(&store, LockKind::Drain);
+        let solo = lock_claim_path(&store, LockKind::Solo);
+        std::fs::create_dir_all(drain.parent().unwrap()).unwrap();
+        let holder = build_lock_claim(
+            &store,
+            LockKind::Drain,
+            &dir.path().join("holder"),
+            "drain",
+            1800,
+        );
+        let oversized =
+            toml::to_string(&holder).unwrap() + "#" + &"x".repeat(MAX_CLAIM_BYTES as usize);
+        std::fs::write(&drain, &oversized).unwrap();
+        let target = dir.path().join("target");
+        std::fs::write(&target, "original").unwrap();
+        std::os::unix::fs::symlink(&target, &solo).unwrap();
+        aida_core::git_ops::add(&store, &[LOCKS_SUBDIR]).unwrap();
+        aida_core::git_ops::commit(&store, "record existing locks").unwrap();
+        let branch = aida_core::git_ops::current_branch(&store).unwrap();
+        assert!(aida_core::git_ops::push(&store, "origin", &branch).unwrap());
+        let head = aida_core::git_ops::head_sha(&store).unwrap();
+        for kind in [LockKind::Drain, LockKind::Solo] {
+            for force in [false, true] {
+                let err =
+                    acquire_lock_claim(&store, kind, dir.path(), "new", 1800, force).unwrap_err();
+                assert!(err.to_string().contains("could not read claim"), "{err:#}");
+            }
+        }
+        assert_eq!(std::fs::read_to_string(drain).unwrap(), oversized);
+        assert_eq!(std::fs::read_link(solo).unwrap(), target);
+        assert_eq!(std::fs::read_to_string(target).unwrap(), "original");
+        assert_eq!(aida_core::git_ops::head_sha(&store).unwrap(), head);
     }
 
     // trace:BUG-2501 | ai:codex
