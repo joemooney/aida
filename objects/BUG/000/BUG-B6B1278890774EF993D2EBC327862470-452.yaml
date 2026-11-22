@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T17:28:28.918478108Z
+modified_at: 2026-11-22T17:28:31.681312923Z
 req_type: Bug
 tags:
 - conflicts
@@ -1002,6 +1002,27 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes. Assessed landed tree 042756f83a8d09c6838ef36ee959f5f46a76b7e9 against protected main aa567732958f669b69ec5848863ea0b13c800db5. Existing CI compiled the test targets, then both fast jobs failed the same writer inventory check. Evidence below is source inspection, with no local builds or test execution.. No triage reason was given.'
   created_at: 2026-11-22T17:28:28.918465905Z
   modified_at: 2026-11-22T17:28:28.918465905Z
+- id: 01a2044d-6813-74f3-89b6-355c120b6538
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2688):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d49e95064e4b
+    Recorded: 2026-11-22T04:57:07.057671331+00:00
+    Findings:
+    1. At the admission callback around line 6438, a nonempty archive makes the callback succeed unconditionally. admit_pinned_rework explicitly skips admission for a clean host merge-tree result. A host-configured merge driver and the private clone’s sanitized Git config can give different conflict results for identical commits. If preparation then finds a conflict, a self-publishing route can receive the conflict task without the required host-publication check. Call the pure route check on every actual conflict. Cover a clean archive probe followed by a conflicting preparation on a refused route.
+    2. The fast-forward and predicted-clean merge use --no-overwrite-ignore, but their errors are propagated without PreserveReworkSeat. An ignored file colliding with a tracked incoming file causes Git to stop to protect the file. run_pickup_launch then rolls back the owned setup, which forcibly removes the worktree or clone and the ignored file. Keep the seat on these failures and test the bytes and lease through run_pickup_launch for both paths. The added preservation test covers only the predicted-conflict branch.
+    3. acc34a6d: archive_retained_rework_with skips a reserved seat that has disappeared when no linked registration remains. A dead lane with an Unknown journal entry for the current PR head therefore survives --fresh and the replacement hits the same already-reserved error. Reconcile the exact dead generation under lock before creating the replacement, retaining live or unknown ownership. Exercise queue pickup with --fresh, a removed seat, no Git registration and the old journal still present.
+    4. aca42931: require_retained_clone_main reports only that the marker and alternates do not match and the seat was left in place. The malformed MERGE_HEAD check likewise supplies no corrective command. The typed self-publication refusal says to use a contained Codex lane without giving the invocation. Supply one actionable, scope-specific command at each refusal and assert it in the corresponding negative tests.
+    5. reservation_for_relocation checks headless_lane_run_alive only for a matching journal entry. With no journal, an unleased seat can still have a live headless record naming its seat_path. A worker temporarily outside the checkout with no open seat files will pass the filesystem holder scan, and pickup can move its seat and reuse its path. Check matching worker records independently of journal presence under the placement lock. Cover a live recorded worker with no journal and no current filesystem holder.
+    6. move_rework_worktree authenticates the registered path and branch from the host inventory but resolves HEAD and MERGE_HEAD using Git discovery from the directory currently at that path. A stale registration whose path has been reused by another linked checkout on a same-named branch can therefore cause the unrelated directory to be relocated before repair is attempted. Verify the reciprocal .git pointer, worktree admin directory and common repository against the host registration before moving, then recheck that identity at mutation time.
+    7. rework_worktree_inventory decodes the entire NUL-delimited inventory as UTF-8. inspect_queue_work_branch now uses it for ordinary branch pickups too. One unrelated worktree with a non-UTF-8 pathname blocks pickups on every other branch. Parse the records as bytes, preserve pathname bytes with OsStr, and scope any refusal to relevant evidence. Add a case with a non-UTF-8 worktree on an unrelated branch.
+    8. Both exact-head fast CI jobs report missing lock_seat_placement caller rows for worktree_lock::acquire and worktree_lock::release. Classify both in the writer inventory and regenerate/check it against the protected base. Rust compilation finished successfully before the inventory check failed.
+    9. The manual promises that a replacement starts at the fetched PR head even on conversation resume. Only explicit fresh placement uses PinnedRework. prepare_host_repair_admitted accepts a clean local tip ahead of the PR for ReworkSeat::Replacement when the merge probe is clean. Qualify the documented guarantee or consistently place replacements at the pin while preserving local commits.
+    10. The supplied criteria report still lists all four worksheet entries as untraced. The diff adds substantive fixtures, but its trace comments name BUG-2688 without the criterion IDs. Link the relevant fixtures and new negative cases to the recorded criteria so the evidence is discoverable.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-22T17:28:31.507254121Z
+  modified_at: 2026-11-22T17:28:31.507254121Z
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
