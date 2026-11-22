@@ -350,6 +350,13 @@ comments:
   modified_at: 2026-11-22T18:05:35.009761271Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20479-21f8-71b3-a833-49e54c141ee5
+  author: joe
+  content: 'LIVE REPRO (product-15, 2026-11-22; advisor ruling 11:17 MST): review-watch launched a reviewer on PR-4382 at merge-only head 923ed7630e8 (Merge commit aa567732 into the branch, pushed 11:08:20 MST) at 11:09 MST (reservation PR-4382:5f19e5d0-4cb4-41d0-9c63-cccf729030f9), while the BUG-2706 r2 codex lane (dell1 lane-run.sh BUG-2706, started 11:06, lane job j20261122T180853264-2-0) was still live on dell1. Advisor ruled that verdict NON-COUNTING for the round cap; a CR from it is superseded once the lane''s final head is reviewed. Same exposure on PR-4376 at 660c0e87 while the BUG-2669 lane runs.'
+  created_at: 2026-11-22T18:16:04.250158474Z
+  modified_at: 2026-11-22T18:16:04.250158474Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
