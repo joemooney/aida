@@ -1,0 +1,18 @@
+{
+  "id": "17dc625f-3878-48bf-a39c-7dd402bc1c4c",
+  "thread_id": "17dc625f-3878-48bf-a39c-7dd402bc1c4c",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795375877665,
+  "body": "- [STUCK-MERGE] #4377 is approved at 1a5f69f0 and has not landed for 49 min (approved at 1a5f69f0aeaa)\n  -> land #4377 (the reconciler shows STALE-CI-BASE: update branch from base)\n- [STUCK-MERGE] #4385 is approved at 14c0451a and has not landed for 26 min (approved at 14c0451a5928)\n  -> land #4385 (the reconciler shows READY: add to next train)\n- [STUCK-REVIEW] #4364 at cdc1030c has had no verdict and no reviewer for 36 min\n  -> rule on #4364: 3 content rounds of requested changes; needs an advisor ruling\n- [STUCK-REVIEW] #4376 at 660c0e87 has had no verdict and no reviewer for 92 min\n  -> launch a reviewer for #4376 at 660c0e87\n- [STUCK-REVIEW] #4378 at 4602d292 has had no verdict and no reviewer for 2619 min\n  -> launch a reviewer for #4378 at 4602d292\n- [STUCK-REVIEW] #4380 at 94cf1439 has had no verdict and no reviewer for 1040 min\n  -> rule on #4380: 4 content rounds of requested changes; needs an advisor ruling\n- [STUCK-REVIEW] #4389 at adbac40e has had no verdict and no reviewer for 44 min\n  -> launch a reviewer for #4389 at adbac40e\n- [STUCK-REWORK] #4373 has changes requested at 2a0c3511 (round 3) and no lane or session on it for 80 min\n  -> rule on #4373: 3 content rounds of requested changes; needs an advisor ruling\n- [STUCK-REWORK] #4387 has changes requested at aa380d29 (round 1) and no lane or session on it for 84 min\n  -> route rework of #4387 to a lane\n\n10 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 9 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
