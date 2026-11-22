@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
+  position: -958000
+  added_by: role:implementer
+  added_at: 2026-11-22T17:28:19.678406324Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1e36b-aa89-7350-92c5-1bc357402bca
   position: -957000
   added_by: role:implementer
@@ -11,13 +17,6 @@
   added_by: role:implementer
   note: 'Requeue existing #4388 rework at fc4441ac7032. Preserve the signed limited recovery design. Exact-head FAST jobs 136682267310 and 136682267292 still fail on fixture Git writes (TASK-HOME-1198), typed vendor expansion (TASK-HOME-1197), and a new direct lane-liveness decision. Use existing guarded fixture, vendor and liveness boundaries rather than expanding the ratchets. Use the current recorded verdict for the reservation diagnostic and once-only admission findings. Keep exact-head independent review and CI gates.'
   added_at: 2026-11-21T07:24:18.670965283Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1fb3c-9960-7a33-a063-0066458db4c2
-  position: -954000
-  added_by: role:implementer
-  note: 'Advisor revalidation at #4385 bdd60daf20ca: merging main kept the round-3 submission protocol and the ambient-PATH CI failure. Complete the existing final-round validate-only redesign, including TASK-HOME-1199, under the recorded scope. Treat the prior final-round lane as unpublished until a new head proves otherwise. This is the existing final-round work, with its review and CI gates intact.'
-  added_at: 2026-11-21T07:11:18.565513412Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1e1a3-1172-71b3-8580-880a91c7e553
