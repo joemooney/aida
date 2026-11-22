@@ -12,12 +12,12 @@ description: |
   - AC2: Defense in depth: while the mode is active, the verdict recorder demotes an unmet-claimed-ac finding marked blocking (and not also p1, data-loss or security) to deferred, and records that the demotion happened.
   - AC3: With the mode off, prompt and recorder behaviour are unchanged (a test covers both states).
   - AC4: A regression test records a verdict with one unmet-claimed-ac blocking finding under the mode and asserts disposition deferred plus an approve-eligible verdict.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269342Z
-modified_at: 2026-11-22T19:30:20.762736936Z
+modified_at: 2026-11-22T19:35:32.277952948Z
 req_type: Bug
 tags:
 - mass-change
@@ -56,6 +56,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a204bd-d448-7d53-9d43-8b223f1b2456
+  author: dirtlab
+  timestamp: 2026-11-22T19:31:19.240912833Z
+  session_id: 01a204bc9eec
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a204c1-b2e0-7232-9bd3-4df2fae8ba13
+  author: dirtlab
+  timestamp: 2026-11-22T19:35:32.832743362Z
+  session_id: 01a204bc9eec
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
@@ -63,3 +78,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: AC5 requires every out-of-list finding to defer, including mutation-kill and untested-path. Approved operator ADR-76 requires those same findings to block in gate and sensitive code even when the configured list omits test-gap. The working patch defers ordinary gaps but preserves that path-scoped refusal. Please settle precedence for a finding with explicit sensitive file evidence.
+  lean: Keep the ADR-76 path-scoped floor and apply the configured list to ordinary gaps.
+  raised_by: implementer
+  raised_at: 2026-11-22T19:35:32.277952948Z

@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-22T19:23:04.006868561Z
+modified_at: 2026-11-22T19:37:07.823493520Z
 req_type: Task
 tags:
 - landing
@@ -494,6 +494,18 @@ comments:
   modified_at: 2026-11-22T19:19:07.861853288Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a204c3-27dd-7812-b4bd-9e07b4f85ce3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fdb8c71221acdb885e910e0c160efd4e9d41f1a8 plus the native working tree for round 4. Inspected origin/main...HEAD, git diff HEAD and untracked paths.
+    F1: [evidence: behavioral-test] coordination.rs:2961 exercises production acquisition under the writer lock with valid oversized drain evidence and a symlinked solo lock, with and without force. Both records, the symlink target and Git HEAD survive. The targeted lane run executed this regression and passed 16/16. Only NotFound permits the empty-holder decision. Other read and parse errors propagate before force or mutation.
+    F8/F10: removed the second directory-type check after configured store resolution and the hard-coded PR scope in the live reviewer path. Per-record opens retain no-follow. Regression fixtures are lane_hosts.rs:729 and tests/story_2768_land_tests.rs:998. Final validation queued.
+    Scope: F2-F6 and F9 are explicitly tracked by TASK-3829. F7 (conflict dispatch wording) and F11 (aggregate work before capped scan) remain open under the fix-only-p1 instruction and are absent from TASK-3829's filed list. Refs-only publication. Store-writer inventory passed (3846 sites): relocated bounded reader, no new writer.
+  created_at: 2026-11-22T19:37:07.823493520Z
+  modified_at: 2026-11-22T19:37:07.823493520Z
+  session_id: 01a204b5f731
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
