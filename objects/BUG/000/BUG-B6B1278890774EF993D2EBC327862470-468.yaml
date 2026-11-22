@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T19:22:38.770525299Z
+modified_at: 2026-11-22T19:27:03.807381055Z
 req_type: Bug
 tags:
 - lanes
@@ -405,6 +405,29 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-22T19:22:38.624803920Z
   modified_at: 2026-11-22T19:22:38.624803920Z
+- id: 01a204ba-1f79-7441-abaf-1de1ef66a881
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:27):
+    # BUG-2706 / PR #4382: r3 FINAL (advisor-122 ruling 2026-11-22 12:22 MST; relayed by product-15). Lane: CODEX.
+
+    Base: the counting Changes Requested verdict at 0dd153cd (gate ledger PR-4382). Under mass-change mode, classify every finding; unmet-AC defers. Another blocking CR after this round parks the spec.
+    Fix ONLY findings 2, 3 and 4 below. They are fail-open cases where one bad record releases a live lane's head to review, which is the bug itself. Findings 1, 5 and 6 are deferred to a follow-up spec (named on BUG-2706). Do NOT touch them.
+    The reviewer scope is findings 2-4 plus this round's diff. Keep the diff minimal.
+
+    ## Fix
+    2. [high] aida-cli-lib/src/lane_hosts.rs: BUG-2706 AC1/AC2. At lines 183–187 a single oversized .toml blob returns an error for the entire published inventory. observe_change then drops every claim, including a readable, freshly reporting holder for the PR. After the unreadable interval the watcher admits that holder’s head. Skip the individual oversized blob as incomplete and retain readable records within the aggregate budget. Cover a fresh matching claim alongside an unrelated oversized blob.
+    3. [high] aida-cli-lib/src/coordination_heartbeat.rs: BUG-2706 AC1/AC2. bound_claim lines 60–62 discards an otherwise verified lease match whenever any sibling .toml fails to parse. A persistent malformed claim for a different spec consequently stops publication for every healthy lane in the store. Their valid claims age out and the watcher eventually reviews their heads. Resolve the canonical claim path from exact lease scope and validate host and lease identity there, so unrelated unreadable records cannot stop refresh. Cover a real published heartbeat with a malformed sibling.
+    4. [medium] aida-cli-lib/src/review_implementer_gate.rs: BUG-2706 AC3. observed_claims lines 274–276 returns a complete empty inventory when the store path is a regular file. An expected distributed store replaced by a file therefore releases even a previously held head immediately. Treat this invalid store shape as unreadable, preserving the configured grace interval. Exercise the transition from a reporting claim to an invalid store root.
+
+    ## Done means
+    - Each fix has a regression test that fails before the fix (oversized sibling blob next to a fresh matching claim; malformed sibling with a real published heartbeat; reporting claim to file-shaped store root).
+    - One targeted cargo run, then `make check-ci-fast` green, then push on the existing branch. COMMIT your work.
+    - Run `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-22T19:27:03.807381055Z
+  modified_at: 2026-11-22T19:27:03.807381055Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
