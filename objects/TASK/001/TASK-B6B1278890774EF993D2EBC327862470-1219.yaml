@@ -1,0 +1,21 @@
+id: 01a2050a-bc31-7193-9200-702b5e4d55bc
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1219
+agreed_id: TASK-3837
+title: 'BUG-2706 follow-up: lane_hosts claim snapshot aborts on a non-UTF-8 sibling pathname'
+description: 'From the #4382 r3 final review at 20d746c9 (lane_hosts.rs:173). git ls-tree -z returns raw pathname bytes, and from_utf8(row)? aborts the whole claim snapshot before the per-blob size check, so one oversized sibling with a non-UTF-8 filename empties the claim list, and review-watch can review a live lane''s merge-only head after the unreadable grace. Fix: split the header and pathname as bytes, check the .toml suffix on bytes, decode only the ASCII header, and extend the bare-origin oversized-sibling regression with a non-UTF-8 name. Deferred by the advisor because AIDA''s claim writers only produce ASCII spec-ID filenames, and the worst case is an early non-counting review (today''s status quo, also addressed by BUG-2714), not an unsafe merge. Also from that review: TASK-3833 holds r2''s deferred findings 1, 5 and 6.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T20:55:19.345403417Z
+modified_at: 2026-11-22T20:55:19.345403417Z
+req_type: Task
+filed_at:
+  code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
+  session: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
