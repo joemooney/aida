@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-22T20:04:32.179754374Z
+modified_at: 2026-11-22T23:58:39.649978473Z
 req_type: Task
 tags:
 - codify
@@ -419,6 +419,13 @@ comments:
   modified_at: 2026-11-22T20:04:32.179754374Z
   session_id: 01a204ce0133
   harness_version: codex-cli 0.167.0
+- id: 01a205b2-c80b-7b93-9cd4-f5a385eadbff
+  author: joe
+  content: 'ADVISOR RULING 2026-11-22 16:59 MST: parked. #4373 closed (branch kept). The FINAL round CR at dd044db0 has 5 new P1s, all in lane_relay.rs (pending brief consumed by ordinary pickup :1537; brief withdrawn on a lost SSH reply :1777; display-ID/round mismatch :1686; symlink-following counter/log opens :1421 [security]; Fence::advance truncates before writing :1451 [data loss]). The host relay scripts cover the job. Revisit inside STORY-2660.'
+  created_at: 2026-11-22T23:58:39.649978473Z
+  modified_at: 2026-11-22T23:58:39.649978473Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
   author: joe
