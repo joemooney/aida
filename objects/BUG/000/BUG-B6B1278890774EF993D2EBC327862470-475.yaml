@@ -14,12 +14,12 @@ description: |
   - AC2: At ship, the merge and the fix commits are pushed together in one push, so the first new PR head after a rework round always contains the round's fix.
   - AC3: A lane whose only new commit is the merge pushes nothing and reports "no fix commits; nothing published".
   - AC4: A regression test drives a rework pickup whose base needs a main merge and asserts the remote branch head is unchanged until ship, then equals the merge-plus-fix tip.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T22:01:09.285501932Z
+modified_at: 2026-11-22T22:11:08.621284145Z
 req_type: Bug
 tags:
 - fasttrack
@@ -78,6 +78,11 @@ comments:
   created_at: 2026-11-22T21:48:22.850054313Z
   modified_at: 2026-11-22T21:48:22.850054313Z
   session_id: 01a20501f488
+- id: 01a20550-26cd-7b90-925e-3a9670dc1225
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes for BUG-2714 (BUG-b6b1278890774ef993d2ebc327862470-475). Reviewed the full landed diff against protected base 6be38166be85. None of the findings depends on the two intervening base commits. CI pending at review time (fast compile). Source and existing validation evidence only.. No triage reason was given.'
+  created_at: 2026-11-22T22:11:08.621280588Z
+  modified_at: 2026-11-22T22:11:08.621280588Z
 history:
 - id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
   author: aida-session-start
@@ -113,6 +118,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20550-26cd-7b90-925e-3a8742faf2dc
+  author: joe
+  timestamp: 2026-11-22T22:11:08.621263829Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
@@ -120,16 +132,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Request changes for BUG-2714 (BUG-b6b1278890774ef993d2ebc327862470-475). Reviewed the full landed diff against protected base 6be38166be85. None of the findings depends on the two intervening base commits. CI pending at review time (fast compile). Source and existing validation evidence only.
-    AC1 — verified by the removal of the production pickup publication callback and the queue pickup assertion that origin still names the original PR head after local preparation.
-    AC2 — unverified. The clone publisher pushes the checked tip once, but the linked-worktree finish ceremony can flatten the preparation merge and rewrite the fix before pushing.
-    AC3 — unverified. The new clone regression checks the exact message and unchanged remote for a marked tip. A merge-only tip with a different subject passes this check.
-    AC4 — verified by the bare-origin clone regression in bug_home_038_seat_publish_tests.rs, which prepares a divergent base, checks the remote before and after a refused ship, commits the fix on the merge and compares the remote with that fix after ship. The implementer reports two targeted tests passed. The clone regression requires live bubblewrap to execute its assertions.
-  recovery_hint: address the review findings, move BUG-2714 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-22T22:01:09.285501932Z
