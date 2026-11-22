@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T22:20:33.435018239Z
+modified_at: 2026-11-22T22:21:33.293338816Z
 req_type: Bug
 tags:
 - lanes
@@ -461,6 +461,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-22T22:20:33.261583296Z
   modified_at: 2026-11-22T22:20:33.261583296Z
+- id: 01a20559-ddb4-7501-bb93-19e9d8043cd7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:21):
+    # BUG-2706 / PR #4382: TINY CI-fix lane (advisor-122 ruling 2026-11-22 15:24 MST; relayed by product-15). Lane: CODEX.
+
+    CR at e07f437c, finding 3: a REAL red exact-head CI failure. Fix ONLY this. The reviewer scope is finding 3 plus the diff.
+    3. Exact-head cli-0 shows scrubbed_headless_reviewer_records_but_implementer_shell_refuses exiting at reviewer pickup with 'claim snapshot unavailable'. The BUG-2187 fixture redirects fetches but supplies no usable store-origin ls-remote response for the new gate. Give the fixture a local readable published store ref and retain both reviewer and implementer identity assertions. Verify with cargo test -p aida-cli --test bug_2187_reviewer_record_identity.
+    Fix: the BUG-2187 fixture in `scrubbed_headless_reviewer_records_but_implementer_shell_refuses` supplies a usable store-origin ls-remote response for the new claim gate. Don't weaken the assertion.
+    ALSO REQUIRED, in the PR body: confirm that PRODUCTION pickup with a genuinely unavailable claim snapshot DEFERS within the configured grace interval and does NOT hard-fail, citing the code path and a test. If it DOES hard-fail, STOP and report that in a comment on BUG-2706 instead of fixing it.
+    One targeted cargo run of that test, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+  created_at: 2026-11-22T22:21:33.293338816Z
+  modified_at: 2026-11-22T22:21:33.293338816Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
