@@ -17,11 +17,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T19:15:41.901877318Z
-modified_at: 2026-11-22T19:15:41.901877318Z
+modified_at: 2026-11-22T23:59:23.837796351Z
 req_type: Task
 tags:
 - mass-change
+- operator-held
 - review-follow-up
+history:
+- id: 01a205b3-434c-7140-ab83-ae5e234a3448
+  author: joe
+  timestamp: 2026-11-22T23:59:23.980515577Z
+  changes: []
+deferred: true
+deferred_at: 2026-11-22T23:59:23.837796351Z
+deferred_until: date:2026-12-15
+deferred_reason: 'Follow-up findings of TASK-3826 (PR #4373 closed under the round cap); resurfaces with TASK-3826 inside STORY-2660'
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
