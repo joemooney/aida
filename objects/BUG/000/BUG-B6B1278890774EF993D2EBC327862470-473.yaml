@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-22T23:05:57.457255633Z
+modified_at: 2026-11-22T23:06:17.680188687Z
 req_type: Bug
 tags:
 - mass-change
@@ -149,6 +149,11 @@ comments:
   content: PR-4396 at 2cf202f09fc60bc85e3c8e088a24372728349b2a conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-22T23:05:57.312774286Z
   modified_at: 2026-11-22T23:05:57.312774286Z
+- id: 01a20582-a440-7bc3-b690-4280981e7e91
+  author: joe
+  content: PR-4396 at 2cf202f09fc60bc85e3c8e088a24372728349b2a conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-22T23:06:17.536667257Z
+  modified_at: 2026-11-22T23:06:17.536667257Z
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
