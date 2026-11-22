@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-22T20:02:15.564093984Z
+modified_at: 2026-11-22T20:04:19.574932831Z
 req_type: Story
 tags:
 - landing
@@ -1131,6 +1131,26 @@ comments:
   content: 'Product: advisor-122 S3a FINAL ruling 13:03. Fix findings 1, 2 and 5 only; findings 3, 4, 6-10 are deferred to TASK-3834. Brief: .aida/tmp/brief-STORY-2897-S3a-final-1300.md'
   created_at: 2026-11-22T20:01:35.985188647Z
   modified_at: 2026-11-22T20:01:35.985188647Z
+- id: 01a204dc-3ce6-7fe0-adde-4cb0fdea424f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:04):
+    # STORY-2897 S3a / PR #4389 FINAL round (advisor-122 ruling 2026-11-22 13:03 MST; relayed by product-15). Lane: CODEX. Refs-only head.
+
+    CR at adbac40e (the reviewer reports full CI passed there). Fix ONLY findings 1, 2 and 5. Findings 3, 4, 6-10 are deferred to a follow-up spec (named on STORY-2897). The reviewer scope is 1, 2, 5 plus this round's diff. Another blocking CR parks it.
+    1. [P1] [P1, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:993 (previous finding 7). If attempt 1 supplied a log and the attempt 2 job lookup fails, evidence_text selects attempt 1 by workflow, run and check name and includes its link, steps and excerpt in the confirmation or revert mail. probe also treats the old completed log as already reported, and the late-mail key omits attempt and job ID. Match the full current identity for display, retry and notification deduplication. Test a failed replacement lookup followed by a successful retry.
+    2. [P2, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:851. When the already-processed green tip is independently rerun and turns red without another merge, after(cursor) is empty. The tip is judged red only for display. No episode opens, no advisor alert is sent, and the same SHA stays last_green. Reconcile a changed verdict at the current tip and cover a green-to-red rerun with an unchanged branch. (Missing a red main is the watch's core job.)
+    5. [P2, unmet-claimed-ac] aida-cli-lib/src/main_watch.rs:1649. live_pass constructs the provider with forge_for, whose resolve_forge_kind rewrites .aida/config.toml when a configured pure-git project has a GitHub or GitLab origin. The observational scheduled pass can dirty tracked operator configuration. Use the existing read-only provider lookup and cover this stale-config case. (An observational pass must never dirty tracked config. Use a non-mutating forge resolution.)
+    Under mass-change mode, classify every finding; unmet-AC defers (mass-change is ON until 2026-11-25 19:10 UTC: record unmet-claimed-ac findings as disposition deferred unless the same defect is also data-loss, p1 or security-authority-bypass, or an ADR-76 strict-tier fail-open/race).
+
+    ## Done means
+    - Each fix has a regression test that fails before the fix.
+    - One targeted cargo run, then `make check-ci-fast` green, then push on the existing branch. Never the full suite. COMMIT your work.
+    - Run `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-22T20:04:19.574932831Z
+  modified_at: 2026-11-22T20:04:19.574932831Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
