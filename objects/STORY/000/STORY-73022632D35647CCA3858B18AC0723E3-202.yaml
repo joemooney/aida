@@ -1,0 +1,32 @@
+id: 01a20584-d7d2-78d2-a5a7-b06a214f59b1
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-202
+title: 'Review PR-4397: [AI:codex] fix(ownership): retain clone leases with invalid holder evidence (BUG-2715)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2054a`) for branch `bug-b6b1278890774ef993d2ebc327862470-476`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4397>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-476` → `main`
+
+  ## Covers
+
+  - BUG-2715
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4397` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T23:08:41.810651650Z
+modified_at: 2026-11-22T23:08:41.810651650Z
+req_type: Story
+filed_at:
+  code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6be38166be
+  session: 01a2054a64d4
