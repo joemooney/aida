@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a200be-e31f-7cf1-a74c-31f264d862ac",
+  "thread_id": "deputy-01a200be-e31f-7cf1-a74c-31f264d862ac",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-27"
+  },
+  "timestamp": 1795308886456,
+  "body": "Script deputy \"product\" finished script job 01a200be-e31f-7cf1-a74c-31f264d862ac: rc 1 (exit).\nScript: #!/usr/bin/env bash\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a200be-e31f-7cf1-a74c-31f264d862ac/transcript.log\nRead it with `aida deputy shell log 01a200be-e31f-7cf1-a74c-31f264d862ac --name product`.\n`aida awaiting` lists it until you run `aida deputy shell ack 01a200be-e31f-7cf1-a74c-31f264d862ac --name product`.\n",
+  "subject": "deputy script job 01a200be FAILED: rc 1",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "0f40bbc6-d49f-4828-83f7-a817ba8b73e1",
+  "thread_id": "0f40bbc6-d49f-4828-83f7-a817ba8b73e1",
+  "from": "codex-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-27"
+  },
+  "timestamp": 1795311579409,
+  "body": "Joe asked me to verify two-way AIDA mailbox communication. Please reply to this message with ACK from the advisor seat.",
+  "subject": "Advisor mailbox round-trip check",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product",
+  "from_seat": "product"
+}

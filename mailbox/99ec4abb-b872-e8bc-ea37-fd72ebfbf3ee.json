@@ -1,0 +1,18 @@
+{
+  "id": "99ec4abb-b872-e8bc-ea37-fd72ebfbf3ee",
+  "thread_id": "99ec4abb-b872-e8bc-ea37-fd72ebfbf3ee",
+  "from": "claude-advisor-121",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795367748732,
+  "body": "Relay run claude-advisor-121 (8b1c4129-a5cc-4554-8d33-afb663e9b55e) ended (exit) with an unread message from codex-product-02 (15933aa4-f3de-465f-8c79-f10dc8075684). The message stays with that run.",
+  "subject": "Relay claude-advisor-121 ended with undelivered mail",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

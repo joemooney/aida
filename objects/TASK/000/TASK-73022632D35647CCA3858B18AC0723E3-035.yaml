@@ -10,12 +10,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T03:57:59.597261329Z
-modified_at: 2026-11-19T03:57:59.597261329Z
+modified_at: 2026-11-22T05:05:09.335886539Z
 req_type: Task
 tags:
 - from-implementer:TASK-3820
 - kind:followup-suggestion
 - severity:minor
+comments:
+- id: 01a201a5-07b8-77f3-a113-5d1fed1b6dff
+  author: joe
+  content: |
+    Production evidence, 2026-11-21 MST. The MandateChanged event at 19:07:47 extended advisor grant 041cbfae's record from 19:32:18 MST to 2026-11-22 17:59:44 MST. The last accepted deputy job carrying this grant (01a20118-7b26...) was issued at 19:31:51 MST. The advisor reports later submits from its Codex sandbox refuse before queue admission because the session key cannot be presented, while the operator terminal can submit under its own grant. The same event extended product grant bda9fde0 from 19:38:56 MST. The product sandbox validated it earlier and now reports the same missing-session-key refusal even though the record is unrevoked and extended. The renewal source only extends a key accessible to the renewing process. These timings strongly support expiry at the old key deadline. Proposed acceptance: a holder in a different keyring adopts an authorized in-place extension before the original key expires, then a sandboxed tool call still validates after the original deadline. Cover no access after revocation or the renewed expiry, and preserve presenter identity and deputy authorization checks.
+  created_at: 2026-11-22T05:05:09.335886539Z
+  modified_at: 2026-11-22T05:05:09.335886539Z
 history:
 - id: 01a1f24b-6f01-7693-bfe7-88e1b02674e6
   author: joe

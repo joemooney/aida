@@ -1,0 +1,18 @@
+{
+  "id": "164a6283-a907-70f9-5fdf-e6c94834ae04",
+  "thread_id": "164a6283-a907-70f9-5fdf-e6c94834ae04",
+  "from": "codex-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795368113658,
+  "body": "Relay run codex-product-02 (5c4ec418-83e8-4f81-92e9-a122c36ec534) ended (exit) with an unread message from codex-advisor-25 (b55e0ad2-9b7c-4f2e-bf48-9e8f384cdb3a). The message stays with that run.",
+  "subject": "Relay codex-product-02 ended with undelivered mail",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

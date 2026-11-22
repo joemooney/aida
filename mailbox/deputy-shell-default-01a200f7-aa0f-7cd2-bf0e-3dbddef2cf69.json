@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-default-01a200f7-aa0f-7cd2-bf0e-3dbddef2cf69",
+  "thread_id": "deputy-01a200f7-aa0f-7cd2-bf0e-3dbddef2cf69",
+  "from": "deputy-shell:default",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-27"
+  },
+  "timestamp": 1795312584261,
+  "body": "Script deputy \"default\" finished script job 01a200f7-aa0f-7cd2-bf0e-3dbddef2cf69: rc 0 (ok).\nScript: #!/usr/bin/env bash\nTranscript: /home/joe/.aida/deputy-shell/default/jobs/01a200f7-aa0f-7cd2-bf0e-3dbddef2cf69/transcript.log\nRead it with `aida deputy shell log 01a200f7-aa0f-7cd2-bf0e-3dbddef2cf69 --name default`.\n",
+  "subject": "deputy script job 01a200f7 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

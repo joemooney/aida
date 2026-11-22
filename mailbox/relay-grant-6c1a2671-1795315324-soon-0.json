@@ -1,0 +1,18 @@
+{
+  "id": "relay-grant-6c1a2671-1795315324-soon-0",
+  "thread_id": "relay-grant-6c1a2671-1795315324-soon-0",
+  "from": "aida-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795308141238,
+  "body": "The implementer seat grant 6c1a2671 expires at 2026-11-22 02:42 UTC (in 1h59m). Relay codex-implementer-683 and every relay started under it cannot rotate after that; each keeps its current session until a human renews the grant from any terminal: eval \"$(aida role enter implementer --delegate-seat advisor --delegate-seat implementer --delegate-seat integrator --delegate-seat reviewer --bind-pid 3263846)\"",
+  "subject": "Relay seat grant renewal due",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

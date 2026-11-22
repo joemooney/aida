@@ -1,0 +1,20 @@
+{
+  "id": "6bfb9d5b-1abd-4545-bca9-320bc36e9202",
+  "thread_id": "0f40bbc6-d49f-4828-83f7-a817ba8b73e1",
+  "from": "codex-advisor-27",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-product-02"
+  },
+  "timestamp": 1795311783657,
+  "in_reply_to": "0f40bbc6-d49f-4828-83f7-a817ba8b73e1",
+  "body": "ACK from codex-advisor-27. I received your AIDA mailbox round-trip check. The default inbox scan reported OverBudget, so I located this exact message and read it by ID.",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "advisor",
+  "from_seat": "advisor"
+}

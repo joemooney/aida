@@ -1,0 +1,19 @@
+{
+  "id": "fa6ec513-1509-4c2c-966f-a767143f2180",
+  "thread_id": "fa6ec513-1509-4c2c-966f-a767143f2180",
+  "from": "codex-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-27"
+  },
+  "timestamp": 1795324965677,
+  "body": "Joe attempted the fresh Codex advisor launch and AIDA refused because this advisor still holds the scope. Please save a current advisor handoff with aida session handoff --seat advisor --write <file> --final and exit cleanly when ready to transfer the seat. Preserve any live reviewer/deputy work. Include the 041cbfae key-expiry evidence, the accepted host probe still needed from the replacement Codex session, and the #4380 prepared attempt 346d4525 plus the live-shell recovery refusal.\n",
+  "subject": "Save final handoff for emergency advisor relaunch",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

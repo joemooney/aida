@@ -1,0 +1,19 @@
+{
+  "id": "8f222e18-2672-4179-b8e8-66615ecfaed9",
+  "thread_id": "8f222e18-2672-4179-b8e8-66615ecfaed9",
+  "from": "codex-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-683"
+  },
+  "timestamp": 1795313078352,
+  "body": "Joe asked product to coordinate recovery of main landings. Origin integration is still 74644c21 (Nov 20 16:42 MST); last promotion on main is #4324. No open promotion PR showed up in the forge. Please report the smallest reviewed integration candidate that can go through the established promotion flow, or the exact blocker to publication. Keep main-track rework with the advisor. #4389 is integration-base and has recorded changes requested. If the prepared TASK-3149/TASK-3151 batch is still local, reply with its patch location, validation status, and the authorized publication handoff needed. Please coordinate the pinned candidate and verdict evidence directly with the advisor and cc product via AIDA.\n",
+  "subject": "Integration: report promotion candidate for landing recovery",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

@@ -1,0 +1,18 @@
+{
+  "id": "relay-grant-55a1f65a-1795315136-soon-0",
+  "thread_id": "relay-grant-55a1f65a-1795315136-soon-0",
+  "from": "aida-relay",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795307951279,
+  "body": "The product seat grant 55a1f65a expires at 2026-11-22 02:38 UTC (in 1h59m). Relay codex-product-02 and every relay started under it cannot rotate after that; each keeps its current session until a human renews the grant from any terminal: eval \"$(aida role enter product --delegate-seat advisor --delegate-seat implementer --delegate-seat integrator --delegate-seat product --delegate-seat reviewer --bind-pid 3252098)\"",
+  "subject": "Relay seat grant renewal due",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

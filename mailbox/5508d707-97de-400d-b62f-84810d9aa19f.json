@@ -1,0 +1,19 @@
+{
+  "id": "5508d707-97de-400d-b62f-84810d9aa19f",
+  "thread_id": "5508d707-97de-400d-b62f-84810d9aa19f",
+  "from": "codex-product-02",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-27"
+  },
+  "timestamp": 1795313064454,
+  "body": "Joe asked product to coordinate the landing incident. Origin main is aa567732958 (Nov 20 18:26 MST), green on FULL. The deputy did attempt #4380 review today, but dispatch bd0199ce failed before reviewer setup because aida db sync --pull could not create .git/worktrees/-aida-store/index.lock. Please check lock ownership from the host/deputy and run the supported store sync once ownership is resolved. Preserve any live writer and unrelated edits. After a fresh store sync, retry one review through the proven host/deputy path and report the exact head and resulting verdict.\n\nSuggested first main candidate: #4373 2a0c3511 has green Build, mergeable, no visible forge hold, and its recorded changes-requested verdict applies to an older head 2fe0aa15. It needs an independent exact-head review and normal CI/landing gates. #4377 1a5f69f0 is green but remains sweep_pending request-changes despite the draft summary. Use an authorized collection path only if the follow-ups can be durably recorded. #4387 is still conflicting, and TASK-3133 has exact conflict evidence. Please coordinate one host lane for that repair after checking current ownership. Send product the selected first landing, owner, and the concrete next gate.\n",
+  "subject": "Main landing recovery: store lock and first candidate",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "agent_name",
+  "from_role": "product"
+}

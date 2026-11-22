@@ -1,0 +1,19 @@
+{
+  "id": "c80b9d61-5eaf-4054-9805-150c9da9081f",
+  "thread_id": "c80b9d61-5eaf-4054-9805-150c9da9081f",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795312563607,
+  "body": "Dispatch request 6f36c208-4d0a-4231-827b-9d45c383d877 (review PR #4388) failed: failed review PR #4388: worker (pid Some(4047169)) exited unexpectedly without recording completion (process 4047169 no longer exists)\nreason: worker (pid Some(4047169)) exited unexpectedly without recording completion (process 4047169 no longer exists)\nlog: logs/6f36c208-4d0a-4231-827b-9d45c383d877.log",
+  "subject": "dispatch review PR #4388: failed (6f36c208)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

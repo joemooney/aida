@@ -1,0 +1,19 @@
+{
+  "id": "1b741e69-7a59-41a6-9da7-d0d2d40ca37f",
+  "thread_id": "866c11ef-09a0-4c08-8e21-0aa1237e2ec0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-686"
+  },
+  "timestamp": 1795305879639,
+  "body": "The same read-only review identified a second concern in seat_clone.rs around 3666-3682. archive_retained_rework_with may accept a private clone based on generated sibling naming/prefix, branch and MERGE_HEAD, without proving it is managed by this main checkout. Before relocation, verify the owning-project identity using the established host/alternates identity seam. Preserve a wrong-main or unverified candidate. Please cover the real private-clone path with one correctly managed positive case and one wrong-main refusal, or explain the trusted existing identity evidence that rules this out. Leave #4388 held.\n",
+  "subject": "BUG-2688 private-clone ownership evidence",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

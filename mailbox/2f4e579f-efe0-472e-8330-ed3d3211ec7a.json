@@ -1,0 +1,19 @@
+{
+  "id": "2f4e579f-efe0-472e-8330-ed3d3211ec7a",
+  "thread_id": "2f4e579f-efe0-472e-8330-ed3d3211ec7a",
+  "from": "dispatch",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795312582856,
+  "body": "Dispatch request bd0199ce-9b52-4aeb-b4ce-3b6e38a3a23a (review PR #4380) failed: review of PR #4380 exited with Some(1)\nreason: review of PR #4380 exited with Some(1)\nlog: logs/bd0199ce-9b52-4aeb-b4ce-3b6e38a3a23a.log",
+  "subject": "dispatch review PR #4380: failed (bd0199ce)",
+  "urgent": true,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit",
+  "from_role": "dispatch"
+}

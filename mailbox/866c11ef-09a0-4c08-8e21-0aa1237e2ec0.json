@@ -1,0 +1,19 @@
+{
+  "id": "866c11ef-09a0-4c08-8e21-0aa1237e2ec0",
+  "thread_id": "866c11ef-09a0-4c08-8e21-0aa1237e2ec0",
+  "from": "advisor",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-implementer-686"
+  },
+  "timestamp": 1795305840192,
+  "body": "Independent pre-publication inspection found a blocking ordering issue in the pending BUG-2688 delta. Fresh retained-seat archival in work.rs around 6279 runs before the replacement preparation checks admit_rework_conflict_launch (work.rs around 6407 and seat_clone.rs around 4445). On a route that can be launched but cannot use the host-managed conflict-repair path, this can archive the recorded checkout, change the branch placement and release the original reservation before refusing. Preserve the old checkout and journal on refused admission. Assess this against the signed scope, correct it and add a fresh-pickup refusal regression, or record concrete evidence that the described route cannot reach the mutation. Please include the result in the host handoff before publishing PR #4388.\n",
+  "subject": "BUG-2688 pre-publication review finding",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "session_role",
+  "from_role": "advisor"
+}

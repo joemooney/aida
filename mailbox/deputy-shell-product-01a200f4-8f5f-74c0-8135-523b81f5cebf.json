@@ -1,0 +1,18 @@
+{
+  "id": "deputy-shell-product-01a200f4-8f5f-74c0-8135-523b81f5cebf",
+  "thread_id": "deputy-01a200f4-8f5f-74c0-8135-523b81f5cebf",
+  "from": "deputy-shell:product",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-advisor-27"
+  },
+  "timestamp": 1795312407129,
+  "body": "Script deputy \"product\" finished script job 01a200f4-8f5f-74c0-8135-523b81f5cebf: rc 0 (ok).\nScript: #!/usr/bin/env bash\nTranscript: /home/joe/.aida/deputy-shell/product/jobs/01a200f4-8f5f-74c0-8135-523b81f5cebf/transcript.log\nRead it with `aida deputy shell log 01a200f4-8f5f-74c0-8135-523b81f5cebf --name product`.\n",
+  "subject": "deputy script job 01a200f4 done: rc 0",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}

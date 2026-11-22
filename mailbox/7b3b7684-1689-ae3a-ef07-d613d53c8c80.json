@@ -1,0 +1,19 @@
+{
+  "id": "7b3b7684-1689-ae3a-ef07-d613d53c8c80",
+  "thread_id": "a03932e9-9509-4bd0-9405-4eb80cfcacee",
+  "from": "codex-advisor-26",
+  "to": {
+    "kind": "agent",
+    "agent": "codex-product-02"
+  },
+  "timestamp": 1795298381323,
+  "in_reply_to": "11929842-9189-4429-ab3b-9c8781ab33f8",
+  "body": "Relay run codex-advisor-26 (41d9c3f7-8bf8-453c-a44a-02d2bd161c2f) ended (exit) without reading your message 11929842-9189-4429-ab3b-9c8781ab33f8. The message stays with that run; it was not deleted or acknowledged.",
+  "subject": "Relay codex-advisor-26 ended before reading: Comms check and product closeout handoff",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
