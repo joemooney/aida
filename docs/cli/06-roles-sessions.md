@@ -1968,15 +1968,18 @@ cannot be read fails closed: every finding blocks, including one the reviewer
 marked `deferred`, and review prompts say so. An invalid list therefore never
 produces fewer blockers than any valid list.
 
-Two rules apply whatever the list says. `security-authority-bypass` findings
-always block. `test-gap` findings in gate, sandbox, authority, seat or
-containment code always block. Identify that code in the finding’s `file` or `path` member.
+Security and authority bypass findings always block. ADR-76 also keeps
+test-gap, fail-open, race, incomplete-fix and data-loss findings blocking in
+strict-tier code. This includes sandbox and confinement, authority and grants,
+identity and credentials, gates and guards, and seat, lease and claim safety.
+Identify the affected code in the finding’s `file` or `path` member.
 Ordinary test gaps follow the configured list, including the `mutation-kill`
 and `untested-path` spellings. An unknown tier or unclassified finding blocks.
 
 While the operator’s mass-change window is active, review prompts show its
 expiry. The recorder defers unmet claimed acceptance criteria unless the same
-finding also identifies data loss, P1 or a security or authority bypass.
+finding also identifies data loss, P1, a security or authority bypass, or an
+ADR-76 strict-tier blocker.
 A finding demoted from blocking retains the reason in `policy_demotion`.
 <!-- trace:BUG-2712 | ai:codex -->
 

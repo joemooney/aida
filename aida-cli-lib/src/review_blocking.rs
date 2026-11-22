@@ -55,7 +55,7 @@ you mark deferred: record request-changes whenever any finding remains.\n",
             "\nFindings in a listed class block. Findings only in {} become APPROVE with follow-ups. \
 Record every finding as structured --finding JSON with text, severity and blocking_tier, one of: {}; add a `class` member when a second class applies (a finding blocks when its tier or its class is listed). \
 Use security-authority-bypass for security and authority-bypass findings regardless of priority: it blocks whatever the list says. \
-In gate, sandbox, authority, seat and containment code, test-gap findings still block under ADR-76: give the finding a test-gap tier or class plus a `file` member naming that code. The same class elsewhere (for example reporting or documentation) follows the list. \
+In gate, sandbox, authority, seat and containment code, test-gap, fail-open, race, incomplete-fix and data-loss findings still block under ADR-76: give the finding its applicable tier or class plus a `file` member naming that code. The same class elsewhere (for example reporting or documentation) follows the list. \
 Do not classify an unmet acceptance criterion the change claims as anything but unmet-claimed-ac. Unknown/unclassified findings block. \
 The canonical writer defers eligible findings and durably files each as a linked follow-up before approval; retain every finding, including mixed reviews. Do not manually omit findings or bypass failed follow-up delivery.\n",
             if defer.is_empty() { "no class".to_string() } else { defer.join(", ") },
@@ -64,7 +64,7 @@ The canonical writer defers eligible findings and durably files each as a linked
     }
     // trace:BUG-2712 | ai:codex
     if let Some(expiry) = effective.mass_change_until {
-        out.push_str(&format!("\nMass-change mode is ON until {}. Record unmet-claimed-ac findings with disposition deferred unless the same defect is also data-loss, p1 or security-authority-bypass.\n", expiry.to_rfc3339()));
+        out.push_str(&format!("\nMass-change mode is ON until {}. Record unmet-claimed-ac findings with disposition deferred unless the same defect is also data-loss, p1 or security-authority-bypass. ADR-76 strict-tier blockers still block, including fail-open, race, incomplete-fix and test gaps. Provide the affected file or path.\n", expiry.to_rfc3339()));
     }
     Ok(out)
 }
@@ -936,6 +936,43 @@ pub(crate) mod tests {
             let meta = &record["finding_dispositions"][0];
             assert_eq!(meta["disposition"], "deferred");
             assert!(meta["policy_demotion"].is_string());
+        }
+        for (tier, class, path, expected) in [
+            (
+                "mutation-kill",
+                "p2",
+                "src/gate/check.rs",
+                "request-changes",
+            ),
+            ("mutation-kill", "p2", "src/report.rs", "approved"),
+            ("fail-open", "p2", "src/report.rs", "approved"),
+            (
+                "unmet-claimed-ac",
+                "fail-open",
+                "src/credentials.rs",
+                "request-changes",
+            ),
+            (
+                "unmet-claimed-ac",
+                "TOCTOU",
+                "src/leases.rs",
+                "request-changes",
+            ),
+            (
+                "unmet-claimed-ac",
+                "partial-fix",
+                "src/guard.rs",
+                "request-changes",
+            ),
+        ] {
+            let mut detail: serde_json::Value = serde_json::from_str(&finding(tier)).unwrap();
+            detail["class"] = class.into();
+            detail["path"] = path.into();
+            assert_eq!(
+                record(root, "request-changes", &[detail.to_string()]).unwrap()["verdict"],
+                expected,
+                "{tier}/{class} in {path}"
+            );
         }
         for class in ["p1", "data-loss", "security"] {
             let mut detail: serde_json::Value = serde_json::from_str(&ac).unwrap();

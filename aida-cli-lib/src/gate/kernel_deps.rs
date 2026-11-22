@@ -1035,6 +1035,19 @@ pub(crate) mod review_blocking {
                     | "contain"
                     | "contained"
                     | "containment"
+                    | "confinement"
+                    | "grant"
+                    | "grants"
+                    | "identity"
+                    | "credential"
+                    | "credentials"
+                    | "auth"
+                    | "guard"
+                    | "guards"
+                    | "lease"
+                    | "leases"
+                    | "claim"
+                    | "claims"
                     | "authority"
                     | "mandate"
                     | "seat"
@@ -1117,7 +1130,7 @@ pub(crate) mod review_blocking {
                     (false, true) => false,
                     _ => old_rank > new_rank || (old_rank == new_rank && old_rank > 0),
                 };
-                if keep_old {
+                if existing.is_some() && keep_old {
                     return raw.clone();
                 }
                 merged.to_string()
@@ -1136,24 +1149,42 @@ pub(crate) mod review_blocking {
         let tier = tier_raw.and_then(canonical);
         let class = class_of(detail);
         let either = |c: &str| tier == Some(c) || class == Some(c);
+        // trace:BUG-2712 | ai:codex
+        let strict_defect = |label: &str| {
+            matches!(
+                super::review_classification::parse_class(label),
+                super::review_classification::ClassArg::Class(
+                    "fail-open" | "race" | "incomplete-fix"
+                )
+            )
+        };
         if either("security-authority-bypass")
             || (mass_change && (either("data-loss") || either("p1")))
-            || (either("test-gap") && in_sensitive_code(detail))
+            || ((either("test-gap")
+                || either("data-loss")
+                || tier_raw.is_some_and(strict_defect)
+                || detail["class"].as_str().is_some_and(strict_defect))
+                && in_sensitive_code(detail))
         {
             return true;
         }
-        let primary = if detail.get("blocking_tier").is_some() {
-            tier
-        } else {
-            class
-        };
-        let Some(tier) = primary else {
+        // An explicit malformed tier cannot borrow validity from a secondary class.
+        let primary = detail.get("blocking_tier").unwrap_or(&detail["class"]);
+        let Some(label) = primary.as_str() else {
             return true;
         };
+        if canonical(label).is_none()
+            && !matches!(
+                super::review_classification::parse_class(label),
+                super::review_classification::ClassArg::Class(_)
+            )
+        {
+            return true;
+        }
         if mass_change && either("unmet-claimed-ac") {
             return false;
         }
-        set.contains(tier) || class.is_some_and(|c| set.contains(c))
+        tier.is_some_and(|c| set.contains(c)) || class.is_some_and(|c| set.contains(c))
     }
 
     /// [`apply`] with the positional `--finding-class` channel folded in first.
