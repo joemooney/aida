@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T17:32:00.491014050Z
+modified_at: 2026-11-22T17:32:15.512842081Z
 req_type: Bug
 tags:
 - conflicts
@@ -1048,6 +1048,13 @@ comments:
     Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
   created_at: 2026-11-22T17:32:00.491014050Z
   modified_at: 2026-11-22T17:32:00.491014050Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20451-05b6-74c3-bbcd-780f4a69c122
+  author: joe
+  content: 'Product 10:32: R4FINAL lane queued on dell1 (codex), branch bug-2688-journal-loop. Scope = the AUTHORITATIVE R4FINAL BRIEF in the previous comment.'
+  created_at: 2026-11-22T17:32:15.512842081Z
+  modified_at: 2026-11-22T17:32:15.512842081Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
