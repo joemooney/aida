@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-22T22:15:13.218338786Z
+modified_at: 2026-11-22T22:15:32.680830460Z
 req_type: Bug
 tags:
 - hygiene
@@ -39,6 +39,13 @@ comments:
     AC1 should cover all three shapes: name the message, path or git error, plus the one command that resolves it.
   created_at: 2026-11-22T22:15:13.218338786Z
   modified_at: 2026-11-22T22:15:13.218338786Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20554-5cd2-7712-9050-8ee07caa76d5
+  author: joe
+  content: 'Correction to the previous comment: 01a17087db33 (PR-2906) is not silent. Its full output (captured with tail -3) is the same mail-retention refusal as PR-2910/2913, preceded by a hint to run `git worktree remove /home/joe/ai/aida-review-pr2906-codex` (branch codex/review-pr2906-3707 kept). So that''s three mail-retention cases plus one unreadable-HEAD case. The earlier ''silent'' reading came from my grep filter, not from AIDA.'
+  created_at: 2026-11-22T22:15:32.680830460Z
+  modified_at: 2026-11-22T22:15:32.680830460Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 filed_at:
