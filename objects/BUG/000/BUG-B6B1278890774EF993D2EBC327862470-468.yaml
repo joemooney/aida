@@ -15,12 +15,12 @@ description: |
   - AC2: a head whose only new commit is a merge of the base, while such a lane is live, is never reviewed; once the lane exits, the newest head is reviewed.
   - AC3: when the lane-host state cannot be read, review-watch defers for a bounded time (a setting, default 20 min) and then reviews, logging why.
   - Regressions for AC1-AC3 with a fake foreign lane host.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T22:38:17.910261424Z
+modified_at: 2026-11-22T22:39:00.517773288Z
 req_type: Bug
 tags:
 - lanes
@@ -477,6 +477,15 @@ comments:
   modified_at: 2026-11-22T22:21:33.293338816Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20569-91e6-7981-ac16-7c79205375c7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e07f437c196992439334dadd494ec32582cf27bd. Finding 3 stop condition: direct production reviewer pickup exits nonzero for an unavailable published snapshot during grace. lane_hosts.rs:122 reports the failed origin read, review_implementer_gate.rs:302 converts it to incomplete evidence, and settle_episode persists the bounded deferral at lines 235–252. But queue_cmd/work.rs:5241 returns anyhow::bail! for that reason. review_watch.rs:3509 separately records a skip and returns Admission::Settled. AC3: [evidence: manual-inspection] bug2706_unreadable_interval_survives_restart_and_recovers exercises the gate over time, not the queue command exit. The reported exact-head BUG-2187 failure is consistent with the direct caller. Cannot confirm a non-error pickup outcome. Stopped per advisor brief before fixture edits. Findings 1, 2, 4 and 5 remain open outside the finding-3 slice.
+  created_at: 2026-11-22T22:38:54.112089546Z
+  modified_at: 2026-11-22T22:38:54.112089546Z
+  session_id: 01a20568cda7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
@@ -636,6 +645,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20569-aaef-7302-aa21-86d3594ff04f
+  author: dirtlab
+  timestamp: 2026-11-22T22:39:00.847058122Z
+  session_id: 01a20568cda7
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
@@ -651,3 +669,8 @@ implementation_info:
   implemented_at: 2026-11-20T21:47:47.832017Z
   implemented_by: dirtlab
   reopened_at_sha: aa567732958f669b69ec5848863ea0b13c800db5
+attention_reason:
+  category: design-fork
+  detail: 'Finding 3: cannot attest that direct reviewer pickup avoids a hard command failure on an unavailable snapshot. During the persisted grace interval queue_cmd/work.rs returns anyhow::bail! and the invocation exits nonzero. Advisor brief requires stopping here. Clarify whether this retryable nonzero refusal is the intended pickup contract before repairing the fixture.'
+  raised_by: implementer
+  raised_at: 2026-11-22T22:39:00.517773288Z
