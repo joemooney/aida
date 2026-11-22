@@ -2288,7 +2288,7 @@ pub(crate) fn list_leases_strict(
     project_root: &std::path::Path,
     spec_ids: &[&str],
 ) -> Result<Vec<SessionLease>, String> {
-    list_leases_strict_inner(project_root, spec_ids, false)
+    list_leases_strict_inner(project_root, spec_ids, false, &mut Vec::new())
 }
 
 /// Lease listing for a branch-ownership judgement: like
@@ -2299,13 +2299,23 @@ pub(crate) fn list_leases_strict(
 pub(crate) fn list_leases_strict_all(
     project_root: &std::path::Path,
 ) -> Result<Vec<SessionLease>, String> {
-    list_leases_strict_inner(project_root, &[], true)
+    list_leases_strict_inner(project_root, &[], true, &mut Vec::new())
+}
+
+/// Relocation must account for both session leases and path-bound advisor locks.
+pub(crate) fn list_seat_ownership_strict(
+    project_root: &std::path::Path,
+) -> Result<(Vec<SessionLease>, Vec<crate::worktree_lock::LockOnlyEntry>), String> {
+    let mut locks = Vec::new();
+    let leases = list_leases_strict_inner(project_root, &[], true, &mut locks)?;
+    Ok((leases, locks))
 }
 
 fn list_leases_strict_inner(
     project_root: &std::path::Path,
     spec_ids: &[&str],
     any_unparseable_is_unknown: bool,
+    locks: &mut Vec<crate::worktree_lock::LockOnlyEntry>,
 ) -> Result<Vec<SessionLease>, String> {
     // A dangling symlink or an inconclusive lookup cannot prove absence.
     // trace:BUG-2688 | ai:codex
@@ -2337,19 +2347,27 @@ fn list_leases_strict_inner(
         let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
-        if !is_session_lease_file(name) {
+        // Dots in a scope-derived lock filename are valid. Keep the
+        // strict lease filename filter for session leases and companions.
+        let lock_candidate = any_unparseable_is_unknown
+            && name.starts_with(crate::worktree_lock::LOCK_ONLY_PREFIX)
+            && name.ends_with(".toml")
+            && !is_lease_companion(name);
+        if !lock_candidate && !is_session_lease_file(name) {
             continue;
         }
-        // An `aida lock` lock-only entry is not a session lease and names no
-        // branch, so it cannot own one: skip it. One that does not parse as a
-        // lock entry falls through and still fails closed.
-        // trace:TASK-2813 | ai:claude
-        if any_unparseable_is_unknown
-            && name.starts_with(crate::worktree_lock::LOCK_ONLY_PREFIX)
-            && aida_core::seat_clone_detect::read_regular_file_result_with_limit(&p, 256 * 1024)
-                .is_ok_and(|body| crate::worktree_lock::parse_lock_only_entry(&body).is_ok())
-        {
-            continue;
+        // Lock-only entries own a path and name no branch. A malformed
+        // lock entry still fails closed in the strict reader.
+        // trace:TASK-2813 BUG-2688 | ai:codex
+        if lock_candidate {
+            if let Ok(lock) =
+                aida_core::seat_clone_detect::read_regular_file_result_with_limit(&p, 256 * 1024)
+                    .map_err(anyhow::Error::from)
+                    .and_then(|body| crate::worktree_lock::parse_lock_only_entry(&body))
+            {
+                locks.push(lock);
+                continue;
+            }
         }
         let label = p.display().to_string();
         match read_lease_file_for_gate(

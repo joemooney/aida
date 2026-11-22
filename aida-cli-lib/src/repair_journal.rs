@@ -354,6 +354,7 @@ impl RepairGuard {
         pr: u64,
         branch: &str,
         leases: &[crate::leases::SessionLease],
+        scope: &str,
     ) -> Result<Option<&RepairEntry>> {
         let mut reservation = None;
         for entry in self.journal.entries.iter().filter(|entry| {
@@ -373,10 +374,14 @@ impl RepairGuard {
                 seat.display()
             );
             anyhow::ensure!(
-                !leases.iter().any(|lease| lease.id == entry.lane_id)
-                    && !crate::lane_liveness::headless_lane_run_alive(main, &entry.lane_id)?,
+                !leases.iter().any(|lease| lease.id == entry.lane_id),
                 "lane {} still owns retained seat {}; once its owner exits run `aida session end {}`",
                 entry.lane_id, seat.display(), entry.lane_id,
+            );
+            anyhow::ensure!(
+                !crate::lane_liveness::headless_lane_run_alive(main, &entry.lane_id)?,
+                "recorded worker for lane {} still owns retained seat {}; after the worker exits retry `aida queue work {} --fresh`",
+                entry.lane_id, seat.display(), crate::shell_quote(scope),
             );
             reservation = Some(entry);
         }
@@ -590,7 +595,9 @@ pub(crate) fn scan(main: &Path) -> Vec<crate::DoctorFinding> {
             category: HEAL_CATEGORY.to_string(),
             id: reservation_id(entry),
             summary: format!(
-                "conflict-repair reservation for PR #{} is held by lane {}, which has no                  lease, no live lane run and no seat at {}; it blocks the next repair of                  this PR head",
+                "conflict-repair reservation for PR #{} is held by lane {}, which has no \
+                 lease, no live lane run and no seat at {}; it blocks the next repair of \
+                 this PR head",
                 entry.key.pr, entry.lane_id, entry.tree_path.display()
             ),
             action: format!("run `aida doctor heal {HEAL_CATEGORY} --yes` to release it (the journal is backed up first)"),

@@ -2290,7 +2290,8 @@ pub(crate) fn session_start_with_receipt(
         .unwrap_or(false);
     // Hold placement through lease publication and any repair ownership transfer.
     // trace:BUG-2688 | ai:codex
-    let seat_placement = crate::seat_clone::lock_seat_placement(&project_root, false)?;
+    let seat_placement =
+        crate::seat_clone::lock_seat_placement(&project_root, pinned_rework_head.is_some())?;
     let slug = slugify(owns);
     if slug.is_empty() {
         anyhow::bail!(
@@ -2345,6 +2346,22 @@ pub(crate) fn session_start_with_receipt(
         Some(p) => std::path::PathBuf::from(p),
         None => pickup_worktree_path(&project_root, &slug)?,
     };
+    if pinned_rework_head.is_some() {
+        let inventory = crate::seat_clone::rework_worktree_inventory(&project_root)?;
+        if crate::seat_clone::rework_worktrees(&inventory).any(|entry| {
+            entry.absent_prunable()
+                && crate::worktree::canonical_or_self(entry.path)
+                    == crate::worktree::canonical_or_self(&worktree_path)
+        }) {
+            anyhow::ensure!(explicit_path.is_none(),
+                "fresh rework path {} has a retained Git registration; retry fresh pickup without --path",
+                worktree_path.display());
+            worktree_path = pickup_worktree_path(
+                &project_root,
+                &format!("{slug}-fresh-{}", uuid::Uuid::new_v4()),
+            )?;
+        }
+    }
     // BUG-2223: an orphan adoption may re-enter its recorded --path too.
     // TASK-2823: so may a lane launch onto a worktree already on its branch.
     let reenters_path = force_claim || path_reentry != PathReentry::None;
@@ -2825,7 +2842,7 @@ pub(crate) fn session_start_with_receipt(
     let mut pr_metadata: PrMetadata = PrMetadata::default();
 
     // trace:BUG-2451 | ai:codex — a clone must not bypass a held PR branch either.
-    if existing_pr.is_some() {
+    if existing_pr.is_some() || pinned_rework_head.is_some() {
         crate::queue_cmd::preflight_queue_work_branch_adopting(
             &project_root,
             Some(&branch_name),
@@ -2888,13 +2905,13 @@ pub(crate) fn session_start_with_receipt(
                 }
             );
         }
-        let base_ref = if reuse_existing {
+        let base_ref = if let Some(head) = pinned_rework_head {
+            head.to_owned()
+        } else if reuse_existing {
             if session_git_ref_exists(&project_root, &format!("refs/heads/{branch_name}")) {
                 branch_name.clone()
             } else {
-                pinned_rework_head
-                    .map(str::to_owned)
-                    .unwrap_or_else(|| format!("origin/{branch_name}"))
+                format!("origin/{branch_name}")
             }
         } else {
             match base {
@@ -2908,7 +2925,11 @@ pub(crate) fn session_start_with_receipt(
             }
         };
         if explicit_path.is_none() {
-            worktree_path = crate::seat_clone::clone_path(&project_root, &slug)?;
+            worktree_path = if pinned_rework_head.is_some() {
+                crate::seat_clone::pinned_rework_clone_path(&project_root, &slug)?
+            } else {
+                crate::seat_clone::clone_path(&project_root, &slug)?
+            };
         } else if !crate::seat_clone::is_seat_clone_location(&project_root, &worktree_path) {
             // Only where `seat_clone::destroy` can remove it again: a clone
             // elsewhere could never be torn down by session end, reap or
@@ -3320,11 +3341,19 @@ pub(crate) fn session_start_with_receipt(
         if pinned_rework_head.is_none() {
             align_reused_pr_branch(&project_root, &branch_name)?;
         }
-        // Create a missing local PR branch at the pinned commit. An existing
-        // branch goes through preparation's clean/ancestry checks.
+        // Create at the pin or preserve and align an existing local tip
+        // after proving that no other checkout or lease owns the branch.
         // trace:BUG-2211 BUG-2688 | ai:codex
         let mut args = vec!["worktree", "add"];
         let local_absent = rollback_branch_absent(&project_root, &branch_name)?;
+        if let Some(head) = pinned_rework_head.filter(|_| !local_absent) {
+            let leases =
+                crate::leases::list_leases_strict_all(&project_root).map_err(anyhow::Error::msg)?;
+            if let Some(lease) = leases.iter().find(|lease| lease.branch == branch_name) {
+                anyhow::bail!("local {branch_name} is leased; once its owner exits run `aida session end {}` before retrying fresh pickup", lease.id);
+            }
+            crate::seat_clone::align_pinned_rework_branch(&project_root, &branch_name, head)?;
+        }
         if let Some(head) = pinned_rework_head.filter(|_| local_absent) {
             args.extend([
                 "--no-track",

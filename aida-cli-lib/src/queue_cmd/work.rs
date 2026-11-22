@@ -851,13 +851,17 @@ pub(crate) struct ReworkConflictLaunch<'a> {
 impl ReworkConflictLaunch<'_> {
     // Verify the remote head and admit the route before relocating a retained seat.
     // trace:BUG-2688 | ai:codex
-    pub(crate) fn preserve_for_fresh_pickup(self, main: &Path, head: &str) -> Result<Vec<PathBuf>> {
+    pub(crate) fn preserve_for_fresh_pickup(
+        self,
+        main: &Path,
+        heads: &crate::seat_clone::ReworkHeads,
+    ) -> Result<Vec<PathBuf>> {
         crate::seat_clone::archive_retained_rework(
             main,
             self.scope,
             self.pr,
             self.branch,
-            head,
+            heads,
             || admit_rework_conflict_launch(self),
         )
     }
@@ -4125,7 +4129,7 @@ pub(crate) fn preflight_queue_work_branch_reclaiming(
 // trace:BUG-2548 | ai:codex
 // Eligibility is read-only before sync; the post-gate pass revalidates before
 // destructive reclamation. Keep the existing reclaiming API for setup callers.
-fn inspect_queue_work_branch(
+pub(crate) fn inspect_queue_work_branch(
     root: &std::path::Path,
     branch: Option<&str>,
     adopting: Option<&std::path::Path>,
@@ -4141,18 +4145,7 @@ fn inspect_queue_work_branch(
             crate::worktree::canonical_or_self(a) == crate::worktree::canonical_or_self(path)
         })
     };
-    let out = std::process::Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(["worktree", "list", "--porcelain"])
-        .output()
-        .context("could not inspect branch worktree ownership")?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "could not inspect branch worktree ownership: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
+    let inventory = crate::seat_clone::rework_worktree_inventory(root)?;
     // BUG-2169 slice S4: a contained seat's private clone on the branch holds
     // it too. It is never offered for `git worktree remove` (not a linked
     // worktree); ending its session salvages and removes it.
@@ -4183,12 +4176,13 @@ fn inspect_queue_work_branch(
             clone.path.display()
         );
     }
-    let inventory = String::from_utf8_lossy(&out.stdout);
-    for wt in crate::worktree_reclaim::parse_worktree_entries(&inventory) {
-        if wt.branch.as_deref() != Some(branch) || adopted(&wt.path) {
+    for wt in crate::seat_clone::rework_worktrees(&inventory) {
+        if wt.branch != Some(branch) || adopted(wt.path) {
             continue;
         }
-        if archive_merge && wt.path != root && crate::seat_clone::linked_rework_has_merge(&wt.path)?
+        if archive_merge
+            && wt.path != root
+            && (wt.absent_prunable() || crate::seat_clone::linked_rework_has_merge(wt.path)?)
         {
             // Fresh rework revalidates the registered seat under the placement
             // lock before moving it, including leases and live holders.
@@ -4200,14 +4194,8 @@ fn inspect_queue_work_branch(
         let live = aida_core::liveness::probe_live_agent_processes()
             .iter()
             .any(|process| !process.stale_cwd && process.cwd.starts_with(&wt.path));
-        let locked = inventory.split("\n\n").any(|record| {
-            record
-                .lines()
-                .any(|line| line == format!("branch refs/heads/{branch}"))
-                && record.lines().any(|line| line.starts_with("locked"))
-        });
-        let clean = working_tree_clean(&wt.path) == Some(true);
-        let recovery = if clean && !leased && !live && !locked && wt.path != root {
+        let clean = working_tree_clean(wt.path) == Some(true);
+        let recovery = if clean && !leased && !live && !wt.locked && wt.path != root {
             format!("It is idle, clean, and unleased. To retire it, run `git worktree remove {}` then retry pickup.", shell_quote(&wt.path.to_string_lossy()))
         } else {
             "Keep this checkout; inspect its lease/process/dirty/lock state, then retry pickup on this branch.".to_string()
@@ -6311,7 +6299,7 @@ pub(crate) fn handle_queue_work(
             // Check both pins against origin before taking the placement lock.
             // trace:BUG-2688 | ai:codex
             heads.verify_origin(&project_root, conflict.branch)?;
-            let archives = conflict.preserve_for_fresh_pickup(&project_root, &heads.head)?;
+            let archives = conflict.preserve_for_fresh_pickup(&project_root, &heads)?;
             (Some(heads), archives)
         } else {
             (None, Vec::new())
@@ -7526,7 +7514,15 @@ pub(crate) fn run_pickup_launch(
             std::panic::resume_unwind(panic);
         }
     };
-    if launch_refused_before_agent(&result, mark.started()) && receipt.owns_setup() {
+    let preserve_seat = result.as_ref().err().is_some_and(|error| {
+        error
+            .downcast_ref::<crate::seat_clone::PreserveReworkSeat>()
+            .is_some()
+    });
+    if !preserve_seat
+        && launch_refused_before_agent(&result, mark.started())
+        && receipt.owns_setup()
+    {
         leave_setup_tree(project_root, &receipt);
         let lane_id = receipt.lease_id.clone();
         // trace:BUG-2548 | ai:codex — never claim success with a retained lease.

@@ -126,6 +126,7 @@ fn find_lease_file_for_worktree(project_root: &Path, target_canonical: &str) -> 
 /// lease already covers it).
 // trace:STORY-711 | ai:claude
 pub(crate) fn acquire(project_root: &Path, worktree: &Path, advisor: &str) -> Result<PathBuf> {
+    let _placement = crate::seat_clone::lock_seat_placement(project_root, false)?;
     let target = worktree
         .canonicalize()
         .with_context(|| format!("worktree path does not exist: {}", worktree.display()))?;
@@ -189,6 +190,7 @@ pub(crate) fn read_authorized_by(project_root: &Path, worktree: &Path) -> Option
 /// leaving the rest of the lease intact.
 // trace:STORY-711 | ai:claude
 pub(crate) fn release(project_root: &Path, worktree: &Path) -> Result<bool> {
+    let _placement = crate::seat_clone::lock_seat_placement(project_root, false)?;
     let target_str = canonical_str(worktree);
     let Some(path) = find_lease_file_for_worktree(project_root, &target_str) else {
         return Ok(false);

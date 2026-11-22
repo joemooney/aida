@@ -179,6 +179,18 @@ pub(crate) fn clone_path(project_root: &Path, slug: &str) -> Result<PathBuf> {
         ))
 }
 
+// A manually preserved clone may leave its original pin behind. Allocate
+// another slot without using, moving, or deleting that host evidence.
+pub(crate) fn pinned_rework_clone_path(main: &Path, slug: &str) -> Result<PathBuf> {
+    let pins = linked_rework_git(main, &["for-each-ref", "--format=%(refname)", PIN_PREFIX])?;
+    clone_paths(main, slug)
+        .find(|path| {
+            matches!(std::fs::symlink_metadata(path), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+                && pin_ref(path).is_some_and(|pin| !pins.lines().any(|reference| reference == pin))
+        })
+        .context("no free seat-clone slot with an unused host pin")
+}
+
 fn clone_paths<'a>(project_root: &'a Path, slug: &str) -> impl Iterator<Item = PathBuf> + 'a {
     let project = project_root
         .file_name()
@@ -3328,6 +3340,17 @@ impl std::fmt::Display for ReworkRecovery {
     }
 }
 
+// A failed preparation observed user files or retained merge state. Keep
+// the pickup receipt and lease so its owner can preserve those files.
+#[derive(Debug)]
+pub(crate) struct PreserveReworkSeat(String);
+
+impl std::fmt::Display for PreserveReworkSeat {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 // Fetch only the actual base and PR head through the trusted host origin.
 // trace:BUG-2603 | ai:codex
 pub(crate) fn fetch_rework_heads(
@@ -3546,8 +3569,14 @@ fn prepare_rework_merge_with_base(
     let host_value = |key: &str| -> Result<String> {
         let mut cmd = git(main);
         cmd.args(["config", "--get", key]);
-        let value = run(cmd, "read host merge identity")?;
-        anyhow::ensure!(!value.is_empty(), "missing host {key}");
+        let recovery = || {
+            format!(
+                "missing host {key}; set it with `git -C {} config {key} <value>` and retry pickup",
+                crate::shell_quote(&main.to_string_lossy())
+            )
+        };
+        let value = run(cmd, "read host merge identity").with_context(recovery)?;
+        anyhow::ensure!(!value.is_empty(), "{}", recovery());
         Ok(value)
     };
     let name = host_value("user.name")?;
@@ -3734,7 +3763,7 @@ fn rework_merge_head(execute: &dyn Fn(&[&str]) -> Result<String>) -> Result<Opti
     }
 }
 
-fn linked_rework_git(tree: &Path, args: &[&str]) -> Result<String> {
+fn linked_rework_command(tree: &Path, args: &[&str]) -> std::process::Command {
     let mut cmd = aida_core::git_ops::host_git_command(tree);
     cmd.args([
         "-c",
@@ -3743,11 +3772,175 @@ fn linked_rework_git(tree: &Path, args: &[&str]) -> Result<String> {
         "core.fsmonitor=false",
     ])
     .args(args);
-    run(cmd, "inspect or preserve registered rework worktree")
+    cmd
+}
+
+fn linked_rework_git(tree: &Path, args: &[&str]) -> Result<String> {
+    run(
+        linked_rework_command(tree, args),
+        "inspect or preserve registered rework worktree",
+    )
+}
+
+pub(crate) struct ReworkWorktree<'a> {
+    pub path: &'a Path,
+    pub branch: Option<&'a str>,
+    pub locked: bool,
+    prunable: bool,
+}
+
+impl ReworkWorktree<'_> {
+    pub(crate) fn absent_prunable(&self) -> bool {
+        self.prunable
+            && !self.locked
+            && matches!(
+                std::fs::symlink_metadata(self.path),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound
+            )
+    }
+}
+
+pub(crate) fn rework_worktree_inventory(main: &Path) -> Result<String> {
+    let out = linked_rework_command(main, &["worktree", "list", "--porcelain", "-z"])
+        .output()
+        .context("could not inspect branch worktree ownership")?;
+    anyhow::ensure!(
+        out.status.success(),
+        "could not inspect branch worktree ownership: {}",
+        String::from_utf8_lossy(&out.stderr).trim()
+    );
+    String::from_utf8(out.stdout).context(
+        "worktree inventory contains non-UTF-8 evidence; cannot safely identify registered paths",
+    )
+}
+
+pub(crate) fn rework_worktrees(inventory: &str) -> impl Iterator<Item = ReworkWorktree<'_>> {
+    inventory.split("\0\0").filter_map(|row| {
+        let mut fields = row.split('\0');
+        let path = Path::new(fields.next()?.strip_prefix("worktree ")?);
+        let mut worktree = ReworkWorktree {
+            path,
+            branch: None,
+            locked: false,
+            prunable: false,
+        };
+        for field in fields {
+            if let Some(branch) = field.strip_prefix("branch refs/heads/") {
+                worktree.branch = Some(branch);
+            }
+            worktree.locked |= field == "locked" || field.starts_with("locked ");
+            worktree.prunable |= field == "prunable" || field.starts_with("prunable ");
+        }
+        Some(worktree)
+    })
 }
 
 pub(crate) fn linked_rework_has_merge(tree: &Path) -> Result<bool> {
     Ok(rework_merge_head(&|args| linked_rework_git(tree, args))?.is_some())
+}
+
+fn admit_pinned_rework(
+    main: &Path,
+    heads: &ReworkHeads,
+    admit_conflict: &dyn Fn() -> Result<()>,
+) -> Result<()> {
+    let args = [
+        "merge-tree",
+        "--write-tree",
+        "--name-only",
+        "-z",
+        &heads.head,
+        &heads.base,
+    ];
+    let probe = || -> Result<Vec<String>> {
+        let mut cmd = linked_rework_command(main, &args);
+        cmd.stdin(std::process::Stdio::null());
+        let crate::BoundedCommandOutput::Completed(out) =
+            crate::command_output_with_timeout_detail(cmd, std::time::Duration::from_secs(30))
+        else {
+            anyhow::bail!("merge-tree timed out");
+        };
+        anyhow::ensure!(
+            out.status.success()
+                || repair_merge_tree_conflict(&args, out.status.code(), &out.stdout),
+            "{}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        repair_merge_tree_paths(std::str::from_utf8(&out.stdout)?)
+            .context("invalid merge-tree evidence")
+    };
+    let paths = probe().with_context(|| format!(
+        "cannot verify the pinned merge; inspect with `git -C {} merge-tree --write-tree --name-only -z {} {}` before retrying fresh pickup",
+        crate::shell_quote(&main.to_string_lossy()), heads.head, heads.base
+    ))?;
+    if !paths.is_empty() {
+        admit_conflict()?;
+    }
+    Ok(())
+}
+
+// Free only this absent registration's branch, retaining its Git admin
+// directory (including its index, merge metadata and the old tip).
+// trace:BUG-2688 | ai:codex
+fn detach_absent_rework(main: &Path, path: &Path, branch: &str) -> Result<()> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let common = linked_rework_git(
+        main,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )?;
+    let mut matched = None;
+    let mut target = path.join(".git").as_os_str().as_bytes().to_vec();
+    target.push(b'\n');
+    for entry in std::fs::read_dir(Path::new(&common).join("worktrees"))? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let gitdir = entry.path().join("gitdir");
+        let gitdir = aida_core::seat_clone_detect::read_regular_file_result(&gitdir)?;
+        if gitdir.as_bytes() == target {
+            anyhow::ensure!(
+                matched.is_none(),
+                "ambiguous absent worktree registration at {}",
+                path.display()
+            );
+            matched = Some(entry.file_name());
+        }
+    }
+    let id = matched.context("missing Git registration for absent rework seat")?;
+    let head_ref = format!(
+        "worktrees/{}/HEAD",
+        id.to_str().context("non-UTF-8 worktree registration ID")?
+    );
+    let branch_ref = format!("refs/heads/{branch}");
+    let tip = linked_rework_git(main, &["rev-parse", "--verify", &head_ref])?;
+    anyhow::ensure!(
+        linked_rework_git(main, &["symbolic-ref", &head_ref])? == branch_ref
+            && rework_worktrees(&rework_worktree_inventory(main)?).any(|entry| entry.path == path
+                && entry.branch == Some(branch)
+                && entry.absent_prunable()),
+        "absent worktree registration at {} changed; retry fresh pickup after checking ownership",
+        path.display()
+    );
+    linked_rework_git(main, &["update-ref", "--no-deref", &head_ref, &tip, &tip])?;
+    Ok(())
+}
+
+// Under the exclusive placement lock and after branch occupancy checks,
+// keep the previous local tip independently before moving the branch.
+pub(crate) fn align_pinned_rework_branch(main: &Path, branch: &str, head: &str) -> Result<()> {
+    let reference = format!("refs/heads/{branch}");
+    let old = linked_rework_git(main, &["rev-parse", "--verify", &reference])?;
+    if old != head {
+        let backup = format!("refs/heads/aida-recovery/{}", uuid::Uuid::new_v4());
+        linked_rework_git(main, &["update-ref", &backup, &old, ""])?;
+        linked_rework_git(main, &["update-ref", &reference, head, &old]).with_context(|| {
+            format!("local tip preserved at {backup}; retry fresh pickup after checking {branch}")
+        })?;
+        eprintln!("  fresh rework: preserved previous {branch} tip {old} at {backup}");
+    }
+    Ok(())
 }
 
 // Explicit fresh pickup archives only the retained merges of this PR in
@@ -3759,10 +3952,10 @@ pub(crate) fn archive_retained_rework(
     scope: &str,
     pr: u64,
     branch: &str,
-    pr_head: &str,
-    admit_conflict: impl FnOnce() -> Result<()>,
+    heads: &ReworkHeads,
+    admit_conflict: impl Fn() -> Result<()>,
 ) -> Result<Vec<PathBuf>> {
-    archive_retained_rework_with(main, scope, pr, branch, pr_head, admit_conflict, |path| {
+    archive_retained_rework_with(main, scope, pr, branch, heads, admit_conflict, |path| {
         aida_core::worktree_holders::check_worktree_removal(path).map_err(Into::into)
     })
 }
@@ -3772,8 +3965,8 @@ fn archive_retained_rework_with(
     scope: &str,
     pr: u64,
     branch: &str,
-    pr_head: &str,
-    admit_conflict: impl FnOnce() -> Result<()>,
+    heads: &ReworkHeads,
+    admit_conflict: impl Fn() -> Result<()>,
     check_holders: impl Fn(&Path) -> Result<()>,
 ) -> Result<Vec<PathBuf>> {
     let _placement = lock_seat_placement(main, true)?;
@@ -3781,8 +3974,8 @@ fn archive_retained_rework_with(
     let candidate_clones = clone_paths(main, &crate::slugify(scope))
         .chain(reserved)
         .collect::<std::collections::BTreeSet<_>>();
-    let inventory = linked_rework_git(main, &["worktree", "list", "--porcelain", "-z"])?;
-    let branch_line = format!("branch refs/heads/{branch}");
+    let inventory = rework_worktree_inventory(main)?;
+    let pr_head = &heads.head;
     let project_main = main.canonicalize()?;
     let mut retained = Vec::new();
     for path in candidate_clones {
@@ -3796,7 +3989,7 @@ fn archive_retained_rework_with(
         match aida_core::seat_clone_detect::read_regular_file_result(&merge_path) {
             Ok(merge) => {
                 require_retained_clone_main(&project_main, &path)?;
-                retained.push((path, identity, true, merge.trim().to_owned()));
+                retained.push((path, Some((identity, true, merge.trim().to_owned()))));
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
             Err(error) => {
@@ -3806,34 +3999,34 @@ fn archive_retained_rework_with(
             }
         }
     }
-    for record in inventory.split("\0\0") {
-        let mut fields = record.split('\0');
-        let Some(path) = fields
-            .next()
-            .and_then(|field| field.strip_prefix("worktree "))
-        else {
-            continue;
-        };
-        let fields: Vec<_> = fields.collect();
-        let path = PathBuf::from(path);
-        if path == main || !fields.contains(&branch_line.as_str()) {
+    for entry in rework_worktrees(&inventory) {
+        if entry.path == project_main || entry.branch != Some(branch) {
             continue;
         }
-        let identity = dir_identity(&path)?;
-        if let Some(merge) = rework_merge_head(&|args| linked_rework_git(&path, args))? {
-            anyhow::ensure!(!fields.iter().any(|field| *field == "locked" || field.starts_with("locked ")), "retained worktree {} is locked; after its owner exits run `git -C {} worktree unlock {}`", path.display(), crate::shell_quote(&main.to_string_lossy()), crate::shell_quote(&path.to_string_lossy()));
-            retained.push((path, identity, false, merge));
+        if entry.absent_prunable() {
+            retained.push((entry.path.to_owned(), None));
+            continue;
+        }
+        let identity = dir_identity(entry.path)?;
+        if let Some(merge) = rework_merge_head(&|args| linked_rework_git(entry.path, args))? {
+            anyhow::ensure!(!entry.locked, "retained worktree {} is locked; after its owner exits run `git -C {} worktree unlock {}`", entry.path.display(), crate::shell_quote(&main.to_string_lossy()), crate::shell_quote(&entry.path.to_string_lossy()));
+            retained.push((entry.path.to_owned(), Some((identity, false, merge))));
         }
     }
 
     if !retained.is_empty() {
-        admit_conflict()?;
+        admit_pinned_rework(main, heads, &admit_conflict)?;
     }
     let mut preserved = Vec::new();
-    for (from, identity, clone, merge) in retained {
-        ensure_dir_identity(&from, identity)?;
-        let from = from.canonicalize()?;
-        ensure_dir_identity(&from, identity)?;
+    for (from, state) in retained {
+        let from = if let Some((identity, _, _)) = &state {
+            ensure_dir_identity(&from, *identity)?;
+            let from = from.canonicalize()?;
+            ensure_dir_identity(&from, *identity)?;
+            from
+        } else {
+            from
+        };
         let cwd = std::env::current_dir()?;
         anyhow::ensure!(
             !cwd.starts_with(&from),
@@ -3841,19 +4034,32 @@ fn archive_retained_rework_with(
             crate::shell_quote(&main.to_string_lossy())
         );
         let mut journal = crate::repair_journal::RepairGuard::lock(main)?;
-        let leases = crate::leases::list_leases_strict_all(main).map_err(anyhow::Error::msg)?;
+        let (leases, locks) =
+            crate::leases::list_seat_ownership_strict(main).map_err(anyhow::Error::msg)?;
+        let matches_seat =
+            |path: &Path| path == from || path.canonicalize().is_ok_and(|path| path == from);
+        if let Some(lock) = locks
+            .iter()
+            .find(|lock| matches_seat(Path::new(&lock.worktree_path)))
+        {
+            anyhow::bail!("retained seat {} is locked by {}; ask the advisor to release it with `aida lock release {}` before retrying fresh pickup", from.display(), lock.authorized_by, crate::shell_quote(&from.to_string_lossy()));
+        }
         if let Some(lease) = leases.iter().find(|lease| {
-            lease.worktree_path == from
-                || lease
-                    .worktree_path
-                    .canonicalize()
-                    .is_ok_and(|path| path == from)
+            matches_seat(&lease.worktree_path)
+                || (!matches!(&state, Some((_, true, _))) && lease.branch == branch)
         }) {
             anyhow::bail!("retained seat {} is leased; once the owner exits, release it with `aida session end {}`", from.display(), lease.id);
         }
-        let reservation = journal.reservation_for_relocation(main, &from, pr, branch, &leases)?;
+        let reservation =
+            journal.reservation_for_relocation(main, &from, pr, branch, &leases, scope)?;
+        let reservation_id = reservation.map(crate::repair_journal::reservation_id);
         check_holders(&from)
             .with_context(|| format!("retained seat {} has process holders; retry `aida queue work {} --fresh` after they exit", from.display(), crate::shell_quote(scope)))?;
+        let Some((identity, clone, merge)) = state else {
+            detach_absent_rework(main, &from, branch)?;
+            release_preserved_reservation(main, &mut journal, reservation_id.as_deref())?;
+            continue;
+        };
         let current_merge = if clone {
             Some(
                 aida_core::seat_clone_detect::read_regular_file_result(
@@ -3902,19 +4108,27 @@ fn archive_retained_rework_with(
             move_rework_worktree(main, &from, &to, branch, pr_head, identity)?;
         }
         eprintln!("  fresh rework: preserved {} with MERGE_HEAD {merge} at {}; verified origin/{branch} at {}", from.display(), to.display(), pr_head);
-        if let Some(entry) = reservation {
-            let id = crate::repair_journal::reservation_id(entry);
-            let backup = journal
-                .heal_dead_lane_reservation(main, &id)?
-                .map_err(anyhow::Error::msg)?;
-            eprintln!(
-                "  fresh rework: released the archived lane's reservation (backup {})",
-                backup.display()
-            );
-        }
+        release_preserved_reservation(main, &mut journal, reservation_id.as_deref())?;
         preserved.push(to);
     }
     Ok(preserved)
+}
+
+fn release_preserved_reservation(
+    main: &Path,
+    journal: &mut crate::repair_journal::RepairGuard,
+    id: Option<&str>,
+) -> Result<()> {
+    if let Some(id) = id {
+        let backup = journal
+            .heal_dead_lane_reservation(main, id)?
+            .map_err(anyhow::Error::msg)?;
+        eprintln!(
+            "  fresh rework: released the previous lane's reservation (backup {})",
+            backup.display()
+        );
+    }
+    Ok(())
 }
 
 // trace:BUG-2688 | ai:codex
@@ -3980,10 +4194,11 @@ fn move_rework_clone(
         marker.branch == branch && marker.pin == pin && oid == Some(marker.base_sha.as_str());
     // The placement pin identifies this clone's creation, even if either
     // the seat's local tip or the remote PR head has since moved.
+    let manual_archive = from.with_file_name(format!("retained-seat-{}", uuid::Uuid::new_v4()));
     anyhow::ensure!(
         (pin_matches_marker && scoped_path)
             || (journal_bound && (oid.is_none() || pin_matches_marker)),
-        "retained clone {} has no matching host pin or exact repair reservation; left in place. Expected marker branch {branch} and pin {pin} at the recorded creation SHA {:?}; marker names branch {:?} and pin {:?}, host pin is {} (scope path matches: {scoped_path}). Inspect from the host with `git -C {} show-ref --verify -- {}` and `cd {} && aida doctor check repair-journal`. Once the proof is available, retry `cd {} && aida queue work {} --fresh`",
+        "retained clone {} has no matching host pin or exact repair reservation; left in place. Expected marker branch {branch} and pin {pin} at the recorded creation SHA {:?}; marker names branch {:?} and pin {:?}, host pin is {} (scope path matches: {scoped_path}). Inspect from the host with `git -C {} show-ref --verify -- {}` and `cd {} && aida doctor check repair-journal`. If you can independently verify this is your seat and it has no lock, lease or process holder, preserve the entire directory from the host with `mv -T --no-clobber -- {} {}`. Verify it is at the new path, then retry `cd {} && aida queue work {} --fresh`",
         from.display(),
         marker.base_sha,
         marker.branch,
@@ -3992,6 +4207,8 @@ fn move_rework_clone(
         crate::shell_quote(&main.to_string_lossy()),
         crate::shell_quote(&pin),
         crate::shell_quote(&main.to_string_lossy()),
+        crate::shell_quote(&from.to_string_lossy()),
+        crate::shell_quote(&manual_archive.to_string_lossy()),
         crate::shell_quote(&main.to_string_lossy()),
         crate::shell_quote(scope),
     );
@@ -4035,15 +4252,18 @@ fn move_rework_worktree(
             .arg(path);
         run(cmd, "re-register retained worktree")
     };
+    let registration = rework_worktree_inventory(main)?;
+    anyhow::ensure!(
+        rework_worktrees(&registration)
+            .any(|entry| entry.path == from && entry.branch == Some(branch) && !entry.locked),
+        "retained worktree registration changed or became locked"
+    );
     relocate_rework_directory(from, to, identity)?;
     let verify_repair = || {
         repair(to)?;
-        let registration = linked_rework_git(main, &["worktree", "list", "--porcelain", "-z"])?;
-        let expected = format!("worktree {}", to.display());
+        let registration = rework_worktree_inventory(main)?;
         anyhow::ensure!(
-            registration
-                .split("\0\0")
-                .any(|row| row.split('\0').next() == Some(expected.as_str())),
+            rework_worktrees(&registration).any(|entry| entry.path == to),
             "retained worktree registration was not moved"
         );
         Ok::<_, anyhow::Error>(())
@@ -4569,9 +4789,14 @@ fn prepare_host_repair_admitted(
                 tree.display()
             ))
         })?;
-        if !(resume && entry.lane_id == lane_id && pr_head == head) {
+        if !(resume
+            && entry.lane_id == lane_id
+            && entry.key.pr == pr
+            && pr_head == head
+            && merge == base)
+        {
             anyhow::bail!(ReworkRecovery(format!(
-                "pending repair does not match adopted lane {lane_id} at fetched head {pr_head}; once the seat is unleased run `{fresh_command}`"
+                "pending repair does not match adopted lane {lane_id} for PR #{pr} at fetched head {pr_head} and base {base} (retained MERGE_HEAD {merge}); once the seat is unleased run `{fresh_command}`"
             )));
         }
         let paths = entry.original_conflict_paths.clone();
@@ -4594,10 +4819,12 @@ fn prepare_host_repair_admitted(
         return Ok(paths);
     }
     let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
-    anyhow::ensure!(
-        resume || !dirty,
-        "rework seat has pending changes; merge refused"
-    );
+    if dirty && !resume {
+        return Err(anyhow::anyhow!(PreserveReworkSeat(format!(
+            "rework seat {} has pending changes; merge refused. After its owner exits, save the edits with `{preserve_pending}`, release the seat with `aida session end {lane_id}`, and retry `{fresh_command}`",
+            tree.display()
+        ))));
+    }
     let current = execute(&["rev-parse", "HEAD"])?;
     let behind = current != pr_head
         && !dirty
@@ -4621,8 +4848,7 @@ fn prepare_host_repair_admitted(
         })?;
         if seat == ReworkSeat::Fresh && current != pr_head {
             anyhow::bail!(ReworkRecovery(format!(
-                "local {branch} has commits ahead of origin/{branch} at {pr_head}; publish the local tip with `git -C {} push origin {}` before starting fresh",
-                crate::shell_quote(&main.to_string_lossy()), crate::shell_quote(branch),
+                "local {branch} has commits ahead of origin/{branch} at {pr_head}; commits preserved at {current}. Once the seat is unleased run `{fresh_command}` to place a seat at the verified PR head",
             )));
         }
     }
@@ -4715,8 +4941,14 @@ fn prepare_host_repair_admitted(
                 anyhow::bail!("conflict observation changed; reservation retained for recovery")
             }
             Err(why) => {
-                execute(&["rev-parse", "--verify", "MERGE_HEAD"])
-                    .context("merge failed without retained MERGE_HEAD")?;
+                if rework_merge_head(execute)
+                    .with_context(|| PreserveReworkSeat(format!("cannot inspect MERGE_HEAD after merge failed: {why:#}; preserve the seat and inspect `aida doctor check repair-journal` before retrying")))?
+                    .as_deref() != Some(base.as_str())
+                {
+                    return Err(why).context(PreserveReworkSeat(format!(
+                        "merge failed without the expected MERGE_HEAD; after the lane exits, correct the Git error and preserve any obstructing files outside the seat, then run `aida session end {lane_id}`, `aida doctor heal repair-journal`, and retry `{fresh_command}`"
+                    )));
+                }
                 let paths = execute(&["diff", "--name-only", "--diff-filter=U", "-z"])?;
                 let paths: Vec<String> = paths
                     .split('\0')

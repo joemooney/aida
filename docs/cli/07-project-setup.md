@@ -432,22 +432,27 @@ are gone. An unreadable lease or lane record leaves the reservation in place, an
 the doctor names the evidence that needs attention.
 
 A replacement seat starts from the fetched PR head even when the conversation
-resumes. Verified adoption can continue a retained merge with matching journal
-evidence. An explicit `aida queue work <SPEC> --fresh` can move an unleased,
-idle retained merge to a sibling `.retained-<id>` path before building the
-replacement. Pickup pins the open PR's head and fetched base before moving
-the seat or releasing its reservation. It admits the conflict route before
-moving the seat and rechecks the pinned refs and PR before preparing the
-replacement. If they changed, pickup reports the refusal and any archive
-stays at the location already reported. A private clone needs a matching
-project marker and object alternates, plus a host pin for the exact scope
-path at the marker's recorded creation SHA or a host journal entry matching
-the retained repair. The archived clone keeps that creation pin even if the
-PR has advanced. The replacement uses the newly pinned PR head. If the clone
-stays in place for missing proof, use the reported host `git show-ref --verify`
-command and `aida doctor check repair-journal` to inspect the evidence. For a
-forge and origin mismatch before placement, use the reported `git ls-remote`
-command and retry fresh pickup from the main checkout once the heads agree.
+resumes. Private clone placement leaves the host branch tip in place. Linked
+placement saves a differing local tip under an `aida-recovery/` branch before
+aligning the PR branch. Adoption can continue a retained merge only when the
+journal matches the adopted lane, PR number, fetched head and fetched base.
+
+An explicit `aida queue work <SPEC> --fresh` can move an unleased, unlocked,
+idle retained merge to a sibling `.retained-<id>` path. Pickup probes the
+pinned PR head and base for conflicts and checks route eligibility before
+moving the seat. It rechecks the pins and PR before preparing the replacement.
+A missing, prunable linked worktree can free its branch by detaching the
+registered HEAD. Its Git administration directory remains in place and the
+replacement uses a different path if needed.
+
+A retained private clone needs a matching project marker and object alternates,
+plus a host pin for the exact scope path at the marker's recorded creation SHA
+or a host journal entry matching the retained repair. If that proof is missing,
+the operator can use the reported host move command after independently verifying
+the seat's ownership and that it has no lease, lock or process holder. The move
+preserves the whole directory and leaves existing host pins in place. Retry
+fresh pickup from the main checkout. For a forge and origin mismatch, use the
+reported `git ls-remote` command and retry once the heads agree.
 <!-- trace:BUG-2688 | ai:codex -->
 
 **Expired exited-worker claims.** `aida doctor check leases` also reports shared

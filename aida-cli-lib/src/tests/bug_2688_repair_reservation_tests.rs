@@ -130,6 +130,15 @@ fn admitted_prepare(fx: &Fixture, seat: &Path, lane: &str) -> Result<Vec<String>
     prepare_rework_merge_fixture_admitted(&fx.main, seat, "feat", false, PR, lane, &|| Ok(()))
 }
 
+fn fixture_heads(fx: &Fixture) -> ReworkHeads {
+    let (base, head) = fetch_rework_heads(&fx.main, "main", "feat").unwrap();
+    ReworkHeads {
+        base_ref: "main".into(),
+        base,
+        head,
+    }
+}
+
 /// The 2026-11-20 loop, end to end.
 #[test]
 fn bug_2688_refused_route_reserves_nothing_and_a_gone_lane_heals_without_a_hand_edit() {
@@ -504,7 +513,7 @@ fn bug_2688_fresh_pickup_refused_route_keeps_retained_seat_and_reservation() {
     let branch = git_ok(&fx.main, &["rev-parse", "refs/heads/feat"]);
 
     let error = launch(HeadlessVendor::Claude, true)
-        .preserve_for_fresh_pickup(&fx.main, &branch)
+        .preserve_for_fresh_pickup(&fx.main, &fixture_heads(&fx))
         .unwrap_err();
     assert!(
         error
@@ -580,7 +589,7 @@ fn bug_2688_fresh_pickup_preserves_private_clone_when_origin_moves_without_a_jou
         "BUG-2688",
         PR,
         "feat",
-        &heads.head,
+        &heads,
         || Ok(()),
         |_| Ok(()),
     )
@@ -601,7 +610,7 @@ fn bug_2688_fresh_pickup_preserves_private_clone_when_origin_moves_without_a_jou
         route.scope,
         route.pr,
         route.branch,
-        &heads.head,
+        &heads,
         || admit_rework_conflict_launch(route),
         |path| {
             assert_eq!(path, retained);
@@ -660,7 +669,7 @@ fn bug_2688_fresh_pickup_refuses_wrong_main_or_unverified_private_clone() {
         marker.main.clone_from(marker_main);
         std::fs::write(&marker_path, toml::to_string(&marker).unwrap()).unwrap();
         let error = launch(HeadlessVendor::Codex, true)
-            .preserve_for_fresh_pickup(&fx.main, &head)
+            .preserve_for_fresh_pickup(&fx.main, &fixture_heads(&fx))
             .unwrap_err();
         assert!(
             format!("{error:#}").contains("lacks matching marker and object alternates"),
@@ -718,7 +727,7 @@ fn bug_2688_explicit_fresh_archives_the_retained_linked_merge() {
         "BUG-2688",
         PR,
         "feat",
-        &fetched,
+        &fixture_heads(&fx),
         || Ok(()),
         |path| {
             assert_eq!(path, retained);
@@ -734,7 +743,7 @@ fn bug_2688_explicit_fresh_archives_the_retained_linked_merge() {
         "BUG-2688",
         PR,
         "feat",
-        &fetched,
+        &fixture_heads(&fx),
         || Ok(()),
         |_| Ok(()),
     )
@@ -795,7 +804,7 @@ fn bug_2688_matching_private_clone_metadata_without_host_proof_is_preserved() {
         "BUG-2688",
         PR,
         "feat",
-        &head,
+        &fixture_heads(&fx),
         || Ok(()),
         |_| Ok(()),
     )
@@ -836,7 +845,7 @@ fn bug_2688_matching_private_clone_metadata_without_host_proof_is_preserved() {
         "BUG-2688",
         PR,
         "feat",
-        &head,
+        &fixture_heads(&fx),
         || Ok(()),
         |_| Ok(()),
     )
@@ -876,7 +885,7 @@ fn bug_2688_fresh_pickup_refuses_head_movement_without_replacing_its_pin() {
         "BUG-2688",
         PR,
         "feat",
-        &heads.head,
+        &heads,
         || Ok(()),
         |_| Ok(()),
     )
@@ -1054,4 +1063,550 @@ fn bug_2688_unobservable_merge_names_the_pinned_probe_and_keeps_state() {
         admitted_prepare(&fx, &tree, "probe").unwrap(),
         ["README.md"]
     );
+}
+
+fn pinned_setup(
+    scope: &str,
+    head: &str,
+    contained: bool,
+) -> crate::session_start::SessionStartReceipt {
+    crate::session_start::session_start_with_receipt(
+        scope,
+        Some("feat"),
+        Some(crate::session_start::SessionBase::PinnedRework(head)),
+        false,
+        None,
+        None,
+        "auto",
+        false,
+        None,
+        false,
+        None,
+        None,
+        false,
+        None,
+        false,
+        Some(false),
+        true,
+        None,
+        contained,
+        true,
+        crate::session_start::PathReentry::None,
+        Some(Some((PR, "feat".into()))),
+        false,
+    )
+    .unwrap()
+}
+
+#[test]
+fn bug_2688_fresh_pickup_reuses_branch_of_absent_registration_without_pruning() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let scope = "TASK-926881";
+    let old = seat(&fx, "aida-task-926881");
+    git_ok(&old, &["commit", "--allow-empty", "-qm", "unpublished"]);
+    let tip = git_ok(&old, &["rev-parse", "HEAD"]);
+    let git_dir = git_ok(&old, &["rev-parse", "--absolute-git-dir"]);
+    let index = std::fs::read(Path::new(&git_dir).join("index")).unwrap();
+    let merge = git_ok(&fx.main, &["rev-parse", "origin/main"]);
+    std::fs::write(Path::new(&git_dir).join("MERGE_HEAD"), format!("{merge}\n")).unwrap();
+    let lock = crate::worktree_lock::acquire(&fx.main, &old, "advisor-a").unwrap();
+    std::fs::remove_dir_all(&old).unwrap();
+
+    let heads = fixture_heads(&fx);
+    let route = launch(HeadlessVendor::Codex, true);
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &[],
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    crate::queue_cmd::inspect_queue_work_branch(&fx.main, Some("feat"), None, false, false, true)
+        .unwrap();
+    let error = route
+        .preserve_for_fresh_pickup(&fx.main, &heads)
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("locked by advisor-a"));
+    assert!(lock.exists());
+    assert_eq!(git_ok(&fx.main, &["rev-parse", "feat"]), tip);
+    assert!(crate::worktree_lock::release(&fx.main, &old).unwrap());
+    assert!(route
+        .preserve_for_fresh_pickup(&fx.main, &heads)
+        .unwrap()
+        .is_empty());
+    let receipt = pinned_setup(scope, &heads.head, false);
+    assert!(receipt.owns_setup());
+    let (lane, replacement) = lease_tree(&fx.main, scope);
+    assert_ne!(replacement, old);
+    assert_eq!(git_ok(&replacement, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        std::fs::read(Path::new(&git_dir).join("index")).unwrap(),
+        index
+    );
+    assert_eq!(
+        std::fs::read_to_string(Path::new(&git_dir).join("MERGE_HEAD"))
+            .unwrap()
+            .trim(),
+        merge
+    );
+    assert_eq!(
+        std::fs::read_to_string(Path::new(&git_dir).join("HEAD"))
+            .unwrap()
+            .trim(),
+        tip
+    );
+    assert!(git_ok(&fx.main, &["worktree", "list", "--porcelain"]).contains("prunable"));
+    assert!(crate::lease_path(&fx.main, &lane).exists());
+}
+
+#[test]
+fn bug_2688_fresh_session_setup_preserves_unpublished_local_tips() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    for (contained, diverged) in [(false, false), (false, true), (true, false), (true, true)] {
+        let fx = fixture();
+        let head = conflicting_pr(&fx);
+        let fork = if diverged {
+            format!("{head}^")
+        } else {
+            head.clone()
+        };
+        git_ok(&fx.main, &["checkout", "-qb", "local-only", &fork]);
+        git_ok(
+            &fx.main,
+            &["commit", "--allow-empty", "-qm", "private commit"],
+        );
+        let tip = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+        git_ok(&fx.main, &["branch", "-f", "feat", &tip]);
+        git_ok(&fx.main, &["checkout", "-q", "main"]);
+        git_ok(&fx.main, &["branch", "-D", "local-only"]);
+
+        let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+        let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+            &fx.main,
+            "implementer",
+            &[],
+            &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+        );
+        let scope = "TASK-926881";
+        let receipt = pinned_setup(scope, &head, contained);
+        assert!(receipt.owns_setup());
+        let (lane, tree) = lease_tree(&fx.main, scope);
+        assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
+        assert_eq!(git_ok(&fx.main, &["rev-parse", "origin/feat"]), head);
+        if contained {
+            assert_eq!(git_ok(&fx.main, &["rev-parse", "feat"]), tip);
+            assert_eq!(
+                git_ok(&fx.main, &["rev-parse", &pin_ref(&tree).unwrap()]),
+                head
+            );
+        } else {
+            assert_eq!(git_ok(&fx.main, &["rev-parse", "feat"]), head);
+            assert_eq!(
+                git_ok(
+                    &fx.main,
+                    &[
+                        "for-each-ref",
+                        "--format=%(objectname)",
+                        "refs/heads/aida-recovery/"
+                    ]
+                ),
+                tip
+            );
+        }
+        assert!(crate::lease_path(&fx.main, &lane).exists());
+    }
+}
+
+#[test]
+fn bug_2688_fresh_clean_route_archives_old_conflict_and_respects_advisor_lock() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    let fx = fixture();
+    let old = conflicting_pr(&fx);
+    let retained = seat(&fx, "retained");
+    assert_eq!(
+        admitted_prepare(&fx, &retained, "old-lane").unwrap(),
+        ["README.md"]
+    );
+    let merge = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
+    let index = git_ok(&retained, &["ls-files", "--stage"]);
+    std::fs::write(retained.join("draft"), "keep me").unwrap();
+
+    git_ok(
+        &fx.main,
+        &["commit", "--allow-empty", "-qm", "resolved PR branch"],
+    );
+    let head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    git_ok(&fx.main, &["push", "-q", "--force", "origin", "HEAD:feat"]);
+    let heads = fixture_heads(&fx);
+    assert_eq!(heads.head, head);
+    let route = launch(HeadlessVendor::Claude, true);
+    assert!(admit_rework_conflict_launch(route).is_err());
+    let lock = crate::worktree_lock::acquire(&fx.main, &retained, "advisor-a").unwrap();
+    let lock_bytes = std::fs::read(&lock).unwrap();
+    let old_journal = journal(&fx.main);
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &[],
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let error = route
+        .preserve_for_fresh_pickup(&fx.main, &heads)
+        .unwrap_err();
+    assert!(
+        format!("{error:#}").contains("locked by advisor-a"),
+        "{error:#}"
+    );
+    assert_eq!(std::fs::read(&lock).unwrap(), lock_bytes);
+    assert_eq!(journal(&fx.main), old_journal);
+    assert_eq!(git_ok(&retained, &["ls-files", "--stage"]), index);
+    assert!(crate::worktree_lock::release(&fx.main, &retained).unwrap());
+
+    let archives = route.preserve_for_fresh_pickup(&fx.main, &heads).unwrap();
+    let [archive] = archives.as_slice() else {
+        panic!("expected one archive: {archives:?}");
+    };
+    assert_eq!(git_ok(archive, &["rev-parse", "HEAD"]), old);
+    assert_eq!(git_ok(archive, &["rev-parse", "MERGE_HEAD"]), merge);
+    assert_eq!(git_ok(archive, &["ls-files", "--stage"]), index);
+    assert_eq!(
+        std::fs::read_to_string(archive.join("draft")).unwrap(),
+        "keep me"
+    );
+    let scope = "TASK-926881";
+    let receipt = pinned_setup(scope, &head, false);
+    assert!(receipt.owns_setup());
+    let (lane, fresh) = lease_tree(&fx.main, scope);
+    assert!(prepare_rework_merge_fixture_for_seat(
+        &fx.main,
+        &fresh,
+        "feat",
+        ReworkSeat::Fresh,
+        PR,
+        &lane,
+        &|| admit_rework_conflict_launch(route),
+    )
+    .unwrap()
+    .is_empty());
+    assert!(crate::lease_path(&fx.main, &lane).exists());
+}
+
+#[test]
+fn bug_2688_adoption_rejects_another_pr_or_new_base_without_touching_merge() {
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let retained = seat(&fx, "retained");
+    let lane = "original-lane";
+    assert_eq!(
+        admitted_prepare(&fx, &retained, lane).unwrap(),
+        ["README.md"]
+    );
+    let merge = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
+    let index = git_ok(&retained, &["ls-files", "--stage"]);
+    let old_journal = journal(&fx.main);
+    let refuse = |pr| {
+        let error = prepare_rework_merge_fixture_for_seat(
+            &fx.main,
+            &retained,
+            "feat",
+            ReworkSeat::Adopted,
+            pr,
+            lane,
+            &|| panic!("stale adoption must refuse before admission"),
+        )
+        .unwrap_err();
+        assert!(
+            format!("{error:#}").contains("aida queue work"),
+            "{error:#}"
+        );
+        assert!(format!("{error:#}").contains("--fresh"), "{error:#}");
+        assert_eq!(git_ok(&retained, &["rev-parse", "HEAD"]), head);
+        assert_eq!(git_ok(&retained, &["rev-parse", "MERGE_HEAD"]), merge);
+        assert_eq!(git_ok(&retained, &["ls-files", "--stage"]), index);
+        assert_eq!(journal(&fx.main), old_journal);
+    };
+    refuse(PR + 1);
+    git_ok(
+        &fx.main,
+        &["commit", "--allow-empty", "-qm", "base advanced"],
+    );
+    git_ok(&fx.main, &["push", "-q", "origin", "main"]);
+    refuse(PR);
+}
+
+#[test]
+fn bug_2688_conflict_merge_failure_preserves_git_error_ignored_files_and_lease() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &[],
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let scope = "TASK-926881";
+    let receipt = pinned_setup(scope, &head, false);
+    let (lane, tree) = lease_tree(&fx.main, scope);
+    let lease = crate::lease_path(&fx.main, &lane);
+    let lease_bytes = std::fs::read(&lease).unwrap();
+    let exclude = git_ok(
+        &tree,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "info/exclude",
+        ],
+    );
+    let existing_excludes = std::fs::read_to_string(&exclude).unwrap();
+    std::fs::write(exclude, format!("{existing_excludes}\nobstruction\n")).unwrap();
+    std::fs::write(tree.join("obstruction"), "keep these ignored bytes").unwrap();
+    assert_eq!(git_ok(&tree, &["status", "--porcelain"]), "");
+    let before = git_ok(&tree, &["ls-files", "--stage"]);
+    // Use a real Git failure before MERGE_HEAD. merge-tree reports the
+    // conflict, while the actual merge reads branch-specific strategy options.
+    let strategy = "missing-rework-strategy";
+    git_ok(
+        &tree,
+        &[
+            "config",
+            "branch.feat.mergeOptions",
+            &format!("-s {strategy}"),
+        ],
+    );
+    let (result, rolled_back) = run_pickup_launch(&fx.main, receipt, |_| {
+        prepare_rework_merge_fixture_for_seat(
+            &fx.main,
+            &tree,
+            "feat",
+            ReworkSeat::Fresh,
+            PR,
+            &lane,
+            &|| Ok(()),
+        )
+        .map(|_| ())
+    });
+    assert!(!rolled_back);
+    assert_eq!(std::fs::read(lease).unwrap(), lease_bytes);
+    let error = result.unwrap_err();
+    let diagnostic = format!("{error:#}");
+    assert!(diagnostic.contains(strategy), "{diagnostic}");
+    assert!(
+        diagnostic.contains("Could not find merge strategy"),
+        "{diagnostic}"
+    );
+    assert!(diagnostic.contains("--fresh"), "{diagnostic}");
+    assert!(!merging(&tree));
+    assert_eq!(git_ok(&tree, &["ls-files", "--stage"]), before);
+    assert_eq!(
+        std::fs::read_to_string(tree.join("obstruction")).unwrap(),
+        "keep these ignored bytes"
+    );
+    assert_eq!(journal(&fx.main).len(), 1);
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn bug_2688_missing_pin_recovery_preserves_the_clone_and_makes_room_for_pickup() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let scope = "TASK-926881";
+    let retained = clone_path(&fx.main, &crate::slugify(scope)).unwrap();
+    retained_private_clone(&fx.main, &retained);
+    let pin = pin_ref(&retained).unwrap();
+    git_ok(&fx.main, &["update-ref", "-d", &pin, &head]);
+    let merge = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
+    let index = git_ok(&retained, &["ls-files", "--stage"]);
+    let heads = fixture_heads(&fx);
+    let mut route = launch(HeadlessVendor::Codex, true);
+    route.scope = scope;
+    let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &[],
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
+    let error = route
+        .preserve_for_fresh_pickup(&fx.main, &heads)
+        .unwrap_err();
+    let message = format!("{error:#}");
+    assert!(message.contains("host pin is missing"), "{message}");
+    let command = message
+        .split('`')
+        .find(|part| part.starts_with("mv -T --no-clobber -- "))
+        .unwrap();
+    assert!(std::process::Command::new("sh")
+        .args(["-c", command])
+        .status()
+        .unwrap()
+        .success());
+    let archive = std::fs::read_dir(&fx.root)
+        .unwrap()
+        .map(|entry| entry.unwrap())
+        .find(|entry| {
+            entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with("retained-seat-")
+        })
+        .unwrap()
+        .path();
+    assert!(!retained.exists());
+    assert_eq!(git_ok(&archive, &["rev-parse", "MERGE_HEAD"]), merge);
+    assert_eq!(git_ok(&archive, &["ls-files", "--stage"]), index);
+    assert_eq!(git_ok(&fx.main, &["for-each-ref", &pin]), "");
+    assert!(route
+        .preserve_for_fresh_pickup(&fx.main, &heads)
+        .unwrap()
+        .is_empty());
+    let receipt = pinned_setup(scope, &heads.head, true);
+    assert!(receipt.owns_setup());
+    let (lane, fresh) = lease_tree(&fx.main, scope);
+    assert_eq!(git_ok(&fresh, &["rev-parse", "HEAD"]), head);
+    assert!(crate::lease_path(&fx.main, &lane).exists());
+    assert_eq!(git_ok(&archive, &["ls-files", "--stage"]), index);
+}
+
+#[test]
+fn bug_2688_fresh_pickup_refuses_non_utf8_registration_before_mutation() {
+    use std::os::unix::ffi::OsStrExt;
+
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let retained = seat(&fx, "retained");
+    let name = std::ffi::OsStr::from_bytes(b"non-utf8-\xff");
+    let moved = fx.root.join(name);
+    let status = crate::test_git::git_command()
+        .current_dir(&fx.main)
+        .args(["worktree", "move"])
+        .arg(&retained)
+        .arg(&moved)
+        .status()
+        .unwrap();
+    assert!(status.success());
+    std::fs::write(moved.join("draft"), "preserve this").unwrap();
+    let error = crate::queue_cmd::inspect_queue_work_branch(
+        &fx.main,
+        Some("feat"),
+        None,
+        false,
+        false,
+        true,
+    )
+    .unwrap_err();
+    assert!(format!("{error:#}").contains("non-UTF-8"));
+    let error = launch(HeadlessVendor::Codex, true)
+        .preserve_for_fresh_pickup(&fx.main, &fixture_heads(&fx))
+        .unwrap_err();
+    assert!(format!("{error:#}").contains("non-UTF-8"));
+    assert_eq!(
+        std::fs::read_to_string(moved.join("draft")).unwrap(),
+        "preserve this"
+    );
+    assert_eq!(git_ok(&fx.main, &["rev-parse", "feat"]), head);
+}
+
+#[test]
+fn bug_2688_dirty_replacement_and_missing_host_identity_name_corrective_commands() {
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    let fx = fixture();
+    conflicting_pr(&fx);
+    let tree = seat(&fx, "seat");
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &[],
+        &[("GIT_CONFIG_GLOBAL", Some("/dev/null"))],
+    );
+    for (key, value) in [("user.name", "Test"), ("user.email", "test@example.com")] {
+        git_ok(&fx.main, &["config", "--unset", key]);
+        let error = admitted_prepare(&fx, &tree, "lane").unwrap_err();
+        let diagnostic = format!("{error:#}");
+        assert!(
+            diagnostic.contains(&format!("missing host {key}")),
+            "{diagnostic}"
+        );
+        assert!(
+            diagnostic.contains(&format!("config {key} <value>")),
+            "{diagnostic}"
+        );
+        git_ok(&fx.main, &["config", key, value]);
+    }
+    std::fs::write(tree.join("draft"), "keep dirty").unwrap();
+    let error = admitted_prepare(&fx, &tree, "lane").unwrap_err();
+    let diagnostic = format!("{error:#}");
+    assert!(
+        diagnostic.contains("stash push --include-untracked"),
+        "{diagnostic}"
+    );
+    assert!(
+        diagnostic.contains("aida queue work") && diagnostic.contains("--fresh"),
+        "{diagnostic}"
+    );
+    assert_eq!(
+        std::fs::read_to_string(tree.join("draft")).unwrap(),
+        "keep dirty"
+    );
+    assert!(!merging(&tree));
+    assert!(journal(&fx.main).is_empty());
+}
+
+#[test]
+fn bug_2688_fresh_pickup_waits_for_recorded_worker_without_a_lease() {
+    let fx = fixture();
+    conflicting_pr(&fx);
+    let retained = seat(&fx, "retained");
+    let lane = "worker-only";
+    assert_eq!(
+        admitted_prepare(&fx, &retained, lane).unwrap(),
+        ["README.md"]
+    );
+    let before = journal(&fx.main);
+    assert!(!crate::lease_path(&fx.main, lane).exists());
+    let lanes = fx.main.join(".aida/lanes");
+    std::fs::create_dir_all(&lanes).unwrap();
+    let pid = std::process::id();
+    let record = serde_json::json!({
+        "lease_id": lane,
+        "spec": "BUG-2688",
+        "vendor": "codex",
+        "pid": pid,
+        "pid_start_time": crate::process_probe::process_start_identity(pid).unwrap(),
+        "pid_namespace": aida_core::pid_observer::current_pid_namespace().unwrap(),
+        "log_path": fx.main.join(".aida/headless-logs/fixture"),
+        "started_at": chrono::Utc::now(),
+    });
+    std::fs::write(lanes.join("headless-worker-only.json"), record.to_string()).unwrap();
+    let error = launch(HeadlessVendor::Codex, true)
+        .preserve_for_fresh_pickup(&fx.main, &fixture_heads(&fx))
+        .unwrap_err();
+    let message = format!("{error:#}");
+    assert!(message.contains("recorded worker"), "{message}");
+    assert!(
+        message.contains("after the worker exits retry"),
+        "{message}"
+    );
+    assert!(message.contains("--fresh"), "{message}");
+    assert!(!message.contains("session end"), "{message}");
+    assert!(merging(&retained));
+    assert_eq!(journal(&fx.main), before);
 }
