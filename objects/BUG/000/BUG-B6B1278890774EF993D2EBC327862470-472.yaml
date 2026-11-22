@@ -14,12 +14,12 @@ description: |
   - AC2: The two fake-gh fixtures (bug_2690_land_update_branch_tests.rs, story_2768_land_tests.rs) accept both argv shapes. A test covers the without-flag path.
   - AC3: A test checks the composed argv against the real `gh api --help` on the test host and skips with a clear message when gh is absent, so a flag the installed gh lacks fails CI.
   - AC4: On imac (gh 2.81.0), `aida land stalls` reads at least one open PR's CI state as something other than UNKNOWN-for-evidence.
-status: InProgress
+status: Done
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T18:45:04.006084804Z
-modified_at: 2026-11-22T19:20:52.174741465Z
+modified_at: 2026-11-22T19:42:04.574838371Z
 req_type: Bug
 tags:
 - fasttrack
@@ -55,6 +55,12 @@ comments:
   modified_at: 2026-11-22T19:20:52.174741465Z
   session_id: 01a204a06239
   harness_version: codex-cli 0.167.0
+- id: 01a204c7-ad1e-7960-af33-52ba543c2be1
+  author: aida-publication-done
+  content: Implementer push ab3735a1290d declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-22T19:42:04.574837454Z
+  modified_at: 2026-11-22T19:42:04.574837454Z
+  session_id: 01a204a06239
 history:
 - id: 01a204a0-b071-7890-b82e-02414625a203
   author: aida-session-start
@@ -69,6 +75,14 @@ history:
   session_id: 01a204a06239
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a204c7-ad1e-7960-af33-52a08c376450
+  author: aida-publication-done
+  timestamp: 2026-11-22T19:42:04.574834670Z
+  session_id: 01a204a06239
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
