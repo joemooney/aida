@@ -1,0 +1,30 @@
+id: 01a204b0-217a-7653-8004-4bf6bd6c15a9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1213
+agreed_id: TASK-3832
+title: 'Mass-change deferred findings from PR #4387 (TASK-3133) final round'
+description: |
+  Deferred under MASS-CHANGE mode (advisor-122 ruling 2026-11-22 12:15 MST) from the PR #4387 (TASK-3133) Changes Requested verdict at aa380d29b2. These findings were blocking (unmet claimed AC / below-tier) and now defer; #4387 fixes only p1, data loss and security findings in its final round.
+
+  ## Findings to address
+  1. [major/mutation-kill] aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs The new regression at line 517 can pass if the previous fixture_tempdir is restored. In a normal build outside /tmp or a named seat, the old helper chooses the target relative to the compile-time CARGO_MANIFEST_DIR. Relocating the executable, cwd and TMPDIR leaves that path unchanged. Assert that the actual fixture root is a direct child of the designated private-fixture base under /tmp, or exercise the old target-selection input with a controlled workspace whose target resolves under target/worktrees. Verify that restoring the previous helper fails on an ordinary checkout.
+  2. [major/untested-path] aida-cli-lib/src/tests/bug_2169_contained_clone_bwrap_tests.rs Making fixture_tempdir always use /tmp also moves the TASK-2712 live Codex denial test there on primary hosts. Its existing preflight explicitly skips when Codex grants writes to an unlisted sibling under /tmp (and fails when live coverage is required). A host that previously exercised the denial assertions outside /tmp can now lose that coverage solely because of fixture placement. Give that live test a fixture location outside both the ambient temporary write grant and target/worktrees.
+
+  ## Acceptance
+  - AC1: Each finding above is fixed with a regression test that fails before the fix, or explicitly closed with advisor sign-off as not applicable to the landed code.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T19:16:21.498334452Z
+modified_at: 2026-11-22T19:16:21.498334452Z
+req_type: Task
+tags:
+- mass-change
+- review-follow-up
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
