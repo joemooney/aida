@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-22T17:59:57.976736794Z
+modified_at: 2026-11-22T18:14:48.760982598Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -494,6 +494,15 @@ comments:
   modified_at: 2026-11-22T17:59:57.976736794Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20477-ceb6-7c80-93c8-0dc8e05f8d0e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: bdd60daf20ca7357f13beb9ad35a86a7d3843ea2 plus the native worktree edits. AC1: [evidence: documentation-inspection] aida-core/templates/skills/aida-review.md and commands/aida-review.md direct the reviewer to write draft.json, correct refusals and exit on acceptance. AC2: [evidence: behavioral-test] aida-cli/tests/bug_2707_submit_draft_cli.rs:57 passed using deterministic PATH, including contradictory approval, correction, and refusal after editing. AC3: [evidence: behavioral-test] the same CLI fixture retains the p3 and style findings and reports the request-changes remedy. Adversarial inspection found one shared validator and no submit-time file writes or receipts. Collection at review_draft.rs:161 locks before reading and through recording and consumption. The launcher retains its policy, grant, head checks, and legacy fallback only for a missing draft. Edited and never-validated contradictory inputs are covered in review_draft.rs:846. Store-writer inventory passed. Native .agents pack regeneration requires the host. TASK-HOME-1193 stays open for published-head verification.
+  created_at: 2026-11-22T18:14:48.760982598Z
+  modified_at: 2026-11-22T18:14:48.760982598Z
+  session_id: 01a2046c4bb5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe
