@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-22T17:28:41.853087446Z
+modified_at: 2026-11-22T17:33:24.426166216Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -577,6 +577,20 @@ comments:
   created_at: 2026-11-21T07:49:27.809899119Z
   modified_at: 2026-11-21T07:49:27.809899119Z
   session_id: 01a1fd06c235
+- id: 01a20452-130c-72d3-94e5-75e2989404af
+  author: joe
+  content: |-
+    AUTHORITATIVE CONFLICT BRIEF (advisor-122, relayed by product 10:33):
+    # TASK-3133 / PR #4387: conflict repair ONLY (advisor-122 routing 2026-11-22 10:30 MST; relayed by product-15). Lane: CODEX.
+
+    PR #4387 (head 509f5afb) conflicts with main. Merge origin/main into the branch and resolve the conflicts, preserving slice 3's fixture-root isolation and watchdog re-exec semantics. Merge, do not rebase or force-push; COMMIT your work. Make NO other changes: the acceptance evidence gate is already met (3 dell1 lane jobs plus 3 primary-host runs, each 382/0). After resolving, run the seat_clone targeted test once on the merged tree and `make check-ci-fast`, then push. Review follows the merge.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-22T17:33:24.426166216Z
+  modified_at: 2026-11-22T17:33:24.426166216Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
