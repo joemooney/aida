@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T20:46:18.165571017Z
+modified_at: 2026-11-22T21:02:39.970741776Z
 req_type: Bug
 tags:
 - fasttrack
@@ -39,6 +39,20 @@ comments:
   modified_at: 2026-11-22T20:30:07.954667272Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20511-78a1-7902-835d-db24c72dc36b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b plus the native working-tree diff. The merge-base diff is empty and there are no untracked additions.
+    AC1: [evidence: behavioral-test] seat_clone.rs:4031 and queue_work_tests.rs:4866 keep the actual-base merge local. The BUG-2714 integration-base regression checked the remote and first parent.
+    AC2: [evidence: behavioral-test] bug_home_038_seat_publish_tests.rs:2546 checks the fix parent and the remote tip through ship --from-seat. The existing non-forced push publishes the checked tip once.
+    AC3: [evidence: behavioral-test] ship_from_seat.rs:2530 and pr_cmd/finish.rs:276 reject the preparation tip before publication. The regression checks the exact diagnostic and the unchanged remote.
+    AC4: [evidence: behavioral-test] bug_home_038_seat_publish_tests.rs:2489 drives clean and conflict pickups. Lane job j20261122T204954230-2-0 executed both BUG-2714 tests, 2 passed.
+    Probes covered the shared exact subject comparison, Git log limited to the tip and merge parents, no fix, a fix, resumed preparation, alternate base and host ownership checks. Clone hooks remain disabled, the guarded ship path retains its vetoes, and preparation has no production publication callback. Updated the obsolete manual and repair fixtures. FAST flagged a Git maintenance setting in a now test-only fixture. Switched to the shared test helper and the maintenance suite passed. Final reruns pending. Residual limitation: a hand-authored merge deliberately using the reserved preparation subject also refuses until a fix follows.
+  created_at: 2026-11-22T21:02:39.970741776Z
+  modified_at: 2026-11-22T21:02:39.970741776Z
+  session_id: 01a20501f488
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
   author: aida-session-start
