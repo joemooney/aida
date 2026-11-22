@@ -1,0 +1,31 @@
+id: 01a204af-86cd-7380-9ec4-12c1f06c8c80
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1212
+agreed_id: TASK-3831
+title: 'Mass-change deferred findings from PR #4373 (TASK-3826) final round'
+description: |
+  Deferred under MASS-CHANGE mode (advisor-122 ruling 2026-11-22 12:15 MST) from the PR #4373 (TASK-3826) Changes Requested verdict at 2a0c351161. These findings were blocking (unmet claimed AC / below-tier) and now defer; #4373 fixes only p1, data loss and security findings in its final round.
+
+  ## Findings to address
+  1. [p2/unmet-claimed-ac] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:1434 — TASK-3826 AC3, round-3 item 4. place_brief retires previous pending files across vendors before publishing the new file. A subsequent head-gate refusal removes the new file and leaves the earlier brief absent from pickup. A failed delivery with no returned path also retracts every pending brief for the spec. Stage by round, retract only that round, and retire prior files on confirmed admission. Check both vendor mailboxes after refusal.
+  2. [p2/unmet-claimed-ac] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:508 — TASK-3826 fresh routing. Fresh checks for an open change at queue routing, then admit returns immediately for Fresh. An open change appearing while the launcher waits for capacity is missed. Re-read fresh eligibility for the spec after slot acquisition, and cover a change opening between routing and admission.
+  3. [p2/unmet-claimed-ac] aida-cli-lib/src/lane_relay.rs aida-cli-lib/src/lane_relay.rs:650 — TASK-3826 AC5. nap returns true even after sleeping the entire remaining budget, and the next probe or admission read uses its own timeout (150 seconds over SSH). A late idle reply can even authorize launch after wait_timeout. Bound host operations by the remaining deadline and reject late observations. The existing timing test allows 150 seconds for a 100-second budget.
+
+  ## Acceptance
+  - AC1: Each finding above is fixed with a regression test that fails before the fix, or explicitly closed with advisor sign-off as not applicable to the landed code.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T19:15:41.901877318Z
+modified_at: 2026-11-22T19:15:41.901877318Z
+req_type: Task
+tags:
+- mass-change
+- review-follow-up
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
