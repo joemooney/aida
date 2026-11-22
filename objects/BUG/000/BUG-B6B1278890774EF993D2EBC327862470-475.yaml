@@ -14,12 +14,12 @@ description: |
   - AC2: At ship, the merge and the fix commits are pushed together in one push, so the first new PR head after a rework round always contains the round's fix.
   - AC3: A lane whose only new commit is the merge pushes nothing and reports "no fix commits; nothing published".
   - AC4: A regression test drives a rework pickup whose base needs a main merge and asserts the remote branch head is unchanged until ship, then equals the merge-plus-fix tip.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T20:30:07.954667272Z
+modified_at: 2026-11-22T20:45:55.364619230Z
 req_type: Bug
 tags:
 - fasttrack
@@ -39,6 +39,14 @@ comments:
   modified_at: 2026-11-22T20:30:07.954667272Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
+  author: aida-session-start
+  timestamp: 2026-11-22T20:45:55.364618179Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
