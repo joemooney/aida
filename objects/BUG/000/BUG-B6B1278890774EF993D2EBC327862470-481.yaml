@@ -1,0 +1,28 @@
+id: 01a205a9-7715-7ce3-a532-cf8c3ffde338
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-481
+agreed_id: BUG-2720
+title: Review-watch never retries an attempt that exited on a since-removed held worktree; passes report 0 dispatched / 0 refused
+description: |
+  Found 2026-11-22 (product-15; advisor-122 ruled it a BUG at 16:55). At 14:25 MST, review-watch attempts on PR-4364, 4373, 4381, 4387 and 4389 failed at pickup with "branch `pr-N` is held by worktree .../aida-pr-N before pickup setup" (dead outage-era reviewer trees). The trees were removed at ~15:00. Review-watch never retried, because an exited attempt for a head isn't relaunched. Every later pass reported "14 open change(s); 0 dispatched; 0 not admitted; 0 busy; 0 refused", and the PRs sat with no reviewer for 1-3.5h until a manual `aida review watch --release PR-N` at 16:42.
+
+  ## Acceptance
+  - AC1: An attempt that exited because of a transient pickup blocker (worktree or branch held, lock busy) is retried automatically once the blocker is gone, bounded with backoff, not left as a permanent exited reservation.
+  - AC2: The pass summary counts heads it skipped because of a prior exited attempt (e.g. "N held by exited attempts"), naming the PRs, so "0 dispatched, 0 refused" can never hide stuck changes.
+  - AC3: A regression test: an attempt exits on a held worktree, the worktree is removed, and the next pass dispatches the same head.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T23:48:41.877431556Z
+modified_at: 2026-11-22T23:48:41.877431556Z
+req_type: Bug
+tags:
+- review-watch
+- throughput
+filed_at:
+  code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6be38166be8
+  vendor: claude
