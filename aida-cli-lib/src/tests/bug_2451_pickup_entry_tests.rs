@@ -83,7 +83,6 @@ fn bug_2211_session_reuses_local_and_remote_only_branches_without_config_writes(
             PathReentry::None,
             Some(None),
             false,
-            /* no_human */ false,
         )
         .unwrap_or_else(|err| panic!("local={local}, explicit_reuse={explicit_reuse}: {err:#}"));
         receipt.disarm();
@@ -134,7 +133,6 @@ fn start(
         PathReentry::None,
         resolved,
         /* done_rework_admitted */ false,
-        /* no_human */ false,
     )
 }
 

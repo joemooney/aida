@@ -3815,6 +3815,7 @@ fn is_default_review_worktree(
     root: &std::path::Path,
     branch: &str,
     path: &std::path::Path,
+    allow_missing: bool,
 ) -> Result<bool> {
     let configured = crate::session_start::pickup_worktree_path(root, branch)?;
     let name = configured
@@ -3825,8 +3826,10 @@ fn is_default_review_worktree(
     Ok(canonical(path) != canonical(root)
         && [configured, sibling].iter().any(|candidate| {
             // A symlink at the worktree leaf cannot establish ownership.
-            candidate.symlink_metadata().is_ok_and(|m| m.is_dir())
-                && canonical(candidate) == canonical(path)
+            (match candidate.symlink_metadata() {
+                Ok(m) => m.is_dir(),
+                Err(e) => allow_missing && e.kind() == std::io::ErrorKind::NotFound,
+            }) && canonical(candidate) == canonical(path)
         }))
 }
 
@@ -3921,7 +3924,7 @@ fn review_worktree_retirement(
         return Ok(None);
     };
     let path = crate::worktree::canonical_or_self(&candidate.path);
-    if candidates.next().is_some() || !is_default_review_worktree(root, &branch, &path)? {
+    if candidates.next().is_some() || !is_default_review_worktree(root, &branch, &path, true)? {
         return Ok(None);
     }
     let matching_leases = || -> Result<Vec<SessionLease>> {
@@ -3933,6 +3936,49 @@ fn review_worktree_retirement(
             })
             .collect())
     };
+    // A deleted checkout can still occupy the branch in Git. Only clear an
+    // unleased, prunable registration after the pickup gates have passed.
+    if path
+        .symlink_metadata()
+        .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+    {
+        let prunable = inventory.split("\n\n").any(|record| {
+            record
+                .lines()
+                .any(|l| l == format!("branch refs/heads/{branch}"))
+                && record
+                    .lines()
+                    .any(|l| l.split_whitespace().next() == Some("prunable"))
+                && !record
+                    .lines()
+                    .any(|l| l.split_whitespace().next() == Some("locked"))
+        });
+        anyhow::ensure!(
+            prunable && matching_leases()?.is_empty(),
+            "missing review worktree is still held: {}",
+            path.display()
+        );
+        if retire {
+            let tip = crate::session_reap::resolve_local_branch_tip(root, &branch)
+                .context("cannot resolve prunable review branch")?;
+            let head = crate::pr_lease_takeover::fetch_review_head(root, forge, n)?;
+            anyhow::ensure!(
+                crate::pr_lease_takeover::is_ancestor(root, &tip, &head),
+                "prunable review branch has unpublished commits"
+            );
+            anyhow::ensure!(
+                matching_leases()?.is_empty()
+                    && crate::session_reap::clear_missing_worktree_registration(
+                        root,
+                        &path,
+                        || {},
+                        || {}
+                    ) == crate::session_reap::RegistrationClearOutcome::Cleared,
+                "could not clear prunable review registration"
+            );
+        }
+        return Ok(Some(path));
+    }
     // A crashed review needs positive death proof. Only one exact reviewer
     // lease is eligible. A review whose verdict is recorded at the lease's
     // head and whose worker is gone has also ended, even without a lifecycle
@@ -6371,10 +6417,6 @@ pub(crate) fn handle_queue_work(
                 // trace:STORY-2690 | ai:claude
                 /* done_rework_admitted */
                 plan.done_rework_change.is_some(),
-                // A `--no-human` pickup's setup must never stop at a prompt.
-                // trace:BUG-2684 | ai:claude
-                /* no_human */
-                no_human,
             )
         };
         let setup_receipt = if no_launch {
@@ -7375,7 +7417,7 @@ pub(crate) fn end_finished_review(
             let default_review = crate::pr_lease_takeover::reviewer_target(l)
                 .is_some_and(|(forge, n)| {
                     l.branch == forge.local_branch_for(n)
-                        && is_default_review_worktree(project_root, &l.branch, worktree)
+                        && is_default_review_worktree(project_root, &l.branch, worktree, false)
                             .unwrap_or(false)
                 });
             // A lease without a head has no review ownership record to

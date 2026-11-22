@@ -1619,11 +1619,24 @@ pub(crate) fn verdict_history(
 /// ledger, or a synced publication. An unreadable source counts as no verdict.
 // trace:BUG-2684 | ai:claude
 pub(crate) fn conclusive_recorded_at(root: &Path, keys: &[&str], head: &str) -> bool {
+    if !matches!(head.len(), 40 | 64) || !head.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return false;
+    }
+    // A 40-digit legacy prefix is still an abbreviation in a SHA-256 repository.
+    let format = aida_core::git_ops::host_git_command(root)
+        .args(["rev-parse", "--show-object-format"])
+        .output();
+    let expected = if head.len() == 40 { "sha1" } else { "sha256" };
+    if !format.is_ok_and(|out| {
+        out.status.success() && String::from_utf8_lossy(&out.stdout).trim() == expected
+    }) {
+        return false;
+    }
     let conclusive = |v: &RecordedVerdict| {
         !matches!(v.kind, VerdictKind::Waiting | VerdictKind::Unknown)
             && v.reviewed_sha
                 .as_deref()
-                .is_some_and(|sha| same_reviewed_sha(sha, head))
+                .is_some_and(|sha| sha.eq_ignore_ascii_case(head))
     };
     keys.iter().any(|key| {
         let events = super::ledger::ChangeKey::parse(key)
@@ -1637,13 +1650,17 @@ pub(crate) fn conclusive_recorded_at(root: &Path, keys: &[&str], head: &str) -> 
                 .ok()
             })
             .unwrap_or_default();
-        verdict_history(root, key, &events)
-            .unwrap_or_default()
+        events
             .iter()
-            .filter_map(|(record, _, _)| {
-                parse_recorded_verdict(&serde_json::Value::Object(record.clone()).to_string())
-            })
+            .filter(|event| !event.is_spec_only())
+            .filter_map(|event| event.verdict_record())
+            .filter_map(parse_ledger_record)
             .any(|v| conclusive(&v))
+            || verdict_history(root, key, &[])
+                .unwrap_or_default()
+                .iter()
+                .filter_map(|(record, _, _)| parse_ledger_record(record))
+                .any(|v| conclusive(&v))
             || super::review_publication::current_at_head(root, &[*key], head)
                 .and_then(|current| parse_recorded_verdict(&current.body))
                 .is_some_and(|v| conclusive(&v))

@@ -5288,7 +5288,6 @@ fn prepare_agent_launch_attempt_inner(
                     },
                     None,
                     /* done_rework_admitted */ false,
-                    /* no_human */ false,
                 )
             });
             let restore_result = std::env::set_current_dir(&previous_cwd);

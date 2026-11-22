@@ -531,36 +531,6 @@ pub(crate) fn journal_review_reclaim(root: &Path, lease: &crate::SessionLease) -
     journal_reclaim(root, lease)
 }
 
-/// Whether an earlier reviewer's lease has ended for a review pickup: the
-/// pickup ownership rule does not retain it and either its holder is
-/// positively dead ([`review_holder_proven_dead`]) or the record is the
-/// completion receipt bound to this lease
-/// ([`review_completion_receipt_bound`]). Unknown liveness keeps the lease.
-// trace:BUG-2684 | ai:claude
-pub(crate) fn stale_review_lease_ended(root: &Path, lease: &crate::SessionLease) -> bool {
-    crate::pr_lease_takeover::reviewer_target(lease).is_some()
-        && !lease_retained(root, lease)
-        && (review_holder_proven_dead(root, lease).is_ok()
-            || review_completion_receipt_bound(root, lease))
-}
-
-/// The ownership record is the supervisor's completion receipt for exactly
-/// this lease: a Closed review record naming no holder whose reason binds
-/// this lease's identity and worker generation, with the recorded worker
-/// gone ([`review_completion_matches`]). A holder-less Closed record with any
-/// other reason (another lease's receipt, a manual release) proves nothing
-/// about this lease, and an unreadable record is never a receipt.
-// trace:BUG-2684 | ai:claude
-fn review_completion_receipt_bound(root: &Path, lease: &crate::SessionLease) -> bool {
-    matches!(
-        lease_record(root, lease),
-        Ok(Some(record))
-            if matches!(record.key, WorkKey::Review { .. })
-                && record.holder.is_none()
-                && matches!(&record.phase, Phase::Closed { why } if review_completion_matches(lease, why))
-    )
-}
-
 /// Positive proof that a reviewer lease's holder ended, or why it is kept.
 /// Reaping fails closed: an unreadable ownership record, a record naming a
 /// different (or no) holder, or a provably live holder keeps the lease. When

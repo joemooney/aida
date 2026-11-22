@@ -42,16 +42,6 @@ fn queue_work_sync_force(
     no_pull: bool,
     force_claim: bool,
 ) -> anyhow::Result<()> {
-    queue_work_full(storage, no_launch, no_pull, force_claim, false)
-}
-
-fn queue_work_full(
-    storage: &crate::Storage,
-    no_launch: bool,
-    no_pull: bool,
-    force_claim: bool,
-    no_human: bool,
-) -> anyhow::Result<()> {
     crate::queue_cmd::handle_queue_work(
         storage,
         None,
@@ -76,7 +66,7 @@ fn queue_work_full(
         false,
         None,
         "claude",
-        /* no_human */ no_human,
+        false,
         crate::phase_driver::AutonomyMode::Default,
         None,
         false,
@@ -578,6 +568,14 @@ fn bug_2684_recorded_verdict_retires_stale_reviewer_tree_on_next_head_pickup() {
     assert_ne!(new_lease.id, lease.id);
     assert_eq!(new_lease.worktree_path, tree);
     assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), next_head);
+    // Delete the checkout but leave its registration. A subsequent pickup
+    // has to pass both occupancy checks and recreate the default checkout.
+    std::fs::remove_file(crate::lease_path(&fx.main, &new_lease.id)).unwrap();
+    std::fs::remove_dir_all(&tree).unwrap();
+    assert!(git_ok(&fx.main, &["worktree", "list", "--porcelain"]).contains("prunable"));
+    status(aida_core::RequirementStatus::Approved);
+    queue_work(&storage).unwrap();
+    assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), next_head);
     // The retirement wrote the lease-bound completion receipt.
     let old = crate::ownership::reader::lease_record(&fx.main, &lease)
         .unwrap()
@@ -669,6 +667,16 @@ fn bug_2684_each_local_verdict_source_counts_as_recorded_at_its_head() {
     assert!(!recorded(root, GitHub, 35, &sha('a')));
     assert!(!recorded(root, GitHub, 35, &other));
 
+    write("PR-35/round-1.json", serde_json::json!(false));
+    assert!(recorded(root, GitHub, 35, &sha('b')), "independent ledger");
+
+    let prefix = "abcd1234";
+    write("PR-38.json", verdict("approved", prefix));
+    for suffix in ['a', 'b'] {
+        let head = format!("{prefix}{}", suffix.to_string().repeat(32));
+        assert!(!recorded(root, GitHub, 38, &head));
+    }
+
     // The GitLab `MR-` key, as a file and as a ledger change. A GitLab
     // pickup reads both keys; a GitHub pickup never reads `MR-`.
     write("MR-36.json", verdict("approved", &sha('a')));
@@ -680,47 +688,6 @@ fn bug_2684_each_local_verdict_source_counts_as_recorded_at_its_head() {
     assert!(!recorded(root, GitHub, 37, &sha('b')));
     // A GitLab pickup still honours the `PR-` key.
     assert!(recorded(root, GitLab, 31, &sha('a')));
-}
-
-/// A `--no-human` review pickup hands its flag to session start, where the
-/// lease-conflict loop decides from the substrate instead of prompting; an
-/// attended pickup passes none. Observed at session start itself, on the
-/// real `aida queue work` path.
-// trace:BUG-2684 | ai:claude
-#[test]
-fn bug_2684_no_human_review_pickup_passes_no_human_to_session_start() {
-    for no_human in [false, true] {
-        let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
-        let fx = fixture();
-        let mut ambient =
-            crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "reviewer", &[]);
-        ambient.set_key("AIDA_TRUST_PID_NAMESPACE", "1");
-        ambient.set_key("AIDA_NO_HUMAN_ACKNOWLEDGED", "1");
-        let gh = fx.root.join("fake-gh");
-        crate::test_exec::write_executable(&gh, "#!/bin/sh\nexit 1\n");
-        ambient.set_key("AIDA_TEST_GH_BINARY", &gh);
-        git_ok(&fx.main, &["init", "-q", ".aida-store"]);
-        let store = fx.main.join(".aida-store");
-        git_ok(&store, &["config", "user.email", "test@example.com"]);
-        git_ok(&store, &["config", "user.name", "AIDA Test"]);
-        let (storage, _status) = review_story(&fx.main);
-        std::fs::write(fx.main.join("README.md"), "PR head\n").unwrap();
-        git_ok(&fx.main, &["commit", "-qam", "PR head"]);
-        git_ok(
-            &fx.main,
-            &["push", "-q", "origin", "HEAD:refs/pull/2457/head"],
-        );
-        crate::session_start::test_no_human_seen::take();
-        let result = queue_work_full(&storage, true, true, false, no_human);
-        let seen = crate::session_start::test_no_human_seen::take();
-        assert_eq!(
-            seen,
-            vec![no_human],
-            "no_human={no_human}: session start saw {seen:?}; pickup result {result:?}"
-        );
-        result.unwrap();
-        assert_eq!(crate::list_leases(&fx.main).len(), 1);
-    }
 }
 
 // trace:BUG-2469 | ai:codex
