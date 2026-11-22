@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-22T18:06:59.671023817Z
+modified_at: 2026-11-22T18:46:03.259304843Z
 req_type: Story
 tags:
 - landing
@@ -1082,6 +1082,23 @@ comments:
   modified_at: 2026-11-22T18:03:53.059301892Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20494-642e-7d83-beee-ab11563b3a2d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 964a98c30edfd0c67a5712f8e52dcc99f8a8d22d, plus the native uncommitted diff and untracked-file inventory (empty). Refs-only S3a.
+
+    Findings 15 and 12: [evidence: behavioral-test] The scheduled watch has no rerun mutation port or forge POST. Red opens an episode and sends the observation. A linked journal with a torn tail is refused and the other name retains its contents. See aida-cli-lib/src/tests/story_2897_main_watch_tests.rs:322 and :488.
+    Findings 1–6: [evidence: behavioral-test] Oldest candidate and pending frontier persist across passes. Production first-parent traversal returns the oldest bounded batch, distinguishes a missing object from an off-chain parent, and uses a pinned tip. Cursor, episode and journal intent are persisted together. Historical and observation times are distinct. See main_watch tests :622, :999, :1072 and :1163.
+    Findings 7–10 and 19: [evidence: behavioral-test] Carried jobs are verified against paginated all-attempt evidence. Job reports validate the exact ID, run, attempt and name before reading failed steps and the log. Optional jobs sharing a run remain diagnostics. See main_watch tests :204, :499, :1030 and :1119.
+    Findings 11–14 and 16–18: [evidence: behavioral-test] Watch directories are pinned, file reads bounded and nonblocking, inaccessible evidence refused, revert attribution bound to the red SHA, and the log deadline holds after pipe EOF. The source guard scans the CLI library and restricts watch dispatch. See main_watch tests :443, :666, :790, :1016 and :1148.
+    Deep pass: checked identity comparisons, null/missing metadata, duplicate and replaced jobs, later pages, torn writes, restart and directory replacement. Fixed a pending initial candidate being skipped after restart and reused the existing Git routing sanitizer after the ExecContext ratchet identified an ambient environment read. No reviewer verdict or draft disposition.
+    Validation: final watch filter 40 passed, exact GitHub attempt filter 2 passed, formatting and diff checks clean, store writer inventory 3834 sites reconciled. Structural ratchets 51 passed, CLI library ratchets 90 passed, JSON audit 2 passed, Python ratchet fixtures 90 passed. Source fast gate was interrupted when the make target started Cargo directly and its final Rust harness ran through the lane runner instead. Dynamic manual check remains for the host. Touched CLI tests initially had five failures, three passed after building the matching CLI. Two persist in the lane, native preflight ForeignNamespace and a fixture reporting 31.3 GiB against a 60 GiB launch floor. Core touched suite 2372 passed, one cache-lock assertion failed and passed in isolation. No replacement-head CI yet.
+    Checklist limitation: the original 01:54 numbered ledger record is unavailable on this host. The change-scoped gate reports absent at this exact SHA, and the forge lists zero reviews. Used the advisor’s numbered rework brief for the coverage above. Exact-verdict reconciliation and fresh independent review remain open. S1b and S3b are deferred.
+  created_at: 2026-11-22T18:46:03.259304843Z
+  modified_at: 2026-11-22T18:46:03.259304843Z
+  session_id: 01a204703c77
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
