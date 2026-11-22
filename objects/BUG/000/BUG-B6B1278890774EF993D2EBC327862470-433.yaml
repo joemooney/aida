@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-22T17:38:56.120249641Z
+modified_at: 2026-11-22T17:39:11.479388522Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -401,6 +401,13 @@ comments:
     Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
   created_at: 2026-11-22T17:38:56.120249641Z
   modified_at: 2026-11-22T17:38:56.120249641Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20457-5f0b-7363-b69a-4d45b95d4f31
+  author: joe
+  content: 'Product 10:39: CI-FIX lane queued on dell1 (codex), branch bug-b6b1278890774ef993d2ebc327862470-433. Scope = the AUTHORITATIVE CI-FIX BRIEF in the previous comment.'
+  created_at: 2026-11-22T17:39:11.479388522Z
+  modified_at: 2026-11-22T17:39:11.479388522Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
