@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T15:47:02.009592285Z
-modified_at: 2026-11-22T18:20:50.673208623Z
+modified_at: 2026-11-22T18:21:18.028458029Z
 req_type: Bug
 tags:
 - dell1
@@ -1049,6 +1049,44 @@ comments:
   content: 'Product 11:22: scope-cut follow-up filed as STORY-2997 (Draft, needs sketch). Final scope-cut codex lane queued on #4364 behind BUG-2688.'
   created_at: 2026-11-22T18:20:50.673208623Z
   modified_at: 2026-11-22T18:20:50.673208623Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a2047d-e97c-71f3-a093-742e52f1d71f
+  author: joe
+  content: |-
+    AUTHORITATIVE FINAL-SCOPE-CUT BRIEF (advisor-122, relayed by product 11:21):
+    # BUG-2684 #4364 FINAL round: scope cut (advisor ruling 2026-11-22 11:20 MST)
+
+    The PR is at round 7 (9 verdicts) and well past the 4-round cap. The verdict at 1e8528ae has three P1s. Two of them (1 and 3) are in the new
+    *lease-release* path: releasing a dead reviewer's lease without prompting can delete a live creator's
+    lease, or a re-stamped same-ID generation. That is authority code and can't merge with follow-ups.
+
+    Ruling: CUT SCOPE, like BUG-2707's simplification. Don't fix the lease-release path; REMOVE it.
+
+    Keep (stale reviewer-tree retirement, which is what blocked review-watch for 40h on 2026-11-22):
+    - Finding 2 (P1): handle a deleted default pr-N worktree still registered in Git (prunable marker) in the
+      read-only preflight and post-gate cleanup. Cover it through queue work with the stale registration present.
+    - Finding 4 (P2): exact-head means full object-ID equality. Resolve legacy abbreviations uniquely or refuse.
+      Cover two heads that share the recorded prefix.
+    - Finding 5 (P2): read the checked ledger independently of the legacy/archive history, so a corrupt legacy
+      round can't hide a valid exact-head ledger verdict.
+
+    Remove:
+    - The no-prompt release of dead gone-tree reviewer leases (session_reap.rs release path, the
+      session_start.rs conflict-loop creator check, and their tests). Lease release keeps today's
+      behaviour (prompt / doctor heal stale-leases). That removes findings 1 and 3.
+    - Update the PR title/body: "retire a recorded reviewer's stale tree" only.
+
+    Follow-up: product files a separate spec for the reviewer-lease auto-release. It needs a sketch and advisor
+    signoff (generation revalidation under the lease writer lock, creator liveness at the first release decision).
+
+    Gate: LIGHT (one targeted cargo run + make check-ci-fast). Refs-only trailer, as before.
+    If this round is CHANGES REQUESTED on the kept scope, the PR is parked.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-22T18:21:18.028458029Z
+  modified_at: 2026-11-22T18:21:18.028458029Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
