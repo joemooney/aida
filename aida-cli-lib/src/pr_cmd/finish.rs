@@ -272,6 +272,9 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         );
     }
 
+    // trace:BUG-2714 | ai:codex
+    crate::ship_from_seat::require_fix_after_preparation(&project_root, "HEAD")?;
+
     // ---- Step 2: rebase onto the branch's REAL base, not a hardcoded
     // origin/main (TASK-1416). A stacked PR (base = another in-flight
     // branch, not the repository default) that gets rebased onto main

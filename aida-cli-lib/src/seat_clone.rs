@@ -3399,7 +3399,6 @@ fn prepare_rework_merge_with_base(
         &execute,
         branch,
         resume,
-        |tip| publish_rework_merge(main, tree, branch, tip),
         |base, restore_only| {
             let head = execute(&["rev-parse", "HEAD"])?;
             *repair_key.borrow_mut() = Some(crate::repair_journal::RepairKey {
@@ -3457,9 +3456,27 @@ fn prepare_rework_merge_with_base(
     })
 }
 
+// trace:BUG-2714 | ai:codex
+pub(crate) const REWORK_PREPARATION_SUBJECT: &str = "Merge rework base before implementing fix";
+
+// Inspect only this commit. Earlier preparation merges remain ancestors of a
+// legitimate fix and an ordinary commit may have the same subject.
+pub(crate) fn preparation_merge_probe(tip: &str) -> [&str; 7] {
+    [
+        "log",
+        "--no-walk",
+        "--min-parents=2",
+        "--format=%s",
+        "--no-notes",
+        "--no-show-signature",
+        tip,
+    ]
+}
+
 /// Publish the prepared tip using only the trusted host origin. Clone objects
 /// cross the existing sandboxed bundle boundary; seat hooks never run.
 // trace:BUG-2456 | ai:codex
+#[cfg(test)]
 fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Result<()> {
     crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
     let imported = host_recorded_clone(main, tree)
@@ -3477,16 +3494,17 @@ fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Re
         crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
         // trace:BUG-2618 | ai:codex — queue rework is a head publication too.
         crate::pr_head_guard::check_branch(main, branch)?;
-        let mut push = aida_core::git_ops::host_remote_git_command(main, "origin");
-        push.args([
-            "-c",
-            "core.hooksPath=/dev/null",
-            "push",
-            "origin",
-            &format!("{tip}:refs/heads/{branch}"),
-        ])
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .stdin(std::process::Stdio::null());
+        let mut push = crate::test_git::git_command();
+        push.current_dir(main)
+            .args([
+                "-c",
+                "core.hooksPath=/dev/null",
+                "push",
+                "origin",
+                &format!("{tip}:refs/heads/{branch}"),
+            ])
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .stdin(std::process::Stdio::null());
         match crate::command_output_with_timeout_detail(push, std::time::Duration::from_secs(30)) {
             crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
             crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
@@ -3890,7 +3908,6 @@ fn prepare_host_repair_with(
     execute: &dyn Fn(&[&str]) -> Result<String>,
     branch: &str,
     resume: bool,
-    publish: impl FnOnce(&str) -> Result<()>,
     regenerate: impl FnOnce(&str, bool) -> Result<()>,
     fetch_heads: impl FnOnce() -> Result<(String, String)>,
 ) -> Result<Vec<String>> {
@@ -4010,13 +4027,22 @@ fn prepare_host_repair_with(
             }
         }
     } else {
-        execute(&["merge", "--no-edit", "--no-verify", &base])?;
-        let tip = execute(&["rev-parse", "HEAD"])?;
-        if tip != before && before == pr_head {
-            let parents = execute(&["show", "-s", "--format=%P", &tip])?;
-            if parents.split_whitespace().collect::<Vec<_>>() == [pr_head.as_str(), base.as_str()] {
-                publish(&tip)?;
-            }
+        // Mark preparation-only tips, including fast-forwards and repeated
+        // preparation on resume. A resume with local fixes can ship normally.
+        // trace:BUG-2714 | ai:codex
+        if before == pr_head
+            || execute(&preparation_merge_probe(&before))? == REWORK_PREPARATION_SUBJECT
+        {
+            execute(&[
+                "merge",
+                "--no-ff",
+                "--no-verify",
+                "-m",
+                REWORK_PREPARATION_SUBJECT,
+                &base,
+            ])?;
+        } else {
+            execute(&["merge", "--no-edit", "--no-verify", &base])?;
         }
         Ok(vec![])
     }
@@ -4119,7 +4145,7 @@ mod rework_merge_tests {
     use super::*;
     // trace:BUG-2603 | ai:codex
     #[test]
-    fn bug_2603_integration_rework_fetches_and_merges_only_actual_base() {
+    fn bug_2714_bug_2603_integration_rework_keeps_actual_base_merge_local() {
         let fx = tests::fixture();
         let g = |args: &[&str]| tests::git_ok(&fx.main, args);
         g(&["branch", "integration"]);
@@ -4190,6 +4216,16 @@ mod rework_merge_tests {
         .unwrap();
         assert!(execute(&["merge-base", "--is-ancestor", &integration, "HEAD"]).is_ok());
         assert!(execute(&["merge-base", "--is-ancestor", &main, "HEAD"]).is_err());
+        // trace:BUG-2714 | ai:codex
+        let remote = || tests::git_ok(&fx.origin, &["rev-parse", "refs/heads/rework"]);
+        assert_eq!(remote(), before);
+        assert_eq!(g(&["rev-parse", "HEAD^1"]), before);
+        let err =
+            crate::ship_from_seat::require_fix_after_preparation(&fx.main, "HEAD").unwrap_err();
+        assert_eq!(err.to_string(), "no fix commits; nothing published");
+        g(&["commit", "--allow-empty", "-qm", "fix: round (BUG-2714)"]);
+        crate::ship_from_seat::require_fix_after_preparation(&fx.main, "HEAD").unwrap();
+        assert_eq!(remote(), before);
         assert!(fx.main.join("integration-only").exists());
         assert!(!fx.main.join("main-only").exists());
         assert!(fetch_rework_heads(&fx.main, "missing-base", "rework").is_err());
@@ -4453,7 +4489,6 @@ mod rework_merge_tests {
                 &failed_probe,
                 "repair",
                 false,
-                |_| panic!("failed probe must not publish"),
                 |_, _| panic!("failed probe must not regenerate"),
                 || Ok((head.clone(), head.clone())),
             )
@@ -4469,7 +4504,6 @@ mod rework_merge_tests {
             &execute,
             "repair",
             false,
-            |_| panic!("unchanged tip must not publish"),
             |_, _| panic!("clean merge must not regenerate"),
             || Ok((head.clone(), head.clone())),
         )
@@ -4564,7 +4598,6 @@ mod rework_merge_tests {
                 &failed_probe,
                 "repair",
                 false,
-                |_| panic!("failed probe cannot publish"),
                 |_, _| panic!("failed probe cannot regenerate"),
                 || Ok((base.clone(), head.clone())),
             )
@@ -4583,7 +4616,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             false,
-            |_| panic!("conflicts must not publish"),
             |_, _| anyhow::bail!("generator timeout after partial write"),
             || Ok((base.clone(), head.clone())),
         );
@@ -4607,7 +4639,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             true,
-            |_| panic!("failed preparation cannot publish"),
             |_, _| anyhow::bail!("generator still fails"),
             || Ok((base.clone(), head.clone())),
         );
@@ -4626,7 +4657,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             true,
-            |_| panic!("unrelated lane cannot publish"),
             |_, _| panic!("unrelated lane cannot regenerate"),
             || Ok((base.clone(), head.clone())),
         )
@@ -4639,7 +4669,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             true,
-            |_| panic!("conflicts cannot publish"),
             |_, restore_only| {
                 assert!(restore_only);
                 Ok(())
@@ -4700,7 +4729,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             true,
-            |_| panic!("retry must not publish"),
             |_, _| panic!("retry must not overwrite evidence"),
             || Ok((base.clone(), head.clone())),
         )

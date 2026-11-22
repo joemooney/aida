@@ -4862,11 +4862,8 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
             } else {
                 let vendor =
                     routed.unwrap_or_else(|e| panic!("{branch} interactive={interactive}: {e:#}"));
-                assert_eq!(
-                    remote,
-                    git(&seat, &["rev-parse", "HEAD"]),
-                    "host pushed before launch"
-                );
+                // trace:BUG-2714 | ai:codex
+                assert_eq!(remote, head, "preparation must keep the merge local");
                 assert_eq!(vendor, HeadlessVendor::Codex);
                 assert_eq!(mailed.get(), 0);
                 assert_ne!(git(&seat, &["rev-parse", "HEAD"]), head, "merge committed");

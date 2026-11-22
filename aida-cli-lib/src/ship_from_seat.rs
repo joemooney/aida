@@ -1873,6 +1873,7 @@ pub(crate) fn stage_bundle(
 /// Import a recorded seat's branch into main's quarantine: bundle it in the
 /// seat sandbox, verify it, fetch it. Returns the quarantine ref and the tip.
 // trace:BUG-HOME-038 | ai:claude
+#[cfg(test)]
 pub(crate) fn import_seat_branch(
     seat: &HostRecordedClone,
     branch: &str,
@@ -2525,12 +2526,23 @@ pub(crate) fn publication_subject_since(
         .map(str::to_string)
 }
 
+// trace:BUG-2714 | ai:codex
+pub(crate) fn require_fix_after_preparation(repo: &Path, tip: &str) -> Result<()> {
+    let subject = git_text(repo, &crate::seat_clone::preparation_merge_probe(tip))?;
+    anyhow::ensure!(
+        subject != crate::seat_clone::REWORK_PREPARATION_SUBJECT,
+        "no fix commits; nothing published"
+    );
+    Ok(())
+}
+
 /// Everything [`run_from`] checks on a staged import before it pushes: the
 /// diff stat against the default branch, the STORY-469 trailer check and an
 /// explicit spec's match. A refusal here deletes the quarantine ref.
 // trace:BUG-HOME-038 trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
 fn check_staged(main: &Path, staged: &Staged, opts: &FromSeatOptions) -> Result<()> {
     let (quarantine, tip) = (&staged.reference, &staged.tip);
+    require_fix_after_preparation(&staged.repo, tip)?;
     eprintln!(
         "  {} bundle verified ({tip}){}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),
