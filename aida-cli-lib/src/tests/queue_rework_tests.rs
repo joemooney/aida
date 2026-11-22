@@ -1362,15 +1362,23 @@ fn rework_fails_closed_on_unknown_lease_state() {
         RequirementStatus::NeedsAttention
     );
 
-    // (2) A lease directory that cannot be read.
+    // (2) A regular file in place of the lease directory.
     let (tmp2, storage2) = story_1429_fixture(vec![parked("BUG-9104")]);
-    std::fs::write(tmp2.path().join(".aida").join("sessions"), "not a dir").unwrap();
-    let err = rework_as(&storage2, "BUG-9104", None, false).expect_err("unreadable lease dir");
-    assert!(err.to_string().contains("unreadable"), "{err}");
+    let lease_dir = tmp2.path().join(".aida").join("sessions");
+    std::fs::write(&lease_dir, "not a dir").unwrap();
+    let err = rework_as(&storage2, "BUG-9104", None, false).expect_err("not a lease directory");
+    let msg = err.to_string();
+    let reason = format!("{} is not a real lease directory", lease_dir.display());
+    assert!(msg.contains(&reason), "{msg}");
+    assert!(
+        msg.contains("Fix the session leases (`aida session leases`) and requeue again."),
+        "{msg}"
+    );
     assert_eq!(
         status_of(&storage2, "BUG-9104"),
         RequirementStatus::NeedsAttention
     );
+    assert!(storage2.queue_list("codex", true).unwrap().is_empty());
 
     // (3) A liveness probe that errors, on a lease that claims the spec.
     let check = crate::requeue_lease_gate_from(
