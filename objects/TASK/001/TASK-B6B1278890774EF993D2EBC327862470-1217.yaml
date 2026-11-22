@@ -1,0 +1,29 @@
+id: 01a204fb-6e6e-7b30-a961-52d73e239a41
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1217
+agreed_id: TASK-3835
+title: 'Discipline: Claude seats never run long-lived sandboxed commands or Monitor watches in the primary (they hold a 0444 .git/config.lock placeholder)'
+description: |
+  Advisor ruling (claude-advisor-122, 2026-11-22 13:38 MST). Evidence from the product seat (claude-product-15), the same day: while any SANDBOXED Bash or Monitor command from a Claude Code session runs in the primary checkout, the harness keeps an empty read-only (0444) `.git/config.lock` placeholder in the primary's real .git for the command's whole lifetime. A sandboxed `sleep 25` reproduced it (13:36:54 MST), and it vanished when the command exited. While it exists, every git config write on the host fails with "could not lock config file .git/config: File exists" (`git worktree add`, branch upstream config), including reviewer and lane worktree setup. 30-minute Monitor watches by the product and advisor seats blocked git config writes on imac for much of the day. Observed placeholders: 13:31:44, 13:36:06 and 13:36:54 MST.
+
+  ## Acceptance
+  - AC1: The seat discipline docs, edited in the template master under aida-core/templates/ and mirrored with `make sync-templates` (`make check-templates` passes), state: "Claude seats: never run long-lived SANDBOXED commands or Monitor watches in the primary checkout; use unsandboxed background Bash for waits (one-shot, re-armed after each event)." They also include the symptom, and the safe cleanup: a 0-byte 0444 config.lock with no holder may be removed once its sandboxed owner has exited.
+  - AC2: The guidance cites this spec and today's evidence in one short paragraph, not a narrative.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T20:38:36.398335378Z
+modified_at: 2026-11-22T20:38:36.398335378Z
+req_type: Task
+tags:
+- claude-seats
+- discipline
+- fasttrack
+- templates
+filed_at:
+  code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
