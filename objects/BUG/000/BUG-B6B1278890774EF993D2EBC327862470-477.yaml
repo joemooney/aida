@@ -9,12 +9,12 @@ description: |
   - AC1: Requests carrying a negative sender pidfd (-1, -2 and INT_MIN-like values) are refused before any dispatch, with a clear error.
   - AC2: close() is called only on fds that were validly received. A test asserts no close on the refused values.
   - AC3: A valid pidfd request still dispatches (positive control).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:50.241345704Z
-modified_at: 2026-11-22T21:56:26.625133743Z
+modified_at: 2026-11-22T21:56:58.625173632Z
 req_type: Bug
 tags:
 - authority
@@ -50,6 +50,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20543-2fca-7b92-be56-7f8e14f84d6a
+  author: dirtlab
+  timestamp: 2026-11-22T21:56:58.954684360Z
+  session_id: 01a2054260bc
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -57,3 +66,8 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+attention_reason:
+  category: blocked-dependency
+  detail: The brief requires a failing reproduction of an authorization bypass on main before any fix. This lane cannot exercise that bypass. Reproduction remains unverified. Supply independently obtained failure evidence and authorize proceeding from it.
+  raised_by: implementer
+  raised_at: 2026-11-22T21:56:58.625173632Z
