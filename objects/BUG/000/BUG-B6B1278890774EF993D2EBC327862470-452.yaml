@@ -14,12 +14,12 @@ description: |
   2. A retained conflict with no host journal (seat gone, journal missing) is treated as "no retained conflict" after verifying the remote branch head, so a fresh start can proceed, not as a hard refusal.
   3. `--fresh` always starts from the remote branch head and ignores retained-conflict state (after logging it).
   4. Tests: conflict rework from a clean remote branch; seat gone + journal missing → fresh start; a genuinely retained conflict with a journal → resume.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T20:53:07.318968826Z
+modified_at: 2026-11-22T20:53:16.533250569Z
 req_type: Bug
 tags:
 - conflicts
@@ -1211,6 +1211,11 @@ comments:
   content: 'Product: advisor-122 r5 CAP EXCEPTION ruling 13:55. ONE round fixing the data-loss finding only (ignored-path collision check on the observed merge-tree result before reserving or merging). Finding 2 is deferred to TASK-3836. Brief: .aida/tmp/brief-BUG-2688-r5-1355.md. A further blocking CR parks #4388.'
   created_at: 2026-11-22T20:53:07.318968826Z
   modified_at: 2026-11-22T20:53:07.318968826Z
+- id: 01a20508-dc75-7d93-9b29-cd28e741106a
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2688 has source coverage for rebuilding a removed seat from the fetched head and resuming a journal-bound retained merge (AC2 and AC4). Fresh placement pins the PR head, but conflict preparation can overwrite ignored local data, and the registration-mismatch refusal lacks the recovery evidence command required by AC1. Both findings apply to the landed tree independently of the two intervening base commits. CI fast gates passed and fast compile was pending at review time.. No triage reason was given.'
+  created_at: 2026-11-22T20:53:16.533238712Z
+  modified_at: 2026-11-22T20:53:16.533238712Z
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
@@ -1611,6 +1616,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20508-dc75-7d93-9b29-cd1e3ba1f9fd
+  author: joe
+  timestamp: 2026-11-22T20:53:16.533223859Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 2edf9a4130ad93f63f9d7b6c1f3f757f66df3ac1
@@ -1621,11 +1633,3 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: BUG-2688 has source coverage for rebuilding a removed seat from the fetched head and resuming a journal-bound retained merge (AC2 and AC4). Fresh placement pins the PR head, but conflict preparation can overwrite ignored local data, and the registration-mismatch refusal lacks the recovery evidence command required by AC1. Both findings apply to the landed tree independently of the two intervening base commits. CI fast gates passed and fast compile was pending at review time.
-  recovery_hint: address the review findings, move BUG-2688 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-22T20:51:35.768755408Z
