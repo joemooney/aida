@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T20:53:21.690084413Z
+modified_at: 2026-11-22T21:11:23.455560473Z
 req_type: Bug
 tags:
 - conflicts
@@ -1229,6 +1229,26 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-22T20:53:21.556075913Z
   modified_at: 2026-11-22T20:53:21.556075913Z
+- id: 01a20519-a2d6-7981-9c34-9f7982d98e93
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:11):
+    # BUG-2688 / PR #4388 r5: CAP EXCEPTION, ONE round (advisor-122 ruling 2026-11-22 13:55 MST; relayed by product-15). Lane: CODEX.
+
+    CR at 291758c1 (r4, the cap round). The advisor granted exactly one more round because finding 1 is data loss and can't merge with a follow-up. Fix finding 1 ONLY. Finding 2 is deferred to a follow-up spec (named on BUG-2688). The reviewer scope is finding 1 plus the r5 diff. If r5 still has a blocking finding, the PR parks.
+
+    1. [P1, data-loss] [P1, data-loss] aida-cli-lib/src/seat_clone.rs:5044 — When merge-tree reports a conflict, preparation reserves the repair and invokes merge without calling protect_ignored on the observed result tree. A base can add a tracked file at the path of an ignored local file while conflicting on a different file. The ort merge can overwrite the ignored bytes as it stages the nonconflicting addition, even with --no-overwrite-ignore. Preserving the seat after the merge cannot restore those bytes. Check the observed result for ignored-path collisions before reserving or merging, and cover the mixed conflict/addition case. The existing conflict failure fixture stops at strategy selection and never writes the incoming file.
+
+    Required: check the OBSERVED merge-tree result for ignored-path collisions BEFORE reserving the repair or invoking merge, and refuse while preserving the ignored bytes. Add a regression test for the mixed case: a conflict on one file plus a base-added tracked file at an ignored local path, which actually runs preparation far enough to write. Assert the ignored file's bytes survive and the refusal names the path.
+    Under mass-change mode, classify every finding; unmet-AC defers.
+
+    ## Done means
+    - One targeted cargo run, then `make check-ci-fast` green, then push on the existing branch. Never the full suite. COMMIT your work.
+    - Run `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-22T21:11:23.455560473Z
+  modified_at: 2026-11-22T21:11:23.455560473Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
