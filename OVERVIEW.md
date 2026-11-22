@@ -1524,11 +1524,15 @@ and additional event vectors; these reads never rewrite ledger history.
 <!-- trace:BUG-2517 | ai:codex -->
 
 Standalone headless reviewer launches pin the change head and give fresh and
-resumed children an absolute, exclusive `draft.json` path in their review tree.
-The closed version-1 draft carries data only; it supplies no identity or grant.
-After the child exits, the parent reads through the directory descriptor held
-since before spawn, refuses unsafe files and conflicting legacy evidence, and
-revalidates its issued reviewer grant and the current forge head. The normal
+resumed children an exclusive launch directory in their review tree. The child
+writes the closed version-1 JSON verdict to `draft.json` and runs
+`aida review submit-draft` to check it under the launching project's policy.
+The command leaves the file intact so the child can correct it and retry.
+After the child exits, the parent locks the launch directory using the descriptor
+held since before spawn. It checks the current draft under its own policy,
+refuses unsafe files and conflicting legacy evidence, and revalidates its
+issued reviewer grant and the current forge head. It holds the lock through
+recording and marking the draft consumed. The normal
 record policy checks the routed session against authorship and derives recorder
 attestation and hold-release evidence from that child grant. Missing drafts can
 still use the existing grant-stamped collector; rejected drafts never fall back.
