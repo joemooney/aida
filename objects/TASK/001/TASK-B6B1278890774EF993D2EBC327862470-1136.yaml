@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-22T19:37:07.823493520Z
+modified_at: 2026-11-22T19:54:47.094508901Z
 req_type: Task
 tags:
 - landing
@@ -504,6 +504,13 @@ comments:
     Scope: F2-F6 and F9 are explicitly tracked by TASK-3829. F7 (conflict dispatch wording) and F11 (aggregate work before capped scan) remain open under the fix-only-p1 instruction and are absent from TASK-3829's filed list. Refs-only publication. Store-writer inventory passed (3846 sites): relocated bounded reader, no new writer.
   created_at: 2026-11-22T19:37:07.823493520Z
   modified_at: 2026-11-22T19:37:07.823493520Z
+  session_id: 01a204b5f731
+  harness_version: codex-cli 0.167.0
+- id: 01a204d3-50ec-78f0-8df3-ec7821100348
+  author: dirtlab
+  content: 'Round 4 final validation for the native working tree on fdb8c71221ac: all 18 targeted tests passed, including the lock-preservation, configured symlink-store and live MR reviewer regressions (lane job j20261122T193306138-2-0). make check-ci-fast passed end to end (j20261122T193459148-2-0). Store-writer inventory and git diff --check passed. Partial publication declared for the host.'
+  created_at: 2026-11-22T19:54:47.094508901Z
+  modified_at: 2026-11-22T19:54:47.094508901Z
   session_id: 01a204b5f731
   harness_version: codex-cli 0.167.0
 history:

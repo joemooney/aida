@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T19:50:14.609450431Z
+modified_at: 2026-11-22T19:58:07.678363062Z
 req_type: Bug
 tags:
 - lanes
@@ -428,6 +428,18 @@ comments:
   modified_at: 2026-11-22T19:27:03.807381055Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a204d6-6300-7860-a105-b7ccd0217fbf
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5765eb2c233d9ec5b73c09e934262860648b5a17 plus native working-tree edits. Round 3 covers findings 2–4.
+    AC1: [evidence: behavioral-test] coordination_heartbeat.rs:557 observes the fresh claim from the bare origin alongside a 65,537-byte sibling.
+    AC2: [evidence: behavioral-test] coordination_heartbeat.rs:409 publishes the exact holder heartbeat alongside malformed TOML. Inspected canonical scope naming, host and lease equality, directory pinning, successor, link and FIFO refusals. Existing refusal tests passed.
+    AC3: [evidence: behavioral-test] review_implementer_gate.rs:688 exercises a live claim followed by a file-shaped store, including the last held minute and expiry. Lane job j20261122T195118597-2-0 executed all 13 BUG-2706 tests successfully. Store writer inventory reconciled 3,858 sites. Findings 1, 5 and 6 remain deferred per advisor ruling.
+  created_at: 2026-11-22T19:58:07.678363062Z
+  modified_at: 2026-11-22T19:58:07.678363062Z
+  session_id: 01a204ced250
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
