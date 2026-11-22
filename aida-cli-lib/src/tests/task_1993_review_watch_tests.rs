@@ -4523,3 +4523,1129 @@ fn bug2650_pause_duration_limits_come_from_config() {
     let paused = pause::current(&store, now).unwrap().unwrap();
     assert_eq!(paused.expires_at, now + chrono::Duration::seconds(3600));
 }
+
+// trace:BUG-2703 | ai:claude
+fn bug2703_loop_claims(root: &Path) -> Vec<String> {
+    crate::admission_owner::holders(root)
+        .unwrap()
+        .into_iter()
+        .filter(|h| h.state == "claim")
+        .map(|h| h.purpose)
+        .collect()
+}
+
+/// Review round 4, finding 1, at the review-watch pause: the control shares
+/// the loops drain's authority check. Without a grant, a process with no
+/// terminal and a process an agent identity marks as managed can neither
+/// pause nor resume, and the journal is left as it was; the operator at a
+/// terminal outside any agent session can do both.
+// trace:BUG-2703 | ai:claude
+#[test]
+fn bug2703_pause_control_refuses_a_managed_process_without_a_grant() {
+    const REFUSAL: &str = "review-watch pause control requires an advisor grant or an operator at an interactive terminal outside any agent session";
+    let (temp, store) = fixture();
+    let mut env = crate::test_env::AmbientGuard::hermetic_and(
+        temp.path(),
+        None,
+        &[
+            ("AIDA_AGENT_NAME", None),
+            ("AIDA_AGENT_TYPE", None),
+            ("AIDA_SESSION_ID", None),
+            ("AIDA_HEADLESS", None),
+        ],
+    );
+    let pause = pause::Control::Pause {
+        reason: "landing-driver cutover".into(),
+        duration: None,
+    };
+    let paused = || {
+        pause::current(&store, chrono::Utc::now())
+            .unwrap()
+            .is_some()
+    };
+    let refused = |what: &str, expect_paused: bool| {
+        for control in [&pause, &pause::Control::Resume] {
+            let error = format!("{:#}", pause::run(&store, control).expect_err(what));
+            assert!(error.contains(REFUSAL), "{what}: {error}");
+            assert_eq!(paused(), expect_paused, "{what}");
+        }
+    };
+    for expect_paused in [false, true] {
+        if expect_paused {
+            // The operator's own pause, which no refused caller may clear.
+            env.set_terminal(true);
+            pause::run(&store, &pause).unwrap();
+            assert!(paused());
+        }
+        env.set_terminal(false);
+        refused("no grant and no terminal", expect_paused);
+        env.set_terminal(true);
+        for (key, value) in [
+            ("AIDA_AGENT_NAME", "claude-implementer"),
+            ("AIDA_AGENT_TYPE", "claude"),
+            ("AIDA_SESSION_ID", "01a1fad87977"),
+        ] {
+            env.set_key(key, value);
+            refused(key, expect_paused);
+            env.unset_key(key);
+        }
+    }
+    pause::run(&store, &pause::Control::Resume).unwrap();
+    assert!(!paused());
+}
+
+// trace:BUG-2703 | ai:claude
+fn bug2703_wait_for(what: &str, mut ready: impl FnMut() -> bool) {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+    while !ready() {
+        assert!(std::time::Instant::now() < deadline, "timed out: {what}");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}
+
+/// Claim-step unit for AC3 (the production-path regression is
+/// `bug2703_real_worker_loops_yield_to_the_real_ship_handler`): the loops'
+/// boundary and idle helpers give the claim up to a waiting ship's admission
+/// within the configured bound, take none while it holds the exclusive mode,
+/// and take theirs again afterwards.
+// trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.acc625bf | ai:claude
+#[test]
+fn bug2703_ship_gets_admission_while_both_loop_workers_run() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let (temp, _store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 30\n",
+    )
+    .unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let review = {
+        let (root, stop) = (root.clone(), stop.clone());
+        std::thread::spawn(move || {
+            let store = Store::open(&root, "github:github.com/owner/repo").unwrap();
+            let mut claim = None;
+            while !stop.load(Ordering::SeqCst) {
+                hold_admission(&root, &mut claim, false).unwrap();
+                idle_yielding(&root, &store, 1, &mut claim).unwrap();
+            }
+        })
+    };
+    let train = {
+        let (root, stop) = (root.clone(), stop.clone());
+        std::thread::spawn(move || {
+            let mut claim = None;
+            while !stop.load(Ordering::SeqCst) {
+                let _ = super::train::hold_admission(&root, &Ok(None), &mut claim);
+                super::train::idle(&root, 1, &mut claim).unwrap();
+            }
+        })
+    };
+    let both = |root: &Path| {
+        let claims = bug2703_loop_claims(root);
+        claims.iter().any(|p| p == "legacy review-watch")
+            && claims.iter().any(|p| p == "legacy auto-train")
+    };
+    bug2703_wait_for("both loop workers hold claims", || both(&root));
+    let started = std::time::Instant::now();
+    let ship = crate::admission_owner::ship_admission(&root)
+        .expect("ship acquires admission within the bound")
+        .expect("ship holds its own claim");
+    assert!(started.elapsed() < std::time::Duration::from_secs(30));
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["manual train/ship".to_string()]
+    );
+    std::thread::sleep(std::time::Duration::from_secs(2));
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["manual train/ship".to_string()],
+        "no loop retakes a claim while the ship holds the exclusive mode"
+    );
+    drop(ship);
+    bug2703_wait_for("loops resume after the ship", || both(&root));
+    stop.store(true, Ordering::SeqCst);
+    review.join().unwrap();
+    train.join().unwrap();
+}
+
+/// Review round 4, AC ac6ca3ea: settlement does not wait for the discovery
+/// interval. A watcher with `--interval 3600` (twenty times the default ship
+/// bound) is in its idle sleep, holding its claim, when a ship arrives. It
+/// yields within a second; the superseding review still in flight exits a
+/// little later, well inside that sleep. The idle watcher settles it on its
+/// own short cadence, so the ship crosses admission within its bound. Before
+/// this, the attempt stayed active until the next pass, an hour away, and
+/// the ship gave up with both workers idle and the review already gone.
+// trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug2703_idle_watcher_with_an_hour_interval_settles_a_review_that_exits() {
+    use std::time::{Duration, Instant};
+    const INTERVAL: u64 = 3600;
+    const BOUND: u64 = 60;
+    assert!(SETTLEMENT_CADENCE_SECS * 4 <= BOUND && BOUND < INTERVAL);
+    let (temp, store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        format!("[admission]\nwait_secs = {BOUND}\n"),
+    )
+    .unwrap();
+    // In flight: a claimed review being superseded, signals already sent.
+    let (process, stdin, exit) = bug2703_review_process();
+    let c = change(4324, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    store
+        .transaction(&c.key(), |state| {
+            let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+            let now = chrono::Utc::now();
+            a.identity = Some(process.clone());
+            a.phase = Phase::Superseding;
+            a.supersede = Some(Supersede {
+                by: format!("{:040x}", 3),
+                requested_at: now,
+                term_at: Some(now),
+                kill_at: Some(now),
+                diagnostic: None,
+            });
+            Ok(())
+        })
+        .unwrap();
+    // The watcher, as its loop runs it after a pass: claim held, then the
+    // idle sleep of a whole discovery interval.
+    let watcher = {
+        let root = root.clone();
+        std::thread::spawn(move || {
+            let store = Store::open(&root, "github:github.com/owner/repo").unwrap();
+            let mut claim = None;
+            assert_eq!(hold_admission(&root, &mut claim, false).unwrap(), None);
+            let started = Instant::now();
+            let result = idle_yielding(&root, &store, INTERVAL, &mut claim);
+            (result, started.elapsed(), claim.is_some())
+        })
+    };
+    let holds = |root: &Path| {
+        bug2703_loop_claims(root)
+            .iter()
+            .any(|p| p == "legacy review-watch")
+    };
+    bug2703_wait_for("the watcher holds its claim", || holds(&root));
+    // Once the watcher has yielded to the ship (its settlement at that
+    // moment finds the review still running), the review exits on its own.
+    let reviewer = {
+        let root = root.clone();
+        let store = Store::open(&root, "github:github.com/owner/repo").unwrap();
+        std::thread::spawn(move || {
+            bug2703_wait_for("the ship registered its intent", || {
+                crate::admission_owner::yield_reason(&root, "legacy review-watch").is_some()
+            });
+            bug2703_wait_for("the watcher yielded", || !holds(&root));
+            std::thread::sleep(Duration::from_millis(1500));
+            let in_flight = store
+                .load()
+                .unwrap()
+                .entries
+                .values()
+                .flat_map(|e| &e.attempts)
+                .all(active);
+            drop(stdin);
+            in_flight
+        })
+    };
+    let started = Instant::now();
+    let ship = crate::admission_owner::ship_admission(&root);
+    let waited = started.elapsed();
+    assert!(reviewer.join().unwrap(), "the review was still in flight");
+    assert!(
+        exit.join().unwrap().success(),
+        "the review was not signalled"
+    );
+    let ship = ship
+        .unwrap_or_else(|error| panic!("refused after {waited:?}: {error:#}"))
+        .expect("a claim of its own");
+    assert!(waited >= Duration::from_millis(1500), "{waited:?}");
+    assert!(waited < Duration::from_secs(BOUND), "{waited:?}");
+    // Only the idle watcher can have settled it: nothing else runs here.
+    let state = store.load().unwrap();
+    assert_eq!(
+        state.entries["PR-4324"].attempts[0].phase,
+        Phase::Superseded
+    );
+    drop(ship);
+    // The watcher is still inside the same idle sleep, without its claim.
+    assert!(!watcher.is_finished());
+    crate::review_watch::stop_test_loops(&root);
+    let (result, idled, claimed) = watcher.join().unwrap();
+    let error = result.expect_err("stopped by the fixture");
+    assert!(
+        format!("{error:#}").contains("test fixture stopped the loop"),
+        "{error:#}"
+    );
+    assert!(idled < Duration::from_secs(INTERVAL), "{idled:?}");
+    assert!(!claimed);
+}
+
+/// AC3 control: a waiting ship never interrupts work in progress. A review
+/// already in flight keeps running after its watcher yields (the ship gives
+/// up at its bound, naming it), and a train pass that has not reached its
+/// boundary keeps its claim.
+// trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.acc625bf | ai:claude
+#[test]
+fn bug2703_ship_wait_never_interrupts_a_review_or_train_in_progress() {
+    let (temp, store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 2\n",
+    )
+    .unwrap();
+    let in_flight = |store: &Store| {
+        store
+            .load()
+            .unwrap()
+            .entries
+            .values()
+            .flat_map(|e| &e.attempts)
+            .any(active)
+    };
+    // A review launch is in flight under the watcher's claim.
+    let c = change(1, 1, false);
+    dispatch(select(&store, &c, None, 2).unwrap());
+    assert!(in_flight(&store));
+    let mut watcher = None;
+    assert_eq!(hold_admission(&root, &mut watcher, false).unwrap(), None);
+    let ship = {
+        let root = root.clone();
+        std::thread::spawn(move || {
+            crate::admission_owner::ship_admission(&root).map(|c| c.is_some())
+        })
+    };
+    bug2703_wait_for("ship registers its intent", || {
+        crate::admission_owner::yield_reason(&root, "legacy review-watch").is_some()
+    });
+    // At its boundary the watcher yields and launches nothing more...
+    assert!(hold_admission(&root, &mut watcher, false)
+        .unwrap()
+        .is_some());
+    assert!(watcher.is_none());
+    // ...but the running review is not cut short, so the ship gives up.
+    let error = ship
+        .join()
+        .unwrap()
+        .err()
+        .expect("ship waits, then gives up");
+    let text = format!("{error:#}");
+    assert!(text.contains("not quiescent"), "{text}");
+    assert!(
+        text.contains(&format!("the review of {} is ", c.key())),
+        "{text}"
+    );
+    assert!(text.contains("gave up after waiting"), "{text}");
+    assert!(in_flight(&store), "the review attempt is untouched");
+    // A one-shot watcher retakes its claim once nobody waits.
+    assert_eq!(hold_admission(&root, &mut watcher, true).unwrap(), None);
+    drop(watcher);
+
+    // A train pass in progress (not at a boundary) keeps its claim.
+    let (temp, _store) = fixture();
+    let root = temp.path();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 2\n",
+    )
+    .unwrap();
+    let mut train = None;
+    super::train::hold_admission(root, &Ok(None), &mut train).unwrap();
+    let error = crate::admission_owner::ship_admission(root).err().unwrap();
+    assert!(
+        error.to_string().contains("purpose legacy auto-train"),
+        "{error}"
+    );
+    assert!(train.is_some(), "the running pass keeps its claim");
+    assert_eq!(
+        bug2703_loop_claims(root),
+        vec!["legacy auto-train".to_string()]
+    );
+    // With nobody waiting any more, its next boundary keeps the claim.
+    super::train::hold_admission(root, &Ok(None), &mut train).unwrap();
+    assert!(train.is_some());
+}
+
+/// Review round 4, finding 2: with the loop workers yielded, a running
+/// review is the only thing a ship waits for. The refusal it ends with names
+/// that review's change and its live process, not only "not quiescent"; a
+/// review whose process has exited but is not yet proved gone names its
+/// change too.
+// trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug2703_busy_refusal_names_the_running_review_and_its_process() {
+    let (temp, store) = fixture();
+    let root = temp.path();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 1\n",
+    )
+    .unwrap();
+    let (process, stdin, exit) = bug2703_review_process();
+    let pid = process.pid;
+    let c = change(4324, 1, false);
+    let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+    store
+        .transaction(&c.key(), |state| {
+            let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+            a.phase = Phase::Running;
+            a.identity = Some(process.clone());
+            Ok(())
+        })
+        .unwrap();
+    // No loop worker holds a claim: the review alone blocks the ship.
+    assert!(bug2703_loop_claims(root).is_empty());
+    let refusal = || {
+        let error = crate::admission_owner::ship_admission(root)
+            .err()
+            .expect("the ship is refused");
+        assert!(
+            error
+                .downcast_ref::<crate::admission_owner::AdmissionBusy>()
+                .is_some(),
+            "{error:#}"
+        );
+        error.to_string()
+    };
+    let text = refusal();
+    assert!(text.contains("the review of PR-4324 is running"), "{text}");
+    assert!(text.contains(&format!("(PID {pid})")), "{text}");
+    assert!(text.contains("gave up after waiting"), "{text}");
+    assert!(text.contains("(bound 1s, "), "{text}");
+    // `land run` ends with the same evidence.
+    let land = crate::admission_owner::land_admission(root)
+        .err()
+        .expect("the land is refused");
+    let land = land.to_string();
+    assert!(land.contains("the review of PR-4324 is running"), "{land}");
+    assert!(land.contains(&format!("(PID {pid})")), "{land}");
+    // A reservation with no process yet says so, and still names the change.
+    store
+        .transaction(&c.key(), |state| {
+            let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+            a.phase = Phase::Reserved;
+            a.identity = None;
+            Ok(())
+        })
+        .unwrap();
+    let text = refusal();
+    assert!(
+        text.contains("the review of PR-4324 is reserved and not yet running"),
+        "{text}"
+    );
+    assert!(text.contains("(no live process recorded)"), "{text}");
+    drop(stdin);
+    assert!(exit.join().unwrap().success());
+}
+
+/// Review round 4, finding 5: a yielded watcher's settlement drops no entry.
+/// A change another watcher reserved after this one last read the state (its
+/// dispatcher has not claimed it yet) is still there afterwards; judged
+/// against an older set of keys, as the settlement used to, it is discarded.
+// trace:BUG-2703 | ai:claude
+#[test]
+fn bug2703_yielded_settlement_never_discards_an_unclaimed_reservation() {
+    let (_temp, store) = fixture();
+    // What the yielded watcher saw before it settled.
+    let seen = change(1, 1, false);
+    dispatch(select(&store, &seen, None, 2).unwrap());
+    let snapshot: BTreeSet<String> = store.load().unwrap().entries.keys().cloned().collect();
+    // Another watcher, already in a pass, reserves a new change.
+    let new = change(2, 2, false);
+    let reserved = dispatch(select(&store, &new, None, 2).unwrap());
+    assert!(reserved.unclaimed_before_spawn());
+    settle_while_yielded(&store).unwrap();
+    store.reconcile().unwrap();
+    let state = store.load().unwrap();
+    assert_eq!(state.entries.keys().collect::<Vec<_>>(), ["PR-1", "PR-2"]);
+    let kept = &state.entries["PR-2"].attempts[0];
+    assert_eq!(
+        (&kept.token, &kept.phase),
+        (&reserved.token, &Phase::Reserved)
+    );
+    // The same state judged against the older key set loses the reservation:
+    // why the settlement takes no key set at all.
+    assert_eq!(store.prune(&snapshot).unwrap(), 1);
+    assert_eq!(
+        store.load().unwrap().entries.keys().collect::<Vec<_>>(),
+        ["PR-1"]
+    );
+    // Reconciliation itself still runs: a claimed review whose dispatcher is
+    // gone without a terminal receipt is settled, and its entry kept.
+    #[cfg(target_os = "linux")]
+    {
+        let (process, stdin, exit) = bug2703_review_process();
+        drop(stdin);
+        assert!(exit.join().unwrap().success());
+        let lost = change(3, 3, false);
+        let attempt = dispatch(select(&store, &lost, None, 2).unwrap());
+        store
+            .transaction(&lost.key(), |state| {
+                let a = attempt_mut(state, &lost.key(), &attempt.token).unwrap();
+                a.phase = Phase::Running;
+                a.identity = Some(process.clone());
+                Ok(())
+            })
+            .unwrap();
+        settle_while_yielded(&store).unwrap();
+        let state = store.load().unwrap();
+        assert!(!active(&state.entries["PR-3"].attempts[0]));
+        assert!(state.entries.contains_key("PR-1"));
+    }
+}
+
+/// A review process the fixture controls: alive until the test closes its
+/// stdin, then it exits on its own (status 0). Reaped by its own thread.
+// trace:BUG-2703 | ai:claude
+#[cfg(target_os = "linux")]
+fn bug2703_review_process() -> (
+    Identity,
+    std::process::ChildStdin,
+    std::thread::JoinHandle<std::process::ExitStatus>,
+) {
+    let mut child = Command::new("sh")
+        .args(["-c", "read _ignored; exit 0"])
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let identity = Identity::child(&child).unwrap();
+    let stdin = child.stdin.take().unwrap();
+    (
+        identity,
+        stdin,
+        std::thread::spawn(move || child.wait().unwrap()),
+    )
+}
+
+/// Review findings 2 and 3 (round 2), through the production entry points:
+/// the real review-watch worker loop (`run_with_program`, as the service
+/// worker runs it), the real auto-train worker loop (`train::run_passes`,
+/// the loop `train::run` is, around a controlled train pass) and the real
+/// `aida pr ship` handler (`pr_ship_handler`).
+///
+/// In flight when the ship arrives: a claimed review that is running, a
+/// claimed superseding review whose processes have not exited yet, and a
+/// train pass that has not returned. The ship waits; nothing in flight is
+/// signalled or cut short; the review-watch worker, though yielded, keeps
+/// settling, so once the processes exit on their own both attempts settle
+/// (the superseding one confirmed and cleared, finding 2) and the ship
+/// crosses admission within its bound. Its target is an open PR whose pushed
+/// head carries a recorded approval and green CI (review round 4, finding 7):
+/// after admission the handler reads that head, passes its approval and CI
+/// checks and asks the forge to merge exactly that head. The fixture's forge
+/// refuses the merge call itself, so nothing merges. Afterwards both workers
+/// take their claims again.
+// trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac336622 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.acc625bf | ai:claude
+#[cfg(target_os = "linux")]
+#[test]
+fn bug2703_real_worker_loops_yield_to_the_real_ship_handler() {
+    // The fixture's forge and Git wrappers go on PATH: run in its own process.
+    if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
+        return;
+    }
+    use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().join("repo");
+    let hub = temp.path().join("hub.git");
+    let bin = temp.path().join("bin");
+    let home = temp.path().join("home");
+    for dir in [&root, &bin, &home] {
+        std::fs::create_dir(dir).unwrap();
+    }
+    let git = |cwd: &Path, args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(cwd)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    git(
+        temp.path(),
+        &["init", "-q", "--bare", hub.to_str().unwrap()],
+    );
+    git(&root, &["init", "-q", "-b", "main"]);
+    git(&root, &["config", "user.name", "fixture"]);
+    git(&root, &["config", "user.email", "fixture@test"]);
+    std::fs::write(root.join("own.rs"), "initial").unwrap();
+    git(&root, &["add", "."]);
+    git(&root, &["commit", "-q", "-m", "initial"]);
+    git(&root, &["remote", "add", "origin", hub.to_str().unwrap()]);
+    git(&root, &["push", "-q", "origin", "main"]);
+    git(&root, &["fetch", "-q", "origin"]);
+    git(
+        &root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/main",
+        ],
+    );
+    // The ship's target (review round 4, finding 7): PR-4324, open, its head
+    // pushed and approved. The ship runs from the default branch, as the
+    // advisor's did.
+    git(&root, &["checkout", "-q", "-b", "claude/bug-4324"]);
+    std::fs::write(root.join("own.rs"), "changed").unwrap();
+    git(&root, &["commit", "-q", "-am", "fix(x): change"]);
+    git(&root, &["push", "-q", "origin", "claude/bug-4324"]);
+    let approved_head = {
+        let out = crate::test_git::git_command()
+            .current_dir(&root)
+            .args(["rev-parse", "HEAD"])
+            .output()
+            .unwrap();
+        String::from_utf8(out.stdout).unwrap().trim().to_string()
+    };
+    git(&root, &["checkout", "-q", "main"]);
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n\n[admission]\nwait_secs = 30\n",
+    )
+    .unwrap();
+    // The forge is GitHub by origin URL; Git transport stays in the bare hub.
+    // Review-watch's own discovery read lists no open change, so the watcher
+    // launches nothing new; the ship's reads answer with PR-4324, approved
+    // at its pushed head, with green CI. A merge call fails: no merge is
+    // needed to show the ship got that far. Every call is logged.
+    let real_git = crate::find_executable_on_path("git").expect("git on PATH");
+    let q = |p: &Path| crate::sh_single_quote(&p.to_string_lossy());
+    crate::test_exec::write_executable(
+        &bin.join("git"),
+        &format!(
+            "#!/bin/sh\nif [ \"$1 $2 $3\" = 'remote get-url origin' ]; then echo https://github.com/owner/repo.git; exit 0; fi\nfor a in \"$@\"; do shift; if [ \"$a\" = https://github.com/owner/repo.git ]; then set -- \"$@\" {hub}; else set -- \"$@\" \"$a\"; fi; done\nexec {git} \"$@\"\n",
+            hub = q(&hub),
+            git = q(&real_git)
+        ),
+    );
+    let gh_calls = temp.path().join("gh-calls");
+    let pr_view = temp.path().join("pr-view.json");
+    std::fs::write(
+        &pr_view,
+        serde_json::json!({
+            "number": 4324,
+            "url": "https://github.com/owner/repo/pull/4324",
+            "state": "OPEN", "isDraft": false, "mergedAt": null,
+            "headRefOid": approved_head, "headRefName": "claude/bug-4324",
+            "baseRefName": "main", "title": "fix(x): change", "body": "",
+            "labels": [], "mergeable": "MERGEABLE", "mergeStateStatus": "CLEAN",
+            "reviewDecision": "APPROVED", "author": {"login": "implementer"},
+        })
+        .to_string(),
+    )
+    .unwrap();
+    crate::test_exec::write_executable(
+        &bin.join("gh"),
+        &format!(
+            r#"#!/usr/bin/env python3
+import json, subprocess, sys
+a = sys.argv[1:]
+open({gh_calls:?}, "a").write(" ".join(a) + "\n")
+def opt(name):
+    for i, x in enumerate(a):
+        if x == name and i + 1 < len(a):
+            return a[i + 1]
+    return None
+def emit(doc):
+    q = opt("-q") or opt("--jq")
+    text = json.dumps(doc)
+    if q:
+        r = subprocess.run(["jq", "-r", q], input=text, capture_output=True, text=True)
+        sys.stdout.write(r.stdout)
+        sys.exit(r.returncode)
+    print(text)
+    sys.exit(0)
+verb = " ".join(a[:2])
+doc = json.load(open({pr_view:?}))
+if verb == "pr view" and a[2] == "4324":
+    emit(doc)
+if verb == "pr list":
+    if opt("--json") == {DISCOVERY_FIELDS:?} or opt("--base") is not None:
+        emit([])
+    emit([doc])
+if verb == "pr checks":
+    emit([{{"name": "ci", "state": "SUCCESS", "bucket": "pass", "link": "", "workflow": "ci"}}])
+if verb in ("pr edit", "label create"):
+    sys.exit(0)
+sys.exit(1)
+"#,
+            DISCOVERY_FIELDS = "number,headRefOid,headRefName,baseRefName,isDraft,state,author",
+        ),
+    );
+    // The approval of that head, as `aida review record` stamps it from an
+    // independent reviewer seat.
+    let record_approval = |root: &Path| {
+        let grant_id = crate::gate::seat_authority::test_support::mint_grant_for(
+            root,
+            crate::test_env::HERMETIC_TEST_USER,
+            "reviewer",
+            &[],
+        );
+        let grant = crate::gate::seat_authority::read_grant(&grant_id).unwrap();
+        let attestation = crate::gate::review_verdict::RecorderAttestation {
+            sha: approved_head.clone(),
+            seat: Some("reviewer".into()),
+            grant_id: Some(grant_id),
+            identity: vec!["session:independent-reviewer".into()],
+            grant_binding: grant.binding.clone(),
+            ..Default::default()
+        };
+        let record = serde_json::json!({
+            "schema_version": 1,
+            "pr": 4324,
+            "verdict": "APPROVED",
+            "head_sha": approved_head,
+            "recorded_by": "reviewer",
+            "recorded_at": (chrono::Utc::now() + chrono::Duration::seconds(1)).to_rfc3339(),
+            "summary": format!("approved at {approved_head}"),
+            "spec_ids": ["BUG-2703"],
+            "findings": [],
+            crate::gate::review_verdict::ATTESTATION_KEY: attestation,
+        });
+        let dir = root.join(".aida/review-verdicts");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("PR-4324.json"),
+            serde_json::to_vec_pretty(&record).unwrap(),
+        )
+        .unwrap();
+    };
+    let inputs = aida_core::exec_context::Environment::capture();
+    let path = format!(
+        "{}:{}",
+        bin.display(),
+        inputs.get("PATH").unwrap().to_string_lossy()
+    );
+    let gh = bin.join("gh");
+    let mut env = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &root,
+        "advisor",
+        &["reviewer"],
+        &[
+            ("PATH", Some(path.as_str())),
+            ("HOME", Some(home.to_str().unwrap())),
+            ("AIDA_HOME", Some(home.to_str().unwrap())),
+            ("AIDA_TEST_GH_BINARY", Some(gh.to_str().unwrap())),
+            ("GH_REPO", None),
+            ("AIDA_CONTAINED", None),
+            ("AIDA_HEADLESS", None),
+            ("AIDA_SESSION_ID", None),
+            (crate::standalone_implementer::MARKER_ENV, None),
+        ],
+    );
+    // Reissue the advisor parent in the pinned home (as the watcher test does).
+    let parent = crate::gate::seat_authority::test_support::mint_grant_for(
+        &root,
+        crate::test_env::HERMETIC_TEST_USER,
+        "advisor",
+        &["reviewer"],
+    );
+    env.set_key(crate::gate::seat_authority::GRANT_ENV, &parent);
+    record_approval(&root);
+
+    // Work in flight: a claimed running review (PR-1) and a claimed review
+    // being superseded whose signals were already sent (PR-2).
+    let repo = forge::Repository::load(&root).unwrap();
+    let store = Store::open(&root, &repo.identity).unwrap();
+    let (running_id, running_stdin, running_exit) = bug2703_review_process();
+    let (superseding_id, superseding_stdin, superseding_exit) = bug2703_review_process();
+    for (c, process, supersede) in [
+        (change(1, 1, false), running_id, false),
+        (change(2, 2, false), superseding_id, true),
+    ] {
+        let attempt = dispatch(select(&store, &c, None, 2).unwrap());
+        store
+            .transaction(&c.key(), |state| {
+                let a = attempt_mut(state, &c.key(), &attempt.token).unwrap();
+                a.phase = Phase::Running;
+                a.identity = Some(process.clone());
+                if supersede {
+                    let now = chrono::Utc::now();
+                    a.phase = Phase::Superseding;
+                    a.supersede = Some(Supersede {
+                        by: format!("{:040x}", 3),
+                        requested_at: now,
+                        term_at: Some(now),
+                        kill_at: Some(now),
+                        diagnostic: None,
+                    });
+                }
+                Ok(())
+            })
+            .unwrap();
+    }
+
+    // The two production worker loops.
+    let review = {
+        let root = root.clone();
+        let args = ReviewWatchArgs {
+            control: None,
+            once: false,
+            interval: 1,
+            max_concurrent: None,
+            vendor: None,
+            release: None,
+            launch_reservation: None,
+        };
+        std::thread::spawn(move || run_with_program(&args, &root, None).map(|_| ()))
+    };
+    let train_started = Arc::new(AtomicBool::new(false));
+    let train_release = Arc::new(AtomicBool::new(false));
+    let train_finished: Arc<Mutex<Option<Instant>>> = Arc::new(Mutex::new(None));
+    let train_passes = Arc::new(AtomicUsize::new(0));
+    let train = {
+        let root = root.clone();
+        let (started, release, finished, passes) = (
+            train_started.clone(),
+            train_release.clone(),
+            train_finished.clone(),
+            train_passes.clone(),
+        );
+        std::thread::spawn(move || {
+            super::train::run_passes(&root, 1, move || {
+                // The first pass is a train stack in progress until released.
+                if passes.fetch_add(1, Ordering::SeqCst) == 0 {
+                    started.store(true, Ordering::SeqCst);
+                    while !release.load(Ordering::SeqCst) {
+                        std::thread::sleep(Duration::from_millis(20));
+                    }
+                    *finished.lock().unwrap() = Some(Instant::now());
+                }
+                Ok(())
+            })
+        })
+    };
+    let both_hold = || {
+        let claims = bug2703_loop_claims(&root);
+        claims.iter().any(|p| p == "legacy review-watch")
+            && claims.iter().any(|p| p == "legacy auto-train")
+    };
+    bug2703_wait_for("both workers hold claims, a train in progress", || {
+        both_hold() && train_started.load(Ordering::SeqCst)
+    });
+
+    // While the ship waits: nothing in flight is interrupted. Then the work
+    // finishes on its own.
+    let ship_done = Arc::new(AtomicBool::new(false));
+    let observer = {
+        let (root, done, finished, release) = (
+            root.clone(),
+            ship_done.clone(),
+            train_finished.clone(),
+            train_release.clone(),
+        );
+        let (running, superseding) = (running_stdin, superseding_stdin);
+        let store = Store::open(&root, &repo.identity).unwrap();
+        std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while crate::admission_owner::yield_reason(&root, "legacy review-watch").is_none() {
+                assert!(Instant::now() < deadline, "the ship registered no intent");
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            std::thread::sleep(Duration::from_secs(3));
+            let claims = bug2703_loop_claims(&root);
+            let attempts: Vec<Attempt> = store
+                .load()
+                .unwrap()
+                .entries
+                .values()
+                .flat_map(|e| e.attempts.clone())
+                .collect();
+            let seen = (
+                done.load(Ordering::SeqCst),
+                claims,
+                finished.lock().unwrap().is_some(),
+                attempts
+                    .iter()
+                    .all(|a| a.recorded().iter().all(|p| p.alive())),
+                attempts.iter().all(active),
+            );
+            drop(running);
+            drop(superseding);
+            release.store(true, Ordering::SeqCst);
+            seen
+        })
+    };
+    let started = Instant::now();
+    let shipped = crate::with_review_pr_subject(
+        crate::ReviewPrSubject {
+            head_ref: "claude/bug-4324".into(),
+            commit_subjects: vec!["fix(x): change".into()],
+        },
+        || {
+            crate::pr_cmd::pr_ship_handler(
+                Some(4324),
+                true,
+                true,
+                false,
+                false,
+                None,
+                None,
+                true,
+                false,
+                false,
+                None,
+                true,
+            )
+        },
+    );
+    let waited = started.elapsed();
+    ship_done.store(true, Ordering::SeqCst);
+    let (done_early, claims_during, train_done_during, processes_alive, attempts_active) =
+        observer.join().unwrap();
+    assert!(!done_early, "the ship waited for the work in flight");
+    assert_eq!(
+        claims_during,
+        vec!["legacy auto-train".to_string()],
+        "review-watch yielded; the running train pass kept its claim"
+    );
+    assert!(!train_done_during, "the train pass was not cut short");
+    assert!(processes_alive, "no review process was signalled");
+    assert!(attempts_active, "both reviews were still in flight");
+    // The ship crossed admission within its bound and went on to check its
+    // own PR at the forge: never an admission refusal.
+    let error = format!("{:#}", shipped.unwrap_err());
+    let calls = std::fs::read_to_string(&gh_calls).unwrap_or_default();
+    assert!(
+        !error.contains("admission busy"),
+        "{error}\ngh calls:\n{calls}"
+    );
+    // It checked that PR after admission: read its head and approval state,
+    // found the recorded approval at that head, read its CI, and asked the
+    // forge to merge exactly the approved head. Only the fixture's merge
+    // refusal stopped it.
+    assert!(
+        error.contains("`gh pr merge` failed") && error.contains("#4324"),
+        "{error}\ngh calls:\n{calls}"
+    );
+    let ship_calls: Vec<&str> = calls.lines().filter(|l| l.contains(" 4324 ")).collect();
+    let position = |start: &str| {
+        ship_calls
+            .iter()
+            .position(|l| l.starts_with(start))
+            .unwrap_or_else(|| panic!("no `{start}` call:\n{calls}"))
+    };
+    let head_read = position("pr view 4324 --json state,mergeable,reviewDecision,headRefOid");
+    let ci_read = position("pr checks 4324 ");
+    let merge = position("pr merge 4324 ");
+    assert!(head_read < ci_read && ci_read < merge, "{calls}");
+    assert!(
+        calls.contains(&format!("--match-head-commit {approved_head}")),
+        "the merge is pinned to the approved head:\n{calls}"
+    );
+    assert_eq!(
+        calls.lines().filter(|l| l.starts_with("pr merge ")).count(),
+        1,
+        "{calls}"
+    );
+    assert!(waited < Duration::from_secs(30), "{waited:?}");
+    assert!(waited >= Duration::from_secs(3), "{waited:?}");
+    // The work ran to its own end: exit 0, never a signal.
+    assert!(running_exit.join().unwrap().success());
+    assert!(superseding_exit.join().unwrap().success());
+    assert!(train_finished.lock().unwrap().is_some());
+    // Only the yielded watcher's settlement can have cleared the superseding
+    // attempt (finding 2): the ship got in, so it did. A later ordinary pass
+    // may already have pruned both closed entries.
+    let state = store.load().unwrap();
+    if let Some(entry) = state.entries.get("PR-2") {
+        assert_eq!(entry.attempts[0].phase, Phase::Superseded);
+    }
+    assert!(state
+        .entries
+        .values()
+        .flat_map(|e| &e.attempts)
+        .all(|a| !active(a)));
+    // With nobody waiting, both workers take their claims again.
+    bug2703_wait_for("both workers resume their claims", both_hold);
+    crate::review_watch::stop_test_loops(&root);
+    for (name, worker) in [("review-watch", review), ("auto-train", train)] {
+        let error = worker.join().unwrap().expect_err("stopped by the fixture");
+        assert!(
+            format!("{error:#}").contains("test fixture stopped the loop"),
+            "{name}: {error:#}"
+        );
+    }
+    assert!(
+        train_passes.load(Ordering::SeqCst) >= 2,
+        "the auto-train passed again"
+    );
+}
+
+/// Review round 3, finding 3 (the BUG-2650 coexistence survives a yield):
+/// the watcher holds its claim beside a running manual cooperative train; a
+/// ship arrives, the watcher yields to its intent at the pass boundary; the
+/// ship cannot get in (the train is running) and gives up at its bound; the
+/// watcher then takes its claim back while that train is still running, and
+/// the train's own claim was never disturbed.
+// trace:BUG-2703 | ai:claude
+// trace:BUG-b6b1278890774ef993d2ebc327862470-465.ac6ca3ea | ai:claude
+#[test]
+fn bug2703_watcher_retakes_its_claim_beside_a_manual_train_after_a_ship_gives_up() {
+    use fs2::FileExt;
+    let (temp, _store) = fixture();
+    let root = temp.path().to_path_buf();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[admission]\nwait_secs = 2\n",
+    )
+    .unwrap();
+    let mut watcher = None;
+    assert_eq!(hold_admission(&root, &mut watcher, false).unwrap(), None);
+    // A manual train takes its cooperative claim and runs (holds run.lock).
+    let train = crate::admission_owner::manual_train_admission(&root, false)
+        .unwrap()
+        .expect("the manual train coexists with the watcher");
+    std::fs::create_dir_all(root.join(".aida/train")).unwrap();
+    let run = std::fs::File::create(root.join(".aida/train/run.lock")).unwrap();
+    run.lock_exclusive().unwrap();
+    assert!(crate::pr_train::admission_train_running(&root).unwrap());
+    assert_eq!(hold_admission(&root, &mut watcher, false).unwrap(), None);
+    let coexisting = vec![
+        "legacy review-watch".to_string(),
+        "cooperative manual train".to_string(),
+    ];
+    assert_eq!(bug2703_loop_claims(&root), coexisting);
+
+    // A ship comes: the watcher yields at its boundary and stays yielded.
+    let ship = {
+        let root = root.clone();
+        std::thread::spawn(move || {
+            crate::admission_owner::ship_admission(&root).map(|c| c.is_some())
+        })
+    };
+    bug2703_wait_for("ship registers its intent", || {
+        crate::admission_owner::yield_reason(&root, "legacy review-watch").is_some()
+    });
+    let reason = hold_admission(&root, &mut watcher, false)
+        .unwrap()
+        .expect("the watcher yields to the waiting ship");
+    assert!(reason.contains("exclusive admission requested"), "{reason}");
+    assert!(watcher.is_none());
+    assert_eq!(
+        bug2703_loop_claims(&root),
+        vec!["cooperative manual train".to_string()]
+    );
+    // The ship never gets in beside the running train, and gives up.
+    let error = ship.join().unwrap().expect_err("the ship gives up");
+    let text = format!("{error:#}");
+    assert!(text.contains("gave up after waiting"), "{text}");
+    assert!(text.contains("cooperative manual train"), "{text}");
+
+    // The intent is gone: the watcher retakes its claim, train still running.
+    assert_eq!(
+        crate::admission_owner::yield_reason(&root, "legacy review-watch"),
+        None
+    );
+    assert!(crate::pr_train::admission_train_running(&root).unwrap());
+    assert_eq!(
+        hold_admission(&root, &mut watcher, false).unwrap(),
+        None,
+        "the watcher rejoins the running manual train"
+    );
+    assert!(watcher.is_some());
+    let mut claims = bug2703_loop_claims(&root);
+    claims.sort();
+    let mut want = coexisting;
+    want.sort();
+    assert_eq!(claims, want);
+    // The same holds after a drain and its resume.
+    crate::admission_drain::fixture_drain(&root, "joe (uid 1)", "x", 600, chrono::Utc::now())
+        .unwrap();
+    assert!(hold_admission(&root, &mut watcher, false)
+        .unwrap()
+        .is_some());
+    assert!(watcher.is_none());
+    crate::admission_drain::fixture_resume(&root, "joe (uid 1)").unwrap();
+    assert_eq!(hold_admission(&root, &mut watcher, false).unwrap(), None);
+    assert!(watcher.is_some());
+    drop(train);
+    FileExt::unlock(&run).unwrap();
+}
+
+/// Review round 3, finding 8: a watcher that starts yielded (drained, or a
+/// ship waiting) still sweeps leaked probe refs, the first time it takes
+/// its claim, and only once.
+// trace:BUG-2703 | ai:claude
+#[test]
+fn bug2703_probe_refs_are_swept_the_first_time_the_claim_is_taken() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path();
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(out.status.success(), "git {args:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_string()
+    };
+    git(&["init", "-q", "-b", "main"]);
+    git(&[
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "s",
+    ]);
+    let head = git(&["rev-parse", "HEAD"]);
+    let leak = |name: &str| {
+        let name = format!(
+            "refs/aida/review-watch/4000000001-t{}-{name}/base",
+            chrono::Utc::now().timestamp() - 3600
+        );
+        git(&["update-ref", &name, &head]);
+    };
+    let leaked = || {
+        git(&[
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/aida/review-watch/",
+        ])
+    };
+    leak("0b7c6a52-1f3e-4c1d-9a7e-5d2f8c3b4a10");
+    // The watcher starts drained: no claim, so no sweep yet.
+    crate::admission_drain::fixture_drain(root, "joe (uid 1)", "x", 600, chrono::Utc::now())
+        .unwrap();
+    let (mut claim, mut swept) = (None, false);
+    assert!(hold_admission(root, &mut claim, false).unwrap().is_some());
+    assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 0);
+    assert!(!swept);
+    assert!(!leaked().is_empty());
+    // The first pass that holds the claim sweeps.
+    crate::admission_drain::fixture_resume(root, "joe (uid 1)").unwrap();
+    assert_eq!(hold_admission(root, &mut claim, false).unwrap(), None);
+    assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 1);
+    assert!(swept);
+    assert_eq!(leaked(), "");
+    // Later passes do not sweep again.
+    leak("1c2d3e4f-1f3e-4c1d-9a7e-5d2f8c3b4a10");
+    assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 0);
+    assert!(!leaked().is_empty());
+}
