@@ -9,6 +9,6 @@ note: 'advisor-121 05:52: stale mail-poll-setup on 01a1f4a0; the seat confirmed 
 due_since: 2026-11-20T13:00:55.721588579Z
 due_reason: on CronJobFailed:watchdog
 due_failure:
-  trip_id: watchdog@2026-11-20T12:44:59.923075912Z
+  trip_id: watchdog@2026-11-22T06:48:02.677580090Z
   job: watchdog
   error: 'exit 1: '
