@@ -1,3 +1,9 @@
+Conflict rework distinguishes seat adoption from conversation resume. Explicit fresh
+pickup preserves unleased retained merges after the session-end holder scan.
+Repair-journal heal binds the scanned generation and rechecks lease and worker
+evidence under lock. See docs/cli/07-project-setup.md.
+<!-- trace:BUG-2688 | ai:codex -->
+
 Cross-label gate-ledger discovery has a separate 128 MiB/200,000-attempt
 aggregate work ceiling, including unrelated payloads and torn retries; exhaustion
 refuses selection. Automatic archive retention and discovery limited to relevant

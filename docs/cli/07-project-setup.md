@@ -421,7 +421,25 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 
-**Conflict-repair reservations.** When a rework's PR head conflicts with its base, the host records a reservation for that head in `.aida/repair-journal.json` before the lane starts, so two lanes never repair the same head. A launch that is refused on its route, or is not eligible to run the repair, is refused before the reservation is made. A launch that fails before its worker starts releases its own reservation when its setup is rolled back. A reservation can still be left behind by a lane that started and then ended without publishing. The next attempt is refused and names the lane that holds it. `aida doctor check repair-journal` reports each reservation whose lane has no lease, no live lane run and no seat directory, and `aida doctor heal repair-journal --yes` releases them. The heal re-checks that evidence under the journal lock and first copies the journal to `.aida/repair-journal.backup-<timestamp>.json`. A reservation whose lease, lane run or seat still exists, or whose evidence cannot be read, is kept. <!-- trace:BUG-2688 | ai:claude -->
+**Conflict-repair reservations.** The host reserves a conflicting PR head in
+`.aida/repair-journal.json` after launch admission. A pre-spawn failure releases
+its own reservation when the seat setup rolls back. If a lane leaves a reservation
+behind, `aida doctor check repair-journal` reports whether it has enough ownership
+evidence to release it. `aida doctor heal repair-journal --yes` backs up the verified
+journal to `.aida/repair-journal.backup-<timestamp>.json`. It releases only the
+scanned reservation generation after rechecking that its lease, worker and seat
+are gone. An unreadable lease or lane record leaves the reservation in place, and
+the doctor names the evidence that needs attention.
+
+A replacement seat starts from the fetched PR head even when the conversation
+resumes. Verified adoption can continue a retained merge with matching journal
+evidence. An explicit `aida queue work <SPEC> --fresh` can move an unleased,
+idle retained merge to a sibling `.retained-<id>` path before building the
+replacement. Pickup verifies the remote head and admits the conflict route
+before moving the seat or releasing its reservation. A private clone also
+needs a matching project marker and object alternates. Pickup reports where
+it preserved the files, index and merge state.
+<!-- trace:BUG-2688 | ai:codex -->
 
 **Expired exited-worker claims.** `aida doctor check leases` also reports shared
 claims whose local session record has disappeared. On the holder's host, an

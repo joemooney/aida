@@ -2281,6 +2281,9 @@ pub(crate) fn session_start_with_receipt(
         .zip(project_root.canonicalize().ok())
         .map(|(a, b)| a != b)
         .unwrap_or(false);
+    // Hold placement through lease publication and any repair ownership transfer.
+    // trace:BUG-2688 | ai:codex
+    let seat_placement = crate::seat_clone::lock_seat_placement(&project_root, false)?;
     let slug = slugify(owns);
     if slug.is_empty() {
         anyhow::bail!(
@@ -3759,6 +3762,7 @@ pub(crate) fn session_start_with_receipt(
             );
         }
     }
+    drop(seat_placement);
     // BUG-1918: durable record of who claimed this spec, surviving release.
     // trace:BUG-1918 | ai:claude
     crate::gate::review_authority::record_authoring_lease(&project_root, &lease);

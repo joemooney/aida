@@ -3957,7 +3957,10 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
                 assert!(!message.contains("git -C"), "{message}");
             } else {
                 assert!(message.contains("git -C"), "{message}");
-                assert!(message.contains("merge origin/feat"), "{message}");
+                assert!(
+                    message.contains("stash push --include-untracked"),
+                    "{message}"
+                );
                 assert!(!message.contains("aida ship --from-seat"), "{message}");
             }
             assert_eq!(git_ok(&tree, &["rev-parse", "HEAD"]), head);
@@ -3967,17 +3970,14 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
             );
             if behind_head {
                 std::fs::remove_file(tree.join("pending")).unwrap();
-                let message = format!(
-                    "{:#}",
+                let files =
                     prepare_leased_rework_merge(&fx.main, &tree, "feat", false, 3398, "test-lane")
-                        .unwrap_err()
+                        .unwrap();
+                assert!(files.is_empty());
+                assert_eq!(
+                    git_ok(&tree, &["rev-parse", "HEAD"]),
+                    git_ok(&fx.main, &["rev-parse", "HEAD"])
                 );
-                assert!(
-                    message.contains("retry pickup with its current head"),
-                    "{message}"
-                );
-                assert!(!message.contains("--commit-pending"), "{message}");
-                assert!(!message.contains("add -A"), "{message}");
             }
         }
     }
@@ -3988,6 +3988,7 @@ fn bug_2504_recovery_matches_recorded_tree_kind() {
 fn bug_2504_rework_preflight_has_no_commit_recovery() {
     let fx = fixture();
     git_ok(&fx.main, &["branch", "feat"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
     let tree = fx.root.join("linked-preflight");
     git_ok(
         &fx.main,
@@ -4025,6 +4026,7 @@ fn bug_2504_rework_preflight_has_no_commit_recovery() {
         assert!(!message.contains("add -A"), "{message}");
         assert!(!message.contains("commit-pending"), "{message}");
         assert!(!message.contains(". ."), "{message}");
+        assert_eq!(message.matches("aida queue work").count(), 1, "{message}");
     }
     assert!(git_ok(&tree, &["status", "--porcelain"]).contains("UU README.md"));
     assert_eq!(

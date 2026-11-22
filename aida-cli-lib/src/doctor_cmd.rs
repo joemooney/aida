@@ -2018,6 +2018,19 @@ fn heal_doctor_findings(
     let mut by_category: std::collections::BTreeMap<String, Vec<&DoctorFinding>> =
         std::collections::BTreeMap::new();
     for finding in findings {
+        // An unproven repair reservation is report-only even with --force.
+        // Keep its diagnostic visible without blocking other proven heals.
+        // trace:BUG-2688 | ai:codex
+        if finding.category == crate::repair_journal::HEAL_CATEGORY && !finding.safe_heal {
+            out.push(DoctorHealResult {
+                category: finding.category.clone(),
+                id: finding.id.clone(),
+                action: finding.action.clone(),
+                status: "skipped".into(),
+                detail: Some(finding.summary.clone()),
+            });
+            continue;
+        }
         by_category
             .entry(finding.category.clone())
             .or_default()

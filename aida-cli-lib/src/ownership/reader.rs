@@ -17,38 +17,38 @@ pub(crate) fn local_claim_process_is_dead(
     recorded_start: Option<&str>,
     pid_namespace: Option<u64>,
 ) -> bool {
-    pid != 0
-        && aida_core::pid_observer::PidObserver::current().can_observe(pid_namespace)
-        && match aida_core::proc_identity::observe_legacy_registry(
-            pid,
-            recorded_start,
-            pid_namespace,
-        ) {
-            aida_core::proc_identity::Verdict::Dead(
-                aida_core::proc_identity::DeadReason::Absent,
-            ) => true,
-            aida_core::proc_identity::Verdict::Dead(
-                aida_core::proc_identity::DeadReason::Reused,
-            ) => {
-                // The strict observer requires a boot-bound identity and only
-                // reports Reused when the boot matches. Legacy tick-only
-                // stamps cannot prove this and retain the claim.
-                aida_core::proc_identity::ProcIdentity::from_registry(
-                    pid,
-                    recorded_start,
-                    pid_namespace,
-                )
-                .is_some_and(|id| {
-                    matches!(
-                        aida_core::proc_identity::observe(&id, true),
-                        aida_core::proc_identity::Verdict::Dead(
-                            aida_core::proc_identity::DeadReason::Reused
-                        )
-                    )
-                })
-            }
-            _ => false,
+    local_claim_process_liveness(pid, recorded_start, pid_namespace) == Some(false)
+}
+
+// The repair journal needs to distinguish a confirmed live worker from an
+// unreadable process view. Both retain the reservation, but only the latter
+// calls for recovery in doctor.
+// trace:BUG-2688 | ai:codex
+pub(crate) fn local_claim_process_liveness(
+    pid: u32,
+    recorded_start: Option<&str>,
+    pid_namespace: Option<u64>,
+) -> Option<bool> {
+    use aida_core::proc_identity::{
+        observe, observe_legacy_registry, DeadReason, ProcIdentity, Verdict,
+    };
+
+    if pid == 0
+        || pid > i32::MAX as u32
+        || !aida_core::pid_observer::PidObserver::current().can_observe(pid_namespace)
+    {
+        return None;
+    }
+    match observe_legacy_registry(pid, recorded_start, pid_namespace) {
+        Verdict::Alive => Some(true),
+        Verdict::Dead(DeadReason::Absent) => Some(false),
+        Verdict::Dead(DeadReason::Reused) => {
+            // Legacy tick-only stamps cannot prove that the boot matches.
+            let id = ProcIdentity::from_registry(pid, recorded_start, pid_namespace)?;
+            matches!(observe(&id, true), Verdict::Dead(DeadReason::Reused)).then_some(false)
         }
+        _ => None,
+    }
 }
 
 /// Advisory death observation for local deputy processes. The caller must

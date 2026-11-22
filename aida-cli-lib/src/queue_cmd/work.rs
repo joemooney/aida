@@ -3,6 +3,7 @@ use super::*;
 // trace:BUG-2509 | ai:codex
 use crate::gate::ledger::{ChangeForge, ChangeKey};
 use crate::rework_direction::ReviewResult;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum QueueFreshPickup {
@@ -841,11 +842,26 @@ pub(crate) fn rework_conflict_route(
 pub(crate) struct ReworkConflictLaunch<'a> {
     pub(crate) vendor: session::HeadlessVendor,
     pub(crate) resume: bool,
-    pub(crate) interactive: bool,
     pub(crate) contained: bool,
     pub(crate) scope: &'a str,
     pub(crate) pr: u64,
     pub(crate) branch: &'a str,
+}
+
+impl ReworkConflictLaunch<'_> {
+    // Verify the remote head and admit the route before relocating a retained seat.
+    // trace:BUG-2688 | ai:codex
+    pub(crate) fn preserve_for_fresh_pickup(self, main: &Path, base: &str) -> Result<Vec<PathBuf>> {
+        let (_, head) = crate::seat_clone::fetch_rework_heads(main, base, self.branch)?;
+        crate::seat_clone::archive_retained_rework(
+            main,
+            self.scope,
+            self.pr,
+            self.branch,
+            &head,
+            || admit_rework_conflict_launch(self),
+        )
+    }
 }
 
 /// Whether this launch may run a conflicted repair at all: its route and its
@@ -874,47 +890,46 @@ pub(crate) fn admit_rework_conflict_launch(launch: ReworkConflictLaunch<'_>) -> 
         }
         .into());
     }
-    session::preflight_launch_vendor(launch.vendor, launch.interactive)?;
-    session::require_vendor_containment(launch.vendor, launch.contained, "conflict rework")
+    // The queue pickup already checked binary and containment eligibility
+    // before seating this launch. The conflict adds only the publication gate.
+    Ok(())
 }
 
-/// Host preparation of a rework followed by its conflict route, in the order
-/// pickup runs them: `prepare` receives the launch's admission check and asks
-/// it before reserving a conflict, then the route is applied to the result.
-// trace:BUG-2688 | ai:claude
-pub(crate) fn prepare_and_route_rework_conflict(
-    project_root: &Path,
-    launch: ReworkConflictLaunch<'_>,
-    prompt: &mut String,
-    resolved_model: &mut Option<String>,
-    prepare: impl FnOnce(&dyn Fn() -> Result<()>) -> Result<Vec<String>>,
-    notify: impl FnOnce(&str, &str) -> Result<()>,
-) -> Result<session::HeadlessVendor> {
-    let prepared = prepare(&|| admit_rework_conflict_launch(launch));
-    apply_rework_conflict_route(
-        project_root,
-        prepared,
-        launch,
-        prompt,
-        resolved_model,
-        notify,
-    )
+// The conversation may resume on a replacement tree. Only verified orphan
+// adoption carries the previous checkout forward.
+// trace:BUG-2688 | ai:codex
+pub(crate) fn rework_seat_for(adopted: bool, fresh: bool) -> crate::seat_clone::ReworkSeat {
+    use crate::seat_clone::ReworkSeat;
+    match (adopted, fresh) {
+        (_, true) => ReworkSeat::Fresh,
+        (true, false) => ReworkSeat::Adopted,
+        (false, false) => ReworkSeat::Replacement,
+    }
 }
 
-/// Append the host-journal conflict paths without changing vendor or model.
-/// A route where the lane would publish its own merge is refused, since only
-/// host publication compile-checks the exact merged tree. Launch admission and
-/// containment are rechecked before any child starts.
+/// Apply the conflict route only after host preparation. The preparation
+/// calls admission before reserving the head and carries the result forward
+/// without repeating the effectful preflight.
 // trace:STORY-2475 | ai:claude
-// trace:BUG-2553 | ai:codex
+// trace:BUG-2553 BUG-2688 | ai:codex
 pub(crate) fn apply_rework_conflict_route(
-    _project_root: &Path,
-    prepared: Result<Vec<String>>,
     launch: ReworkConflictLaunch<'_>,
     prompt: &mut String,
-    _resolved_model: &mut Option<String>,
+    prepare: impl FnOnce(&dyn Fn() -> Result<()>) -> Result<Vec<String>>,
+    admit: impl FnOnce(ReworkConflictLaunch<'_>) -> Result<()>,
     notify: impl FnOnce(&str, &str) -> Result<()>,
 ) -> Result<session::HeadlessVendor> {
+    let admit = std::cell::Cell::new(Some(admit));
+    let admitted = std::cell::Cell::new(false);
+    let prepared = prepare(&|| {
+        if !admitted.get() {
+            admit
+                .take()
+                .context("conflict launch admission already refused")?(launch)?;
+            admitted.set(true);
+        }
+        Ok(())
+    });
     let (route_vendor, files) = rework_conflict_route(
         prepared,
         launch.vendor,
@@ -928,7 +943,10 @@ pub(crate) fn apply_rework_conflict_route(
         return Ok(launch.vendor);
     }
     let vendor = route_vendor;
-    admit_rework_conflict_launch(ReworkConflictLaunch { vendor, ..launch })?;
+    anyhow::ensure!(
+        admitted.get(),
+        "repair preparation omitted conflict launch admission"
+    );
     prompt.push_str(&format!(
         "\n\n{}",
         crate::rework_direction::host_conflict_task(
@@ -4102,7 +4120,7 @@ pub(crate) fn preflight_queue_work_branch_reclaiming(
     adopting: Option<&std::path::Path>,
     force_claim: bool,
 ) -> Result<()> {
-    inspect_queue_work_branch(root, branch, adopting, force_claim, true)
+    inspect_queue_work_branch(root, branch, adopting, force_claim, true, false)
 }
 
 // trace:BUG-2548 | ai:codex
@@ -4114,6 +4132,7 @@ fn inspect_queue_work_branch(
     adopting: Option<&std::path::Path>,
     force_claim: bool,
     reclaim: bool,
+    archive_merge: bool,
 ) -> Result<()> {
     let Some(branch) = branch else {
         return Ok(());
@@ -4168,6 +4187,12 @@ fn inspect_queue_work_branch(
     let inventory = String::from_utf8_lossy(&out.stdout);
     for wt in crate::worktree_reclaim::parse_worktree_entries(&inventory) {
         if wt.branch.as_deref() != Some(branch) || adopted(&wt.path) {
+            continue;
+        }
+        if archive_merge && wt.path != root && crate::seat_clone::linked_rework_has_merge(&wt.path)?
+        {
+            // Fresh rework revalidates the registered seat under the placement
+            // lock before moving it, including leases and live holders.
             continue;
         }
         let leased = list_leases(root)
@@ -4978,6 +5003,16 @@ pub(crate) fn handle_queue_work(
              this pickup must keep the existing PR branch"
             );
         }
+        // trace:BUG-2688 | ai:codex
+        let fresh_rework = fresh
+            && adopt_orphan.is_none()
+            && !no_launch
+            && !dry_run
+            && !plan_only
+            && !guided
+            && !list_sessions
+            && role == "implementer"
+            && rework_pr.is_some();
         let resolved_pickup_pr =
             (plan.entries.len() == 1 && plan.review_target.is_none()).then(|| rework_pr.clone());
         let rework_branch_override = rework_pr.as_ref().map(|(_, branch)| branch.clone());
@@ -5205,6 +5240,7 @@ pub(crate) fn handle_queue_work(
                         .or(review_retirement.as_deref()),
                     force_claim,
                     false,
+                    fresh_rework,
                 )?;
                 let preflight_source_leases = || -> Result<()> {
                     if adopt_orphan.is_none() {
@@ -5288,11 +5324,13 @@ pub(crate) fn handle_queue_work(
                         retire_idle_review_worktree(&project_root, forge, n)?;
                     }
                 }
-                preflight_queue_work_branch_reclaiming(
+                inspect_queue_work_branch(
                     &project_root,
                     session_branch_override.or(review_branch.as_deref()),
                     adopt_orphan.as_ref().map(|l| l.worktree_path.as_path()),
                     force_claim,
+                    true,
+                    fresh_rework,
                 )?;
                 // trace:BUG-2549 | ai:codex — known PR-less, unleased branch.
                 if canonical_resume.is_some() && !dry_run {
@@ -6253,6 +6291,26 @@ pub(crate) fn handle_queue_work(
             );
         }
 
+        let conflict_launch = rework_pr
+            .as_ref()
+            .filter(|_| !no_launch && !plan_only && !guided && role == "implementer")
+            .map(|(pr, branch)| ReworkConflictLaunch {
+                vendor: launch_vendor,
+                resume: matches!(launch, Some(QueueWorkLaunch::Resume(_))),
+                contained,
+                scope: &plan.scope,
+                pr: *pr,
+                branch,
+            });
+        let preserved_rework = if let Some(conflict) = conflict_launch.filter(|_| fresh_rework) {
+            let pr = conflict.pr;
+            let pr_base = crate::seat_clone::rework_base_branch(&project_root, pr, conflict.branch)
+                .with_context(|| format!("missing open PR #{pr} base/head metadata; retry `aida queue work {} --fresh` once the forge can return it", shell_quote(&plan.scope)))?;
+            conflict.preserve_for_fresh_pickup(&project_root, &pr_base)?
+        } else {
+            Vec::new()
+        };
+
         // session_start handles worktree creation, lease persistence, env
         // shim, conflict detection. We always pass launch=false so we can
         // (a) write the cluster manifest from the new lease and (b) emit
@@ -6351,42 +6409,42 @@ pub(crate) fn handle_queue_work(
             // any vendor, red run, child grant or resume is started.
             // trace:STORY-2475 | ai:codex
             let mut launch_vendor = launch_vendor;
-            let mut resolved_model = resolved_model.clone();
+            let resolved_model = resolved_model.clone();
             let mut prompt = prompt.clone();
-            if !no_launch && !plan_only && !guided && role == "implementer" {
-                if let Some((pr, branch)) = rework_pr.as_ref() {
-                    // Route and eligibility are checked before a conflict is
-                    // reserved in the repair journal. trace:BUG-2688 | ai:claude
-                    let resume = matches!(launch, Some(QueueWorkLaunch::Resume(_)));
-                    launch_vendor = prepare_and_route_rework_conflict(
-                        &project_root,
-                        ReworkConflictLaunch {
-                            vendor: launch_vendor,
-                            resume,
-                            interactive: !no_human,
-                            contained,
-                            scope: &plan.scope,
-                            pr: *pr,
-                            branch,
-                        },
-                        &mut prompt,
-                        &mut resolved_model,
-                        |admit_conflict| {
-                            crate::seat_clone::prepare_rework_merge(
-                                &project_root,
-                                &lease.worktree_path,
-                                branch,
-                                resume,
-                                *pr,
-                                &lease.id,
-                                admit_conflict,
-                            )
-                        },
-                        |subject, body| {
-                            crate::ship_from_seat::advisor_request(&project_root, subject, body)
-                        },
-                    )?;
-                }
+            for path in &preserved_rework {
+                prompt.push_str(&format!(
+                    "\n\nPrevious conflict work was preserved at {}.",
+                    path.display()
+                ));
+            }
+            if let Some(conflict) = conflict_launch {
+                launch_vendor = apply_rework_conflict_route(
+                    conflict,
+                    &mut prompt,
+                    |admit_conflict| {
+                        crate::seat_clone::prepare_rework_merge(
+                            &project_root,
+                            &lease.worktree_path,
+                            conflict.branch,
+                            rework_seat_for(adopt_orphan.is_some(), fresh_rework),
+                            conflict.pr,
+                            &lease.id,
+                            &plan.scope,
+                            admit_conflict,
+                        )
+                    },
+                    |launch| {
+                        // A nonempty archive proves this pickup already admitted its route.
+                        // trace:BUG-2688 | ai:codex
+                        if preserved_rework.is_empty() {
+                            admit_rework_conflict_launch(launch)?;
+                        }
+                        Ok(())
+                    },
+                    |subject, body| {
+                        crate::ship_from_seat::advisor_request(&project_root, subject, body)
+                    },
+                )?;
             }
             // Rework may select another vendor after the early host gate. Recheck
             // its actual policy before spawning; ordinary cleanup retains the lease

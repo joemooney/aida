@@ -2307,9 +2307,26 @@ fn list_leases_strict_inner(
     spec_ids: &[&str],
     any_unparseable_is_unknown: bool,
 ) -> Result<Vec<SessionLease>, String> {
+    // A dangling symlink or an inconclusive lookup cannot prove absence.
+    // trace:BUG-2688 | ai:codex
     let dir = leases_dir(project_root);
-    if !dir.exists() {
-        return Ok(Vec::new());
+    for ancestor in [project_root.join(".aida"), dir.clone()] {
+        match std::fs::symlink_metadata(&ancestor) {
+            Ok(metadata) if metadata.is_dir() => {}
+            Ok(_) => {
+                return Err(format!(
+                    "{} is not a real lease directory",
+                    ancestor.display()
+                ))
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(error) => {
+                return Err(format!(
+                    "cannot inspect lease directory {}: {error}",
+                    ancestor.display()
+                ))
+            }
+        }
     }
     let entries = std::fs::read_dir(&dir)
         .map_err(|e| format!("the lease directory {} is unreadable: {e}", dir.display()))?;
@@ -2329,17 +2346,22 @@ fn list_leases_strict_inner(
         // trace:TASK-2813 | ai:claude
         if any_unparseable_is_unknown
             && name.starts_with(crate::worktree_lock::LOCK_ONLY_PREFIX)
-            && std::fs::read_to_string(&p)
+            && aida_core::seat_clone_detect::read_regular_file_result_with_limit(&p, 256 * 1024)
                 .is_ok_and(|body| crate::worktree_lock::parse_lock_only_entry(&body).is_ok())
         {
             continue;
         }
         let label = p.display().to_string();
-        match read_lease_file_for_gate(&label, || std::fs::read_to_string(&p), spec_ids) {
+        match read_lease_file_for_gate(
+            &label,
+            || aida_core::seat_clone_detect::read_regular_file_result_with_limit(&p, 256 * 1024),
+            spec_ids,
+        ) {
             LeaseFileRead::Lease(lease) => out.push(*lease),
             LeaseFileRead::OtherScope if !any_unparseable_is_unknown => {}
             LeaseFileRead::OtherScope => {
-                if !p.exists() {
+                if matches!(std::fs::symlink_metadata(&p), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+                {
                     continue;
                 }
                 return Err(format!("the lease {label} does not parse"));
@@ -2347,7 +2369,8 @@ fn list_leases_strict_inner(
             LeaseFileRead::Unknown(why) => {
                 // A lease removed between the listing and the read is gone,
                 // not unknown.
-                if !p.exists() {
+                if matches!(std::fs::symlink_metadata(&p), Err(error) if error.kind() == std::io::ErrorKind::NotFound)
+                {
                     continue;
                 }
                 return Err(why);

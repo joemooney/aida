@@ -4792,47 +4792,43 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
             env.set_key("AIDA_AGENT_MODEL", "gpt-codex");
             crate::session::set_headless_vendor_override(None);
             let mut prompt = String::from("/aida-pickup STORY-2475");
-            let mut model = Some("gpt-codex".to_string());
             let mailed = Cell::new(0);
             crate::seat_clone::record_test_publication_lease(&project, &seat, branch);
-            let prepared = crate::seat_clone::prepare_rework_merge_fixture(
-                &project,
-                &seat,
-                branch,
-                false,
-                3398,
-                "test-lane",
-            );
             let routed = apply_rework_conflict_route(
-                &project,
-                prepared,
                 ReworkConflictLaunch {
                     vendor: crate::session::resolve_enabled_headless_vendor(&project).unwrap(),
                     resume: false,
-                    interactive,
                     contained: false,
                     scope: "STORY-2475",
                     pr: 3398,
                     branch,
                 },
                 &mut prompt,
-                &mut model,
+                |admit| {
+                    crate::seat_clone::prepare_rework_merge_fixture_admitted(
+                        &project,
+                        &seat,
+                        branch,
+                        false,
+                        3398,
+                        "test-lane",
+                        admit,
+                    )
+                },
+                crate::queue_cmd::admit_rework_conflict_launch,
                 |_, body| {
                     mailed.set(mailed.get() + 1);
                     assert!(body.contains("shared.rs"), "{body}");
                     Ok(())
                 },
             );
-            assert_eq!(
-                git(&seat, &["status", "--porcelain"]).is_empty(),
-                !conflicts
-            );
+            assert!(git(&seat, &["status", "--porcelain"]).is_empty());
             let merging = crate::test_git::git_command()
                 .current_dir(&seat)
                 .args(["rev-parse", "-q", "--verify", "MERGE_HEAD"])
                 .output()
                 .unwrap();
-            assert_eq!(merging.status.success(), conflicts);
+            assert!(!merging.status.success());
             // Remote evidence must agree before a vendor can be started.
             let remote = git(&origin, &["rev-parse", &format!("refs/heads/{branch}")]);
             if conflicts {
@@ -4851,9 +4847,8 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                 );
                 assert_eq!(remote, head, "conflicts must not publish");
                 assert_eq!(mailed.get(), 0);
-                assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge retained");
+                assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "seat preserved");
                 assert_eq!(prompt, "/aida-pickup STORY-2475", "no lane task appended");
-                assert_eq!(model.as_deref(), Some("gpt-codex"));
                 assert_eq!(std::env::var("AIDA_AGENT_MODEL").unwrap(), "gpt-codex");
                 assert_eq!(
                     crate::session::resolve_headless_vendor(&project),
@@ -4871,7 +4866,6 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                 assert_eq!(mailed.get(), 0);
                 assert_ne!(git(&seat, &["rev-parse", "HEAD"]), head, "merge committed");
                 assert_eq!(prompt, "/aida-pickup STORY-2475");
-                assert_eq!(model.as_deref(), Some("gpt-codex"));
             }
             git(
                 &project,

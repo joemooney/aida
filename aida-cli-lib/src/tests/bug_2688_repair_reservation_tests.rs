@@ -10,15 +10,30 @@
 //! - a reservation whose lane is gone is found and released by the doctor heal.
 // trace:BUG-2688 | ai:claude
 
-use super::tests::{fixture, git_ok, Fixture};
+use super::tests::{fixture, Fixture};
 use super::*;
 use crate::queue_cmd::{
-    prepare_and_route_rework_conflict, run_pickup_launch, AgentLaunchMark, ReworkConflictLaunch,
+    admit_rework_conflict_launch, apply_rework_conflict_route, rework_seat_for, run_pickup_launch,
+    AgentLaunchMark, ReworkConflictLaunch,
 };
 use crate::repair_journal::{RepairGuard, SpawnOutcome};
 use crate::session::HeadlessVendor;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
+
+fn git_ok(root: &Path, args: &[&str]) -> String {
+    let out = crate::test_git::git_command()
+        .current_dir(root)
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).unwrap().trim().to_owned()
+}
 
 const PR: u64 = 4365;
 
@@ -83,7 +98,6 @@ fn launch(vendor: HeadlessVendor, contained: bool) -> ReworkConflictLaunch<'stat
     ReworkConflictLaunch {
         vendor,
         resume: false,
-        interactive: false,
         contained,
         scope: "BUG-2688",
         pr: PR,
@@ -100,15 +114,13 @@ fn reconcile(
     contained: bool,
 ) -> Result<HeadlessVendor> {
     let mut prompt = String::from("/aida-pickup BUG-2688");
-    let mut model = None;
-    prepare_and_route_rework_conflict(
-        &fx.main,
+    apply_rework_conflict_route(
         launch(vendor, contained),
         &mut prompt,
-        &mut model,
         |admit| {
             prepare_rework_merge_fixture_admitted(&fx.main, seat, "feat", false, PR, lane, admit)
         },
+        admit_rework_conflict_launch,
         |_, _| panic!("no conflict-only mail is sent"),
     )
 }
@@ -358,7 +370,12 @@ fn reserve_for(main: &Path, lane: &str, tree: &Path) -> crate::repair_journal::R
 fn bug_2688_pre_spawn_failure_releases_the_launch_own_reservation() {
     let _scan = aida_core::mailbox_lifecycle::activation::test_writer_scan(true);
     let fx = fixture();
-    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat(&fx.main, "implementer", &[]);
+    let _ambient = crate::test_env::AmbientGuard::hermetic_with_seat_and(
+        &fx.main,
+        "implementer",
+        &[],
+        &[("AIDA_TRUST_PID_NAMESPACE", Some("1"))],
+    );
 
     let scope = "TASK-926881";
     let receipt = launching_setup(scope);
@@ -397,4 +414,305 @@ fn bug_2688_pre_spawn_failure_releases_the_launch_own_reservation() {
     );
     // Its lease and seat still stand, so the doctor keeps it too.
     assert!(crate::repair_journal::scan(&fx.main).is_empty());
+}
+
+#[test]
+fn bug_2688_replacement_pickup_pins_remote_for_new_and_resumed_conversations() {
+    for resume in [false, true] {
+        let fx = fixture();
+        let head = conflicting_pr(&fx);
+        let removed = seat(&fx, "removed-seat");
+        remove_seat(&fx, &removed);
+        assert!(!fx.main.join(".aida/repair-journal.json").exists());
+        git_ok(&fx.main, &["branch", "-f", "feat", &format!("{head}^")]);
+        let replacement = seat(&fx, "replacement");
+        assert_ne!(git_ok(&replacement, &["rev-parse", "HEAD"]), head);
+
+        let mut launch = launch(HeadlessVendor::Codex, true);
+        launch.resume = resume;
+        let mut prompt = String::new();
+        let admission_count = std::cell::Cell::new(0);
+        let vendor = apply_rework_conflict_route(
+            launch,
+            &mut prompt,
+            |admit| {
+                prepare_rework_merge_fixture_for_seat(
+                    &fx.main,
+                    &replacement,
+                    "feat",
+                    rework_seat_for(false, false),
+                    PR,
+                    "lane-1",
+                    admit,
+                )
+            },
+            |facts| {
+                assert_eq!(facts.resume, resume);
+                admission_count.set(admission_count.get() + 1);
+                Ok(())
+            },
+            |_, _| panic!("no conflict-only mail"),
+        )
+        .unwrap();
+        assert_eq!(vendor, HeadlessVendor::Codex);
+        assert_eq!(admission_count.get(), 1);
+        assert!(prompt.contains("README.md"));
+        assert!(merging(&replacement));
+        assert_eq!(git_ok(&replacement, &["rev-parse", "HEAD"]), head);
+
+        // A genuinely retained merge resumes through the same route using its
+        // verified adoption and journal, irrespective of the conversation.
+        let admitted = std::cell::Cell::new(0);
+        apply_rework_conflict_route(
+            launch,
+            &mut prompt,
+            |admit| {
+                prepare_rework_merge_fixture_for_seat(
+                    &fx.main,
+                    &replacement,
+                    "feat",
+                    rework_seat_for(true, false),
+                    PR,
+                    "lane-1",
+                    admit,
+                )
+            },
+            |_| {
+                admitted.set(admitted.get() + 1);
+                Ok(())
+            },
+            |_, _| panic!("no conflict-only mail"),
+        )
+        .unwrap();
+        assert_eq!(admitted.get(), 1);
+    }
+}
+
+#[test]
+fn bug_2688_fresh_pickup_refused_route_keeps_retained_seat_and_reservation() {
+    let fx = fixture();
+    conflicting_pr(&fx);
+    let retained = seat(&fx, "retained");
+    assert_eq!(
+        admitted_prepare(&fx, &retained, "retained-lane").unwrap(),
+        ["README.md"]
+    );
+    let journal_path = fx.main.join(".aida/repair-journal.json");
+    let before = std::fs::read(&journal_path).unwrap();
+    let merge = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
+    let index = git_ok(&retained, &["ls-files", "--stage"]);
+    let branch = git_ok(&fx.main, &["rev-parse", "refs/heads/feat"]);
+
+    let error = launch(HeadlessVendor::Claude, true)
+        .preserve_for_fresh_pickup(&fx.main, "main")
+        .unwrap_err();
+    assert!(
+        error
+            .downcast_ref::<crate::repair_journal::UnvalidatedRepairPublication>()
+            .is_some(),
+        "{error:#}"
+    );
+    assert_eq!(git_ok(&retained, &["rev-parse", "MERGE_HEAD"]), merge);
+    assert_eq!(git_ok(&retained, &["ls-files", "--stage"]), index);
+    assert_eq!(git_ok(&fx.main, &["rev-parse", "refs/heads/feat"]), branch);
+    assert_eq!(std::fs::read(journal_path).unwrap(), before);
+    assert!(!std::fs::read_dir(&fx.root).unwrap().any(|entry| entry
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .starts_with("retained.retained-")));
+}
+
+fn retained_private_clone(main: &Path, path: &Path) {
+    create(main, path, "feat", "origin/feat").unwrap();
+    let base = git_ok(main, &["rev-parse", "origin/main"]);
+    let merge = crate::test_git::git_command()
+        .current_dir(path)
+        .args([
+            "-c",
+            "user.name=AIDA Test",
+            "-c",
+            "user.email=test@example.com",
+            "merge",
+            "--no-edit",
+            &base,
+        ])
+        .output()
+        .unwrap();
+    assert!(!merge.status.success(), "{merge:?}");
+    assert!(merging(path), "{merge:?}");
+    std::fs::write(path.join("README.md"), "unfinished draft").unwrap();
+}
+
+#[test]
+fn bug_2688_fresh_pickup_preserves_project_private_clone_without_a_lease() {
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let retained = clone_path(&fx.main, "bug-2688").unwrap();
+    retained_private_clone(&fx.main, &retained);
+    assert!(host_recorded_clone(&fx.main, &retained).is_none());
+    let index = git_ok(&retained, &["ls-files", "--stage"]);
+    let merge = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
+    let old_pin = pin_ref(&retained).unwrap();
+
+    let route = launch(HeadlessVendor::Codex, true);
+    let archives = archive_retained_rework_with(
+        &fx.main,
+        route.scope,
+        route.pr,
+        route.branch,
+        &head,
+        || admit_rework_conflict_launch(route),
+        |path| {
+            assert_eq!(path, retained);
+            Ok(())
+        },
+    )
+    .unwrap();
+    let [archive] = archives.as_slice() else {
+        panic!("expected one archive, got {archives:?}");
+    };
+    assert!(!retained.exists());
+    assert_eq!(git_ok(archive, &["rev-parse", "MERGE_HEAD"]), merge);
+    assert_eq!(git_ok(archive, &["ls-files", "--stage"]), index);
+    assert_eq!(
+        std::fs::read_to_string(archive.join("README.md")).unwrap(),
+        "unfinished draft"
+    );
+    assert_eq!(git_ok(&fx.main, &["for-each-ref", &old_pin]), "");
+    assert_eq!(
+        git_ok(&fx.main, &["rev-parse", &pin_ref(archive).unwrap()]),
+        head
+    );
+    assert!(host_recorded_clone(&fx.main, archive).is_none());
+}
+
+#[test]
+fn bug_2688_fresh_pickup_refuses_wrong_main_or_unverified_private_clone() {
+    let fx = fixture();
+    conflicting_pr(&fx);
+    let other = fixture();
+    let head = conflicting_pr(&other);
+    let retained = clone_path(&fx.main, "bug-2688").unwrap();
+    retained_private_clone(&other.main, &retained);
+    let pin = pin_ref(&retained).unwrap();
+    let merge = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
+    let index = git_ok(&retained, &["ls-files", "--stage"]);
+    let marker_path = retained.join(MARKER_RELATIVE);
+    let mut marker: SeatCloneMarker =
+        toml::from_str(&std::fs::read_to_string(&marker_path).unwrap()).unwrap();
+
+    // Even if the marker is then rewritten to name this project, the
+    // alternate still points at the other project's objects.
+    for marker_main in [&other.main, &fx.main] {
+        marker.main.clone_from(marker_main);
+        std::fs::write(&marker_path, toml::to_string(&marker).unwrap()).unwrap();
+        let error = launch(HeadlessVendor::Codex, true)
+            .preserve_for_fresh_pickup(&fx.main, "main")
+            .unwrap_err();
+        assert!(
+            format!("{error:#}").contains("lacks matching marker and object alternates"),
+            "{error:#}"
+        );
+        assert_eq!(git_ok(&retained, &["rev-parse", "MERGE_HEAD"]), merge);
+        assert_eq!(git_ok(&retained, &["ls-files", "--stage"]), index);
+        assert_eq!(git_ok(&other.main, &["rev-parse", &pin]), head);
+        assert_eq!(git_ok(&fx.main, &["for-each-ref", &pin]), "");
+    }
+}
+
+#[test]
+fn bug_2688_explicit_fresh_archives_the_retained_linked_merge() {
+    let fx = fixture();
+    let head = conflicting_pr(&fx);
+    let retained = seat(&fx, "retained");
+    let branch_tip = git_ok(&retained, &["rev-parse", "HEAD"]);
+    std::fs::write(retained.join("lane-only"), "before merge").unwrap();
+    git_ok(&retained, &["add", "lane-only"]);
+    git_ok(&retained, &["commit", "-qm", "unpublished tip"]);
+    let old_head = git_ok(&retained, &["rev-parse", "HEAD"]);
+    assert_ne!(old_head, branch_tip);
+    let merge = crate::test_git::git_command()
+        .current_dir(&retained)
+        .args(["merge", "--no-edit", "origin/main"])
+        .output()
+        .unwrap();
+    // The fixture's origin/main is refreshed by its push.
+    assert!(!merge.status.success(), "{merge:?}");
+    assert!(merging(&retained));
+    std::fs::write(retained.join("README.md"), "unfinished resolution").unwrap();
+    std::fs::write(retained.join("untracked"), "untracked").unwrap();
+    let exclude = git_ok(
+        &retained,
+        &[
+            "rev-parse",
+            "--path-format=absolute",
+            "--git-path",
+            "info/exclude",
+        ],
+    );
+    std::fs::write(exclude, "ignored\n").unwrap();
+    std::fs::write(retained.join("ignored"), "ignored bytes").unwrap();
+    let index = git_ok(&retained, &["ls-files", "--stage"]);
+    let merge_head = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
+
+    let (_, fetched) = fetch_rework_heads(&fx.main, "main", "feat").unwrap();
+    assert_eq!(fetched, head);
+    let blocked = archive_retained_rework_with(
+        &fx.main,
+        "BUG-2688",
+        PR,
+        "feat",
+        &fetched,
+        || Ok(()),
+        |path| {
+            assert_eq!(path, retained);
+            anyhow::bail!("holder found")
+        },
+    )
+    .unwrap_err();
+    assert!(format!("{blocked:#}").contains("holder found"));
+    assert_eq!(git_ok(&retained, &["ls-files", "--stage"]), index);
+
+    let archive = archive_retained_rework_with(
+        &fx.main,
+        "BUG-2688",
+        PR,
+        "feat",
+        &fetched,
+        || Ok(()),
+        |_| Ok(()),
+    )
+    .unwrap()
+    .pop()
+    .unwrap();
+    assert!(!retained.exists());
+    assert_eq!(git_ok(&archive, &["rev-parse", "HEAD"]), old_head);
+    assert_eq!(git_ok(&archive, &["rev-parse", "MERGE_HEAD"]), merge_head);
+    assert_eq!(git_ok(&archive, &["ls-files", "--stage"]), index);
+    for (name, body) in [
+        ("README.md", "unfinished resolution"),
+        ("untracked", "untracked"),
+        ("ignored", "ignored bytes"),
+    ] {
+        assert_eq!(std::fs::read_to_string(archive.join(name)).unwrap(), body);
+    }
+
+    let fresh = seat(&fx, "retained");
+    assert_eq!(
+        prepare_rework_merge_fixture_for_seat(
+            &fx.main,
+            &fresh,
+            "feat",
+            rework_seat_for(false, true),
+            PR,
+            "lane-1",
+            &|| Ok(()),
+        )
+        .unwrap(),
+        ["README.md"]
+    );
+    assert_eq!(git_ok(&fresh, &["rev-parse", "HEAD"]), head);
+    assert!(merging(&fresh));
+    assert!(merging(&archive));
 }

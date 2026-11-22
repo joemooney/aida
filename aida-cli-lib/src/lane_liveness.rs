@@ -748,6 +748,8 @@ struct HeadlessLaneRecord {
     pid: u32,
     #[serde(default)]
     pid_start_time: Option<String>,
+    #[serde(default)]
+    pid_namespace: Option<u64>,
     log_path: PathBuf,
     started_at: DateTime<Utc>,
     #[serde(default)]
@@ -800,11 +802,13 @@ pub(crate) fn claim_worker_has_exited(
 /// Whether the headless lane run recorded for `lease_id` under `project_root`
 /// is still alive. No record is a definite "no run"; a record that cannot be
 /// read or parsed, or an id that is not a lease id, is an error (unknown).
-/// The exit stamp alone never proves death: the recorded process must be
-/// provably dead, so every "cannot tell" reads as alive.
+/// The exit stamp alone never proves death. An unknown process observation
+/// is an error so doctor can name the evidence that needs attention.
 // trace:BUG-2688 | ai:claude
 pub(crate) fn headless_lane_run_alive(project_root: &Path, lease_id: &str) -> anyhow::Result<bool> {
     use anyhow::Context;
+    use std::io::ErrorKind;
+
     anyhow::ensure!(
         !lease_id.is_empty()
             && lease_id
@@ -813,19 +817,50 @@ pub(crate) fn headless_lane_run_alive(project_root: &Path, lease_id: &str) -> an
         "`{lease_id}` is not a lease id"
     );
     let path = headless_record_path(project_root, lease_id);
-    let raw = match std::fs::read_to_string(&path) {
-        Ok(raw) => raw,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
-        Err(error) => {
-            return Err(error).with_context(|| format!("reading lane record {}", path.display()))
+    let read = || -> anyhow::Result<bool> {
+        // A missing directory is evidence only after checking the parent.
+        for dir in [project_root.join(".aida"), lanes_dir(project_root)] {
+            match std::fs::symlink_metadata(&dir) {
+                Ok(meta) if meta.is_dir() => {}
+                Ok(_) => anyhow::bail!("{} is not a real directory", dir.display()),
+                Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+                Err(error) => return Err(error.into()),
+            }
         }
+        let raw = match aida_core::seat_clone_detect::read_regular_file_result(&path) {
+            Ok(raw) => raw,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(false),
+            Err(error) => return Err(error.into()),
+        };
+        let record: HeadlessLaneRecord =
+            serde_json::from_str(&raw).context("invalid lane record")?;
+        anyhow::ensure!(
+            record.lease_id == lease_id,
+            "record names a different lease"
+        );
+        let namespace = record.pid_namespace.or_else(|| {
+            record
+                .claim
+                .as_ref()
+                .filter(|claim| {
+                    claim.lease_id.as_deref() == Some(lease_id)
+                        && claim.host == crate::coordination::hostname()
+                })
+                .and_then(|claim| claim.pid_namespace)
+        });
+        crate::ownership::reader::local_claim_process_liveness(
+            record.pid,
+            record.pid_start_time.as_deref(),
+            namespace,
+        )
+        .with_context(|| {
+            format!(
+                "cannot verify recorded PID {} in namespace {namespace:?}",
+                record.pid
+            )
+        })
     };
-    let record: HeadlessLaneRecord = serde_json::from_str(&raw)
-        .with_context(|| format!("lane record {} is not valid", path.display()))?;
-    Ok(!aida_core::liveness::process_provably_dead(
-        record.pid,
-        record.pid_start_time.as_deref(),
-    ))
+    read().with_context(|| format!("inspecting lane evidence at {}", path.display()))
 }
 
 // A bound claim whose admission never spawned a worker: its clone is present
@@ -921,6 +956,7 @@ pub(crate) fn register_headless_lane_for_child(
         vendor: vendor.to_string(),
         pid: child_pid,
         pid_start_time: crate::process_probe::process_start_identity(child_pid),
+        pid_namespace: aida_core::pid_observer::current_pid_namespace(),
         log_path: log_path.to_path_buf(),
         started_at: Utc::now(),
         exited_at: None,

@@ -210,7 +210,7 @@ pub(crate) use work::{
 pub use work::{refuse_waiting_review, spec_open_change_key};
 // trace:BUG-2688 | ai:claude
 #[cfg(test)]
-pub(crate) use work::prepare_and_route_rework_conflict;
+pub(crate) use work::{admit_rework_conflict_launch, rework_seat_for};
 #[cfg(test)]
 pub(crate) use work::{resolve_rework_findings, resolve_rework_review};
 
