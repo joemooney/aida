@@ -3319,6 +3319,8 @@ fn task_2902_launch_paths_preserve_signals_on_refused_spawn() {
     use crate::agent_launch::{AgentLaunchConfig, AgentLaunchPlan, AgentPromptStyle, RotationEnv};
     use crate::session::HeadlessVendor;
     let fx = fixture();
+    // trace:TASK-3133 | ai:codex
+    let _space = crate::machine_readiness::test_lane_available_bytes(100 * 1024 * 1024 * 1024);
     std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
     // Use the smallest supported fixture floor so this reaches publication setup.
     // trace:TASK-3133 | ai:codex
@@ -3333,6 +3335,8 @@ fn task_2902_launch_paths_preserve_signals_on_refused_spawn() {
         &fx.main,
         &["update-ref", "refs/remotes/origin/main", "HEAD"],
     );
+    crate::machine_readiness::lane_disk_preflight(&fx.main)
+        .expect("fixture headroom must satisfy the configured launch floor");
     let lease = "c0ffee290207";
     let clone = seat_with_publication_pending(&fx, "launches", lease, "launches");
     let _env = crate::test_env::EnvVarsGuard::apply(&[
@@ -3708,12 +3712,14 @@ fn story_2640_fast_gate_real_lane_exit_paths_settle_reservations() {
     }
     use crate::session::{HeadlessResume, HeadlessVendor};
     let fx = fixture();
-    // Exercise reservation cleanup on fixture filesystems smaller than the default floor.
     // trace:TASK-3133 | ai:codex
     crate::test_env::write_project_config_fixture(
         &fx.main,
         "[doctor.disk_headroom]\nmin_free_gib = 1\n",
     );
+    let _space = crate::machine_readiness::test_lane_available_bytes(100 * 1024 * 1024 * 1024);
+    crate::machine_readiness::lane_disk_preflight(&fx.main)
+        .expect("fixture headroom must satisfy the configured launch floor");
     let lease = "c0ffee264002";
     let branch = "gate-exits";
     let clone = seat_with_publication_pending(&fx, "gate-exits", lease, branch);
