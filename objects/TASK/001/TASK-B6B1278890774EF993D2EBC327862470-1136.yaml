@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-22T19:17:08.686136033Z
+modified_at: 2026-11-22T19:17:11.212649044Z
 req_type: Task
 tags:
 - landing
@@ -439,6 +439,28 @@ comments:
   content: 'Product (advisor-122 mass-change ruling 12:15): findings deferred from the PR #4381 final round are filed as TASK-3829. Final-round brief: .aida/tmp/brief-TASK-3827-final-1222.md'
   created_at: 2026-11-22T19:15:18.155925592Z
   modified_at: 2026-11-22T19:15:18.155925592Z
+- id: 01a204b0-e2fd-7c22-9d1e-4958d1c6418e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4381):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 160e9b17edd4
+    Recorded: 2026-11-22T18:07:53.733234261+00:00
+    Findings:
+    1. coordination.rs:866 — The new bounded read converts a refusal to None even in acquire_lock_claim. A valid existing drain or solo lock over 64 KiB used to be parsed and protected. Now decide_claim(None) grants acquisition and the writer replaces the live holder without force. A symlink refusal also reaches the path-based writer. Distinguish absence from refused evidence for lock mutation and cover preservation of the existing holder.
+    2. leases.rs:812 — The guard still has a blocking session-lease read. live_pass_with partitions shared claims before attaching lane evidence. For a same-host sibling clone, probe_session_liveness_with calls list_leases, which still uses read_to_string. A FIFO in that clone’s session directory stalls the entire observation. Use the bounded regular-file reader on this path and cover the production partition operation.
+    3. lane_hosts.rs:249 — After 24 hours View::holder discards an unreleased expired claim, and View::hosts drops it too. A long-running lane without heartbeat renewal then gets a second STUCK-REWORK route. The authoritative round-3 interim rule requires unknown until release or affirmative liveness evidence. The three-day fixture currently asserts the opposite.
+    4. land.rs:1087 — branch_names still treats a hyphen inside a multipart spec ID as a delimiter. A TASK-1 claim therefore holds task-1-216-work, suppressing a stall for TASK-1-216. Branch-only matching also misses equivalent padded IDs. Compare an exact branch or its complete parsed spec identity, including node segments and numeric padding.
+    5. lane_hosts.rs:144 — judge validates heartbeat_at.trim() and computes expires, then recomputes the state through claim_staleness, whose heartbeat_age_secs parses the untrimmed value. Whitespace around an expired timestamp therefore yields Reporting and suppresses stalls indefinitely. Classify from the validated heartbeat or consistently reject it.
+    6. land_stalls.rs:1375 — build_report sanitizes unknown lines before it appends the landing-history failure. landing_times returns Git stderr verbatim, so a failed git log can still add multiline, unbounded diagnostics to the report. Sanitize after the last insertion and cover the landings error path.
+    7. land_stalls.rs:1005 — A conflict with a silent or invalid matching foreign lane still says nobody owns it and recommends routing another lane. The appended clause says the existing lane may be live. Keep the conflict visible and have the action establish ownership before dispatch.
+    8. lane_hosts.rs:283 — The store resolver accepts a configured symlink to a directory and returns its path, but store_root rejects it using symlink_metadata().is_dir(). In a project with a symlinked shared store, remote ownership and host counts disappear. Resolve the configured store to its directory while preserving no-follow checks on individual records.
+    9. lane_hosts.rs:458 — The routed-text filter leaves invisible formatting characters such as U+206A through U+206F and U+034F in host names, errors and messages. These values can still display identically while carrying different text. Apply a complete policy for default-ignorable characters and cover omitted ranges.
+    10. land.rs:1204 — The new cause reader uses MR-N on GitLab, but the preceding live reviewer check still looks for PR-N. A live MR-N reviewer lease before marker publication can produce STUCK-REVIEW with a launch recommendation, while cause() ignores the held lease. Use the forge-specific key in both production stages.
+    11. land_stalls.rs:1958 — The 20,000-record scan ceiling in lane_hosts is reached only after live_pass_with has already used coordination::list_claims to parse and collect every claim in the same directory, without an aggregate limit. The scheduled guard therefore pays the full cost before its bounded reader runs. Share the observation or enforce the guard budget on the first scan as well.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-22T19:17:11.037740047Z
+  modified_at: 2026-11-22T19:17:11.037740047Z
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
