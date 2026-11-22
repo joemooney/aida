@@ -15,12 +15,12 @@ description: |
   - AC2: a head whose only new commit is a merge of the base, while such a lane is live, is never reviewed; once the lane exits, the newest head is reviewed.
   - AC3: when the lane-host state cannot be read, review-watch defers for a bounded time (a setting, default 20 min) and then reviews, logging why.
   - Regressions for AC1-AC3 with a fake foreign lane host.
-status: Approved
+status: InProgress
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T19:27:03.807381055Z
+modified_at: 2026-11-22T19:50:14.609450431Z
 req_type: Bug
 tags:
 - lanes
@@ -558,6 +558,13 @@ history:
   author: joe
   timestamp: 2026-11-22T19:22:32.190319976Z
   changes: []
+- id: 01a204cf-2751-7603-98d6-99402ab8b8e4
+  author: aida-session-start
+  timestamp: 2026-11-22T19:50:14.609448407Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
