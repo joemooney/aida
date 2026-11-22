@@ -15,12 +15,20 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-22T20:08:06.984078687Z
+modified_at: 2026-11-22T20:09:31.574297944Z
 req_type: Bug
 tags:
 - hygiene
 - seat-clone
 - sessions
+comments:
+- id: 01a204e1-0091-7a50-96d6-ea09d3435844
+  author: joe
+  content: 'ROOT-CAUSE EVIDENCE (advisor-122, 2026-11-22 ~13:09 MST; recorded by product-15). With Joe''s delegated OK the advisor ran `aida session end 01a1abbf6456 --yes --force`. The lease is gone, but the tree was KEPT: ''mail retention refused for ...-658: the checkout is not in a Git repository this host can verify, so its mail cannot be fenced and retained''. So the empty ''has uncommitted changes:'' refusal was really a HOST VERIFICATION failure of the seat clone being reported as dirt. AC1 therefore needs: when the clone''s Git repository can''t be verified, say that (with the reason) instead of reporting uncommitted changes. Evidence: .aida/salvage/session-01a1abbf6456-evidence.txt (clean status, 0 commits not on origin, lease toml). The leftover clone -658 is deliberately kept as the reproduction fixture; don''t remove it until the fix is verified against it.'
+  created_at: 2026-11-22T20:09:31.574297944Z
+  modified_at: 2026-11-22T20:09:31.574297944Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
