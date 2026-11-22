@@ -7584,8 +7584,13 @@ pub(crate) fn run_standalone_reviewer(
     };
     let draft = if no_human {
         match launch_head {
+            // The reviewer's submission is decided under this (the parent)
+            // project's blocking policy. trace:BUG-2707 | ai:claude
             Some(head) => Some(crate::review_draft::LaunchDraft::prepare(
-                worktree, pr, head,
+                worktree,
+                pr,
+                head,
+                &crate::gate::kernel_deps::review_blocking::effective_warned(project_root),
             )?),
             None => {
                 eprintln!(
@@ -7907,94 +7912,82 @@ pub(crate) fn run_standalone_reviewer(
         launcher_grant,
         child_grant,
     };
-    let draft_recorded = (|| -> Result<Option<crate::gate::review_verdict::CollectedVerdict>> {
-        let Some(launch_draft) = &draft else {
-            return Ok(None);
-        };
-        let data = match launch_draft.read() {
-            Ok(data) => data,
-            // Retain the original stamped-source collector for existing
-            // grant-bound writers. A present but rejected draft never falls back.
-            Err(e)
-                if e.downcast_ref::<std::io::Error>()
-                    .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
-            {
-                return Ok(None)
+    let draft_recorded = match &draft {
+        None => Ok(None),
+        Some(launch_draft) => launch_draft.collect(|data| {
+            launch_draft.validate_current_head(checks.head_sha.as_deref())?;
+            let reviewer = crate::review_draft::VerifiedReviewer::from_launch(
+                project_root,
+                checks
+                    .child_grant
+                    .as_deref()
+                    .context("launch issued no child grant")?,
+                checks
+                    .launcher_grant
+                    .as_deref()
+                    .context("launch has no parent grant")?,
+                launched_at,
+                &reviewer_session,
+            )?
+            .with_draft(launch_draft, &data)?;
+            crate::gate::review_verdict::check_draft_legacy_conflicts(
+                project_root,
+                worktree,
+                verdict_path,
+                &pr_spec_ids,
+                launched_at,
+                &data.facts(),
+                reviewer.own_handoff().as_ref(),
+                &checks,
+            )?;
+            let labels = if pr_spec_ids.is_empty() {
+                vec![format!("PR-{pr}")]
+            } else {
+                pr_spec_ids.clone()
+            };
+            // Bounded same-launch retries of record + verify under this launch's
+            // own grant; a terminal failure retains the validated draft for the
+            // next launch. trace:BUG-2564 | ai:claude
+            let mut attempt = 0;
+            loop {
+                attempt += 1;
+                let tried = (|| -> Result<crate::gate::review_verdict::CollectedVerdict> {
+                    if attempt > 1 {
+                        launch_draft.validate_current_head(
+                            standalone_review_pr_head(project_root, pr).as_deref(),
+                        )?;
+                    }
+                    for spec in &labels {
+                        crate::record_reviewer_draft(
+                            project_root.to_path_buf(),
+                            spec,
+                            &data,
+                            &reviewer,
+                        )?;
+                    }
+                    crate::gate::review_verdict::verify_recorded_draft(
+                        project_root,
+                        verdict_path,
+                        &pr_spec_ids,
+                        launched_at,
+                        &checks,
+                    )
+                    .map_err(anyhow::Error::msg)
+                })();
+                match tried {
+                    Ok(collected) => return Ok(collected),
+                    Err(e) if attempt < crate::review_draft::handoff_attempts() => {
+                        eprintln!(
+                            "  {} recording the reviewer's draft failed (attempt {attempt}): {e:#}; retrying",
+                            crate::glyph(crate::glyphs::Glyph::Warning).yellow()
+                        );
+                        std::thread::sleep(crate::review_draft::handoff_backoff(attempt));
+                    }
+                    Err(e) => return Err(e),
+                }
             }
-            Err(e) => return Err(e),
-        };
-        launch_draft.validate_current_head(checks.head_sha.as_deref())?;
-        let reviewer = crate::review_draft::VerifiedReviewer::from_launch(
-            project_root,
-            checks
-                .child_grant
-                .as_deref()
-                .context("launch issued no child grant")?,
-            checks
-                .launcher_grant
-                .as_deref()
-                .context("launch has no parent grant")?,
-            launched_at,
-            &reviewer_session,
-        )?
-        .with_draft(launch_draft, &data)?;
-        crate::gate::review_verdict::check_draft_legacy_conflicts(
-            project_root,
-            worktree,
-            verdict_path,
-            &pr_spec_ids,
-            launched_at,
-            &data.facts(),
-            reviewer.own_handoff().as_ref(),
-            &checks,
-        )?;
-        let labels = if pr_spec_ids.is_empty() {
-            vec![format!("PR-{pr}")]
-        } else {
-            pr_spec_ids.clone()
-        };
-        // Bounded same-launch retries of record + verify under this launch's
-        // own grant; a terminal failure retains the validated draft for the
-        // next launch. trace:BUG-2564 | ai:claude
-        let mut attempt = 0;
-        loop {
-            attempt += 1;
-            let tried = (|| -> Result<crate::gate::review_verdict::CollectedVerdict> {
-                if attempt > 1 {
-                    launch_draft.validate_current_head(
-                        standalone_review_pr_head(project_root, pr).as_deref(),
-                    )?;
-                }
-                for spec in &labels {
-                    crate::record_reviewer_draft(
-                        project_root.to_path_buf(),
-                        spec,
-                        &data,
-                        &reviewer,
-                    )?;
-                }
-                crate::gate::review_verdict::verify_recorded_draft(
-                    project_root,
-                    verdict_path,
-                    &pr_spec_ids,
-                    launched_at,
-                    &checks,
-                )
-                .map_err(anyhow::Error::msg)
-            })();
-            match tried {
-                Ok(collected) => return Ok(Some(collected)),
-                Err(e) if attempt < crate::review_draft::handoff_attempts() => {
-                    eprintln!(
-                        "  {} recording the reviewer's draft failed (attempt {attempt}): {e:#}; retrying",
-                        crate::glyph(crate::glyphs::Glyph::Warning).yellow()
-                    );
-                    std::thread::sleep(crate::review_draft::handoff_backoff(attempt));
-                }
-                Err(e) => return Err(e),
-            }
-        }
-    })();
+        }),
+    };
     let collected = draft_recorded
         .map_err(|e| format!("reviewer draft handoff refused: {e:#}"))
         .and_then(|recorded| {
@@ -8010,13 +8003,6 @@ pub(crate) fn run_standalone_reviewer(
                 &checks,
             )
         });
-    if collected.is_ok() {
-        if let Some(draft) = &draft {
-            if let Err(e) = draft.consumed() {
-                eprintln!("warning: verdict is durable but draft consumption marker failed: {e:#}");
-            }
-        }
-    }
     match &collected {
         Ok(c) if c.collected_from_worktree && !quiet => eprintln!(
             "  {} collected the reviewer's verdict from {} onto the PR-{pr} gate ledger",
@@ -8123,7 +8109,7 @@ pub(crate) fn run_standalone_reviewer(
         .and_then(reviewer_summary::parse_result_event);
     let recovery = collected.as_ref().err().map(|_| {
         if let Some(draft) = &draft {
-            return format!("Structured draft location: {} (a missing draft requires the reviewer to write it; a rejected draft is retained). No log text or commands were used as verdict evidence.", draft.path().display());
+            return format!("Structured draft location: {} (a missing draft requires the reviewer to submit it with `aida review submit-draft`; a rejected draft is retained). No log text or commands were used as verdict evidence.", draft.path().display());
         }
         reviewer_summary::unrecorded_review_recovery(
             worktree,
