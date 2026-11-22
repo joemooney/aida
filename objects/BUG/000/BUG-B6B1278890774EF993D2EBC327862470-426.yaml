@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-22T21:53:02.677627067Z
+modified_at: 2026-11-22T22:21:48.054419850Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -651,6 +651,15 @@ comments:
   modified_at: 2026-11-22T21:16:28.762812750Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20559-eb5c-7421-b100-a55da3a4dba5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4602d292b515f72d9851558ca9837b44d3e17deb with MERGE_HEAD 30da58d4f9b68ed52201e60a99f4a4330abc07bf and the unstaged conflict repair. AC1: [evidence: behavioral-test] All 45 review_draft tests passed. Both conflicting test blocks match their respective parents verbatim and occur once. No production decision or authority change in the resolution. Format, store-writer inventory, and make check-ci-fast passed. One out-of-file process fixture also matched the filter and failed before exercising the recorder: matching CLI absent from runner overlay, ForeignNamespace on retry with the FAST-built CLI. Conflict-only Refs slice.
+  created_at: 2026-11-22T22:21:48.054419850Z
+  modified_at: 2026-11-22T22:21:48.054419850Z
+  session_id: 01a2053f59c6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1ebd7-f8f5-7cd3-b1d7-7dcbeca8491b
   author: joe

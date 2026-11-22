@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-22T22:05:38.191480112Z
+modified_at: 2026-11-22T22:28:15.616606558Z
 req_type: Bug
 tags:
 - authority
@@ -40,6 +40,19 @@ comments:
   content: 'Advisor-122 14:34: overlaps STORY-2997 (reviewer-lease auto-release with positive death evidence) and BUG-2684''s cut scope. If the predicate is shared, the fix lands here and STORY-2997 builds on it. The PR body must say whether it touches the same reader.'
   created_at: 2026-11-22T21:31:36.139023317Z
   modified_at: 2026-11-22T21:31:36.139023317Z
+- id: 01a2055f-d52f-7570-8b8c-cb9d384147e7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6be38166be85fb474a3c5ba8036c4b2eb853db5f. HEAD equals main and origin/main. Reviewed the merge-base diff (empty), the native working diff, and untracked additions (none).
+    AC1: [evidence: behavioral-test] ownership/reader.rs:811 exercises truncated TOML text in the raw holder field, a wrong-type PID, a missing start binding and an unsupported refusal version. Main lane job j20261122T220643470-2-0 failed with Dead { proof: "local refused worker process exited" }; final job j20261122T221858069-2-0 executed one test and passed. Force-claim returns NotProvable before tree retirement in pr_lease_takeover.rs:196.
+    AC2: [evidence: behavioral-test] reader.rs:799 and :801 check a waited-for child with admitted evidence and the explicit refusal compatibility path.
+    AC3: [evidence: behavioral-test] reader.rs:824 checks the lease path and the read-only inspection command.
+    Deep pass: checked typed parsing, envelope version, host and PID binding, and zero/one/multiple witnesses. Fixed the multiple-witness fallback and tested duplicate witnesses. No existing test weakened. Explicit clone force-claim is reached after lease binding; PID-based recovery still requires local host, observable namespace, valid PID and kernel exit/absence. The initial reviewer-pickup probe retained invalid evidence on main. Scope is the force_claim_clone_owner predicate in the same reader module as BUG-2684, but BUG-2684 and STORY-2997 reviewer auto-release do not use this changed predicate. No reviewer auto-release or GC change. Rustfmt and git diff --check passed; make check-ci-fast in progress. PR-head CI requires host publication.
+  created_at: 2026-11-22T22:28:15.616606558Z
+  modified_at: 2026-11-22T22:28:15.616606558Z
+  session_id: 01a2054a64d4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
