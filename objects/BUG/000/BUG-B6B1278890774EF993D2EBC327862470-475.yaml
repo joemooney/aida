@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T21:02:39.970741776Z
+modified_at: 2026-11-22T21:21:47.806173353Z
 req_type: Bug
 tags:
 - fasttrack
@@ -51,6 +51,13 @@ comments:
     Probes covered the shared exact subject comparison, Git log limited to the tip and merge parents, no fix, a fix, resumed preparation, alternate base and host ownership checks. Clone hooks remain disabled, the guarded ship path retains its vetoes, and preparation has no production publication callback. Updated the obsolete manual and repair fixtures. FAST flagged a Git maintenance setting in a now test-only fixture. Switched to the shared test helper and the maintenance suite passed. Final reruns pending. Residual limitation: a hand-authored merge deliberately using the reserved preparation subject also refuses until a fix follows.
   created_at: 2026-11-22T21:02:39.970741776Z
   modified_at: 2026-11-22T21:02:39.970741776Z
+  session_id: 01a20501f488
+  harness_version: codex-cli 0.167.0
+- id: 01a20522-fb2c-7c22-b49e-10dee65eae1d
+  author: dirtlab
+  content: 'Final implementer validation: after the fixture correction, lane job j20261122T210110518-2-0 executed both BUG-2714 tests (2 passed). The FAST retry passed all 48 source gates and all Cargo ratchets. The make invocation exited 2 at the final manual verifier because the lane target overlay had unmounted. Re-running that same verifier against the freshly built executable from the lane overlay passed. git diff --check passed.'
+  created_at: 2026-11-22T21:21:47.806173353Z
+  modified_at: 2026-11-22T21:21:47.806173353Z
   session_id: 01a20501f488
   harness_version: codex-cli 0.167.0
 history:

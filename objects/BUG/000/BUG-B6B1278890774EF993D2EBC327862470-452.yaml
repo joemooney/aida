@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T21:13:55.729613706Z
+modified_at: 2026-11-22T21:23:36.254232147Z
 req_type: Bug
 tags:
 - conflicts
@@ -1249,6 +1249,15 @@ comments:
   modified_at: 2026-11-22T21:11:23.455560473Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20524-a1df-78d2-8a97-9ae10c73c7da
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 63e760c519a80365381609a92076fc2f9cd49d7e plus the native working-tree diff. R5 scope is the P1 mixed conflict/addition data loss. AC1: [evidence: behavioral-test] bug_2688_ignored_collision_refuses_before_advance_or_merge passed in launcher job j20261122T212051934-2-0. seat_clone.rs:5023 checks the parsed merge-tree result before the journal lock and base merge. The regression at bug_2688_repair_reservation_tests.rs:1817 verifies the path diagnostic, bytes, lease, empty journal and absence of MERGE_HEAD across all three cases. A real Git positive control overwrote incoming while reporting the unrelated README.md conflict. The previous fixture clobbered seat excludes and could pass at the dirty-seat check. The corrected fixture preserves excludes and asserts clean status. Inspection covered NUL-delimited paths, file/directory ancestry, clean and conflicted paths, and failure propagation. AC2/AC3/AC4 are outside the r5 change. P2 reused-path registration diagnostic is an unmet-AC follow-up deferred by advisor-122. Store writer and formatting checks passed.
+  created_at: 2026-11-22T21:23:36.254232147Z
+  modified_at: 2026-11-22T21:23:36.254232147Z
+  session_id: 01a2051b6fe5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
