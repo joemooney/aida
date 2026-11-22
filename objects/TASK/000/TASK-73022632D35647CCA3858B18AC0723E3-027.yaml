@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-22T18:01:35.102010538Z
+modified_at: 2026-11-22T19:16:55.901810943Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -603,6 +603,11 @@ comments:
   content: 'Lane exit evidence: retained branch `task-73022632d35647cca3858b18ac0723e3-027` at head `aa380d29b2fe753702844e384cfa9b5c7c8955fc`.'
   created_at: 2026-11-22T18:01:35.102005424Z
   modified_at: 2026-11-22T18:01:35.102005424Z
+- id: 01a204b0-a7dd-7da3-a93e-96decb491c92
+  author: joe
+  content: 'Product (advisor-122 mass-change ruling 12:15): findings deferred from the PR #4387 final round are filed as TASK-3832. Final-round brief: .aida/tmp/brief-TASK-3133-final-1222.md'
+  created_at: 2026-11-22T19:16:55.901810943Z
+  modified_at: 2026-11-22T19:16:55.901810943Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
