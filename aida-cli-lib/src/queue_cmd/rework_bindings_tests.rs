@@ -1698,14 +1698,8 @@ fn bug_2629_selected_ownership_failure_checks_other_spec_changes() {
     wait.insert("summary".into(), "newer evidence on PR-42".into());
     append(&root, 42, SPEC, &wait);
     let mut cache = super::DiscoveryCache::default();
-    let result = crate::queue_cmd::work::resolve_rework_review_inner(
-        &mut cache,
-        &root,
-        SPEC,
-        SPEC,
-        Some("PR-41"),
-        true,
-    );
+    let result =
+        crate::queue_cmd::work::pickup_rework_review(&mut cache, &root, SPEC, SPEC, Some("PR-41"));
     assert!(
         matches!(result, Err(ReworkReviewError::Waiting(ref why))
             if why.contains("newer evidence on PR-42")),
@@ -1717,22 +1711,23 @@ fn bug_2629_selected_ownership_failure_checks_other_spec_changes() {
 #[test]
 fn bug_2629_selected_malformed_ledger_is_unknown_even_without_fingerprints() {
     let (_tmp, root, _env) = fixture();
-    append(&root, 41, SPEC, &phase3(record("approved", -100)));
-    std::fs::write(store::ledger_file(&root, ChangeKey::pr(41)), "invalid\n").unwrap();
-    let mut cache = super::DiscoveryCache::default();
-    let result = crate::queue_cmd::work::resolve_rework_review_inner(
-        &mut cache,
-        &root,
-        SPEC,
-        SPEC,
-        Some("PR-41"),
-        true,
-    );
-    assert!(
-        matches!(result, Err(ReworkReviewError::Waiting(ref why))
+    append(&root, 41, SPEC, &phase3(record("waiting", -100)));
+    for invalid in [b"invalid\n".as_slice(), &[0xff, 0xfe, b'\n']] {
+        std::fs::write(store::ledger_file(&root, ChangeKey::pr(41)), invalid).unwrap();
+        let mut cache = super::DiscoveryCache::default();
+        let result = crate::queue_cmd::work::pickup_rework_review(
+            &mut cache,
+            &root,
+            SPEC,
+            SPEC,
+            Some("PR-41"),
+        );
+        assert!(
+            matches!(result, Err(ReworkReviewError::Waiting(ref why))
             if why.contains("PR-41.jsonl")),
-        "{result:?}"
-    );
+            "{result:?}"
+        );
+    }
 }
 
 // trace:BUG-2629 | ai:codex
