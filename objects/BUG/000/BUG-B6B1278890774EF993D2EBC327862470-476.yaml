@@ -14,13 +14,26 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-22T21:24:40.221583815Z
+modified_at: 2026-11-22T21:29:16.138403664Z
 req_type: Bug
 tags:
 - authority
 - from-work-ci
 - leases
 - ownership
+comments:
+- id: 01a2052a-0107-7ed2-bd43-eff3ff8cdd99
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:29):
+    # BUG-2715: small fix from the operator's work-side CI report (product-15, 2026-11-22; Joe-delegated). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2715` for the problem and ACs. First reproduce on main. If main already behaves correctly, add the regression test anyway, then ship it with a PR body that says so. Keep the diff small and on the named file. Add `// trace:BUG-2715 | ai:codex`, or `# trace:BUG-2715 | ai:codex` for Python. Commit `[AI:codex] fix(...): ... (BUG-2715)`. One targeted test run (cargo or pytest), then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+    Under mass-change mode, classify every finding; unmet-AC defers.
+  created_at: 2026-11-22T21:29:16.138403664Z
+  modified_at: 2026-11-22T21:29:16.138403664Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
