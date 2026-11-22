@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-22T23:05:31.026007529Z
+modified_at: 2026-11-22T23:05:57.457255633Z
 req_type: Bug
 tags:
 - mass-change
@@ -144,6 +144,11 @@ comments:
   modified_at: 2026-11-22T22:12:04.436397643Z
   session_id: 01a205451a9c
   harness_version: codex-cli 0.167.0
+- id: 01a20582-5540-7fd3-8025-f82cdebe191d
+  author: joe
+  content: PR-4396 at 2cf202f09fc60bc85e3c8e088a24372728349b2a conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-22T23:05:57.312774286Z
+  modified_at: 2026-11-22T23:05:57.312774286Z
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
