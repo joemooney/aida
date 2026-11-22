@@ -1,0 +1,18 @@
+{
+  "id": "review-watch-2ad6fd452d83baf23e5101ffd1a41518238b1c358b9b02d0b743f00b949ec9fb",
+  "thread_id": "review-watch-2ad6fd452d83baf23e5101ffd1a41518238b1c358b9b02d0b743f00b949ec9fb",
+  "from": "review-watch",
+  "to": {
+    "kind": "agent",
+    "agent": "joemooney"
+  },
+  "timestamp": 1795377476529,
+  "body": "PR-4387 at e871fa8e0f2470681bfa09586e6d6090988e180e: the review by claude-advisor-122 (claude advisor seat) recorded `request-changes` with 2 finding(s), round 1 of 4. The findings are in `.aida/gate-ledger/PR-4387.jsonl`. Address them and push a new head; the watcher starts its review when it sees the head.",
+  "subject": "PR-4387: review requested changes (round 1 of 4)",
+  "urgent": false,
+  "intent": "request",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
