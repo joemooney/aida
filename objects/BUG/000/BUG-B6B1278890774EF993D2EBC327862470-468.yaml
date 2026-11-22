@@ -15,12 +15,12 @@ description: |
   - AC2: a head whose only new commit is a merge of the base, while such a lane is live, is never reviewed; once the lane exits, the newest head is reviewed.
   - AC3: when the lane-host state cannot be read, review-watch defers for a bounded time (a setting, default 20 min) and then reviews, logging why.
   - Regressions for AC1-AC3 with a fake foreign lane host.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T19:58:07.678363062Z
+modified_at: 2026-11-22T20:27:25.259361491Z
 req_type: Bug
 tags:
 - lanes
@@ -577,6 +577,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a204f1-30cb-78e0-833f-c4f9b51574f1
+  author: aida-orchestrator
+  timestamp: 2026-11-22T20:27:25.259369616Z
+  session_id: 01a204ef3fd5
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
@@ -596,7 +604,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: BUG-2706 AC1 and AC2 remain partial. The new regression exercises release and deduplication across distinct heads, but guided pickups and unrelated invalid records can still expose a live lane to review. AC3 remains partial for an invalid store root and zero-grace diagnostics. FAST gates passed and FAST compilation was pending at review time.
+  detail: The pinned head still contains all three in-scope BUG-2706 defects from round three. The three affected source files are identical to those at 0dd153cd. The implementer’s test report explicitly includes working-tree edits, and the corresponding regressions are absent from this head. FAST gates, compile and aggregate Build passed.
   recovery_hint: address the review findings, move BUG-2706 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-22T19:19:02.539428517Z
+  shelved_at: 2026-11-22T20:27:25.259361491Z
