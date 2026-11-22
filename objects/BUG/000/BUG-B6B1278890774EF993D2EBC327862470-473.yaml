@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269342Z
-modified_at: 2026-11-22T19:35:32.277952948Z
+modified_at: 2026-11-22T19:43:31.146661078Z
 req_type: Bug
 tags:
 - mass-change
@@ -48,6 +48,22 @@ comments:
   modified_at: 2026-11-22T19:26:45.128207333Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a204c9-0195-70e3-bd2a-ea6ee46f3625
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: aa567732958f669b69ec5848863ea0b13c800db5 plus native working-tree diff. Empty origin/main...HEAD diff and no untracked files.
+    AC1: [evidence: behavioral-test] review_blocking.rs:914 checks the reviewer policy text, expiry and exceptions.
+    AC2: [evidence: behavioral-test] review_blocking.rs:914 exercises demotion and protected secondary classes, and checks the reason survives.
+    AC3: [evidence: behavioral-test] review_blocking.rs:914 checks the inactive prompt and request-changes result.
+    AC4: [evidence: behavioral-test] review_draft.rs:842 records the parent verdict for a blocking draft finding and reads back approval, deferred disposition and the demotion reason.
+    AC5: [evidence: behavioral-test] review_blocking.rs:914 verifies ordinary mutation-kill and untested-path findings defer. Partial pending operator resolution of conflict with the ADR-76 sensitive-path floor. Punted.
+    Cross-reference and format probes checked normalized aliases and the draft JSON string boundary. Multiplicity review checked routing for per-finding dispositions and existing mixed findings. Authority review traced the live clock to the shared main checkout and the tier list to the default branch, including the existing invalid-list fail-closed path. Existing strict path refusal coverage includes task_3814_sensitive_class_aliases_keep_p2_blocking. The working implementation preserves that refusal. Local mode reported OFF.
+    Targeted lane job j20261122T193319348-2-0 ran 2 tests, both passed. Rustfmt and diff whitespace checks passed. FAST stopped at test-speed tooling because cargo metadata is unsupported by the native lane runner. No exact-head CI or publication.
+  created_at: 2026-11-22T19:43:31.146661078Z
+  modified_at: 2026-11-22T19:43:31.146661078Z
+  session_id: 01a204bc9eec
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
