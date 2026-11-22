@@ -3459,70 +3459,23 @@ fn prepare_rework_merge_with_base(
 // trace:BUG-2714 | ai:codex
 pub(crate) const REWORK_PREPARATION_SUBJECT: &str = "Merge rework base before implementing fix";
 
-// Inspect only this commit. Earlier preparation merges remain ancestors of a
-// legitimate fix and an ordinary commit may have the same subject.
-pub(crate) fn preparation_merge_probe(tip: &str) -> [&str; 7] {
-    [
-        "log",
-        "--no-walk",
-        "--min-parents=2",
-        "--format=%s",
-        "--no-notes",
-        "--no-show-signature",
-        tip,
-    ]
+// Host-side evidence is scoped to the lease minted for this pickup.
+pub(crate) fn rework_round_path(main: &Path, lane: &str) -> Result<PathBuf> {
+    anyhow::ensure!(
+        !lane.is_empty() && lane.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
+        "invalid rework lease id"
+    );
+    Ok(crate::lease_path(main, lane).with_extension("rework"))
 }
 
-/// Publish the prepared tip using only the trusted host origin. Clone objects
-/// cross the existing sandboxed bundle boundary; seat hooks never run.
-// trace:BUG-2456 | ai:codex
-#[cfg(test)]
-fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Result<()> {
-    crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
-    let imported = host_recorded_clone(main, tree)
-        .map(|seat| crate::ship_from_seat::import_seat_branch(&seat, branch))
-        .transpose()?;
-    // Keep the result until cleanup has run, including tip mismatch, rejection
-    // and timeout. Compare-delete only the exact object imported by this call.
-    let result = (|| {
-        if let Some((_, imported_tip)) = &imported {
-            anyhow::ensure!(
-                imported_tip == tip,
-                "rework branch changed before publication"
-            );
-        }
-        crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
-        // trace:BUG-2618 | ai:codex — queue rework is a head publication too.
-        crate::pr_head_guard::check_branch(main, branch)?;
-        let mut push = crate::test_git::git_command();
-        push.current_dir(main)
-            .args([
-                "-c",
-                "core.hooksPath=/dev/null",
-                "push",
-                "origin",
-                &format!("{tip}:refs/heads/{branch}"),
-            ])
-            .env("GIT_TERMINAL_PROMPT", "0")
-            .stdin(std::process::Stdio::null());
-        match crate::command_output_with_timeout_detail(push, std::time::Duration::from_secs(30)) {
-            crate::BoundedCommandOutput::Completed(out) if out.status.success() => Ok(()),
-            crate::BoundedCommandOutput::Completed(out) => anyhow::bail!(
-                "could not publish prepared rework merge: {}",
-                String::from_utf8_lossy(&out.stderr)
-            ),
-            _ => anyhow::bail!("rework merge publication timed out; no vendor launched"),
-        }
-    })();
-    if let Some((reference, imported_tip)) = imported {
-        let mut cleanup = git(main);
-        cleanup.args(["update-ref", "-d", &reference, &imported_tip]);
-        let cleanup = run(cleanup, "remove rework import");
-        if let Err(why) = cleanup {
-            anyhow::bail!("rework import cleanup failed: {why:#}; publication result: {result:?}");
-        }
-    }
-    result
+fn record_rework_round(main: &Path, lane: &str, head: &str, base: &str) -> Result<()> {
+    let path = rework_round_path(main, lane)?;
+    let dir = path.parent().context("missing lease directory")?;
+    std::fs::create_dir_all(dir)?;
+    let mut record = tempfile::NamedTempFile::new_in(dir)?;
+    serde_json::to_writer(record.as_file_mut(), &(head, base))?;
+    record.persist(path)?;
+    Ok(())
 }
 
 /// Merge a host-fetched remote PR head after committing the child's edits.
@@ -3914,16 +3867,15 @@ fn prepare_host_repair_with(
     use crate::repair_journal::{RepairEntry, RepairGuard, RepairKey, SpawnOutcome};
     anyhow::ensure!(
         execute(&["symbolic-ref", "--short", "HEAD"])? == branch,
-        "rework branch changed"
+        "rework seat is not on the PR head branch {branch}"
     );
-    let (base, pr_head) = fetch_heads()?;
     if execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_ok() {
         let head = execute(&["rev-parse", "HEAD"])?;
         let merge = execute(&["rev-parse", "MERGE_HEAD"])?;
         let guard = RepairGuard::lock(main)?;
         let entry = guard.for_tree(tree, branch, &head, &merge)?;
         anyhow::ensure!(
-            resume && entry.lane_id == lane_id && pr_head == head,
+            resume && entry.lane_id == lane_id,
             "pending repair belongs to a different lane or head"
         );
         let paths = entry.original_conflict_paths.clone();
@@ -3931,6 +3883,11 @@ fn prepare_host_repair_with(
         let prepared = entry.preparation_success == Some(true);
         let failed_generation = entry.regeneration_success == Some(false);
         drop(guard);
+        let (_, pr_head) = fetch_heads()?;
+        anyhow::ensure!(
+            pr_head == head,
+            "pending repair belongs to a different head"
+        );
         if !prepared || failed_generation {
             RepairGuard::lock(main)?.record_preparation(&key, false)?;
             regenerate(&merge, !failed_generation)?;
@@ -3949,6 +3906,7 @@ fn prepare_host_repair_with(
         resume || !dirty,
         "rework seat has pending changes; merge refused"
     );
+    let (base, pr_head) = fetch_heads()?;
     execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if resume && dirty {
         "seated rework branch is behind the PR head; edits preserved"
     } else {
@@ -3957,6 +3915,7 @@ fn prepare_host_repair_with(
     if dirty {
         execute(&["merge-tree", "--write-tree", "HEAD", &base])
             .context("could not prove clean merge for dirty resume; edits preserved")?;
+        record_rework_round(main, lane_id, &pr_head, &base)?;
         return Ok(vec![]);
     }
     let before = execute(&["rev-parse", "HEAD"])?;
@@ -4027,85 +3986,17 @@ fn prepare_host_repair_with(
             }
         }
     } else {
-        // Mark preparation-only tips, including fast-forwards and repeated
-        // preparation on resume. A resume with local fixes can ship normally.
-        // trace:BUG-2714 | ai:codex
-        if before == pr_head
-            || execute(&preparation_merge_probe(&before))? == REWORK_PREPARATION_SUBJECT
-        {
-            execute(&[
-                "merge",
-                "--no-ff",
-                "--no-verify",
-                "-m",
-                REWORK_PREPARATION_SUBJECT,
-                &base,
-            ])?;
-        } else {
-            execute(&["merge", "--no-edit", "--no-verify", &base])?;
-        }
+        record_rework_round(main, lane_id, &pr_head, &base)?;
+        execute(&[
+            "merge",
+            "--no-ff",
+            "--no-verify",
+            "-m",
+            REWORK_PREPARATION_SUBJECT,
+            &base,
+        ])?;
         Ok(vec![])
     }
-}
-
-// Keep launch admission and the Git operations together: any failed fetch,
-// ancestry check, merge or abort propagates before the vendor can start.
-// trace:STORY-2475 | ai:codex
-#[cfg(test)]
-fn prepare_rework_merge_with(
-    execute: &dyn Fn(&[&str]) -> Result<String>,
-    branch: &str,
-    resume: bool,
-    publish: impl FnOnce(&str) -> Result<()>,
-    fetch_heads: impl FnOnce() -> Result<(String, String)>,
-) -> Result<Vec<String>> {
-    anyhow::ensure!(
-        execute(&["symbolic-ref", "--short", "HEAD"])? == branch,
-        "rework seat is not on the PR head branch {branch}"
-    );
-    anyhow::ensure!(
-        execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err(),
-        "rework seat already has an unfinished merge"
-    );
-    let dirty = !execute(&["status", "--porcelain", "--untracked-files=all"])?.is_empty();
-    anyhow::ensure!(
-        resume || !dirty,
-        "rework seat has pending changes; merge refused"
-    );
-    let (base, pr_head) = fetch_heads()?;
-    // Dirty seats need preservation; clean/fresh pickups need only a current head.
-    // trace:BUG-2504 | ai:codex
-    execute(&["merge-base", "--is-ancestor", &pr_head, "HEAD"]).context(if resume && dirty {
-        "seated rework branch is behind the PR head; edits preserved"
-    } else {
-        "seated rework branch is behind the PR head; retry pickup with its current head"
-    })?;
-    // Probe committed trees without touching pending edits, the index or HEAD.
-    // A clean merge needs no host preparation before continuing pending work.
-    // trace:BUG-2504 | ai:codex
-    if resume && dirty {
-        execute(&["merge-tree", "--write-tree", "HEAD", &base]).context(
-            "could not prove a clean main merge for the dirty rework resume; edits preserved",
-        )?;
-        return Ok(Vec::new());
-    }
-    let before = execute(&["rev-parse", "HEAD"])?;
-    let files = finish_rework_merge(execute, &base)?;
-    // Only publish the host-created merge of the fetched PR head and base.
-    // Existing local lane commits retain the post-exit trailer and punt/hold
-    // gates, including when this merge reports "Already up to date".
-    // trace:BUG-2456 | ai:codex
-    if files.is_empty() && before == pr_head {
-        let tip = execute(&["rev-parse", "HEAD"])?;
-        if tip != before {
-            let parents = execute(&["show", "-s", "--format=%P", &tip])?;
-            let parents: Vec<_> = parents.split_whitespace().collect();
-            if parents == [pr_head.as_str(), base.as_str()] {
-                publish(&tip)?;
-            }
-        }
-    }
-    Ok(files)
 }
 
 // trace:STORY-2475 | ai:codex
@@ -4166,9 +4057,11 @@ mod rework_merge_tests {
         g(&["commit", "-qm", "main"]);
         let main = g(&["rev-parse", "HEAD"]);
         g(&["push", "origin", "main"]);
-        g(&["checkout", "rework"]);
+        let tree = fx.main.with_file_name("linked-seat");
+        g(&["worktree", "add", tree.to_str().unwrap(), "rework"]);
+        let g = |args: &[&str]| tests::git_ok(&tree, args);
         let execute = |args: &[&str]| {
-            let mut cmd = git(&fx.main);
+            let mut cmd = git(&tree);
             cmd.args(args);
             run(cmd, "test rework Git")
         };
@@ -4176,7 +4069,7 @@ mod rework_merge_tests {
         let status = execute(&["status", "--porcelain"]).unwrap();
         let unknown = prepare_rework_merge_with_base(
             &fx.main,
-            &fx.main,
+            &tree,
             "rework",
             false,
             2603,
@@ -4194,14 +4087,9 @@ mod rework_merge_tests {
         assert_eq!(execute(&["status", "--porcelain"]).unwrap(), status);
         assert!(execute(&["rev-parse", "--verify", "MERGE_HEAD"]).is_err());
         assert!(!fx.main.join(".aida/repair-journal.json").exists());
-        // Publication requires host ownership evidence; main is the seat here,
-        // so keep the lease file from reading as pending work.
-        // trace:BUG-2633 | ai:claude
-        record_test_publication_lease(&fx.main, &fx.main, "rework");
-        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/sessions/\n").unwrap();
         prepare_rework_merge_with_base(
             &fx.main,
-            &fx.main,
+            &tree,
             "rework",
             false,
             2603,
@@ -4220,14 +4108,145 @@ mod rework_merge_tests {
         let remote = || tests::git_ok(&fx.origin, &["rev-parse", "refs/heads/rework"]);
         assert_eq!(remote(), before);
         assert_eq!(g(&["rev-parse", "HEAD^1"]), before);
-        let err =
-            crate::ship_from_seat::require_fix_after_preparation(&fx.main, "HEAD").unwrap_err();
+        // Another lease may legitimately ship a merge with the same subject.
+        let check = |lane| {
+            crate::ship_from_seat::require_fix_after_preparation(
+                &fx.main,
+                Some(lane),
+                &tree,
+                "HEAD",
+            )
+        };
+        g(&["checkout", "-qb", "ordinary"]);
+        assert_eq!(g(&["log", "-1", "--format=%s"]), REWORK_PREPARATION_SUBJECT);
+        crate::pr_cmd::finish::integrate_and_push(
+            &fx.main,
+            Some("ordinary-lane"),
+            &tree,
+            "ordinary",
+            "origin/integration",
+        )
+        .unwrap();
+        assert_eq!(
+            tests::git_ok(&fx.origin, &["rev-parse", "refs/heads/ordinary"]),
+            g(&["rev-parse", "ordinary"])
+        );
+        g(&["checkout", "rework"]);
+        // Resume an old pickup that created Git's ordinary, unmarked merge.
+        g(&["commit", "--amend", "-qm", "Merge branch 'integration'"]);
+        let legacy = g(&["rev-parse", "HEAD"]);
+        prepare_rework_merge_with_base(
+            &fx.main,
+            &tree,
+            "rework",
+            true,
+            2603,
+            "integration-lane",
+            || Ok("integration".into()),
+        )
+        .unwrap();
+        assert_eq!(g(&["rev-parse", "HEAD"]), legacy);
+        use crate::ship_from_seat::{
+            publish_queue_exit_with, record_queue_exit, PostExitCommit, QueueExitOutcome,
+        };
+        let outcome = record_queue_exit(&fx.main, "integration-lane", true, true, || {
+            publish_queue_exit_with(
+                &fx.main,
+                "BUG-2714",
+                || PostExitCommit::Clean,
+                || {
+                    Probe::Known(ProbeFacts {
+                        unpushed: 1,
+                        ..Default::default()
+                    })
+                },
+                || check("integration-lane").map(|_| ()),
+                || panic!("unexpected unchanged-PR notification"),
+            )
+        })
+        .unwrap();
+        assert_eq!(outcome, QueueExitOutcome::NoChange);
+        assert!(crate::ship_from_seat::take_no_change(
+            &fx.main,
+            "integration-lane"
+        ));
+        assert_eq!(remote(), before);
+        let err = crate::ship_from_seat::require_fix_after_preparation(
+            &fx.main,
+            Some("integration-lane"),
+            &tree,
+            "HEAD",
+        )
+        .unwrap_err();
         assert_eq!(err.to_string(), "no fix commits; nothing published");
         g(&["commit", "--allow-empty", "-qm", "fix: round (BUG-2714)"]);
-        crate::ship_from_seat::require_fix_after_preparation(&fx.main, "HEAD").unwrap();
+        crate::ship_from_seat::require_fix_after_preparation(
+            &fx.main,
+            Some("integration-lane"),
+            &tree,
+            "HEAD",
+        )
+        .unwrap();
         assert_eq!(remote(), before);
-        assert!(fx.main.join("integration-only").exists());
-        assert!(!fx.main.join("main-only").exists());
+        let fix = g(&["rev-parse", "HEAD"]);
+        g(&["checkout", "integration"]);
+        g(&["commit", "--allow-empty", "-qm", "base advances again"]);
+        g(&["push", "origin", "integration"]);
+        g(&["checkout", "rework"]);
+        let ship = || {
+            crate::pr_cmd::finish::integrate_and_push(
+                &fx.main,
+                Some("integration-lane"),
+                &tree,
+                "rework",
+                "origin/integration",
+            )
+        };
+        // A racer after pickup cannot be overwritten, even if its tracking ref is current.
+        g(&["checkout", "-qb", "racer", &before]);
+        g(&["commit", "--allow-empty", "-qm", "concurrent PR work"]);
+        let raced = g(&["rev-parse", "HEAD"]);
+        g(&["checkout", "rework"]);
+        prepare_host_repair_with(
+            &fx.main,
+            &tree,
+            2603,
+            "integration-lane",
+            &execute,
+            "rework",
+            true,
+            |_, _| panic!("no conflicts"),
+            || {
+                let pinned = fetch_rework_heads(&fx.main, "integration", "rework")?;
+                g(&["push", "origin", "racer:rework"]);
+                Ok(pinned)
+            },
+        )
+        .unwrap();
+        assert_eq!(remote(), raced);
+        g(&["checkout", "integration"]);
+        g(&[
+            "commit",
+            "--allow-empty",
+            "-qm",
+            "base moves between preparation and ship",
+        ]);
+        g(&["push", "origin", "integration"]);
+        g(&["checkout", "rework"]);
+        assert!(ship().unwrap_err().to_string().contains("push to origin"));
+        let config = crate::config_path_for_project(&fx.main);
+        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+        std::fs::write(&config, "[pr-head]\nprotect = 'invalid'\n").unwrap();
+        assert!(format!("{:#}", ship().unwrap_err()).contains("pr-head.protect must be a boolean"));
+        std::fs::remove_file(config).unwrap();
+        assert_eq!(remote(), raced);
+        g(&["merge", "--no-edit", "racer"]);
+        ship().unwrap();
+        assert_eq!(remote(), g(&["rev-parse", "HEAD"]));
+        g(&["merge-base", "--is-ancestor", &fix, "HEAD"]);
+        g(&["merge-base", "--is-ancestor", "integration", "HEAD"]);
+        assert!(tree.join("integration-only").exists());
+        assert!(!tree.join("main-only").exists());
         assert!(fetch_rework_heads(&fx.main, "missing-base", "rework").is_err());
     }
 
@@ -4775,87 +4794,26 @@ mod rework_merge_tests {
         .is_err());
     }
 
-    // trace:BUG-2456 | ai:codex
-    #[test]
-    fn bug_2456_publication_failure_refuses_launch_and_current_head_skips_push() {
-        for current in [false, true] {
-            let merged = std::cell::Cell::new(false);
-            let execute = |args: &[&str]| -> Result<String> {
-                match args {
-                    ["symbolic-ref", "--short", "HEAD"] => Ok("rework".into()),
-                    ["rev-parse", "-q", "--verify", "MERGE_HEAD"] => anyhow::bail!("absent"),
-                    ["rev-parse", "HEAD"] => Ok(if current || merged.get() {
-                        "prepared"
-                    } else {
-                        "old"
-                    }
-                    .into()),
-                    ["show", "-s", "--format=%P", "prepared"] => Ok("old base".into()),
-                    ["merge", "--no-edit", "--no-verify", "base"] => {
-                        merged.set(true);
-                        Ok(String::new())
-                    }
-                    _ => Ok(String::new()),
-                }
-            };
-            let result = prepare_rework_merge_with(
-                &execute,
-                "rework",
-                false,
-                |tip| {
-                    assert!(!current, "an already published head needs no push");
-                    assert_eq!(tip, "prepared");
-                    anyhow::bail!("push rejected")
-                },
-                || {
-                    Ok((
-                        "base".into(),
-                        if current { "prepared" } else { "old" }.into(),
-                    ))
-                },
-            );
-            if current {
-                assert!(result.unwrap().is_empty());
-            } else {
-                assert_eq!(result.unwrap_err().to_string(), "push rejected");
-            }
-        }
-    }
-
-    // trace:BUG-2456 | ai:codex
-    #[test]
-    fn bug_2456_only_exact_host_merge_parents_publish() {
-        for parents in ["old base", "base old", "old", "old other", "old base third"] {
-            let merged = std::cell::Cell::new(false);
-            let published = std::cell::Cell::new(false);
-            let execute = |args: &[&str]| -> Result<String> {
-                match args {
-                    ["symbolic-ref", "--short", "HEAD"] => Ok("rework".into()),
-                    ["rev-parse", "-q", "--verify", "MERGE_HEAD"] => anyhow::bail!("absent"),
-                    ["rev-parse", "HEAD"] => {
-                        Ok(if merged.get() { "prepared" } else { "old" }.into())
-                    }
-                    ["show", "-s", "--format=%P", "prepared"] => Ok(parents.into()),
-                    ["merge", "--no-edit", "--no-verify", "base"] => {
-                        merged.set(true);
-                        Ok(String::new())
-                    }
-                    _ => Ok(String::new()),
-                }
-            };
-            prepare_rework_merge_with(
-                &execute,
-                "rework",
-                false,
-                |_| {
-                    published.set(true);
-                    Ok(())
-                },
-                || Ok(("base".into(), "old".into())),
-            )
-            .unwrap();
-            assert_eq!(published.get(), parents == "old base", "{parents}");
-        }
+    // These Git fixtures inject fetched heads into the production preparation path.
+    fn prepare_rework_merge_with(
+        tree: &Path,
+        execute: &dyn Fn(&[&str]) -> Result<String>,
+        branch: &str,
+        resume: bool,
+        fetch_heads: impl FnOnce() -> Result<(String, String)>,
+    ) -> Result<Vec<String>> {
+        let host = tempfile::tempdir()?;
+        prepare_host_repair_with(
+            host.path(),
+            tree,
+            2456,
+            "lane",
+            execute,
+            branch,
+            resume,
+            |_, _| anyhow::bail!("unexpected conflict regeneration"),
+            fetch_heads,
+        )
     }
 
     // trace:BUG-2456 | ai:codex
@@ -4883,104 +4841,20 @@ mod rework_merge_tests {
                 }
                 Ok(g(args))
             };
-            assert!(prepare_rework_merge_with(
-                &execute,
-                "rework",
-                true,
-                |_| panic!("local lane commits must retain post-exit publication gates"),
-                || Ok((base.clone(), pr_head.clone())),
-            )
-            .unwrap()
-            .is_empty());
+            assert!(
+                prepare_rework_merge_with(&fx.main, &execute, "rework", true, || Ok((
+                    base.clone(),
+                    pr_head.clone()
+                )),)
+                .unwrap()
+                .is_empty()
+            );
             if base_ahead {
                 assert_eq!(g(&["rev-parse", "HEAD^1"]), local);
             } else {
                 assert_eq!(g(&["rev-parse", "HEAD"]), local);
             }
         }
-    }
-
-    // trace:BUG-2618 | ai:codex
-    #[test]
-    fn bug2618_rework_publication_refuses_unreadable_policy_before_push() {
-        let fx = tests::fixture();
-        let tip = tests::git_ok(&fx.main, &["rev-parse", "HEAD"]);
-        let config = crate::config_path_for_project(&fx.main);
-        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
-        std::fs::write(&config, "[pr-head]\nprotect = 'invalid'\n").unwrap();
-        // Own the branch so the BUG-2633 ownership check passes and the
-        // refusal under test is the policy read, not a missing lease.
-        record_test_publication_lease(&fx.main, &fx.main, "protected");
-        let err = publish_rework_merge(&fx.main, &fx.main, "protected", &tip).unwrap_err();
-        assert!(
-            format!("{err:#}").contains("pr-head.protect must be a boolean"),
-            "{err:#}"
-        );
-        let remote = tests::git_ok(&fx.main, &["ls-remote", "origin", "refs/heads/protected"]);
-        assert!(remote.is_empty(), "guard refusal published {remote}");
-    }
-
-    // No bwrap dependency: move the real remote after fetch, then exercise
-    // the production push and prove refusal stops the launch continuation.
-    // trace:BUG-2456 | ai:codex
-    #[test]
-    fn bug_2456_real_remote_race_refuses_before_vendor_launch() {
-        let fx = tests::fixture();
-        let g = |args: &[&str]| tests::git_ok(&fx.main, args);
-        g(&["checkout", "-qb", "rework"]);
-        g(&["commit", "--allow-empty", "-qm", "PR head"]);
-        let pr_head = g(&["rev-parse", "HEAD"]);
-        g(&["push", "-q", "origin", "rework"]);
-        g(&["checkout", "main"]);
-        g(&["commit", "--allow-empty", "-qm", "main advances"]);
-        let base = g(&["rev-parse", "HEAD"]);
-        g(&["push", "-q", "origin", "main"]);
-        g(&["checkout", "-qb", "racer", &pr_head]);
-        g(&["commit", "--allow-empty", "-qm", "concurrent PR work"]);
-        let raced = g(&["rev-parse", "HEAD"]);
-        g(&["checkout", "rework"]);
-        record_test_publication_lease(&fx.main, &fx.main, "rework");
-        // This fixture uses main itself as the seat. Host coordination files
-        // must not turn the otherwise clean source checkout into pending work.
-        std::fs::write(fx.main.join(".git/info/exclude"), ".aida/sessions/\n").unwrap();
-        let execute = |args: &[&str]| -> Result<String> {
-            if args == ["rev-parse", "-q", "--verify", "MERGE_HEAD"] {
-                anyhow::bail!("absent");
-            }
-            // This happens after fetch but before publication. A real push
-            // advances origin while preparation retains its fetched PR SHA.
-            if args.first() == Some(&"merge") {
-                g(&["push", "-q", "origin", "racer:refs/heads/rework"]);
-            }
-            Ok(g(args))
-        };
-        let launched = std::cell::Cell::new(false);
-        let result = (|| -> Result<()> {
-            prepare_rework_merge_with(
-                &execute,
-                "rework",
-                false,
-                |tip| publish_rework_merge(&fx.main, &fx.main, "rework", tip),
-                || {
-                    g(&["fetch", "-q", "origin"]);
-                    assert_eq!(g(&["rev-parse", "origin/rework"]), pr_head);
-                    Ok((base.clone(), pr_head.clone()))
-                },
-            )?;
-            launched.set(true);
-            Ok(())
-        })();
-        let why = result.unwrap_err().to_string();
-        assert!(
-            why.contains("could not publish prepared rework merge"),
-            "{why}"
-        );
-        assert!(why.contains("rejected"), "{why}");
-        assert!(!launched.get());
-        assert_eq!(
-            tests::git_ok(&fx.origin, &["rev-parse", "refs/heads/rework"]),
-            raced
-        );
     }
 
     // Exercise admission against real Git state; the fetch seam pins heads
@@ -5003,37 +4877,24 @@ mod rework_merge_tests {
         };
         let no_fetch =
             || -> Result<(String, String)> { panic!("local refusal must precede fetch") };
-        let why = prepare_rework_merge_with(
-            &execute,
-            "wrong",
-            false,
-            |_| panic!("must not publish"),
-            no_fetch,
-        )
-        .unwrap_err();
+        let why =
+            prepare_rework_merge_with(&fx.main, &execute, "wrong", false, no_fetch).unwrap_err();
         assert!(why.to_string().contains("PR head branch"));
         std::fs::write(fx.main.join("pending"), "edits").unwrap();
-        let why = prepare_rework_merge_with(
-            &execute,
-            "main",
-            false,
-            |_| panic!("must not publish"),
-            no_fetch,
-        )
-        .unwrap_err();
+        let why =
+            prepare_rework_merge_with(&fx.main, &execute, "main", false, no_fetch).unwrap_err();
         assert!(why.to_string().contains("pending changes"));
         // A dirty resume still checks fresh remote heads before admission.
         // trace:BUG-2504 | ai:codex
         let current = execute(&["rev-parse", "HEAD"]).unwrap();
-        assert!(prepare_rework_merge_with(
-            &execute,
-            "main",
-            true,
-            |_| panic!("must not publish"),
-            || Ok((current.clone(), current.clone())),
-        )
-        .unwrap()
-        .is_empty());
+        assert!(
+            prepare_rework_merge_with(&fx.main, &execute, "main", true, || Ok((
+                current.clone(),
+                current.clone()
+            )),)
+            .unwrap()
+            .is_empty()
+        );
         assert_eq!(
             std::fs::read_to_string(fx.main.join("pending")).unwrap(),
             "edits"
@@ -5041,15 +4902,11 @@ mod rework_merge_tests {
         let before = execute(&["rev-parse", "HEAD"]).unwrap();
         std::fs::write(fx.main.join(".git/MERGE_HEAD"), format!("{before}\n")).unwrap();
         for resume in [false, true] {
-            let why = prepare_rework_merge_with(
-                &execute,
-                "main",
-                resume,
-                |_| panic!("must not publish"),
-                no_fetch,
-            )
-            .unwrap_err();
-            assert!(why.to_string().contains("unfinished merge"));
+            let why = prepare_rework_merge_with(&fx.main, &execute, "main", resume, no_fetch)
+                .unwrap_err();
+            assert!(why
+                .to_string()
+                .contains("no matching host repair journal evidence"));
         }
         std::fs::remove_file(fx.main.join(".git/MERGE_HEAD")).unwrap();
         std::fs::remove_file(fx.main.join("pending")).unwrap();
@@ -5057,25 +4914,17 @@ mod rework_merge_tests {
         execute(&["commit", "--allow-empty", "-m", "new PR head"]).unwrap();
         let ahead = execute(&["rev-parse", "HEAD"]).unwrap();
         execute(&["checkout", "main"]).unwrap();
-        let why = prepare_rework_merge_with(
-            &execute,
-            "main",
-            false,
-            |_| panic!("must not publish"),
-            || Ok((before.clone(), ahead)),
-        )
+        let why = prepare_rework_merge_with(&fx.main, &execute, "main", false, || {
+            Ok((before.clone(), ahead))
+        })
         .unwrap_err();
         assert!(why.to_string().contains("behind the PR head"));
         assert!(!why.to_string().contains("commit-pending"));
         assert!(!why.to_string().contains("--resume"));
         assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), before);
-        let why = prepare_rework_merge_with(
-            &execute,
-            "main",
-            false,
-            |_| panic!("must not publish"),
-            || anyhow::bail!("fetch refused"),
-        )
+        let why = prepare_rework_merge_with(&fx.main, &execute, "main", false, || {
+            anyhow::bail!("fetch refused")
+        })
         .unwrap_err();
         assert_eq!(why.to_string(), "fetch refused");
         assert!(!fx.main.join(".git/MERGE_HEAD").exists());
@@ -5106,22 +4955,14 @@ mod rework_merge_tests {
         execute(&["checkout", "main"]).unwrap();
         std::fs::write(fx.main.join("pending"), "keep these edits\n").unwrap();
         let status = execute(&["status", "--porcelain"]).unwrap();
-        prepare_rework_merge_with(
-            &execute,
-            "main",
-            true,
-            |_| panic!("must not publish"),
-            || Ok((base.clone(), head.clone())),
-        )
+        prepare_rework_merge_with(&fx.main, &execute, "main", true, || {
+            Ok((base.clone(), head.clone()))
+        })
         .expect("non-conflicting main advance admits pending work");
         {
-            let why = prepare_rework_merge_with(
-                &execute,
-                "main",
-                true,
-                |_| panic!("must not publish"),
-                || Ok((head.clone(), base.clone())),
-            )
+            let why = prepare_rework_merge_with(&fx.main, &execute, "main", true, || {
+                Ok((head.clone(), base.clone()))
+            })
             .unwrap_err();
             assert!(format!("{why:#}").contains("behind the PR head"), "{why:#}");
             assert_eq!(execute(&["rev-parse", "HEAD"]).unwrap(), head);
@@ -5132,13 +4973,9 @@ mod rework_merge_tests {
             );
             assert!(execute(&["rev-parse", "-q", "--verify", "MERGE_HEAD"]).is_err());
         }
-        let why = prepare_rework_merge_with(
-            &execute,
-            "main",
-            true,
-            |_| panic!("must not publish"),
-            || anyhow::bail!("fetch unavailable"),
-        )
+        let why = prepare_rework_merge_with(&fx.main, &execute, "main", true, || {
+            anyhow::bail!("fetch unavailable")
+        })
         .unwrap_err();
         assert!(why.to_string().contains("fetch unavailable"));
         std::fs::write(fx.main.join("main-update"), "PR change\n").unwrap();
@@ -5146,13 +4983,9 @@ mod rework_merge_tests {
         execute(&["commit", "-m", "conflicting PR change"]).unwrap();
         let pr_head = execute(&["rev-parse", "HEAD"]).unwrap();
         let status = execute(&["status", "--porcelain"]).unwrap();
-        let why = prepare_rework_merge_with(
-            &execute,
-            "main",
-            true,
-            |_| panic!("must not publish"),
-            || Ok((base, pr_head.clone())),
-        )
+        let why = prepare_rework_merge_with(&fx.main, &execute, "main", true, || {
+            Ok((base, pr_head.clone()))
+        })
         .unwrap_err();
         let guidance = format!("{why:#}");
         assert!(guidance.contains("edits preserved"));

@@ -895,7 +895,11 @@ pickup performs a forge PR lookup unless an explicit branch was selected. Before
 launching an implementer, the host fetches the PR's base and merges it locally
 into the seated PR branch with the host's identity. Ship publishes the clean
 preparation merge together with the lane's fix. A preparation-only tip leaves
-the remote unchanged and reports `no fix commits; nothing published`.
+the remote unchanged and reports `no fix commits; nothing published`. The host
+uses the lease's recorded PR head and base to identify fix commits on resume.
+An automatic clean exit with only the preparation merge records a no-change
+drain receipt when requested. If the base advances again, linked-worktree ship
+merges it and pushes a descendant of the verified fix without forcing the PR branch.
 Clone publication uses the sandboxed bundle boundary and the host's trusted
 origin.
 <!-- trace:BUG-2714 | ai:codex -->

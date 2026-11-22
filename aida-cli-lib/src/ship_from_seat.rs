@@ -724,7 +724,6 @@ pub(crate) fn publish_queue_exit_recorded(
             require_lease_branch_work(&main, tree)?;
             // trace:STORY-2640 | ai:codex — all native exit surfaces share this fence.
             let branch = lease_branch(&recorded_seat(&main, tree)?)?.0;
-            crate::lane_fast_gate::publication_ready(&main, tree, &branch)?;
             run_at_with_fast_gate(
                 &main,
                 FromSeatOptions {
@@ -907,7 +906,14 @@ pub(crate) fn publish_queue_exit_with(
     let no_change = std::cell::Cell::new(false);
     finish_queue_exit(commit(), &publish, || {
         match probe() {
-            crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => return publish(),
+            crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => match publish() {
+                Err(error) if error.is::<NoReworkFix>() => {
+                    eprintln!("{error}");
+                    no_change.set(true);
+                    return Ok(());
+                }
+                result => return result,
+            },
             crate::seat_clone::Probe::Unknown(why)
             | crate::seat_clone::Probe::HasSubmodules(why) => {
                 anyhow::bail!("could not inspect clean lane for pending publication: {why}")
@@ -2142,7 +2148,8 @@ pub(crate) fn run_from_with_reconciliation(
     let main = crate::main_worktree_root_from(&project_root);
     let seat = recorded_seat(&main, &opts.clone)?;
     let main = seat.main.clone();
-    let (branch, scope) = lease_branch(&seat)?;
+    let lease = seat_lease(&seat)?;
+    let (branch, scope) = (lease.branch.clone(), lease.scope.clone());
     // trace:BUG-2596 | ai:codex — explicit publication shares the red-gate veto.
     crate::lane_fast_gate::refuse_failed_gate(&main, &branch)?;
     let spec = crate::ship::resolve_spec(opts.spec.as_deref(), &branch, Some(&scope)).ok_or_else(
@@ -2206,8 +2213,15 @@ pub(crate) fn run_from_with_reconciliation(
     }
     let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
     let mut staged = stage_bundle(&main, &branch, &bytes, opts.dry_run)?;
-    let checked = check_staged(&main, &staged, &opts);
+    let checked = check_staged(&main, &staged, &opts, &lease.id);
     drop_quarantine_on_refusal(&staged, opts.dry_run, checked)?;
+    if automatic {
+        drop_quarantine_on_refusal(
+            &staged,
+            opts.dry_run,
+            crate::lane_fast_gate::publication_ready(&main, &seat.root, &branch),
+        )?;
+    }
     // A plain publish never writes the seat unless the pinned remote head is
     // missing from its committed history. Live/dirty seats remain publishable
     // when their existing commits already contain that head (or it is absent).
@@ -2244,7 +2258,7 @@ pub(crate) fn run_from_with_reconciliation(
                 merged = true;
                 let bytes = (deps.bundle)(&main, &seat.root, &branch)?;
                 staged = stage_bundle(&main, &branch, &bytes, false)?;
-                check_staged(&main, &staged, &opts)?;
+                check_staged(&main, &staged, &opts, &lease.id)?;
             }
             Ok(())
         })();
@@ -2527,22 +2541,65 @@ pub(crate) fn publication_subject_since(
 }
 
 // trace:BUG-2714 | ai:codex
-pub(crate) fn require_fix_after_preparation(repo: &Path, tip: &str) -> Result<()> {
-    let subject = git_text(repo, &crate::seat_clone::preparation_merge_probe(tip))?;
+#[derive(Debug)]
+struct NoReworkFix;
+impl std::fmt::Display for NoReworkFix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("no fix commits; nothing published")
+    }
+}
+impl std::error::Error for NoReworkFix {}
+
+pub(crate) fn require_fix_after_preparation(
+    main: &Path,
+    lane: Option<&str>,
+    repo: &Path,
+    tip: &str,
+) -> Result<bool> {
+    let Some(lane) = lane else { return Ok(false) };
+    let path = crate::seat_clone::rework_round_path(main, lane)?;
+    let bytes = match std::fs::symlink_metadata(&path) {
+        Ok(_) => crate::gate::dispatch_io::read_bounded_regular_file(&path, 256, true)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    let (head, base): (String, String) = serde_json::from_slice(&bytes)?;
+    for oid in [&head, &base] {
+        anyhow::ensure!(
+            matches!(oid.len(), 40 | 64) && oid.bytes().all(|b| b.is_ascii_hexdigit()),
+            "invalid rework round commit"
+        );
+    }
     anyhow::ensure!(
-        subject != crate::seat_clone::REWORK_PREPARATION_SUBJECT,
-        "no fix commits; nothing published"
+        git_text(repo, &["merge-base", &head, tip])? == head,
+        "rework tip lost the recorded PR head"
     );
-    Ok(())
+    if git_text(
+        repo,
+        &[
+            "rev-list",
+            "--max-count=1",
+            "--no-merges",
+            tip,
+            "--not",
+            &head,
+            &base,
+        ],
+    )?
+    .is_empty()
+    {
+        return Err(NoReworkFix.into());
+    }
+    Ok(true)
 }
 
 /// Everything [`run_from`] checks on a staged import before it pushes: the
 /// diff stat against the default branch, the STORY-469 trailer check and an
 /// explicit spec's match. A refusal here deletes the quarantine ref.
 // trace:BUG-HOME-038 trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
-fn check_staged(main: &Path, staged: &Staged, opts: &FromSeatOptions) -> Result<()> {
+fn check_staged(main: &Path, staged: &Staged, opts: &FromSeatOptions, lane: &str) -> Result<()> {
     let (quarantine, tip) = (&staged.reference, &staged.tip);
-    require_fix_after_preparation(&staged.repo, tip)?;
+    require_fix_after_preparation(main, Some(lane), &staged.repo, tip)?;
     eprintln!(
         "  {} bundle verified ({tip}){}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),

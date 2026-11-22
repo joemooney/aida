@@ -38,7 +38,7 @@ pub(crate) use crate::pr_service::*;
 
 // trace:TASK-3822 | ai:codex
 mod cleanup;
-mod finish;
+pub(crate) mod finish;
 mod gc;
 mod hold;
 mod rebase;

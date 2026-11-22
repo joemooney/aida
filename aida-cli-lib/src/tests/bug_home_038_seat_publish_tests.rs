@@ -2336,7 +2336,16 @@ fn task_3804_compile_failure_keeps_conflict_resolution_off_origin() {
     let head = commit_pending(&fx.main, &clone, "feat", message)
         .unwrap()
         .unwrap();
-    publish_rework_merge(&fx.main, &clone, "feat", &head).unwrap();
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "push",
+            fx.origin.to_str().unwrap(),
+            &format!("{}:refs/heads/feat", head),
+        ],
+    );
     std::fs::write(fx.main.join("README.md"), "main moved\n").unwrap();
     git_ok(&fx.main, &["commit", "-qam", "main moved"]);
     git_ok(&fx.main, &["push", "-q", "origin", "main"]);
@@ -2409,7 +2418,16 @@ fn task_3804_self_committed_repair_merge_is_refused_before_origin() {
     let head = commit_pending(&fx.main, &clone, "feat", "fix: repair (Refs BUG-1)")
         .unwrap()
         .unwrap();
-    publish_rework_merge(&fx.main, &clone, "feat", &head).unwrap();
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "push",
+            fx.origin.to_str().unwrap(),
+            &format!("{}:refs/heads/feat", head),
+        ],
+    );
     std::fs::write(fx.main.join("README.md"), "main moved\n").unwrap();
     git_ok(&fx.main, &["commit", "-qam", "main moved"]);
     git_ok(&fx.main, &["push", "-q", "origin", "main"]);
@@ -2492,7 +2510,7 @@ fn bug_2714_rework_publishes_merge_with_fix_and_never_runs_seat_hooks() {
     }
     for conflicts in [false, true] {
         let fx = fixture();
-        let clone = leased_clone(&fx, "rework-merge", "c0ffee245600");
+        let clone = seat_with_publication_pending(&fx, "rework-merge", "c0ffee245600", "feat");
         git_ok(&fx.main, &["branch", "feat"]);
         git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
         std::fs::write(
@@ -2500,10 +2518,19 @@ fn bug_2714_rework_publishes_merge_with_fix_and_never_runs_seat_hooks() {
             "rework\n",
         )
         .unwrap();
-        let before = commit_pending(&fx.main, &clone, "feat", "fix: rework (BUG-2456)")
+        let before = commit_pending(&fx.main, &clone, "feat", "fix: rework (BUG-1)")
             .unwrap()
             .unwrap();
-        publish_rework_merge(&fx.main, &clone, "feat", &before).unwrap();
+        git_ok(
+            &clone,
+            &[
+                "-c",
+                "core.hooksPath=/dev/null",
+                "push",
+                fx.origin.to_str().unwrap(),
+                &format!("{}:refs/heads/feat", before),
+            ],
+        );
         std::fs::write(fx.main.join("README.md"), "main moved\n").unwrap();
         git_ok(&fx.main, &["commit", "-qam", "main moved"]);
         git_ok(&fx.main, &["push", "-q", "origin", "main"]);
@@ -2514,8 +2541,9 @@ fn bug_2714_rework_publishes_merge_with_fix_and_never_runs_seat_hooks() {
             &clone,
             &["remote", "set-url", "origin", "/nonexistent/seat-origin"],
         );
-        let files = prepare_leased_rework_merge(&fx.main, &clone, "feat", false, 3398, "test-lane")
-            .unwrap();
+        let files =
+            prepare_leased_rework_merge(&fx.main, &clone, "feat", false, 3398, "c0ffee245600")
+                .unwrap();
         let remote = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
         let head = git_ok(&clone, &["rev-parse", "HEAD"]);
         if conflicts {
@@ -2539,6 +2567,20 @@ fn bug_2714_rework_publishes_merge_with_fix_and_never_runs_seat_hooks() {
                     },
                 )
             };
+            let outcome = crate::ship_from_seat::publish_queue_exit_recorded(
+                &fx.main,
+                &clone,
+                "BUG-1",
+                "c0ffee245600",
+                true,
+                true,
+            )
+            .unwrap();
+            assert_eq!(outcome, crate::ship_from_seat::QueueExitOutcome::NoChange);
+            assert!(crate::ship_from_seat::take_no_change(
+                &fx.main,
+                "c0ffee245600"
+            ));
             let refusal = ship().unwrap_err();
             assert!(format!("{refusal:#}").contains("no fix commits; nothing published"));
             assert_eq!(
@@ -5431,7 +5473,16 @@ fn bug_2657_retained_repair_failure_keeps_lease_and_retry_publishes() {
     let before = commit_pending(&fx.main, &clone, "feat", "fix: seat (BUG-1)")
         .unwrap()
         .unwrap();
-    publish_rework_merge(&fx.main, &clone, "feat", &before).unwrap();
+    git_ok(
+        &clone,
+        &[
+            "-c",
+            "core.hooksPath=/dev/null",
+            "push",
+            fx.origin.to_str().unwrap(),
+            &format!("{}:refs/heads/feat", before),
+        ],
+    );
     std::fs::write(fx.main.join("README.md"), "main change\n").unwrap();
     git_ok(&fx.main, &["commit", "-qam", "main change"]);
     git_ok(&fx.main, &["push", "-q", "origin", "main"]);
@@ -5518,11 +5569,6 @@ fn bug_2633_host_rework_refuses_reserved_push_before_import_or_remote_mutation()
         },
     )
     .unwrap_err();
-    assert!(error
-        .downcast_ref::<crate::ship_from_seat::PublicationOwnershipRefusal>()
-        .is_some());
-    let tip = git_ok(&clone, &["rev-parse", "HEAD"]);
-    let error = publish_rework_merge(&fx.main, &clone, "promote/integration-15", &tip).unwrap_err();
     assert!(error
         .downcast_ref::<crate::ship_from_seat::PublicationOwnershipRefusal>()
         .is_some());

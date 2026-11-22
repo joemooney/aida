@@ -216,17 +216,27 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     }
 
     // Resolve the spec: explicit arg → branch name → active session lease.
-    let lease_scope = list_leases(&main_worktree)
-        .into_iter()
-        .find(|l| l.branch == branch)
-        .map(|l| l.scope);
-    let spec = ship::resolve_spec(opts.spec.as_deref(), &branch, lease_scope.as_deref())
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "could not resolve a spec from branch `{branch}` — pass one explicitly: \
+    let leases =
+        crate::leases::list_leases_strict_all(&main_worktree).map_err(anyhow::Error::msg)?;
+    let mut branch_leases = leases.iter().filter(|lease| lease.branch == branch);
+    let lane = branch_leases.next();
+    anyhow::ensure!(
+        branch_leases.next().is_none(),
+        "ambiguous lease for branch {branch}"
+    );
+    if let Some(lease) = lane {
+        anyhow::ensure!(
+            lease.worktree_path.canonicalize()? == project_root.canonicalize()?,
+            "branch {branch} is leased to a different worktree"
+        );
+    }
+    let lease_scope = lane.map(|lease| lease.scope.as_str());
+    let spec = ship::resolve_spec(opts.spec.as_deref(), &branch, lease_scope).ok_or_else(|| {
+        anyhow::anyhow!(
+            "could not resolve a spec from branch `{branch}` — pass one explicitly: \
                  `aida ship <SPEC>`"
-            )
-        })?;
+        )
+    })?;
 
     let mode = ship::finish_mode(opts.no_pr, opts.no_merge);
     // Tracked/staged changes only: untracked paths (sandbox device mounts,
@@ -273,8 +283,6 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     }
 
     // trace:BUG-2714 | ai:codex
-    crate::ship_from_seat::require_fix_after_preparation(&project_root, "HEAD")?;
-
     // ---- Step 2: rebase onto the branch's REAL base, not a hardcoded
     // origin/main (TASK-1416). A stacked PR (base = another in-flight
     // branch, not the repository default) that gets rebased onto main
@@ -314,76 +322,13 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
         );
     }
     let origin_ref = rebase_target.origin_ref().to_string();
-    let remote_branch = origin_ref
-        .strip_prefix("origin/")
-        .unwrap_or(origin_ref.as_str())
-        .to_string();
-    // The base comes from the forge (a PR's baseRefName); never let it
-    // read as a git option. trace:BUG-1622 | ai:claude
-    crate::git_arg_guard::reject_option_like("PR base branch", &remote_branch)?;
-    eprintln!("  step 2: rebasing onto current {origin_ref}");
-    let fetch = std::process::Command::new("git")
-        .current_dir(&project_root)
-        .args([
-            "fetch",
-            crate::git_arg_guard::END_OF_OPTIONS,
-            "origin",
-            &remote_branch,
-        ])
-        // trace:BUG-2181 | ai:claude
-        .remote_credentials(&project_root, "origin")
-        .status()
-        .context("could not invoke `git fetch`")?;
-    if !fetch.success() {
-        anyhow::bail!("`git fetch origin {remote_branch}` failed — is the remote reachable?");
-    }
-    let rebase = std::process::Command::new("git")
-        .current_dir(&project_root)
-        // trace:BUG-1622 | ai:claude
-        .args(["rebase", crate::git_arg_guard::END_OF_OPTIONS, &origin_ref])
-        .status()
-        .context("could not invoke `git rebase`")?;
-    if !rebase.success() {
-        // Abort so the worktree is left clean, then bail with the manual recipe.
-        let _ = std::process::Command::new("git")
-            .current_dir(&project_root)
-            .args(["rebase", "--abort"])
-            .status();
-        anyhow::bail!(
-            "rebase onto {origin_ref} hit conflicts — aborted, worktree left clean.\n  \
-             Resolve by hand: `git rebase {origin_ref}`, fix the conflicts, \
-             `git rebase --continue`, then re-run `aida ship`."
-        );
-    }
-    eprintln!(
-        "  {} rebased onto {origin_ref}",
-        crate::glyph(crate::glyphs::Glyph::Check).green()
-    );
-
-    // trace:BUG-2618 | ai:codex
-    crate::pr_head_guard::check_branch(&project_root, &branch)?;
-    // ---- Step 3: push (force-with-lease — the rebase may have rewritten history). ----
-    eprintln!("  step 3: pushing {} to origin", branch);
-    // trace:TASK-2270 | ai:claude
-    aida_core::git_ops::clear_sandbox_config_lock(&project_root);
-    let push = std::process::Command::new("git")
-        .current_dir(&project_root)
-        .args(["push", "--force-with-lease", "-u", "origin", &branch])
-        // trace:BUG-2181 | ai:claude
-        .remote_credentials(&project_root, "origin")
-        .status()
-        .context("could not invoke `git push`")?;
-    if !push.success() {
-        anyhow::bail!(
-            "`git push --force-with-lease -u origin {branch}` failed — investigate before retrying"
-        );
-    }
-    aida_core::git_ops::repair_push_upstream(&project_root, "origin", Some(&branch), &branch);
-    eprintln!(
-        "  {} pushed {}",
-        crate::glyph(crate::glyphs::Glyph::Check).green(),
-        branch
-    );
+    integrate_and_push(
+        &main_worktree,
+        lane.map(|lease| lease.id.as_str()),
+        &project_root,
+        &branch,
+        &origin_ref,
+    )?;
     // D3 (BUG-2696): a push whose tip completes the spec marks it Done.
     // trace:BUG-2696 | ai:claude
     // F1: the hardened host git command; a failed read sets nothing (A2).
@@ -401,7 +346,7 @@ pub(crate) fn run_human_finish_ceremony(opts: HumanFinishOptions) -> Result<()> 
     match mode {
         FinishMode::RebasePushOnly => {
             eprintln!(
-                "{} aida ship — {} rebased + pushed (--no-pr; no PR opened)",
+                "{} aida ship — {} pushed (--no-pr; no PR opened)",
                 crate::glyph(crate::glyphs::Glyph::Check).green().bold(),
                 aida_core::node_alias::display_spec_id(&spec).bold()
             );
@@ -496,4 +441,97 @@ mod task_1416_lookup_failure_tests {
             "offline".into()
         )));
     }
+}
+
+// trace:BUG-2714 | ai:codex
+pub(crate) fn integrate_and_push(
+    main: &std::path::Path,
+    lane: Option<&str>,
+    project_root: &std::path::Path,
+    branch: &str,
+    origin_ref: &str,
+) -> Result<()> {
+    let original = aida_core::git_ops::head_sha(project_root)?;
+    let rework =
+        crate::ship_from_seat::require_fix_after_preparation(main, lane, project_root, &original)?;
+    let remote_branch = origin_ref
+        .strip_prefix("origin/")
+        .unwrap_or(origin_ref)
+        .to_string();
+    // The base comes from the forge (a PR's baseRefName); never let it
+    // read as a git option. trace:BUG-1622 | ai:claude
+    crate::git_arg_guard::reject_option_like("PR base branch", &remote_branch)?;
+    let action = if rework { "merge" } else { "rebase" };
+    eprintln!("  step 2: git {action} {origin_ref}");
+    let fetch = std::process::Command::new("git")
+        .current_dir(project_root)
+        .args([
+            "fetch",
+            crate::git_arg_guard::END_OF_OPTIONS,
+            "origin",
+            &remote_branch,
+        ])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
+        .status()
+        .context("could not invoke `git fetch`")?;
+    if !fetch.success() {
+        anyhow::bail!("`git fetch origin {remote_branch}` failed — is the remote reachable?");
+    }
+    let mut integrate = std::process::Command::new("git");
+    integrate.current_dir(project_root).arg(action);
+    if rework {
+        // The tip subject carries the PR title and the completion trailer.
+        let subject = crate::pr_merge_gate::branch_tip_subject(project_root, &original)?;
+        integrate.args(["--no-edit", "-m", &subject]);
+    }
+    if !integrate
+        .args([crate::git_arg_guard::END_OF_OPTIONS, origin_ref])
+        .status()?
+        .success()
+    {
+        let _ = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args([action, "--abort"])
+            .status();
+        anyhow::bail!(
+            "git {action} onto {origin_ref} failed; inspect the worktree before retrying"
+        );
+    }
+
+    // trace:BUG-2618 | ai:codex
+    crate::pr_head_guard::check_branch(project_root, branch)?;
+    // ---- Step 3: push (force-with-lease — the rebase may have rewritten history). ----
+    eprintln!("  step 3: pushing {} to origin", branch);
+    // trace:TASK-2270 | ai:claude
+    aida_core::git_ops::clear_sandbox_config_lock(project_root);
+    let destination = if rework {
+        let tip = aida_core::git_ops::head_sha(project_root)?;
+        anyhow::ensure!(
+            aida_core::git_ops::is_ancestor(project_root, &original, &tip)?,
+            "ship tip lost the verified rework commits"
+        );
+        format!("{tip}:refs/heads/{branch}")
+    } else {
+        branch.to_string()
+    };
+    let push = std::process::Command::new("git")
+        .current_dir(project_root)
+        .arg("push")
+        .args((!rework).then_some("--force-with-lease"))
+        .args(["-u", "origin", &destination])
+        // trace:BUG-2181 | ai:claude
+        .remote_credentials(project_root, "origin")
+        .status()
+        .context("could not invoke `git push`")?;
+    if !push.success() {
+        anyhow::bail!("`git push to origin {branch}` failed — investigate before retrying");
+    }
+    aida_core::git_ops::repair_push_upstream(project_root, "origin", Some(branch), branch);
+    eprintln!(
+        "  {} pushed {}",
+        crate::glyph(crate::glyphs::Glyph::Check).green(),
+        branch
+    );
+    Ok(())
 }
