@@ -28,12 +28,12 @@ description: |
   - Two jobs run concurrently without sharing a job directory or cache slot; the slot cap holds.
   - A test proves a PR job cannot write to the main/train cache.
   - Runbook updated. After activation, compare queue time and end-to-end run time against this baseline, and roll back the variable if wait increases.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-09T16:33:51.967266Z
-modified_at: 2026-11-20T23:58:00.936005305Z
+modified_at: 2026-11-22T20:18:05.026071944Z
 req_type: Story
 tags:
 - area:ci
@@ -548,6 +548,11 @@ comments:
   created_at: 2026-11-20T23:58:00.935973897Z
   modified_at: 2026-11-20T23:58:00.935973897Z
   session_id: 01a1fb40b082
+- id: 01a204e8-a462-7c42-bc7b-9b05a58aa09c
+  author: lane-recovery
+  content: Reference merge `452f36684d474f46b1b7556bcd8c6e9190ff7f8b` left unfinished work with no lease or open PR; returned to Approved.
+  created_at: 2026-11-22T20:18:05.026066977Z
+  modified_at: 2026-11-22T20:18:05.026066977Z
 history:
 - id: 01a1c325-9cdb-7b81-a057-a76e1b9c8512
   author: joe
@@ -841,6 +846,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a204e8-a462-7c42-bc7b-9b1f6c1b5cde
+  author: lane-recovery
+  timestamp: 2026-11-22T20:18:05.026071896Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: e4eee38238fa4cb8e8c85dadaa4ed07894cfbeea
