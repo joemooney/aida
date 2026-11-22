@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269342Z
-modified_at: 2026-11-22T19:45:03.221142874Z
+modified_at: 2026-11-22T20:01:11.024329411Z
 req_type: Bug
 tags:
 - mass-change
@@ -76,6 +76,11 @@ comments:
   created_at: 2026-11-22T19:45:03.221136186Z
   modified_at: 2026-11-22T19:45:03.221136186Z
   session_id: 01a204bc9eec
+- id: 01a204d9-2b70-7533-bc0e-22e11319fa60
+  author: joe
+  content: 'AC AMENDMENT (advisor-122 ruling 2026-11-22 13:00 MST under Joe''s delegated authority; recorded by product-15). AC5 amended: out-of-tier classes are demoted to deferred ONLY in the standard tier. The ADR-76 strict tier (sandbox/confinement, authority/grants/identity, credentials, gate/guard, lease/claim safety) keeps blocking on mutation-kill, untested-path, fail-open, race and incomplete-fix. AC1/AC2 amended: mass-change''s unmet-claimed-ac deferral applies only where the finding is not also a strict-tier fail-open, race or data-loss. The punted lane''s work is saved as wip commit 5779904749 on bug-b6b1278890774ef993d2ebc327862470-473.'
+  created_at: 2026-11-22T20:01:11.024329411Z
+  modified_at: 2026-11-22T20:01:11.024329411Z
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
