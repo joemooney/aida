@@ -21,7 +21,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:07:18.839053638Z
-modified_at: 2026-11-22T19:49:22.420788378Z
+modified_at: 2026-11-22T20:04:32.179754374Z
 req_type: Task
 tags:
 - codify
@@ -406,6 +406,19 @@ comments:
   modified_at: 2026-11-22T19:19:38.644405981Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a204dc-3f4a-73b3-a08b-e98559433171
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c13b8d31781e8b19253167f15e279b310c30f013 plus the uncommitted native-seat diff for PR #4373. Reviewed the merge-base diff and the final-round changes. No untracked deliverables.
+    AC2: [evidence: behavioral-test] bug_044_headless_background_tests.rs:1897 verifies a newer round during cold-slot waiting at an unchanged head in both launchers. task_3826_lane_relay_tests.rs:2220 covers queue-head ownership with no spec argument. The fence is held through spawn.
+    AC3: [evidence: behavioral-test] task_3826_lane_relay_tests.rs:683 and :1415 exercise supersession after placement and exact old-round retraction, including a lost path reply. The cross-vendor supersession test also runs. The mailbox and its ancestors are opened by handle, the filename and frontmatter bind spec and round, and :2199 refuses a symlinked vendor mailbox.
+    AC6: [evidence: behavioral-test] task_3826_lane_relay_tests.rs:2147 exercises success and refusal in both orders across overlapping pickups. The launched attempt owns a no-replace UUID receipt.
+    Probes covered aliases, exact paths, missing files, conflicting receipts, symlink refusal, slot-time races and the scope of the launcher environment. Source review found that the detached worker also needs a pinned directory for its explicit read and acknowledgement, and that the vendor child must drop relay ownership. Both fixes are in the diff. Targeted lane job j20261122T200042537-2-0 executed 38 tests, all passed. All 48 FAST source gates and the classified store-writer inventory passed. Full check-ci-fast submitted as j20261122T200411743-2-0. TASK-3831 retains the three deferred findings. The custom launcher must preserve the relay environment. No reviewer verdict.
+  created_at: 2026-11-22T20:04:32.179754374Z
+  modified_at: 2026-11-22T20:04:32.179754374Z
+  session_id: 01a204ce0133
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f9b6-ef50-7053-b53f-55a2b4881790
   author: joe
