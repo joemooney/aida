@@ -431,9 +431,10 @@ scanned reservation generation after rechecking that its lease, worker and seat
 are gone. An unreadable lease or lane record leaves the reservation in place, and
 the doctor names the evidence that needs attention.
 
-A replacement seat starts from the fetched PR head even when the conversation
-resumes. Private clone placement leaves the host branch tip in place. Linked
-placement saves a differing local tip under an `aida-recovery/` branch before
+`aida queue work <SPEC> --fresh` places the replacement at the fetched PR head.
+Conversation resume can retain a clean local tip ahead of that head when the
+merge probe is clean. Private clone placement leaves the host branch tip in
+place. Linked placement saves a differing local tip under an `aida-recovery/` branch before
 aligning the PR branch. Adoption can continue a retained merge only when the
 journal matches the adopted lane, PR number, fetched head and fetched base.
 

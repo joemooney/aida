@@ -4804,6 +4804,7 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                     branch,
                 },
                 &mut prompt,
+                &[],
                 |admit| {
                     crate::seat_clone::prepare_rework_merge_fixture_admitted(
                         &project,

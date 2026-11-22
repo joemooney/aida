@@ -799,6 +799,47 @@ pub(crate) fn claim_worker_has_exited(
         )
 }
 
+// trace:BUG-2688 | ai:codex
+pub(crate) fn seat_has_recorded_worker(main: &Path, seat: &Path) -> anyhow::Result<bool> {
+    let dir = lanes_dir(main);
+    match std::fs::symlink_metadata(&dir) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        result => anyhow::ensure!(
+            result?.is_dir(),
+            "invalid lanes directory {}",
+            dir.display()
+        ),
+    }
+    for entry in std::fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let Some(id) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix("headless-"))
+            .and_then(|name| name.strip_suffix(".json"))
+        else {
+            continue;
+        };
+        let raw = aida_core::seat_clone_detect::read_regular_file_result(&entry.path())?;
+        let record: HeadlessLaneRecord = serde_json::from_str(&raw)?;
+        if record
+            .seat_path
+            .as_deref()
+            .is_some_and(|path| path == seat || path.canonicalize().is_ok_and(|path| path == seat))
+        {
+            anyhow::ensure!(
+                record.lease_id == id,
+                "mismatched headless record {}",
+                entry.path().display()
+            );
+            if recorded_worker_alive(&record)? {
+                return Ok(true);
+            }
+        }
+    }
+    Ok(false)
+}
+
 /// Whether the headless lane run recorded for `lease_id` under `project_root`
 /// is still alive. No record is a definite "no run"; a record that cannot be
 /// read or parsed, or an id that is not a lease id, is an error (unknown).
@@ -838,29 +879,34 @@ pub(crate) fn headless_lane_run_alive(project_root: &Path, lease_id: &str) -> an
             record.lease_id == lease_id,
             "record names a different lease"
         );
-        let namespace = record.pid_namespace.or_else(|| {
-            record
-                .claim
-                .as_ref()
-                .filter(|claim| {
-                    claim.lease_id.as_deref() == Some(lease_id)
-                        && claim.host == crate::coordination::hostname()
-                })
-                .and_then(|claim| claim.pid_namespace)
-        });
-        crate::ownership::reader::local_claim_process_liveness(
-            record.pid,
-            record.pid_start_time.as_deref(),
-            namespace,
-        )
-        .with_context(|| {
-            format!(
-                "cannot verify recorded PID {} in namespace {namespace:?}",
-                record.pid
-            )
-        })
+        recorded_worker_alive(&record)
     };
     read().with_context(|| format!("inspecting lane evidence at {}", path.display()))
+}
+
+fn recorded_worker_alive(record: &HeadlessLaneRecord) -> anyhow::Result<bool> {
+    use anyhow::Context;
+    let namespace = record.pid_namespace.or_else(|| {
+        record
+            .claim
+            .as_ref()
+            .filter(|claim| {
+                claim.lease_id.as_deref() == Some(record.lease_id.as_str())
+                    && claim.host == crate::coordination::hostname()
+            })
+            .and_then(|claim| claim.pid_namespace)
+    });
+    crate::ownership::reader::local_claim_process_liveness(
+        record.pid,
+        record.pid_start_time.as_deref(),
+        namespace,
+    )
+    .with_context(|| {
+        format!(
+            "cannot verify recorded PID {} in namespace {namespace:?}",
+            record.pid
+        )
+    })
 }
 
 // A bound claim whose admission never spawned a worker: its clone is present

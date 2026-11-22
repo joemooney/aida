@@ -881,6 +881,7 @@ pub(crate) fn admit_rework_conflict_launch(launch: ReworkConflictLaunch<'_>) -> 
     if !host_publishes {
         return Err(crate::repair_journal::UnvalidatedRepairPublication {
             pr: launch.pr,
+            scope: launch.scope.to_owned(),
             route: format!(
                 "self-published {} {} lane",
                 if launch.contained {
@@ -918,10 +919,17 @@ pub(crate) fn rework_seat_for(adopted: bool, fresh: bool) -> crate::seat_clone::
 pub(crate) fn apply_rework_conflict_route(
     launch: ReworkConflictLaunch<'_>,
     prompt: &mut String,
+    archives: &[PathBuf],
     prepare: impl FnOnce(&dyn Fn() -> Result<()>) -> Result<Vec<String>>,
     admit: impl FnOnce(ReworkConflictLaunch<'_>) -> Result<()>,
     notify: impl FnOnce(&str, &str) -> Result<()>,
 ) -> Result<session::HeadlessVendor> {
+    for path in archives {
+        prompt.push_str(&format!(
+            "\n\nPrevious conflict work was preserved at {}.",
+            path.display()
+        ));
+    }
     let admit = std::cell::Cell::new(Some(admit));
     let admitted = std::cell::Cell::new(false);
     let prepared = prepare(&|| {
@@ -4180,6 +4188,10 @@ pub(crate) fn inspect_queue_work_branch(
         if wt.branch != Some(branch) || adopted(wt.path) {
             continue;
         }
+        anyhow::ensure!(
+            wt.path.to_str().is_some(),
+            "non-UTF-8 path holds branch {branch}"
+        );
         if archive_merge
             && wt.path != root
             && (wt.absent_prunable() || crate::seat_clone::linked_rework_has_merge(wt.path)?)
@@ -6409,16 +6421,11 @@ pub(crate) fn handle_queue_work(
             let mut launch_vendor = launch_vendor;
             let resolved_model = resolved_model.clone();
             let mut prompt = prompt.clone();
-            for path in &preserved_rework {
-                prompt.push_str(&format!(
-                    "\n\nPrevious conflict work was preserved at {}.",
-                    path.display()
-                ));
-            }
             if let Some(conflict) = conflict_launch {
                 launch_vendor = apply_rework_conflict_route(
                     conflict,
                     &mut prompt,
+                    &preserved_rework,
                     |admit_conflict| {
                         crate::seat_clone::prepare_rework_merge(
                             &project_root,
@@ -6432,14 +6439,7 @@ pub(crate) fn handle_queue_work(
                             admit_conflict,
                         )
                     },
-                    |launch| {
-                        // A nonempty archive proves this pickup already admitted its route.
-                        // trace:BUG-2688 | ai:codex
-                        if preserved_rework.is_empty() {
-                            admit_rework_conflict_launch(launch)?;
-                        }
-                        Ok(())
-                    },
+                    admit_rework_conflict_launch,
                     |subject, body| {
                         crate::ship_from_seat::advisor_request(&project_root, subject, body)
                     },

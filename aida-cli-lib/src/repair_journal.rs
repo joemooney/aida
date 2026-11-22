@@ -182,6 +182,7 @@ impl RepairGuard {
                 if !validated {
                     return Err(UnvalidatedRepairPublication {
                         pr: entry.key.pr,
+                        scope: format!("PR-{}", entry.key.pr),
                         route: "seat-committed conflict merge".into(),
                     }
                     .into());
@@ -334,7 +335,11 @@ impl RepairGuard {
     // Only a reservation for this exact PR/branch can travel through fresh
     // recovery. A live or unreadable worker must keep its retained seat.
     // trace:BUG-2688 | ai:codex
-    pub fn reserved_seats(&self, pr: u64, branch: &str) -> Vec<PathBuf> {
+    pub fn reserved_seats(
+        &self,
+        pr: u64,
+        branch: &str,
+    ) -> std::collections::BTreeMap<PathBuf, String> {
         self.journal
             .entries
             .iter()
@@ -343,7 +348,7 @@ impl RepairGuard {
                     && entry.branch == branch
                     && entry.spawn != SpawnOutcome::ProvenDead
             })
-            .map(|entry| entry.tree_path.clone())
+            .map(|entry| (entry.tree_path.clone(), reservation_id(entry)))
             .collect()
     }
 
@@ -356,6 +361,12 @@ impl RepairGuard {
         leases: &[crate::leases::SessionLease],
         scope: &str,
     ) -> Result<Option<&RepairEntry>> {
+        anyhow::ensure!(
+            !crate::lane_liveness::seat_has_recorded_worker(main, seat)?,
+            "recorded worker owns {}; after the worker exits retry `aida queue work {} --fresh`",
+            seat.display(),
+            crate::shell_quote(scope)
+        );
         let mut reservation = None;
         for entry in self.journal.entries.iter().filter(|entry| {
             entry.spawn != SpawnOutcome::ProvenDead
@@ -619,6 +630,7 @@ pub(crate) fn scan(main: &Path) -> Vec<crate::DoctorFinding> {
 pub(crate) struct UnvalidatedRepairPublication {
     pub pr: u64,
     pub route: String,
+    pub scope: String,
 }
 
 impl std::fmt::Display for UnvalidatedRepairPublication {
@@ -627,8 +639,8 @@ impl std::fmt::Display for UnvalidatedRepairPublication {
             f,
             "conflict repair for PR #{} refused on route `{}`: the merged tree has not passed \
              the host compile check, so nothing was published. Run the repair as a contained \
-             Codex lane, where the host checks, commits and publishes the merged tree",
-            self.pr, self.route
+             Codex lane, where the host checks, commits and publishes the merged tree: `aida queue work {} --vendor codex --sandbox --fresh --role implementer --no-human=both`",
+            self.pr, self.route, crate::shell_quote(&self.scope)
         )
     }
 }

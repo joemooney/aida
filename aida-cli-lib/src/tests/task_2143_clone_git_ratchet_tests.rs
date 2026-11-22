@@ -38,7 +38,7 @@ const RAW_GIT_ALLOWLIST: &[(&str, usize)] = &[
     ("aida-cli-lib/src/pr_service.rs", 3),
     ("aida-cli-lib/src/queue_cmd/done.rs", 1),
     ("aida-cli-lib/src/queue_cmd/recover.rs", 2),
-    ("aida-cli-lib/src/queue_cmd/work.rs", 1),
+    ("aida-cli-lib/src/queue_cmd/work.rs", 0),
     ("aida-cli-lib/src/seat_clone.rs", 2),
     ("aida-cli-lib/src/session_end.rs", 0),
     ("aida-cli-lib/src/session_reap.rs", 7),
