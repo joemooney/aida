@@ -1,0 +1,30 @@
+id: 01a20490-9910-7150-ba3d-e3cc2faf7290
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1208
+title: 'Review follow-up: .github/workflows/ci.yml comment above ''Verify self-hosted cargo-nextest location'', the ''L'
+description: |-
+  From STORY-2695
+  Reviewed sha: 1a5f69f0aeaa47e7162649b5cacf05b59d781ed5
+
+  .github/workflows/ci.yml comment above 'Verify self-hosted cargo-nextest location', the 'Local cache only' bullet in docs/internal/testing/dell1-runner.md and the fixture comment 'cargo runs the CARGO_HOME/bin copy before it searches PATH' in tests/test_self_hosted_runner.py say cargo always prefers CARGO_HOME/bin. Current cargo does so only when CARGO_HOME/bin is not on PATH; when it is on PATH, PATH order decides. The check refuses in that case too, so it is stricter than cargo and safe. Correct the wording so a later reader does not relax the check on a wrong premise.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-22T18:41:54.960717064Z
+modified_at: 2026-11-22T18:41:54.960717064Z
+req_type: Task
+tags:
+- carried-from:STORY-2695
+- finding-hash:56435f5a
+- from-review:STORY-2695
+relationships:
+- rel_type: References
+  target_id: 01a1c128-b15f-7a41-93b8-94877cd89088
+  created_at: 2026-11-22T18:41:54.960754005Z
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude

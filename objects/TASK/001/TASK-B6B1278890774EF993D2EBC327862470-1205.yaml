@@ -1,0 +1,30 @@
+id: 01a20490-989e-7040-95c5-2a892f507b1f
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1205
+title: 'Review follow-up: scripts/runner/select-job.py (not changed by this PR; found while checking the workflow ag'
+description: |-
+  From STORY-2695
+  Reviewed sha: 1a5f69f0aeaa47e7162649b5cacf05b59d781ed5
+
+  scripts/runner/select-job.py (not changed by this PR; found while checking the workflow against the controller contract): the selector proposes any queued heavy-shard job of a pull_request run whose head branch starts with train/, without checking the base branch, the head repository or the labels the job requested. With the new routing, a train/ pull request into integration or from a fork keeps its heavy shards on hosted runners, where they can sit queued for minutes; the selector still proposes them, controller.py admit refuses (foreign repository or PR head mismatch), and rearm.py exits its slot loop on that non-zero status. Follow-up: have the selector propose only jobs whose requested labels include aida-dell1 and the class label, with a fixture for a hosted-labelled train/ job.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-22T18:41:54.846293550Z
+modified_at: 2026-11-22T18:41:54.846293550Z
+req_type: Task
+tags:
+- carried-from:STORY-2695
+- finding-hash:a3b8ae31
+- from-review:STORY-2695
+relationships:
+- rel_type: References
+  target_id: 01a1c128-b15f-7a41-93b8-94877cd89088
+  created_at: 2026-11-22T18:41:54.846335287Z
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
