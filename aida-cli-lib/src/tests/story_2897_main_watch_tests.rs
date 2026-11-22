@@ -57,6 +57,7 @@ struct Fake {
     commits: Vec<Commit>,
     checks: HashMap<String, Vec<CommitCheck>>,
     jobs: HashMap<(String, String), JobReport>,
+    job_unavailable: bool,
     log_failures: usize,
     mails: Vec<(String, String, String)>,
     fail_mail: bool,
@@ -117,6 +118,7 @@ impl Ports for Fake {
         })
     }
     fn job(&mut self, run_id: &str, job: &str, _id: u64, _attempt: u64) -> Result<JobReport> {
+        anyhow::ensure!(!self.job_unavailable, "job unavailable");
         let mut report = self
             .jobs
             .get(&(run_id.to_string(), job.to_string()))
@@ -1170,4 +1172,101 @@ fn a_pending_first_candidate_survives_restart_and_a_later_green() {
     run(dir.path(), &mut fake);
     assert_eq!(count(dir.path(), "red_start"), 1);
     assert_eq!(count(dir.path(), "red_end"), 1);
+}
+
+#[test]
+fn replacement_lookup_retries_without_reporting_a_previous_jobs_log() {
+    let (dir, mut fake) = red_on_green();
+    let root = dir.path();
+    fake.log_failures = 2;
+    run(root, &mut fake);
+    fake.at(1);
+    run(root, &mut fake);
+    let logs = |fake: &Fake| {
+        fake.mails
+            .iter()
+            .filter(|(k, _, _)| k.contains("-evidence-"))
+            .count()
+    };
+    assert_eq!(logs(&fake), 2);
+
+    let mut replacement = check(BUILD, CheckOutcome::Failed, "200", 2);
+    replacement.job_id = Some(22);
+    fake.checks.insert(sha(2), vec![replacement]);
+    fake.job_unavailable = true;
+    fake.at(2);
+    run(root, &mut fake);
+    let mail = fake.mail(&format!("main-red-{}-confirmed", sha(2)));
+    assert!(mail.contains("evidence not read yet"));
+    assert!(!mail.contains("ci.example") && !mail.contains("Run tests") && !mail.contains("foo"));
+
+    fake.job_unavailable = false;
+    fake.jobs.insert(
+        ("200".into(), BUILD.into()),
+        JobReport {
+            link: "replacement-link".into(),
+            failed_steps: vec![],
+            excerpt: "replacement-log".into(),
+            log_complete: true,
+        },
+    );
+    fake.at(3);
+    run(root, &mut fake);
+    run(root, &mut fake);
+    assert_eq!(logs(&fake), 3);
+    assert!(fake.mails.last().unwrap().2.contains("replacement-log"));
+}
+
+#[test]
+fn a_green_tip_rerun_opens_an_episode_without_a_merge() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let mut fake = Fake::default();
+    fake.push(1, "base", green("100"));
+    fake.push(2, "tip", green("200"));
+    run(root, &mut fake);
+    fake.checks.insert(sha(2), red("200", 2));
+    fake.at(1);
+    run(root, &mut fake);
+    run(root, &mut fake);
+    let s = state(root);
+    let ep = s.episode.unwrap();
+    assert_eq!(ep.red_sha, sha(2));
+    assert_eq!(s.last_green, Some(sha(1)));
+    assert_eq!(ep.held_green, s.last_green);
+    assert_eq!(count(root, "red_start"), 1);
+    assert_eq!(fake.mails.len(), 1);
+}
+
+#[test]
+fn live_pass_preserves_stale_pure_git_configuration() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    for args in [
+        vec!["init", "-q"],
+        vec![
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/watch.git",
+        ],
+    ] {
+        assert!(crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    let land = land_dir(root).unwrap();
+    let config = root.join(".aida/config.toml");
+    let original = "[forge]\nprovider = \"pure-git\"\n";
+    std::fs::write(&config, original).unwrap();
+    // Exercise production provider selection, then stop before any network access.
+    let _lock = try_lock(&land).unwrap().unwrap();
+    assert!(live_pass(root)
+        .unwrap()
+        .iter()
+        .any(|n| n.contains("skipped")));
+    assert_eq!(std::fs::read_to_string(config).unwrap(), original);
 }

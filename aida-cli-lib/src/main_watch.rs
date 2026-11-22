@@ -120,6 +120,15 @@ pub(crate) struct FailedCheck {
 }
 
 impl FailedCheck {
+    fn matches_evidence(&self, e: &Evidence) -> bool {
+        self.workflow == e.workflow
+            && self.run_id.as_ref() == Some(&e.run_id)
+            && self.name == e.check
+            && self.attempt == Some(e.attempt)
+            && self.job_id.is_some()
+            && self.job_id == e.job_id
+    }
+
     fn key(&self) -> Option<String> {
         Some(format!(
             "{}:{}:{}:{}:{}",
@@ -800,6 +809,23 @@ pub(crate) fn pass(
         }
     }
 
+    if batch.is_empty() && state.episode.is_none() {
+        if let Some(tip) = recent.first() {
+            if state.cursor.as_ref() == Some(&tip.sha)
+                && matches!(judged(ports, tip), Verdict::Red { .. })
+            {
+                if state.last_green.as_ref() == Some(&tip.sha) {
+                    state.last_green = recent
+                        .iter()
+                        .skip(1)
+                        .find(|c| judged(ports, c) == Verdict::Green)
+                        .map(|c| c.sha.clone());
+                }
+                batch.push(tip.clone());
+            }
+        }
+    }
+
     for commit in batch {
         let verdict = judged(ports, &commit);
         if !matches!(verdict, Verdict::Pending(_)) {
@@ -914,22 +940,16 @@ fn probe(
                     job_id: Some(id),
                     workflow: f.workflow.clone(),
                     run_id: run.clone(),
-                    attempt: f.attempt.unwrap_or(0),
+                    attempt,
                     check: f.name.clone(),
                     link: report.link,
                     failed_steps: report.failed_steps,
                     excerpt: report.excerpt,
                     log_complete: report.log_complete,
                 };
-                let same = |e: &Evidence| {
-                    e.workflow == found.workflow
-                        && e.run_id == found.run_id
-                        && e.check == found.check
-                };
-                let had_log = episode.evidence.iter().any(|e| same(e) && e.log_complete);
                 if found.log_complete {
                     episode.evidence_keys.insert(key);
-                    if episode.alerted && !had_log {
+                    if episode.alerted {
                         late.push(found.clone());
                     }
                 } else {
@@ -938,7 +958,7 @@ fn probe(
                         f.name
                     ));
                 }
-                episode.evidence.retain(|e| !same(e));
+                episode.evidence.retain(|e| !f.matches_evidence(e));
                 episode.evidence.push(found);
             }
             Err(e) => notes.push(format!(
@@ -956,16 +976,7 @@ fn current_evidence(episode: &Episode) -> Vec<&Evidence> {
         .failed
         .iter()
         .chain(&episode.contributing)
-        .filter_map(|f| {
-            episode.evidence.iter().find(|e| {
-                e.workflow == f.workflow
-                    && Some(&e.run_id) == f.run_id.as_ref()
-                    && e.check == f.name
-                    && Some(e.attempt) == f.attempt
-                    && e.job_id.is_some()
-                    && e.job_id == f.job_id
-            })
-        })
+        .filter_map(|f| episode.evidence.iter().find(|e| f.matches_evidence(e)))
         .collect()
 }
 
@@ -990,9 +1001,7 @@ fn names(list: &[FailedCheck]) -> String {
 fn evidence_text(episode: &Episode) -> String {
     let mut out = String::new();
     for f in episode.failed.iter().chain(&episode.contributing) {
-        let found = episode.evidence.iter().find(|e| {
-            e.workflow == f.workflow && Some(&e.run_id) == f.run_id.as_ref() && e.check == f.name
-        });
+        let found = episode.evidence.iter().find(|e| f.matches_evidence(e));
         match found {
             Some(e) => {
                 out.push_str(&format!("- {} ({})\n", f.name, e.link));
@@ -1122,12 +1131,15 @@ fn advance(
         notify(
             state,
             format!(
-                "main-red-{}-evidence-{}-{}",
+                "main-red-{}-evidence-{}-{:x}",
                 episode.red_sha,
                 found.run_id,
-                found
-                    .check
-                    .replace(|c: char| !c.is_ascii_alphanumeric(), "-")
+                <sha2::Sha256 as sha2::Digest>::digest(serde_json::to_vec(&(
+                    &found.workflow,
+                    &found.check,
+                    found.attempt,
+                    found.job_id
+                ))?)
             ),
             format!(
                 "main red at {}: log of {}",
@@ -1647,7 +1659,7 @@ pub(crate) fn live_pass(root: &Path) -> Result<Vec<String>> {
         let policy = crate::landing_policy::load(root);
         let mut ports = Live {
             root: root.to_path_buf(),
-            forge: crate::forge::forge_for(root),
+            forge: crate::forge::forge_for_kind(root, crate::forge::peek_forge_kind(root)),
             pinned_tip: None,
             call_timeout: CALL_TIMEOUT,
         };
