@@ -9,7 +9,7 @@ use super::*;
 const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const MOVED: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const BRANCH: &str = "feature-7";
-const GET: &str = "github.com api --allow-escape-sequences repos/owner/repo/pulls/7";
+const GET: &str = "github.com api repos/owner/repo/pulls/7";
 
 /// One repository per scenario: `<tmp>/repo` with a GitHub origin, and the
 /// fake gh's fixture (`pr.json`) and call log (`calls.log`) beside it. The
@@ -177,9 +177,10 @@ fn bug_2690_real_update_branch_path_puts_once_and_refuses_every_guard() {
     crate::test_exec::write_executable(
         &gh,
         r#"#!/bin/sh
+[ "$*" = 'api --help' ] && exit 0
 printf '%s %s\n' "$GH_HOST" "$*" >> ../calls.log
 case "$*" in
-  'api --allow-escape-sequences repos/owner/repo/pulls/7') cat ../pr.json ;;
+  'api repos/owner/repo/pulls/7'|'api --allow-escape-sequences repos/owner/repo/pulls/7') cat ../pr.json ;;
   'api --method PUT repos/owner/repo/pulls/7/update-branch -f expected_head_sha='*) printf '{}' ;;
   *) exit 99 ;;
 esac
@@ -322,4 +323,67 @@ esac
     f.approve_at(MOVED);
     f.live().update_ci_base(&stale_pr()).unwrap();
     assert_eq!(f.puts().len(), 1, "an approval elsewhere does not protect");
+}
+
+// trace:BUG-2711 | ai:codex
+#[test]
+fn bug_2711_old_gh_reads_raw_bytes_and_probes_once() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    crate::test_exec::write_executable(
+        &f.temp.path().join("gh"),
+        r#"#!/bin/sh
+case "$*" in
+  'api --help') echo probe >> ../probes; echo 'Usage: gh api PATH' ;;
+  'api logs') printf '\033\377' ;;
+  *) exit 99 ;;
+esac
+"#,
+    );
+    let path = format!("{}:/usr/bin:/bin", f.temp.path().display());
+    let live = f.live();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
+    for _ in 0..2 {
+        assert_eq!(
+            crate::forge::landing_ci_api(&f.root, &live.repo, "logs").unwrap(),
+            [27, 255]
+        );
+    }
+    assert_eq!(
+        std::fs::read_to_string(f.temp.path().join("probes")).unwrap(),
+        "probe\n"
+    );
+}
+
+// trace:BUG-2711 | ai:codex
+#[test]
+fn bug_2711_installed_gh_supports_composed_argv() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let help = match std::process::Command::new("gh")
+        .args(["api", "--help"])
+        .output()
+    {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            eprintln!("Skipping installed gh argv check: gh is absent");
+            return;
+        }
+        result => result.unwrap(),
+    };
+    assert!(help.status.success());
+    let f = Fixture::new();
+    let args = crate::forge::landing_ci_args(&f.root, &f.live().repo, "logs");
+    let help = String::from_utf8(help.stdout).unwrap();
+    let expected = if help
+        .lines()
+        .any(|line| line.trim_start().starts_with("--allow-escape-sequences "))
+    {
+        vec!["api", "--allow-escape-sequences", "logs"]
+    } else {
+        vec!["api", "logs"]
+    };
+    assert_eq!(args, expected);
 }
