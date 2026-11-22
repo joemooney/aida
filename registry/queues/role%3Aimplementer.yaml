@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1e1a3-1172-71b3-8580-880a91c7e553
+  position: -960000
+  added_by: role:implementer
+  added_at: 2026-11-22T17:28:44.186598003Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1efba-fa3f-7992-95ff-43d1d3577827
   position: -959000
   added_by: role:implementer
@@ -16,13 +22,6 @@
   added_by: role:implementer
   note: The host prepared take-4380 at the existing PR head, but its legacy launcher refused contained Claude. The normal drain aborted before launch when it refused to adopt bug-2629-fresh. Restore the existing approved cap-exception rework to the implementer queue. The scope, exact-head review and merge hold remain in force.
   added_at: 2026-11-21T09:51:32.742429731Z
-  for_role: implementer
-- user_id: role:implementer
-  requirement_id: 01a1e1a3-1172-71b3-8580-880a91c7e553
-  position: -951000
-  added_by: role:implementer
-  note: PR-4387 at 509f5afbb29daaa8771237f5812e1aafd8e0493f conflicts with the protected base; resolve the conflict before review
-  added_at: 2026-11-21T01:14:02.887622492Z
   for_role: implementer
 - user_id: role:implementer
   requirement_id: 01a1f9b6-5637-7c23-9223-6c63e4f889f8
