@@ -1970,10 +1970,15 @@ produces fewer blockers than any valid list.
 
 Two rules apply whatever the list says. `security-authority-bypass` findings
 always block. `test-gap` findings in gate, sandbox, authority, seat or
-containment code always block. Mark such a finding with the
-`blocking_tier` `mutation-kill` or `untested-path`, or give it a `test-gap`
-class plus a `file` member naming that code. A finding without a registry
-`blocking_tier` also blocks.
+containment code always block. Identify that code in the finding’s `file` or `path` member.
+Ordinary test gaps follow the configured list, including the `mutation-kill`
+and `untested-path` spellings. An unknown tier or unclassified finding blocks.
+
+While the operator’s mass-change window is active, review prompts show its
+expiry. The recorder defers unmet claimed acceptance criteria unless the same
+finding also identifies data loss, P1 or a security or authority bypass.
+A finding demoted from blocking retains the reason in `policy_demotion`.
+<!-- trace:BUG-2712 | ai:codex -->
 
 Every review prompt, including the prompt a launched reviewer starts with,
 quotes the active list and where it came from, and

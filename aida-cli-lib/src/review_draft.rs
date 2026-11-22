@@ -837,6 +837,37 @@ mod standalone_review_verdict_parent_tests {
             before
         );
     }
+    // trace:BUG-2712 | ai:codex
+    #[test]
+    fn bug_2712_parent_records_deferred_acceptance_and_approval() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let f = Fixture::new();
+        let config = crate::mass_change::config_path(&f.root);
+        let original = std::fs::read_to_string(&config).unwrap_or_default();
+        std::fs::write(&config, format!("{original}\n[review]\nblocking_tiers = ['unmet-claimed-ac']\nmass_change_mode = 'on'\nmass_change_started_at = '{}'\n", chrono::Utc::now().to_rfc3339())).unwrap();
+        crate::review_blocking::commit_config_for_test(&f.root);
+        let launch = LaunchDraft::prepare(&f.root, 59, f.head.clone()).unwrap();
+        let finding = serde_json::json!({"text":"claimed acceptance gap", "severity":"major",
+            "blocking_tier":"unmet-claimed-ac", "disposition":"blocking"});
+        let body = serde_json::json!({"version":1,"pr":59,"reviewed_sha":f.head,
+            "verdict":"request-changes","summary":"complete child rationale","findings":[finding.to_string()]});
+        std::fs::write(&launch.path, body.to_string()).unwrap();
+        let draft = launch.read().unwrap();
+        let reviewer = f.reviewer().unwrap().with_draft(&launch, &draft).unwrap();
+        f.record(&draft.verdict, &draft.findings, Some(&reviewer))
+            .unwrap();
+        let stored = rv::read_current_verdict_object(&rv::verdict_path(&f.root, "PR-59")).unwrap();
+        assert_eq!(stored["verdict"], "approved");
+        let finding = &stored["finding_dispositions"][0];
+        assert_eq!(finding["disposition"], "deferred");
+        assert!(finding["policy_demotion"]
+            .as_str()
+            .unwrap()
+            .contains("mass-change"));
+    }
+
     /// A completed request-changes draft whose p2 finding the `["p1"]` list
     /// deferred was recorded as an approval. Replaying that same launch after
     /// the list became invalid, unreadable or newly blocking re-decides the

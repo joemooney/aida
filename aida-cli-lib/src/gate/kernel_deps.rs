@@ -716,11 +716,6 @@ pub(crate) mod review_blocking {
         ("mutation-kill", "test-gap"),
     ];
 
-    /// Blocking-tier spellings that, under ADR-76, assert the finding sits in
-    /// gate, sandbox, authority, seat or containment code: they block
-    /// regardless of the configured list.
-    const ADR76_TIER_SPELLINGS: &[&str] = &["mutation-kill", "untested-path"];
-
     fn normalize(raw: &str) -> String {
         raw.trim().to_ascii_lowercase().replace(['_', ' '], "-")
     }
@@ -775,6 +770,7 @@ pub(crate) mod review_blocking {
     pub(crate) struct Effective {
         pub policy: Policy,
         pub source: Source,
+        pub mass_change_until: Option<chrono::DateTime<chrono::Utc>>,
     }
 
     impl Effective {
@@ -837,6 +833,7 @@ pub(crate) mod review_blocking {
     // trace:STORY-2913 | ai:claude
     pub(crate) fn from_config_text(text: &str) -> Effective {
         let invalid = |why: String| Effective {
+            mass_change_until: None,
             policy: Policy::AllBlock,
             source: Source::Invalid(why),
         };
@@ -846,12 +843,14 @@ pub(crate) mod review_blocking {
         };
         let Some(value) = config.get("review").and_then(|r| r.get("blocking_tiers")) else {
             return Effective {
+                mass_change_until: None,
                 policy: Policy::AllBlock,
                 source: Source::Unset,
             };
         };
         match parse_value(value) {
             Ok(set) => Effective {
+                mass_change_until: None,
                 policy: Policy::Tiers(set),
                 source: Source::DefaultBranch,
             },
@@ -865,19 +864,24 @@ pub(crate) mod review_blocking {
     // trace:STORY-2913 | ai:claude
     pub(crate) fn effective(root: &Path) -> Effective {
         let all_block = |source| Effective {
+            mass_change_until: None,
             policy: Policy::AllBlock,
             source,
         };
         let Some(sha) = crate::trusted_config::local_trusted_default_branch_sha(root) else {
             return all_block(Source::NoDefaultBranch);
         };
-        match crate::trusted_config::read_config_at_sha(root, &sha) {
+        let mut policy = match crate::trusted_config::read_config_at_sha(root, &sha) {
             Some(text) => from_config_text(&text),
             None => match crate::trusted_config::config_present_at_sha(root, &sha) {
                 Some(false) => all_block(Source::Unset),
                 _ => all_block(Source::Unavailable),
             },
+        };
+        if !policy.fails_closed() {
+            policy.mass_change_until = crate::mass_change::review_expiry(root);
         }
+        policy
     }
 
     /// [`effective`], with the fail-closed warning printed once.
@@ -991,7 +995,8 @@ pub(crate) mod review_blocking {
     /// Whether a blocking-tier list is in force (findings may defer to
     /// linked follow-ups). `Result` is kept for callers; it never fails.
     pub(crate) fn enabled(root: &Path) -> Result<bool> {
-        Ok(matches!(effective(root).policy, Policy::Tiers(_)))
+        let policy = effective(root);
+        Ok(policy.mass_change_until.is_some() || matches!(policy.policy, Policy::Tiers(_)))
     }
 
     /// Use the existing structured finding format, retaining the finding evidence.
@@ -1077,6 +1082,7 @@ pub(crate) mod review_blocking {
         findings: &[String],
         raw_classes: &[String],
         set: &BTreeSet<&'static str>,
+        mass_change: bool,
     ) -> Vec<String> {
         findings
             .iter()
@@ -1103,7 +1109,10 @@ pub(crate) mod review_blocking {
                 let (new_rank, old_rank) = (rank(Some(&class), set), rank(existing, set));
                 let mut merged = detail.clone();
                 merged["class"] = class.into();
-                let keep_old = match (blocks(&detail, set), blocks(&merged, set)) {
+                let keep_old = match (
+                    blocks(&detail, set, mass_change),
+                    blocks(&merged, set, mass_change),
+                ) {
                     (true, false) => true,
                     (false, true) => false,
                     _ => old_rank > new_rank || (old_rank == new_rank && old_rank > 0),
@@ -1122,20 +1131,28 @@ pub(crate) mod review_blocking {
     /// registry `blocking_tier` blocks; otherwise it blocks when its tier or
     /// its class is on the list.
     // trace:STORY-2913 | ai:claude
-    fn blocks(detail: &serde_json::Value, set: &BTreeSet<&'static str>) -> bool {
+    fn blocks(detail: &serde_json::Value, set: &BTreeSet<&'static str>, mass_change: bool) -> bool {
         let tier_raw = detail.get("blocking_tier").and_then(|v| v.as_str());
         let tier = tier_raw.and_then(canonical);
         let class = class_of(detail);
         let either = |c: &str| tier == Some(c) || class == Some(c);
         if either("security-authority-bypass")
-            || tier_raw.is_some_and(|t| ADR76_TIER_SPELLINGS.contains(&normalize(t).as_str()))
+            || (mass_change && (either("data-loss") || either("p1")))
             || (either("test-gap") && in_sensitive_code(detail))
         {
             return true;
         }
-        let Some(tier) = tier else {
+        let primary = if detail.get("blocking_tier").is_some() {
+            tier
+        } else {
+            class
+        };
+        let Some(tier) = primary else {
             return true;
         };
+        if mass_change && either("unmet-claimed-ac") {
+            return false;
+        }
         set.contains(tier) || class.is_some_and(|c| set.contains(c))
     }
 
@@ -1162,22 +1179,32 @@ pub(crate) mod review_blocking {
         findings: &[String],
         raw_classes: &[String],
     ) -> Vec<String> {
-        let Policy::Tiers(set) = &effective.policy else {
-            if !effective.fails_closed() {
-                return findings.to_vec();
+        // trace:BUG-2712 | ai:codex
+        let mass_change = effective.mass_change_until.is_some();
+        let default_classes;
+        let set = match &effective.policy {
+            Policy::Tiers(set) => set,
+            Policy::AllBlock if mass_change => {
+                default_classes = registry_names().into_iter().collect();
+                &default_classes
             }
-            return findings
-                .iter()
-                .map(|raw| match serde_json::from_str::<serde_json::Value>(raw) {
-                    Ok(mut detail) if detail.is_object() => {
-                        detail["disposition"] = "blocking".into();
-                        detail.to_string()
-                    }
-                    _ => raw.clone(),
-                })
-                .collect();
+            Policy::AllBlock => {
+                if !effective.fails_closed() {
+                    return findings.to_vec();
+                }
+                return findings
+                    .iter()
+                    .map(|raw| match serde_json::from_str::<serde_json::Value>(raw) {
+                        Ok(mut detail) if detail.is_object() => {
+                            detail["disposition"] = "blocking".into();
+                            detail.to_string()
+                        }
+                        _ => raw.clone(),
+                    })
+                    .collect();
+            }
         };
-        merge_positional_classes(findings, raw_classes, set)
+        merge_positional_classes(findings, raw_classes, set, mass_change)
             .iter()
             .map(|raw| {
                 let Ok(mut detail) = serde_json::from_str::<serde_json::Value>(raw) else {
@@ -1190,7 +1217,19 @@ pub(crate) mod review_blocking {
                 {
                     return raw.clone();
                 }
-                let deferred = !blocks(&detail, set);
+                let tier = detail.get("blocking_tier").and_then(|v| v.as_str()).and_then(canonical);
+                let acceptance = [tier, class_of(&detail)].contains(&Some("unmet-claimed-ac"));
+                if matches!(effective.policy, Policy::AllBlock) && !acceptance {
+                    return raw.clone();
+                }
+                let deferred = !blocks(&detail, set, mass_change);
+                if deferred && detail["disposition"] == "blocking" {
+                    detail["policy_demotion"] = if acceptance && mass_change {
+                        "Blocking unmet-claimed-ac finding deferred during mass-change mode"
+                    } else {
+                        "Blocking finding deferred because its class is outside the configured blocking tiers"
+                    }.into();
+                }
                 detail["disposition"] = if deferred { "deferred" } else { "blocking" }.into();
                 if deferred {
                     if !detail

@@ -174,6 +174,22 @@ pub(crate) fn state(project_root: &Path) -> MassChangeState {
     state_at(&read_record(project_root), Utc::now())
 }
 
+/// Resolve the operator's shared clock without falling back to a review checkout.
+// trace:BUG-2712 | ai:codex
+pub(crate) fn review_expiry(root: &Path) -> Option<DateTime<Utc>> {
+    let main = match crate::seat_clone::main_for(root) {
+        crate::seat_clone::MainFor::Verified(main) => main,
+        crate::seat_clone::MainFor::Unverified(_) => return None,
+        crate::seat_clone::MainFor::NotAClone => {
+            crate::seat_occupancy::store::main_worktree_root(root).ok()?
+        }
+    };
+    match state(&main) {
+        MassChangeState::Active { expires_at, .. } => Some(expires_at),
+        _ => None,
+    }
+}
+
 /// THE consumer query: is mass-change mode in force right now? False when
 /// off, expired, or on-without-a-clock.
 #[allow(dead_code)] // the split-verdict consumer lands separately

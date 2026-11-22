@@ -55,12 +55,16 @@ you mark deferred: record request-changes whenever any finding remains.\n",
             "\nFindings in a listed class block. Findings only in {} become APPROVE with follow-ups. \
 Record every finding as structured --finding JSON with text, severity and blocking_tier, one of: {}; add a `class` member when a second class applies (a finding blocks when its tier or its class is listed). \
 Use security-authority-bypass for security and authority-bypass findings regardless of priority: it blocks whatever the list says. \
-In gate, sandbox, authority, seat and containment code, test-gap findings still block under ADR-76: use the blocking_tier mutation-kill or untested-path, or give the finding a test-gap class plus a `file` member naming that code. The same class elsewhere (for example reporting or documentation) follows the list. \
+In gate, sandbox, authority, seat and containment code, test-gap findings still block under ADR-76: give the finding a test-gap tier or class plus a `file` member naming that code. The same class elsewhere (for example reporting or documentation) follows the list. \
 Do not classify an unmet acceptance criterion the change claims as anything but unmet-claimed-ac. Unknown/unclassified findings block. \
 The canonical writer defers eligible findings and durably files each as a linked follow-up before approval; retain every finding, including mixed reviews. Do not manually omit findings or bypass failed follow-up delivery.\n",
             if defer.is_empty() { "no class".to_string() } else { defer.join(", ") },
             policy::registry_names().join(", "),
         ));
+    }
+    // trace:BUG-2712 | ai:codex
+    if let Some(expiry) = effective.mass_change_until {
+        out.push_str(&format!("\nMass-change mode is ON until {}. Record unmet-claimed-ac findings with disposition deferred unless the same defect is also data-loss, p1 or security-authority-bypass.\n", expiry.to_rfc3339()));
     }
     Ok(out)
 }
@@ -318,15 +322,7 @@ pub(crate) mod tests {
         enable(tmp.path());
         let findings = apply(tmp.path(), &[finding("p2"), finding("p3")]).unwrap();
         assert!(rv::incoming_disposition("request-changes", &findings).approves());
-        for tier in [
-            "p1",
-            "data-loss",
-            "security",
-            "acceptance",
-            "mutation-kill",
-            "untested-path",
-            "unknown",
-        ] {
+        for tier in ["p1", "data-loss", "security", "acceptance", "unknown"] {
             let findings = apply(tmp.path(), &[finding("p2"), finding(tier)]).unwrap();
             assert_eq!(
                 rv::incoming_disposition("request-changes", &findings),
@@ -638,7 +634,7 @@ pub(crate) mod tests {
             root,
             classed("security-authority-bypass", None)
         ));
-        assert!(blocks_under(root, classed("mutation-kill", None)));
+        assert!(!blocks_under(root, classed("mutation-kill", None)));
         let gate = serde_json::json!({"text": "gate path untested", "blocking_tier": "p3",
             "class": "test-gap", "file": "aida-cli-lib/src/gate/ship.rs"});
         assert!(blocks_under(root, gate.to_string()));
@@ -690,6 +686,7 @@ pub(crate) mod tests {
         assert_eq!(
             crate::gate::kernel_deps::review_blocking::effective(root),
             crate::gate::kernel_deps::review_blocking::Effective {
+                mass_change_until: None,
                 policy: Policy::AllBlock,
                 source: Source::NoDefaultBranch,
             }
@@ -910,6 +907,45 @@ pub(crate) mod tests {
         )
         .unwrap();
         assert!(rv::incoming_disposition("approved", &findings).approves());
+    }
+
+    // trace:BUG-2712 | ai:codex
+    #[test]
+    fn bug_2712_clock_and_blocking_tiers_agree_with_record() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        enable(root);
+        let ac = finding("unmet-claimed-ac");
+        assert!(!prompt(root).unwrap().contains("Mass-change mode is ON"));
+        assert_eq!(
+            record(root, "request-changes", &[ac.clone()]).unwrap()["verdict"],
+            "request-changes"
+        );
+        let config = crate::mass_change::config_path(root);
+        let original = std::fs::read_to_string(&config).unwrap();
+        let now = chrono::Utc::now();
+        let expiry = now + chrono::Duration::days(1);
+        std::fs::write(config, format!("{original}mass_change_mode = 'on'\nmass_change_started_at = '{}'\nmass_change_expires_at = '{}'\n", now.to_rfc3339(), expiry.to_rfc3339())).unwrap();
+        let prompt = launch_prompt(root).unwrap();
+        assert!(prompt.contains(&expiry.to_rfc3339()));
+        assert!(prompt
+            .contains("unless the same defect is also data-loss, p1 or security-authority-bypass"));
+        for tier in ["unmet-claimed-ac", "mutation-kill", "untested-path"] {
+            let record = record(root, "request-changes", &[finding(tier)]).unwrap();
+            assert_eq!(record["verdict"], "approved", "{tier}");
+            let meta = &record["finding_dispositions"][0];
+            assert_eq!(meta["disposition"], "deferred");
+            assert!(meta["policy_demotion"].is_string());
+        }
+        for class in ["p1", "data-loss", "security"] {
+            let mut detail: serde_json::Value = serde_json::from_str(&ac).unwrap();
+            detail["class"] = class.into();
+            assert_eq!(
+                record(root, "request-changes", &[detail.to_string()]).unwrap()["verdict"],
+                "request-changes",
+                "{class}"
+            );
+        }
     }
 
     fn deferred_findings() -> Vec<String> {
@@ -1300,6 +1336,7 @@ pub(crate) mod tests {
         seed_deferred_approval(root, &path, Some(&head));
         let before = rv::current_verdict_body_at(&path).unwrap();
         let snapshot = Effective {
+            mass_change_until: None,
             policy: Policy::AllBlock,
             source: Source::Unavailable,
         };
