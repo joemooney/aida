@@ -1,0 +1,18 @@
+{
+  "id": "5d689814-9b08-4041-9f4d-702a3b28d9a2",
+  "thread_id": "5d689814-9b08-4041-9f4d-702a3b28d9a2",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795383385246,
+  "body": "- [STUCK-MERGE] #4393 is approved at ee92eaab and has not landed for 37 min (approved at 791775d2d99c, carried over clean merges of `main`)\n  -> land #4393 (the reconciler shows READY: add to next train)\n- [STUCK-REWORK] #4387 has changes requested at d1282e70 (round 1) and no lane or session on it for 98 min\n  -> route rework of #4387 to a lane\n- [STUCK-REWORK] #4388 has changes requested at 63e760c5 (round 4) and no lane or session on it for 44 min\n  -> rule on #4388: 4 content rounds of requested changes; needs an advisor ruling\n- [STUCK-CONFLICT] #4376 at 660c0e87 conflicts with its base and nobody owns it, for 49 min\n  -> route a lane to resolve the conflict on #4376\n- [STUCK-CONFLICT] #4378 at 4602d292 conflicts with its base and nobody owns it, for 49 min\n  -> route a lane to resolve the conflict on #4378\n\n8 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 5 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
