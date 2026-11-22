@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-22T23:49:41.284534706Z
+modified_at: 2026-11-22T23:53:21.483018295Z
 req_type: Bug
 tags:
 - mass-change
@@ -172,6 +172,18 @@ comments:
   content: PR-4396 at 2cf202f09fc60bc85e3c8e088a24372728349b2a conflicts with the protected base; resolve the conflict before review
   created_at: 2026-11-22T23:06:17.536667257Z
   modified_at: 2026-11-22T23:06:17.536667257Z
+- id: 01a205ad-ec81-7d80-9b50-fc67776e5d3c
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:53):
+    # BUG-2712 / PR #4396: CONFLICT REPAIR ONLY (advisor-122 ruling 2026-11-22 16:55 MST; relayed by product-15). Lane: CODEX.
+
+    PR #4396 conflicts with main. Merge origin/main into the existing branch and resolve the conflicts, keeping main's changes plus this PR's intent (mass-change deferral plus out-of-tier demotion, with the ADR-76 strict-tier floor preserved). No rebase, no force-push, no new scope.
+    cargo fmt; one targeted cargo run of the tests in the conflicted files; `make check-ci-fast`; push. COMMIT your work.
+  created_at: 2026-11-22T23:53:21.483018295Z
+  modified_at: 2026-11-22T23:53:21.483018295Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
