@@ -9,12 +9,12 @@ description: |
   - AC1: Requests carrying a negative sender pidfd (-1, -2 and INT_MIN-like values) are refused before any dispatch, with a clear error.
   - AC2: close() is called only on fds that were validly received. A test asserts no close on the refused values.
   - AC3: A valid pidfd request still dispatches (positive control).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:50.241345704Z
-modified_at: 2026-11-22T23:49:50.931339975Z
+modified_at: 2026-11-22T23:55:21.541275838Z
 req_type: Bug
 tags:
 - authority
@@ -52,6 +52,11 @@ comments:
   content: 'Product code inspection of main (2026-11-22 16:50, per the advisor-122 16:55 ruling): the AUTHORIZATION part is already safe on main. A negative SCM_PIDFD value reaches Identity.check(sender_fd=...), where poll.register(sender_fd) raises ValueError, caught at aida-cli-lib/src/store_mutation/service.py:225-226, so check() returns False and dispatch is refused (lines 206-207, 284/296). But AC2 is a REAL defect on main: the finally block at service.py:372-373 calls os.close() on every collected sender fd, including a negative one (the kernel delivers a negative errno in SCM_PIDFD when pidfd creation fails). That raises OSError out of poll(), which can kill the broker loop (availability, not authority). Re-scope: AC1/AC3 are already satisfied on main; AC2 (close only valid fds; a negative value doesn''t crash the loop) is unit-testable by driving poll() with a stub channel whose recvmsg returns an SCM_PIDFD cmsg holding -1. No special host is needed.'
   created_at: 2026-11-22T23:49:48.505708208Z
   modified_at: 2026-11-22T23:49:48.505708208Z
+- id: 01a205af-9045-7ee0-b6fb-7e8cda3d037b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: blocked-dependency: The brief requires a failing reproduction of an authorization bypass on main before any fix. This lane cannot exercise that bypass. Reproduction remains unverified. Supply independently obtained failure evidence and authorize proceeding from it.. No triage reason was given.'
+  created_at: 2026-11-22T23:55:21.541271529Z
+  modified_at: 2026-11-22T23:55:21.541271529Z
 history:
 - id: 01a2052b-d43c-7761-9620-191b4708745f
   author: joe
@@ -83,6 +88,13 @@ history:
   - field_name: tags
     old_value: authority, from-work-ci, security, store-mutation, strict
     new_value: authority, from-work-ci, robustness, store-mutation, strict
+- id: 01a205af-9045-7ee0-b6fb-7e70ddf2ea7e
+  author: joe
+  timestamp: 2026-11-22T23:55:21.541259266Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -90,8 +102,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
-attention_reason:
-  category: blocked-dependency
-  detail: The brief requires a failing reproduction of an authorization bypass on main before any fix. This lane cannot exercise that bypass. Reproduction remains unverified. Supply independently obtained failure evidence and authorize proceeding from it.
-  raised_by: implementer
-  raised_at: 2026-11-22T21:56:58.625173632Z
