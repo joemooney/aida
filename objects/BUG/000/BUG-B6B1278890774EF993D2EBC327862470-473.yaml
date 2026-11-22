@@ -2,29 +2,22 @@ id: 01a204b5-7e8d-7833-baec-b160042a8c66
 spec_id: BUG-b6b1278890774ef993d2ebc327862470-473
 agreed_id: BUG-2712
 title: 'Mass-change mode defers nothing: reviewers are never told the mode is on and the recorder never demotes unmet-claimed-ac findings'
-description: 'Found by the advisor (claude-advisor-122, 2026-11-22 12:22 MST). Mass-change mode is ON (set by the operator until 2026-11-25 19:10 UTC; unmet-claimed-AC findings should defer, while data loss, p1 and security still block), but it has deferred NOTHING. The #4382 reviewer at 0dd153cd marked five findings unmet-claimed-ac as "blocking", and the finding corpus shows 0 deferred findings open. Per the advisor, the reviewer prompt/draft path (mode orchestrator-phase-3) never tells the reviewer the mode is on, and the recorder never demotes. So the mode has no effect, and capped PRs keep cycling.
-
+description: |
+  Found by the advisor (claude-advisor-122, 2026-11-22 12:22 MST). Mass-change mode is ON (set by the operator until 2026-11-25 19:10 UTC; unmet-claimed-AC findings should defer, while data loss, p1 and security still block), but it has deferred NOTHING. The #4382 reviewer at 0dd153cd marked five findings unmet-claimed-ac as "blocking", and the finding corpus shows 0 deferred findings open. Per the advisor, the reviewer prompt/draft path (mode orchestrator-phase-3) never tells the reviewer the mode is on, and the recorder never demotes. So the mode has no effect, and capped PRs keep cycling.
 
   Interim workaround (advisor): every reviewer launch brief carries "Mass-change mode is ON until 2026-11-25 19:10 UTC: record unmet-claimed-ac findings as disposition deferred unless the same defect is also data-loss, p1 or security-authority-bypass."
 
-
   ## Acceptance
-
   - AC1: While mass-change mode is active, the composed reviewer prompt states the mode, its expiry, and that unmet-claimed-ac findings are deferred unless they are also data-loss, p1 or security-authority-bypass.
-
   - AC2: Defense in depth: while the mode is active, the verdict recorder demotes an unmet-claimed-ac finding marked blocking (and not also p1, data-loss or security) to deferred, and records that the demotion happened.
-
   - AC3: With the mode off, prompt and recorder behaviour are unchanged (a test covers both states).
-
   - AC4: A regression test records a verdict with one unmet-claimed-ac blocking finding under the mode and asserts disposition deferred plus an approve-eligible verdict.
-
-  '
 status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-22 19:22:13.005269+00:00
-modified_at: 2026-11-22 20:03:44.973251+00:00
+created_at: 2026-11-22T19:22:13.005269Z
+modified_at: 2026-11-22T20:33:35.360614543Z
 req_type: Bug
 tags:
 - mass-change
@@ -35,124 +28,113 @@ comments:
 - id: 01a204b8-370d-7752-8e4b-0925ca4ca85a
   author: joe
   content: 'Advisor-122 12:26 addition (relayed by product-15): AC5. The recorder must also demote to deferred any finding marked blocking whose class is not in the configured blocking-tier list (data-loss, p1, security-authority-bypass, unmet-claimed-ac). Today such classes (mutation-kill, untested-path) block, as on PR-4387 at aa380d29. Brief: .aida/tmp/brief-BUG-2712-1222.md'
-  created_at: 2026-11-22 19:24:58.581879+00:00
-  modified_at: 2026-11-22 19:24:58.581879+00:00
+  created_at: 2026-11-22T19:24:58.581879Z
+  modified_at: 2026-11-22T19:24:58.581879Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a204b9-d6da-7912-b390-e7c20aa14d35
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:26):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:26):
     # BUG-2712: P1 throughput fix (advisor-122 ruling 2026-11-22 12:22/12:26 MST; relayed by product-15). Lane: CODEX. New branch, new PR.
 
-
     Mass-change mode is ON (operator, until 2026-11-25 19:10 UTC) but defers nothing. Read `aida show BUG-2712` for the ACs. Locate the mode config and the reviewer prompt/draft path with rg (e.g. `rg -n "mass.change|mass_change" aida-core aida-cli-lib`).
-
     1. While the mode is active, the composed reviewer prompt states its expiry and the rule: unmet-claimed-ac findings are recorded with disposition deferred unless the same defect is also data-loss, p1 or security-authority-bypass.
-
     2. Recorder defense in depth (the verdict-record path): while the mode is active, demote a blocking unmet-claimed-ac finding that is not also p1/data-loss/security to deferred, and note the demotion in the record.
-
     3. ALSO (advisor 12:26): at all times, demote to deferred any finding marked blocking whose class is NOT in the configured blocking-tier list (e.g. mutation-kill, untested-path), and note why. Such findings currently block despite project policy (PR #4387 at aa380d29).
-
     4. Mode off: prompt and recorder unchanged except point 3. Tests cover mode on, mode off, and an out-of-tier class.
-
-    Keep the diff tight. Add `// trace:BUG-2712 | ai:codex`. Commit `[AI:codex] fix(review): ... (BUG-2712)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.'
-  created_at: 2026-11-22 19:26:45.128207+00:00
-  modified_at: 2026-11-22 19:26:45.128207+00:00
+    Keep the diff tight. Add `// trace:BUG-2712 | ai:codex`. Commit `[AI:codex] fix(review): ... (BUG-2712)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-22T19:26:45.128207Z
+  modified_at: 2026-11-22T19:26:45.128207Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a204c9-0195-70e3-bd2a-ea6ee46f3625
   author: dirtlab
-  content: '## Implementer self-review
-
+  content: |-
+    ## Implementer self-review
     Reviewed HEAD: aa567732958f669b69ec5848863ea0b13c800db5 plus native working-tree diff. Empty origin/main...HEAD diff and no untracked files.
-
     AC1: [evidence: behavioral-test] review_blocking.rs:914 checks the reviewer policy text, expiry and exceptions.
-
     AC2: [evidence: behavioral-test] review_blocking.rs:914 exercises demotion and protected secondary classes, and checks the reason survives.
-
     AC3: [evidence: behavioral-test] review_blocking.rs:914 checks the inactive prompt and request-changes result.
-
     AC4: [evidence: behavioral-test] review_draft.rs:842 records the parent verdict for a blocking draft finding and reads back approval, deferred disposition and the demotion reason.
-
     AC5: [evidence: behavioral-test] review_blocking.rs:914 verifies ordinary mutation-kill and untested-path findings defer. Partial pending operator resolution of conflict with the ADR-76 sensitive-path floor. Punted.
-
     Cross-reference and format probes checked normalized aliases and the draft JSON string boundary. Multiplicity review checked routing for per-finding dispositions and existing mixed findings. Authority review traced the live clock to the shared main checkout and the tier list to the default branch, including the existing invalid-list fail-closed path. Existing strict path refusal coverage includes task_3814_sensitive_class_aliases_keep_p2_blocking. The working implementation preserves that refusal. Local mode reported OFF.
-
-    Targeted lane job j20261122T193319348-2-0 ran 2 tests, both passed. Rustfmt and diff whitespace checks passed. FAST stopped at test-speed tooling because cargo metadata is unsupported by the native lane runner. No exact-head CI or publication.'
-  created_at: 2026-11-22 19:43:31.146661+00:00
-  modified_at: 2026-11-22 19:43:31.146661+00:00
+    Targeted lane job j20261122T193319348-2-0 ran 2 tests, both passed. Rustfmt and diff whitespace checks passed. FAST stopped at test-speed tooling because cargo metadata is unsupported by the native lane runner. No exact-head CI or publication.
+  created_at: 2026-11-22T19:43:31.146661Z
+  modified_at: 2026-11-22T19:43:31.146661Z
   session_id: 01a204bc9eec
   harness_version: codex-cli 0.167.0
 - id: 01a204ca-3797-70f0-b308-de31e2db432e
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-473` at head `aa567732958f669b69ec5848863ea0b13c800db5`.'
-  created_at: 2026-11-22 19:44:51.095580+00:00
-  modified_at: 2026-11-22 19:44:51.095580+00:00
+  created_at: 2026-11-22T19:44:51.095580Z
+  modified_at: 2026-11-22T19:44:51.095580Z
   session_id: 01a204bc9eec
 - id: 01a204ca-66f5-7293-9a6d-fe6b3e77a73a
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-473` at head `aa567732958f669b69ec5848863ea0b13c800db5`.'
-  created_at: 2026-11-22 19:45:03.221136+00:00
-  modified_at: 2026-11-22 19:45:03.221136+00:00
+  created_at: 2026-11-22T19:45:03.221136Z
+  modified_at: 2026-11-22T19:45:03.221136Z
   session_id: 01a204bc9eec
 - id: 01a204d7-fae9-75c0-b32e-5423d7a88473
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-473` at head `5779904749c78b17d40d230405fa24d8a7c9b6da`.'
-  created_at: 2026-11-22 19:59:53.065565+00:00
-  modified_at: 2026-11-22 19:59:53.065565+00:00
+  created_at: 2026-11-22T19:59:53.065565Z
+  modified_at: 2026-11-22T19:59:53.065565Z
 - id: 01a204d8-6fa9-7612-bf03-ff3e29bf5b55
   author: lane-recovery
   content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-473` at head `5779904749c78b17d40d230405fa24d8a7c9b6da`.'
-  created_at: 2026-11-22 20:00:22.953449+00:00
-  modified_at: 2026-11-22 20:00:22.953449+00:00
+  created_at: 2026-11-22T20:00:22.953449Z
+  modified_at: 2026-11-22T20:00:22.953449Z
 - id: 01a204d9-2b70-7533-bc0e-22e11319fa60
   author: joe
   content: 'AC AMENDMENT (advisor-122 ruling 2026-11-22 13:00 MST under Joe''s delegated authority; recorded by product-15). AC5 amended: out-of-tier classes are demoted to deferred ONLY in the standard tier. The ADR-76 strict tier (sandbox/confinement, authority/grants/identity, credentials, gate/guard, lease/claim safety) keeps blocking on mutation-kill, untested-path, fail-open, race and incomplete-fix. AC1/AC2 amended: mass-change''s unmet-claimed-ac deferral applies only where the finding is not also a strict-tier fail-open, race or data-loss. The punted lane''s work is saved as wip commit 5779904749 on bug-b6b1278890774ef993d2ebc327862470-473.'
-  created_at: 2026-11-22 20:01:11.024329+00:00
-  modified_at: 2026-11-22 20:01:11.024329+00:00
+  created_at: 2026-11-22T20:01:11.024329Z
+  modified_at: 2026-11-22T20:01:11.024329Z
 - id: 01a204d9-c04c-7bd0-b338-b65377a58a30
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: AC5 requires every out-of-list finding to defer, including mutation-kill and untested-path. Approved operator ADR-76 requires those same findings to block in gate and sensitive code even when the configured list omits test-gap. The working patch defers ordinary gaps but preserves that path-scoped refusal. Please settle precedence for a finding with explicit sensitive file evidence.. No triage reason was given.'
-  created_at: 2026-11-22 20:01:49.132707+00:00
-  modified_at: 2026-11-22 20:01:49.132707+00:00
+  created_at: 2026-11-22T20:01:49.132707Z
+  modified_at: 2026-11-22T20:01:49.132707Z
 - id: 01a204db-b66d-78c0-87b8-89713b39bffc
   author: joe
-  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:03):
-
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:03):
     # BUG-2712: RESUME and ship (advisor-122 ruling 2026-11-22 13:00 MST; relayed by product-15). Lane: CODEX. New PR from the existing branch.
 
-
     The previous codex lane implemented AC1-AC5 (6 files, +171/-41, targeted tests passing), then punted on an AC5 conflict with the ADR-76 sensitive-path floor. Its work is now committed on this branch as 5779904749 (a wip commit). Start from it; do not redo it.
-
-    RULING, the ADR-76 floor wins. ADR-76 is Joe''s 2026-10-13 decision: the strict tier (sandbox/confinement, authority/grants/identity, credentials, gate/guard, lease/claim safety) blocks on mutation-kill, untested-path, fail-open, race and incomplete-fix. So:
-
+    RULING, the ADR-76 floor wins. ADR-76 is Joe's 2026-10-13 decision: the strict tier (sandbox/confinement, authority/grants/identity, credentials, gate/guard, lease/claim safety) blocks on mutation-kill, untested-path, fail-open, race and incomplete-fix. So:
     - AC5 demotes out-of-tier classes ONLY in the standard tier. Strict-tier findings with those classes stay blocking. task_3814_sensitive_class_aliases_keep_p2_blocking must keep passing.
-
-    - Mass-change''s unmet-claimed-ac deferral (AC1/AC2) applies only where the finding is NOT also a strict-tier fail-open, race or data-loss.
-
-    Add tests: a strict-tier mutation-kill stays blocking, a standard-tier mutation-kill defers, and a strict-tier fail-open unmet-AC stays blocking under mass-change. Reword the wip commit or add a fix commit as `[AI:codex] fix(review): ... (BUG-2712)`. One targeted cargo run, then `make check-ci-fast`, then ship a NEW PR. COMMIT your work.'
-  created_at: 2026-11-22 20:03:44.973251+00:00
-  modified_at: 2026-11-22 20:03:44.973251+00:00
+    - Mass-change's unmet-claimed-ac deferral (AC1/AC2) applies only where the finding is NOT also a strict-tier fail-open, race or data-loss.
+    Add tests: a strict-tier mutation-kill stays blocking, a standard-tier mutation-kill defers, and a strict-tier fail-open unmet-AC stays blocking under mass-change. Reword the wip commit or add a fix commit as `[AI:codex] fix(review): ... (BUG-2712)`. One targeted cargo run, then `make check-ci-fast`, then ship a NEW PR. COMMIT your work.
+  created_at: 2026-11-22T20:03:44.973251Z
+  modified_at: 2026-11-22T20:03:44.973251Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a204f7-07ff-7700-9073-d106a6d21a9d
+  author: joe
+  content: 'AC6 (advisor-122 ruling 2026-11-22 13:36 MST; recorded by product-15): `aida review mode mass-change on` (or whatever verb sets the mode) must write the setting where the fleet reads it, as a committed config change or in the store, or at minimum warn that a local-only edit to .aida/config.toml is invisible to reviewers and lanes, which resolve config from their own checkout. The mode status output must report the scope (local-only vs fleet-visible). Evidence: the mode was on only as an uncommitted primary-checkout edit from 19:10Z, and every reviewer and lane read it OFF. Interim fix: a config PR commits the four lines.'
+  created_at: 2026-11-22T20:33:35.360614543Z
+  modified_at: 2026-11-22T20:33:35.360614543Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
-  timestamp: 2026-11-22 19:30:20.762735+00:00
+  timestamp: 2026-11-22T19:30:20.762735Z
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a204bd-d448-7d53-9d43-8b223f1b2456
   author: dirtlab
-  timestamp: 2026-11-22 19:31:19.240912+00:00
+  timestamp: 2026-11-22T19:31:19.240912Z
   session_id: 01a204bc9eec
   harness_version: codex-cli 0.167.0
   changes: []
 - id: 01a204c1-b2e0-7232-9bd3-4df2fae8ba13
   author: dirtlab
-  timestamp: 2026-11-22 19:35:32.832743+00:00
+  timestamp: 2026-11-22T19:35:32.832743Z
   session_id: 01a204bc9eec
   harness_version: codex-cli 0.167.0
   changes:
@@ -161,7 +143,7 @@ history:
     new_value: NeedsAttention
 - id: 01a204d9-c04c-7bd0-b338-b647aa5fa1cd
   author: joe
-  timestamp: 2026-11-22 20:01:49.132691+00:00
+  timestamp: 2026-11-22T20:01:49.132691Z
   changes:
   - field_name: status
     old_value: NeedsAttention
@@ -178,4 +160,4 @@ attention_reason:
   detail: AC5 requires every out-of-list finding to defer, including mutation-kill and untested-path. Approved operator ADR-76 requires those same findings to block in gate and sensitive code even when the configured list omits test-gap. The working patch defers ordinary gaps but preserves that path-scoped refusal. Please settle precedence for a finding with explicit sensitive file evidence.
   lean: Keep the ADR-76 path-scoped floor and apply the configured list to ordinary gaps.
   raised_by: implementer
-  raised_at: 2026-11-22 19:35:32.277952+00:00
+  raised_at: 2026-11-22T19:35:32.277952Z
