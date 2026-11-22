@@ -14,12 +14,12 @@ description: |
   Impact: anything that reads the ledger before the last write lands sees request-changes for an approval the operator recorded, and the round counter inflates ("round 6").
 
   Acceptance: (1) one `review record --verdict approved` produces exactly one verdict ledger event for the spec. (2) A no-op "unchanged" record writes no ledger event. (3) Regression test covering a prior sweep_pending barrier.
-status: Done
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-22T18:42:34.062861476Z
+modified_at: 2026-11-22T21:16:07.434981300Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -839,6 +839,13 @@ history:
   author: joe
   timestamp: 2026-11-21T08:40:10.686102695Z
   changes: []
+- id: 01a2051d-c811-7770-9576-a55652b4efe3
+  author: joe
+  timestamp: 2026-11-22T21:16:07.569384842Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2
@@ -853,3 +860,4 @@ implementation_info:
   implemented: true
   implemented_at: 2026-11-20T23:55:59.956619423Z
   implemented_by: dirtlab
+  reopened_at_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
