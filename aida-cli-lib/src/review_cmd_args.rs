@@ -233,6 +233,16 @@ pub enum ReviewCommand {
         json: bool,
     },
 
+    /// Submit a standalone reviewer's draft verdict (the reviewer runs this).
+    ///
+    /// Write draft.json in the launch directory and run this command. Fix any reported errors and retry. After validation succeeds, exit so the launcher can recheck and record the current draft.
+    // trace:BUG-2707 | ai:claude
+    SubmitDraft {
+        /// The launch directory the review prompt named.
+        #[clap(value_name = "LAUNCH_DIR")]
+        launch_dir: std::path::PathBuf,
+    },
+
     /// One-time repair: expand every abbreviated `reviewed_sha` on disk to
     /// its full commit sha where this repo can still resolve it, and mark
     /// the rest explicitly unresolvable. Never invents a value and never
