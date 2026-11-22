@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T01:28:48.707703433Z
-modified_at: 2026-11-21T06:41:31.944812771Z
+modified_at: 2026-11-22T17:38:56.120249641Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
@@ -385,6 +385,24 @@ comments:
   content: 'Product landing-health evidence for #4376 at 190513dc5b. Both FAST gates 136664509541 and FAST compile 136664509542 fail the structural-selection cover. The new bug_2669_a_writable_mount_above_the_receipt_store_is_resealed_read_only test in containment/tests/launch_tests.rs has no classification. The two failing assertions report the same missing entry. Classify it in the existing structural selection according to its fixture scope before rerunning CI. This head still needs independent review. CI: https://github.com/joemooney/aida/actions/runs/44845618874/job/136664509542'
   created_at: 2026-11-21T06:41:31.944812771Z
   modified_at: 2026-11-21T06:41:31.944812771Z
+- id: 01a20457-2128-7a21-a21b-1a4333515fea
+  author: joe
+  content: |-
+    AUTHORITATIVE CI-FIX BRIEF (advisor-122, relayed by product 10:38):
+    # BUG-2669 / PR #4376: CI-fix lane (advisor-122 routing 2026-11-22 10:30 MST; relayed by product-15). Lane: CODEX.
+
+    There are no review findings yet. Head 190513dc fails fast compile, fast gates and Build. Fix CI only, without changing behavior:
+    1. The new test containment/tests/launch_tests.rs::bug_2669_a_writable_mount_above_the_receipt_store_is_resealed_read_only is not registered in aida-ci-guards/lib.rs / scripts/ratchet-set.json (test_ci_structural_guards fails). Register it.
+    2. The markers in docs/internal/architecture/external-tool-output-classifiers.md do not match the tree. Regenerate or fix them so the marker check passes.
+    3. Also fix whatever turns fast compile red on this head (read the failing job log with `gh run view --log-failed`).
+    Then: `make check-ci-fast` green, push. Review follows once CI is green.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-22T17:38:56.120249641Z
+  modified_at: 2026-11-22T17:38:56.120249641Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec46-45e5-72e3-8645-2cdc6b3ac56e
   author: joe
