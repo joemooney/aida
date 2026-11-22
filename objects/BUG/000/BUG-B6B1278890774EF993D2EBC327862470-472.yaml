@@ -19,13 +19,28 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T18:45:04.006084804Z
-modified_at: 2026-11-22T18:45:04.006084804Z
+modified_at: 2026-11-22T18:46:45.883663970Z
 req_type: Bug
 tags:
 - fasttrack
 - forge
 - landing
 - p1
+comments:
+- id: 01a20495-3c5c-79c0-96a6-0b54d1bbeba4
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 11:46):
+    # BUG-2711: fasttrack fix, P1 (advisor-122 2026-11-22 11:44 MST; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    aida-cli-lib/src/forge.rs:2316 `landing_ci_api` runs `gh api --allow-escape-sequences PATH`. gh 2.81.0 (installed on imac) rejects the flag with "unknown flag", so every CI-evidence read fails and every PR reads UNKNOWN. dell1 has gh 2.103.3. Read the spec's ACs (`aida show BUG-2711`).
+    Fix: probe once per process whether `gh api --help` lists --allow-escape-sequences, and pass it only when supported. Do not just drop it, since newer gh may need it to keep raw log bytes.
+    Update the fake-gh fixtures in aida-cli-lib/src/tests/bug_2690_land_update_branch_tests.rs (lines 12 and 182) and story_2768_land_tests.rs (907-908) to accept both argv shapes. Add a test for the without-flag path, and one that checks the composed argv against the real `gh api --help` (skip clearly when gh is absent).
+    Keep the diff small. Add `// trace:BUG-2711 | ai:codex`. Commit as `[AI:codex] fix(forge): ... (BUG-2711)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-22T18:46:45.883663970Z
+  modified_at: 2026-11-22T18:46:45.883663970Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
