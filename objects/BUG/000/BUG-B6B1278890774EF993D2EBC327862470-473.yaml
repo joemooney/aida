@@ -17,7 +17,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269342Z
-modified_at: 2026-11-22T19:24:58.581879612Z
+modified_at: 2026-11-22T19:26:45.128207333Z
 req_type: Bug
 tags:
 - mass-change
@@ -30,6 +30,22 @@ comments:
   content: 'Advisor-122 12:26 addition (relayed by product-15): AC5. The recorder must also demote to deferred any finding marked blocking whose class is not in the configured blocking-tier list (data-loss, p1, security-authority-bypass, unmet-claimed-ac). Today such classes (mutation-kill, untested-path) block, as on PR-4387 at aa380d29. Brief: .aida/tmp/brief-BUG-2712-1222.md'
   created_at: 2026-11-22T19:24:58.581879612Z
   modified_at: 2026-11-22T19:24:58.581879612Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a204b9-d6da-7912-b390-e7c20aa14d35
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:26):
+    # BUG-2712: P1 throughput fix (advisor-122 ruling 2026-11-22 12:22/12:26 MST; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Mass-change mode is ON (operator, until 2026-11-25 19:10 UTC) but defers nothing. Read `aida show BUG-2712` for the ACs. Locate the mode config and the reviewer prompt/draft path with rg (e.g. `rg -n "mass.change|mass_change" aida-core aida-cli-lib`).
+    1. While the mode is active, the composed reviewer prompt states its expiry and the rule: unmet-claimed-ac findings are recorded with disposition deferred unless the same defect is also data-loss, p1 or security-authority-bypass.
+    2. Recorder defense in depth (the verdict-record path): while the mode is active, demote a blocking unmet-claimed-ac finding that is not also p1/data-loss/security to deferred, and note the demotion in the record.
+    3. ALSO (advisor 12:26): at all times, demote to deferred any finding marked blocking whose class is NOT in the configured blocking-tier list (e.g. mutation-kill, untested-path), and note why. Such findings currently block despite project policy (PR #4387 at aa380d29).
+    4. Mode off: prompt and recorder unchanged except point 3. Tests cover mode on, mode off, and an out-of-tier class.
+    Keep the diff tight. Add `// trace:BUG-2712 | ai:codex`. Commit `[AI:codex] fix(review): ... (BUG-2712)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-22T19:26:45.128207333Z
+  modified_at: 2026-11-22T19:26:45.128207333Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 filed_at:
