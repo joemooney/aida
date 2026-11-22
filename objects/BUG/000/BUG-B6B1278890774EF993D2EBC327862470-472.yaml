@@ -14,12 +14,12 @@ description: |
   - AC2: The two fake-gh fixtures (bug_2690_land_update_branch_tests.rs, story_2768_land_tests.rs) accept both argv shapes. A test covers the without-flag path.
   - AC3: A test checks the composed argv against the real `gh api --help` on the test host and skips with a clear message when gh is absent, so a flag the installed gh lacks fails CI.
   - AC4: On imac (gh 2.81.0), `aida land stalls` reads at least one open PR's CI state as something other than UNKNOWN-for-evidence.
-status: NeedsAttention
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T18:45:04.006084804Z
-modified_at: 2026-11-22T19:51:33.009758425Z
+modified_at: 2026-11-22T19:53:27.010520807Z
 req_type: Bug
 tags:
 - fasttrack
@@ -73,6 +73,11 @@ comments:
   created_at: 2026-11-22T19:44:10.695277558Z
   modified_at: 2026-11-22T19:44:10.695277558Z
   session_id: 01a204a06239
+- id: 01a204d2-16e2-7f73-a392-25aaf80b5fd1
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Request changes. On this host, gh 2.105.0 advertises the supported option as --allow-escape-sequences[=true|false]. Both the capability probe and the installed-gh test read this as absent. Reviewed the full landed diff against protected base 452f36684d47. Neither finding depends on the intervening base commit. CI pending at review time.. No triage reason was given.'
+  created_at: 2026-11-22T19:53:27.010518474Z
+  modified_at: 2026-11-22T19:53:27.010518474Z
 history:
 - id: 01a204a0-b071-7890-b82e-02414625a203
   author: aida-session-start
@@ -108,6 +113,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a204d2-16e2-7f73-a392-2598a53c8559
+  author: joe
+  timestamp: 2026-11-22T19:53:27.010492762Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
@@ -115,17 +127,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Request changes. On this host, gh 2.105.0 advertises the supported option as --allow-escape-sequences[=true|false]. Both the capability probe and the installed-gh test read this as absent. Reviewed the full landed diff against protected base 452f36684d47. Neither finding depends on the intervening base commit. CI pending at review time.
-    BUG-2711.AC1 — unverified. The isolated old-gh fixture verifies one probe for two reads and preserves ESC and 0xff. The supported-option case fails for the installed help spelling.
-    BUG-2711.AC2 — verified by both changed fake-gh case statements accepting both request shapes and the old-gh fixture rejecting an extra flag.
-    BUG-2711.AC3 — unverified. The test provides the absent-gh skip, but its expected argv is wrong for the installed gh.
-    BUG-2711.AC4 — unverified. The implementer reports the imac canary pending. The imac operator needs to supply evidence from this change with gh 2.81.0 showing at least one open PR classified by land stalls.
-    BUG-2711 (bug protocol): the PR touches at least one test file — met. Both named Rust test files changed.
-  recovery_hint: address the review findings, move BUG-2711 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-22T19:51:33.009758425Z
