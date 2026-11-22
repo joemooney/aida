@@ -1739,11 +1739,16 @@ fn bug_2629_selected_malformed_ledger_is_unknown_even_without_fingerprints() {
 #[test]
 fn bug_2629_pickup_terminal_lookup_does_not_close_superseded_wait() {
     use crate::forge::ChangeState;
-    use crate::queue_cmd::work::resolve_rework_review_with;
+    use crate::queue_cmd::work::{pickup_rework_review, resolve_rework_review_with};
+    use crate::rework_direction::ReviewResult;
 
     for new_change in [None, Some(41), Some(42)] {
         let (_tmp, root, _env) = fixture();
         append(&root, 41, SPEC, &record("waiting", -60));
+        let index = ledger::ledger_dir(&root)
+            .join("by-spec")
+            .join(format!("{SPEC}.json"));
+        let before_index = std::fs::read(&index).unwrap();
         let mut cache = super::DiscoveryCache::default();
         let mut observations = 0;
         let (result, pass) = measured(|| {
@@ -1796,7 +1801,63 @@ fn bug_2629_pickup_terminal_lookup_does_not_close_superseded_wait() {
                 "both the spec and change wait are closed"
             );
             assert!(current.is_closed());
+
+            // Preparation and both pickup checks share the same discovery.
+            let (pickups, reused) = measured(|| {
+                [0, 1].map(|_| pickup_rework_review(&mut cache, &root, SPEC, SPEC, Some("PR-41")))
+            });
+            for pickup in pickups {
+                assert!(
+                    matches!(pickup, Ok(ReviewResult::Unavailable)),
+                    "{pickup:?}"
+                );
+            }
+            assert_eq!(reused.opened, 0, "{reused:?}");
+            assert_eq!(reused.ledger_opens, 0, "{reused:?}");
+            assert_eq!(reused.index_reads, 0, "{reused:?}");
+            assert_eq!(std::fs::read(&index).unwrap(), before_index);
+            assert_eq!(store::read_file(&root, ChangeKey::pr(41)).len(), 4);
+
+            // A different writer changing the hint still invalidates reuse.
+            std::fs::write(&index, b"{}").unwrap();
+            let drift = pickup_rework_review(&mut cache, &root, SPEC, SPEC, Some("PR-41"));
+            assert!(
+                matches!(&drift, Err(ReworkReviewError::Waiting(why)) if why.contains("by-spec")),
+                "{drift:?}"
+            );
         }
+    }
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_same_scope_pickup_refuses_new_local_wait() {
+    use crate::queue_cmd::work::pickup_rework_review;
+    use crate::rework_direction::ReviewResult;
+
+    for verdict in ["approved", "request-changes"] {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 41, SPEC, &record(verdict, -60));
+        let mut cache = super::DiscoveryCache::default();
+        let first = pickup_rework_review(&mut cache, &root, SPEC, SPEC, Some("PR-41"));
+        assert!(
+            matches!(
+                first,
+                Ok(ReviewResult::ClearedByApproval | ReviewResult::Available(_))
+            ),
+            "{first:?}"
+        );
+
+        append(&root, 41, SPEC, &record("waiting", -10));
+        let (second, reused) =
+            measured(|| pickup_rework_review(&mut cache, &root, SPEC, SPEC, Some("PR-41")));
+        assert!(
+            matches!(&second, Err(ReworkReviewError::Waiting(why)) if why.contains("PR-41.jsonl")),
+            "{second:?}"
+        );
+        assert_eq!(reused.opened, 0, "{reused:?}");
+        assert_eq!(reused.ledger_opens, 0, "{reused:?}");
+        assert_eq!(reused.index_reads, 0, "{reused:?}");
     }
 }
 

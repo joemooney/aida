@@ -1310,6 +1310,10 @@ impl DiscoveryCache {
     // trace:BUG-2629 | ai:codex
     fn revalidate_wait_evidence(&mut self, root: &Path) -> std::io::Result<()> {
         self.check_signed_generation(root)?;
+        self.revalidate_local_evidence()
+    }
+
+    pub(super) fn revalidate_local_evidence(&self) -> std::io::Result<()> {
         self.evidence.revalidate()?;
         if let Some(Ok(Some(discovery))) = &self.discovery {
             discovery.revalidate_queue_evidence()?;
@@ -1331,7 +1335,20 @@ impl DiscoveryCache {
         store::with_exclusive(&store_root, || {
             self.revalidate_wait_evidence(root)?;
             for (key, change, source) in waits {
-                let annotation = rv::append_terminal_wait(root, &store_root, key, *change, source)?;
+                let path = store::ledger_file(&store_root, *change);
+                let before = std::fs::symlink_metadata(&path);
+                let (annotation, appended) =
+                    rv::append_terminal_wait(root, &store_root, key, *change, source)?;
+                // Carry only an in-place annotation on an existing ledger. A new
+                // ledger, import, or changed binding/index leaves the corresponding
+                // old witness in place and a later reuse will refuse on drift.
+                if let (Ok(before), [event]) = (before, appended.as_slice()) {
+                    let append = checked::QueueAppend::verify(path, &before, event)?;
+                    self.evidence.advance_append(&append)?;
+                    if let Some(Ok(Some(discovery))) = &mut self.discovery {
+                        discovery.advance_queue_append(&append)?;
+                    }
+                }
                 self.closures.insert(key.clone(), annotation);
             }
             Ok(())

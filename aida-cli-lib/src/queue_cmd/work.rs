@@ -3144,7 +3144,7 @@ pub fn refuse_waiting_review(
 
 // Both pickup checks use the resolved change when branch selection found one.
 // trace:BUG-2656 | ai:codex
-fn pickup_rework_review(
+pub(super) fn pickup_rework_review(
     cache: &mut DiscoveryCache,
     root: &Path,
     display: &str,
@@ -3156,12 +3156,17 @@ fn pickup_rework_review(
         spec.to_owned(),
         selected_change.map(str::to_owned),
     );
-    if let Some(found) = cache.pickups.get(&scope).cloned() {
-        // The admission-to-launch path can persist an implicit queue row.
+    if cache.pickups.contains_key(&scope) {
+        // The admission-to-launch path can persist an implicit queue row
+        // or wait for consent while a local review is appended.
+        // trace:BUG-2629 | ai:codex
         cache
             .carry_signed_generation_across_store_writes(root)
-            .map_err(|error| signed_generation_refusal(display, error))?;
-        return found;
+            .map_err(|error| pickup_evidence_refusal(display, error))?;
+        cache
+            .revalidate_local_evidence()
+            .map_err(|error| pickup_evidence_refusal(display, error))?;
+        return cache.pickups[&scope].clone();
     }
     let open = selected_change
         .is_none()
@@ -3284,10 +3289,10 @@ fn check_rework_signed_generation(
 ) -> Result<(), ReworkReviewError> {
     cache
         .check_signed_generation(root)
-        .map_err(|error| signed_generation_refusal(display, error))
+        .map_err(|error| pickup_evidence_refusal(display, error))
 }
 
-fn signed_generation_refusal(display: &str, error: std::io::Error) -> ReworkReviewError {
+fn pickup_evidence_refusal(display: &str, error: std::io::Error) -> ReworkReviewError {
     ReworkReviewError::Waiting(format!(
         "{display}: a WAITING review cannot be ruled out ({error}). Retry pickup with fresh review evidence."
     ))

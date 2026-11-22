@@ -3866,7 +3866,7 @@ pub(crate) fn append_terminal_wait(
     key: &str,
     change: super::ledger::ChangeKey,
     current: &CurrentVerdict,
-) -> std::io::Result<JsonObj> {
+) -> std::io::Result<(JsonObj, Vec<super::ledger::GateEvent>)> {
     use super::ledger::{self, store};
     let mut obj: JsonObj = serde_json::from_str(&current.body).map_err(std::io::Error::other)?;
     refuse_unsafe_legacy_history(&verdict_path(root, key), round_sha(&obj).as_deref())?;
@@ -3878,11 +3878,9 @@ pub(crate) fn append_terminal_wait(
     let spec = ledger::ChangeKey::parse(key)
         .is_none()
         .then(|| ledger::GateSpec::resolve(root, key));
-    store::append_one(
-        store_root,
-        ledger::event::verdict_event(store_root, change, &obj, spec.as_ref()),
-    )?;
-    Ok(obj)
+    let event = ledger::event::verdict_event(store_root, change, &obj, spec.as_ref());
+    let appended = store::append(store_root, change, vec![event])?;
+    Ok((obj, appended))
 }
 
 // Apply the local annotation to its exact effective source, even when the

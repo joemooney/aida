@@ -1258,6 +1258,13 @@ impl Discovery {
             .map(|cached| (cached.events.as_slice(), cached.bytes))
     }
 
+    // Only the physical witness advances. Queue readers keep the checked
+    // events and apply exact-source terminal overlays to that snapshot.
+    // trace:BUG-2629 | ai:codex
+    pub(crate) fn advance_queue_append(&mut self, append: &QueueAppend) -> std::io::Result<()> {
+        self.queue_evidence.advance_append(append)
+    }
+
     pub(crate) fn revalidate_queue_evidence(&self) -> std::io::Result<()> {
         self.queue_evidence.revalidate()
     }
@@ -1799,6 +1806,55 @@ pub(crate) struct QueueEvidence(
     std::collections::HashMap<std::path::PathBuf, Result<Option<EntryStat>, ()>>,
 );
 
+/// An in-place append made between two stats under the exclusive ledger
+/// writer lock. Directory, binding, and index witnesses are never rebased.
+// trace:BUG-2629 | ai:codex
+pub(crate) struct QueueAppend {
+    path: std::path::PathBuf,
+    before: EntryStat,
+    after: EntryStat,
+}
+
+impl QueueAppend {
+    pub(crate) fn verify(
+        path: std::path::PathBuf,
+        before: &std::fs::Metadata,
+        event: &GateEvent,
+    ) -> std::io::Result<Self> {
+        let error = || {
+            std::io::Error::other(format!(
+                "could not verify the terminal annotation append at {}",
+                path.display()
+            ))
+        };
+        let before = EntryStat::of(before);
+        let after = QueueEvidence::stat(&path)
+            .ok()
+            .flatten()
+            .ok_or_else(&error)?;
+        let bytes = serde_json::to_vec(event)
+            .map_err(std::io::Error::other)?
+            .len() as u64
+            + 1;
+        if before.nlink != 1
+            || before.dev != after.dev
+            || before.ino != after.ino
+            || before.mode != after.mode
+            || before.nlink != after.nlink
+            || before.len.checked_add(bytes) != Some(after.len)
+            || after.len > MAX_LEDGER_BYTES
+            || bytes > MAX_LINE_BYTES as u64
+        {
+            return Err(error());
+        }
+        Ok(Self {
+            path,
+            before,
+            after,
+        })
+    }
+}
+
 impl QueueEvidence {
     pub(crate) fn watch(&mut self, path: std::path::PathBuf) {
         self.0
@@ -1814,13 +1870,27 @@ impl QueueEvidence {
         }
     }
 
+    pub(crate) fn advance_append(&mut self, append: &QueueAppend) -> std::io::Result<()> {
+        if let Some(expected) = self.0.get_mut(&append.path) {
+            if expected.as_ref().ok().and_then(Option::as_ref) != Some(&append.before) {
+                return Err(Self::changed(&append.path));
+            }
+            *expected = Ok(Some(append.after.clone()));
+        }
+        Ok(())
+    }
+
+    fn changed(path: &Path) -> std::io::Error {
+        std::io::Error::other(format!(
+            "review evidence changed during terminal lookup at {}",
+            path.display()
+        ))
+    }
+
     pub(crate) fn revalidate(&self) -> std::io::Result<()> {
         for (path, expected) in &self.0 {
             if expected.is_err() || Self::stat(path) != *expected {
-                return Err(std::io::Error::other(format!(
-                    "review evidence changed during terminal lookup at {}",
-                    path.display()
-                )));
+                return Err(Self::changed(path));
             }
         }
         Ok(())
