@@ -1042,8 +1042,12 @@ fn train_infrastructure_failure(
                         | "Save Linux dependency archives"
                         | "Install zsh (shell-wrapper test matrix)"
                         | "Verify self-hosted prerequisites"
+                        // dell1 setup steps that run before any test.
+                        // trace:STORY-2695 | ai:claude
+                        | "Adopt host-prepared exact source"
                         | "Cache Rust dependencies"
                         | "Install cargo-nextest"
+                        | "Verify self-hosted cargo-nextest location"
                 ) =>
             {
                 failures.push(name)
@@ -4994,7 +4998,9 @@ pub(crate) fn pr_train_handler_with_dispatch_ctx(
     let _admission = if opts.dry_run {
         None
     } else {
-        crate::admission_owner::cooperative_train(
+        // A manual train waits a bounded time for the auto-train to yield.
+        // trace:BUG-2703 | ai:claude
+        crate::admission_owner::manual_train_admission(
             &main_worktree,
             ADVISOR_LOOP.with(std::cell::Cell::get),
         )?

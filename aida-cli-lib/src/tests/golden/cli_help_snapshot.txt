@@ -2573,6 +2573,8 @@ Commands:
   status        Show review-watch's persisted binding and controller receipt
   rebind        Bind review-watch and auto-train to this advisor grant through the deputy
   train-status  Show the supervised train service and any repeated-failure alert
+  drain         Drain both loops' admission claims for a bounded, audited time
+  resume        End an active drain; the loops take their admission claims again
   help          Print this message or the help of the given subcommand(s)
 
 Options:
@@ -2653,6 +2655,60 @@ Options:
       --json
           Emit the persisted train service status as JSON
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida advisor loops drain
+Drain both loops' admission claims for a bounded, audited time.
+
+Review-watch and auto-train give up their claims at their next pass boundary, so a land or ship can
+run; running reviews and trains finish first. Exited loop workers are not restarted until the drain
+ends.
+
+Usage: aida advisor loops drain [OPTIONS] --reason <REASON>
+
+Options:
+      --reason <REASON>
+          Reason to record in the audit history
+
+      --for <DURATION>
+          Drain duration, e.g. 3600, 30m or 2h (default 1h, maximum 24h)
+
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida advisor loops resume
+End an active drain; the loops take their admission claims again
+
+Usage: aida advisor loops resume [OPTIONS]
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -22272,6 +22328,7 @@ Commands:
   list            List recorded review verdicts
   classes         Count review findings per defect class across every recorded verdict, including
                   archived rounds. Alias of `aida findings classes`
+  submit-draft    Submit a standalone reviewer's draft verdict (the reviewer runs this)
   normalize-shas  One-time repair: expand every abbreviated `reviewed_sha` on disk to its full
                   commit sha where this repo can still resolve it, and mark the rest explicitly
                   unresolvable. Never invents a value and never touches an already-full or sha-less
@@ -22897,6 +22954,35 @@ Options:
       --json
           Emit the report as JSON
 
+      --format <FORMAT>
+          Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
+          compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
+          piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)
+
+          Possible values:
+          - human: Human-readable tables / emoji (the interactive default at a TTY)
+          - toon:  Token-efficient TOON — the compact agent default when piped/captured
+          - json:  Machine JSON, for commands that support a JSON projection
+
+      --canonical-ids
+          Show node-local spec IDs in their canonical form instead of the node's friendly label (for
+          scripts). Also settable via AIDA_CANONICAL_IDS=1
+
+  -h, --help
+          Print help (see a summary with '-h')
+===== aida review submit-draft
+Submit a standalone reviewer's draft verdict (the reviewer runs this).
+
+Write draft.json in the launch directory and run this command. Fix any reported errors and retry.
+After validation succeeds, exit so the launcher can recheck and record the current draft.
+
+Usage: aida review submit-draft [OPTIONS] <LAUNCH_DIR>
+
+Arguments:
+  <LAUNCH_DIR>
+          The launch directory the review prompt named
+
+Options:
       --format <FORMAT>
           Pin the output format regardless of whether stdout is a terminal: human = tables, toon =
           compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when
@@ -35426,6 +35512,70 @@ Working on aida itself
         "name": "json",
         "takes_value": false,
         "help": "Emit the persisted train service status as JSON"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "advisor",
+      "loops",
+      "drain"
+    ],
+    "about": "Drain both loops' admission claims for a bounded, audited time",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "for",
+        "takes_value": true,
+        "help": "Drain duration, e.g. 3600, 30m or 2h (default 1h, maximum 24h)"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
+      },
+      {
+        "name": "reason",
+        "takes_value": true,
+        "help": "Reason to record in the audit history"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "advisor",
+      "loops",
+      "resume"
+    ],
+    "about": "End an active drain; the loops take their admission claims again",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
@@ -56169,6 +56319,32 @@ Working on aida itself
         "name": "since",
         "takes_value": true,
         "help": "Only count rounds recorded since this point: a relative window (`45m`, `12h`, `30d`, `2w`, or `24 hours ago`), an ISO date (`2026-05-01`, local midnight), a zone-less ISO datetime (`2026-05-01T10:00`, local time), or an RFC3339 timestamp"
+      }
+    ],
+    "hidden": false
+  },
+  {
+    "path": [
+      "aida",
+      "review",
+      "submit-draft"
+    ],
+    "about": "Submit a standalone reviewer's draft verdict (the reviewer runs this)",
+    "flags": [
+      {
+        "name": "canonical-ids",
+        "takes_value": false,
+        "help": "Show node-local spec IDs in their canonical form instead of the node's friendly label (for scripts). Also settable via AIDA_CANONICAL_IDS=1"
+      },
+      {
+        "name": "format",
+        "takes_value": true,
+        "help": "Pin the output format regardless of whether stdout is a terminal: human = tables, toon = compact agent output, json = machine JSON. Default (unset) is human at a TTY, toon when piped/captured. Also settable via AIDA_OUTPUT_FORMAT (the flag wins)"
+      },
+      {
+        "name": "help",
+        "takes_value": false,
+        "help": "Print help (see more with '--help')"
       }
     ],
     "hidden": false
