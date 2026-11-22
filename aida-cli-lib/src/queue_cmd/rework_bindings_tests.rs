@@ -1322,6 +1322,8 @@ struct Work {
     entries: usize,
     binding_lists: usize,
     ledger_opens: usize,
+    index_reads: usize,
+    membership: usize,
     bytes: u64,
     took: std::time::Duration,
 }
@@ -1332,6 +1334,8 @@ fn measured<T>(run: impl FnOnce() -> T) -> (T, Work) {
     work::DISCOVERIES_OPENED.with(|n| n.set(0));
     work::BINDING_LISTS.with(|n| n.set(0));
     work::LEDGER_OPENS.with(|n| n.set(0));
+    work::INDEX_READS.with(|n| n.set(0));
+    work::MEMBERSHIP_INPUTS.with(|n| n.set(0));
     let started = std::time::Instant::now();
     let out = run();
     let spent = Work {
@@ -1340,6 +1344,8 @@ fn measured<T>(run: impl FnOnce() -> T) -> (T, Work) {
         entries: work::DIRECTORY_ENTRIES.with(Cell::get),
         binding_lists: work::BINDING_LISTS.with(Cell::get),
         ledger_opens: work::LEDGER_OPENS.with(Cell::get),
+        index_reads: work::INDEX_READS.with(Cell::get),
+        membership: work::MEMBERSHIP_INPUTS.with(Cell::get),
         bytes: ledger_reads(),
         took: started.elapsed(),
     };
@@ -1396,6 +1402,10 @@ fn bug_2629_one_discovery_checks_every_change_of_a_healthy_spec() {
         eprintln!("bug_2629 healthy {ledgers} ledgers: whole resolution {whole:?}");
         assert_eq!(whole.opened, 1, "{whole:?}");
         assert_eq!(whole.binding_lists, 1, "{whole:?}");
+        assert_eq!(whole.index_reads, 1, "{whole:?}");
+        // One set build/probe per binding and hint for the inventory and
+        // ownership checks, plus one set insertion per item in their union.
+        assert_eq!(whole.membership as u64, 6 * ledgers, "{whole:?}");
         assert_eq!(whole.checks, 0, "{whole:?}");
         assert!(whole.ledger_opens as u64 <= ledgers + 2, "{whole:?}");
         assert!(whole.took < limit, "the resolution took {:?}", whole.took);
@@ -1403,6 +1413,26 @@ fn bug_2629_one_discovery_checks_every_change_of_a_healthy_spec() {
     };
     let (few, few_bytes, few_pass, few_whole) = run(6);
     let (many, many_bytes, many_pass, many_whole) = run(48);
+    {
+        let (_tmp, root, _env) = fixture();
+        healthy_many_target_spec(&root, 48);
+        std::fs::remove_file(
+            ledger::bindings::bindings_dir(&root)
+                .join(SPEC)
+                .join("PR-547"),
+        )
+        .unwrap();
+        let (bindings, pass) = measured(|| super::discover(&root, &labels, None, false));
+        assert!(bindings.binds("PR-547"));
+        assert_eq!(bindings.failure(), None);
+        assert_eq!(pass.opened, 1, "{pass:?}");
+        assert_eq!(pass.binding_lists, 1, "{pass:?}");
+        assert_eq!(pass.index_reads, 1, "{pass:?}");
+        assert_eq!(pass.ledger_opens, 50, "{pass:?}");
+        assert!(pass.membership <= 9 * 50, "{pass:?}");
+        eprintln!("bug_2629 50 ledgers with a lost binding: {pass:?}");
+    }
+
     // The pass does not open more discoveries for more changes, and what
     // the whole resolution reads grows with the spec's ledgers, not with
     // their square.
@@ -1703,4 +1733,199 @@ fn bug_2629_selected_malformed_ledger_is_unknown_even_without_fingerprints() {
             if why.contains("PR-41.jsonl")),
         "{result:?}"
     );
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_pickup_terminal_lookup_does_not_close_superseded_wait() {
+    use crate::forge::ChangeState;
+    use crate::queue_cmd::work::resolve_rework_review_with;
+
+    for new_change in [None, Some(41), Some(42)] {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 41, SPEC, &record("waiting", -60));
+        let mut cache = super::DiscoveryCache::default();
+        let mut observations = 0;
+        let (result, pass) = measured(|| {
+            resolve_rework_review_with(
+                &mut cache,
+                &root,
+                SPEC,
+                SPEC,
+                None,
+                false,
+                |root, keys, reviews| {
+                    crate::review_waiting::reconcile_waiting_with(root, keys, reviews, |change| {
+                        assert_eq!(change, ChangeKey::pr(41));
+                        observations += 1;
+                        if let Some(pr) = new_change {
+                            let mut newer = record("waiting", -10);
+                            newer.insert("summary".into(), "new independent evidence".into());
+                            append(root, pr, SPEC, &newer);
+                        }
+                        Some((ChangeState::Closed, HEAD.into()))
+                    });
+                },
+            )
+        });
+        assert_eq!(observations, 1, "aliases share forge observations");
+        assert_eq!(pass.opened, 1, "{pass:?}");
+        assert_eq!(pass.binding_lists, 1, "{pass:?}");
+        assert_eq!(pass.index_reads, 1, "{pass:?}");
+        let terminal_records = store::read_file(&root, ChangeKey::pr(41))
+            .into_iter()
+            .filter(|event| {
+                event
+                    .verdict_record()
+                    .is_some_and(|r| r.contains_key("terminal_wait_source"))
+            })
+            .count();
+        let current = rv::read_recorded_verdict(&root, SPEC).unwrap();
+        if new_change.is_some() {
+            assert!(
+                matches!(&result, Err(ReworkReviewError::Waiting(why)) if why.contains("changed during terminal lookup")),
+                "{result:?}"
+            );
+            assert_eq!(terminal_records, 0);
+            assert_eq!(current.summary.as_deref(), Some("new independent evidence"));
+            assert!(!current.is_closed());
+        } else {
+            result.unwrap();
+            assert_eq!(
+                terminal_records, 2,
+                "both the spec and change wait are closed"
+            );
+            assert!(current.is_closed());
+        }
+    }
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_pickup_refuses_unsafe_index_for_ownership_free_records() {
+    use crate::gate::ledger::checked::MAX_INDEX_BYTES;
+    for kind in [
+        "malformed",
+        "invalid key",
+        "oversized",
+        "symlink",
+        "hard link",
+    ] {
+        let (_tmp, root, _env) = fixture();
+        append(&root, 41, SPEC, &phase3(record("approved", -60)));
+        let hint = ledger::ledger_dir(&root)
+            .join("by-spec")
+            .join(format!("{SPEC}.json"));
+        // Even with an unambiguous approval in the ledger, a sound hint can
+        // discover a legacy wait with no physical change ledger or binding.
+        assert!(!refused_waiting(&root));
+        legacy_file(
+            &root,
+            "PR-42",
+            serde_json::json!({
+                "verdict": "waiting",
+                "reviewed_sha": HEAD,
+                "summary": SUMMARY,
+            }),
+        );
+        project::index_spec(&root, SPEC, ChangeKey::pr(42)).unwrap();
+        assert!(refused_waiting(&root));
+        match kind {
+            "malformed" => std::fs::write(&hint, b"{malformed").unwrap(),
+            "invalid key" => {
+                std::fs::write(&hint, br#"{"changes":["PR-41","not a key"]}"#).unwrap()
+            }
+            "oversized" => std::fs::OpenOptions::new()
+                .write(true)
+                .open(&hint)
+                .unwrap()
+                .set_len(MAX_INDEX_BYTES + 1)
+                .unwrap(),
+            "symlink" | "hard link" => {
+                let target = root.join("other-index.json");
+                std::fs::rename(&hint, &target).unwrap();
+                if kind == "symlink" {
+                    std::os::unix::fs::symlink(target, &hint).unwrap();
+                } else {
+                    std::fs::hard_link(target, &hint).unwrap();
+                }
+            }
+            _ => unreachable!(),
+        }
+        let ((first, second), pass) = measured(|| {
+            let mut cache = super::DiscoveryCache::default();
+            let mut resolve = || {
+                crate::queue_cmd::work::resolve_rework_review_cached(
+                    &mut cache, &root, SPEC, SPEC, None,
+                )
+            };
+            (resolve(), resolve())
+        });
+        for result in [first, second] {
+            assert!(
+                matches!(&result, Err(ReworkReviewError::Waiting(why)) if why.contains("BUG-2629.json")),
+                "{kind}: {result:?}"
+            );
+        }
+        assert_eq!(pass.opened, 1, "{kind}: {pass:?}");
+        assert_eq!(
+            pass.index_reads,
+            usize::from(matches!(kind, "malformed" | "invalid key")),
+            "{kind}: {pass:?}"
+        );
+    }
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_queue_hint_spends_the_shared_checked_read_budget() {
+    use crate::gate::ledger::checked::Budget;
+    let (_tmp, root, _env) = fixture();
+    let labels = [SPEC.to_string()];
+    let key = ChangeKey::pr(41);
+    append(&root, 41, SPEC, &phase3(record("approved", -60)));
+    let ledger_bytes = std::fs::metadata(store::ledger_file(&root, key))
+        .unwrap()
+        .len();
+    let index = ledger::ledger_dir(&root)
+        .join("by-spec")
+        .join(format!("{SPEC}.json"));
+    let index_bytes = std::fs::metadata(index).unwrap().len();
+    for extra in [0, 1] {
+        let mut cache = super::DiscoveryCache {
+            budget: Budget::with_limits(ledger_bytes + index_bytes - extra, 10),
+            ..Default::default()
+        };
+        let bindings = super::discover_with_cache(&mut cache, &root, &labels, None, false);
+        if extra == 0 {
+            assert!(bindings.binds("PR-41"));
+            assert_eq!(bindings.failure(), None);
+            assert_eq!(bindings.refusal(), None);
+        } else {
+            assert!(bindings
+                .failure()
+                .is_some_and(|why| why.contains("read budget")));
+        }
+    }
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_uncertified_labels_reuse_the_checked_hint() {
+    let (_tmp, root, _env) = fixture();
+    append(&root, 41, SPEC, &phase3(record("approved", -60)));
+    std::fs::remove_file(ledger::bindings::marker_file(&root)).unwrap();
+    let mut cache = super::DiscoveryCache::default();
+    let (_, pass) = measured(|| {
+        for labels in [
+            vec![SPEC.to_string()],
+            vec![SPEC.to_string(), "BUG-17".to_string()],
+        ] {
+            let inventory = cache.inventory(&root, &labels);
+            assert_eq!(inventory.refusal(), None);
+            assert_eq!(inventory.hints[SPEC], [ChangeKey::pr(41)]);
+        }
+    });
+    assert_eq!(pass.opened, 1, "{pass:?}");
+    assert_eq!(pass.index_reads, 1, "{pass:?}");
 }

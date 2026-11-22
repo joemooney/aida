@@ -20,6 +20,7 @@ use super::bindings::{
 use super::event::{GateEvent, EVENT_VERSION};
 use super::project::{spec_key, SpecIndex};
 use super::ChangeKey;
+use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read as _;
 use std::path::Path;
@@ -300,6 +301,14 @@ impl Pinned {
         list_pinned(&self.ledger, &self.ledger_path)
     }
 
+    pub(crate) fn index_hint(
+        &self,
+        spec: &str,
+        budget: &mut Budget,
+    ) -> Result<Option<Vec<String>>, Unsafe> {
+        read_index_hint(self.by_spec.as_ref(), spec, budget).map(|hint| hint.changes)
+    }
+
     /// The validated handle of `name` in the ledger directory (or in its
     /// `by-spec` child), with the metadata of that handle; `Ok(None)` only
     /// when no such entry exists. `Err` says why the entry is refused.
@@ -572,14 +581,29 @@ fn recorded_in(scan: &Scan, spec: &str) -> Vec<String> {
 /// is a lossy hint, not a lost binding. A binding and a hint entry deleted
 /// together leave no evidence either; only the deep audit sees that.
 // trace:BUG-2531 | ai:claude
-pub(crate) fn binding_lost<T: PartialEq>(hint: Option<&[T]>, bound: Option<&[T]>) -> bool {
+// trace:BUG-2629 | ai:codex
+pub(crate) fn binding_lost<T: Eq + std::hash::Hash>(
+    hint: Option<&[T]>,
+    bound: Option<&[T]>,
+) -> bool {
     match hint {
         Some(hint) => {
-            let bound = bound.unwrap_or_default();
-            hint.iter().any(|change| !bound.contains(change))
+            let bound: HashSet<_> = bound
+                .unwrap_or_default()
+                .iter()
+                .map(membership_input)
+                .collect();
+            hint.iter()
+                .any(|change| !bound.contains(membership_input(change)))
         }
         None => bound.is_some(),
     }
+}
+
+fn membership_input<T>(key: T) -> T {
+    #[cfg(test)]
+    discovery_work_tests::MEMBERSHIP_INPUTS.with(|n| n.set(n.get() + 1));
+    key
 }
 
 // trace:BUG-2531 | ai:codex
@@ -708,6 +732,51 @@ struct CachedHint {
     selected: bool,
 }
 
+// trace:BUG-2629 | ai:codex
+fn read_index_hint(
+    by_spec: Option<&File>,
+    spec: &str,
+    budget: &mut Budget,
+) -> Result<CachedHint, Unsafe> {
+    let mut hint = CachedHint {
+        changes: None,
+        stat: None,
+        bytes: 0,
+        selected: false,
+    };
+    let Some(by_spec) = by_spec else {
+        return Ok(hint);
+    };
+    let index_name = format!("{spec}.json");
+    let Some((body, meta)) = read_entry_meta(by_spec, &index_name, MAX_INDEX_BYTES, budget)? else {
+        return Ok(hint);
+    };
+    #[cfg(test)]
+    discovery_work_tests::INDEX_READS.with(|n| n.set(n.get() + 1));
+    let index: SpecIndex = serde_json::from_slice(&body)
+        .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
+    if index.changes.len() > MAX_CHANGES_PER_SPEC {
+        return Err(Unsafe(format!(
+            "refusing gate-ledger index {index_name}: it names more than {MAX_CHANGES_PER_SPEC} changes"
+        )));
+    }
+    let changes = index
+        .changes
+        .iter()
+        .map(|c| {
+            ChangeKey::parse(c).map(|k| k.as_key()).ok_or_else(|| {
+                Unsafe(format!(
+                    "refusing gate-ledger index {index_name}: {c:?} is not a change key"
+                ))
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    hint.changes = Some(changes);
+    hint.stat = Some(EntryStat::of(&meta));
+    hint.bytes = body.len() as u64;
+    Ok(hint)
+}
+
 /// The changes bound to the normalized label `spec` under the pinned
 /// `ledger` directory, strictly: every entry must be a regular file named by
 /// a change key. `None` when the label has no bindings directory: it was
@@ -809,13 +878,13 @@ pub(crate) struct Discovery {
     /// whose ledger carries it although no binding names them.
     // trace:BUG-2531 | ai:claude
     root: std::path::PathBuf,
-    recovered: std::collections::HashMap<String, Vec<String>>,
+    recovered: std::collections::HashMap<String, Recovered>,
     /// The full read `recovered` came from, if any.
     full: Option<std::rc::Rc<Scan>>,
     /// Per label, its by-spec hint as read once by this discovery, with the
     /// hint file's stat identity (`None` when it has none).
     // trace:BUG-2531 | ai:claude
-    hints: std::collections::HashMap<String, CachedHint>,
+    hints: std::collections::HashMap<String, Result<CachedHint, Unsafe>>,
     /// Ledgers are read once across a list operation. Their total retained
     /// payload is bounded by the work and selection budgets.
     cache: std::collections::HashMap<String, Cached>,
@@ -823,8 +892,15 @@ pub(crate) struct Discovery {
     // negative reads and any full scan needed after losing a binding.
     // trace:BUG-2629 | ai:codex
     queue: bool,
+    queue_evidence: QueueEvidence,
     misses: std::collections::HashMap<String, Result<(), Unsafe>>,
     queue_scan: Option<Result<std::collections::HashMap<String, Vec<String>>, Unsafe>>,
+}
+
+// trace:BUG-2629 | ai:codex
+struct Recovered {
+    ordered: Vec<String>,
+    keys: HashSet<String>,
 }
 
 /// Every change a label's reviews may sit on, as a selection and the
@@ -982,6 +1058,13 @@ pub(crate) fn discover_for_queue(root: &Path) -> Result<Option<Discovery>, Unsaf
     )?;
     if let Some(discovery) = &mut found {
         discovery.queue = true;
+        for path in [
+            discovery.ledger_path.join(MARKER_FILE),
+            discovery.ledger_path.join(BINDINGS_DIR),
+            discovery.ledger_path.join("by-spec"),
+        ] {
+            discovery.queue_evidence.watch(path);
+        }
     }
     Ok(found)
 }
@@ -1031,6 +1114,7 @@ fn open_discovery(root: &Path, work: Budget, share: bool) -> Result<Option<Disco
         hints: Default::default(),
         cache: Default::default(),
         queue: false,
+        queue_evidence: QueueEvidence::default(),
         misses: Default::default(),
         queue_scan: None,
     }))
@@ -1041,6 +1125,10 @@ impl Discovery {
     /// directory is distinct from a present directory with no bindings.
     // trace:BUG-2531 BUG-2629 | ai:codex
     pub(crate) fn listed(&mut self, spec: &str) -> Result<Option<&[String]>, Unsafe> {
+        if self.queue {
+            self.queue_evidence
+                .watch(self.ledger_path.join(BINDINGS_DIR).join(spec));
+        }
         self.bound
             .entry(spec.to_string())
             .or_insert_with(|| list_bound(&self.ledger, &self.ledger_path, self.marked, spec))
@@ -1073,7 +1161,7 @@ impl Discovery {
             let recovered = self
                 .recovered
                 .get(&spec)
-                .is_some_and(|changes| changes.iter().any(|c| c == key));
+                .is_some_and(|changes| changes.keys.contains(membership_input(key)));
             if !recovered
                 && !self
                     .listed(&spec)?
@@ -1110,6 +1198,9 @@ impl Discovery {
         let selected = selection.is_some();
         let budget = selection.unwrap_or(&mut self.work);
         let name = format!("{key}.jsonl");
+        if self.queue {
+            self.queue_evidence.watch(self.ledger_path.join(&name));
+        }
         let read = read_change(&self.ledger, &name, key, budget);
         match read {
             Ok(Some((events, bytes, stat))) => {
@@ -1165,6 +1256,10 @@ impl Discovery {
         self.cache
             .get(&key)
             .map(|cached| (cached.events.as_slice(), cached.bytes))
+    }
+
+    pub(crate) fn revalidate_queue_evidence(&self) -> std::io::Result<()> {
+        self.queue_evidence.revalidate()
     }
 
     pub(crate) fn queue_recorded_changes(&mut self, spec: &str) -> Result<Vec<String>, Unsafe> {
@@ -1383,70 +1478,47 @@ impl Discovery {
         budget: &mut Budget,
         selection: bool,
     ) -> Result<(Option<Vec<String>>, Option<EntryStat>), Unsafe> {
-        if let Some(hint) = self.hints.get_mut(spec) {
-            if selection && !hint.selected {
-                budget.spend_bytes(hint.bytes)?;
-                hint.selected = true;
+        if !self.hints.contains_key(spec) {
+            if self.queue {
+                self.queue_evidence.watch(
+                    self.ledger_path
+                        .join("by-spec")
+                        .join(format!("{spec}.json")),
+                );
             }
-            return Ok((hint.changes.clone(), hint.stat.clone()));
+            let read = read_index_hint(self.by_spec.as_ref(), spec, budget).map(|mut hint| {
+                hint.selected = selection;
+                hint
+            });
+            self.hints.insert(spec.to_string(), read);
         }
-        let (changes, stat, bytes) = self.read_index_hint(spec, budget)?;
-        self.hints.insert(
-            spec.to_string(),
-            CachedHint {
-                changes: changes.clone(),
-                stat: stat.clone(),
-                bytes,
-                selected: selection,
-            },
-        );
-        Ok((changes, stat))
+        let hint = self
+            .hints
+            .get_mut(spec)
+            .expect("hint cached")
+            .as_mut()
+            .map_err(|e| e.clone())?;
+        if selection && !hint.selected {
+            budget.spend_bytes(hint.bytes)?;
+            hint.selected = true;
+        }
+        Ok((hint.changes.clone(), hint.stat.clone()))
     }
 
-    // trace:BUG-2531 | ai:claude
-    fn read_index_hint(
-        &self,
+    /// Queue also consults legacy verdicts named by a hint without a ledger.
+    // trace:BUG-2629 | ai:codex
+    pub(crate) fn queue_index_hint(
+        &mut self,
         spec: &str,
         budget: &mut Budget,
-    ) -> Result<(Option<Vec<String>>, Option<EntryStat>, u64), Unsafe> {
-        let Some(by_spec) = &self.by_spec else {
-            return Ok((None, None, 0));
-        };
-        let index_name = format!("{spec}.json");
-        let Some((body, meta)) = read_entry_meta(by_spec, &index_name, MAX_INDEX_BYTES, budget)?
-        else {
-            return Ok((None, None, 0));
-        };
-        let index: SpecIndex = serde_json::from_slice(&body)
-            .map_err(|e| Unsafe(format!("refusing gate-ledger index {index_name}: {e}")))?;
-        if index.changes.len() > MAX_CHANGES_PER_SPEC {
-            return Err(Unsafe(format!(
-                "refusing gate-ledger index {index_name}: it names more than {MAX_CHANGES_PER_SPEC} changes"
-            )));
-        }
-        let mut out = Vec::new();
-        for c in &index.changes {
-            let key = ChangeKey::parse(c).map(|k| k.as_key()).ok_or_else(|| {
-                Unsafe(format!(
-                    "refusing gate-ledger index {index_name}: {c:?} is not a change key"
-                ))
-            })?;
-            // trace:BUG-2517 | ai:codex
-            // Retain the strict reader's missing-ledger refusal rather than
-            // treating absent evidence as empty.
-            if !self.ledger_exists(&key)? {
-                return Err(Unsafe(format!(
-                    "refusing gate-ledger index {index_name}: it names {key}, whose ledger is missing"
-                )));
-            }
-            out.push(key);
-        }
-        Ok((Some(out), Some(EntryStat::of(&meta)), body.len() as u64))
+    ) -> Result<Option<Vec<String>>, Unsafe> {
+        self.index_hint(spec, budget, true)
+            .map(|(changes, _)| changes)
     }
 
     /// `spec`'s unbound verdict events, strictly.
     pub(crate) fn unbound(
-        &self,
+        &mut self,
         spec: &str,
         budget: &mut Budget,
     ) -> Result<Vec<GateEvent>, Unsafe> {
@@ -1454,6 +1526,10 @@ impl Discovery {
             return Ok(Vec::new());
         };
         let unbound_name = format!("{spec}.jsonl");
+        if self.queue {
+            self.queue_evidence
+                .watch(self.ledger_path.join("by-spec").join(&unbound_name));
+        }
         Ok(
             match read_entry(by_spec, &unbound_name, MAX_LEDGER_BYTES, budget)? {
                 Some(body) => parse_events(&unbound_name, &body, spec, budget)?
@@ -1494,38 +1570,48 @@ impl Discovery {
         } else {
             (None, None)
         };
-        let lost = keyed && binding_lost(hint.as_deref(), listed.as_deref());
-        let mut changes = listed.clone().unwrap_or_default();
-        if lost {
-            let found = match self.recovered.get(spec) {
-                Some(found) => found.clone(),
-                None => {
-                    if self.queue {
-                        let found = self.queue_recorded_changes(spec)?;
-                        self.recovered.insert(spec.to_string(), found.clone());
-                        found
-                    } else {
-                        let scan = full_read(&self.root)?;
-                        let found: Vec<String> = scan
-                            .as_deref()
-                            .map(|scan| recorded_in(scan, spec))
-                            .unwrap_or_default()
-                            .into_iter()
-                            .filter(|key| !changes.contains(key))
-                            .collect();
-                        self.full = scan;
-                        self.recovered.insert(spec.to_string(), found.clone());
-                        found
-                    }
-                }
-            };
-            changes.extend(found);
-        }
-        for key in hint.unwrap_or_default() {
-            if !changes.contains(&key) {
-                changes.push(key);
+        // A legacy-only hint can be considered by queue inventory, but
+        // strict ownership still requires every hinted ledger to exist.
+        for key in hint.iter().flatten() {
+            if !self.ledger_exists(key)? {
+                return Err(Unsafe(format!(
+                    "refusing gate-ledger index {spec}.json: it names {key}, whose ledger is missing"
+                )));
             }
         }
+        let lost = keyed && binding_lost(hint.as_deref(), listed.as_deref());
+        let mut changes = listed.clone().unwrap_or_default();
+        let mut seen: HashSet<_> = changes.iter().cloned().map(membership_input).collect();
+        if lost {
+            if !self.recovered.contains_key(spec) {
+                let ordered = if self.queue {
+                    self.queue_recorded_changes(spec)?
+                } else {
+                    let scan = full_read(&self.root)?;
+                    let found = scan
+                        .as_deref()
+                        .map(|scan| recorded_in(scan, spec))
+                        .unwrap_or_default();
+                    self.full = scan;
+                    found
+                };
+                let keys = ordered.iter().cloned().map(membership_input).collect();
+                self.recovered
+                    .insert(spec.to_string(), Recovered { ordered, keys });
+            }
+            changes.extend(
+                self.recovered[spec]
+                    .ordered
+                    .iter()
+                    .filter(|key| seen.insert(membership_input((*key).clone())))
+                    .cloned(),
+            );
+        }
+        changes.extend(
+            hint.into_iter()
+                .flatten()
+                .filter(|key| seen.insert(membership_input(key.clone()))),
+        );
         Ok(OwnerSet {
             changes,
             folded: Folded {
@@ -1705,6 +1791,42 @@ impl EntryStat {
     }
 }
 
+/// Metadata witnesses for the files and directories used by a queue snapshot.
+/// A terminal observation may commit only while those inputs still match.
+// trace:BUG-2629 | ai:codex
+#[derive(Default)]
+pub(crate) struct QueueEvidence(
+    std::collections::HashMap<std::path::PathBuf, Result<Option<EntryStat>, ()>>,
+);
+
+impl QueueEvidence {
+    pub(crate) fn watch(&mut self, path: std::path::PathBuf) {
+        self.0
+            .entry(path)
+            .or_insert_with_key(|path| Self::stat(path));
+    }
+
+    fn stat(path: &Path) -> Result<Option<EntryStat>, ()> {
+        match std::fs::symlink_metadata(path) {
+            Ok(meta) => Ok(Some(EntryStat::of(&meta))),
+            Err(error) if missing(&error) => Ok(None),
+            Err(_) => Err(()),
+        }
+    }
+
+    pub(crate) fn revalidate(&self) -> std::io::Result<()> {
+        for (path, expected) in &self.0 {
+            if expected.is_err() || Self::stat(path) != *expected {
+                return Err(std::io::Error::other(format!(
+                    "review evidence changed during terminal lookup at {}",
+                    path.display()
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
 // trace:BUG-2543 | ai:claude
 fn dir_id(dir: &File) -> Result<(u64, u64), Unsafe> {
     use std::os::unix::fs::MetadataExt;
@@ -1826,6 +1948,8 @@ pub(crate) fn capacity(root: &Path) -> Result<Capacity, Unsafe> {
 pub(crate) mod discovery_work_tests {
     thread_local! {
         pub(crate) static BINDING_LISTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        pub(crate) static MEMBERSHIP_INPUTS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        pub(crate) static INDEX_READS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
         pub(crate) static LEDGER_OPENS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     }
 

@@ -480,3 +480,6 @@ pub(crate) fn production_sources() -> Vec<(String, String)> {
         })
         .collect()
 }
+
+#[cfg(test)]
+pub(crate) use work::resolve_rework_review_with;

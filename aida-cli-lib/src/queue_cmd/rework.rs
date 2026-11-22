@@ -757,7 +757,8 @@ pub(crate) fn handle_queue_rework(
     // rework pickup. Persist it onto the spec before queueing so every later
     // pickup surface sees the same blocking context. trace:BUG-814 | ai:codex
     let mut pending_findings = None;
-    if let Ok(root) = find_project_root() {
+    let review_root = find_project_root().ok();
+    if let Some(root) = review_root.as_deref() {
         // BUG-2430: a review keyed by the spec's open PR counts too.
         // trace:BUG-2430 | ai:claude
         // BUG-2629: neither lookup may run silently for minutes; a slow one
@@ -772,7 +773,7 @@ pub(crate) fn handle_queue_rework(
                     std::time::Duration::from_secs(15),
                     || {
                         let change =
-                            spec_open_change_key(&root, &[display_id.as_str(), spec_id.as_str()]);
+                            spec_open_change_key(root, &[display_id.as_str(), spec_id.as_str()]);
                         anyhow::ensure!(
                             crate::forge_lookup::forge_lookup_deadline()
                                 .is_some_and(|deadline| std::time::Instant::now() < deadline),
@@ -793,7 +794,7 @@ pub(crate) fn handle_queue_rework(
             || {
                 super::work::resolve_rework_review_cached(
                     &mut review_cache,
-                    &root,
+                    root,
                     &display_id,
                     &spec_id,
                     open_change.as_deref(),
@@ -855,7 +856,7 @@ pub(crate) fn handle_queue_rework(
                 let exe = crate::aida_exe_path();
                 let finding_title = format!("Repeated unchanged review findings: {display_id}");
                 let finding = std::process::Command::new(&exe)
-                    .current_dir(&root)
+                    .current_dir(root)
                     .args([
                         "findings",
                         "add",
@@ -873,7 +874,7 @@ pub(crate) fn handle_queue_rework(
                     .status_retrying_etxtbsy()?;
                 anyhow::ensure!(finding.success(), "could not file repeated-review finding");
                 let brief = std::process::Command::new(&exe)
-                    .current_dir(&root)
+                    .current_dir(root)
                     .args(["brief", "advisor", &display_id, "--note", &note, "--notify"])
                     .status_retrying_etxtbsy()?;
                 anyhow::ensure!(
@@ -1160,6 +1161,16 @@ pub(crate) fn handle_queue_rework(
     // `handle_queue_work` directly with the same storage handle so any
     // failure surfaces here. trace:TASK-218 | ai:claude
     if work {
+        // Status, findings and audit writes can advance the store commit.
+        // Carry the cache only if those commits preserved signed lookup authority.
+        if let Some(root) = review_root
+            .as_deref()
+            .filter(|_| for_role_resolved.as_deref() != Some("reviewer"))
+        {
+            review_cache.carry_signed_generation_across_store_writes(root).with_context(|| {
+                format!("{display_id}: a WAITING review cannot be ruled out. Retry pickup with fresh review evidence")
+            })?;
+        }
         handle_queue_work(
             storage,
             Some(&mut review_cache),

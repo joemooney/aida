@@ -49,6 +49,7 @@ fn bug_2629_queue_discovery_source_ratchet() {
             "rv::current_verdict(",
             "review_waiting::reconcile_waiting_verdicts(",
             "project::changes_for_spec(",
+            "project::index_changes(",
             "review_publication::current(",
         ] {
             assert!(

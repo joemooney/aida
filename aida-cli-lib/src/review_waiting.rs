@@ -110,7 +110,7 @@ pub(crate) fn reconcile_waiting_verdicts_with(
 
 // Injectable observation keeps regression tests independent of PATH and live APIs.
 // trace:BUG-2525 | ai:codex
-fn reconcile_waiting_with(
+pub(crate) fn reconcile_waiting_with(
     project_root: &Path,
     keys: Option<&[String]>,
     reviews: &mut impl WaitReviews,

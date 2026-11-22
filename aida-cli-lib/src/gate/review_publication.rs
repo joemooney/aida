@@ -225,10 +225,13 @@ fn node_valid(node: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
 }
-fn run(mut cmd: Command) -> Result<Vec<u8>> {
+fn bounded_output(mut cmd: Command) -> Result<std::process::Output> {
     cmd.env("GIT_TERMINAL_PROMPT", "0");
-    let out = super::kernel_deps::bounded_review_output(cmd, Duration::from_secs(10), CAP as u64)
-        .context("review publication command failed or timed out")?;
+    super::kernel_deps::bounded_review_output(cmd, Duration::from_secs(10), CAP as u64)
+        .context("review publication command failed or timed out")
+}
+fn run(cmd: Command) -> Result<Vec<u8>> {
+    let out = bounded_output(cmd)?;
     ensure!(
         out.status.success(),
         "review publication command refused: {}",
@@ -295,11 +298,24 @@ fn public_key_valid(key: &str) -> bool {
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'='))
 }
 fn repository(root: &Path) -> Result<String> {
+    repository_identity(root)?.context("review repository has no origin remote")
+}
+
+fn repository_identity(root: &Path) -> Result<Option<String>> {
     // Hash the exact configured origin: no embedded credentials enter the store.
     // Alternate URL spellings require the operator to align origins.
     use sha2::{Digest, Sha256};
-    let origin = git(root, &["remote", "get-url", "origin"])?;
-    Ok(format!("{:x}", Sha256::digest(origin)))
+    let mut cmd = Command::new("git");
+    cmd.current_dir(root).args(["remote", "get-url", "origin"]);
+    let out = bounded_output(cmd)?;
+    if out.status.code() == Some(2) {
+        return Ok(None);
+    }
+    ensure!(
+        out.status.success(),
+        "could not read review repository origin"
+    );
+    Ok(Some(format!("{:x}", Sha256::digest(out.stdout))))
 }
 
 fn evidence_dir(change: &str, kind: &str) -> String {
@@ -871,6 +887,88 @@ fn store_view(root: &Path) -> Result<Option<(PathBuf, String)>> {
     Ok(Some((store, tip)))
 }
 
+/// Inputs to signed selection, with the project refs read in one bounded batch.
+// trace:BUG-2629 | ai:codex
+#[derive(PartialEq, Eq)]
+pub(crate) struct ReviewStoreGeneration {
+    store: PathBuf,
+    tip: String,
+    namespace: Vec<u8>,
+    store_replacements: Vec<u8>,
+    project_refs: Vec<u8>,
+    repository: Option<String>,
+}
+
+pub(crate) fn review_store_generation(root: &Path) -> Result<Option<ReviewStoreGeneration>> {
+    let Some((store, tip)) = store_view(root)? else {
+        return Ok(None);
+    };
+    let store_replacements = git(
+        &store,
+        &[
+            "for-each-ref",
+            "--format=%(objectname) %(refname)",
+            "refs/replace/",
+        ],
+    )?;
+    let namespace = git(&store, &["ls-tree", &tip, "--", "reviews"])?;
+    ensure!(
+        namespace.is_empty() || namespace.starts_with(b"040000 tree "),
+        "committed review namespace is not a tree"
+    );
+    let (project_refs, repository) = if namespace.is_empty() {
+        (Vec::new(), None)
+    } else {
+        let refs = git(
+            root,
+            &[
+                "for-each-ref",
+                "--format=%(objectname) %(refname) %(symref)",
+                "refs/remotes/origin/",
+                "refs/heads/",
+                "refs/replace/",
+                // rev-parse also tries these namespaces for a full ref name.
+                "refs/refs/remotes/origin/",
+                "refs/refs/heads/",
+                "refs/*/refs/remotes/origin/**",
+                "refs/*/refs/heads/**",
+            ],
+        )?;
+        (refs, repository_identity(root)?)
+    };
+    Ok(Some(ReviewStoreGeneration {
+        store,
+        tip,
+        namespace,
+        store_replacements,
+        project_refs,
+        repository,
+    }))
+}
+
+impl ReviewStoreGeneration {
+    /// Rework can commit status and comments before continuing into pickup.
+    /// Compare the signed lookup inputs at both commits, excluding metadata
+    /// that Snapshot resolution and signed coverage never consult.
+    pub(crate) fn same_signed_authority(&self, live: &Self) -> Result<bool> {
+        if self.store != live.store
+            || self.namespace != live.namespace
+            || self.store_replacements != live.store_replacements
+            || self.project_refs != live.project_refs
+            || self.repository != live.repository
+        {
+            return Ok(false);
+        }
+        if self.tip == live.tip || self.namespace.is_empty() {
+            return Ok(true);
+        }
+        let snapshot = |tip| {
+            Snapshot::of_store_at(&self.store, tip).map_err(|e| anyhow::anyhow!(e.to_string()))
+        };
+        Ok(snapshot(&self.tip)?.same_identities(&snapshot(&live.tip)?))
+    }
+}
+
 fn reference(r: &Receipt) -> String {
     format!("publication:{}:{}:{}", r.change, r.node, r.publication)
 }
@@ -1047,6 +1145,15 @@ fn select_effective(
         !relevant.is_empty(),
         "review publication selection lost all evidence"
     );
+    if expected_head.is_none() {
+        ensure!(
+            relevant
+                .iter()
+                .filter_map(|(receipt, ..)| receipt.branch.as_deref())
+                .all(|branch| !branch.contains(['~', '^', ':']) && !branch.contains("@{")),
+            "signed review branch must name a ref directly"
+        );
+    }
     let change_head = match expected_head {
         Some(h) => h.trim().to_ascii_lowercase(),
         None => match current_head(root, &relevant) {

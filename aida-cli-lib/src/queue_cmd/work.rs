@@ -3156,8 +3156,12 @@ fn pickup_rework_review(
         spec.to_owned(),
         selected_change.map(str::to_owned),
     );
-    if let Some(found) = cache.pickups.get(&scope) {
-        return found.clone();
+    if let Some(found) = cache.pickups.get(&scope).cloned() {
+        // The admission-to-launch path can persist an implicit queue row.
+        cache
+            .carry_signed_generation_across_store_writes(root)
+            .map_err(|error| signed_generation_refusal(display, error))?;
+        return found;
     }
     let open = selected_change
         .is_none()
@@ -3261,6 +3265,66 @@ pub(super) fn resolve_rework_review_inner(
     spec_id: &str,
     open_change: Option<&str>,
     selected_only: bool,
+) -> Result<ReviewResult<String>, ReworkReviewError> {
+    resolve_rework_review_with(
+        cache,
+        project_root,
+        display_id,
+        spec_id,
+        open_change,
+        selected_only,
+        |root, keys, reviews| crate::review_waiting::reconcile_waiting(root, keys, reviews),
+    )
+}
+
+fn check_rework_signed_generation(
+    cache: &mut DiscoveryCache,
+    root: &Path,
+    display: &str,
+) -> Result<(), ReworkReviewError> {
+    cache
+        .check_signed_generation(root)
+        .map_err(|error| signed_generation_refusal(display, error))
+}
+
+fn signed_generation_refusal(display: &str, error: std::io::Error) -> ReworkReviewError {
+    ReworkReviewError::Waiting(format!(
+        "{display}: a WAITING review cannot be ruled out ({error}). Retry pickup with fresh review evidence."
+    ))
+}
+
+// trace:BUG-2629 | ai:codex
+pub(crate) fn resolve_rework_review_with(
+    cache: &mut DiscoveryCache,
+    project_root: &Path,
+    display_id: &str,
+    spec_id: &str,
+    open_change: Option<&str>,
+    selected_only: bool,
+    reconcile: impl FnOnce(&Path, Option<&[String]>, &mut WaitingReviews<'_>),
+) -> Result<ReviewResult<String>, ReworkReviewError> {
+    check_rework_signed_generation(cache, project_root, display_id)?;
+    let result = select_rework_review_with(
+        cache,
+        project_root,
+        display_id,
+        spec_id,
+        open_change,
+        selected_only,
+        reconcile,
+    );
+    check_rework_signed_generation(cache, project_root, display_id)?;
+    result
+}
+
+fn select_rework_review_with(
+    cache: &mut DiscoveryCache,
+    project_root: &Path,
+    display_id: &str,
+    spec_id: &str,
+    open_change: Option<&str>,
+    selected_only: bool,
+    reconcile: impl FnOnce(&Path, Option<&[String]>, &mut WaitingReviews<'_>),
 ) -> Result<ReviewResult<String>, ReworkReviewError> {
     use crate::gate::review_alias::{spec_labels, AliasSelection};
     use crate::gate::review_verdict::RecordedVerdict;
@@ -3376,17 +3440,22 @@ pub(super) fn resolve_rework_review_inner(
         }
         return Err(ReworkReviewError::Unavailable(why));
     }
+    let mut reviews = WaitingReviews {
+        root: project_root,
+        cache,
+        bindings: &bindings,
+        terminal: Vec::new(),
+    };
     crate::forge_lookup::with_forge_lookup_deadline(std::time::Duration::from_secs(15), || {
-        crate::review_waiting::reconcile_waiting(
-            project_root,
-            Some(&review_keys),
-            &mut WaitingReviews {
-                root: project_root,
-                cache,
-                bindings: &bindings,
-            },
-        );
+        reconcile(project_root, Some(&review_keys), &mut reviews);
     });
+    // A terminal observation cannot clear a wait after its evidence moved.
+    // trace:BUG-2629 | ai:codex
+    reviews.cache.close_waits(project_root, &reviews.terminal).map_err(|error| {
+        ReworkReviewError::Waiting(format!(
+            "{shown}: WAITING — terminal review reconciliation could not be completed ({error}). Retry pickup with fresh review evidence."
+        ))
+    })?;
     let mut current = |key: &str| cache.current_verdict(project_root, &bindings, key);
     // Ignore terminal waits before alias ordering as well as PR/spec ordering.
     // Otherwise a late annotation can hide an active review on another label.

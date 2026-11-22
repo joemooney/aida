@@ -1558,7 +1558,7 @@ impl VerdictSource {
 /// file's mtime, or the ledger event's primary-side order time
 /// ([`ledger_order_time`]).
 // trace:STORY-b6b1278890774ef993d2ebc327862470-080 | ai:claude
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CurrentVerdict {
     pub body: String,
     pub source: VerdictSource,
@@ -3858,27 +3858,9 @@ pub(crate) fn close_terminal_wait(
     })
 }
 
-/// Annotate an exact source observed by queue admission. A concurrent new
-/// review has a different body and cannot be closed by this annotation.
+/// Append after the caller verifies the exact source under the ledger lock.
 // trace:BUG-2629 | ai:codex
-pub(crate) fn close_cached_terminal_wait(
-    root: &Path,
-    store_root: &Path,
-    key: &str,
-    change: super::ledger::ChangeKey,
-    expected: &CurrentVerdict,
-) -> std::io::Result<JsonObj> {
-    if super::ledger::contained() {
-        return Err(std::io::Error::other(
-            "a contained seat cannot close gate reviews",
-        ));
-    }
-    super::ledger::store::with_exclusive(store_root, || {
-        append_terminal_wait(root, store_root, key, change, expected)
-    })
-}
-
-fn append_terminal_wait(
+pub(crate) fn append_terminal_wait(
     root: &Path,
     store_root: &Path,
     key: &str,

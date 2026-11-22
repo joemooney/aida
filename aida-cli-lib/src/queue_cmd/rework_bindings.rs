@@ -28,7 +28,9 @@
 
 use crate::gate::ledger::event::EVENT_VERSION;
 use crate::gate::ledger::{self, bindings, checked, project, store, ChangeKey, GateEvent};
+use crate::gate::review_publication::ReviewStoreGeneration;
 use crate::gate::review_verdict::{self as rv, JsonObj, RecordedVerdict, VerdictKind};
+use anyhow::Context;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -763,14 +765,17 @@ pub(crate) struct DiscoveryCache {
     root: Option<PathBuf>,
     discovery: Option<Result<Option<checked::Discovery>, String>>,
     budget: checked::Budget,
+    evidence: checked::QueueEvidence,
     change_events: HashMap<ChangeKey, Result<Vec<GateEvent>, String>>,
     label_events: HashMap<String, Result<Vec<GateEvent>, String>>,
     listed: HashMap<String, Result<Option<Vec<ChangeKey>>, String>>,
     inventories: HashMap<Vec<String>, ReworkBindings>,
     current: HashMap<String, Result<Option<rv::CurrentVerdict>, String>>,
     closures: HashMap<String, JsonObj>,
+    signed_generation: Option<Result<Option<ReviewStoreGeneration>, String>>,
     signed: HashMap<Vec<String>, Result<Option<rv::CurrentVerdict>, String>>,
     fallback: Option<Result<Option<checked::Pinned>, String>>,
+    fallback_hints: HashMap<String, Result<Option<Vec<String>>, String>>,
     raw: HashMap<(bool, String), Result<RawLedger, Unread>>,
     raw_budget: Option<ReadBudget>,
     verdict_budget: Option<ReadBudget>,
@@ -789,6 +794,7 @@ impl DiscoveryCache {
         self.discovery
             .get_or_insert_with(|| {
                 let root = ledger::store_root(project_root).map_err(|e| e.to_string())?;
+                self.evidence.watch(ledger::ledger_dir(&root));
                 let discovery = checked::discover_for_queue(&root).map_err(|e| e.0);
                 self.root = Some(root);
                 discovery
@@ -823,6 +829,48 @@ impl DiscoveryCache {
         };
         self.listed.insert(spec.to_string(), listed.clone());
         listed
+    }
+
+    // A certified discovery shares this exact hint with its ownership folds.
+    // An uncertified one can still read hints through pinned fallback handles.
+    // trace:BUG-2629 | ai:codex
+    fn index_hint(
+        &mut self,
+        project_root: &Path,
+        spec: &str,
+    ) -> Result<Option<Vec<ChangeKey>>, String> {
+        let mut budget = std::mem::take(&mut self.budget);
+        let found = match self.discovery(project_root) {
+            Ok(Some(discovery)) => discovery
+                .queue_index_hint(spec, &mut budget)
+                .map_err(|e| e.0),
+            Ok(None) => Ok(None),
+            Err(why) => self
+                .fallback_hints
+                .entry(spec.to_string())
+                .or_insert_with(|| {
+                    let root = self.root.as_deref().ok_or(why)?;
+                    let by_spec = ledger::ledger_dir(root).join("by-spec");
+                    self.evidence.watch(by_spec.clone());
+                    self.evidence.watch(by_spec.join(format!("{spec}.json")));
+                    let pinned = self
+                        .fallback
+                        .get_or_insert_with(|| checked::pin(root).map_err(|e| e.0));
+                    match pinned.as_ref().map_err(Clone::clone)? {
+                        Some(pinned) => pinned.index_hint(spec, &mut budget).map_err(|e| e.0),
+                        None => Ok(None),
+                    }
+                })
+                .clone(),
+        };
+        self.budget = budget;
+        found.map(|hint| {
+            hint.map(|keys| {
+                keys.iter()
+                    .filter_map(|key| ChangeKey::parse(key))
+                    .collect()
+            })
+        })
     }
 
     fn ownership_checked(
@@ -894,6 +942,7 @@ impl DiscoveryCache {
     ) -> Result<&RawLedger, Unread> {
         let key = (by_spec, source.to_string());
         if !self.raw.contains_key(&key) {
+            self.evidence.watch(file.to_path_buf());
             let root = self.root.as_deref().expect("inventory has a store root");
             let pinned = self
                 .fallback
@@ -1037,6 +1086,52 @@ impl DiscoveryCache {
             .collect())
     }
 
+    // Gate-ledger metadata cannot detect changes to signed lookup authority.
+    // trace:BUG-2629 | ai:codex
+    pub(super) fn check_signed_generation(&mut self, root: &Path) -> std::io::Result<()> {
+        self.refresh_signed_generation(root, false)
+    }
+
+    pub(super) fn carry_signed_generation_across_store_writes(
+        &mut self,
+        root: &Path,
+    ) -> std::io::Result<()> {
+        self.refresh_signed_generation(root, true)
+    }
+
+    fn refresh_signed_generation(
+        &mut self,
+        root: &Path,
+        allow_metadata_changes: bool,
+    ) -> std::io::Result<()> {
+        if let Some(Err(reason)) = &self.signed_generation {
+            return Err(std::io::Error::other(reason.clone()));
+        }
+        let checked = || -> anyhow::Result<_> {
+            let live = crate::gate::review_publication::review_store_generation(root)
+                .context("canonical review store generation could not be read")?;
+            if let Some(Ok(pinned)) = &self.signed_generation {
+                let unchanged = pinned == &live
+                    || (allow_metadata_changes
+                        && match (pinned, &live) {
+                            (Some(pinned), Some(live)) => pinned.same_signed_authority(live)?,
+                            _ => false,
+                        });
+                anyhow::ensure!(
+                    unchanged,
+                    "canonical review store generation changed during review selection"
+                );
+            }
+            Ok(live)
+        };
+        let live = checked().map_err(|error| format!("{error:#}"));
+        let checked = self.signed_generation.insert(live);
+        checked
+            .as_ref()
+            .map(|_| ())
+            .map_err(|reason| std::io::Error::other(reason.clone()))
+    }
+
     fn signed(&mut self, root: &Path, ids: &[&str]) -> Result<Option<rv::CurrentVerdict>, String> {
         let keys = ids.iter().map(|key| key.to_string()).collect();
         self.signed
@@ -1064,6 +1159,7 @@ impl DiscoveryCache {
             .verdict_budget
             .get_or_insert_with(|| ReadBudget::new(MAX_RECOVERY_BYTES));
         let path = rv::verdict_path(root, key);
+        self.evidence.watch(path.clone());
         let mut consumed = 0;
         let found = rv::checked_legacy_record(root, key, budget.left, &mut consumed);
         budget.charge(&path.display(), consumed)?;
@@ -1082,7 +1178,13 @@ impl DiscoveryCache {
             let store = self.root.clone().unwrap_or_else(|| root.to_path_buf());
             let current = (|| {
                 let signed = self.signed(root, &[key])?;
-                let legacy = self.legacy_body(root, key)?;
+                // A verified publication answers for this key before local files.
+                // trace:BUG-2629 | ai:codex
+                let legacy = if signed.is_some() {
+                    None
+                } else {
+                    self.legacy_body(root, key)?
+                };
                 let events = self.events(root, bindings, key)?;
                 if ChangeKey::parse(key).is_some() {
                     let verdicts: Vec<_> = events
@@ -1204,24 +1306,38 @@ impl DiscoveryCache {
         }
     }
 
-    pub(super) fn close_wait(
+    // Revalidate the sources under the ledger write lock before appending
+    // annotations. Metadata comparisons reuse the checked discovery.
+    // trace:BUG-2629 | ai:codex
+    pub(super) fn close_waits(
         &mut self,
         root: &Path,
-        key: &str,
-        change: ChangeKey,
-        source: &rv::CurrentVerdict,
+        waits: &[(String, ChangeKey, rv::CurrentVerdict)],
     ) -> std::io::Result<()> {
-        let store = self.root.as_deref().unwrap_or(root);
-        let annotation = rv::close_cached_terminal_wait(root, store, key, change, source)?;
-        self.closures.insert(key.to_string(), annotation);
-        Ok(())
+        if waits.is_empty() || ledger::contained() {
+            return self.check_signed_generation(root);
+        }
+        let store_root = self.root.clone().unwrap_or_else(|| root.to_path_buf());
+        store::with_exclusive(&store_root, || {
+            self.check_signed_generation(root)?;
+            self.evidence.revalidate()?;
+            if let Some(Ok(Some(discovery))) = &self.discovery {
+                discovery.revalidate_queue_evidence()?;
+            }
+            for (key, change, source) in waits {
+                let annotation = rv::append_terminal_wait(root, &store_root, key, *change, source)?;
+                self.closures.insert(key.clone(), annotation);
+            }
+            Ok(())
+        })
     }
 }
 
-pub(super) struct WaitingReviews<'a> {
+pub(crate) struct WaitingReviews<'a> {
     pub(super) root: &'a Path,
     pub(super) cache: &'a mut DiscoveryCache,
     pub(super) bindings: &'a ReworkBindings,
+    pub(super) terminal: Vec<(String, ChangeKey, rv::CurrentVerdict)>,
 }
 
 impl crate::review_waiting::WaitReviews for WaitingReviews<'_> {
@@ -1246,7 +1362,9 @@ impl crate::review_waiting::WaitReviews for WaitingReviews<'_> {
         change: ChangeKey,
         source: &rv::CurrentVerdict,
     ) -> std::io::Result<()> {
-        self.cache.close_wait(self.root, key, change, source)
+        self.terminal
+            .push((key.to_string(), change, source.clone()));
+        Ok(())
     }
 }
 
@@ -1359,7 +1477,13 @@ fn discover_inventory(
         let Some(spec) = project::spec_key(label) else {
             continue;
         };
-        let hint = project::index_changes(&root, &spec);
+        let hint = match cache.index_hint(project_root, &spec) {
+            Ok(hint) => hint,
+            Err(why) => {
+                out.refusal = Some(why);
+                break;
+            }
+        };
         let listed = match cache.listed(project_root, &spec) {
             Ok(listed) => listed,
             Err(why) => {
@@ -1395,7 +1519,7 @@ fn discover_inventory(
             }
         }
     }
-    if scan {
+    if scan && out.refusal.is_none() {
         match labelled_changes_with_cache(cache, &root, labels) {
             Ok(found) => found.into_iter().for_each(|change| out.note(change, false)),
             Err(why) => out.refusal = Some(why),

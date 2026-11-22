@@ -1273,6 +1273,37 @@ fn bug_2629_signed_approval_supersedes_a_withheld_raw_wait() {
     assert!(why.contains("WAITING") && why.contains("Host:"), "{why}");
 }
 
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_pickup_preserves_sole_signed_wait_over_malformed_legacy_files() {
+    assert!(available(), "OpenSSH is required for this regression");
+    let f = Fixture::new();
+    let summary = "Host: signed evidence still required";
+    {
+        let _env = env(&f.temp.path().join("home-b"));
+        let mut wait = f.record("waiting", "reviewer-session");
+        wait.remove("findings");
+        wait.insert("summary".into(), summary.into());
+        f.collect(&wait).unwrap();
+    }
+    let _env = env(&f.temp.path().join("home-a"));
+    f.sync(&f.a);
+    let root = ledger::store_root(&f.a).unwrap();
+    assert!(
+        !ledger::ledger_dir(&root).exists(),
+        "no local ledger verdict"
+    );
+    let native = f.spec.spec_id.as_deref().unwrap();
+    let pickup = || crate::queue_cmd::refuse_waiting_review(&f.a, "STORY-1", native, Some("PR-7"));
+    assert!(pickup().unwrap_err().contains(summary));
+    for key in ["STORY-1", native, "PR-7"] {
+        let path = rv::verdict_path(&f.a, key);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, b"{malformed").unwrap();
+    }
+    assert!(pickup().unwrap_err().contains(summary));
+}
+
 // trace:BUG-2530 | ai:codex
 #[test]
 fn bug2530_synced_verdict_controls_admission_and_redundant_claims() {
@@ -1484,4 +1515,196 @@ fn bug2618_head_guard_binds_publication_to_live_head_with_stale_local_refs() {
             .unwrap()
             .approved_at_head
     );
+}
+
+// trace:BUG-2629 | ai:codex
+#[test]
+fn bug_2629_pickup_refuses_signed_authority_movement_during_terminal_lookup() {
+    use crate::forge::ChangeState;
+    use crate::queue_cmd::{resolve_rework_review_with, rework_bindings::DiscoveryCache};
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    enum Movement {
+        Stable,
+        Sync,
+        Alias,
+        Branch,
+        Origin,
+    }
+
+    assert!(available(), "OpenSSH is required for this regression");
+    for (movement, state) in [
+        (Movement::Stable, ChangeState::Closed),
+        (Movement::Sync, ChangeState::Closed),
+        (Movement::Sync, ChangeState::Open),
+        (Movement::Alias, ChangeState::Closed),
+        (Movement::Alias, ChangeState::Open),
+        (Movement::Branch, ChangeState::Closed),
+        (Movement::Branch, ChangeState::Open),
+        (Movement::Origin, ChangeState::Closed),
+    ] {
+        let f = Fixture::new();
+        let store = f.a.join(".aida-store");
+        let origin = git_ok(&f.a, &["remote", "get-url", "origin"]);
+        let native = f.spec.spec_id.as_deref().unwrap();
+        {
+            let _env = env(&f.temp.path().join("home-b"));
+            let decision = if movement == Movement::Stable {
+                "approved"
+            } else {
+                "waiting"
+            };
+            let mut wait = f.record(decision, "reviewer-session");
+            wait.remove("findings");
+            if movement != Movement::Stable {
+                wait.insert("summary".into(), "Host: sibling evidence required".into());
+            }
+            f.collect(&wait).unwrap();
+        }
+        let _env = env(&f.temp.path().join("home-a"));
+        if movement != Movement::Sync {
+            f.sync(&f.a);
+        }
+        let (display, spec_id) = if movement == Movement::Alias {
+            // The raw terminal wait is discoverable through the finding's
+            // label. The other label cannot yet route to the signed wait.
+            ("STORY-999", f.finding.spec_id.as_deref().unwrap())
+        } else {
+            ("STORY-1", native)
+        };
+        if movement == Movement::Branch {
+            git_ok(&f.a, &["commit", "--allow-empty", "-qm", "new branch tip"]);
+            let newer = head(&f.a).unwrap();
+            git_ok(&f.a, &["update-ref", "refs/remotes/origin/main", &newer]);
+        }
+        if movement == Movement::Origin {
+            git_ok(&f.a, &["remote", "set-url", "origin", "other-origin"]);
+        }
+        let signed_key = if movement == Movement::Alias {
+            display
+        } else {
+            "PR-7"
+        };
+        assert_eq!(
+            kind_of(current_verified(&f.a, &[signed_key]).unwrap()),
+            (movement == Movement::Stable).then_some(rv::VerdictKind::Approved),
+        );
+        let review_tree = || git_ok(&store, &["ls-tree", "HEAD", "--", "reviews"]);
+        let before_reviews = review_tree();
+        let before_head = head(&store).unwrap();
+        let pinned = review_store_generation(&f.a).unwrap().unwrap();
+
+        let root = ledger::store_root(&f.a).unwrap();
+        let spec = ledger::GateSpec::resolve(&f.a, spec_id);
+        let terminal = ChangeKey::pr(6);
+        let sibling = ChangeKey::pr(7);
+        let records = [(terminal, "waiting"), (sibling, "approved")];
+        for (change, decision) in records {
+            if change == sibling && movement == Movement::Alias {
+                continue;
+            }
+            let record = serde_json::json!({
+                "verdict": decision,
+                "reviewed_sha": f.sha,
+                "recorded_at": chrono::Utc::now().to_rfc3339(),
+            });
+            ledger::store::append_one(
+                &root,
+                ledger::event::verdict_event(
+                    &root,
+                    change,
+                    record.as_object().unwrap(),
+                    Some(&spec),
+                ),
+            )
+            .unwrap();
+        }
+
+        let mut observed = Vec::new();
+        let mut cache = DiscoveryCache::default();
+        let result = resolve_rework_review_with(
+            &mut cache,
+            &f.a,
+            display,
+            spec_id,
+            None,
+            false,
+            |root, keys, reviews| {
+                crate::review_waiting::reconcile_waiting_with(root, keys, reviews, |change| {
+                    observed.push(change);
+                    if change != terminal {
+                        return None;
+                    }
+                    match movement {
+                        Movement::Stable => {}
+                        Movement::Sync => f.sync(&f.a),
+                        Movement::Alias => {
+                            let path = super::super::canon::RETIRED_IDS_REL;
+                            write(
+                                &store,
+                                path,
+                                format!(
+                                    "[[retired]]\nold = \"{display}\"\nuuid = \"{}\"\n",
+                                    f.spec.id,
+                                ),
+                            );
+                            git_ok(&store, &["add", path]);
+                            git_ok(&store, &["commit", "-qm", "map retired spec ID"]);
+                        }
+                        Movement::Branch => {
+                            git_ok(&f.a, &["update-ref", "refs/remotes/origin/main", &f.sha]);
+                        }
+                        Movement::Origin => {
+                            git_ok(&f.a, &["remote", "set-url", "origin", &origin]);
+                        }
+                    }
+                    Some((state, f.sha.clone()))
+                });
+            },
+        );
+        assert!(observed.contains(&terminal), "{movement:?}: {observed:?}");
+        let annotated = ledger::store::read_file(&root, terminal)
+            .iter()
+            .any(|event| {
+                event
+                    .verdict_record()
+                    .is_some_and(|record| record.contains_key("terminal_wait_source"))
+            });
+        if movement != Movement::Sync {
+            assert_eq!(review_tree(), before_reviews, "{movement:?}");
+        }
+        if matches!(movement, Movement::Branch | Movement::Origin) {
+            assert_eq!(head(&store).unwrap(), before_head, "{movement:?}");
+        }
+        if movement == Movement::Stable {
+            assert!(result.is_ok(), "{result:?}");
+            assert!(annotated);
+            let mut spec = f.spec.clone();
+            spec.status = aida_core::RequirementStatus::InProgress;
+            let path = "objects/STORY/000/STORY-nodea-1.yaml";
+            write(&store, path, serde_yaml::to_string(&spec).unwrap());
+            git_ok(&store, &["add", path]);
+            git_ok(&store, &["commit", "-qm", "write rework status"]);
+            let live = review_store_generation(&f.a).unwrap().unwrap();
+            assert!(pinned != live);
+            assert!(pinned.same_signed_authority(&live).unwrap());
+        } else {
+            let error = format!("{:?}", result.unwrap_err());
+            assert!(
+                error.contains("Waiting")
+                    && error.contains("canonical review store generation changed"),
+                "{movement:?}: {error}"
+            );
+            assert_eq!(
+                kind_of(current_verified(&f.a, &[signed_key]).unwrap()),
+                Some(rv::VerdictKind::Waiting),
+                "{movement:?}"
+            );
+            assert!(!annotated);
+            if movement == Movement::Alias {
+                let live = review_store_generation(&f.a).unwrap().unwrap();
+                assert!(!pinned.same_signed_authority(&live).unwrap());
+            }
+        }
+    }
 }

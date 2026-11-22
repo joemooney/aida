@@ -401,14 +401,31 @@ impl Snapshot {
         if head.len() < 40 || !head.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err(SnapshotError("an unreadable HEAD".into()));
         }
+        Self::of_store_at(&store, &head)
+    }
+
+    pub(crate) fn same_identities(&self, other: &Self) -> bool {
+        self.literal == other.literal
+            && self.mapped == other.mapped
+            && self.specs.len() == other.specs.len()
+            && self
+                .specs
+                .iter()
+                .zip(&other.specs)
+                .all(|((key, spec), (other_key, other_spec))| {
+                    key == other_key && spec.native == other_spec.native
+                })
+    }
+
+    pub(crate) fn of_store_at(store: &Path, head: &str) -> Result<Self, SnapshotError> {
         let listing = git_bounded(
-            &store,
+            store,
             &[
                 "ls-tree",
                 "-r",
                 "-z",
                 "--full-tree",
-                &head,
+                head,
                 "--",
                 OBJECTS_REL,
                 NODE_ALIASES_REL,
@@ -424,7 +441,7 @@ impl Snapshot {
             input.push('\n');
         }
         let batch = git_bounded(
-            &store,
+            store,
             &["cat-file", "--batch"],
             Some(input.into_bytes()),
             MAX_BATCH_BYTES,
@@ -445,7 +462,7 @@ impl Snapshot {
                 ),
             }
         }
-        Self::from_parts(&head, &reqs, aliases, retired)
+        Self::from_parts(head, &reqs, aliases, retired)
     }
 }
 
