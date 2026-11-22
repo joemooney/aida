@@ -14,12 +14,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-22T21:26:49.060117976Z
+modified_at: 2026-11-22T23:49:46.215756792Z
 req_type: Bug
 tags:
 - gate-ledger
 - merge-hold
 - review
+comments:
+- id: 01a205aa-7267-70f2-bdda-3d4c8373725d
+  author: joe
+  content: 'Addendum (advisor-122 16:55, recorded by product-15): even after the advisor mirrored the approval and the hold auto-released, PR #4391 stays STUCK-MERGE: the auto-release left no recorded clearance, and clearing needs the human-only integrity floor `aida merge-hold clear 4391`. AC4: an auto-release records its clearance so a human-only clear is not needed for an approval-backed release.'
+  created_at: 2026-11-22T23:49:46.215756792Z
+  modified_at: 2026-11-22T23:49:46.215756792Z
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
