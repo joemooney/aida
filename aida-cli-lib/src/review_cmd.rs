@@ -67,7 +67,7 @@ fn run_review(
     use aida_core::Storage;
     let args = <ReviewArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        // A reviewer's draft submission reads and writes only the launch
+        // A reviewer's draft validation reads only the launch
         // directory it is given: it runs before project discovery, so it
         // works from any directory, inside a project or not.
         // trace:BUG-2707 | ai:claude

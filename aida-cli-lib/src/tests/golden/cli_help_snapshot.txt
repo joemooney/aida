@@ -22973,13 +22973,8 @@ Options:
 ===== aida review submit-draft
 Submit a standalone reviewer's draft verdict (the reviewer runs this).
 
-The launch prompt names a launch directory. Write the draft JSON to `pending.json` inside it, then
-run this on the directory. It applies the checks the launcher and the recorder apply later, under
-the launching project's review policy: the closed draft format, and the rule that any unresolved
-finding means request-changes. An `approved` draft may carry only findings the recorder files as
-deferred follow-ups. An accepted draft becomes the launch's submission; a refusal accepts nothing
-and says what to change, so correct `pending.json` and run it again. Nothing is recorded here: the
-launcher records the accepted draft after the reviewer exits.
+Write draft.json in the launch directory and run this command. Fix any reported errors and retry.
+After validation succeeds, exit so the launcher can recheck and record the current draft.
 
 Usage: aida review submit-draft [OPTIONS] <LAUNCH_DIR>
 

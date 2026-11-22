@@ -25,11 +25,10 @@ Follow the workflow in `.claude/skills/aida-review/SKILL.md`:
 4. Fix-forward mechanical issues (fmt drift, cfg-gated tests, typos) as small commits; never fix-forward semantic gaps
 5. Record approval independently of pending CI, applying the review decision fixtures below. Gate merging on required CI green. If independent host evidence or a specific named test result needed for judgment is unavailable, record `waiting` with dependency, responsible actor and resume condition, omit `--finding`, then stop for a fresh review at the current head.
 **Standalone headless draft contract:** when the launch prompt supplies an
-absolute `pending.json` path and an `aida review submit-draft <launch-dir>`
+absolute `draft.json` path and an `aida review submit-draft <launch-dir>`
 command, write the closed version-1 data-only JSON contract to that path, then
 submit the draft with that command. If it refuses, fix the draft as the message
-says and resubmit. Exit only after the submission is accepted; while a draft the
-command has not accepted is pending, nothing is recorded from the launch.
+says and resubmit. Exit only after the submission is accepted.
 Include the full reviewed SHA, complete summary and all findings. Any
 unresolved finding means request-changes. This supersedes the record command
 below, including on resume or after a refused legacy record attempt. Do not add

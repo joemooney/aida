@@ -15,17 +15,7 @@ const LIMIT: u64 = 1024 * 1024;
 /// The parent's record of the launch: PR, head and blocking policy.
 const LAUNCH_FILE: &str = "launch.json";
 /// What the reviewer writes and `aida review submit-draft` validates.
-const PENDING_FILE: &str = "pending.json";
-/// The accepted draft. Its single atomic placement is the acceptance: there
-/// is no separate receipt to disagree with it. Everything in this directory
-/// is reviewer-writable, so none of it is proof of anything: the launcher
-/// validates what it collects under the policy it kept in memory.
 const DRAFT_FILE: &str = "draft.json";
-/// The pending generation an accepting submission is consuming. It exists
-/// only between two system calls; one left behind marks an interrupted
-/// submission and is an unresolved attempt like `pending.json`.
-const CLAIM_FILE: &str = "pending.consumed.json";
-
 /// A closed schema: unknown authority fields and duplicate fields are errors.
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 #[serde(deny_unknown_fields)]
@@ -129,12 +119,7 @@ impl LaunchDraft {
         self.path.parent().unwrap_or(&self.path)
     }
 
-    /// Where the reviewer writes its draft before submitting it.
-    pub(crate) fn pending_path(&self) -> PathBuf {
-        self.launch_dir().join(PENDING_FILE)
-    }
-
-    /// The command that submits the pending draft, quoted for a shell.
+    /// Shell-quoted validation command for this launch.
     // trace:BUG-2707 | ai:claude
     pub(crate) fn submit_command(&self) -> String {
         format!(
@@ -146,8 +131,8 @@ impl LaunchDraft {
     // trace:BUG-2707 | ai:claude
     pub(crate) fn prompt(&self, prompt: &str) -> String {
         format!(
-            "{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording), on fresh and resumed reviews alike: write your verdict as UTF-8 JSON data to the absolute path `{pending}`, then submit it by running this command exactly as written: {command}\nThat command is the only supported submission. It validates the draft and, when it refuses, says what to change: correct `{PENDING_FILE}` and run it again. A draft it has not accepted is not a submission: while `{PENDING_FILE}` holds an attempt it has not accepted, the parent records nothing from this launch, not even an earlier accepted draft. Do not write `{DRAFT_FILE}` yourself: the parent applies the same checks to whatever it collects, after you can no longer correct it. Do not run `aida review record`. If a legacy record attempt was refused, still submit this draft. The parent validates the accepted draft again and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{pr},\"reviewed_sha\":\"{head}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. Any unresolved finding means request-changes: an approved draft may carry only findings written as deferred follow-ups, and the submission refuses any other approved draft. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Exit only after the submission command has accepted the draft; then give a brief final response. Never claim the parent has recorded it.",
-            pending = self.pending_path().display(),
+            "{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording), on fresh and resumed reviews alike: write your verdict as UTF-8 JSON data to the absolute path `{path}`, then validate it by running this command exactly as written: {command}\nIf validation refuses, correct the draft and run the command again. Do not run `aida review record`. If a legacy record attempt was refused, still submit this draft for validation. After you exit, the parent validates the current draft and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{pr},\"reviewed_sha\":\"{head}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. Any unresolved finding means request-changes: an approved draft may carry only findings written as deferred follow-ups, and the submission refuses any other approved draft. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Exit only after the submission command has accepted the draft; then give a brief final response. Never claim the parent has recorded it.",
+            path = self.path().display(),
             command = self.submit_command(),
             pr = self.pr,
             head = self.head,
@@ -161,19 +146,6 @@ impl LaunchDraft {
     /// that it can still correct the draft.
     // trace:BUG-2707 | ai:claude
     pub(crate) fn read(&self) -> Result<ReviewerDraft> {
-        // Not while a submission is half-way through accepting a draft.
-        let _lock = LaunchLock::hold(&self.dir)?;
-        // A later attempt the submission has not accepted wins over an
-        // earlier accepted draft: recording the earlier one would drop
-        // whatever the later attempt reports. It stays for recovery.
-        for name in [PENDING_FILE, CLAIM_FILE] {
-            let later = rv::open_verdict_entry(&self.dir, std::ffi::OsStr::new(name), 0);
-            ensure!(
-                later.is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound),
-                "rejected reviewer draft: {} holds an attempt that `aida review submit-draft` has not accepted, so nothing is recorded from this launch; the attempt is retained",
-                self.launch_dir().join(name).display()
-            );
-        }
         let file = rv::open_verdict_entry(&self.dir, std::ffi::OsStr::new(DRAFT_FILE), 0)
             .context("missing or unreadable reviewer draft")?;
         let (body, meta) = read_bounded(file)?;
@@ -181,18 +153,31 @@ impl LaunchDraft {
             meta.modified()? >= self.since,
             "rejected stale launch draft"
         );
-        let draft = parse_draft(&body)?;
-        ensure!(draft.pr == self.pr, "reviewer draft version or PR mismatch");
-        ensure!(
-            draft.reviewed_sha == self.head,
-            "reviewer draft does not match the full launch head"
-        );
-        if let Some(why) =
-            rv::approval_refusal(&self.policy, &draft.verdict, &draft.record_findings())
-        {
-            anyhow::bail!("rejected reviewer draft at {}: {why}", self.path.display());
+        validate_draft(&body, self.pr, &self.head, &self.policy)
+    }
+
+    /// Recheck the current bytes, record the verdict, and mark the draft consumed
+    /// under one lock. Only a missing draft permits the legacy collector.
+    pub(crate) fn collect<T>(
+        &self,
+        record: impl FnOnce(ReviewerDraft) -> Result<T>,
+    ) -> Result<Option<T>> {
+        let _lock = LaunchLock::hold(&self.dir)?;
+        let data = match self.read() {
+            Ok(data) => data,
+            Err(e)
+                if e.downcast_ref::<std::io::Error>()
+                    .is_some_and(|e| e.kind() == std::io::ErrorKind::NotFound) =>
+            {
+                return Ok(None)
+            }
+            Err(e) => return Err(e),
+        };
+        let collected = record(data)?;
+        if let Err(e) = self.consumed() {
+            eprintln!("warning: verdict is durable but draft consumption marker failed: {e:#}");
         }
-        Ok(draft)
+        Ok(Some(collected))
     }
 
     /// Write `body` straight to `draft.json`, as a reviewer that skips the
@@ -202,10 +187,10 @@ impl LaunchDraft {
         std::fs::write(&self.path, body).unwrap();
     }
 
-    /// Write `body` as the pending draft and submit it, as a reviewer does.
+    /// Write `body` as the current draft and submit it, as a reviewer does.
     #[cfg(test)]
     pub(crate) fn submit(&self, body: &str) -> Result<ReviewerDraft> {
-        std::fs::write(self.pending_path(), body).unwrap();
+        std::fs::write(self.path(), body).unwrap();
         submit_draft(self.launch_dir())
     }
 
@@ -269,19 +254,11 @@ pub(crate) fn unconsumed_drafts(worktree: &Path) -> Result<Vec<PathBuf>> {
         if !entry.file_name().to_string_lossy().starts_with("draft-") {
             continue;
         }
-        // An attempt the submission never accepted holds the review's
-        // findings just as an unrecorded accepted draft does, whether or not
-        // an earlier draft of the launch was recorded.
-        // trace:BUG-2707 | ai:claude
-        for name in [DRAFT_FILE, PENDING_FILE, CLAIM_FILE] {
-            let draft = entry.path().join(name);
-            match std::fs::symlink_metadata(&draft) {
-                Ok(_) => drafts.push(draft),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => {
-                    return Err(e).with_context(|| format!("cannot inspect {}", draft.display()))
-                }
-            }
+        let draft = entry.path().join(DRAFT_FILE);
+        match std::fs::symlink_metadata(&draft) {
+            Ok(_) => drafts.push(draft),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e).with_context(|| format!("cannot inspect {}", draft.display())),
         }
     }
     drafts.sort();
@@ -447,80 +424,7 @@ fn write_in(dir: &File, name: &str, body: &[u8]) -> Result<()> {
     placed
 }
 
-fn remove_in(dir: &File, name: &str) {
-    use std::os::fd::AsRawFd;
-    if let Ok(name) = c_name(name) {
-        // SAFETY: `dir` is open and the name is NUL-terminated.
-        unsafe { libc::unlinkat(dir.as_raw_fd(), name.as_ptr(), 0) };
-    }
-}
-
-/// Put a claimed pending generation back as `pending.json` unless a newer
-/// one is already there (the newer one wins), then drop the claim name.
-/// `linkat` never replaces an existing entry, so nothing is overwritten.
-// trace:BUG-2707 | ai:claude
-fn restore_claim(dir: &File) -> Result<()> {
-    use std::os::fd::AsRawFd;
-    let (claim, pending) = (c_name(CLAIM_FILE)?, c_name(PENDING_FILE)?);
-    let fd = dir.as_raw_fd();
-    // SAFETY: `dir` is open and both names are NUL-terminated.
-    if unsafe { libc::linkat(fd, claim.as_ptr(), fd, pending.as_ptr(), 0) } != 0 {
-        let e = std::io::Error::last_os_error();
-        match e.kind() {
-            // No claim to restore.
-            std::io::ErrorKind::NotFound => return Ok(()),
-            std::io::ErrorKind::AlreadyExists => {}
-            _ => return Err(e).context("cannot restore an interrupted draft submission"),
-        }
-    }
-    remove_in(dir, CLAIM_FILE);
-    Ok(())
-}
-
-/// After `body` was accepted, remove the pending draft only if it is still
-/// the generation that was validated. Taking it under the claim name is one
-/// atomic step, so a draft written over `pending.json` meanwhile is either
-/// left alone or taken and put back, never deleted unread.
-/// `Ok(false)`: a different draft is waiting in `pending.json`.
-// trace:BUG-2707 | ai:claude
-fn consume_pending(dir: &File, body: &str) -> Result<bool> {
-    use std::os::fd::AsRawFd;
-    let (claim, pending) = (c_name(CLAIM_FILE)?, c_name(PENDING_FILE)?);
-    let fd = dir.as_raw_fd();
-    // SAFETY: `dir` is open and both names are NUL-terminated.
-    if unsafe { libc::renameat(fd, pending.as_ptr(), fd, claim.as_ptr()) } != 0 {
-        let e = std::io::Error::last_os_error();
-        // Already gone: nothing left to consume.
-        return if e.kind() == std::io::ErrorKind::NotFound {
-            Ok(true)
-        } else {
-            Err(e).context("cannot consume the pending reviewer draft")
-        };
-    }
-    let same = rv::open_verdict_entry(dir, std::ffi::OsStr::new(CLAIM_FILE), 0)
-        .map_err(anyhow::Error::from)
-        .and_then(read_bounded)
-        .is_ok_and(|(claimed, _)| claimed == body);
-    if same {
-        remove_in(dir, CLAIM_FILE);
-    } else {
-        restore_claim(dir)?;
-    }
-    Ok(same)
-}
-
-/// The supported draft submission: validate the pending draft in
-/// `launch_dir` the way the launcher and the recorder will, under the
-/// launching project's policy recorded there, and accept it only when it
-/// passes. Acceptance is one atomic placement of `draft.json`; a refusal
-/// leaves the refused attempt in `pending.json`, where it blocks collection
-/// (even of an earlier accepted draft) until a later submission is accepted,
-/// and says what to correct. Submissions for one launch run one at a time.
-/// This is the reviewer's fast feedback, not the authority: the launch
-/// record it reads is reviewer-writable, and the launcher validates what it
-/// collects itself. Nothing here depends on the working directory or on the
-/// checkout the command runs from.
-// trace:BUG-2707 | ai:claude
+/// Validate the current reviewer draft without changing the launch directory.
 pub(crate) fn submit_draft(launch_dir: &Path) -> Result<ReviewerDraft> {
     use crate::gate::kernel_deps::review_blocking as rb;
     let name = |n: &str| std::ffi::OsString::from(n);
@@ -531,8 +435,6 @@ pub(crate) fn submit_draft(launch_dir: &Path) -> Result<ReviewerDraft> {
         )
     })?;
     let _lock = LaunchLock::hold(&dir)?;
-    // An earlier submission interrupted while consuming its pending draft.
-    restore_claim(&dir)?;
     let launch = rv::open_verdict_entry(&dir, &name(LAUNCH_FILE), 0)
         .map_err(anyhow::Error::from)
         .and_then(read_bounded)
@@ -554,15 +456,24 @@ pub(crate) fn submit_draft(launch_dir: &Path) -> Result<ReviewerDraft> {
     };
     // Absent or unrecognised policy data fails closed.
     let effective = rb::from_snapshot(launch.get("policy").unwrap_or(&serde_json::Value::Null));
-    let pending = launch_dir.join(PENDING_FILE);
-    let file = rv::open_verdict_entry(&dir, &name(PENDING_FILE), 0).with_context(|| {
+    let draft_path = launch_dir.join(DRAFT_FILE);
+    let file = rv::open_verdict_entry(&dir, &name(DRAFT_FILE), 0).with_context(|| {
         format!(
             "no draft to submit at {}: write the draft JSON there, then run this command again",
-            pending.display()
+            draft_path.display()
         )
     })?;
     let (body, _) = read_bounded(file)?;
-    let draft = parse_draft(&body)?;
+    validate_draft(&body, pr, head, &effective)
+}
+
+fn validate_draft(
+    body: &str,
+    pr: u64,
+    head: &str,
+    effective: &crate::gate::kernel_deps::review_blocking::Effective,
+) -> Result<ReviewerDraft> {
+    let draft = parse_draft(body)?;
     ensure!(
         draft.pr == pr,
         "reviewer draft names PR {}, but this launch reviews PR {pr}: set \"pr\" to {pr}",
@@ -573,15 +484,9 @@ pub(crate) fn submit_draft(launch_dir: &Path) -> Result<ReviewerDraft> {
         "reviewer draft names reviewed_sha {}, but this launch reviews {head}: review that commit and set \"reviewed_sha\" to it",
         draft.reviewed_sha
     );
-    if let Some(why) = rv::approval_refusal(&effective, &draft.verdict, &draft.record_findings()) {
+    if let Some(why) = rv::approval_refusal(effective, &draft.verdict, &draft.record_findings()) {
         anyhow::bail!(why);
     }
-    write_in(&dir, DRAFT_FILE, body.as_bytes())?;
-    ensure!(
-        consume_pending(&dir, &body)?,
-        "{} changed while it was being submitted: the draft read at the start was accepted, but the newer contents were not checked. Run this command again to submit them",
-        pending.display()
-    );
     Ok(draft)
 }
 
@@ -808,7 +713,7 @@ mod standalone_review_verdict_draft_tests {
         assert_eq!(draft.reviewed_sha, HEAD);
         for prompt in ["fresh review", "resumed review"] {
             let rendered = launch.prompt(prompt);
-            assert!(rendered.contains(launch.pending_path().to_str().unwrap()));
+            assert!(rendered.contains(launch.path.to_str().unwrap()));
             assert!(rendered.contains("Do not run `aida review record`"));
             assert!(rendered.contains("still submit this draft"));
         }
@@ -894,12 +799,12 @@ mod standalone_review_verdict_draft_tests {
             assert!(err.contains("Never drop a finding"), "{name}: {err}");
             // Nothing was accepted: the parent has no submission to record,
             // and the refused draft is kept for whoever recovers the review.
-            assert!(!launch.path.exists(), "{name}");
+            assert!(launch.path.exists(), "{name}");
             let read = format!("{:#}", launch.read().unwrap_err());
-            assert!(read.contains("has not accepted"), "{name}: {read}");
+            assert_eq!(read, err, "{name}");
             assert_eq!(
                 unconsumed_drafts(tmp.path()).unwrap(),
-                [launch.pending_path()],
+                [launch.path.clone()],
                 "{name}"
             );
             // The reviewer corrects the draft and resubmits through the same
@@ -950,8 +855,11 @@ mod standalone_review_verdict_draft_tests {
             serde_json::json!({"version": 1, "sha256": sha}).to_string(),
         )
         .unwrap();
-        let err = format!("{:#}", launch.read().unwrap_err());
-        assert!(err.contains("rejected reviewer draft"), "{err}");
+        let err = launch
+            .collect::<()>(|_| panic!("contradictory approval recorded"))
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("reviewer draft refused"), "{err}");
         assert!(err.contains("1 unresolved finding"), "{err}");
         assert!(err.contains("\"request-changes\""), "{err}");
         // An accepted submission followed by a raw overwrite is refused too.
@@ -959,7 +867,10 @@ mod standalone_review_verdict_draft_tests {
         launch.submit(&payload().to_string()).unwrap();
         assert!(launch.read().is_ok());
         launch.place(&contradictory);
-        assert!(launch.read().is_err());
+        let err = launch
+            .collect::<()>(|_| panic!("edited approval recorded"))
+            .unwrap_err();
+        assert!(err.to_string().contains("1 unresolved finding"));
         // The parent blocks p2. The reviewer rewrites the launch record to a
         // policy with no list: its own submission now accepts the approval,
         // and the launcher, which never reads that record, still refuses it.
@@ -980,177 +891,30 @@ mod standalone_review_verdict_draft_tests {
         launch.place(&payload().to_string());
         assert_eq!(launch.read().unwrap().verdict, "request-changes");
     }
-    /// A later attempt wins over an earlier acceptance. After an accepted
-    /// clean approval, an approval that reports a new finding is refused; the
-    /// launcher then records nothing (the clean approval would drop that
-    /// finding), and teardown keeps the attempt even once a draft of the
-    /// launch was recorded. Accepting the corrected attempt resolves it.
-    // trace:BUG-2707 | ai:claude
     #[test]
-    fn bug_2707_refused_resubmission_blocks_the_earlier_acceptance() {
-        let (tmp, launch) = launch_under("");
+    fn bug_2707_collection_holds_lock_while_recording() {
+        use std::os::fd::AsRawFd;
+        let (_tmp, launch) = fixture();
+        write(&launch, &payload());
+        let contender = File::open(launch.launch_dir()).unwrap();
+        let try_lock =
+            || unsafe { libc::flock(contender.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
         launch
-            .submit(&approved(serde_json::json!([])).to_string())
-            .unwrap();
-        assert_eq!(launch.read().unwrap().verdict, "approved");
-        let later = approved(serde_json::json!(["P1: the gate fails open"]));
-        let err = refusal(&launch, &later);
-        assert!(err.contains("1 unresolved finding"), "{err}");
-        let read = format!("{:#}", launch.read().unwrap_err());
-        assert!(read.contains("has not accepted"), "{read}");
-        assert!(read.contains("pending.json"), "{read}");
-        // Not the "no draft" case the legacy collector falls back from.
-        assert!(launch
-            .read()
-            .unwrap_err()
-            .downcast_ref::<std::io::Error>()
-            .is_none());
-        assert_eq!(
-            std::fs::read_to_string(launch.pending_path()).unwrap(),
-            later.to_string(),
-            "the refused attempt is retained"
-        );
-        assert_eq!(
-            unconsumed_drafts(tmp.path()).unwrap(),
-            [launch.path.clone(), launch.pending_path()]
-        );
-        // Even beside a recorded draft, the attempt is kept for recovery.
-        launch.consumed().unwrap();
-        assert_eq!(
-            unconsumed_drafts(tmp.path()).unwrap(),
-            [launch.pending_path()]
-        );
-        // The corrected attempt is accepted and is what the launcher reads.
-        let mut fixed = later.clone();
-        fixed["verdict"] = "request-changes".into();
-        launch.submit(&fixed.to_string()).unwrap();
-        let draft = launch.read().unwrap();
-        assert_eq!(draft.verdict, "request-changes");
-        assert_eq!(draft.findings, ["P1: the gate fails open"]);
-        // An attempt written but never submitted blocks the same way.
-        std::fs::write(launch.pending_path(), later.to_string()).unwrap();
-        assert!(launch.read().is_err());
-    }
-    /// Acceptance consumes only the pending generation it validated. A draft
-    /// that replaces `pending.json` after the read is put back, not deleted,
-    /// and the submission says to run again; an interrupted submission's
-    /// claimed generation blocks collection and is restored by the next run.
-    // trace:BUG-2707 | ai:claude
-    #[test]
-    fn bug_2707_acceptance_consumes_only_the_validated_pending_generation() {
-        let (tmp, launch) = launch_under("");
-        let dir = rv::open_verdict_directory(launch.launch_dir()).unwrap();
-        let first = payload().to_string();
-        let mut second = payload();
-        second["summary"] = "a later, different draft".into();
-        let second = second.to_string();
-        // The validated generation itself is consumed.
-        std::fs::write(launch.pending_path(), &first).unwrap();
-        assert!(consume_pending(&dir, &first).unwrap());
-        assert!(!launch.pending_path().exists());
-        // Nothing pending: nothing to consume.
-        assert!(consume_pending(&dir, &first).unwrap());
-        // A replacement written after validation survives, byte for byte.
-        std::fs::write(launch.pending_path(), &second).unwrap();
-        assert!(!consume_pending(&dir, &first).unwrap());
-        assert_eq!(
-            std::fs::read_to_string(launch.pending_path()).unwrap(),
-            second
-        );
-        let claim = launch.path.with_file_name(CLAIM_FILE);
-        assert!(!claim.exists());
-        std::fs::remove_file(launch.pending_path()).unwrap();
-        // A submission interrupted between claiming and removing: the claim
-        // is an unresolved attempt for the launcher and for teardown.
-        launch.submit(&first).unwrap();
-        std::fs::write(&claim, &second).unwrap();
-        let read = format!("{:#}", launch.read().unwrap_err());
-        assert!(read.contains(CLAIM_FILE), "{read}");
-        assert_eq!(
-            unconsumed_drafts(tmp.path()).unwrap(),
-            [launch.path.clone(), claim.clone()]
-        );
-        // The next submission restores it as the pending draft and accepts it.
-        let accepted = submit_draft(launch.launch_dir()).unwrap();
-        assert_eq!(accepted.summary, "a later, different draft");
-        assert!(!claim.exists() && !launch.pending_path().exists());
-        assert_eq!(launch.read().unwrap().summary, "a later, different draft");
-        // A newer pending draft wins over a leftover claim.
-        std::fs::write(&claim, &first).unwrap();
-        std::fs::write(launch.pending_path(), &second).unwrap();
-        restore_claim(&dir).unwrap();
-        assert!(!claim.exists());
-        assert_eq!(
-            std::fs::read_to_string(launch.pending_path()).unwrap(),
-            second
-        );
-    }
-    /// Overlapping submissions and rewrites of one launch never acknowledge
-    /// inconsistent state: every accepted draft is one of the complete
-    /// submitted bodies, no temporary file is left or shared, and once the
-    /// writers stop the launcher reads exactly the last accepted draft with
-    /// no pending attempt lost.
-    // trace:BUG-2707 | ai:claude
-    #[test]
-    fn bug_2707_concurrent_submissions_stay_consistent() {
-        let (_tmp, launch) = launch_under("");
-        let dir = launch.launch_dir().to_path_buf();
-        let body = |n: usize| {
-            let mut value = payload();
-            // Different lengths, so a torn or mixed file cannot parse as one.
-            value["summary"] = format!("draft {n} {}", "x".repeat(n * 997)).into();
-            value.to_string()
-        };
-        let bodies: Vec<String> = (0..4).map(body).collect();
-        std::thread::scope(|scope| {
-            for mine in &bodies {
-                let (dir, bodies) = (&dir, &bodies);
-                scope.spawn(move || {
-                    for _ in 0..25 {
-                        // Replace the pending draft atomically, as an editor
-                        // does, then submit whatever is pending.
-                        let tmp = dir.join(format!(".w-{}", uuid::Uuid::new_v4()));
-                        std::fs::write(&tmp, mine).unwrap();
-                        std::fs::rename(&tmp, dir.join(PENDING_FILE)).unwrap();
-                        let _ = submit_draft(dir);
-                        let accepted = std::fs::read_to_string(dir.join(DRAFT_FILE)).unwrap();
-                        assert!(bodies.contains(&accepted), "torn or foreign draft");
-                    }
-                });
-            }
-        });
-        // Whatever is still pending was never accepted: submit it.
-        if launch.pending_path().exists() {
-            let waiting = std::fs::read_to_string(launch.pending_path()).unwrap();
-            assert!(bodies.contains(&waiting));
-            assert!(launch.read().is_err(), "an unaccepted attempt blocks");
-            submit_draft(&dir).unwrap();
-            assert_eq!(std::fs::read_to_string(&launch.path).unwrap(), waiting);
-        }
-        let accepted = std::fs::read_to_string(&launch.path).unwrap();
-        assert!(bodies.contains(&accepted));
-        assert_eq!(
-            launch.read().unwrap().summary,
-            parse_draft(&accepted).unwrap().summary
-        );
-        let mut names: Vec<String> = std::fs::read_dir(&dir)
+            .collect(|_| {
+                assert_eq!(try_lock(), -1);
+                assert_eq!(
+                    std::io::Error::last_os_error().kind(),
+                    std::io::ErrorKind::WouldBlock
+                );
+                assert!(launch.path.exists());
+                Ok(())
+            })
             .unwrap()
-            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-            .collect();
-        names.sort();
-        assert_eq!(
-            names,
-            [DRAFT_FILE, LAUNCH_FILE],
-            "no temporary, claim or pending file is left"
-        );
-        // Each temporary name is unique and exclusive: a planted file with a
-        // fixed temporary name is neither published nor removed.
-        let planted = dir.join(format!(".{DRAFT_FILE}.tmp"));
-        std::fs::write(&planted, "planted").unwrap();
-        launch.submit(&bodies[1]).unwrap();
-        assert_eq!(std::fs::read_to_string(&planted).unwrap(), "planted");
-        assert_eq!(std::fs::read_to_string(&launch.path).unwrap(), bodies[1]);
+            .unwrap();
+        assert!(launch.path.with_file_name("recorded.json").exists());
+        assert_eq!(try_lock(), 0);
     }
+
     /// The default-policy remedy states the rule the recorder applies: an
     /// explicit deferral needs severity, disposition and a one-line
     /// rationale, and no `blocking_tier`. The skill's own example is accepted.
@@ -1316,7 +1080,6 @@ mod standalone_review_verdict_draft_tests {
                 body,
                 "{name}"
             );
-            assert!(!launch.pending_path().exists(), "{name}");
             assert_eq!(launch.read().unwrap().findings, draft.findings, "{name}");
             // What the submission accepts, the recorder's own decision accepts.
             let decided = crate::gate::kernel_deps::review_blocking::apply_policy(
@@ -1445,11 +1208,10 @@ mod standalone_review_verdict_draft_tests {
         let mut waiting = payload();
         waiting["verdict"] = "waiting".into();
         assert!(launch.submit(&waiting.to_string()).is_err());
-        assert!(!launch.path.exists());
-        std::fs::remove_file(launch.pending_path()).unwrap();
+        std::fs::remove_file(&launch.path).unwrap();
         let err = format!("{:#}", submit_draft(launch.launch_dir()).unwrap_err());
         assert!(err.contains("no draft to submit at"), "{err}");
-        assert!(err.contains("pending.json"), "{err}");
+        assert!(err.contains("draft.json"), "{err}");
         // Not a launch directory.
         let err = format!("{:#}", submit_draft(tmp.path()).unwrap_err());
         assert!(err.contains("is not a review launch directory"), "{err}");
@@ -1459,7 +1221,7 @@ mod standalone_review_verdict_draft_tests {
         );
         assert!(err.contains("no review launch directory"), "{err}");
     }
-    /// The pending draft is opened once, without following links or waiting
+    /// The current draft is opened once, without following links or waiting
     /// on a FIFO, and the size and file-type checks are made on that handle.
     // trace:BUG-2707 | ai:claude
     #[test]
@@ -1478,7 +1240,7 @@ mod standalone_review_verdict_draft_tests {
             }
         });
         let (tmp, launch) = launch_under("");
-        let pending = launch.pending_path();
+        let pending = launch.path.clone();
         let submit = || submit_draft(launch.launch_dir());
         let other = tmp.path().join("other.json");
         std::fs::write(&other, payload().to_string()).unwrap();
@@ -1532,7 +1294,7 @@ mod standalone_review_verdict_draft_tests {
             "one argument, uninterpreted"
         );
         // The same string, parsed by a shell, submits this launch's draft.
-        std::fs::write(launch.pending_path(), payload().to_string()).unwrap();
+        std::fs::write(launch.path.clone(), payload().to_string()).unwrap();
         let out = std::process::Command::new("/bin/sh")
             .args([
                 "-c",
@@ -1983,7 +1745,7 @@ mod standalone_review_verdict_parent_tests {
             "a refused draft is not a submission"
         );
         // Written straight to `draft.json`, the launcher refuses it as well.
-        std::fs::remove_file(launch.pending_path()).unwrap();
+        std::fs::remove_file(launch.path.clone()).unwrap();
         launch.place(&body.to_string());
         let read = format!("{:#}", launch.read().unwrap_err());
         assert!(read.contains("2 unresolved findings"), "{read}");

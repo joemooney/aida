@@ -1412,14 +1412,14 @@ fn standalone_review_verdict_structured_child_reaches_parent_canonical_record() 
 unset AIDA_SESSION_GRANT AIDA_SESSION_ID AIDA_AGENT_TYPE AIDA_AGENT_NAME
 python3 - "$@" <<'PY'
 import json, pathlib, re, subprocess, sys
-matches = [re.search(r'absolute path `([^`]+)/pending.json`', arg) for arg in sys.argv[1:]]
+matches = [re.search(r'absolute path `([^`]+)/draft.json`', arg) for arg in sys.argv[1:]]
 launch = pathlib.Path(next(match.group(1) for match in matches if match))
 assert launch.is_absolute()
 # The submission is the command the prompt gives, run through a shell as written.
 commands = [re.search(r'exactly as written: (aida review submit-draft [^\n]+)\n', arg) for arg in sys.argv[1:]]
 command = next(match.group(1) for match in commands if match)
 def submit(draft):
-    (launch / "pending.json").write_text(json.dumps(draft))
+    (launch / "draft.json").write_text(json.dumps(draft))
     return subprocess.run(command, shell=True, capture_output=True, text=True)
 draft = json.loads(r'''{data}''')
 # An approval that carries an unresolved finding is refused while this
@@ -1427,11 +1427,10 @@ draft = json.loads(r'''{data}''')
 refused = submit(dict(draft, findings=["P3: rename the helper"]))
 assert refused.returncode != 0, refused
 assert "request-changes" in refused.stdout + refused.stderr, refused
-assert not (launch / "draft.json").exists()
+assert json.loads((launch / "draft.json").read_text())["findings"] == ["P3: rename the helper"]
 accepted = submit(draft)
 assert accepted.returncode == 0, accepted
 assert json.loads((launch / "draft.json").read_text()) == draft
-assert not (launch / "pending.json").exists()
 PY
 "#
                     )

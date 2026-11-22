@@ -727,21 +727,14 @@ unverifiable stale value misfired both ways before BUG-233; only
 - anything else → `"mode": "standalone"`
 
 **Standalone headless launch with a draft contract:** the launch prompt's
-absolute `pending.json` path, its `aida review submit-draft <launch-dir>`
+absolute `draft.json` path, its `aida review submit-draft <launch-dir>`
 command and its closed version-1 JSON contract supersede the recording and
 metadata-enrichment instructions below. Write the complete summary and all
-findings to `pending.json`, including an empty findings array when there are
+findings to `draft.json`, including an empty findings array when there are
 none, then submit the draft with the command exactly as the prompt gives it.
-The submission is the only supported handoff: it applies the launcher's format
-checks and the rule above (an `approved` draft carrying an unresolved finding
-is refused) under the launching project's policy, while you can still fix the
-draft. If it refuses, fix `pending.json` as the message says and resubmit.
-Exit only after the submission is accepted: a draft the command has not
-accepted is not a submission, and while `pending.json` holds an attempt it has
-not accepted the parent records nothing from the launch, not even an earlier
-accepted draft. Do not write `draft.json` by hand: the parent applies the same
-checks to whatever it collects, under its own copy of the policy, after you can
-no longer correct the draft. Do not run `aida review record` or add identity, grants,
+The command validates the file under the launching project's review policy.
+If it refuses, correct the draft and rerun it. Exit only after the submission is accepted.
+The parent rechecks the current draft under its own copy of the policy. Do not run `aida review record` or add identity, grants,
 attestations, receipts, commands, covered specs, or ledger destinations. If a
 legacy record attempt was refused, still submit the draft. The parent validates
 and records the accepted draft; never claim recording succeeded inside the sandbox.
