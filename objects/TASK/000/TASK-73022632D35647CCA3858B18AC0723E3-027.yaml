@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-22T19:16:55.901810943Z
+modified_at: 2026-11-22T19:57:39.913098711Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -765,6 +765,12 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Approved
+- id: 01a204d6-2723-7e13-87f6-caa2a1414149
+  author: joe
+  timestamp: 2026-11-22T19:57:53.315079363Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
@@ -772,3 +778,11 @@ filed_at:
   vendor: codex
   session: 01a1e1976efb
   harness_version: codex-cli 0.167.0
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'Advisor correction 2026-11-22 13:00 MST: my 12:35 approval misapplied ADR-76. bug_2169_contained_clone_bwrap_tests.rs is containment (sandbox/confinement), which is ADR-76 strict tier, so untested-path and mutation-kill there BLOCK. Fix findings 1 and 3 only. Finding 2 (noexec /tmp, p2) stays deferred in TASK-3832. The head is the clean update-branch merge of aa380d29 onto 452f366.'
+  recovery_hint: address the review findings, move TASK-3133 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-22T19:57:39.913098711Z
