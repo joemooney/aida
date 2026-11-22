@@ -1,0 +1,33 @@
+id: 01a204b5-7e8d-7833-baec-b160042a8c66
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-473
+agreed_id: BUG-2712
+title: 'Mass-change mode defers nothing: reviewers are never told the mode is on and the recorder never demotes unmet-claimed-ac findings'
+description: |
+  Found by the advisor (claude-advisor-122, 2026-11-22 12:22 MST). Mass-change mode is ON (set by the operator until 2026-11-25 19:10 UTC; unmet-claimed-AC findings should defer, while data loss, p1 and security still block), but it has deferred NOTHING. The #4382 reviewer at 0dd153cd marked five findings unmet-claimed-ac as "blocking", and the finding corpus shows 0 deferred findings open. Per the advisor, the reviewer prompt/draft path (mode orchestrator-phase-3) never tells the reviewer the mode is on, and the recorder never demotes. So the mode has no effect, and capped PRs keep cycling.
+
+  Interim workaround (advisor): every reviewer launch brief carries "Mass-change mode is ON until 2026-11-25 19:10 UTC: record unmet-claimed-ac findings as disposition deferred unless the same defect is also data-loss, p1 or security-authority-bypass."
+
+  ## Acceptance
+  - AC1: While mass-change mode is active, the composed reviewer prompt states the mode, its expiry, and that unmet-claimed-ac findings are deferred unless they are also data-loss, p1 or security-authority-bypass.
+  - AC2: Defense in depth: while the mode is active, the verdict recorder demotes an unmet-claimed-ac finding marked blocking (and not also p1, data-loss or security) to deferred, and records that the demotion happened.
+  - AC3: With the mode off, prompt and recorder behaviour are unchanged (a test covers both states).
+  - AC4: A regression test records a verdict with one unmet-claimed-ac blocking finding under the mode and asserts disposition deferred plus an approve-eligible verdict.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T19:22:13.005269342Z
+modified_at: 2026-11-22T19:22:13.005269342Z
+req_type: Bug
+tags:
+- mass-change
+- p1
+- review
+- throughput
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
