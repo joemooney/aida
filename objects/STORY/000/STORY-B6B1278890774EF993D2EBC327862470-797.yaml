@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-22T19:14:40.454281691Z
+modified_at: 2026-11-22T19:15:23.831112046Z
 req_type: Story
 tags:
 - landing
@@ -1110,6 +1110,13 @@ comments:
   content: 'Integration seat, 22:58 MST: #4077 (approved at f3357d36cdca) is merged into integration as 5da306f03d9. With main 49cb2ad synced, integration and promotion 11 (#4075) are now at 0fbfcdb74bc. Checks at that head are in the #4075 body; ci:full and the delta review come next.'
   created_at: 2026-11-22T19:14:40.454281691Z
   modified_at: 2026-11-22T19:14:40.454281691Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a204af-7437-7103-ab90-be63884c6256
+  author: joe
+  content: 'REVIEWER NOTE for #4389 at adbac40 (advisor ruling 12:15 MST, mass-change mode): the following are KNOWN, NON-BLOCKING items. Record them as deferred follow-ups (test-gap / p2), not as request-changes: (a) test-gap: no new tests for F2 (inconclusive git probe vs proved rewrite), F3 (episode reconciled on rewrite), F5 (source vs observation timestamps), F6 (cursor+transition across crash boundaries), F14 (git routing-env sanitisation); (b) p2: F10 contributors use a hardcoded aggregate job-name list in judge() that can drift from ci.yml build-result needs, and no test covers an unrelated failed job in the same run; (c) test-gap: F19 no-watch-on-landing guard still omits orchestrator.rs. Data-loss/p1/security findings still block as usual.'
+  created_at: 2026-11-22T19:15:23.831112046Z
+  modified_at: 2026-11-22T19:15:23.831112046Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
