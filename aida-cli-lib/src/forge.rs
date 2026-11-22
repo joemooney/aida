@@ -2321,7 +2321,7 @@ pub(crate) fn landing_ci_args<'a>(
             out.status.success()
                 && String::from_utf8_lossy(&out.stdout)
                     .split_whitespace()
-                    .any(|word| word == FLAG)
+                    .any(|word| word.split(['[', '=']).next() == Some(FLAG))
         })
     }) {
         vec!["api", FLAG, path]

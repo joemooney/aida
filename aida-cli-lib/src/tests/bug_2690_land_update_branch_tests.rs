@@ -359,6 +359,32 @@ esac
 
 // trace:BUG-2711 | ai:codex
 #[test]
+fn bug_2711_optional_value_help_requires_flag_on_request() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let f = Fixture::new();
+    crate::test_exec::write_executable(
+        &f.temp.path().join("gh"),
+        r#"#!/bin/sh
+case "$*" in
+  'api --help') printf '%s\n' 'FLAGS' '      --allow-escape-sequences[=true|false]   Allow escape sequences in output' ;;
+  'api --allow-escape-sequences logs') printf '\033' ;;
+  *) exit 99 ;;
+esac
+"#,
+    );
+    let path = format!("{}:/usr/bin:/bin", f.temp.path().display());
+    let live = f.live();
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("PATH", Some(&path))]);
+    assert_eq!(
+        crate::forge::landing_ci_api(&f.root, &live.repo, "logs").unwrap(),
+        [27]
+    );
+}
+
+// trace:BUG-2711 | ai:codex
+#[test]
 fn bug_2711_installed_gh_supports_composed_argv() {
     if crate::test_env::run_path_isolated_test() {
         return;
@@ -377,10 +403,15 @@ fn bug_2711_installed_gh_supports_composed_argv() {
     let f = Fixture::new();
     let args = crate::forge::landing_ci_args(&f.root, &f.live().repo, "logs");
     let help = String::from_utf8(help.stdout).unwrap();
-    let expected = if help
-        .lines()
-        .any(|line| line.trim_start().starts_with("--allow-escape-sequences "))
-    {
+    let expected = if help.lines().any(|line| {
+        line.trim_start()
+            .strip_prefix("--allow-escape-sequences")
+            .is_some_and(|rest| {
+                rest.is_empty()
+                    || rest.starts_with(['[', '='])
+                    || rest.starts_with(char::is_whitespace)
+            })
+    }) {
         vec!["api", "--allow-escape-sequences", "logs"]
     } else {
         vec!["api", "logs"]
