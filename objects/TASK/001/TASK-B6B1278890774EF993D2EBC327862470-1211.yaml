@@ -1,0 +1,30 @@
+id: 01a204af-2ff5-7db3-83f8-467dcebff13c
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1211
+agreed_id: TASK-3830
+title: 'Mass-change deferred findings from PR #4380 (BUG-2629) final round'
+description: |
+  Deferred under MASS-CHANGE mode (advisor-122 ruling 2026-11-22 12:15 MST) from the PR #4380 (BUG-2629) Changes Requested verdict at 367c23a772. These findings were blocking (unmet claimed AC / below-tier) and now defer; #4380 fixes only p1, data loss and security findings in its final round.
+
+  ## Findings to address
+  1. [major/unmet-claimed-ac]  aida-cli-lib/src/queue_cmd/work.rs:3328 — BUG-2629 AC3 still fails for N fingerprinted changes bound to one spec. reconcile_waiting_verdicts calls current_verdict for each review key. Each local change projection opens another discovery, and Inventory::current lists all N bindings and stats all N folded ledgers on each open. active_verdicts_for repeats this when no open change answers. The outer DiscoveryScope saves payload reads but leaves quadratic filesystem work. The scaling test bounds whole.bytes and whole.opened while checking directory entries only for the initial binding pass. Reuse a checked batch projection through reconciliation and selection, refreshing after a write, and bound whole-resolution directory entries and stat work.
+  2. [major/unmet-claimed-ac]  aida-cli-lib/src/queue_cmd/rework_bindings.rs:454 — Recovery also has quadratic per-spec rescans. For N distinct reviews present in both a change ledger and the unbound ledger, each unbound event scans the bound vector with any and potentially retain, comparing full JSON records. All input can fit the byte and parse budgets while those comparisons grow as N squared. Index the duplicate records once, preserving the ownership-free preference and event order, and add a scaling assertion for this mirrored-history case.
+
+  ## Acceptance
+  - AC1: Each finding above is fixed with a regression test that fails before the fix, or explicitly closed with advisor sign-off as not applicable to the landed code.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-22T19:15:19.669562997Z
+modified_at: 2026-11-22T19:15:19.669562997Z
+req_type: Task
+tags:
+- mass-change
+- review-follow-up
+filed_at:
+  code_sha: aa567732958f669b69ec5848863ea0b13c800db5
+  branch: main
+  dirty: true
+  aida_version: 0.16.0
+  aida_build_sha: aa567732958
+  vendor: claude
