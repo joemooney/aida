@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-22T22:28:15.616606558Z
+modified_at: 2026-11-22T22:41:36.684149602Z
 req_type: Bug
 tags:
 - authority
@@ -51,6 +51,13 @@ comments:
     Deep pass: checked typed parsing, envelope version, host and PID binding, and zero/one/multiple witnesses. Fixed the multiple-witness fallback and tested duplicate witnesses. No existing test weakened. Explicit clone force-claim is reached after lease binding; PID-based recovery still requires local host, observable namespace, valid PID and kernel exit/absence. The initial reviewer-pickup probe retained invalid evidence on main. Scope is the force_claim_clone_owner predicate in the same reader module as BUG-2684, but BUG-2684 and STORY-2997 reviewer auto-release do not use this changed predicate. No reviewer auto-release or GC change. Rustfmt and git diff --check passed; make check-ci-fast in progress. PR-head CI requires host publication.
   created_at: 2026-11-22T22:28:15.616606558Z
   modified_at: 2026-11-22T22:28:15.616606558Z
+  session_id: 01a2054a64d4
+  harness_version: codex-cli 0.167.0
+- id: 01a2056c-0e02-7a72-a725-43c3bf96cffc
+  author: dirtlab
+  content: 'Validation update: final BUG-2715 regression passed (1 executed), all FAST source gates passed, all 16 Rust ratchet groups passed, and the CLI built. make check-ci-fast exited 2 only at docs/cli/verify-manual.py because the executable built inside the launcher target overlay is unavailable at the native seat target path. Dynamic manual validation remains for host CI. No related source failure was observed.'
+  created_at: 2026-11-22T22:41:36.684149602Z
+  modified_at: 2026-11-22T22:41:36.684149602Z
   session_id: 01a2054a64d4
   harness_version: codex-cli 0.167.0
 history:
