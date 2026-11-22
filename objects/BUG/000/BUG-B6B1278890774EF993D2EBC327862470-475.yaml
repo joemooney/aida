@@ -19,13 +19,26 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T20:28:46.424573080Z
+modified_at: 2026-11-22T20:30:07.954667272Z
 req_type: Bug
 tags:
 - fasttrack
 - lanes
 - review-watch
 - rework
+comments:
+- id: 01a204f3-dd38-7b01-92a7-92c43b278805
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:30):
+    # BUG-2714: fasttrack stopgap (advisor-122 ruling 2026-11-22 13:33 MST; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2714` for the ACs. A rework lane currently merges origin/main into the PR branch and pushes that merge-only head before doing the fix, so review-watch reviews it early. Find where rework preparation pushes the merge (rg the rework pickup and preparation paths in aida-cli-lib/src/queue_cmd/ and seat_clone.rs, for push or publish after the main merge). Keep the merge LOCAL until ship, and push merge plus fix together. With no fix commits, push nothing and report it.
+    Keep the diff small; don't redesign the BUG-2706 deferral. Add `// trace:BUG-2714 | ai:codex`. Commit `[AI:codex] fix(rework): ... (BUG-2714)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-22T20:30:07.954667272Z
+  modified_at: 2026-11-22T20:30:07.954667272Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
