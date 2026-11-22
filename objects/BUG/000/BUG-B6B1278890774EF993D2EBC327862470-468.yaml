@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T19:22:32.098955920Z
+modified_at: 2026-11-22T19:22:38.770525299Z
 req_type: Bug
 tags:
 - lanes
@@ -388,6 +388,23 @@ comments:
   content: 'Product: advisor-122 r3 FINAL ruling 12:22. Fix findings 2-4 only; findings 1, 5, 6 deferred to TASK-3833. Brief: .aida/tmp/brief-BUG-2706-r3-final-1222.md'
   created_at: 2026-11-22T19:22:08.765703421Z
   modified_at: 2026-11-22T19:22:08.765703421Z
+- id: 01a204b5-e2a0-77d0-9a7d-cb2784cec80b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2706):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0dd153cdba57
+    Recorded: 2026-11-22T19:18:31.287333763+00:00
+    Findings:
+    1. BUG-2706 AC1/AC2. The guard at line 1571 is reachable from queue pickup only for a fresh standalone headless implementer. is_standalone_implementer excludes guided pickups, and queue_cmd/work.rs requires QueueWorkLaunch::Fresh before calling run_recorded. An interactive foreign implementer can therefore keep working past the 30-minute TTL plus 20-minute grace while its merge-only head becomes eligible. Bind heartbeat ownership to the live implementer lease on these paths and cover a guided pickup beyond the grace period.
+    2. BUG-2706 AC1/AC2. At lines 183–187 a single oversized .toml blob returns an error for the entire published inventory. observe_change then drops every claim, including a readable, freshly reporting holder for the PR. After the unreadable interval the watcher admits that holder’s head. Skip the individual oversized blob as incomplete and retain readable records within the aggregate budget. Cover a fresh matching claim alongside an unrelated oversized blob.
+    3. BUG-2706 AC1/AC2. bound_claim lines 60–62 discards an otherwise verified lease match whenever any sibling .toml fails to parse. A persistent malformed claim for a different spec consequently stops publication for every healthy lane in the store. Their valid claims age out and the watcher eventually reviews their heads. Resolve the canonical claim path from exact lease scope and validate host and lease identity there, so unrelated unreadable records cannot stop refresh. Cover a real published heartbeat with a malformed sibling.
+    4. BUG-2706 AC3. observed_claims lines 274–276 returns a complete empty inventory when the store path is a regular file. An expected distributed store replaced by a file therefore releases even a previously held head immediately. Treat this invalid store shape as unreadable, preserving the configured grace interval. Exercise the transition from a reporting claim to an invalid store root.
+    5. BUG-2706 AC3. A configured zero-minute grace admits the first unreadable observation without logging why: settle_episode lines 235–256 sets no reason, and released is false because the episode was never held. Emit a single explanation for immediate admission on unreadable evidence and deduplicate it until recovery. Cover the zero-grace case with a malformed claim.
+    6. read_record charges the 32 MiB inventory budget only after read_to_string succeeds at lines 125–131. Invalid UTF-8 payloads consume I/O but never count, so a scan under the store writer lock can read more than a gigabyte across the permitted entry count. Charge actual bytes read before decoding or parsing and stop at the aggregate ceiling.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-22T19:22:38.624803920Z
+  modified_at: 2026-11-22T19:22:38.624803920Z
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
