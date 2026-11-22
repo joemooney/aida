@@ -67,7 +67,17 @@ fn run_review(
     use aida_core::Storage;
     let args = <ReviewArgs as clap::FromArgMatches>::from_arg_matches(matches)?;
     match &ctx.store {
-        None => Ok(crate::cmdkit::Flow::Continue),
+        // A reviewer's draft validation reads only the launch
+        // directory it is given: it runs before project discovery, so it
+        // works from any directory, inside a project or not.
+        // trace:BUG-2707 | ai:claude
+        None => match &args.cmd {
+            Some(crate::ReviewCommand::SubmitDraft { launch_dir }) => {
+                crate::review_draft::handle_submit_draft(launch_dir)?;
+                Ok(crate::cmdkit::Flow::Return)
+            }
+            _ => Ok(crate::cmdkit::Flow::Continue),
+        },
         Some(crate::cmdkit::StoreCtx::Distributed { .. }) => Ok(crate::cmdkit::Flow::Continue),
         Some(crate::cmdkit::StoreCtx::Git {
             store_path,
@@ -243,6 +253,10 @@ pub(crate) fn handle_review_command(
         // trace:BUG-775 | ai:claude
         ReviewCommand::Verdict { spec, json } => handle_review_verdict_show(spec, *json),
         ReviewCommand::List { json } => handle_review_list(*json),
+        // trace:BUG-2707 | ai:claude
+        ReviewCommand::SubmitDraft { launch_dir } => {
+            crate::review_draft::handle_submit_draft(launch_dir)
+        }
         // trace:BUG-1516 | ai:claude
         ReviewCommand::NormalizeShas { dry_run } => handle_review_normalize_shas(*dry_run),
         // trace:TASK-1307 | ai:claude
