@@ -9,12 +9,12 @@ description: |
   - AC1: Requests carrying a negative sender pidfd (-1, -2 and INT_MIN-like values) are refused before any dispatch, with a clear error.
   - AC2: close() is called only on fds that were validly received. A test asserts no close on the refused values.
   - AC3: A valid pidfd request still dispatches (positive control).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:50.241345704Z
-modified_at: 2026-11-22T21:31:28.188278664Z
+modified_at: 2026-11-22T21:56:26.625133743Z
 req_type: Bug
 tags:
 - authority
@@ -43,6 +43,13 @@ history:
   - field_name: tags
     old_value: authority, from-work-ci, security, store-mutation
     new_value: authority, from-work-ci, security, store-mutation, strict
+- id: 01a20542-b181-7500-9289-708f49c661f7
+  author: aida-session-start
+  timestamp: 2026-11-22T21:56:26.625124053Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
