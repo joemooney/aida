@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-22T22:00:00.307003668Z
+modified_at: 2026-11-22T22:12:04.436397643Z
 req_type: Bug
 tags:
 - mass-change
@@ -125,6 +125,25 @@ comments:
     A reference merge (commit 6be38166be85, `(Refs BUG-2712)`) landed while this spec was Approved, so it stays open: a reference completes only a spec the implementer marked Done. If the merged work finished it, mark it Done or Completed; otherwise the remaining slices keep it open.
   created_at: 2026-11-22T21:57:20.078433575Z
   modified_at: 2026-11-22T21:57:20.078433575Z
+- id: 01a20551-01fe-7e31-b68d-910527cdec10
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5779904749c78b17d40d230405fa24d8a7c9b6da plus native working-tree changes. Inspected the merge-base diff, git diff HEAD, and untracked inventory (empty).
+
+    AC1: [evidence: behavioral-test] review_blocking.rs:914 exercises the launch prompt and expiry. The instructions at line 67 identify the global exceptions and strict-tier floor.
+    AC2: [evidence: behavioral-test] review_blocking.rs:914 exercises recorder demotion, retained policy_demotion, and mixed-class refusals under the clock.
+    AC3: [evidence: behavioral-test] review_blocking.rs:914 checks the off-state prompt and request-changes verdict against the active window.
+    AC4: [evidence: behavioral-test] review_draft.rs:842 exercises the parent recorder and inspects the persisted approval, deferred disposition, and explanation.
+    AC5: [evidence: behavioral-test] review_blocking.rs:396 and :940 exercise strict and standard mutation-kill, strict fail-open, race and incomplete-fix aliases, and ordinary out-of-list findings.
+
+    Deep-pass: compared classification aliases across positional and JSON inputs, checked malformed and absent tiers, file/path and case normalization, mixed findings and multiple classes on a finding. Fixed strict defect precedence and standard-tier handling of recognized vocabulary. Scope uses the finding's own location. Clock reads use the verified main root and trusted-policy lookup failures retain existing refusal behavior. The existing sensitive-class regression passed. Documentation matches the amended ruling. No new authority to set the clock or change blocking tiers.
+
+    Validation: 21 review_blocking tests passed, then both BUG-2712 regressions passed on the final edits. Both diff checks passed. make check-ci-fast stopped in the shard planner fixtures: four cargo metadata calls unsupported by the lane runner. Remaining fast gates and exact publication-head CI need host validation. The prior design-fork punt remains visible on the card.
+  created_at: 2026-11-22T22:12:04.436397643Z
+  modified_at: 2026-11-22T22:12:04.436397643Z
+  session_id: 01a205451a9c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
