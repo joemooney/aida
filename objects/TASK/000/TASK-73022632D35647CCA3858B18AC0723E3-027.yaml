@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-22T20:02:02.043940446Z
+modified_at: 2026-11-22T20:04:00.145431184Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -621,6 +621,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-22T20:02:01.895549194Z
   modified_at: 2026-11-22T20:02:01.895549194Z
+- id: 01a204db-f30a-7e32-94bf-ccaa71f3c037
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:03):
+    # TASK-3133 / PR #4387 r2 (advisor-122 ruling 2026-11-22 13:00 MST; relayed by product-15). Lane: CODEX. Small.
+
+    The advisor reversed the earlier approval. bug_2169_contained_clone_bwrap_tests.rs is containment (ADR-76 strict tier). CR at e871fa8e. Fix ONLY these two findings. Finding 2 of the earlier round (noexec /tmp) stays deferred in TASK-3832. The reviewer scope is these two plus this round's diff.
+    1. ADR-76 strict tier. The regression at line 517 passes if the previous fixture_tempdir is restored. Assert that the fixture root is a direct child of the designated private-fixture base under /tmp, or drive the old target-selection input with a controlled workspace, and show that restoring the old helper fails.
+    2. ADR-76 strict tier (containment coverage). Moving fixture_tempdir to /tmp moves the TASK-2712 live Codex denial test under the ambient /tmp write grant, where its preflight skips, so primary hosts can silently lose live denial coverage. Give that live test a fixture location outside both the ambient temporary write grant and target/worktrees.
+    Under mass-change mode, classify every finding; unmet-AC defers (mass-change is ON until 2026-11-25 19:10 UTC: record unmet-claimed-ac findings as disposition deferred unless the same defect is also data-loss, p1 or security-authority-bypass, or an ADR-76 strict-tier fail-open/race).
+
+    ## Done means
+    - Each fix has a regression test that fails before the fix.
+    - One targeted cargo run, then `make check-ci-fast` green, then push on the existing branch. Never the full suite. COMMIT your work.
+    - Run `python3 scripts/check-store-writers.py`.
+  created_at: 2026-11-22T20:04:00.145431184Z
+  modified_at: 2026-11-22T20:04:00.145431184Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
