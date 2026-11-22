@@ -545,18 +545,55 @@ fn retained_private_clone(main: &Path, path: &Path) {
 }
 
 #[test]
-fn bug_2688_fresh_pickup_preserves_project_private_clone_without_a_lease() {
+fn bug_2688_fresh_pickup_preserves_private_clone_when_origin_moves_without_a_journal() {
     if aida_testkit::test_env::run_path_isolated_test_in_scratch() {
         return;
     }
     let fx = fixture();
-    let head = conflicting_pr(&fx);
+    let old_head = conflicting_pr(&fx);
     let retained = clone_path(&fx.main, "bug-2688").unwrap();
     retained_private_clone(&fx.main, &retained);
     assert!(host_recorded_clone(&fx.main, &retained).is_none());
+    assert!(journal(&fx.main).is_empty());
+    std::fs::write(retained.join("untracked"), "seat-only bytes").unwrap();
     let index = git_ok(&retained, &["ls-files", "--stage"]);
     let merge = git_ok(&retained, &["rev-parse", "MERGE_HEAD"]);
     let old_pin = pin_ref(&retained).unwrap();
+    assert_eq!(git_ok(&fx.main, &["rev-parse", &old_pin]), old_head);
+
+    git_ok(&fx.main, &["checkout", "-q", "feat"]);
+    git_ok(&fx.main, &["commit", "--allow-empty", "-qm", "new PR head"]);
+    let new_head = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+    git_ok(&fx.main, &["push", "-q", "origin", "feat"]);
+    git_ok(&fx.main, &["checkout", "-q", "main"]);
+    let mut metadata =
+        verify_rework_metadata("feat", fixture_rework_metadata("feat", "main")).unwrap();
+    metadata.head_sha.clone_from(&new_head);
+    let heads = ReworkHeads::fetch(&fx.main, metadata, "feat").unwrap();
+    assert_ne!(heads.head, old_head);
+    heads.verify_origin(&fx.main, "feat").unwrap();
+
+    // A pin at the new PR head cannot authenticate a marker recording H1.
+    git_ok(&fx.main, &["update-ref", &old_pin, &new_head]);
+    let error = archive_retained_rework_with(
+        &fx.main,
+        "BUG-2688",
+        PR,
+        "feat",
+        &heads.head,
+        || Ok(()),
+        |_| Ok(()),
+    )
+    .unwrap_err();
+    let diagnostic = format!("{error:#}");
+    assert!(diagnostic.contains("no matching host pin or exact repair reservation"));
+    assert!(diagnostic.contains(&format!("host pin is {new_head}")));
+    assert!(diagnostic.contains("show-ref --verify"));
+    assert!(diagnostic.contains("aida doctor check repair-journal"));
+    assert_eq!(git_ok(&retained, &["ls-files", "--stage"]), index);
+    assert_eq!(git_ok(&retained, &["rev-parse", "MERGE_HEAD"]), merge);
+    assert!(journal(&fx.main).is_empty());
+    git_ok(&fx.main, &["update-ref", &old_pin, &old_head]);
 
     let route = launch(HeadlessVendor::Codex, true);
     let archives = archive_retained_rework_with(
@@ -564,7 +601,7 @@ fn bug_2688_fresh_pickup_preserves_project_private_clone_without_a_lease() {
         route.scope,
         route.pr,
         route.branch,
-        &head,
+        &heads.head,
         || admit_rework_conflict_launch(route),
         |path| {
             assert_eq!(path, retained);
@@ -576,6 +613,7 @@ fn bug_2688_fresh_pickup_preserves_project_private_clone_without_a_lease() {
         panic!("expected one archive, got {archives:?}");
     };
     assert!(!retained.exists());
+    assert_eq!(git_ok(archive, &["rev-parse", "HEAD"]), old_head);
     assert_eq!(git_ok(archive, &["rev-parse", "MERGE_HEAD"]), merge);
     assert_eq!(git_ok(archive, &["ls-files", "--stage"]), index);
     assert_eq!(
@@ -584,10 +622,21 @@ fn bug_2688_fresh_pickup_preserves_project_private_clone_without_a_lease() {
     );
     assert_eq!(git_ok(&fx.main, &["for-each-ref", &old_pin]), "");
     assert_eq!(
+        std::fs::read_to_string(archive.join("untracked")).unwrap(),
+        "seat-only bytes"
+    );
+    assert_eq!(
         git_ok(&fx.main, &["rev-parse", &pin_ref(archive).unwrap()]),
-        head
+        old_head
     );
     assert!(host_recorded_clone(&fx.main, archive).is_none());
+    assert!(journal(&fx.main).is_empty());
+
+    create(&fx.main, &retained, "feat", &heads.head).unwrap();
+    assert_eq!(git_ok(&retained, &["rev-parse", "HEAD"]), new_head);
+    assert_eq!(git_ok(&fx.main, &["rev-parse", &old_pin]), new_head);
+    assert!(!merging(&retained));
+    assert!(merging(archive));
 }
 
 #[test]
@@ -902,7 +951,9 @@ fn bug_2688_fresh_pickup_refuses_head_movement_without_replacing_its_pin() {
     let error = ReworkHeads::fetch(&fx.main, metadata, "feat")
         .err()
         .unwrap();
-    assert!(format!("{error:#}").contains("differs from the observed PR head"));
+    let diagnostic = format!("{error:#}");
+    assert!(diagnostic.contains("differs from the observed PR head"));
+    assert!(diagnostic.contains("ls-remote --refs origin refs/heads/feat"));
 }
 
 #[test]

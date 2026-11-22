@@ -441,7 +441,13 @@ moving the seat and rechecks the pinned refs and PR before preparing the
 replacement. If they changed, pickup reports the refusal and any archive
 stays at the location already reported. A private clone needs a matching
 project marker and object alternates, plus a host pin for the exact scope
-path and PR head or a host journal entry matching the retained repair.
+path at the marker's recorded creation SHA or a host journal entry matching
+the retained repair. The archived clone keeps that creation pin even if the
+PR has advanced. The replacement uses the newly pinned PR head. If the clone
+stays in place for missing proof, use the reported host `git show-ref --verify`
+command and `aida doctor check repair-journal` to inspect the evidence. For a
+forge and origin mismatch before placement, use the reported `git ls-remote`
+command and retry fresh pickup from the main checkout once the heads agree.
 <!-- trace:BUG-2688 | ai:codex -->
 
 **Expired exited-worker claims.** `aida doctor check leases` also reports shared

@@ -3402,8 +3402,10 @@ impl ReworkHeads {
         let (base, head) = fetch_rework_heads(main, &metadata.base_ref, branch)?;
         anyhow::ensure!(
             head == metadata.head_sha,
-            "rework origin/{branch} differs from the observed PR head ({} != {head}); retry pickup after forge and origin agree",
-            metadata.head_sha
+            "rework origin/{branch} at {head} differs from the observed PR head {}; inspect origin with `git -C {} ls-remote --refs origin {}` and retry pickup after forge and origin agree",
+            metadata.head_sha,
+            crate::shell_quote(&main.to_string_lossy()),
+            crate::shell_quote(&format!("refs/heads/{branch}")),
         );
         Ok(Self {
             base_ref: metadata.base_ref,
@@ -3885,8 +3887,9 @@ fn archive_retained_rework_with(
                 &to,
                 branch,
                 identity,
-                scoped_path.then_some(pr_head),
+                scoped_path,
                 journal_bound,
+                scope,
             )?;
         } else {
             move_rework_worktree(main, &from, &to, branch, pr_head, identity)?;
@@ -3944,8 +3947,9 @@ fn move_rework_clone(
     to: &Path,
     branch: &str,
     identity: (u64, u64),
-    scoped_head: Option<&str>,
+    scoped_path: bool,
     journal_bound: bool,
+    scope: &str,
 ) -> Result<()> {
     require_retained_clone_main(main, from)?;
     anyhow::ensure!(
@@ -3967,11 +3971,22 @@ fn move_rework_clone(
     )?;
     let pin_matches_marker =
         marker.branch == branch && marker.pin == pin && oid == Some(marker.base_sha.as_str());
+    // The placement pin identifies this clone's creation, even if either
+    // the seat's local tip or the remote PR head has since moved.
     anyhow::ensure!(
-        (pin_matches_marker && scoped_head.is_some() && oid == scoped_head)
+        (pin_matches_marker && scoped_path)
             || (journal_bound && (oid.is_none() || pin_matches_marker)),
-        "retained clone {} has no matching host pin or exact repair reservation; left in place",
-        from.display()
+        "retained clone {} has no matching host pin or exact repair reservation; left in place. Expected marker branch {branch} and pin {pin} at the recorded creation SHA {:?}; marker names branch {:?} and pin {:?}, host pin is {} (scope path matches: {scoped_path}). Inspect from the host with `git -C {} show-ref --verify -- {}` and `cd {} && aida doctor check repair-journal`. Once the proof is available, retry `cd {} && aida queue work {} --fresh`",
+        from.display(),
+        marker.base_sha,
+        marker.branch,
+        marker.pin,
+        oid.unwrap_or("missing"),
+        crate::shell_quote(&main.to_string_lossy()),
+        crate::shell_quote(&pin),
+        crate::shell_quote(&main.to_string_lossy()),
+        crate::shell_quote(&main.to_string_lossy()),
+        crate::shell_quote(scope),
     );
     if let Some(oid) = oid {
         linked_rework_git(main, &["update-ref", &new_pin, oid, ""])?;
