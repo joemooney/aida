@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T17:36:10.815671543Z
-modified_at: 2026-11-22T20:51:35.768755408Z
+modified_at: 2026-11-22T20:53:07.318968826Z
 req_type: Bug
 tags:
 - conflicts
@@ -1206,6 +1206,11 @@ comments:
   created_at: 2026-11-22T20:40:24.489291262Z
   modified_at: 2026-11-22T20:40:24.489291262Z
   session_id: 01a204b4e0e4
+- id: 01a20508-b877-7923-bae9-6f861907d4bc
+  author: joe
+  content: 'Product: advisor-122 r5 CAP EXCEPTION ruling 13:55. ONE round fixing the data-loss finding only (ignored-path collision check on the observed merge-tree result before reserving or merging). Finding 2 is deferred to TASK-3836. Brief: .aida/tmp/brief-BUG-2688-r5-1355.md. A further blocking CR parks #4388.'
+  created_at: 2026-11-22T20:53:07.318968826Z
+  modified_at: 2026-11-22T20:53:07.318968826Z
 history:
 - id: 01a1efbb-a4ad-78f1-87d0-822ed7dd3389
   author: joe
