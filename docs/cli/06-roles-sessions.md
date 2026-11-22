@@ -1142,10 +1142,61 @@ children settle before changing modes. Surviving land children, unresolved
 review reservations, an active train, or unreadable evidence refuse the
 transition; inspect and recover the existing work rather than removing locks.
 
-Manual `aida pr train` and `aida pr ship` use a typed **admission busy** refusal
-while a controller owns admission. It names the holder PID, boot/start identity,
-namespace and purpose when known. Stop the owning service and wait for
-quiescence before retrying. Land hands only its direct train child its admission
+The loop controllers hold their shared claim one pass at a time, not for
+their lifetime. `aida pr ship`, `aida land run` and a manual `aida pr train`
+wait for admission instead of failing on the first attempt. While they wait
+they record a waiting request under `.aida/admission-owner/`. Loop
+controllers check for it between passes and give up their shared claim
+within about a second when idle. No new loop claim starts ahead of the
+waiting request. A ship or land waits for review-watch and the auto-train.
+A manual train waits only for the auto-train, because review-watch can run
+alongside a manual train. Running reviews and train passes are never cut
+short. A ship still waits until in-flight reviews settle, and a train pass
+keeps its claim until it ends. A yielded review-watch keeps settling earlier
+reviews, so a superseded review whose processes have exited is cleared and
+does not hold the waiting ship. It does not discover or launch reviews while
+it is yielded. The wait is bounded by `[admission] wait_secs`
+in `.aida/config.toml`: 180 seconds by default, at most 3600, and 0 to refuse
+at once. If the requester gives up, its typed **admission busy** refusal
+names the holders (PID, boot/start identity, namespace and purpose when known)
+and how long it waited. When a review still in flight is what blocks it, the
+refusal names that review's change and the PIDs of its live processes. Every wait for the admission receipt lock counts
+against the same bound, so a stalled process holding that lock cannot keep
+the requester waiting past it. The refusal then names the lock's holder.
+A waiting request is removed when its requester gets
+admission, gives up or dies. Each request also expires 30 seconds after its
+bound. A request dated ahead of the reader's clock (after a backwards clock
+correction) is ignored until what is left of it is within that maximum, so no
+request holds claims back for longer. Requests and holder receipts are written by rename, so a reader never
+sees one half written. A request file that cannot be parsed (left by an
+interrupted write) blocks nothing: it is ignored and removed once it is 30
+seconds old. A review-watch that gave up its claim during a manual train
+takes it back while that train is still running.
+<!-- trace:BUG-2703 | ai:claude -->
+
+To keep the loops off admission for longer, for example during a long
+landing session, use `aida advisor loops drain --reason "<why>" --for 2h`
+(default 1h, maximum 24h). Do not signal the worker processes. An advisor
+with a valid grant can drain or resume, and so can an operator at an
+interactive terminal outside any agent session. A process without a grant
+that has no terminal, or that an agent identity, a session id or a headless
+lane marks as AIDA-managed, is refused. While a drain is
+active, both controllers give up their claims at their next pass boundary
+and take no new one. The deputy's supervisor does not restart an exited
+loop worker. Running reviews and trains finish first. `aida advisor loops
+resume` ends the drain early; otherwise it expires on its own. The journal
+`.aida/admission-owner/loops-drain.journal` keeps the latest 256 drain,
+resume and expiry events, with actor, reason, issue time and expiry. It is
+also kept under 256 KiB: with long reasons the oldest events are dropped
+sooner. A drain or resume checks its caller's authority once it holds the
+journal lock, so a grant revoked while the command waited is refused. An
+unreadable journal counts as drained. `aida advisor loops status` and
+`train-status` show both workers' claims (review-watch and auto-train) with
+their ages, the active drain, and any waiting land, ship or train. A claim
+taken by an older build shows an unknown age. In `--json` output this is the
+`admission_claims` object. <!-- trace:BUG-2703 | ai:claude -->
+
+Land hands only its direct train child its admission
 scope; ordinary grant and merge gates still apply. Eligibility scans and idle
 passes do not hold `.aida/train/run.lock`; journal recovery and the selected
 train driver take that lock separately. These claims are coordination evidence,
@@ -1267,8 +1318,11 @@ hours also apply.
 
 #### Pausing review launches
 
-An unseated operator or an advisor with a valid grant can run
+An advisor with a valid grant, or an operator at an interactive terminal
+outside any agent session, can run
 `aida review watch pause --reason "landing-driver cutover" --for 1h`.
+A process without a grant that has no terminal or belongs to an agent
+session is refused.
 `--for` accepts seconds or a duration such as `30m` or `2h`. The default and
 maximum come from `[review] watch_pause_default` and `[review] watch_pause_max`
 in `.aida/config.toml` (1h and 24h when unset; the maximum cannot exceed 7 days).
