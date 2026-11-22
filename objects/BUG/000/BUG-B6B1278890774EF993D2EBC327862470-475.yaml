@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T23:22:04.951824890Z
+modified_at: 2026-11-22T23:49:17.058986976Z
 req_type: Bug
 tags:
 - fasttrack
@@ -205,6 +205,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a205aa-350f-7c30-b582-5da53d272ace
+  author: joe
+  timestamp: 2026-11-22T23:49:30.511276169Z
+  session_id: 01a205a791d5
+  changes: []
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
@@ -216,7 +221,7 @@ failure_reason:
   phase: reviewer
   phase_index: 3
   kind: verdict:request-changes
-  detail: BUG-2714 AC1 passes and AC4 has a clone-path regression. AC2 and AC3 fail on linked-worktree ship and resumed preparation respectively. All four round-two findings remain in the pinned tree. The implementer self-review includes working-tree changes absent from this SHA. Exact-head FAST build passed. merge-hold-gate pending at review time.
+  detail: BUG-2714 AC1 and AC4 pass source review. Pickup keeps the clean merge local, and the regression checks the remote before and after ship. The linked-worktree base-advance, legacy merge, remote-race and automatic NoChange cases have targeted coverage. AC2 and AC3 still fail on the paths described below. CI pending at review time (fast compile).
   recovery_hint: address the review findings, move BUG-2714 back to In Progress, and clear the PR hold only after approval
   shelved_by: advisor
-  shelved_at: 2026-11-22T23:22:04.951824890Z
+  shelved_at: 2026-11-22T23:49:17.058986976Z
