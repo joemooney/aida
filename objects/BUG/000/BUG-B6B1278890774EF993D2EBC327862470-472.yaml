@@ -19,7 +19,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T18:45:04.006084804Z
-modified_at: 2026-11-22T20:19:04.301121341Z
+modified_at: 2026-11-22T20:26:27.355775685Z
 req_type: Bug
 tags:
 - fasttrack
@@ -119,6 +119,20 @@ comments:
   modified_at: 2026-11-22T20:03:26.359008346Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a204f0-5103-7651-8c51-60538fa3b386
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 84385c71c9e0fad7b9224d36fd8e7a85599cbd48 plus the two uncommitted round-two edits. Inspected origin/main...HEAD, git diff HEAD and untracked additions (none).
+    AC1: [evidence: behavioral-test] forge.rs:2324 and bug_2690_land_update_branch_tests.rs:330,362. The old-gh case verifies one probe across two raw-byte reads. The new optional-value case requires the bare flag on the actual API request.
+    AC2: [evidence: behavioral-test] bug_2690_land_update_branch_tests.rs:183 and story_2768_land_tests.rs:907 accept both argv shapes. The dedicated old-gh fixture rejects the flag.
+    AC3: [evidence: behavioral-test] bug_2690_land_update_branch_tests.rs:406 independently checks the option declaration. All three BUG-2711 tests passed in the lane job. Installed gh 2.103.3 advertises the bare flag.
+    AC4: [evidence: manual-inspection] Deferred live imac verification, outside this round.
+    Both review findings fixed. Checked case, whitespace, bracket and equals boundaries, longer option names, missing and repeated matches. API failures still propagate. No new authority paths.
+  created_at: 2026-11-22T20:26:27.355775685Z
+  modified_at: 2026-11-22T20:26:27.355775685Z
+  session_id: 01a204e9562e
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a204a0-b071-7890-b82e-02414625a203
   author: aida-session-start
