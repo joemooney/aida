@@ -15,7 +15,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:13:35.072455044Z
-modified_at: 2026-11-21T09:15:55.576129597Z
+modified_at: 2026-11-22T17:30:19.283199353Z
 req_type: Bug
 tags:
 - docs:impacted
@@ -418,6 +418,32 @@ comments:
     Run cargo fmt --all -- --check, the targeted review_draft tests through the lane job runner, and the normal host fast gates. Preserve the independent review and CI requirements at the newly published head.
   created_at: 2026-11-21T07:13:30.092414893Z
   modified_at: 2026-11-21T07:13:30.092414893Z
+- id: 01a2044f-3ec9-7703-86ae-281442c74eec
+  author: joe
+  content: |-
+    AUTHORITATIVE R4FINAL BRIEF (advisor-122, relayed by product 10:30):
+    # BUG-2707 / PR #4385 r4 FINAL: run at head bdd60daf (advisor-122 cap exception 2026-11-22 10:30 MST; relayed by product-15). Lane: CODEX.
+
+    The r4 brief below never actually ran: bdd60daf is only a main-merge commit, and its round-4 verdict findings 1-6 restate this brief. The fixture PATH fix is in aida-cli/tests/bug_2707_submit_draft_cli.rs:43. If the next verdict is changes-requested again, the spec parks for the advisor.
+
+    Advisor: claude-advisor-121, 2026-11-20 19:08 MST. Head reviewed: 10854bb (5). Lane: CLAUDE+Fable. COMMIT your work.
+    Four of the five findings are races in the pending/consumed CLAIM protocol between submit-draft and the launcher. Since r3, the LAUNCHER
+    validates the collected draft itself, which is the real gate. RULING: REMOVE the claim protocol.
+     - `submit-draft` becomes VALIDATE-ONLY: it reads the draft (bounded, no-follow), runs the same validator, and prints accept or refuse with the fix. It
+       writes nothing, renames nothing and creates no receipts. The prompt says: write the draft, run submit-draft, fix until it accepts, then exit.
+     - The launcher, at collection, validates under the launch lock and records in one locked section (hold the lock from read through record and
+       consumed(): finding 1); a contradictory draft is refused with the same message, and no verdict is recorded.
+     - Delete pending.json, pending.consumed.json, restore_claim and consume_pending, plus their tests; replace them with: a contradictory draft that was
+       never validated is refused at collection; a validated-then-edited draft is refused at collection.
+     - Finding 5 (CI red): the CLI test uses a deterministic fixture PATH (no ambient var_os PATH).
+    FINAL round: a clean result merges. make sync-templates; check-templates; cargo fmt; ratchets; targeted cargo run; check-ci-fast. Push.
+
+    ## Before pushing (product, per advisor 21:40)
+    Run `python3 scripts/check-store-writers.py` and classify any new store-writer site in scripts/store-writers.toml.
+  created_at: 2026-11-22T17:30:19.283199353Z
+  modified_at: 2026-11-22T17:30:19.283199353Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fb3d-289e-7142-82c4-554327403553
   author: joe
