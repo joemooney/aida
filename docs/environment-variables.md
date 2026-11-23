@@ -504,7 +504,8 @@ registry's build identity.
 | Variable | What it does | Default | Who sets it | Scope |
 | --- | --- | --- | --- | --- |
 | `AIDA_BUILD_GIT_SHA` | Short git SHA at build time. | `unknown` if git unavailable. | build | compile-time |
-| `AIDA_BUILD_GIT_DIRTY` | `1` if the worktree had uncommitted changes at build. | `0`. | build | compile-time |
+| `AIDA_BUILD_GIT_STATUS` | Tracked changes shown by `aida dev status`, capped at about 32 KiB. | Empty. | build | compile-time |
+| `AIDA_BUILD_GIT_DIRTY` | `1` if tracked files had staged or unstaged changes at build. | `0`. | build | compile-time |
 | `AIDA_BUILD_UNIX_TIME` | Build timestamp (Unix epoch seconds). | `0` if unavailable. | build | compile-time |
 
 ---
