@@ -13,12 +13,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T08:02:21.413386524Z
-modified_at: 2026-11-23T08:03:35.510565040Z
+modified_at: 2026-11-23T19:35:15.606301465Z
 req_type: Bug
 tags:
 - build
 - mail-retention
 - small
+- track:integration
 comments:
 - id: 01a2076e-c081-7e23-9f33-e3a36ca9f32c
   author: joe
@@ -34,6 +35,14 @@ comments:
   modified_at: 2026-11-23T08:03:35.510565040Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a209e7-cb96-7671-a68a-e252bfa61608
+  author: joe
+  timestamp: 2026-11-23T19:35:15.606300887Z
+  changes:
+  - field_name: tags
+    old_value: build, mail-retention, small
+    new_value: build, mail-retention, small, track:integration
 filed_at:
   code_sha: a16f3592f015e06580a94c1f7879ea9c877c088e
   branch: main
