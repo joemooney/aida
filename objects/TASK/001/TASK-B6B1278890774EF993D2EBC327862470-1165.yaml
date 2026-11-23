@@ -15,12 +15,12 @@ description: |
   - Establish sufficient headroom before the scheduler kill ceiling for a pass to stop optional work, report partial progress and persist justified transitions. The same overall deadline must cover fetch, Git, forge calls and repeated scans.
   - Check a slow or repeatedly pending production-equivalent pass with a controlled clock and bounded child fixtures. It should return a diagnostic before the outer kill deadline and resume without advancing past unresolved evidence. Preserve time-based observational transitions when the scan uses the remaining budget.
   - Keep this follow-up observational. Spec filing, rerun initiation and store-mutating escalation retain their separate S3b gate.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:04.786390252Z
-modified_at: 2026-11-23T10:21:02.231754962Z
+modified_at: 2026-11-23T10:36:35.101549593Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -112,6 +112,11 @@ comments:
   modified_at: 2026-11-23T10:21:02.231754962Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a207fa-9f9d-7530-83bf-31b24cd8872f
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Round 1 full sweep for completing TASK-3209 (TASK-b6b1278890774ef993d2ebc327862470-1165). Reviewed the entire pinned diff from protected main 55f63f3800861fee8b80ae3046c104290baf7fbf to landed tree 629aa4ccb616be2c1dce882bdbea152122c316c1 and confirmed that tree matches the original head. The generated worksheet linked the completing task and directed review to its description because the acceptance bullets lack a standard section heading. Reviewed all three bullets in the canonical description.. No triage reason was given.'
+  created_at: 2026-11-23T10:36:35.101542637Z
+  modified_at: 2026-11-23T10:36:35.101542637Z
 history:
 - id: 01a1fd69-49b3-7a42-88e5-dd4c224420bd
   author: joe
@@ -189,6 +194,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a207fa-9f9d-7530-83bf-31aecc207888
+  author: joe
+  timestamp: 2026-11-23T10:36:35.101530364Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362
@@ -197,18 +209,3 @@ filed_at:
   aida_build_sha: 719aa4947d0
   vendor: claude
   session: 01a1faec8fa5
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Round 1 full sweep for completing TASK-3209 (TASK-b6b1278890774ef993d2ebc327862470-1165). Reviewed the entire pinned diff from protected main 55f63f3800861fee8b80ae3046c104290baf7fbf to landed tree 629aa4ccb616be2c1dce882bdbea152122c316c1 and confirmed that tree matches the original head. The generated worksheet linked the completing task and directed review to its description because the acceptance bullets lack a standard section heading. Reviewed all three bullets in the canonical description.
-
-    AC1 (headroom, partial progress, and one deadline across fetch, Git, forge and rescans) — unverified. The live-port deadline is shared, but the scheduled entry does root Git work before it is armed, Git expiry can bypass the partial-pass epilogue, and optional mailbox scans can consume the checkpoint reserve.
-    AC2 (controlled slow pass, diagnostic, safe retry, and time-based transitions) — unverified. The implementer reported a passing focused test, cargo test -p aida-cli-lib exhausted_pass_confirms_verified_red_and_retries_unresolved_commit (lane job j20261123T092520473-2-0). The fixture covers a stalled later CI query, time-based confirmation of verified red, and cursor retry. The production Git expiry branches bypass that behavior and the fixture only uses in-memory Git ports.
-    AC3 (observational only; keep S3b effects gated) — verified by source inspection of pass, open, advance, close, and the production Ports implementation. Effects remain local watch state, journal and advisor notifications. The diff adds no spec filing, rerun initiation, or store-mutating escalation.
-
-    CI pending at review time on the attested head. FAST source gates and merge-hold-gate passed and fast compile was running. Local builds and tests were not run under the reviewer policy. Request changes for the two incomplete acceptance criteria. The draft includes all four findings.
-  recovery_hint: address the review findings, move TASK-3209 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T10:20:20.704692063Z
