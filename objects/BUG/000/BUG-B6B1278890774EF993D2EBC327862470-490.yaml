@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: An approval recorded through review-watch requests full-tier CI exactly as a manual `aida review record` approval does: ci:full is applied, or the full workflow is triggered, after any in-flight FAST run finishes, so no FAST run is cancelled (avoiding the BUG-2723 ghost red).
   - AC2: A regression test: a review-watch approval of a head without ci:full results in a full-tier request.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-23T10:06:32.304172360Z
+modified_at: 2026-11-23T10:16:26.669321194Z
 req_type: Bug
 tags:
 - ci
@@ -35,6 +35,14 @@ comments:
   modified_at: 2026-11-23T10:06:32.304172360Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
+  author: aida-session-start
+  timestamp: 2026-11-23T10:16:26.669320325Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
   branch: main
