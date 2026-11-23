@@ -1,0 +1,35 @@
+id: 01a206f5-21e3-7e91-8e11-5378671e4cf3
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-818
+agreed_id: STORY-3016
+title: 'Review PR-4410: [AI:claude] chore(integration): observational red-main watch (S3a) [promotion 25] (Refs STORY-2897)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `promote/integration-25`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4410>
+  - Branch: `promote/integration-25` → `main`
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2897
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4410` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T05:50:58.019753922Z
+modified_at: 2026-11-23T05:50:58.019753922Z
+req_type: Story
+filed_at:
+  code_sha: ca95624cadfe896abf34e36cde0e98ad40c847e8
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5470336db35
+  vendor: claude
