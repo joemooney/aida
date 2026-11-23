@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T21:45:10.982103610Z
-modified_at: 2026-11-23T21:45:38.652915198Z
+modified_at: 2026-11-23T21:47:47.990611216Z
 req_type: Task
 tags:
 - doctor
@@ -28,6 +28,22 @@ comments:
   content: 'Filed Approved per advisor-122 ruling 2026-11-23 14:47 on #4460 (STORY-2767 slice 1 follow-up condition); relayed by integration-30, filed by product-15. Mode drain, p29 integration bundle.'
   created_at: 2026-11-23T21:45:38.652915198Z
   modified_at: 2026-11-23T21:45:38.652915198Z
+- id: 01a20a61-5aa2-7a13-acc0-521c37145a66
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 14:47):
+    # TASK-3846: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3846` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3846 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3846)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    INTEGRATION BUNDLE p29 (product-15 14:48): branch `int29-task-3846`, cut from origin/integration 7e5580069c0. PR base MUST be `integration`. Builds on STORY-2767 slice 1 (#4460): if #4460 is not yet in integration when you start, base your reader-side counting on the sidecar check it introduces (see #4460). STRICT-PATH STOP: no gate/*, leases, claims, grants, containment, session_reap, admission; if needed, STOP and punt.
+  created_at: 2026-11-23T21:47:47.990611216Z
+  modified_at: 2026-11-23T21:47:47.990611216Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a5f-1ffd-7a60-89c4-efc8c7468411
   author: joe
