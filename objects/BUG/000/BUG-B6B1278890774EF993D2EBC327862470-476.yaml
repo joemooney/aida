@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-23T00:13:50.995183334Z
+modified_at: 2026-11-23T00:37:11.553982858Z
 req_type: Bug
 tags:
 - authority
@@ -121,6 +121,19 @@ comments:
   modified_at: 2026-11-23T00:11:25.565819392Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a205d5-e58e-73f2-9f68-305c2796c4c6
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5171459f65b6d2cfd93a85bf6e713df68bd9c385 plus the native round-2 working tree. Reviewed origin/main...HEAD, git diff HEAD, and untracked additions (none).
+    AC1: [evidence: behavioral-test] ownership/reader.rs:748 exercises missing admission/refusal stamps, wrong-type PID, incomplete refusal, oversized valid JSON, ambiguous witnesses and dead predecessor/live successor. queue_cmd/work.rs:4263 exercises a truncated on-disk TOML lease alone and beside a readable match.
+    AC2: [evidence: behavioral-test] ownership/reader.rs:748 checks both a bound admission and a genuine refusal for an exited worker.
+    AC3: [evidence: behavioral-test] Both tests assert the refusal path and read-only inspection command.
+    Findings 1–4 addressed. Checked writer/reader equality, original JSON fields and TOML filename handling, zero/one/multiple witnesses and leases, and authority at the reclaim preflight and teardown call sites. Older refusal witnesses missing the original generation or stamp retain the clone. The two focused lane tests passed. All 48 FAST source gates passed; aggregate ratchets running at comment time. Host publication pending.
+  created_at: 2026-11-23T00:37:11.553982858Z
+  modified_at: 2026-11-23T00:37:11.553982858Z
+  session_id: 01a205c02902
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
