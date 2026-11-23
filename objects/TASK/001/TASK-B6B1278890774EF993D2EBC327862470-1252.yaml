@@ -1,0 +1,31 @@
+id: 01a2089c-acb0-7bb3-ba17-8661e10b7bd2
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1252
+title: 'Review follow-up: The new plain-check mandate path can overrun --timeout. aida-cli-lib/src/pr_train.rs:2251 '
+description: |-
+  From TASK-3115
+  Reviewed sha: 5d32993516df48bf679c28db590822c4724702b9
+
+  The new plain-check mandate path can overrun --timeout. aida-cli-lib/src/pr_train.rs:2251 reaches have_ship_refs_locally's raw Git status/output calls and the fallback fetch in aida-cli-lib/src/gate/mandate_ship.rs:667-670,1121-1145 and aida-cli-lib/src/pr_service.rs:545-565. Mandate trace and snapshot Git calls also bypass the scoped deadline (aida-cli-lib/src/gate/mandate_traces.rs:51-58,652-674), and store retries have their own independent query budget and backoff. check_all only discards a late result after the call returns. A stalled Git child therefore holds the report past the documented deadline. Apply the remaining deadline to preview Git commands and retries, and cover a stalled mandate-only subprocess through the report entry point.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T13:33:35.280628704Z
+modified_at: 2026-11-23T13:33:35.280628704Z
+req_type: Task
+tags:
+- carried-from:TASK-3115
+- finding-hash:2ec614dc
+- from-review:TASK-3115
+relationships:
+- rel_type: References
+  target_id: 01a1db6f-92aa-7252-a56e-51eb4f30ba07
+  created_at: 2026-11-23T13:33:49.055283923Z
+filed_at:
+  code_sha: 5d32993516df48bf679c28db590822c4724702b9
+  branch: pr-4432
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ff524ebd21f
+  vendor: claude
+  session: 01a208998b78
