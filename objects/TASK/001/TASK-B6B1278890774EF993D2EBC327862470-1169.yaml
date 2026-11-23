@@ -14,12 +14,12 @@ description: |
 
   - With a corrupt committed red-main journal line or an unreadable journal, keep merge, readiness, and review-round metrics available. Show that red-main metrics are unavailable in both human and JSON output, with a bounded diagnostic. Preserve the available red-main result shape for existing JSON callers.
   - Keep the existing valid-journal and absent-journal behavior. A truncated trailing line retains the journal reader's current handling. Exercise the CLI report with one corrupt committed line and assert independent metrics survive. Keep strict journal reads on paths that use it as state or transition evidence.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.340242990Z
-modified_at: 2026-11-23T09:36:31.101339170Z
+modified_at: 2026-11-23T09:55:14.620351486Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -86,6 +86,12 @@ comments:
   modified_at: 2026-11-23T09:36:31.101339170Z
   session_id: 01a20796dd39
   harness_version: codex-cli 0.167.0
+- id: 01a207d4-c63c-7122-aa62-533ab047d2e4
+  author: aida-publication-done
+  content: Implementer push 767142f01ed2 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T09:55:14.620350903Z
+  modified_at: 2026-11-23T09:55:14.620350903Z
+  session_id: 01a20796dd39
 history:
 - id: 01a1fd65-88f9-7f90-ab34-7efd0c59fec7
   author: joe
@@ -141,6 +147,14 @@ history:
   session_id: 01a20796dd39
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a207d4-c63c-7122-aa62-532a7ce8f068
+  author: aida-publication-done
+  timestamp: 2026-11-23T09:55:14.620349089Z
+  session_id: 01a20796dd39
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362
