@@ -75,6 +75,10 @@ if a[:2]==['pr','create']:
     s['prs']['77']=dict(number=77,url='https://github.com/fixture/train/pull/77',state='OPEN',title=opt('--title'),body=opt('--body'),headRefName=branch,headRefOid=sha,baseRefName='main',isDraft=False,isCrossRepository=False,labels=[])
     (r/'transport.json').write_text(json.dumps(s)); print(s['prs']['77']['url']); sys.exit(0)
 if a[:2]==['pr','view']:
+    if 'fail_labels_after' in s and 'url,state,headRefOid,labels' in a:
+        if s['fail_labels_after']==0: sys.exit(1)
+        s['fail_labels_after']-=1
+        (r/'transport.json').write_text(json.dumps(s))
     v=meta(a[2])
     if '-q' in a or '--jq' in a:
         q=a[a.index('-q')+1] if '-q' in a else a[a.index('--jq')+1]
@@ -1553,6 +1557,7 @@ fn supervised_member_lands(held: bool) {
         fs::write(&config, &stale).unwrap();
         mandate.include_supervised = false;
         crate::gate::mandate::write_private(&path, &serde_json::to_vec(&mandate).unwrap()).unwrap();
+        let index = store_root.join(".git/aida/mandate-history-index.json");
         let evidence = || {
             [
                 crate::gate::mandate::mandate_dir()
@@ -1563,6 +1568,8 @@ fn supervised_member_lands(held: bool) {
                     .join(".aida/gate-ledger/PR-11.jsonl"),
                 crate::gate::merge_hold_core::hold_path(f.root(), 11),
                 crate::events::events_path(f.root()),
+                index.clone(),
+                index.with_extension("lock"),
             ]
             .map(|p| match fs::read(p) {
                 Ok(bytes) => Some(bytes),
@@ -1571,6 +1578,7 @@ fn supervised_member_lands(held: bool) {
             })
         };
         let before = evidence();
+        assert_eq!(&before[4..], &[None, None]);
         let row = report(Duration::from_secs(60));
         assert_eq!(row["evidence"], "read", "{row}");
         assert!(
@@ -1582,6 +1590,18 @@ fn supervised_member_lands(held: bool) {
         );
         assert_eq!(fs::read(&config).unwrap(), stale.as_bytes());
         assert_eq!(evidence(), before);
+        let mut failing = state.clone();
+        // The member label gate succeeds before the mandate reads the pinned head.
+        failing["fail_labels_after"] = json!(1);
+        save(f.root(), &failing);
+        let row = report(Duration::from_secs(60));
+        assert_eq!(row["evidence"], "unavailable", "{row}");
+        assert!(
+            row["reason"].as_str().unwrap().contains("pinned labels"),
+            "{row}"
+        );
+        assert_eq!(evidence(), before);
+        save(f.root(), &state);
         assert!(gate(false, false)
             .unwrap_err()
             .contains("--include-supervised"));

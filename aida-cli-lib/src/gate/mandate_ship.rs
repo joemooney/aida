@@ -108,6 +108,7 @@ pub(crate) fn resolve_exclusion_specs(
     store_root: &std::path::Path,
     named: &[String],
     traced: std::collections::BTreeSet<String>,
+    publish_index: bool,
 ) -> Vec<crate::gate::mandate::ShipSpec> {
     let mut history_keys_of: Vec<Vec<String>> = Vec::new();
     let mut specs = mandate_exclusion_specs(named, traced, |id, is_named| {
@@ -176,7 +177,7 @@ pub(crate) fn resolve_exclusion_specs(
         .filter(|spec| spec.current.is_none())
         .map(|spec| spec.id.clone())
         .collect();
-    let alias_search = crate::mandate::store_history_alias_map(store_root, &deleted);
+    let alias_search = crate::mandate::store_history_alias_map(store_root, &deleted, publish_index);
     for (spec, keys) in specs.iter_mut().zip(history_keys_of.iter_mut()) {
         if spec.current.is_some() {
             continue;
@@ -198,7 +199,7 @@ pub(crate) fn resolve_exclusion_specs(
         }
     }
     let all_keys: Vec<String> = history_keys_of.iter().flatten().cloned().collect();
-    let batch = crate::mandate::StoreHistoryBatch::read(store_root, &all_keys);
+    let batch = crate::mandate::StoreHistoryBatch::read(store_root, &all_keys, publish_index);
     let code_root = store_root
         .file_name()
         .filter(|name| *name == ".aida-store")
@@ -741,6 +742,7 @@ fn collect_mandate_cover(
                 &store_root,
                 &ids,
                 trace_evidence.ids.clone(),
+                record_exclusions,
             );
             // STORY-1698: every excluded class seen in any version goes into the
             // append-only ledger first, then the ledger is read back as the first
@@ -835,9 +837,20 @@ fn collect_mandate_cover(
             } else if supervised? {
                 if hold_reason.is_some()
                     || crate::gate::merge_hold_core::recorded_clearance(hold_root, pr).is_some()
-                    || !matches!(labels(), Ok(Some(c))
-                        if c.is_open()
-                            && !c.hold_label && !c.recorded_label && !c.cleared_label)
+                {
+                    return Err(MandateRefusal::MarkerMissing);
+                }
+                let change = labels()
+                    .map_err(MandateRefusal::LabelsUnreadable)?
+                    .ok_or_else(|| {
+                        MandateRefusal::LabelsUnreadable(
+                            "no pinned label evidence for the checked head".into(),
+                        )
+                    })?;
+                if !change.is_open()
+                    || change.hold_label
+                    || change.recorded_label
+                    || change.cleared_label
                 {
                     return Err(MandateRefusal::MarkerMissing);
                 }

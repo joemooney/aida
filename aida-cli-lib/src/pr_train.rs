@@ -2279,6 +2279,7 @@ impl MemberChecks for LiveChecks<'_> {
                 let message = refusal.message(pr);
                 let error = match &refusal {
                     TraceEvidenceUnreadable(_)
+                    | LabelsUnreadable(_)
                     | LedgerUnreadable(_)
                     | HistoryUnreadable { .. }
                     | SpecsUnresolved
