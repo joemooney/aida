@@ -149,6 +149,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a207da-f61a-7ef3-baf4-3fa5892ce029
+  author: aida-session-start
+  timestamp: 2026-11-23T10:02:00.090676783Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a16f3592f015e06580a94c1f7879ea9c877c088e
   branch: main
