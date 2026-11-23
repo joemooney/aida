@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The closeout-audit wording/template writes "AUDIT VERDICT (not a lane instruction): keep open; implementation still wanted" instead of a bare "No implementation or status change". A test or doc check pins the template text.
   - AC2: The lane brief generator explicitly ranks the CURRENT brief above older spec comments: generated briefs include a line saying older spec comments are context, not instructions, when they conflict with this brief. A test asserts the line is present in a generated brief.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:10:14.312515448Z
-modified_at: 2026-11-23T20:26:38.543338421Z
+modified_at: 2026-11-23T21:12:07.710700931Z
 req_type: Bug
 tags:
 - briefs
@@ -103,6 +103,12 @@ comments:
   modified_at: 2026-11-23T20:26:38.543338421Z
   session_id: 01a209fb40a7
   harness_version: codex-cli 0.167.0
+- id: 01a20a40-7b1e-7433-922d-c4ba91a71ad4
+  author: aida-publication-done
+  content: Implementer push 34ad335365c8 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T21:12:07.710697480Z
+  modified_at: 2026-11-23T21:12:07.710697480Z
+  session_id: 01a209fb40a7
 history:
 - id: 01a20912-4d56-73a3-bac7-f684e0f78f51
   author: joe
@@ -176,6 +182,14 @@ history:
   session_id: 01a209fb40a7
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20a40-7b1e-7433-922d-c4ac0437e65e
+  author: aida-publication-done
+  timestamp: 2026-11-23T21:12:07.710695453Z
+  session_id: 01a209fb40a7
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: f091434bfd1a8441a61a453ef0486d4d8edadd74
