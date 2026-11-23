@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:05.182124737Z
-modified_at: 2026-11-23T12:39:36.995244420Z
+modified_at: 2026-11-23T16:06:46.438583114Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -113,6 +113,11 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20928-ec35-7402-9a55-6b7a98d9e435
+  author: joe
+  timestamp: 2026-11-23T16:06:46.581524437Z
+  changes: []
+execution_mode: drain
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
