@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-23T02:29:26.016431296Z
+modified_at: 2026-11-23T02:29:43.137639765Z
 req_type: Bug
 tags:
 - mass-change
@@ -189,6 +189,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was punted on: design-fork: PR #4396 host merge has behavioral overlap in aida-cli-lib/src/gate/kernel_deps.rs. With mass-change active, a finding with class unmet-claimed-ac and absent blocking_tier is Unclassified and blocks under main, but defers under the PR. Preserving the ADR-76 sensitive-code floor does not decide that ordinary class-only case. Confirm the rule for submission and recording. Both kernel_deps.rs and aida-cli-lib/src/review_draft.rs remain unresolved.. No triage reason was given.'
   created_at: 2026-11-23T02:29:26.016426573Z
   modified_at: 2026-11-23T02:29:26.016426573Z
+- id: 01a2063d-1266-7c71-a4d7-aa1127458cf4
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:29):
+    # BUG-2712 / PR #4396: CONFLICT REPAIR with a CLASSIFICATION RULING (advisor-122 2026-11-22 19:35 MST; relayed by product-15). Lane: CODEX.
+
+    The previous lane punted correctly on aida-cli-lib/src/gate/kernel_deps.rs and aida-cli-lib/src/review_draft.rs. RULING: a finding whose CLASS is unmet-claimed-ac and whose blocking_tier is ABSENT IS classified (the class says what it is), so it is NOT "Unclassified". Keep the PR's rule plus the ADR-76 floor, in this order:
+    1. Mass-change OFF: it BLOCKS (today's behaviour).
+    2. Mass-change ON: it DEFERS, EXCEPT where the ADR-76 sensitive-path floor applies (strict-tier paths keep incomplete-fix/unmet-AC blocking, per amended AC5) or the same finding also carries data-loss, p1 or security-authority-bypass.
+    3. A finding with NO class at all stays Unclassified and is REFUSED at draft submission (AC2), never silently blocking or deferring.
+    Put this table in a code comment at the decision point and test all four cells: off; on with a standard path; on with a sensitive path; no class.
+    Merge origin/main into the existing branch (no rebase, no force-push), resolve kernel_deps.rs and review_draft.rs per the table, and keep both sides' other behaviour.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    cargo fmt; one targeted cargo run of the touched tests; `make check-ci-fast`; push. COMMIT your work.
+  created_at: 2026-11-23T02:29:43.137639765Z
+  modified_at: 2026-11-23T02:29:43.137639765Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a204bc-efda-71b2-8241-8eeae72e072a
   author: aida-session-start
