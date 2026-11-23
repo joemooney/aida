@@ -10,12 +10,12 @@ description: |
   2. The skip notice goes to stderr, is prominent (clearly marked SKIPPED, naming the reason and the override), and repeats in the final line so it shows in tails.
   3. Callers that intentionally rely on the skip (fixer/relay templates, check-ci-fast) are updated to accept the new code. Regression tests cover both paths.
   4. Evidence-style docs and briefs that ask for "N passing runs" mention AIDA_CARGO_FORCE_BUILD=1 / --force-build.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:33:38.175003298Z
-modified_at: 2026-11-23T07:05:30.456271673Z
+modified_at: 2026-11-23T07:06:19.120150131Z
 req_type: Bug
 tags:
 - cargo-wrapper
@@ -45,6 +45,15 @@ comments:
   modified_at: 2026-11-23T06:59:50.581009617Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2073a-165f-7731-b837-e9067070c97d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: a16f3592f015e06580a94c1f7879ea9c877c088e. Merge-base diff, working diff and untracked file list empty. AC1: [evidence: behavioral-test] blocked before reproduction: the operator wrapper is absent and installed cargo resolves to rustup. AC2: [evidence: behavioral-test] no wrapper stderr available. AC3: [evidence: behavioral-test] existing BUG-2664 fake-cargo regression exercises the legacy consumer only. AC4: [evidence: documentation-inspection] deferred pending the actual wrapper contract. No code or publication declaration.
+  created_at: 2026-11-23T07:06:16.740179910Z
+  modified_at: 2026-11-23T07:06:16.740179910Z
+  session_id: 01a20738b697
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fb50-9cb2-7cb1-a49c-94ac147e2401
   author: joe
@@ -74,6 +83,15 @@ history:
   session_id: 01a20738b697
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a2073a-1f9f-7481-a141-284020695935
+  author: dirtlab
+  timestamp: 2026-11-23T07:06:19.423666094Z
+  session_id: 01a20738b697
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
@@ -84,3 +102,8 @@ filed_at:
   vendor: claude
   session: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: The operator cargo wrapper implementing diff_skip_check is absent from this checkout and ~/.local/bin/cargo is missing on this host. Cargo resolves to rustup. Reproducing and changing AC1 requires the maintained wrapper source and its installation path. Route to its owning checkout or supply that source here with the install wiring.
+  raised_by: implementer
+  raised_at: 2026-11-23T07:06:19.120150131Z
