@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   aida-cli-lib/src/admission_owner.rs tests: three new tests depend on sub-second scheduling margins and can fail on a loaded full-suite shard. bug2703_one_second_bound_acquires_a_holder_released_after_registration requires the whole acquisition inside a 1 s bound after a helper thread polls for the intent, sleeps 150 ms and drops the claim; bug2703_registration_wait_does_not_extend_the_bound relies on 300 ms and 500 ms windows around a 3 s deadline; bug2703_one_second_bound_refusal_names_the_current_holder shares the 1 s bound. The CI run at this head was the fast tier (test shards skipped), so none of these has run in CI yet. Widen the margins (a longer bound with the same proportions) or make the handoff event-driven.
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.702364545Z
-modified_at: 2026-11-23T08:32:35.292065024Z
+modified_at: 2026-11-23T08:38:37.614996150Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -49,6 +49,13 @@ history:
   author: joe
   timestamp: 2026-11-22T20:32:39.582570433Z
   changes: []
+- id: 01a2078e-a12e-7cc1-a0e2-b7e3a9a14ed5
+  author: aida-session-start
+  timestamp: 2026-11-23T08:38:37.614994021Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
