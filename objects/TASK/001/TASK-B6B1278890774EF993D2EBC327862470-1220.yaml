@@ -14,13 +14,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:25:08.663864382Z
-modified_at: 2026-11-22T21:31:43.341285063Z
+modified_at: 2026-11-23T01:43:48.731418211Z
 req_type: Task
 tags:
 - containment
 - dell1
 - from-work-ci
-- operator-held
 - tests
 comments:
 - id: 01a2052c-0f6d-7ee0-bb6e-0c1320aa81c7
@@ -33,10 +32,10 @@ history:
   author: joe
   timestamp: 2026-11-22T21:31:41.704196760Z
   changes: []
-deferred: true
-deferred_at: 2026-11-22T21:31:41.581869428Z
-deferred_until: pr:4387=merged
-deferred_reason: 'Advisor-122 14:34: touches the same fixtures as TASK-3133 r2 (#4387); resume after #4387 lands. Supersedes TASK-3832 finding 2 (noexec /tmp), which folds in here.'
+- id: 01a20612-db56-7d81-a8fd-ed9f2e40f562
+  author: joe
+  timestamp: 2026-11-23T01:43:48.822297499Z
+  changes: []
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
