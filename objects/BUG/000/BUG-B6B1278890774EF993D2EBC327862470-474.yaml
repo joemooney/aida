@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-22T22:15:32.680830460Z
+modified_at: 2026-11-23T01:49:40.498460404Z
 req_type: Bug
 tags:
 - hygiene
@@ -48,6 +48,11 @@ comments:
   modified_at: 2026-11-22T22:15:32.680830460Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20618-3912-7fb1-8a2e-3d4aef7039ce
+  author: joe
+  content: 'Another hygiene repro (product-15, 2026-11-22 18:46; advisor-122 asked for it): a ''rebased claim twin plus stale published claim'' shape blocked the BUG-2712 conflict lane with ''the unpushed claim commit 9a1f1dd0c9 ... was not dropped (a rebase rewrote it ...); the claim is still in the local store''. On dell1 .aida-store, 9a1f1dd0c9 (16:59:01) was an ORPHAN, not on HEAD or any remote; its rebased twin 3c0ef64b79 (16:59:06, the identical lease file) was already on origin. So the refusal reported a non-problem. The REAL blocker was the published claim itself (lease 01a205b2cbe3, pid 3127711 DEAD, no session file), healed with `aida doctor heal stale-leases --id shared-ea54d12e-f8f0-47ac-8341-97de23f1b832 --yes`. Wanted: recognise a rebased twin by content and not refuse; when the published claim''s holder is dead, name the prescribed heal.'
+  created_at: 2026-11-23T01:49:40.498460404Z
+  modified_at: 2026-11-23T01:49:40.498460404Z
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
