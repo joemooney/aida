@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-23T16:11:59.401186262Z
+modified_at: 2026-11-23T16:13:15.137373076Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -135,6 +135,12 @@ comments:
   content: Implementer push c871fba3c570 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-23T16:11:42.289497548Z
   modified_at: 2026-11-23T16:11:42.289497548Z
+  session_id: 01a208e6d3f2
+- id: 01a2092e-da01-73f0-9891-8d9e072e8e20
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-479` at head `c871fba3c570f41e451caac1213c1b8b098ac5a2`.'
+  created_at: 2026-11-23T16:13:15.137368307Z
+  modified_at: 2026-11-23T16:13:15.137368307Z
   session_id: 01a208e6d3f2
 history:
 - id: 01a206d4-2e73-71c3-b41a-2e45c4ca59d7
