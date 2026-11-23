@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3841",
+  "publishes": [
+    {
+      "at": "2026-11-23T17:08:54.968297902Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T06:35:33.141904315Z",
+      "spec": "TASK-3841",
+      "seat": "implementer",
+      "kind": {
+        "event": "PhaseDonePr",
+        "pr": 4414
+      }
+    },
+    {
+      "ts": "2026-11-23T17:03:59.110695344Z",
+      "spec": "TASK-3841",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4414
+      }
+    },
+    {
+      "ts": "2026-11-23T17:08:54.741118207Z",
+      "spec": "TASK-3841",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "ef906ec7464cf1b3100c4383085280c203722941",
+        "pr": 4414,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
