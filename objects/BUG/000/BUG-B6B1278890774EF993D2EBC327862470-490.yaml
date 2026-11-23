@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-23T11:18:01.575965951Z
+modified_at: 2026-11-23T11:18:05.701239937Z
 req_type: Bug
 tags:
 - ci
@@ -87,6 +87,53 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T11:18:01.421435449Z
   modified_at: 2026-11-23T11:18:01.421435449Z
+- id: 01a20820-d3e2-7dd0-a694-c62c9af5355b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:18):
+    # BUG-2729 / PR #4425 r2 (advisor-122 ruling 2026-11-23 04:21 MST; relayed by product-15). Lane: CODEX. SMALL; the design follows product's stopgap script.
+
+    CR at f2f2903d (r1, +68/-17). Six findings, most from labelling SYNCHRONOUSLY at approval time (it cancels FAST; an unbounded gh call in the handoff; a dropped verified SHA; a stale label after synchronize). RULING:
+    1. On approval, the recorder ONLY appends a durable INTENT `{pr, verified_sha}`: no gh call, nothing blocks the handoff.
+    2. A scheduled tick (a new small job on the existing aida scheduler) applies each intent ONLY when the PR head still == verified_sha AND that head's FAST gates and compile are COMPLETED. Then remove and re-add ci:full ONCE, and drop the intent. If the head has moved, drop the intent and log it. All gh calls are bounded with timeouts.
+    3. Tests: an intent is recorded on approval (no forge call); the tick waits while FAST is pending, labels when it's complete, and drops on a moved head.
+    4. Fix the docs at docs/.../ci-test-shards.md:18 and landing.md:113 to describe the labeled-event behaviour.
+    The reviewer scope is this design plus the diff. When it lands, product's stopgap retires.
+    Reference stopgap (its logic is the spec for the tick):
+    ```bash
+    #!/bin/bash
+    # product-15 2026-11-23: stopgap for review-watch approvals not requesting full CI. For each open PR approved
+    # (gate ledger) at its CURRENT head that lacks ci:full and whose FAST checks are complete, add ci:full once.
+    # Never relabels mid-FAST (avoids BUG-2723 ghost reds). Runs unsandboxed. Logs to .aida/tmp/cifull-labeler.log.
+    cd /home/joe/ai/aida || exit 1
+    declare -A done
+    end=$(( $(date +%s) + ${1:-21600} ))
+    while [ $(date +%s) -lt $end ]; do
+      for row in $(cd /tmp && gh pr list -R joemooney/aida --state open --limit 50 --json number,headRefOid,labels --jq '.[]|select(([.labels[].name]|index("ci:full"))|not)|"\(.number):\(.headRefOid)"' 2>/dev/null); do
+        n=${row%%:*}; h=${row#*:}; key="$n:$h"; [ -n "${done[$key]}" ] && continue
+        f=.aida/gate-ledger/PR-$n.jsonl; [ -f "$f" ] || continue
+        v=$(python3 -I -c "
+    import json,sys
+    recs=[json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+    r=[d for d in recs if 'record' in d]
+    r=r[-1]['record'] if r else {}
+    print(r.get('verdict',''), r.get('reviewed_sha',''))" "$f" 2>/dev/null)
+        verdict=${v%% *}; sha=${v#* }
+        [ "$verdict" = approved ] || continue
+        case "$h" in "$sha"*) ;; *) continue;; esac
+        s=$(cd /tmp && gh pr view $n -R joemooney/aida --json statusCheckRollup --jq '[.statusCheckRollup[]|select(.name=="CI (fast gates)" or .name=="CI (fast compile)")|.status]|join(",")' 2>/dev/null | tail -1)
+        case "$s" in *IN_PROGRESS*|*QUEUED*|*PENDING*) continue;; esac
+        (cd /tmp && gh pr edit $n -R joemooney/aida --add-label ci:full >/dev/null 2>&1) && { echo "$(date +%H:%M) labelled #$n ci:full at ${h:0:8} (approved, fast=$s)" >> .aida/tmp/cifull-labeler.log; done[$key]=1; }
+      done
+      sleep 180
+    done
+    ```
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T11:18:05.701239937Z
+  modified_at: 2026-11-23T11:18:05.701239937Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
   author: aida-session-start
