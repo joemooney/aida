@@ -19,14 +19,21 @@ const RUN_PAGE: usize = 100;
 /// Bound on pages read for one paginated inventory or history search.
 const MAX_PAGES: usize = 10;
 
-/// `base` (which already carries `per_page`) for 1-based `page`. Page 1 keeps
-/// the unpaged endpoint.
-// trace:BUG-2689 | ai:claude
+// Shrink each successive page by one row. Page p then overlaps the previous
+// window by p-1 rows, covering that many deletions between reads. MAX_PAGES
+// keeps these windows advancing and bounds the cost of discovery.
+// trace:BUG-2592 | ai:codex
+fn page_size(page: usize) -> usize {
+    RUN_PAGE - (page - 1)
+}
+
 fn paged(base: &str, page: usize) -> String {
+    let separator = if base.contains('?') { '&' } else { '?' };
+    let url = format!("{base}{separator}per_page={}", page_size(page));
     if page == 1 {
-        base.to_owned()
+        url
     } else {
-        format!("{base}&page={page}")
+        format!("{url}&page={page}")
     }
 }
 
@@ -351,12 +358,10 @@ fn count_blocked(
     // the seen set so shifting pages cannot replace the first observation.
     // trace:BUG-2694 | ai:codex
     while let PrStep::Inventory { page, seen } = &mut scan.step {
-        let response = api_json(
-            port,
-            &paged("repos/{owner}/{repo}/pulls?state=open&per_page=100", *page),
-        )?;
+        anyhow::ensure!((1..=MAX_PAGES).contains(page), "invalid PR inventory page");
+        let response = api_json(port, &paged("repos/{owner}/{repo}/pulls?state=open", *page))?;
         let rows = response.as_array().context("invalid PR inventory")?;
-        let complete = rows.len() < RUN_PAGE;
+        let complete = rows.len() < page_size(*page);
         if !complete && *page >= MAX_PAGES {
             *progress = None;
             anyhow::bail!("PR inventory truncated");
@@ -463,8 +468,8 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
     let key = id.to_string();
     let episode = state.entry(key.clone()).or_default();
     let name = text(workflow, "name")?;
-    let base = format!("repos/{{owner}}/{{repo}}/actions/workflows/{id}/runs?per_page={RUN_PAGE}");
-    let response = api_json(port, &base)?;
+    let base = format!("repos/{{owner}}/{{repo}}/actions/workflows/{id}/runs");
+    let response = api_json(port, &paged(&base, 1))?;
     let all = rows(&response, "workflow_runs")?;
     let complete = all.len() < RUN_PAGE;
     let mut runs = Vec::new();
@@ -497,6 +502,7 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
             .as_mut()
             .expect("mapping scan initialized above");
         while scan.candidate.is_none() && scan.next_page <= MAX_PAGES {
+            anyhow::ensure!(scan.next_page >= 2, "invalid mapping page");
             let older = api_json(port, &paged(&base, scan.next_page))?;
             let older = rows(&older, "workflow_runs")?;
             let mut eligible = Vec::new();
@@ -506,7 +512,7 @@ fn observe_workflow(port: &mut Port, cx: &Pass, workflow: &Value, state: &mut St
                 }
             }
             scan.candidate = newest_started(&eligible, cx)?;
-            scan.next_page = if older.len() < RUN_PAGE {
+            scan.next_page = if older.len() < page_size(scan.next_page) {
                 MAX_PAGES + 1
             } else {
                 scan.next_page + 1
