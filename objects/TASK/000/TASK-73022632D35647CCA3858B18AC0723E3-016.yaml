@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working STORY-2828.
   Branch: story-b6b1278890774ef993d2ebc327862470-751  ·  Commit: 5cce9a0390  (PR-4060)
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:02:51.461032121Z
-modified_at: 2026-11-23T12:41:09.019555393Z
+modified_at: 2026-11-23T12:46:20.026339116Z
 req_type: Task
 tags:
 - from-implementer:STORY-2828
@@ -54,6 +54,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a20871-697a-70d3-8a6a-ef06fc42f0ed
+  author: aida-session-start
+  timestamp: 2026-11-23T12:46:20.026337182Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3484adef6ebc25d80a865cb1d1956cff3c31c8d6
   branch: story-b6b1278890774ef993d2ebc327862470-751
