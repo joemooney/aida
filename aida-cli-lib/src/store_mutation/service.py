@@ -370,7 +370,9 @@ class StoreMutationSession:
                 response = None
             finally:
                 for fd_to_close in sender_fds:
-                    os.close(fd_to_close)
+                    # SCM_PIDFD can carry a negative errno. trace:BUG-2716 | ai:codex
+                    if fd_to_close >= 0:
+                        os.close(fd_to_close)
             try:
                 if response is not None:
                     channel.send(response, socket.MSG_DONTWAIT | socket.MSG_NOSIGNAL)
