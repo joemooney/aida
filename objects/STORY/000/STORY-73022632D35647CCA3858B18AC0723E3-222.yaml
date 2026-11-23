@@ -1,5 +1,6 @@
 id: 01a20857-1802-7513-86ea-9660a6205886
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-222
+agreed_id: STORY-3031
 title: 'Review PR-4428: [AI:codex] fix(review-watch): cover independent terminal refusals (TASK-3210)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2082a`) for branch `task-b6b1278890774ef993d2ebc327862470-1191`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T12:17:48.683861376Z
   session_id: 01a2082a6900
+  changes: []
+- id: 01a2085a-944b-7fd1-91df-1b29f33b7191
+  author: joe
+  timestamp: 2026-11-23T12:21:23.659719595Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
