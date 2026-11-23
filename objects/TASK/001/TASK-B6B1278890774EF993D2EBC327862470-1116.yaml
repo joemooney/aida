@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. Make disk-floor annotation update the current queue entry's note while preserving its order, owner, routing, and any unrelated note text added by another writer. Replace the prior disk-floor marker if present.
   2. Add a deterministic regression for an interleaved edit and removal. The edit survives annotation, and a removed row stays absent. Requirements without an existing queue entry acquire none.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-23T21:41:31.280871910Z
+modified_at: 2026-11-23T22:35:04.165375429Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -162,6 +162,12 @@ comments:
   modified_at: 2026-11-23T21:41:31.280871910Z
   session_id: 01a20a4763f9
   harness_version: codex-cli 0.167.0
+- id: 01a20a8c-6a65-7920-895a-a09fb3991cc8
+  author: aida-publication-done
+  content: Implementer push dd2f0e4489eb declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T22:35:04.165374594Z
+  modified_at: 2026-11-23T22:35:04.165374594Z
+  session_id: 01a20a4763f9
 history:
 - id: 01a1f2f2-2680-7612-be8c-5bbed93131af
   author: joe
@@ -259,6 +265,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20a8c-6a65-7920-895a-a08316c476f2
+  author: aida-publication-done
+  timestamp: 2026-11-23T22:35:04.165371860Z
+  session_id: 01a20a4763f9
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
