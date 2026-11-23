@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T05:43:05.936806167Z
+modified_at: 2026-11-23T06:02:46.345037137Z
 req_type: Bug
 tags:
 - recovery
@@ -181,6 +181,19 @@ comments:
   modified_at: 2026-11-23T05:18:31.301654730Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a206ff-f36c-7c42-902d-eccf890dbcf4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 2cbc5186b168710d69bb252ad15d82466bcefc94 and the pending native-seat diff. Compared origin/main...HEAD and inspected all uncommitted files.
+    AC1: [evidence: behavioral-test] bug_2721_recover_launch_fresh_scan_fails_closed verifies the shared exit/recovery probe, clean-environment group holder, supervisor session, dedicated cwd, detached environment-only holder, partial legacy receipt and missing-grant refusal. See agent_codex_background.rs:1934,2149 and codex_bg_receipt.rs:347,823.
+    AC2: [evidence: behavioral-test] the same test checks the reported PID, command and source of attribution, and checks launch-status guidance on missing evidence.
+    AC3: [evidence: behavioral-test] the wrapper subtest recovers the dead dispatcher while the unrelated primary-checkout shell remains alive. Both filtered tests passed on the final Rust sources in lane job j20261123T055652472-2-0.
+    All three P1s addressed. Checked exact NUL-delimited fields, malformed/missing evidence, multiple process candidates, wrapper ancestry, primary versus dedicated cwd, reservation retention and grant revocation. Partial reads now use the bounded no-follow handle reader. The first FAST run identified a missing inventory entry for that reader; classified it read-only and restarted FAST. Accepted residual: a child that creates a new session, clears its environment and runs outside the worktree can escape attribution.
+  created_at: 2026-11-23T06:02:46.345037137Z
+  modified_at: 2026-11-23T06:02:46.345037137Z
+  session_id: 01a206ed9a53
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start

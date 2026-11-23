@@ -185,6 +185,13 @@ comments:
   modified_at: 2026-11-23T05:33:23.661945874Z
   session_id: 01a206dc9122
   harness_version: codex-cli 0.167.0
+- id: 01a20709-1dbd-7981-ad45-8a7aa973138d
+  author: dirtlab
+  content: 'Implementer self-review validation update for 6ddf368bc3 plus the native worktree: all three BUG-2722 tests passed, including the live bubblewrap count on complete with its bundle removed, entry-48 PTY release, and invalid-journal diagnostic isolation. The first fast gate caught a direct environment read; changed the handler to reuse the drive-seat predicate and reran validation. make check-ci-fast passed (launcher job j20261123T054346370-14-0), including the CLI help snapshot, writer inventory and manual. Native completion declaration recorded for host publication.'
+  created_at: 2026-11-23T06:12:46.724391677Z
+  modified_at: 2026-11-23T06:12:46.724391677Z
+  session_id: 01a206dc9122
+  harness_version: codex-cli 0.167.0
 - id: 01a2070d-d505-7062-9010-752f5ff93a41
   author: joe
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 fails review on the landed tree 3ba03480cdd8 against protected main ca95624cadfe. The published head still has the round-two automatic release implementation. AC1 lacks the required direct-human attestation, preview and typed confirmation. AC2 refuses an extant lease but the unlink fallback can misclassify an active worker as ended. AC3 does not release the historical moved-tree reservation without a newly supplied receipt or stamp. Salvage can also omit unpushed history, and lease cleanup can lose the only terminal evidence. Exact-head fast CI passed and merge-hold clearance was pending. The judgment follows from source and the current BUG-2722 acceptance criteria.. No triage reason was given.'
