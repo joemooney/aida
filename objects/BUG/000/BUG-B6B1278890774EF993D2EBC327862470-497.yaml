@@ -1,0 +1,29 @@
+id: 01a20aa8-25c9-7dc3-992b-e72c6c60ba35
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-497
+agreed_id: BUG-2736
+title: Lane-recovery treats an open integration-base PR as no PR and sets needs-attention; landing completion then does not clear it
+description: |
+  Found 2026-11-23 (integration-30; filed by product-15). At 21:02Z, lane-recovery logged "retained branch int27-bug-2728 at ccb9ea51cc" and set BUG-2728 to needs-attention while its PR #4455 (base `integration`) was OPEN. Lane-recovery doesn't recognise an integration-base PR as the lane's PR. The p27 promotion (#4461) then landed with BUG-2728 in its completion trailer, but the spec stayed needs-attention, because the completion path doesn't move needs-attention specs. It had to be completed by hand.
+
+  ## Acceptance
+  - AC1: Lane-recovery treats an OPEN PR from the lane's branch into ANY base (including `integration` / promote branches) as the lane's PR: no "no open PR" needs-attention while it's open. Test with an integration-base PR fixture.
+  - AC2: When a landing's completion trailer names a spec in needs-attention whose PR is landed, it completes the spec (or reports clearly why not). Test.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T23:05:21.609004102Z
+modified_at: 2026-11-23T23:05:21.609004102Z
+req_type: Bug
+tags:
+- integration
+- landing
+- lanes
+- small
+filed_at:
+  code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4e140498bc8
+  vendor: claude
