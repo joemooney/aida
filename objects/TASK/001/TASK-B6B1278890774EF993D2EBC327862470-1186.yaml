@@ -14,12 +14,12 @@ description: |
 
   - Align the finding-disposition section and the review prompt's unset-list explanation with the recorder's effective policy. With the list unset, a complete explicit deferral uses text, severity, disposition deferred, and a nonempty one-line rationale. The configured-list and invalid-policy branches must remain accurately described.
   - Exercise the documented example without blocking_tier through the validator and the recorder's policy rule. Keep the implementation to guidance and regression coverage. Preserve the recorder's classification and approval rules.
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:15:41.463610485Z
-modified_at: 2026-11-23T11:22:19.128713405Z
+modified_at: 2026-11-23T11:27:49.535608253Z
 req_type: Task
 tags:
 - carried-from:BUG-2707
@@ -86,6 +86,13 @@ history:
   author: joe
   timestamp: 2026-11-22T20:32:39.704161126Z
   changes: []
+- id: 01a20829-891f-7d21-8168-715fb2f63dec
+  author: aida-session-start
+  timestamp: 2026-11-23T11:27:49.535606279Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
   branch: pr-4385
