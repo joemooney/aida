@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-23T01:25:29.741874245Z
+modified_at: 2026-11-23T01:25:57.296418228Z
 req_type: Story
 tags:
 - landing
@@ -1262,6 +1262,11 @@ comments:
   modified_at: 2026-11-23T00:55:14.742664219Z
   session_id: 01a205d752af
   harness_version: codex-cli 0.167.0
+- id: 01a20602-8116-7022-a186-348bd6201c87
+  author: joe
+  content: PR-4401 at 0612b2c022e4e20bfd71482a5ad64a05050788b6 conflicts with the protected base; resolve the conflict before review
+  created_at: 2026-11-23T01:25:57.142785428Z
+  modified_at: 2026-11-23T01:25:57.142785428Z
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
