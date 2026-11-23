@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T23:33:38.175003298Z
-modified_at: 2026-11-23T07:06:39.365005931Z
+modified_at: 2026-11-23T07:06:57.101150761Z
 req_type: Bug
 tags:
 - cargo-wrapper
@@ -59,6 +59,12 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-470` at head `a16f3592f015e06580a94c1f7879ea9c877c088e`.'
   created_at: 2026-11-23T07:06:39.365002247Z
   modified_at: 2026-11-23T07:06:39.365002247Z
+  session_id: 01a20738b697
+- id: 01a2073a-b2cd-7ae1-b6c7-96711f4eb996
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `bug-b6b1278890774ef993d2ebc327862470-470` at head `a16f3592f015e06580a94c1f7879ea9c877c088e`.'
+  created_at: 2026-11-23T07:06:57.101146759Z
+  modified_at: 2026-11-23T07:06:57.101146759Z
   session_id: 01a20738b697
 history:
 - id: 01a1fb50-9cb2-7cb1-a49c-94ac147e2401
