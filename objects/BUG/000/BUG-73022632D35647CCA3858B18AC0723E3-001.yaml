@@ -8,10 +8,16 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:51:17.240362338Z
-modified_at: 2026-11-23T16:21:49.258773031Z
+modified_at: 2026-11-23T16:22:50.683242925Z
 req_type: Bug
 tags:
 - track:integration
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a20937-205f-72a2-bc1b-618937b90d12
+  created_at: 2026-11-23T16:22:50.683211238Z
+  created_by: dirtlab
 comments:
 - id: 01a20887-d70e-7c51-b6fd-6df8d1ced137
   author: joe
@@ -100,6 +106,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20937-b1e5-7240-9595-30e6465d2bf7
+  author: dirtlab
+  timestamp: 2026-11-23T16:22:54.693154397Z
+  session_id: 01a208ea8277
+  changes: []
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
