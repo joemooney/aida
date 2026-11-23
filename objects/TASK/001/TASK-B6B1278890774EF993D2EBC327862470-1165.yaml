@@ -15,12 +15,12 @@ description: |
   - Establish sufficient headroom before the scheduler kill ceiling for a pass to stop optional work, report partial progress and persist justified transitions. The same overall deadline must cover fetch, Git, forge calls and repeated scans.
   - Check a slow or repeatedly pending production-equivalent pass with a controlled clock and bounded child fixtures. It should return a diagnostic before the outer kill deadline and resume without advancing past unresolved evidence. Preserve time-based observational transitions when the scan uses the remaining budget.
   - Keep this follow-up observational. Spec filing, rerun initiation and store-mutating escalation retain their separate S3b gate.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:04.786390252Z
-modified_at: 2026-11-23T16:06:44.285847947Z
+modified_at: 2026-11-23T22:10:06.761191714Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -337,6 +337,25 @@ history:
   author: joe
   timestamp: 2026-11-23T16:06:44.428456728Z
   changes: []
+- id: 01a20a75-90e2-78e0-a456-1490f5aeea0f
+  author: aida-auto-bump
+  timestamp: 2026-11-23T22:10:06.690403497Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20a75-9129-7ba0-865a-037da9bb1309
+  timestamp: 2026-11-23T22:10:06.761188592Z
+  agent: aida
+  commit_sha: 4e140498bc8d425330633234bec803e5f8584ca0
+  summary: 'TASK-3209 passes within the advisor-approved scope. Reviewed the complete pinned diff from protected main f1a50179e5a3640451b4232e08f2e589df93e7d5 and confirmed the landed tree cfaaa188b59a371903373781e6437014dee98f8b matches the original PR head tree. PASS for the scoped deadline and checkpoint: the 90-second live budget leaves 30 seconds against the scheduler ceiling, and Git timeout classification checks the absolute pass deadline after the shared runner returns, including at equal bounds. Startup checkout discovery and per-notice mailbox scan costs were previously deferred by the advisor. PASS for resumable progress: a typed deadline checkpoints history progress, closing-range expiry preserves the episode and cursor for retry, and a verified red episode can still reach time-based confirmation after a later CI read stalls. The diff adds focused coverage for those paths. PASS for observational scope: the diff adds no spec mutation, rerun initiation, or landing action. Git diff --check passed. The implementer reported 47 targeted tests passing. CI pending at review time on the reviewed head, with fast gates passing and fast compile in progress. No local build or tests were run under reviewer policy.'
+  punted:
+  - 'punted: Round 1 full sweep for completing TASK-3209 (TASK-b6b1278890774ef993d2ebc327862470-1165). Reviewed the entire pinned diff from protected main 55f63f3800861fee8b80ae3046c104290baf7fbf to landed tree 629aa4ccb616be2c1dce882bdbea152122c316c1 and confirmed that tree matches the original head. The generated worksheet linked the completing task and directed review to its description because the acceptance bullets lack a standard section heading. Reviewed all three bullets in the canonical description. AC1 (headroom, partial progress, and one deadline across fetch, Git, forge and rescans) — unverified. The live-port deadline is shared, but the scheduled entry does root Git work before it is armed, Git expiry can bypass the partial-pass epilogue, and optional mailbox scans can consume the checkpoint reserve. AC2 (controlled slow pass, diagnostic, safe retry, and time-based transitions) — unverified. The implementer reported a passing focused test, cargo test -p aida-cli-lib exhausted_pass_confirms_verified_red_and_retries_unresolved_commit (lane job j20261123T092520473-2-0). The fixture covers a stalled later CI query, time-based confirmation of verified red, and cursor retry. The production Git expiry branches bypass that behavior and the fixture only uses in-memory Git ports. AC3 (observational only; keep S3b effects gated) — verified by source inspection of pass, open, advance, close, and the production Ports implementation. Effects remain local watch state, journal and advisor notifications. The diff adds no spec filing, rerun initiation, or store-mutating escalation. CI pending at review time on the attested head. FAST source gates and merge-hold-gate passed and fast compile was running. Local builds and tests were not run under the reviewer policy. Request changes for the two incomplete acceptance criteria. The draft includes all four findings.'
+  - 'punted: TASK-3209 review against protected main 8018c42f8d5fed626fca38472d134bd12cf4b259 and landed tree 2a0259626f827378cfa5f5d4e507ecf91e888d21. The extra base commit leaves both reviewed files unchanged and the finding also applies to the original PR head. Checkpointing and attribution retry are partial. A correctly typed deadline takes the resumable path, and the slow-check fixture covers confirmation with an unchanged cursor, but the production Git timeout boundary can still bypass checkpoint reporting or permanently record an unattributed close. Observational scope passes. The advisor previously deferred checkout-root discovery and per-notice mailbox scan costs. Git diff --check passed. The implementer reported 46 targeted tests and FAST checks passing. Forge CI was pending at review time. No local build or tests were run under reviewer policy.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
@@ -346,3 +365,7 @@ filed_at:
   aida_build_sha: 719aa4947d0
   vendor: claude
   session: 01a1faec8fa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T22:10:06.690395472Z
+  completion_sha: 4e140498bc8d425330633234bec803e5f8584ca0
