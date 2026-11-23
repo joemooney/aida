@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3151",
+  "publishes": [
+    {
+      "at": "2026-11-23T23:47:06.777484371Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T17:38:07.854715724Z",
+      "spec": "TASK-3151",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4444,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "ca3c1b9e4f1f3228d42fa667c064e9740bc5f1a7"
+      }
+    },
+    {
+      "ts": "2026-11-23T17:38:10.899997910Z",
+      "spec": "TASK-3151",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3151 (completing spec) — FAIL.\nTASK-b6b1278890774ef993d2ebc327862470-1111.acc246d2 — unverified\nTASK-b6b1278890774ef993d2ebc327862470-1111.ac2584bd — unverified\n\nSource review of cargo test -p aida-cli-lib bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript confirms the refusal diagnostic and vendor-start marker assertions, but the contained path still reads policy from the invoking checkout. The uncontained positive control checks the actual alternate launch cwd. The contained positive control only checks availability and the registry value.\n\nThe full landed diff was reviewed against protected main ef906ec7464cf1b3100c4383085280c203722941. The original PR head is four commits behind. Neither finding depends on code changed by those four commits. CI fast gates and merge-hold passed, fast compilation was pending, and the full test shard was skipped. Review used source and existing CI evidence.",
+        "recovery_hint": "address the review findings, move TASK-3151 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:16:05.230391815Z",
+      "spec": "TASK-3151",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4444,
+        "verdict": "APPROVED",
+        "reviewed_sha": "1652cf2c4cd5a653802862342301952a9ed96e58"
+      }
+    },
+    {
+      "ts": "2026-11-23T23:41:44.572524189Z",
+      "spec": "TASK-3151",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4444
+      }
+    },
+    {
+      "ts": "2026-11-23T23:47:06.564879784Z",
+      "spec": "TASK-3151",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89",
+        "pr": 4444,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
