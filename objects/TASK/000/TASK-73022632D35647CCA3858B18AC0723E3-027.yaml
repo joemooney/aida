@@ -12,12 +12,12 @@ description: |
   2. Every class (a) test is made hermetic: it builds its own temp AIDA home, grant store, mailbox and git roots, and never reads the operator's live ones. The test asserts nothing about the invoking host's seats or grants.
   3. After the fix, the same filtered command passes 3 consecutive runs in a dell1 lane job and 3 on the primary host, with no class (a) failures. Post the job ids here.
   4. Class (b) failures are linked to BUG-2623, not fixed here.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-23T01:43:52.795634795Z
+modified_at: 2026-11-23T01:44:03.158451835Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -664,6 +664,11 @@ comments:
   content: 'Product: r3 queued per advisor-122 18:42. It absorbs TASK-3838; brief .aida/tmp/brief-TASK-3133-r3-1845.md. Evidence that drove it: the dell1-host required-live run at f41a18b0 (FORCE_BUILD, REQUIRE_CODEX_SANDBOX_LIVE, REQUIRE_BWRAP_LIVE, AIDA_TEST_AIDA_BIN = aida built at f41a18b09f) ran exactly 1 test, which FAILED at bug_2169_contained_clone_bwrap_tests.rs:2276: Codex :workspace denied the /var/tmp extra writable root (Read-only file system).'
   created_at: 2026-11-23T01:43:52.795634795Z
   modified_at: 2026-11-23T01:43:52.795634795Z
+- id: 01a20613-1356-7cd0-9da5-5f7ef1241188
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Advisor verdict from required-live host evidence, 2026-11-22 18:40 MST (resolves the reviewer''s WAITING). At f41a18b0, with aida built at that head, FORCE_BUILD, REQUIRE_CODEX_SANDBOX_LIVE and REQUIRE_BWRAP_LIVE, exactly 1 test ran on the dell1 HOST and genuinely failed: task_2712_codex_sandbox_live_seat_commit_and_denials panicked at bug_2169_contained_clone_bwrap_tests.rs:2276, because Codex :workspace denied a configured extra writable root at /var/tmp/.tmpXXXX/codex-control-extra/probe (read-only file system). r2''s move of the live fixture to /var/tmp places the extra writable root where Codex''s workspace sandbox mounts read-only, so live denial coverage now fails on dell1. This is a real defect of the r2 change, not a harness or host gap.. No triage reason was given.'
+  created_at: 2026-11-23T01:44:03.158448282Z
+  modified_at: 2026-11-23T01:44:03.158448282Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
@@ -843,6 +848,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a20613-1356-7cd0-9da5-5f6dc54cda5c
+  author: joe
+  timestamp: 2026-11-23T01:44:03.158427546Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
@@ -850,11 +862,3 @@ filed_at:
   vendor: codex
   session: 01a1e1976efb
   harness_version: codex-cli 0.167.0
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'Advisor verdict from required-live host evidence, 2026-11-22 18:40 MST (resolves the reviewer''s WAITING). At f41a18b0, with aida built at that head, FORCE_BUILD, REQUIRE_CODEX_SANDBOX_LIVE and REQUIRE_BWRAP_LIVE, exactly 1 test ran on the dell1 HOST and genuinely failed: task_2712_codex_sandbox_live_seat_commit_and_denials panicked at bug_2169_contained_clone_bwrap_tests.rs:2276, because Codex :workspace denied a configured extra writable root at /var/tmp/.tmpXXXX/codex-control-extra/probe (read-only file system). r2''s move of the live fixture to /var/tmp places the extra writable root where Codex''s workspace sandbox mounts read-only, so live denial coverage now fails on dell1. This is a real defect of the r2 change, not a harness or host gap.'
-  recovery_hint: address the review findings, move TASK-3133 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T01:35:55.826128882Z
