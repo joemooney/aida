@@ -13,12 +13,22 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T19:52:13.251872149Z
-modified_at: 2026-11-23T19:52:13.251872149Z
+modified_at: 2026-11-23T19:56:56.341123421Z
 req_type: Task
 tags:
 - ci
 - from-work-ci
 - gate
+- operator-held
+history:
+- id: 01a209fb-a4e2-7612-8a2f-3ab7f1fa6d7f
+  author: joe
+  timestamp: 2026-11-23T19:56:56.418080971Z
+  changes: []
+deferred: true
+deferred_at: 2026-11-23T19:56:56.341123421Z
+deferred_until: date:2026-12-15
+deferred_reason: 'advisor-122 12:56: no supported host (imac, dell1, GitHub runners all Python 3.12) lacks tomllib; revisit if one appears. NOTE (product-15): the item came from Joe''s WORK CI report, so the work CI host may run Python < 3.11; if so, un-defer: main, strict, drive.'
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
   branch: main
