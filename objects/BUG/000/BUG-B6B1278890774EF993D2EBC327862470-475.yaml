@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-23T04:30:54.484265250Z
+modified_at: 2026-11-23T04:36:56.939168485Z
 req_type: Bug
 tags:
 - fasttrack
@@ -324,10 +324,14 @@ history:
   author: joe
   timestamp: 2026-11-23T01:28:05.234503417Z
   changes: []
+- id: 01a206b1-5f59-7a73-ade6-87d496bd9b5c
+  author: joe
+  timestamp: 2026-11-23T04:36:57.305594120Z
+  changes: []
 deferred: true
 deferred_at: 2026-11-23T01:28:05.152582686Z
-deferred_until: pr:4382=merged
-deferred_reason: stopgap parked; re-assess after BUG-2706 lands
+deferred_until: date:2026-12-15
+deferred_reason: pr:4382 closed; superseded by BUG-2726 (pickup no longer pushes early). Re-assess only if merge-only reviews continue after BUG-2726 lands.
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
