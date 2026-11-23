@@ -2957,7 +2957,8 @@ pub(crate) fn run_with_program(
             changes: reviewable.len(),
             ..Default::default()
         };
-        let watched = watch_changes(&store, reviewable, |change| {
+        let mut watched = Watched::default();
+        let result = watch_changes_into(&store, reviewable, &mut watched, |change| {
             // A pass can contain many bounded forge probes. Reap between
             // changes as well as between passes so finished children do not
             // sit as zombies throughout a large discovery batch.
@@ -2997,19 +2998,7 @@ pub(crate) fn run_with_program(
         // whole-watcher failure, so status can tell an idle healthy watcher
         // from one that refuses work or no longer completes passes.
         // trace:BUG-2674 | ai:claude
-        let refused = match watched {
-            Ok(watched) => {
-                pass.busy = watched.busy;
-                watched.refused
-            }
-            Err(error) => {
-                if !error.is::<service::ImageSuperseded>() {
-                    service::record_pass(&root, &pass, &[format!("{error:#}")]);
-                }
-                return Err(error);
-            }
-        };
-        service::record_pass(&root, &pass, &refused);
+        finish_watch_pass(&root, pass, watched, result)?;
         // Synchronous setup/spawn errors are dispatch failures too: an idle
         // discovery pass must not clear them before a dispatch succeeds.
         // trace:STORY-2691 | ai:codex
@@ -3275,25 +3264,52 @@ pub(crate) struct Watched {
     pub(crate) busy: usize,
 }
 
-/// Per-change refusals are durable diagnostics, never a reason to abandon the
-/// remaining changes in this pass (including `--once`). Returns each refused
-/// change as `KEY: reason`, and the busy count, so the pass report can
-/// surface them.
-// trace:BUG-2471 | ai:codex
-// trace:BUG-2674 | ai:claude
+// trace:TASK-3157 | ai:codex
+fn finish_watch_pass(
+    root: &Path,
+    mut pass: service::PassCounts,
+    watched: Watched,
+    result: Result<()>,
+) -> Result<()> {
+    if let Err(error) = &result {
+        if error.is::<service::ImageSuperseded>() {
+            return result;
+        }
+        pass.stopped = Some(format!("{error:#}"));
+    }
+    pass.busy = watched.busy;
+    service::record_pass(root, &pass, &watched.refused);
+    result
+}
+
+#[cfg(test)]
 fn watch_changes(
     store: &Store,
     changes: Vec<forge::Change>,
-    mut watch: impl FnMut(forge::Change) -> Result<()>,
+    watch: impl FnMut(forge::Change) -> Result<()>,
 ) -> Result<Watched> {
-    let mut refused = Vec::new();
-    let mut busy = 0usize;
+    let mut watched = Watched::default();
+    watch_changes_into(store, changes, &mut watched, watch)?;
+    Ok(watched)
+}
+
+/// Record per-change refusals and continue processing. On a whole-watcher
+/// stop, the caller retains all observations made before the error.
+// trace:BUG-2471 | ai:codex
+// trace:BUG-2674 | ai:claude
+// trace:TASK-3157 | ai:codex
+fn watch_changes_into(
+    store: &Store,
+    changes: Vec<forge::Change>,
+    watched: &mut Watched,
+    mut watch: impl FnMut(forge::Change) -> Result<()>,
+) -> Result<()> {
     for change in changes {
         let key = change.key();
         match watch(change.clone()) {
             Ok(()) => {}
             Err(error) if is_busy(&error) => {
-                busy += 1;
+                watched.busy += 1;
                 eprintln!("{key}: watcher admission is busy")
             }
             // Whole-watcher failure (unusable state, controller authority
@@ -3307,7 +3323,7 @@ fn watch_changes(
             Err(error) => {
                 let reason = format!("refused: {error:#}");
                 eprintln!("{key}: {reason}");
-                refused.push(format!("{key}: {reason}"));
+                watched.refused.push(format!("{key}: {reason}"));
                 // Diagnostic contention or per-change I/O must not stop the pass.
                 // Preserve only the whole-state failures tagged by store.load().
                 match retry_busy(|| record_skip(store, &change, Some(&reason))) {
@@ -3321,7 +3337,7 @@ fn watch_changes(
             }
         }
     }
-    Ok(Watched { refused, busy })
+    Ok(())
 }
 
 /// Only whole-state failure stops the watcher; one change's refusal must not
