@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. Exercise Claude transcript fallback in an isolated fixture where the expected transcript is missing and the only matching transcript belongs to a private clone in the seat inventory.
   2. With valid host registration, recover that clone's canonical cwd. With missing host registration and otherwise identical evidence, refuse recovery before launching Claude. Assert both results through the same recovery entry point.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:40.147235551Z
-modified_at: 2026-11-23T16:17:02.409206743Z
+modified_at: 2026-11-23T16:43:32.558837050Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -97,6 +97,12 @@ comments:
   modified_at: 2026-11-23T16:17:02.409206743Z
   session_id: 01a209092577
   harness_version: codex-cli 0.167.0
+- id: 01a2094a-954e-7ea3-bf60-f83d043b228b
+  author: aida-publication-done
+  content: Implementer push 717beee630c5 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T16:43:32.558832185Z
+  modified_at: 2026-11-23T16:43:32.558832185Z
+  session_id: 01a209092577
 history:
 - id: 01a1f2d9-26ac-7ba2-b8de-c777621359c5
   author: joe
@@ -159,6 +165,14 @@ history:
   author: joe
   timestamp: 2026-11-23T16:04:36.967801300Z
   changes: []
+- id: 01a2094a-954e-7ea3-bf60-f82107f86627
+  author: aida-publication-done
+  timestamp: 2026-11-23T16:43:32.558826799Z
+  session_id: 01a209092577
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
