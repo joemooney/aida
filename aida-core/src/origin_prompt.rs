@@ -235,7 +235,10 @@ mod tests {
             ("sk-proj-", "abcdefghijklmnopqrstuvwxyz"),
             ("xoxb-", "abcdefghijklmnopqrstuvwxyz"),
             ("gho_", "abcdefghijklmnopqrstuvwxyz"),
-            ("https://example.test/ghp_", "abcdefghijklmnopqrstuvwxyz1234"),
+            (
+                "https://example.test/ghp_",
+                "abcdefghijklmnopqrstuvwxyz1234",
+            ),
             ("quoted-sk-proj-", "abcdefghijklmnopqrstuvwxyz"),
             ("AKIA", "1234567890123456"),
         ] {

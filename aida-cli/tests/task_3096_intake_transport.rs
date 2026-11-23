@@ -1165,7 +1165,15 @@ fn https_userinfo_refuses_before_persistence_and_ssh_is_supported() {
     f.enroll(&remote(&temp));
     let private =
         aida_core::transport_policy::Private::open(&f.root.join(".git/aida-intake")).unwrap();
-    private.write("profile.json", &serde_json::to_vec(&json!({"version":1,"remote":credential_remote("token"),"deny_patterns":[]})).unwrap()).unwrap();
+    private
+        .write(
+            "profile.json",
+            &serde_json::to_vec(
+                &json!({"version":1,"remote":credential_remote("token"),"deny_patterns":[]}),
+            )
+            .unwrap(),
+        )
+        .unwrap();
     bad(&f.run(&["intent", "list"]), "HTTPS userinfo is refused");
 }
 
