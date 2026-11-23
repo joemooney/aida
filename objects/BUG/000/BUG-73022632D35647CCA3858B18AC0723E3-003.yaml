@@ -9,11 +9,12 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T18:05:30.454107450Z
-modified_at: 2026-11-23T13:12:49.613952980Z
+modified_at: 2026-11-23T13:28:14.148395553Z
 req_type: Bug
 tags:
 - linked:TASK-3133
 - tests
+- track:integration
 comments:
 - id: 01a1f736-f84d-7410-97c2-29a0f269870b
   author: joe
@@ -118,6 +119,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a20897-c644-7ce3-865b-ee2c10db25be
+  author: joe
+  timestamp: 2026-11-23T13:28:14.148392659Z
+  changes:
+  - field_name: tags
+    old_value: linked:TASK-3133, tests
+    new_value: linked:TASK-3133, tests, track:integration
 execution_mode: decide
 filed_at:
   aida_version: 0.16.0
