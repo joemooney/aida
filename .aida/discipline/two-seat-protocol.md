@@ -36,8 +36,11 @@ six of these conditions hold:
 2. **Independent APPROVE at head.** An `aida review record` APPROVE on the
    current head from an identity separate from every author (the advisor's
    own review counts when the advisor did not author the PR).
-3. **Green CI on the pinned head.** The required Build check passed on that
-   SHA, and the merge pins it (`--match-head-commit <full sha>` or `aida pr ship`).
+3. **The landing mode's CI on the pinned head.** In `ci-gated` mode (the
+   default) the required Build check passed on that SHA. In `review-gated`
+   mode only `merge-hold-gate` must pass first; CI runs after the merge (see
+   Landing modes below). Either way the merge pins the head
+   (`--match-head-commit <full sha>` or `aida pr ship`).
 4. **No holds (holds are absolute).** No operator hold, merge-hold label or
    unresolved REQUEST CHANGES.
 5. **Signoff for sensitive changes.** An advisor or operator signoff recorded on
@@ -49,7 +52,7 @@ six of these conditions hold:
    - (c) credential or secret handling: tokens, credentials in
      argv/env/URLs/logs.
    Every other change merges on the merge seat's fresh, independent APPROVE at
-   the pinned green head. Architecture is signed at sketch time; the merge
+   the pinned head, with the CI condition 3 asks for. Architecture is signed at sketch time; the merge
    reviewer verifies conformance to the signed sketch, and a deviation needs a
    new advisor ruling (dropping the second, merge-time architecture signoff).
    <!-- trace:TASK-1746 | ai:antigravity -->
@@ -68,13 +71,41 @@ automatically before merging. Raw `gh pr merge --rebase` is no longer an
 exception (STORY-1663).
 <!-- trace:STORY-1663 | ai:antigravity -->
 
+### Landing modes
+
+<!-- trace:STORY-2897 | ai:claude -->
+`[landing] mode` on the default branch decides what a merge waits for:
+
+- **`ci-gated`** (the default): `aida pr ship` waits for CI on the head, and
+  several ready PRs land together through the merge train below. Choose it
+  when a broken main is expensive: many changes land at once, a revert is
+  slow, or nobody watches main after a merge.
+- **`review-gated`**: a PR merges on an independent APPROVE at its exact head
+  and no hold, without waiting for CI; CI runs on main after the merge. The
+  advisor seat (or the operator at a terminal) is the merge hand, there is no
+  train (the auto-train stands down), and `aida land run` ships each ready PR
+  on its own. Choose it when review rounds queue behind CI and a red main is
+  fixed or reverted quickly.
+
+`aida land mode status|set|reconcile` shows and changes the mode with the
+forge's required checks (see `docs/advanced/landing.md`).
+
+The red-main watch reports a red main in both modes. It runs only as its own
+scheduled job (`land watch`, every 5 minutes where the project enables it) or
+by hand (`aida land watch`), never inside a landing path, so nothing that
+merges waits on it. It observes and mails the advisor role; it writes nothing
+to the requirement store. It names the first red commit, observes independent
+re-runs to tell a flake from a real red, and recommends a revert by mail,
+never performing one, when main does not build or is still red
+`[landing] red_main.fix_window` after the red was confirmed.
+
 ### Merge train
 
 <!-- trace:STORY-1690 | ai:claude -->
 Two PRs that are each green can still break main together, because neither
-one's CI saw the other (#2599/#2597). When more than one approved PR is ready,
-the merge seat lands them with `aida pr train <N...>` (or `--all-ready`), the
-batched form of `aida pr ship`:
+one's CI saw the other (#2599/#2597). In `ci-gated` mode, when more than one
+approved PR is ready, the merge seat lands them with `aida pr train <N...>`
+(or `--all-ready`), the batched form of `aida pr ship`:
 
 1. **Same gates per member.** Each PR must be open, not a draft (CI never runs
    Build on drafts, so a draft is refused with that reason), on the default
@@ -123,9 +154,9 @@ train without pushing anything; `--local-ci <CMD>` additionally simulates the
 whole run with a local command as CI. Branch protection's "require up to
 date" (`strict`) stays off; the train makes it unnecessary.
 
-`aida pr ship` enforces the same rule for a single PR: it refuses a PR whose
-head is behind main, since its green never saw main's newer commits, and
-names `aida pr train N` (a one-member train). It does the same when the forge
+In `ci-gated` mode `aida pr ship` enforces the same rule for a single PR: it
+refuses a PR whose head is behind main, since its green never saw main's newer
+commits, and names `aida pr train N` (a one-member train). It does the same when the forge
 does not report the branch as behind. No flag overrides the refusal. A head
 that already contains main ships as before.
 

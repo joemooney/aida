@@ -1844,6 +1844,18 @@ fn run(matches: &clap::ArgMatches, ctx: &crate::cmdkit::DispatchCtx) -> Result<(
                 land_args::ModeCommand::Reconcile => crate::land_mode::reconcile_effective(&root),
             }
         }
+        // trace:STORY-2897 | ai:claude
+        land_args::LandCommand::Watch => {
+            // One trusted root: the main checkout, as `land metrics` reads.
+            let root = crate::main_watch::watch_root(&crate::find_project_root()?)?;
+            let notes = crate::main_watch::live_pass(&root)?;
+            for note in notes {
+                println!("{note}");
+            }
+            // The state after the pass, never inferred from an empty pass.
+            println!("{}", crate::main_watch::status_line(&root)?);
+            Ok(())
+        }
     }
 }
 

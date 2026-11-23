@@ -1882,6 +1882,10 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
             outcome,
             run_id: None,
             workflow_id: Some("ci".to_string()),
+            cancelled: false,
+            job_id: None,
+            run_attempt: None,
+            run_in_progress: false,
         }],
     };
     let time = ExactTipCiClock::default();
