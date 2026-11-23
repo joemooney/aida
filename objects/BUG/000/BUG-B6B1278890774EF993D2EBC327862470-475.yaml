@@ -19,11 +19,12 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-23T01:06:00.221942074Z
+modified_at: 2026-11-23T01:28:05.152582686Z
 req_type: Bug
 tags:
 - fasttrack
 - lanes
+- operator-held
 - review-watch
 - rework
 relationships:
@@ -314,6 +315,14 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20604-7572-7290-914b-8bd9be123f95
+  author: joe
+  timestamp: 2026-11-23T01:28:05.234503417Z
+  changes: []
+deferred: true
+deferred_at: 2026-11-23T01:28:05.152582686Z
+deferred_until: pr:4382=merged
+deferred_reason: stopgap parked; re-assess after BUG-2706 lands
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
