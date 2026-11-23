@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1f330-2c92-77d2-b236-0c3e88276e39
+  position: -1043000
+  added_by: role:implementer
+  added_at: 2026-11-23T09:48:09.406238987Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1fb83-8b0b-7491-b154-6bd8598e48f6
   position: -1042000
   added_by: role:implementer
@@ -348,14 +354,6 @@
   added_by: role:implementer
   note: Contained refusal, contained recorded-cwd control, and uncontained recovery through the same entry point. Reuse the TASK-3149 fixture where applicable. Test-only.
   added_at: 2026-11-21T07:06:33.098468646Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1f330-2c92-77d2-b236-0c3e88276e39
-  position: 628000
-  added_by: role:implementer
-  note: Preserve busy and refusal evidence on a whole-watcher stop. Implement and test the pass sequence in the spec against the current watcher.
-  added_at: 2026-11-21T07:06:47.361295807Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
