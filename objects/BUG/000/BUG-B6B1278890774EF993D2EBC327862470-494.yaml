@@ -1,0 +1,32 @@
+id: 01a2098c-59f6-7922-a25a-70a7be418e02
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-494
+agreed_id: BUG-2733
+title: The train resolves specs from every commit in base..head, including history whose squashes are already on main, so a promotion inherits dozens of stale supervised specs
+description: |
+  Found 2026-11-23 (integration-30; filed at advisor-122's request). `aida pr train 4446 --dry-run` (promotion 26, carrying only TASK-3122, BUG-2592 and BUG-2700, all execution_mode drain) refused with 56 "is marked unset (supervised)" specs (BUG-2521..BUG-2647, STORY-2732..STORY-2905, TASK-3123..TASK-3818). The train resolves specs from EVERY commit in base..head. A promotion branch built from `integration` carries ~500 integration-history commits whose squashes are already on main but which are not ancestors of main, so the promotion inherits dozens of stale, supervised specs and needs a human or a mandate.
+
+  Workaround (until fixed): build promotions linearly as origin/main plus the bundle's squashes cherry-picked (same patch-id).
+
+  ## Acceptance
+  - AC1: The train (and `aida pr ship`) resolve a PR's specs from its title/squash trailer, or from base..head commits whose patch-id is not already on the base, never from history whose change is already on main. Test: a promotion-shaped branch (main merged into a branch carrying old squashed-history commits plus one new commit) resolves only the new commit's spec.
+  - AC2: The refusal text lists only the specs that drove it (unchanged wording otherwise).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T17:55:22.742700627Z
+modified_at: 2026-11-23T17:55:22.742700627Z
+req_type: Bug
+tags:
+- landing
+- small
+- train
+filed_at:
+  code_sha: ef906ec7464cf1b3100c4383085280c203722941
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef906ec7464
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
