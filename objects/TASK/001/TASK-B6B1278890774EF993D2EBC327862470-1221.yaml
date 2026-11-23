@@ -13,12 +13,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:25:17.965996587Z
-modified_at: 2026-11-22T21:25:17.965996587Z
+modified_at: 2026-11-23T08:33:09.938025728Z
 req_type: Task
 tags:
 - from-work-ci
 - secrets
 - tests
+comments:
+- id: 01a20789-d978-7673-8a8c-ff99b1400e8a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:33):
+    # TASK-3839: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3839` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3839 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3839)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T08:33:09.938025728Z
+  modified_at: 2026-11-23T08:33:09.938025728Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
