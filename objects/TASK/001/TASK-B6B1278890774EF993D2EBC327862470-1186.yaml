@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:15:41.463610485Z
-modified_at: 2026-11-23T11:43:24.750910442Z
+modified_at: 2026-11-23T12:14:44.738954891Z
 req_type: Task
 tags:
 - carried-from:BUG-2707
@@ -48,6 +48,18 @@ comments:
   modified_at: 2026-11-23T11:22:19.128713405Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20854-81e2-7c02-a579-61cfe39e6e7f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8018c42f8d5fed626fca38472d134bd12cf4b259 plus native working diff. Merge-base diff empty, three edited files, no untracked additions.
+    AC1: [evidence: documentation-inspection] aida-core/templates/skills/aida-review.md:1429 and aida-cli-lib/src/review_blocking.rs:49 distinguish unset, configured, and invalid or unreadable policy. Compared each branch to apply_policy and finding_is_deferred.
+    AC2: [evidence: behavioral-test] aida-cli-lib/src/review_draft.rs:923 checks the documented JSON through submission and canonical verdict construction. Targeted lane test passed (1 executed), including refusals for an unresolved finding and multiline rationale. Recorder classification, authority and approval rules are untouched.
+    Probes checked field spelling, JSON shape, blank and multiline rationale, mixed findings and fail-closed policy precedence. No actionable defects found. All 48 fast source gates passed. Host publication and PR-head CI pending.
+  created_at: 2026-11-23T12:14:44.738954891Z
+  modified_at: 2026-11-23T12:14:44.738954891Z
+  session_id: 01a20829584b
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fd63-39c8-7d92-8c87-3edb915acbf2
   author: joe
