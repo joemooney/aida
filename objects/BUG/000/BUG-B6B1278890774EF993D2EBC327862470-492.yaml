@@ -61,6 +61,13 @@ comments:
   created_at: 2026-11-23T17:55:21.640391077Z
   modified_at: 2026-11-23T17:55:21.640391077Z
   session_id: 01a2095b139f
+- id: 01a2098d-7987-7412-bb56-1c7ae64d03c5
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 11:00): PR-4450 @ 3b11b9a6091 — AC1 MET, AC2 MET ON THE WRONG PATH. Base integration; one commit ''[AI:codex] fix(brief): ... (BUG-2731)''; +33 lines; traces present; template master and mirror both edited. AC1: advisor-role.md (master + mirror) now carries ''> AUDIT VERDICT (not a lane instruction): keep open; implementation still wanted'', pinned by tests/test_closeout_audit_wording.py. AC2 gap: the precedence line was added to brief.rs render_agent_brief (the `aida brief create` path, asserted in task_492_brief_tests). But lanes receive their brief via `aida queue work --brief <file>` -> PickupBrief::read_explicit -> brief::append_pickup_briefs (queue_cmd/work.rs:4789, :6372), which only prepends PICKUP_BRIEF_HEADING (''## Pickup brief''). So the hand-written lane briefs that caused this bug (TASK-3149/3151) would still reach codex WITHOUT the line. Fix (~2 lines + 1 assertion): emit the same sentence in append_pickup_briefs (or in PICKUP_BRIEF_HEADING) and assert it in a pickup-brief prompt test. Recommend one quick rework round; under mass-change this could instead defer as unmet-AC with a follow-up.'
+  created_at: 2026-11-23T17:56:22.571472707Z
+  modified_at: 2026-11-23T17:56:22.571472707Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a2098d-dc13-74a2-a70c-7ca1f656cdfd
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int26-bug-2731` at head `3b11b9a6091119d7513adf6dc3a74dd1542acc3b`.'
