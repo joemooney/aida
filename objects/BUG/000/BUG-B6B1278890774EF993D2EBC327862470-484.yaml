@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T07:16:09.458047880Z
+modified_at: 2026-11-23T07:16:12.290504084Z
 req_type: Bug
 tags:
 - ci
@@ -195,6 +195,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2723 review against pinned main a16f3592f015e06580a94c1f7879ea9c877c088e and landed tree 65ac06c0df6219e667ed18650b81b430ad005e20. AC1 FAIL: the incident''s jobless cancelled run aborts selection and the train accepts evidence from another PR sharing the head. AC2 PARTIAL: selected tier runs carry diagnostics, while other Actions refusals lose run or cancellation metadata. AC3 FAIL: the source includes the basic cancelled FAST and successful FULL regression, but the pinned landed tree fails to compile after #4410 and the fixture omits the jobless run from the actual incident. AC4 PASS: the CI timing instruction is documented and covered by a text assertion. The fast-compile and Build failures were confirmed from the supplied CI run. The compile finding depends on the newer protected base. The other findings reproduce by inspection on the submitted change against either base. No local test or build commands were run.. It was punted on: design-fork: Disputing finding 3 cross-tier retirement and stored AC3 under the advisor ruling. At one head, FAST run 10 cancelled with a failed Build and FULL run 11 passed, with no second FAST. AC3 explicitly requires ready. The ruling keeps the latest run of each workflow+tier and says cancellation without a newer same-tier run is CANCELLED, so this same head must block. The existing bug2723_train_replaces_cancelled_fast_only_with_verified_full fixture requires Green. Resolve this two-run case for all three landing gates.. No triage reason was given.'
   created_at: 2026-11-23T07:16:09.458045411Z
   modified_at: 2026-11-23T07:16:09.458045411Z
+- id: 01a20743-2ad3-7b90-a34f-a32bd05d6621
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2723):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 037bd499b31a
+    Recorded: 2026-11-23T07:15:28.954136891+00:00
+    Findings:
+    1. BUG-2723 AC3 — aida-cli-lib/src/forge_tier_runs.rs:331 does not compile against pinned main. CommitCheck now requires cancelled, job_id, run_attempt and run_in_progress. The fast compile job for 037bd499b31a reported E0063 and the Build aggregate failed on COMPILE. This finding depends on protected-base change a16f3592f015e (#4410), whose CommitCheck fields are present in the pinned landed tree. Populate the fields using the selected job and attempt metadata so the regression can run.
+    2. BUG-2723 AC1/AC3 — aida-cli-lib/src/forge_tier_runs.rs:178-185 aborts selection on a cancelled CI run with no jobs. GitHub reports exactly that for run 45099765934, attempt 1, at the original PR #4391 incident head e324ae3ea40778e0bfb75b245756439a2f132c45. It sits between FAST 45098448471 and successful FULL 45099774496 in the head inventory. The function returns tier unavailable before it can select FULL, so train readiness and landing still refuse the reported case. Handle the cancelled jobless run using the pinned workflow and run evidence, without treating it as a pass, and cover this three-run sequence. The existing fixture always manufactures a tier job.
+    3. aida-cli-lib/src/forge_tier_runs.rs:123-149 and :201-228 use repository-wide head-SHA evidence to replace PR-scoped rows. The selection key omits the PR and base, and neither train caller filters by them. The workflow runs for both main and integration. Two open PRs from one branch to those bases can share every key field, so a passing FULL run from one PR can suppress a failed FAST run from the other. Both train readiness and the exact-tip proof accept the substituted rows. Bind replacement and injected jobs to the target PR/base and refuse ambiguous ownership.
+    4. BUG-2723 AC2 — aida-cli-lib/src/forge_tier_runs.rs:315-340 only annotates failures projected from selected tier runs. For a failed or cancelled untiered Actions check with a known run ID, the exact-tip refusal still prints only the check name because judge_effective_checks discards run metadata. In the live readiness path, aida-cli-lib/src/pr_train.rs:962-970 appends the fallback run ID but omits cancellation/supersession state for unselected runs. Preserve the known run ID and cancellation state in both refusal paths and distinguish unavailable evidence explicitly.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T07:16:12.115700964Z
+  modified_at: 2026-11-23T07:16:12.115700964Z
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
