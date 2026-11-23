@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T14:54:19.171866586Z
+modified_at: 2026-11-23T15:29:47.688980025Z
 req_type: Bug
 tags:
 - agreed-id
@@ -215,6 +215,18 @@ comments:
   modified_at: 2026-11-23T13:33:21.127160484Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20907-13d1-7a51-a8f4-579557f9836c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 44a4c0ce1118ed7f0b51ea58c47c4bd88eb438b5 plus the native working tree. Reviewed origin/main...HEAD, git diff HEAD and untracked additions (none).
+    AC1: [evidence: behavioral-test] story_105_agreed_and_local_ids.rs:624 drives candidate PR 42 through both reporting paths and the live member mandate. Check and dry-run reach the missing-approval refusal without a store fetch, HEAD change or dirty tree. After approval, only the live refresh rebases the diverged store. The mandate names the remote-only trailer TASK-3835 as operator-only. The 61-second detached replay finishes, preserves the local commit content, and a subsequent canonical add succeeds. Targeted lane job j20261123T151743836-2-0 passed one test in 64.81s.
+    AC2: Deferred by the existing scope ruling. No new missing-ID or HEAD diagnostic is claimed.
+    Adversarial probes: the PR branch carries no label, the subject supplies the agreed ID, and the store object has a distinct local ID. The test covers zero approvals and an exact-head approval with a human receipt, a live mandate and the operator-only refusal. The refresh precedes recovery and member selection. The fixed-argument pull now waits for Git to return under its writer lock, including cleanup. A stalled pull can delay the live train. The negative preview fixture in story_1698_mandate_tests.rs remains in the branch diff. No reviewer verdict recorded.
+  created_at: 2026-11-23T15:29:47.688980025Z
+  modified_at: 2026-11-23T15:29:47.688980025Z
+  session_id: 01a208e8ebe4
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
