@@ -1,0 +1,32 @@
+id: 01a20984-c6d8-7de3-b728-e33f854b9595
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-237
+title: 'Review PR-4449: [AI:codex] fix(admission): cover stale legacy holders during manual train admission (BUG-2732)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2093e`) for branch `bug-b6b1278890774ef993d2ebc327862470-493`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4449>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-493` → `main`
+
+  ## Covers
+
+  - BUG-2732
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4449` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T17:47:06.328310246Z
+modified_at: 2026-11-23T17:47:06.328310246Z
+req_type: Story
+filed_at:
+  code_sha: ef906ec7464cf1b3100c4383085280c203722941
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef906ec746
+  session: 01a2093e9403
