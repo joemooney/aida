@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3195",
+  "publishes": [
+    {
+      "at": "2026-11-23T16:46:42.461725Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T09:42:26.535078718Z",
+      "spec": "TASK-3195",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4418,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "bf941b3731f0c2ec9bcccd494f97e52be7a0d83b"
+      }
+    },
+    {
+      "ts": "2026-11-23T09:42:37.047682207Z",
+      "spec": "TASK-3195",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3195 (TASK-b6b1278890774ef993d2ebc327862470-1170), completing spec. Reviewed the entire landed diff against protected main 55f63f3800861fee8b80ae3046c104290baf7fbf. The worksheet has no formal Acceptance or Verify section. Criteria below are drawn from the advisor acceptance prose.\n\nRecheck shipped persistence protocol — verified by comparing pinned main and the landed tree at main_watch.rs:486–510. Both sync the temporary file before rename and sync the pinned watch directory after rename.\nAdd a missing directory sync or replace the existing persistence helper — not-applicable-because pinned main already performs atomic replacement and the post-rename sync through write_state.\nPropagate publication failures — verified by the fallible file sync, rename and directory sync in write_state and the early return through record and pass. The new failpoint exercises that early return.\nPreserve restart consistency across cursor, episode and pending journal transitions — unverified. Startup can advance the journal while the prior state publication is still unconfirmed, as detailed in the blocking finding.\nCover the publication failure using the existing failpoint/restart pattern — verified by source inspection of the new post-rename injected-error test and the implementer's reported focused pass of cargo test -p aida-cli-lib state_dir_sync_failure_preserves_the_pending_transition_for_restart. The test reloads visible state and checks replay of the same transition ID. Its journal count sees deduplicated records.\nKeep the change limited to the residual durability requirement — verified by the full two-file diff and TASK-3195 traces at the failpoint and regression.\n\nFast gates and merge-hold-gate passed. Fast compile was pending at review time. No local tests were run.",
+        "recovery_hint": "address the review findings, move TASK-3195 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T10:50:53.328995325Z",
+      "spec": "TASK-3195",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4418,
+        "verdict": "APPROVED",
+        "reviewed_sha": "19347c2961e7cb852eabee35fffd9cdb5abe9099"
+      }
+    },
+    {
+      "ts": "2026-11-23T16:42:07.284542439Z",
+      "spec": "TASK-3195",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4418
+      }
+    },
+    {
+      "ts": "2026-11-23T16:46:42.262356622Z",
+      "spec": "TASK-3195",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "79989f9a27da2d3f372332c04927ca08ae0ed377",
+        "pr": 4418,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
