@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-22T23:16:23.049829593Z
+modified_at: 2026-11-23T00:09:40.224715576Z
 req_type: Bug
 tags:
 - authority
@@ -78,6 +78,11 @@ comments:
   created_at: 2026-11-22T23:10:01.973191288Z
   modified_at: 2026-11-22T23:10:01.973191288Z
   session_id: 01a2054a64d4
+- id: 01a205bc-aa80-71e0-8b66-15f46dba57a8
+  author: joe
+  content: 'CONSTRAINT (advisor-122 ruling 2026-11-22 17:12, relayed by product-15): any size-bounded claim/holder read must FAIL CLOSED. An oversized record is a refusal error, never absence. PR #4381 (TASK-3827) was closed because its 64 KiB bounded reader in coordination.rs turned a valid oversized claim into None, which let release delete a successor''s drain/solo lock and let reviewer admission overwrite a live foreign claim. Don''t recreate that in this fix. Add a test that an oversized valid record is never classified Dead or absent.'
+  created_at: 2026-11-23T00:09:40.224715576Z
+  modified_at: 2026-11-23T00:09:40.224715576Z
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
