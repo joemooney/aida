@@ -13,13 +13,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T16:09:19.986851687Z
+modified_at: 2026-11-23T16:09:22.591156482Z
 req_type: Story
 tags:
 - autonomy
 - config
 - landing
 - small
+comments:
+- id: 01a2092b-4d9f-77a2-b088-c20636680314
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-23 09:09 (small, standard tier); set by product-15 deputy, with --mode drain.'
+  created_at: 2026-11-23T16:09:22.591156482Z
+  modified_at: 2026-11-23T16:09:22.591156482Z
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
