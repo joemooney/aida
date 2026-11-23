@@ -13,13 +13,14 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-23T23:13:38.723447013Z
+modified_at: 2026-11-23T23:13:40.857802534Z
 req_type: Bug
 tags:
 - integration
 - landing
 - lanes
 - small
+- track:integration
 comments:
 - id: 01a20aaf-bba3-78c1-9c07-36eee9aeb57f
   author: joe
@@ -34,6 +35,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a20aaf-c3f9-7921-ae00-719ff3f9a548
+  author: joe
+  timestamp: 2026-11-23T23:13:40.857801737Z
+  changes:
+  - field_name: tags
+    old_value: integration, landing, lanes, small
+    new_value: integration, landing, lanes, small, track:integration
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
   branch: main
