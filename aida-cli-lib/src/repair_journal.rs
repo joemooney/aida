@@ -47,8 +47,6 @@ pub(crate) struct RepairEntry {
     pub dispatched_by: String,
     pub reserved_at: String,
     pub lane_id: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lease_ended_at: Option<chrono::DateTime<chrono::Utc>>,
     pub tree_path: PathBuf,
     pub branch: String,
     pub base: String,
@@ -162,97 +160,35 @@ fn path_absent(path: &Path) -> Result<bool> {
     Ok(false)
 }
 
-fn release_evidence(entry: &RepairEntry) -> Result<String> {
-    let root = &entry.key.repository;
+fn reservation_lease(entry: &RepairEntry) -> Result<&'static str> {
     let id = &entry.lane_id;
     anyhow::ensure!(
         !id.is_empty() && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-'),
         "invalid lease ID"
     );
+    let root = &entry.key.repository;
+    if path_absent(&crate::leases::leases_dir(root))? {
+        return Ok("absent");
+    }
     let path = crate::leases::lease_path(root, id);
-    anyhow::ensure!(
-        !path_absent(&crate::leases::leases_dir(root))?,
-        "missing session directory"
-    );
     match std::fs::symlink_metadata(&path) {
-        Ok(_) => anyhow::bail!("lease is still present at {}", path.display()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
-        Err(e) => return Err(e).with_context(|| format!("inspect lease {}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok("absent"),
+        result => {
+            result?;
+        }
     }
-    let worker = crate::lane_liveness::repair_lane_exit(root, id, &entry.tree_path)
-        .with_context(|| format!("worker exit receipt for {id}"))?;
-    let (exit, source) = match (worker, entry.lease_ended_at) {
-        (Some(t), _) => (t, "worker exit receipt"),
-        (None, Some(t)) => (t, "host lease removal"),
-        _ => anyhow::bail!("no worker exit receipt or recorded host lease release"),
-    };
-    let reserved = chrono::DateTime::parse_from_rfc3339(&entry.reserved_at)?;
+    let bytes = crate::observation_envelope::read_bounded(&path, 256 * 1024)?;
+    let lease: crate::SessionLease = toml::from_str(std::str::from_utf8(&bytes)?)?;
     anyhow::ensure!(
-        exit >= reserved && exit <= chrono::Utc::now(),
-        "invalid termination time"
+        lease.id == *id && lease.worktree_path == entry.tree_path && lease.branch == entry.branch,
+        "lease identity mismatch"
     );
-    let state = if path_absent(&entry.tree_path)? {
-        "absent".into()
-    } else {
-        crate::seat_clone::verified_repair_salvage(
-            root,
-            &entry.tree_path,
-            &entry.key.original_head,
-            &entry.branch,
-            reserved,
-        )?
-    };
-    Ok(format!(
-        "lane {id} ended at {exit} ({source}); tree {}: {state}",
-        entry.tree_path.display()
-    ))
-}
-
-// Only an actual successful host unlink supplies this evidence. Never stamp
-// an already-absent lease on a retry.
-pub(crate) fn unlink_session_lease(path: &Path, id: &str) -> std::io::Result<()> {
-    let Some(root) = path.parent().and_then(Path::parent).and_then(Path::parent) else {
-        return std::fs::remove_file(path);
-    };
-    if crate::leases::lease_path(root, id) != path
-        || !root.join(".aida/repair-journal.json").exists()
-    {
-        return std::fs::remove_file(path);
-    }
-    let evidence = crate::observation_envelope::read_bounded(path, 256 * 1024).and_then(|bytes| {
-        Ok(toml::from_str::<crate::SessionLease>(std::str::from_utf8(
-            &bytes,
-        )?)?)
-    });
-    let stamp = chrono::Utc::now();
-    std::fs::remove_file(path)?;
-    let record = || -> Result<()> {
-        let lease = evidence?;
-        anyhow::ensure!(lease.id == id, "lease identity mismatch");
-        let mut guard = RepairGuard::lock(root)?;
-        let mut changed = false;
-        for entry in &mut guard.journal.entries {
-            if entry.lane_id == id
-                && entry.tree_path == lease.worktree_path
-                && entry.branch == lease.branch
-                && chrono::DateTime::parse_from_rfc3339(&entry.reserved_at)
-                    .is_ok_and(|t| lease.started_at <= stamp && t <= stamp)
-                && entry.spawn != SpawnOutcome::ProvenDead
-                && entry.lease_ended_at.is_none()
-            {
-                entry.lease_ended_at = Some(stamp);
-                changed = true;
-            }
-        }
-        if changed {
-            guard.save()?;
-        }
-        Ok(())
-    };
-    if let Err(e) = record() {
-        eprintln!("could not record repair lease {id} release: {e:#}");
-    }
-    Ok(())
+    anyhow::ensure!(
+        crate::leases::lease_recorded_owner(&lease)
+            == aida_core::liveness::RecordedLeaseOwner::Dead,
+        "lease {id} has a live or unverified owner"
+    );
+    Ok("present without a live recorded owner")
 }
 
 impl RepairGuard {
@@ -308,13 +244,6 @@ impl RepairGuard {
         })
     }
     // trace:BUG-2722 | ai:codex
-    pub(crate) fn reserves_lane(&self, id: &str) -> bool {
-        self.journal
-            .entries
-            .iter()
-            .any(|e| e.lane_id == id && e.spawn != SpawnOutcome::ProvenDead)
-    }
-
     pub(crate) fn repair_findings(&self) -> Vec<crate::DoctorFinding> {
         self.journal
             .entries
@@ -322,16 +251,13 @@ impl RepairGuard {
             .filter(|e| e.spawn != SpawnOutcome::ProvenDead)
             .map(|e| {
                 let id = reservation_id(e);
-                let (summary, action) = match release_evidence(e) {
-                    Ok(reason) => (
-                        reason,
-                        format!("aida doctor heal repair-reservations --id {id} --force --yes"),
-                    ),
-                    Err(e) => (
-                        format!("reservation blocked: {e:#}"),
-                        "aida session leases --all".into(),
-                    ),
-                };
+                let summary = format!(
+                    "reserved lane {}, tree {}",
+                    e.lane_id,
+                    e.tree_path.display()
+                );
+                let action =
+                    format!("aida doctor heal repair-reservations --id {id} --attest '<reason>'");
                 crate::DoctorFinding {
                     category: "repair-reservations".into(),
                     action,
@@ -343,30 +269,54 @@ impl RepairGuard {
             .collect()
     }
 
-    pub(crate) fn heal_reservation(&mut self, id: &str, apply: bool) -> Result<String> {
-        let entry = self
+    pub(crate) fn attest_reservation(
+        &mut self,
+        id: &str,
+        reason: &str,
+        input: impl std::io::Read + std::io::IsTerminal,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            input.is_terminal() && !reason.trim().is_empty(),
+            "release requires a terminal and attestation"
+        );
+        let mut matches = self
             .journal
             .entries
             .iter_mut()
-            .find(|e| reservation_id(e) == id)
+            .filter(|e| reservation_id(e) == id);
+        let entry = matches
+            .next()
             .context("unknown reservation; inspect aida doctor check repair-reservations")?;
+        anyhow::ensure!(matches.next().is_none(), "ambiguous reservation ID");
         anyhow::ensure!(
             entry.spawn != SpawnOutcome::ProvenDead,
             "reservation already released"
         );
-        let reason = release_evidence(entry)
-            .map_err(|e| anyhow::anyhow!("{id}: {e:#}; inspect `aida session leases --all`"))?;
-        if apply {
-            entry.spawn = SpawnOutcome::ProvenDead;
-            self.journal.releases.push(ReservationRelease {
-                id: id.into(),
-                uid: unsafe { libc::geteuid() },
-                at: chrono::Utc::now().to_rfc3339(),
-                reason: reason.clone(),
-            });
-            self.save()?;
-        }
-        Ok(reason)
+        let lease = reservation_lease(entry)?;
+        let absent = path_absent(&entry.tree_path)?;
+        let count = if absent {
+            None
+        } else {
+            crate::seat_clone::repair_unpushed_count(&entry.key.repository, &entry.tree_path)
+        };
+        let tree_state = if absent { "absent" } else { "present" };
+        let count = count.map_or_else(|| "unavailable".into(), |v| v.to_string());
+        eprintln!("Entry {id}\nLease {}: {lease}\nTree {:?}: {tree_state}\nUnpushed HEAD commits: {count}\nReason: {reason:?}\nType {id} to release:", entry.lane_id, entry.tree_path);
+        let mut answer = String::new();
+        std::io::BufRead::read_line(&mut std::io::BufReader::new(input), &mut answer)?;
+        anyhow::ensure!(
+            answer.trim_end_matches(['\r', '\n']) == id,
+            "confirmation did not match"
+        );
+        reservation_lease(entry)?;
+        entry.spawn = SpawnOutcome::ProvenDead;
+        self.journal.releases.push(ReservationRelease {
+            id: id.into(),
+            uid: unsafe { libc::geteuid() },
+            at: chrono::Utc::now().to_rfc3339(),
+            reason: reason.into(),
+        });
+        self.save()
     }
 
     fn entry_mut(&mut self, key: &RepairKey) -> Result<&mut RepairEntry> {
@@ -476,7 +426,6 @@ impl RepairGuard {
                 && entry.spawn != SpawnOutcome::ProvenDead
             {
                 entry.lane_id = successor.to_owned();
-                entry.lease_ended_at = None;
             }
         }
         self.save()
@@ -770,7 +719,6 @@ mod tests {
                     key: key.clone(),
                     dispatched_by: "direct-rework".into(),
                     reserved_at: "now".into(),
-                    lease_ended_at: None,
                     lane_id: format!("lane-{attempt}"),
                     tree_path: main.join("seat"),
                     branch: "pr".into(),
@@ -838,128 +786,56 @@ mod tests {
         entry.reserved_at = "2026-01-01T00:00:00Z".into();
         let id = reservation_id(&entry);
         journal.reserve(entry.clone()).unwrap();
-        let lanes = main.join(".aida/lanes");
-        std::fs::create_dir(&lanes).unwrap();
-        std::fs::create_dir(crate::leases::leases_dir(main)).unwrap();
-        assert!(journal.heal_reservation(&id, true).is_err());
-        let mut worker = std::process::Command::new("true").spawn().unwrap();
-        let dead_pid = worker.id();
-        assert!(worker.wait().unwrap().success());
-        let mut receipt = serde_json::json!({"lease_id": entry.lane_id, "seat_path":entry.tree_path,
-            "started_at":"2026-01-01T00:00:01Z", "exited_at":"2026-01-01T00:00:02Z",
-            "exit_status":"exited with exit status: 0", "spec":"BUG-2669", "vendor":"codex",
-            "pid":dead_pid, "log_path":main.join("worker.log"),
-            "claim":{"lease_id":entry.lane_id,"pid_namespace":aida_core::pid_observer::PidObserver::current().namespace,"scope":"BUG-2669","node_id":"host","clone_path":main,"host":crate::coordination::hostname(),"pid":1,"agent":"test","started_at":entry.reserved_at,"heartbeat_at":entry.reserved_at,"ttl_secs":3600}});
-        std::fs::write(
-            lanes.join("headless-01a2053df3e6.json"),
-            receipt.to_string(),
-        )
-        .unwrap();
-        let lease = crate::leases::lease_path(main, &entry.lane_id);
-        std::fs::write(&lease, "malformed").unwrap();
-        assert!(journal.heal_reservation(&id, true).is_err());
-        let mut live = serde_json::json!({
-            "id": entry.lane_id, "scope": "BUG-2669", "slug": "bug-2669",
-            "owner": "implementer", "worktree_path": entry.tree_path,
-            "branch": entry.branch, "started_at": "2026-01-01T00:00:00Z", "hostname": "host"
-        });
-        std::fs::write(&lease, toml::to_string(&live).unwrap()).unwrap();
-        let refusal = journal.heal_reservation(&id, true).unwrap_err().to_string();
-        assert!(refusal.contains("lease is still present"), "{refusal}");
-        std::fs::remove_file(lease).unwrap();
-        std::fs::create_dir(&entry.tree_path).unwrap();
-        assert!(journal.heal_reservation(&id, true).is_err());
-        std::fs::rename(&entry.tree_path, main.join("salvaged")).unwrap();
-        std::fs::remove_dir(entry.tree_path.parent().unwrap()).unwrap();
-        let receipt_path = lanes.join("headless-01a2053df3e6.json");
-        for (status, pid) in [
-            ("exited with ", dead_pid),
-            ("exited with exit status: 0", std::process::id()),
-            ("exited with exit status: 0", 0),
-        ] {
-            receipt["exit_status"] = status.into();
-            receipt["pid"] = pid.into();
-            std::fs::write(&receipt_path, receipt.to_string()).unwrap();
-            assert!(journal.heal_reservation(&id, true).is_err());
+        use std::io::Write;
+        use std::os::fd::FromRawFd;
+        fn terminal(answer: &str) -> (File, File) {
+            let (mut master, mut slave) = (-1, -1);
+            assert_eq!(
+                unsafe {
+                    libc::openpty(
+                        &mut master,
+                        &mut slave,
+                        std::ptr::null_mut(),
+                        std::ptr::null(),
+                        std::ptr::null(),
+                    )
+                },
+                0
+            );
+            let mut master = unsafe { File::from_raw_fd(master) };
+            writeln!(master, "{answer}").unwrap();
+            (master, unsafe { File::from_raw_fd(slave) })
         }
-        receipt["pid"] = dead_pid.into();
-        std::fs::write(&receipt_path, receipt.to_string()).unwrap();
-        std::os::unix::fs::symlink(main.join("missing"), entry.tree_path.parent().unwrap())
-            .unwrap();
-        assert!(journal.heal_reservation(&id, true).is_err());
-        std::fs::remove_file(entry.tree_path.parent().unwrap()).unwrap();
+        let reason = "verified moved checkout";
+        std::fs::create_dir(&entry.tree_path).unwrap();
+        std::fs::rename(&entry.tree_path, main.join("moved")).unwrap();
         assert!(journal
-            .repair_findings()
-            .iter()
-            .any(|f| f.id == id && f.action.contains("--force")));
-        journal.heal_reservation(&id, false).unwrap();
-        std::fs::create_dir(entry.tree_path.parent().unwrap()).unwrap();
-        assert!(journal.reserve(entry.clone()).is_err());
-        assert!(
-            crate::doctor_cmd::explicit_repair_heal(&mut journal, &id, true, true, true).is_err()
-        );
-        assert!(journal.reserve(entry.clone()).is_err());
-        crate::doctor_cmd::explicit_repair_heal(&mut journal, &id, true, true, false).unwrap();
-        drop(journal);
-        let mut journal = RepairGuard::lock(main).unwrap();
-        entry.lane_id = "01a2053df3e7".into();
-        let next = reservation_id(&entry);
-        journal.reserve(entry.clone()).unwrap();
-        let blocked = journal
-            .repair_findings()
-            .into_iter()
-            .find(|f| f.id == next)
-            .unwrap();
-        assert!(
-            blocked.summary.contains("no worker exit receipt") && !blocked.action.contains("heal")
-        );
-        drop(journal);
+            .attest_reservation(&id, reason, File::open("/dev/null").unwrap())
+            .is_err());
+        let (_master, input) = terminal("wrong");
+        assert!(journal.attest_reservation(&id, reason, input).is_err());
+        let dir = crate::leases::leases_dir(main);
+        std::fs::create_dir(&dir).unwrap();
         let lease = crate::leases::lease_path(main, &entry.lane_id);
-        live["id"] = entry.lane_id.clone().into();
-        std::fs::write(lease, toml::to_string(&live).unwrap()).unwrap();
-        assert!(crate::leases::remove_session_lease_record_only(
-            main,
-            &entry.lane_id
-        ));
-        let mut journal = RepairGuard::lock(main).unwrap();
-        journal.heal_reservation(&next, true).unwrap();
-        // Worker releases its lease before the supervisor collects wait().
-        entry.lane_id = "01a2053df3e8".into();
-        let finished = reservation_id(&entry);
-        journal.reserve(entry.clone()).unwrap();
-        drop(journal);
-        live["id"] = entry.lane_id.clone().into();
-        std::fs::write(
-            crate::leases::lease_path(main, &entry.lane_id),
-            toml::to_string(&live).unwrap(),
-        )
-        .unwrap();
-        let log = main.join(".aida/headless-logs/worker");
-        let mut worker = std::process::Command::new("true").spawn().unwrap();
-        crate::lane_liveness::register_headless_lane_for_child(
-            &log,
-            Some(&entry.lane_id),
-            "codex",
-            worker.id(),
-        );
-        assert!(crate::leases::remove_session_lease_record_only(
-            main,
-            &entry.lane_id
-        ));
-        let mut journal = RepairGuard::lock(main).unwrap();
-        assert!(journal.heal_reservation(&finished, true).is_err());
-        drop(journal);
-        crate::lane_liveness::finish_headless_lane_for_child(
-            &log,
-            Some(&entry.lane_id),
-            Some(worker.wait().unwrap()),
-        );
-        let mut journal = RepairGuard::lock(main).unwrap();
+        let live = serde_json::json!({"id":entry.lane_id,"scope":"BUG-2669","slug":"bug-2669","owner":"implementer","worktree_path":entry.tree_path,"branch":entry.branch,"started_at":entry.reserved_at,"hostname":"host","pid_namespace":aida_core::pid_observer::PidObserver::current().namespace,"active_pid":std::process::id()});
+        std::fs::write(&lease, toml::to_string(&live).unwrap()).unwrap();
+        let (_master, input) = terminal(&id);
         assert!(journal
-            .heal_reservation(&finished, true)
-            .unwrap()
-            .contains("worker exit receipt"));
+            .attest_reservation(&id, reason, input)
+            .unwrap_err()
+            .to_string()
+            .contains("live or unverified"));
+        std::fs::remove_file(lease).unwrap();
+        let (_master, input) = terminal(&id);
+        journal.attest_reservation(&id, reason, input).unwrap();
+        drop(journal);
+        let mut journal = RepairGuard::lock(main).unwrap();
+        assert_eq!(journal.journal.releases[0].reason, reason);
         assert_eq!(journal.journal.releases[0].id, id);
+        assert_eq!(journal.journal.releases[0].uid, unsafe { libc::geteuid() });
+        chrono::DateTime::parse_from_rfc3339(&journal.journal.releases[0].at).unwrap();
+        entry.lane_id = "successor".into();
+        journal.reserve(entry).unwrap();
         assert_eq!(
             journal.entry_mut(&other).unwrap().spawn,
             SpawnOutcome::Started
@@ -978,7 +854,6 @@ mod tests {
                 key: key.clone(),
                 dispatched_by: "direct-rework".into(),
                 reserved_at: "now".into(),
-                lease_ended_at: None,
                 lane_id: "lane".into(),
                 tree_path: main.join("seat"),
                 branch: "pr".into(),
@@ -1190,7 +1065,6 @@ mod tests {
             key: key.clone(),
             dispatched_by: "direct-rework".into(),
             reserved_at: "now".into(),
-            lease_ended_at: None,
             lane_id: "lease-1".into(),
             tree_path: main.join("seat"),
             branch: "pr".into(),

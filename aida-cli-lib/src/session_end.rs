@@ -2136,7 +2136,7 @@ pub(crate) fn session_end_with_discard_unpushed(
     // run is fine); other errors warn so the user can clean up manually
     // instead of trusting a stale check mark.
     // trace:BUG-56 | ai:claude
-    match crate::repair_journal::unlink_session_lease(lease_target, &target.id) {
+    match std::fs::remove_file(lease_target) {
         Ok(_) => {
             // trace:BUG-2651 | ai:codex
             if !clone_kept {

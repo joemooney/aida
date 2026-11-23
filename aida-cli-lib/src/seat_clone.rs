@@ -3068,91 +3068,24 @@ pub(crate) fn salvage(main: &Path, clone: &Path) -> Result<PathBuf> {
     salvage_capped(main, clone, SALVAGE_OUTPUT_CAP, false)
 }
 
-/// Compare a completed host salvage against the current checkout using the
-/// producer's read-only sandbox. A partial patch or stale bundle cannot match.
-pub(crate) fn verified_repair_salvage(
-    main: &Path,
-    tree: &Path,
-    head: &str,
-    branch: &str,
-    reserved: chrono::DateTime<chrono::FixedOffset>,
-) -> Result<String> {
-    anyhow::ensure!(
-        aida_core::seat_clone_detect::has_real_git_dir(tree),
-        "tree lacks a private Git directory"
-    );
-    let dir = main
-        .join(".aida/salvage")
-        .join(tree.file_name().context("invalid tree")?);
-    anyhow::ensure!(
-        dir.canonicalize().is_ok_and(|p| p == dir),
-        "missing or redirected salvage directory"
-    );
-    let mut latest = None;
-    for item in std::fs::read_dir(&dir)? {
-        let path = item?.path();
-        if path.extension().is_none_or(|e| e != "patch") {
-            continue;
-        }
-        let Some(stamp) = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .and_then(|s| chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H%M%S%.3fZ").ok())
-        else {
-            continue;
-        };
-        if stamp.and_utc() >= reserved
-            && stamp.and_utc() <= chrono::Utc::now()
-            && latest.as_ref().is_none_or(|p| &path > p)
-        {
-            latest = Some(path);
-        }
-    }
-    let patch = latest.context("no salvage patch for this reservation")?;
-    let run = |script: &str, base: &str| {
-        run_sandboxed(
-            tree,
-            main,
-            "sh",
-            &[
-                "-c".as_ref(),
-                script.as_ref(),
-                "doctor".as_ref(),
-                base.as_ref(),
-                "complete".as_ref(),
-            ],
-            SALVAGE_OUTPUT_CAP,
-        )
-        .map_err(|e| anyhow::anyhow!("salvage verification: {e}"))
-    };
-    let identity = run(
-        r#"set -eu; u=$(git ls-files -u); test -z "$u"; git rev-parse HEAD; git symbolic-ref --short HEAD"#,
-        "",
-    )?;
-    anyhow::ensure!(
-        identity == format!("{head}\n{branch}\n").as_bytes(),
-        "tree identity changed or unresolved conflicts remain"
-    );
-    let base = pinned_base(main, tree).unwrap_or_default();
-    let matches = |file: &Path, script| -> Result<()> {
-        let saved = crate::observation_envelope::read_bounded(file, SALVAGE_OUTPUT_CAP as usize)?;
-        anyhow::ensure!(
-            saved == run(script, &base)?,
-            "salvage differs from tree at {}",
-            file.display()
-        );
-        Ok(())
-    };
-    matches(&patch, SALVAGE_SCRIPT)?;
-    let counts = run(UNPUSHED_COUNT_SCRIPT, &base)?;
-    if parse_unpushed_count(std::str::from_utf8(&counts)?)
-        .context("invalid salvage commit count")?
-        .0
-        > 0
-    {
-        matches(&patch.with_extension("bundle"), SALVAGE_BUNDLE_SCRIPT)?;
-    }
-    Ok(format!("verified salvage {}", patch.display()))
+/// Informational only. Keep Git from the seat inside the salvage read sandbox.
+// trace:BUG-2722 | ai:codex
+pub(crate) fn repair_unpushed_count(main: &Path, tree: &Path) -> Option<u64> {
+    let output = run_sandboxed(
+        tree,
+        main,
+        "git",
+        &[
+            "rev-list".as_ref(),
+            "--count".as_ref(),
+            "HEAD".as_ref(),
+            "--not".as_ref(),
+            "--remotes".as_ref(),
+        ],
+        128,
+    )
+    .ok()?;
+    std::str::from_utf8(&output).ok()?.trim().parse().ok()
 }
 
 /// [`salvage`] for a caller that gives up the lane's lease once the patch
@@ -4057,7 +3990,6 @@ fn prepare_host_repair_with(
             key: key.clone(),
             dispatched_by: "direct-rework".into(),
             reserved_at: chrono::Utc::now().to_rfc3339(),
-            lease_ended_at: None,
             lane_id: lane_id.into(),
             tree_path: tree.into(),
             branch: branch.into(),

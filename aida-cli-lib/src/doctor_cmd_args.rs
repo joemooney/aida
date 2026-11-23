@@ -76,6 +76,10 @@ pub enum DoctorCommand {
         #[clap(long)]
         id: Option<String>,
 
+        /// Operator's reason for releasing one conflict repair reservation.
+        #[clap(long, requires = "id", conflicts_with = "yes")]
+        attest: Option<String>,
+
         /// Skip confirmation prompts.
         #[clap(long, short = 'y')]
         yes: bool,

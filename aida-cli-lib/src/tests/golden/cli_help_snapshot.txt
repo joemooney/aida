@@ -13455,6 +13455,9 @@ Options:
       --id <ID>
           Heal only this exact finding ID (as shown by doctor check)
 
+      --attest <ATTEST>
+          Operator's reason for releasing one conflict repair reservation
+
   -y, --yes
           Skip confirmation prompts
 
@@ -46533,6 +46536,11 @@ Working on aida itself
         "name": "all",
         "takes_value": false,
         "help": "Show older completed-without-commit findings individually"
+      },
+      {
+        "name": "attest",
+        "takes_value": true,
+        "help": "Operator's reason for releasing one conflict repair reservation"
       },
       {
         "name": "canonical-ids",

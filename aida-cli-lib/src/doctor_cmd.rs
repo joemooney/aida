@@ -320,9 +320,10 @@ pub(crate) fn handle_doctor_command(
             })
         }
         cli::DoctorCommand::Heal {
+            attest,
             id,
             category,
-            yes,
+            yes: sub_yes,
             force,
             all: sub_all,
             json,
@@ -330,28 +331,27 @@ pub(crate) fn handle_doctor_command(
             // trace:BUG-2722 | ai:codex
             if normalize_doctor_category(category)? == "repair-reservations" {
                 let root = main_worktree_root_from(&find_project_root()?);
+                anyhow::ensure!(!yes && !sub_yes, "repair release refuses --yes");
+                let id = id.as_deref().context("repair release requires one --id")?;
+                let reason = attest
+                    .as_deref()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .context("repair release requires a nonempty --attest reason")?;
+                crate::gate::seat_authority::require_direct_human()?;
+                anyhow::ensure!(
+                    crate::gate::role_authority::has_integrity_floor_authority()
+                        && !crate::pr_service::ship_caller_is_drive_seat()
+                        && !doctor_running_autonomously(&root),
+                    "repair release requires a human operator"
+                );
                 let mut journal = crate::repair_journal::RepairGuard::lock(&root)?;
-                if let Some(id) = id {
-                    let reason = explicit_repair_heal(
-                        &mut journal,
-                        id,
-                        *force,
-                        *yes,
-                        doctor_running_autonomously(&root),
-                    )?;
-                    println!(
-                        "{}",
-                        serde_json::json!({"id": id, "released": *yes, "evidence": reason})
-                    );
-                } else {
-                    anyhow::ensure!(!yes, "repair-reservations requires one --id to release");
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&journal.repair_findings())?
-                    );
-                }
+                journal.attest_reservation(id, reason, std::io::stdin().lock())?;
+                println!("Released {id}");
                 return Ok(());
             }
+            anyhow::ensure!(attest.is_none(), "--attest requires repair-reservations");
+            let yes = sub_yes;
             if let Some(id) = id {
                 let root = main_worktree_root_from(&find_project_root()?);
                 let category = normalize_doctor_category(category)?;
@@ -2015,19 +2015,6 @@ fn doctor_heal_disposition(
     }
     // Destructive + --force --yes + interactive TTY = explicit human sign-off.
     HealDisposition::Proceed
-}
-
-// trace:BUG-2722 | ai:codex
-pub(crate) fn explicit_repair_heal(
-    journal: &mut crate::repair_journal::RepairGuard,
-    id: &str,
-    force: bool,
-    yes: bool,
-    autonomous: bool,
-) -> Result<String> {
-    anyhow::ensure!(!yes || doctor_heal_disposition(false, force, yes, autonomous) == HealDisposition::Proceed,
-        "repair release requires an interactive operator with --force --yes outside an orchestrated run");
-    journal.heal_reservation(id, yes)
 }
 
 fn collect_repair_findings(
