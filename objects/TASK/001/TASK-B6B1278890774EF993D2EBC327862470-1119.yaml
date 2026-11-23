@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T09:43:03.058201739Z
-modified_at: 2026-11-23T16:33:43.885474057Z
+modified_at: 2026-11-23T16:56:44.193012457Z
 req_type: Task
 tags:
 - carried-from:BUG-2674
@@ -79,6 +79,18 @@ comments:
   modified_at: 2026-11-23T15:13:11.719876074Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20956-aca2-7e70-bd5b-ab0a7743e72b
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c plus native working-tree edits. The merge-base diff is empty. Three modified files, no untracked additions.
+    AC1: [evidence: behavioral-test] review_watch_service.rs:207 persisted one busy change, 17 refusals and a separate stop naming the change and underlying cause.
+    AC2: [evidence: behavioral-test] The same fixture panics on visiting a later change, checks the 16-entry sample and full refusal total, and verifies a superseded image leaves the prior report intact. Lane job j20261123T163822857-2-0 executed the regression, 1 passed.
+    Deep pass: traced both early returns in watch_changes_into, checked optional JSON field compatibility and bounds on sampled refusals and stop text. No authority changes. All 48 FAST source gates passed. Remaining ratchet checks in progress. Original defect confirmed by inspection of the error branch, without a pre-fix test run.
+  created_at: 2026-11-23T16:56:44.193012457Z
+  modified_at: 2026-11-23T16:56:44.193012457Z
+  session_id: 01a209413d50
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f33a-a6c2-7ee0-a721-a9fc4dbfdfd6
   author: joe
