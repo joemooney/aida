@@ -1,5 +1,6 @@
 id: 01a2081b-8efb-7020-9c11-ec6e1d96d09e
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1248
+agreed_id: TASK-3281
 title: 'Review follow-up: aida-cli-lib/src/gate/mandate_ship.rs:689-709. The production collector now rejects every '
 description: |-
   From BUG-2727
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20737-9b05-7ee3-a52c-b8319d3e0e34
   created_at: 2026-11-23T11:12:47.032560868Z
+history:
+- id: 01a20838-a9ed-70f0-b144-881b72bb7183
+  author: joe
+  timestamp: 2026-11-23T11:44:20.973273740Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f27ab17356dd9ce6e2b72a4eef782b5cb2d531f2
   branch: pr-4419

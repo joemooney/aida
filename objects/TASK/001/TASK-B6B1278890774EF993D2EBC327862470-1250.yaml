@@ -1,5 +1,6 @@
 id: 01a2081f-88c2-7e62-b072-6e2d1c99a550
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1250
+agreed_id: TASK-3283
 title: 'Review follow-up: aida-cli-lib/src/queue_cmd/work.rs:8405–8417 and aida-cli-lib/src/full_tier.rs:324–326, 36'
 description: |-
   From BUG-2729
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a207dd-4395-70a2-8265-932cc529c679
   created_at: 2026-11-23T11:17:07.312736584Z
+history:
+- id: 01a20839-1105-7950-a992-0f702337d0ff
+  author: joe
+  timestamp: 2026-11-23T11:44:47.365505631Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: f2f2903d70c9294046921dee86a86c3c35299176
   branch: pr-4425
