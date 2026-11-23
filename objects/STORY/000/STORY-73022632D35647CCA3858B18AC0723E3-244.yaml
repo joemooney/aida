@@ -1,0 +1,32 @@
+id: 01a20a45-18bc-77e0-81d1-c2d59cbdd88b
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-244
+title: 'Review PR-4458: [AI:codex] fix(shift): yield session reap at the tick deadline (BUG-2710)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20a01`) for branch `bug-b6b1278890774ef993d2ebc327862470-471`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4458>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-471` → `main`
+
+  ## Covers
+
+  - BUG-2710
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4458` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T21:17:10.204795953Z
+modified_at: 2026-11-23T21:17:10.204795953Z
+req_type: Story
+filed_at:
+  code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f1a50179e5
+  session: 01a20a01840f
