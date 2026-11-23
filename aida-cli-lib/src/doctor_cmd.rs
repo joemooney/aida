@@ -327,6 +327,25 @@ pub(crate) fn handle_doctor_command(
             all: sub_all,
             json,
         } => {
+            // trace:BUG-2722 | ai:codex
+            if normalize_doctor_category(category)? == "repair-reservations" {
+                let root = main_worktree_root_from(&find_project_root()?);
+                let mut journal = crate::repair_journal::RepairGuard::lock(&root)?;
+                if let Some(id) = id {
+                    let reason = journal.heal_reservation(id, *yes)?;
+                    println!(
+                        "{}",
+                        serde_json::json!({"id": id, "released": *yes, "evidence": reason})
+                    );
+                } else {
+                    anyhow::ensure!(!yes, "repair-reservations requires one --id to release");
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&journal.repair_findings())?
+                    );
+                }
+                return Ok(());
+            }
             if let Some(id) = id {
                 let root = main_worktree_root_from(&find_project_root()?);
                 let category = normalize_doctor_category(category)?;
@@ -460,6 +479,16 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     let mut remote_drift_info = Vec::new();
     let mut landing_health_unknown = Vec::new();
     let mut findings = collect_doctor_findings(&project_root, &store, opts.category.as_deref())?;
+    // Keep the locked journal scan out of routine status reads.
+    // trace:BUG-2722 | ai:codex
+    if doctor_category_selected(opts.category.as_deref(), "repair-reservations")? {
+        match std::fs::symlink_metadata(project_root.join(".aida/repair-journal.json")) {
+            Ok(_) => findings
+                .extend(crate::repair_journal::RepairGuard::lock(&project_root)?.repair_findings()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e.into()),
+        }
+    }
     // The tolerant loader leaves bad objects out; report each one separately
     // while retaining the other categories and safe heals.
     // trace:BUG-2490 | ai:codex

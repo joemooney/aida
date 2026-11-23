@@ -421,6 +421,9 @@ The widths apply when an ID is minted and whenever one is displayed: lists, `sho
 
 **Read-only git config lock.** A sandboxed shell (for example Claude Code's Bash sandbox) can leave an empty, read-only `config.lock` in the repository's shared git directory. While it is there, git refuses every config write, so new worktrees, branch deletion and `push -u` fail with `could not lock config file .git/config: File exists`. AIDA removes that file before its own worktree and branch commands, and retries once if it reappears. `aida doctor check sandbox-config-lock` reports it, and `aida doctor --heal --category sandbox-config-lock` removes it. Only an empty lock with mode `0444` is removed; a real git lock is never read-only, so any other lock is left in place and git's error is shown. <!-- trace:BUG-2211 | ai:claude -->
 
+**Conflict repair reservations.** On the host, run `aida doctor check repair-reservations` to list eligible reservations. Preview one with `aida doctor heal repair-reservations --id <id>` and add `--yes` to release it. The journal records the effective user ID, time, and evidence. Release requires the exact lease file to be gone, a matching host worker exit receipt, and the recorded tree path to be absent. A salvaged tree moved aside satisfies the path check. A patch beside a still-present tree leaves the reservation in place. Inspect leases with `aida session leases --all`.
+<!-- trace:BUG-2722 | ai:codex -->
+
 **Expired exited-worker claims.** `aida doctor check leases` also reports shared
 claims whose local session record has disappeared. On the holder's host, an
 expired non-process-backed claim is eligible only when its creator is provably

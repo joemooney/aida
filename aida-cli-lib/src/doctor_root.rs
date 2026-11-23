@@ -1566,6 +1566,7 @@ pub(crate) static DOCTOR_CATEGORY_ALIASES: &[(&[&str], &str)] = &[
         &["cache-refresh", "refresh-worker", "cache-worker"],
         "cache-refresh",
     ),
+    (&["repair-reservations"], "repair-reservations"),
     (&["stale-lease", "stale-leases", "leases"], "stale-leases"),
     (
         &["abandoned-lease", "abandoned-leases", "abandoned"],

@@ -833,6 +833,36 @@ pub(crate) fn exited_claim_seat(claim: &crate::coordination::Claim) -> Option<Pa
     record.seat_path.filter(|path| path.is_absolute())
 }
 
+// trace:BUG-2722 | ai:codex
+pub(crate) fn repair_lane_exit(
+    root: &Path,
+    id: &str,
+    tree: &Path,
+) -> anyhow::Result<DateTime<Utc>> {
+    let dir = lanes_dir(root);
+    anyhow::ensure!(
+        std::fs::symlink_metadata(&dir)?.is_dir(),
+        "invalid lane directory"
+    );
+    let bytes = crate::observation_envelope::read_bounded(&headless_record_path(root, id), 65536)?;
+    let record: HeadlessLaneRecord = serde_json::from_slice(&bytes)?;
+    anyhow::ensure!(
+        record.lease_id == id && record.seat_path.as_deref() == Some(tree),
+        "exit receipt does not match the recorded lane and tree"
+    );
+    let exit = record
+        .exited_at
+        .filter(|t| *t >= record.started_at && *t <= Utc::now());
+    anyhow::ensure!(
+        record
+            .exit_status
+            .as_deref()
+            .is_some_and(|s| s.starts_with("exited with ")),
+        "worker has no confirmed exit"
+    );
+    exit.ok_or_else(|| anyhow::anyhow!("missing or invalid worker exit time"))
+}
+
 fn lanes_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("lanes")
 }

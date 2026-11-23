@@ -95,12 +95,72 @@ impl RepairEntry {
 struct Journal {
     version: u32,
     entries: Vec<RepairEntry>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    releases: Vec<ReservationRelease>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ReservationRelease {
+    id: String,
+    uid: u32,
+    at: String,
+    reason: String,
 }
 pub(crate) struct RepairGuard {
     _lock: File,
     path: PathBuf,
     journal: Journal,
 }
+// trace:BUG-2722 | ai:codex
+fn reservation_id(entry: &RepairEntry) -> String {
+    format!(
+        "pr-{}-{}-{}",
+        entry.key.pr, entry.key.original_head, entry.lane_id
+    )
+}
+
+fn release_evidence(entry: &RepairEntry) -> Result<String> {
+    let root = &entry.key.repository;
+    let tree = &entry.tree_path;
+    let lease = (|| -> Result<_> {
+        anyhow::ensure!(
+            std::fs::symlink_metadata(crate::leases::leases_dir(root))?.is_dir(),
+            "missing session directory"
+        );
+        anyhow::ensure!(
+            crate::leases::read_exact_lease(root, &entry.lane_id)?.is_none(),
+            "lease is still present"
+        );
+        let exit = crate::lane_liveness::repair_lane_exit(root, &entry.lane_id, tree)?;
+        anyhow::ensure!(
+            exit >= chrono::DateTime::parse_from_rfc3339(&entry.reserved_at)?,
+            "exit predates reservation"
+        );
+        Ok(exit)
+    })();
+    let absent = tree.is_absolute()
+        && tree
+            .parent()
+            .is_some_and(|p| p.canonicalize().is_ok_and(|canonical| canonical == p))
+        && matches!(std::fs::symlink_metadata(tree), Err(e) if e.kind() == std::io::ErrorKind::NotFound);
+    let state = if absent {
+        "absent"
+    } else {
+        "present or unverified"
+    };
+    let lease_state = match &lease {
+        Ok(exit) => format!("ended at {exit}"),
+        Err(error) => format!("{error:#}"),
+    };
+    let reason = format!(
+        "lane {}: {lease_state}; tree {}: {state}; inspect `aida session leases --all`",
+        entry.lane_id,
+        tree.display()
+    );
+    anyhow::ensure!(lease.is_ok() && absent, "{reason}");
+    Ok(reason)
+}
+
 impl RepairGuard {
     pub fn lock(main: &Path) -> Result<Self> {
         use std::os::unix::fs::OpenOptionsExt;
@@ -131,6 +191,7 @@ impl RepairGuard {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Journal {
                 version: 1,
                 entries: vec![],
+                releases: vec![],
             },
             Err(e) => return Err(e).context("cannot read repair journal"),
         };
@@ -152,6 +213,51 @@ impl RepairGuard {
             journal,
         })
     }
+    // trace:BUG-2722 | ai:codex
+    pub(crate) fn repair_findings(&self) -> Vec<crate::DoctorFinding> {
+        self.journal
+            .entries
+            .iter()
+            .filter(|e| e.spawn != SpawnOutcome::ProvenDead)
+            .filter_map(|e| {
+                let summary = release_evidence(e).ok()?;
+                let id = reservation_id(e);
+                Some(crate::DoctorFinding {
+                    category: "repair-reservations".into(),
+                    action: format!("aida doctor heal repair-reservations --id {id} --yes"),
+                    id,
+                    summary,
+                    safe_heal: false,
+                })
+            })
+            .collect()
+    }
+
+    pub(crate) fn heal_reservation(&mut self, id: &str, apply: bool) -> Result<String> {
+        let entry = self
+            .journal
+            .entries
+            .iter_mut()
+            .find(|e| reservation_id(e) == id)
+            .context("unknown reservation; inspect aida doctor check repair-reservations")?;
+        anyhow::ensure!(
+            entry.spawn != SpawnOutcome::ProvenDead,
+            "reservation already released"
+        );
+        let reason = release_evidence(entry)?;
+        if apply {
+            entry.spawn = SpawnOutcome::ProvenDead;
+            self.journal.releases.push(ReservationRelease {
+                id: id.into(),
+                uid: unsafe { libc::geteuid() },
+                at: chrono::Utc::now().to_rfc3339(),
+                reason: reason.clone(),
+            });
+            self.save()?;
+        }
+        Ok(reason)
+    }
+
     fn entry_mut(&mut self, key: &RepairKey) -> Result<&mut RepairEntry> {
         self.journal
             .entries
@@ -332,7 +438,9 @@ impl RepairGuard {
         Ok(entry)
     }
     fn save(&self) -> Result<()> {
-        aida_core::fs_atomic::write_atomic(&self.path, serde_json::to_vec_pretty(&self.journal)?)?;
+        let bytes = serde_json::to_vec_pretty(&self.journal)?;
+        anyhow::ensure!(bytes.len() <= 4 * 1024 * 1024, "repair journal too large");
+        aida_core::fs_atomic::write_atomic(&self.path, bytes)?;
         Ok(())
     }
 }
@@ -587,6 +695,63 @@ mod tests {
             );
         }
         assert_eq!(sent.len(), 2);
+    }
+
+    // trace:BUG-2722 | ai:codex
+    #[test]
+    fn bug_2722_ended_lane_moved_tree_releases_only_selected_head() {
+        let temp = tempfile::tempdir().unwrap();
+        let main = temp.path();
+        let key = reserved(main, "660c0e87e696e0560b23715a1cbda490ad330edc");
+        let other = reserved(main, "other");
+        let mut journal = RepairGuard::lock(main).unwrap();
+        let mut entry = journal.entry_mut(&key).unwrap().clone();
+        entry.key.pr = 4376;
+        entry.lane_id = "01a2053df3e6".into();
+        entry.tree_path = main.join("aida-seat-433");
+        entry.reserved_at = "2026-01-01T00:00:00Z".into();
+        let id = reservation_id(&entry);
+        journal.reserve(entry.clone()).unwrap();
+        let lanes = main.join(".aida/lanes");
+        std::fs::create_dir(&lanes).unwrap();
+        std::fs::create_dir(crate::leases::leases_dir(main)).unwrap();
+        assert!(journal.heal_reservation(&id, true).is_err());
+        let receipt = serde_json::json!({"lease_id": entry.lane_id, "seat_path":entry.tree_path,
+            "started_at":"2026-01-01T00:00:01Z", "exited_at":"2026-01-01T00:00:02Z",
+            "exit_status":"exited with exit status: 0", "spec":"BUG-2669", "vendor":"codex",
+            "pid":42, "log_path":main.join("worker.log")});
+        std::fs::write(
+            lanes.join("headless-01a2053df3e6.json"),
+            receipt.to_string(),
+        )
+        .unwrap();
+        let lease = crate::leases::lease_path(main, &entry.lane_id);
+        std::fs::write(&lease, "malformed").unwrap();
+        assert!(journal.heal_reservation(&id, true).is_err());
+        let live = serde_json::json!({
+            "id": entry.lane_id, "scope": "BUG-2669", "slug": "bug-2669",
+            "owner": "implementer", "worktree_path": entry.tree_path,
+            "branch": "pr", "started_at": "2026-01-01T00:00:00Z", "hostname": "host"
+        });
+        std::fs::write(&lease, toml::to_string(&live).unwrap()).unwrap();
+        let refusal = journal.heal_reservation(&id, true).unwrap_err().to_string();
+        assert!(refusal.contains("lease is still present"), "{refusal}");
+        std::fs::remove_file(lease).unwrap();
+        std::fs::create_dir(&entry.tree_path).unwrap();
+        assert!(journal.heal_reservation(&id, true).is_err());
+        std::fs::rename(&entry.tree_path, main.join("salvaged")).unwrap();
+        assert_eq!(journal.repair_findings()[0].id, id);
+        journal.heal_reservation(&id, false).unwrap();
+        assert!(journal.reserve(entry.clone()).is_err());
+        journal.heal_reservation(&id, true).unwrap();
+        drop(journal);
+        let mut journal = RepairGuard::lock(main).unwrap();
+        journal.reserve(entry).unwrap();
+        assert_eq!(journal.journal.releases[0].id, id);
+        assert_eq!(
+            journal.entry_mut(&other).unwrap().spawn,
+            SpawnOutcome::Started
+        );
     }
 
     fn reserved(main: &Path, head: &str) -> RepairKey {
