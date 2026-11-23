@@ -13,12 +13,12 @@ description: |
   Recheck the persistence protocol after STORY-2897 lands. The S3a head 964a98c30ed already syncs the temporary state data before rename. The watch state replacement there returns after rename without syncing the directory entry. A directory sync after publication is needed for that rename's durability.
 
   If the shipped rework still has this gap, complete the atomic state replacement under the trusted watch directory using the existing persistence helper where it fits. Propagate failures and preserve restart consistency between the cursor, episode and pending journal transitions. Cover failures at the publication boundary with the existing watch failpoint/restart pattern. Keep this limited to the residual durability requirement.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.729374870Z
-modified_at: 2026-11-23T09:35:34.333987396Z
+modified_at: 2026-11-23T09:42:35.342107386Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -159,6 +159,14 @@ history:
   timestamp: 2026-11-23T09:34:34.918862226Z
   session_id: 01a20795b177
   changes: []
+- id: 01a207c9-304e-7bf2-979e-ecc60c3f0044
+  author: aida-orchestrator
+  timestamp: 2026-11-23T09:42:35.342250698Z
+  session_id: 01a207c64e61
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362
@@ -167,3 +175,21 @@ filed_at:
   aida_build_sha: 719aa4947d0
   vendor: claude
   session: 01a1faec8fa5
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    TASK-3195 (TASK-b6b1278890774ef993d2ebc327862470-1170), completing spec. Reviewed the entire landed diff against protected main 55f63f3800861fee8b80ae3046c104290baf7fbf. The worksheet has no formal Acceptance or Verify section. Criteria below are drawn from the advisor acceptance prose.
+
+    Recheck shipped persistence protocol — verified by comparing pinned main and the landed tree at main_watch.rs:486–510. Both sync the temporary file before rename and sync the pinned watch directory after rename.
+    Add a missing directory sync or replace the existing persistence helper — not-applicable-because pinned main already performs atomic replacement and the post-rename sync through write_state.
+    Propagate publication failures — verified by the fallible file sync, rename and directory sync in write_state and the early return through record and pass. The new failpoint exercises that early return.
+    Preserve restart consistency across cursor, episode and pending journal transitions — unverified. Startup can advance the journal while the prior state publication is still unconfirmed, as detailed in the blocking finding.
+    Cover the publication failure using the existing failpoint/restart pattern — verified by source inspection of the new post-rename injected-error test and the implementer's reported focused pass of cargo test -p aida-cli-lib state_dir_sync_failure_preserves_the_pending_transition_for_restart. The test reloads visible state and checks replay of the same transition ID. Its journal count sees deduplicated records.
+    Keep the change limited to the residual durability requirement — verified by the full two-file diff and TASK-3195 traces at the failpoint and regression.
+
+    Fast gates and merge-hold-gate passed. Fast compile was pending at review time. No local tests were run.
+  recovery_hint: address the review findings, move TASK-3195 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T09:42:35.342107386Z
