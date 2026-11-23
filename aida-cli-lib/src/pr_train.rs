@@ -1560,7 +1560,7 @@ pub(crate) enum Gate {
     Corpus,
     Message,
     SpecPolicy,
-    /// An active mandate decides, and a read-only report does not ask it.
+    /// An active mandate decides whether this PR is covered.
     Mandate,
 }
 
@@ -1979,12 +1979,6 @@ pub(crate) struct LiveChecks<'a> {
     pub released_member: Option<&'a Member>,
 }
 
-/// What a read-only report says in place of an active mandate's cover: asking
-/// the cover notes exclusions and may record a carry-over.
-// trace:STORY-2824 | ai:claude
-pub(crate) const MANDATE_NOT_ASKED: &str =
-    "`--check` does not ask an active mandate for its cover, since asking records evidence";
-
 impl MemberChecks for LiveChecks<'_> {
     fn metadata(&mut self, pr: u64) -> std::result::Result<crate::forge::ChangeMetadata, String> {
         match self
@@ -2253,23 +2247,23 @@ impl MemberChecks for LiveChecks<'_> {
                 return Err(None);
             }
             at_gate(Gate::Mandate);
-            if let Some(probe) = &mut self.actor_probe {
-                return crate::gate::mandate_ship::preview_ship_cover(
-                    self.project_root,
-                    self.main_worktree,
-                    self.main_worktree,
-                    pr,
-                    ids,
-                    head_ref,
-                    head,
-                )
-                .map_err(|refusal| {
-                    let message = refusal.message(pr);
+            // trace:TASK-3115 | ai:codex
+            return crate::gate::mandate_ship::preview_ship_cover(
+                self.project_root,
+                self.main_worktree,
+                self.main_worktree,
+                pr,
+                ids,
+                head_ref,
+                head,
+            )
+            .map_err(|refusal| {
+                let message = refusal.message(pr);
+                if let Some(probe) = &mut self.actor_probe {
                     probe.mandate_refusal = Some(refusal);
-                    Some(message)
-                });
-            }
-            return Err(Some(MANDATE_NOT_ASKED.to_string()));
+                }
+                Some(message)
+            });
         }
         if let Some(member) = self.released_member {
             if member.pr != pr || member.head != head {

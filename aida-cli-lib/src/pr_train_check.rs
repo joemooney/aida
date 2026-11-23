@@ -111,7 +111,7 @@ pub(crate) fn remedy(gate: Gate, pr: u64) -> String {
             format!("a human lands it from a terminal: `aida pr train {pr}` or `aida pr ship {pr}`")
         }
         Gate::Mandate => {
-            format!("`aida pr train {pr} --dry-run` asks the mandate and reports its answer")
+            format!("address the reported mandate refusal, then rerun `aida pr train --check {pr}`")
         }
     }
 }

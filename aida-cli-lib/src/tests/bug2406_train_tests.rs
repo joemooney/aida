@@ -1514,7 +1514,7 @@ fn supervised_member_lands(held: bool) {
         serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     mandate.include_supervised = true;
     crate::gate::mandate::write_private(&path, &serde_json::to_vec(&mandate).unwrap()).unwrap();
-    let gate = |request_full| {
+    let gate = |read_only, request_full| {
         gate_member_with(
             &mut LiveChecks {
                 project_root: f.root(),
@@ -1522,7 +1522,7 @@ fn supervised_member_lands(held: bool) {
                 forge: &forge,
                 base: "main",
                 named: true,
-                read_only: false,
+                read_only,
                 actor_probe: None,
                 request_full,
                 released_member: None,
@@ -1531,8 +1531,11 @@ fn supervised_member_lands(held: bool) {
             11,
         )
     };
-    let planned = gate(false).expect("dry-run admission");
-    let member = gate(true).expect("live admission");
+    // trace:TASK-3115 | ai:codex
+    let checked = gate(true, false).expect("read-only train check admission");
+    let planned = gate(false, false).expect("dry-run admission");
+    let member = gate(false, true).expect("live admission");
+    assert_eq!(checked, planned);
     assert_eq!(planned, member);
     assert_eq!(member.release.is_some(), held);
     assert_eq!(member.live_cover().unwrap().supervised_by_mode, !held);
@@ -1545,8 +1548,9 @@ fn supervised_member_lands(held: bool) {
         let mut label_only = state.clone();
         label_only["prs"]["11"]["labels"] = json!([{"name": "aida:merge-hold"}]);
         save(f.root(), &label_only);
-        assert!(gate(false).is_err());
-        assert!(gate(true).is_err());
+        assert!(gate(true, false).is_err());
+        assert!(gate(false, false).is_err());
+        assert!(gate(false, true).is_err());
         save(f.root(), &state);
     }
     let mut rails = ForgeRails::new(&mut live, "bug-2666".into());
