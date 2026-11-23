@@ -9,12 +9,12 @@ description: |
   - AC1: recover-launch judges an attempt alive only from evidence bound to that attempt (its recorded launcher/worker PID plus start identity, or a process whose cmdline/env carries the attempt token), not from any process whose cwd is the attempt's path, and never from cwd alone when that path is the primary checkout.
   - AC2: When it refuses, it names the PID, command and why that PID was treated as the attempt's holder.
   - AC3: A regression test: a dead launcher's attempt whose recorded worktree is the primary, with an unrelated live shell in the primary, is recoverable.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T05:01:33.478914488Z
+modified_at: 2026-11-23T05:14:02.714999180Z
 req_type: Bug
 tags:
 - recovery
@@ -199,6 +199,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a206d3-545b-79c3-af08-1c90d5fae3e0
+  author: aida-orchestrator
+  timestamp: 2026-11-23T05:14:02.715015364Z
+  session_id: 01a206d06124
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -206,3 +214,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 215313b8d3a
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2721 AC2 and AC3 pass source review: positive holder matches identify PID, command and reason, and a traced wrapped-recovery regression keeps the unrelated primary-checkout shell alive through release. AC1 removes cwd-only recovery, but the required descendant protection still fails on three release paths. Reviewed the landed tree on 5470336db358. The intervening forge change affects none of the findings. CI pending at review time.'
+  recovery_hint: address the review findings, move BUG-2721 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T05:14:02.714999180Z
