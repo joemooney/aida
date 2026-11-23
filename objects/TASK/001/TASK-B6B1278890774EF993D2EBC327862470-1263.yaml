@@ -1,0 +1,28 @@
+id: 01a209f7-52c3-72e1-80b4-0d03a420883a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1263
+agreed_id: TASK-3845
+title: CI gate scripts fall back to tomli when tomllib is unavailable (split from TASK-3840; strict gate path)
+description: |
+  Split from TASK-3840 (product-15, 2026-11-23 12:55) after its integration-bundle lane correctly punted. scripts/check-ci-gates.py and scripts/check-exec-context.py import tomllib unconditionally, so on a Python without tomllib (3.10, per the work CI report) the gate runner stops at line 36 before reading scripts/ci-gate-tiers.toml. A tomli fallback changes the parser dependency of the FAST gate runner and the exec-context guard, so this is a GATE/GUARD path: main track, strict review.
+
+  ## Acceptance
+  - AC1: Both scripts fall back to `tomli` when `tomllib` is unavailable, and fail with a clear message naming both modules when neither is present. Parsing results are identical either way.
+  - AC2: Test: run both scripts' TOML loading with tomllib hidden (tomli present → identical parse; both absent → the clear error, non-zero exit).
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T19:52:13.251872149Z
+modified_at: 2026-11-23T19:52:13.251872149Z
+req_type: Task
+tags:
+- ci
+- from-work-ci
+- gate
+filed_at:
+  code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f1a50179e5a
+  vendor: claude
