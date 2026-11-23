@@ -1,5 +1,6 @@
 id: 01a20891-72aa-78e3-81dd-686f86ec8d5c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-226
+agreed_id: STORY-3032
 title: 'Review PR-4432: [AI:codex] fix(train): evaluate active mandates during eligibility checks (TASK-3115)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20870`) for branch `task-73022632d35647cca3858b18ac0723e3-010`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T13:21:34.875775702Z
   session_id: 01a20870e95b
+  changes: []
+- id: 01a208c3-e7dc-78d0-92e5-20a3cb47ddbc
+  author: joe
+  timestamp: 2026-11-23T14:16:26.332730990Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ff524ebd21fa22d5744dedb7f4dff6c3c37fad22

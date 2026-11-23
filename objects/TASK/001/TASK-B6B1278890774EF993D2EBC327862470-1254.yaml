@@ -1,5 +1,6 @@
 id: 01a208a8-ef1b-77c0-8e6b-5a9c2f77337d
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1254
+agreed_id: TASK-3286
 title: 'Review follow-up: tests/test_duration_cap_inventory.py:9 adds a standalone regression that neither GitHub CI'
 description: |-
   From TASK-3126
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a1dbde-c245-7ed1-b86b-daaa48159ead
   created_at: 2026-11-23T13:47:12.382335767Z
+history:
+- id: 01a208c3-afa5-7913-8dd6-b096147c5c47
+  author: joe
+  timestamp: 2026-11-23T14:16:11.941202677Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 9af5afb76bd7628acba2280bba7f642a33952305
   branch: pr-4433

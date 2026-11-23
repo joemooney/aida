@@ -1,5 +1,6 @@
 id: 01a208b0-83d2-7b81-b38c-ac302f085771
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-228
+agreed_id: STORY-3036
 title: 'Review PR-4435: [AI:codex] fix(config): show resolved seat tuning and sources (Refs TASK-3171)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20874`) for branch `task-73022632d35647cca3858b18ac0723e3-039`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T13:55:30.967239367Z
   session_id: 01a208741f50
+  changes: []
+- id: 01a208c4-c1f5-7701-9cfc-d43613e195cd
+  author: joe
+  timestamp: 2026-11-23T14:17:22.165040241Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ff524ebd21fa22d5744dedb7f4dff6c3c37fad22
