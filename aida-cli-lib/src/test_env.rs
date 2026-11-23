@@ -4,6 +4,52 @@ pub(crate) use aida_testkit::test_env::*;
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
+/// A private disposable root visible through bwrap's private /tmp mount.
+// trace:TASK-3133 TASK-3838 | ai:codex
+pub(crate) fn bwrap_fixture_parent() -> std::path::PathBuf {
+    // Lane jobs have a read-only host cache and a private bwrap /dev.
+    // Elsewhere libtest redirects HOME to /tmp before the tests run.
+    let env = aida_core::exec_context::Environment::capture();
+    let cache = if env
+        .get(crate::headless_background::LANE_MARKER_ENV)
+        .is_some()
+    {
+        Path::new("/dev/shm").to_owned()
+    } else {
+        crate::test_home::operator_real_home()
+            .expect("bwrap fixture scratch needs the original cache home")
+            .join(".cache")
+    };
+    std::fs::create_dir_all(&cache)
+        .unwrap_or_else(|err| panic!("create scratch cache {cache:?}: {err}"));
+    let cache = cache.canonicalize().expect("resolve bwrap fixture cache");
+    assert!(
+        !cache.starts_with("/tmp")
+            && !cache.starts_with("/var/tmp")
+            && !cache.ancestors().any(|p| p.ends_with("target/worktrees")),
+        "bwrap fixture cache overlaps temporary or seat target paths: {cache:?}"
+    );
+    if let Some(target) = env.get("CARGO_TARGET_DIR") {
+        let target = std::fs::canonicalize(target)
+            .unwrap_or_else(|err| panic!("resolve CARGO_TARGET_DIR {target:?}: {err}"));
+        assert!(
+            !cache.starts_with(&target),
+            "bwrap fixture cache {cache:?} inside CARGO_TARGET_DIR {target:?}"
+        );
+    }
+    cache
+}
+
+pub(crate) fn bwrap_fixture_scratch() -> tempfile::TempDir {
+    use std::os::unix::fs::PermissionsExt;
+    let cache = bwrap_fixture_parent();
+    tempfile::Builder::new()
+        .prefix("aida-test-scratch-")
+        .permissions(std::fs::Permissions::from_mode(0o700))
+        .tempdir_in(&cache)
+        .unwrap_or_else(|err| panic!("allocate bwrap fixture scratch in {cache:?}: {err}"))
+}
+
 pub(crate) struct EnvVarsGuard(aida_testkit::test_env::EnvVarsGuard);
 impl EnvVarsGuard {
     pub(crate) fn apply(pairs: &[(&'static str, Option<&str>)]) -> Self {

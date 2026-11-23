@@ -69,15 +69,38 @@ mod linux {
         ok
     }
 
-    // A linked checkout's target may resolve under the primary checkout's
-    // target/worktrees. A main created there cannot anchor a recorded clone.
-    // Keep the fixture outside both Cargo's target and a seat-owned TMPDIR.
-    // trace:TASK-3133 | ai:codex
-    fn fixture_tempdir() -> tempfile::TempDir {
-        tempfile::Builder::new()
-            .prefix("bug-2169-bwrap-")
-            .tempdir_in("/tmp")
-            .unwrap()
+    // The roster writer and synthetic-store enrollment both validate the
+    // process temporary root. Give each case its own scratch TMPDIR before
+    // libtest starts, without changing the environment of sibling tests.
+    // trace:TASK-3133 BUG-2209 | ai:codex
+    fn run_in_fixture_scratch() -> bool {
+        let thread = std::thread::current();
+        let name = thread.name().expect("libtest test name");
+        let args = ["--exact", name, "--nocapture"];
+        if std::env::args().skip(1).eq(args) {
+            let tmp = std::env::temp_dir();
+            if tmp.parent() == Some(crate::test_env_base::bwrap_fixture_parent().as_path())
+                && tmp
+                    .file_name()
+                    .is_some_and(|s| s.as_encoded_bytes().starts_with(b"aida-test-scratch-"))
+            {
+                return false;
+            }
+        }
+        let scratch = crate::test_env_base::bwrap_fixture_scratch();
+        let out = Command::new(crate::aida_bin::current_executable_path().unwrap())
+            .args(args)
+            .env("TMPDIR", scratch.path())
+            .output()
+            .expect("run isolated bwrap fixture");
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        eprint!("{stderr}");
+        assert!(
+            out.status.success() && stdout.contains("test result: ok. 1 passed"),
+            "{stdout}{stderr}"
+        );
+        true
     }
 
     /// Give the fixture its own store and stop every store walk-up at the
@@ -115,6 +138,9 @@ mod linux {
     // trace:BUG-2209 | ai:claude
     #[test]
     fn bug_2209_fixture_store_walk_stays_in_the_fixture() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
         std::fs::write(
@@ -160,10 +186,7 @@ mod linux {
     }
 
     fn fixture() -> Fixture {
-        fixture_from_tempdir(fixture_tempdir())
-    }
-
-    fn fixture_from_tempdir(tmp: tempfile::TempDir) -> Fixture {
+        let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path().canonicalize().unwrap();
         let main = root.join("aida");
         std::fs::create_dir_all(&main).unwrap();
@@ -381,11 +404,11 @@ mod linux {
         argv
     }
 
-    // The lane runner puts TMPDIR under /tmp. Restore only the private fixture
+    // The lane runner allocates scratch under its private /dev/shm. Restore it
     // after the new tmpfs, before either sandbox applies its writable binds.
     // trace:TASK-3133 BUG-2701 | ai:codex
     fn expose_fixture_after_tmpfs(argv: &mut Vec<String>, root: &Path) {
-        if root.starts_with("/tmp") {
+        if root.starts_with("/dev/shm") {
             let after_tmpfs = argv
                 .windows(2)
                 .position(|args| args == ["--tmpfs", "/tmp"])
@@ -518,8 +541,13 @@ mod linux {
     // trace:TASK-3133 | ai:codex
     #[test]
     fn recorded_clone_fixture_is_independent_of_the_test_binary_checkout() {
-        assert_eq!(fixture_tempdir().path().parent(), Some(Path::new("/tmp")));
-        let host = tempfile::tempdir_in("/tmp").unwrap();
+        if run_in_fixture_scratch() {
+            return;
+        }
+        let host = crate::test_env_base::bwrap_fixture_scratch();
+        let scratch = std::env::temp_dir();
+        assert_eq!(scratch.parent(), host.path().parent());
+        assert_eq!(fixture().root.parent(), Some(scratch.as_path()));
         git_ok(host.path(), &["init", "-q"]);
         let profile = host.path().join("target/worktrees/evidence/agent/deps");
         std::fs::create_dir_all(&profile).unwrap();
@@ -560,6 +588,9 @@ mod linux {
     // trace:TASK-2032 | ai:claude
     #[test]
     fn a_clone_is_recorded_only_for_its_own_launchers_main() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         aida_core::seat_clone_detect::note_host_main(&fx.main);
@@ -603,6 +634,9 @@ mod linux {
     /// because the HOST's lease vouches for the clone; main's `.git` stays denied.
     #[test]
     fn a_host_recorded_clone_keeps_its_own_git_writable_and_main_git_denied() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         // trace:TASK-2032 | ai:claude
@@ -671,6 +705,9 @@ mod linux {
     // trace:TASK-2032 | ai:claude
     #[test]
     fn a_clone_launched_from_inside_itself_keeps_its_boundary() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         let target = crate::seat_clone::host_recorded_clone(&fx.main, &clone)
@@ -765,6 +802,9 @@ mod linux {
     // trace:TASK-2032 | ai:claude
     #[test]
     fn task_2032_every_queue_work_launch_arm_keeps_the_clone_boundary() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         use crate::session::HeadlessVendor::Claude;
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
@@ -905,6 +945,9 @@ mod linux {
     // trace:TASK-2825 | ai:claude
     #[test]
     fn bug_2169_bwrap_only_the_host_lease_makes_a_host_recorded_clone() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         // trace:TASK-2032 | ai:claude
@@ -1138,6 +1181,9 @@ true"#,
     // trace:TASK-2825 | ai:claude
     #[test]
     fn bug_2169_bwrap_a_genuine_main_lease_naming_another_cargo_target_dir_grants_nothing() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         let recorded =
@@ -1246,6 +1292,9 @@ true"#,
     /// settings are rebuilt for the tree the plan names.
     #[test]
     fn agent_new_scopes_the_contained_boundary_to_the_seat_tree() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         let _ambient = ambient(&fx.main);
@@ -1320,6 +1369,9 @@ true"#,
     /// uncontained one is unchanged.
     #[test]
     fn a_contained_interactive_launch_goes_through_os_wrap() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         std::fs::create_dir_all(fx.other_wt.join(".aida")).unwrap();
         std::fs::write(
@@ -1365,6 +1417,9 @@ true"#,
     /// origin stands in for the network remote, so it is bound read-write.
     #[test]
     fn bug_2169_bwrap_t3_clone_seat_commits_fetches_merges_and_pushes() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         if !bwrap_live() {
             return;
         }
@@ -1406,6 +1461,9 @@ true"#,
     /// covers `refs/heads/main`, then write it.
     #[test]
     fn bug_2169_bwrap_t1_rename_aside() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         if !bwrap_live() {
             return;
         }
@@ -1451,6 +1509,9 @@ echo "$EVIL" > heads/main && echo WROTE"#;
     /// detaches a file bind from the path. Then the seat writes the ref.
     #[test]
     fn bug_2169_bwrap_t2_host_detach() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         if !bwrap_live() {
             return;
         }
@@ -1541,6 +1602,9 @@ echo "$EVIL" > "$MAIN/.git/refs/heads/main" && echo WROTE"#;
     /// object store, and repoint the seat's own alternates.
     #[test]
     fn bug_2169_bwrap_t4_objects_and_alternates() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         if !bwrap_live() {
             return;
         }
@@ -1593,6 +1657,9 @@ true"#;
     /// residual (ruling O3), pinned so a server-side guard would flip it.
     #[test]
     fn bug_2169_bwrap_t5_origin_head_and_tags() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         if !bwrap_live() {
             return;
         }
@@ -1649,6 +1716,9 @@ true"#;
     /// T8: the round-1 denies on main's config and hooks hold in both layouts.
     #[test]
     fn bug_2169_bwrap_t8_main_config_and_hooks() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         if !bwrap_live() {
             return;
         }
@@ -1682,6 +1752,9 @@ true"#;
     /// runs no compiler wrapper (ruling O2), in both layers.
     #[test]
     fn bug_2169_bwrap_clone_seat_cargo_build_uses_its_own_target_dir() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         if !bwrap_live() {
             return;
         }
@@ -1720,6 +1793,9 @@ true"#;
     // trace:TASK-3133 BUG-2700 | ai:codex
     #[test]
     fn a_contained_interactive_resume_goes_through_os_wrap() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         if crate::test_env::run_path_isolated_test() {
             return;
         }
@@ -1773,6 +1849,9 @@ true"#;
     /// it claims, leases, clones or pins anything.
     #[test]
     fn a_refused_contained_bg_launch_leaves_no_lease_clone_or_pin() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let seats = fx.root.join("seats");
         std::fs::create_dir_all(fx.main.join(".aida")).unwrap();
@@ -1868,6 +1947,9 @@ true"#;
     // trace:TASK-2712 | ai:claude
     #[test]
     fn task_2712_native_codex_clone_gets_the_claude_write_set_and_no_git() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         prime_coordination_dirs(&fx.main);
@@ -1927,6 +2009,9 @@ true"#;
     // trace:TASK-2712 | ai:claude
     #[test]
     fn task_2712_native_codex_implementer_gets_no_gate_ledger() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         prime_coordination_dirs(&fx.main);
@@ -1966,6 +2051,9 @@ true"#;
     // trace:TASK-2712 | ai:claude
     #[test]
     fn task_2712_headless_reviewer_argv_carries_the_gate_ledger() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         prime_coordination_dirs(&fx.main);
@@ -2018,6 +2106,9 @@ true"#;
     // trace:TASK-2712 | ai:claude
     #[test]
     fn task_2712_native_codex_linked_worktree_gets_no_git_and_refuses_publication() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         prime_coordination_dirs(&fx.main);
@@ -2052,6 +2143,9 @@ true"#;
     // trace:TASK-2712 | ai:claude
     #[test]
     fn task_2712_agent_new_rescopes_the_codex_write_set_to_the_seat() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let fx = fixture();
         let clone = launch_clone_seat(&fx);
         prime_coordination_dirs(&fx.main);
@@ -2138,6 +2232,9 @@ true"#;
     // trace:BUG-2676 | ai:codex
     #[test]
     fn task_2712_codex_sandbox_live_seat_commit_and_denials() {
+        if run_in_fixture_scratch() {
+            return;
+        }
         let codex = crate::find_executable_on_path("codex");
         let required = std::env::var_os("AIDA_REQUIRE_CODEX_SANDBOX_LIVE").is_some();
         let Some(codex) = codex else {
@@ -2161,40 +2258,7 @@ true"#;
             "AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 needs AIDA_TEST_AIDA_BIN (the `aida` to claim \
              with inside the sandbox)"
         );
-        // Keep denial targets outside both Cargo worktrees and Codex temporary write grants.
-        let tmp = match tempfile::tempdir_in("/var/tmp") {
-            Ok(tmp) => tmp,
-            // Lane jobs mount /var read-only. Give this test process its own
-            // /var/tmp without changing the host mount or the Codex write set.
-            Err(err) if err.kind() == std::io::ErrorKind::ReadOnlyFilesystem => {
-                assert!(
-                    aida_core::exec_context::Environment::capture()
-                        .get("AIDA_TEST_PRIVATE_VAR_TMP")
-                        .is_none(),
-                    "{err}"
-                );
-                let thread = std::thread::current();
-                let case = thread.name().unwrap();
-                let out = Command::new("bwrap")
-                    .args(["--bind", "/", "/", "--tmpfs", "/var/tmp", "--"])
-                    .arg(crate::aida_bin::current_executable_path().unwrap())
-                    .args(["--exact", case, "--nocapture"])
-                    .env("AIDA_TEST_PRIVATE_VAR_TMP", "1")
-                    .output()
-                    .unwrap();
-                let stdout = String::from_utf8_lossy(&out.stdout);
-                let stderr = String::from_utf8_lossy(&out.stderr);
-                eprint!("{stderr}");
-                assert!(
-                    out.status.success() && stdout.contains("1 passed"),
-                    "{stdout}{stderr}"
-                );
-                return;
-            }
-            Err(err) => panic!("create live Codex fixture under /var/tmp: {err}"),
-        };
-        let fx = fixture_from_tempdir(tmp);
-        assert_eq!(fx.root.parent(), Some(Path::new("/var/tmp")));
+        let fx = fixture();
         let codex_home = fx.root.join("codex-home");
         let control_workspace = fx.root.join("codex-control-workspace");
         let extra_root = fx.root.join("codex-control-extra");
@@ -2214,23 +2278,23 @@ true"#;
                 .env("LC_ALL", "C");
             cmd
         };
-        let sandbox = |cwd: &Path, dirs: &[PathBuf]| {
+        let sandbox = |cwd: &Path, dirs: &[PathBuf], ambient_tmp: bool| {
             let roots = toml::Value::Array(
                 dirs.iter()
                     .map(|d| toml::Value::String(d.to_str().unwrap().to_owned()))
                     .collect(),
             );
             let mut cmd = codex_command();
-            cmd.args(["sandbox", "-P", ":workspace", "-C"])
-                .arg(cwd)
-                // Request explicit roots only and verify with a sibling write control.
-                .args([
+            cmd.args(["sandbox", "-P", ":workspace", "-C"]).arg(cwd);
+            if !ambient_tmp {
+                cmd.args([
                     "-c",
                     "sandbox_workspace_write.exclude_slash_tmp=true",
                     "-c",
                     "sandbox_workspace_write.exclude_tmpdir_env_var=true",
-                ])
-                .arg("-c")
+                ]);
+            }
+            cmd.arg("-c")
                 .arg(format!("sandbox_workspace_write.writable_roots={roots}"))
                 .args(["--", "sh", "-c"])
                 .current_dir(cwd);
@@ -2245,9 +2309,10 @@ true"#;
             std::fs::write(probe, "host control").unwrap();
             std::fs::remove_file(probe).unwrap();
         }
-        let control = sandbox(&control_workspace, std::slice::from_ref(&extra_root))
+        let control = sandbox(&control_workspace, std::slice::from_ref(&extra_root), true)
             .args([
-                "printf ok > workspace-probe || exit 41
+                "tmp=$(mktemp /tmp/aida-codex-control-XXXXXXXX) && rm -- \"$tmp\" || exit 40
+                 printf ok > workspace-probe || exit 41
                  (printf ok > \"$1\") || exit 42
                  if (printf ok > \"$2\") 2>/dev/null; then exit 43; fi",
                 "sh",
@@ -2340,7 +2405,7 @@ true"#;
             "missing cache grant: {dirs:?}"
         );
         let sh = |script: &str, paths: &[&Path]| -> bool {
-            sandbox(&clone, &dirs)
+            sandbox(&clone, &dirs, false)
                 .args([script, "sh"])
                 .args(paths)
                 .status()

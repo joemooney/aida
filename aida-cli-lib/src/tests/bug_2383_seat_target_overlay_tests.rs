@@ -939,15 +939,7 @@ fn overlay_usable(ov: &LaneOverlay) -> bool {
 // Joins the forced-live CI gate. trace:BUG-2383 | ai:claude
 #[test]
 fn bug_2383_bwrap_overlay_seat_write_never_changes_a_primary_inode() {
-    // Not under /tmp: the lane-job profile mounts a private tmpfs there.
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("target/bug-2383-bwrap");
-    std::fs::create_dir_all(&base_dir).unwrap();
-    // A worktree's target/ may be a symlink, which bwrap cannot bind through.
-    let base_dir = std::fs::canonicalize(base_dir).unwrap();
-    let base = tempfile::tempdir_in(base_dir).unwrap();
+    let base = crate::test_env_base::bwrap_fixture_scratch();
     let target = primary(base.path());
     let lane = lane_under_primary(base.path());
     let seat_target = base.path().join("target/worktrees/seat");
@@ -1027,18 +1019,7 @@ fn bwrap_runs() -> bool {
 
 use std::collections::BTreeMap;
 
-/// A fixture base under the repository's `target/`: not under /tmp, where
-/// the lane-job profile mounts a private tmpfs.
-fn live_base() -> tempfile::TempDir {
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("target/bug-2383-bwrap");
-    std::fs::create_dir_all(&base_dir).unwrap();
-    // A worktree's target/ may be a symlink, which bwrap cannot bind through.
-    let base_dir = std::fs::canonicalize(base_dir).unwrap();
-    tempfile::tempdir_in(base_dir).unwrap()
-}
+use crate::test_env_base::bwrap_fixture_scratch as live_base;
 
 /// Skip a live test where userns overlay mounts or bubblewrap cannot run,
 /// unless the forced-live CI gate requires it.

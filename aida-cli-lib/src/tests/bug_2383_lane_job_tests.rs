@@ -731,16 +731,7 @@ fn bug_2383_bwrap_host_cargo_is_read_only() {
         eprintln!("SKIP (bwrap unavailable)");
         return;
     }
-    // Not under /tmp: the profile mounts a private tmpfs there, which would
-    // hide the fixture and let the write "fail" for the wrong reason.
-    let base_dir = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .join("target/bug-2383-bwrap");
-    std::fs::create_dir_all(&base_dir).unwrap();
-    // A worktree's target/ may be a symlink, which bwrap cannot bind through.
-    let base_dir = std::fs::canonicalize(base_dir).unwrap();
-    let base = tempfile::tempdir_in(base_dir).unwrap();
+    let base = crate::test_env_base::bwrap_fixture_scratch();
     let home = base.path().join("home");
     let cargo_home = home.join(".cargo");
     let seat = base.path().join("seat");
