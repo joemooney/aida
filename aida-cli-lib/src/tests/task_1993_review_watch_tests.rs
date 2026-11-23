@@ -4579,6 +4579,11 @@ fn bug2703_pause_control_refuses_a_managed_process_without_a_grant() {
         }
         env.set_terminal(false);
         refused("no grant and no terminal", expect_paused);
+        // trace:TASK-3210 | ai:codex
+        env.set_terminals(true, true, false);
+        refused("stderr redirected", expect_paused);
+        env.set_terminals(false, true, true);
+        refused("stdin redirected", expect_paused);
         env.set_terminal(true);
         for (key, value) in [
             ("AIDA_AGENT_NAME", "claude-implementer"),

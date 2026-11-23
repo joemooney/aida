@@ -116,6 +116,33 @@ Code's slash commands and Codex's skill descriptors *wrap* them. If you
 don't know the slash/skill name for your agent type, run the CLI verb
 directly — it works for every agent.
 
+### Claude Code sandbox and git
+
+<!-- trace:TASK-3835 | ai:claude -->
+Claude seats: never run long-lived SANDBOXED commands or Monitor watches in
+the primary checkout; use unsandboxed background Bash for waits (one-shot,
+re-armed after each event). Run git that writes the index, the working tree
+or config (`switch`, `reset`, `merge`, `worktree add`) unsandboxed too.
+
+- **Symptom:** while a sandboxed command lives, the harness keeps an empty
+  read-only (0444) `.git/config.lock` placeholder in the primary's `.git`.
+  Every git config write on the host then fails with
+  `could not lock config file .git/config: File exists`. This includes
+  reviewer and lane worktree setup.
+- **Cleanup:** a 0-byte 0444 `config.lock` with no holder (`fuser` shows
+  none) is a sandbox placeholder. It is safe to remove once its sandboxed
+  owner has exited.
+- **Index writes:** the sandbox also binds paths such as `.claude/hooks/`
+  and `aida-core/templates/settings.json` read-only. A sandboxed
+  `git reset --hard` that must rewrite them stops halfway with
+  `Could not reset index file` and leaves a half-reset tree.
+
+Evidence (TASK-3835, 2026-11-22 MST): a sandboxed `sleep 25` reproduced the
+placeholder at 13:36:54. 30-minute Monitor watches by the product and advisor
+seats blocked git config writes on imac for much of the day. At 22:12 a
+sandboxed reset half-reset the integration worktree (536 phantom
+modifications), and an unsandboxed `reset --hard` recovered it.
+
 ---
 
 ## Why the split matters at first contact
