@@ -9,12 +9,12 @@ description: |
   - AC1: Requests carrying a negative sender pidfd (-1, -2 and INT_MIN-like values) are refused before any dispatch, with a clear error.
   - AC2: close() is called only on fds that were validly received. A test asserts no close on the refused values.
   - AC3: A valid pidfd request still dispatches (positive control).
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:50.241345704Z
-modified_at: 2026-11-23T00:33:51.459347670Z
+modified_at: 2026-11-23T01:40:45.745677806Z
 req_type: Bug
 tags:
 - authority
@@ -162,6 +162,22 @@ history:
   timestamp: 2026-11-23T00:32:51.276811419Z
   session_id: 01a205b6876e
   changes: []
+- id: 01a20610-0fbf-7820-ba02-6196783aa4a6
+  author: aida-auto-bump
+  timestamp: 2026-11-23T01:40:45.631173515Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20610-1031-72e2-b1b1-79756d307384
+  timestamp: 2026-11-23T01:40:45.745673227Z
+  agent: aida
+  commit_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
+  summary: 'BUG-2716 passes. Reviewed the complete landed diff against the pinned base and the product clarification scoping the fix to AC2. AC1 — verified by the real MutationIdentity check inside dispatch and the regression assertions for -1, -2 and INT_MIN. Each receives Unauthorized before operation handling, and the accepted-request map stays empty. AC2 — verified by the nonnegative cleanup guard and the close spy in tests/test_store_mutation.py. The spy sees no calls for the three refused packets and exactly one close of the subsequently received real pidfd. The guard includes descriptor zero. AC3 — verified by the subsequent successful session probe over the same channel using a real pidfd and the fixture identity. BUG-2716 (bug protocol): the PR touches at least one test file — met (tests/test_store_mutation.py). Focused regression command: python3 -m unittest tests.test_store_mutation.StoreMutationTests.test_negative_sender_pidfd_cleanup_keeps_channel_serviceable. Implementer reported a passing run. Review used source and existing CI evidence. CI pending at review time.'
+  review_verdict: approved
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -169,3 +185,7 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T01:40:45.631166266Z
+  completion_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
