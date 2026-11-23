@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: An approval recorded through review-watch requests full-tier CI exactly as a manual `aida review record` approval does: ci:full is applied, or the full workflow is triggered, after any in-flight FAST run finishes, so no FAST run is cancelled (avoiding the BUG-2723 ghost red).
   - AC2: A regression test: a review-watch approval of a head without ci:full results in a full-tier request.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-23T11:17:33.256012911Z
+modified_at: 2026-11-23T11:17:54.656856530Z
 req_type: Bug
 tags:
 - ci
@@ -65,6 +65,11 @@ comments:
   created_at: 2026-11-23T10:55:02.810695769Z
   modified_at: 2026-11-23T10:55:02.810695769Z
   session_id: 01a207e7f7cd
+- id: 01a20820-7560-7e11-88a2-df5725433f47
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: FAIL — BUG-2729. The standalone recorder uses the same FULL requester as manual review after verifying the canonical verdict, but the request can still cancel pending FAST or leave an approved head without FULL. The generated worksheet treats this as a completing spec.. No triage reason was given.'
+  created_at: 2026-11-23T11:17:54.656846104Z
+  modified_at: 2026-11-23T11:17:54.656846104Z
 history:
 - id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
   author: aida-session-start
@@ -100,6 +105,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20820-7560-7e11-88a2-df4a2dfc5ce8
+  author: joe
+  timestamp: 2026-11-23T11:17:54.656839470Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
   branch: main
@@ -107,17 +119,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 55f63f38008
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    FAIL — BUG-2729. The standalone recorder uses the same FULL requester as manual review after verifying the canonical verdict, but the request can still cancel pending FAST or leave an approved head without FULL. The generated worksheet treats this as a completing spec.
-    BUG-b6b1278890774ef993d2ebc327862470-490.AC1 unverified — The in-progress cancellation expression covers the running slot only. Pending FAST can be replaced, and a stale ci:full label can suppress the one-shot request. [GitHub Actions concurrency documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency#using-concurrency-in-different-scenarios).
-    BUG-b6b1278890774ef993d2ebc327862470-490.AC2 unverified — The changed helper test observes an injected callback, while the existing forge test starts at the requester. Neither exercises the production approval path and observes a FULL request on an unlabeled head.
-    BUG-2729 (bug protocol) — met. The PR changes tests/test_ci_tiers.py and the Rust test in aida-cli-lib/src/review_draft.rs.
-    Used the supplied untraced-criteria list for AC1 and AC2. Reviewed all five changed files in the pinned landed tree 08dc5575c59fe0e4fa488a15e2e784377b0ae282 against main 8018c42f8d5fed626fca38472d134bd12cf4b259. The original reviewed head f2f2903d70c9294046921dee86a86c3c35299176 is one commit behind. The intervening commit changes intake credential fixtures and the origin-prompt module; none of the findings depend on those changes.
-    GitHub's exact-head FAST aggregate and merge-hold checks were green, with FULL skipped. No local tests were run.
-  recovery_hint: address the review findings, move BUG-2729 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T11:17:33.256012911Z
