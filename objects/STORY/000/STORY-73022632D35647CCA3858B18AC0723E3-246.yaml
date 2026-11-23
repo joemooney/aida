@@ -1,5 +1,6 @@
 id: 01a20aa5-b2d4-71c3-927d-ce13ad95b082
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-246
+agreed_id: STORY-3057
 title: 'Review PR-4463: [AI:codex] fix(mailbox): report seat messages hidden by missing delivery sidecars (TASK-3846)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20a73`) for branch `int29-task-3846`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T23:02:49.379582391Z
   session_id: 01a20a73aa39
+  changes: []
+- id: 01a20aaa-4538-7b62-9932-7b48a64ca74b
+  author: joe
+  timestamp: 2026-11-23T23:07:40.728057929Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
