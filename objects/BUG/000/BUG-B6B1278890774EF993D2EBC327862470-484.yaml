@@ -10,12 +10,12 @@ description: |
   - AC2: When the train refuses on a check-run, it names the run id and whether that run was cancelled or superseded.
   - AC3: A regression test: a head with a cancelled fast run (failed aggregate) plus a later successful full run is ready.
   - AC4: Docs or CLI note: after `gh pr update-branch`, wait for its FAST run to finish before removing and re-adding ci:full (interim rule).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T07:15:34.418721903Z
+modified_at: 2026-11-23T07:16:09.458047880Z
 req_type: Bug
 tags:
 - ci
@@ -190,6 +190,11 @@ comments:
   modified_at: 2026-11-23T06:43:29.429769379Z
   session_id: 01a20719751c
   harness_version: codex-cli 0.167.0
+- id: 01a20743-2072-7352-a2f2-7fb021ab312e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2723 review against pinned main a16f3592f015e06580a94c1f7879ea9c877c088e and landed tree 65ac06c0df6219e667ed18650b81b430ad005e20. AC1 FAIL: the incident''s jobless cancelled run aborts selection and the train accepts evidence from another PR sharing the head. AC2 PARTIAL: selected tier runs carry diagnostics, while other Actions refusals lose run or cancellation metadata. AC3 FAIL: the source includes the basic cancelled FAST and successful FULL regression, but the pinned landed tree fails to compile after #4410 and the fixture omits the jobless run from the actual incident. AC4 PASS: the CI timing instruction is documented and covered by a text assertion. The fast-compile and Build failures were confirmed from the supplied CI run. The compile finding depends on the newer protected base. The other findings reproduce by inspection on the submitted change against either base. No local test or build commands were run.. It was punted on: design-fork: Disputing finding 3 cross-tier retirement and stored AC3 under the advisor ruling. At one head, FAST run 10 cancelled with a failed Build and FULL run 11 passed, with no second FAST. AC3 explicitly requires ready. The ruling keeps the latest run of each workflow+tier and says cancellation without a newer same-tier run is CANCELLED, so this same head must block. The existing bug2723_train_replaces_cancelled_fast_only_with_verified_full fixture requires Green. Resolve this two-run case for all three landing gates.. No triage reason was given.'
+  created_at: 2026-11-23T07:16:09.458045411Z
+  modified_at: 2026-11-23T07:16:09.458045411Z
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
@@ -265,6 +270,13 @@ history:
   timestamp: 2026-11-23T07:15:47.809605035Z
   session_id: 01a2073f9705
   changes: []
+- id: 01a20743-2072-7352-a2f2-7fa0d9f0f724
+  author: joe
+  timestamp: 2026-11-23T07:16:09.458020777Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -272,17 +284,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 215313b8d3a
   vendor: claude
-attention_reason:
-  category: design-fork
-  detail: Disputing finding 3 cross-tier retirement and stored AC3 under the advisor ruling. At one head, FAST run 10 cancelled with a failed Build and FULL run 11 passed, with no second FAST. AC3 explicitly requires ready. The ruling keeps the latest run of each workflow+tier and says cancellation without a newer same-tier run is CANCELLED, so this same head must block. The existing bug2723_train_replaces_cancelled_fast_only_with_verified_full fixture requires Green. Resolve this two-run case for all three landing gates.
-  lean: Use the advisor same-tier-only rule and revise AC1, AC3 and the two-run expectation. Keep the three-run rerun case as the ready regression.
-  raised_by: implementer
-  raised_at: 2026-11-23T05:35:37.099278384Z
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2723 review against pinned main a16f3592f015e06580a94c1f7879ea9c877c088e and landed tree 65ac06c0df6219e667ed18650b81b430ad005e20. AC1 FAIL: the incident''s jobless cancelled run aborts selection and the train accepts evidence from another PR sharing the head. AC2 PARTIAL: selected tier runs carry diagnostics, while other Actions refusals lose run or cancellation metadata. AC3 FAIL: the source includes the basic cancelled FAST and successful FULL regression, but the pinned landed tree fails to compile after #4410 and the fixture omits the jobless run from the actual incident. AC4 PASS: the CI timing instruction is documented and covered by a text assertion. The fast-compile and Build failures were confirmed from the supplied CI run. The compile finding depends on the newer protected base. The other findings reproduce by inspection on the submitted change against either base. No local test or build commands were run.'
-  recovery_hint: address the review findings, move BUG-2723 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T07:15:34.418721903Z
