@@ -1388,3 +1388,101 @@ fn story2745_codex_prompt_hook_runs_the_binding_notice() {
         "the notice verb changed"
     );
 }
+
+// trace:STORY-2767 | ai:codex
+#[test]
+fn story2767_retired_sender_preserves_seat_delivery_ownership() {
+    let r = mail_repo();
+    let _env = d1_env();
+    let send = |body: &str, queue_for_role| {
+        crate::mailbox_cmd::handle_mailbox_command(
+            &crate::cli::MailboxCommand::Send {
+                to: Some("Seat:Integration".into()),
+                broadcast: false,
+                body: Some(body.into()),
+                subject: None,
+                body_file: None,
+                stdin: false,
+                thread: None,
+                in_reply_to: None,
+                from: Some("sender".into()),
+                urgent: false,
+                intent: "fyi".into(),
+                relayed_from: None,
+                allow_second_person: false,
+                queue_for_role,
+            },
+            &r.sib.join(".aida-store"),
+        )
+        .unwrap();
+    };
+    let seat_reader = |root: &Path| {
+        register_self_as_reviewer(root);
+        for (_, mut entry) in crate::agent_registry::load_entries(root) {
+            entry.seat = Some("integration".into());
+            crate::agent_registry::write_entry(root, &entry).unwrap();
+        }
+        own_audience_in(root)
+            .narrowed_to("seat:integration")
+            .unwrap()
+    };
+    std::fs::create_dir_all(r.sib.join(".aida/handoff/integration")).unwrap();
+    send("for the next holder", true);
+    // Session identity reads the main checkout's registry. Give the sending
+    // worktree the same routing rows for the duration of the original seat.
+    let original = seat_reader(&r.main);
+    std::os::unix::fs::symlink(
+        crate::agent_registry::agents_dir(&r.main),
+        crate::agent_registry::agents_dir(&r.sib),
+    )
+    .unwrap();
+    send("for the original cohort", false);
+    send("missing sidecar", false);
+    let retained = r
+        .main
+        .join(".git/aida/mail-lifecycle/retained/sender/1/data/.deliveries");
+    std::fs::create_dir_all(&retained).unwrap();
+    let sent = crate::mailbox_store::read_local_messages(&r.sib).unwrap();
+    assert_eq!(sent.len(), 3);
+    for m in sent {
+        put_canonical(&r.store, &m);
+        if m.body != "missing sidecar" {
+            let file = format!("{}.json", m.id);
+            std::fs::copy(
+                crate::mailbox_store::mailbox_dir(&r.sib)
+                    .join(".deliveries")
+                    .join(&file),
+                retained.join(file),
+            )
+            .unwrap();
+        }
+    }
+    git(
+        &r.main,
+        &["worktree", "remove", "--force", r.sib.to_str().unwrap()],
+    );
+    std::fs::remove_dir_all(crate::agent_registry::agents_dir(&r.main)).unwrap();
+    let successor = seat_reader(&r.main);
+    assert_ne!(original.recipient(), successor.recipient());
+    let bodies = |view: OwnMail| {
+        view.records()
+            .iter()
+            .map(|r| r.message.body.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        bodies(view_from(&r.main, &r.store, &original)),
+        ["for the original cohort"]
+    );
+    assert!(view_from(&r.main, &r.store, &successor)
+        .records()
+        .is_empty());
+    let bound = read_own_mail_binding(
+        &r.main,
+        &r.store,
+        &successor,
+        &explicit_limits(),
+        BindWait::Explicit,
+    );
+    assert_eq!(bodies(bound), ["for the next holder"]);
+}
