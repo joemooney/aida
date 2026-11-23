@@ -13,12 +13,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T15:10:14.312515448Z
-modified_at: 2026-11-23T15:10:14.312515448Z
+modified_at: 2026-11-23T15:42:04.118668094Z
 req_type: Bug
 tags:
 - briefs
 - lanes
 - small
+- track:integration
+history:
+- id: 01a20912-4d56-73a3-bac7-f684e0f78f51
+  author: joe
+  timestamp: 2026-11-23T15:42:04.118667651Z
+  changes:
+  - field_name: tags
+    old_value: briefs, lanes, small
+    new_value: briefs, lanes, small, track:integration
 filed_at:
   code_sha: f091434bfd1a8441a61a453ef0486d4d8edadd74
   branch: main
