@@ -202,6 +202,57 @@ mod tests {
         }
     }
 
+    // trace:TASK-3157 | ai:codex
+    #[test]
+    fn task3157_stopped_pass_retains_prior_observations() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let store = Store::open(root, "github:github.com/owner/repo").unwrap();
+        let stop_id = PASS_REPORT_ERRORS as u64 + 3;
+        let changes = (1..=stop_id + 1).map(change).collect::<Vec<_>>();
+        let counts = PassCounts {
+            changes: changes.len(),
+            ..Default::default()
+        };
+        let mut watched = super::super::Watched::default();
+        let result =
+            super::super::watch_changes_into(
+                &store,
+                changes,
+                &mut watched,
+                |change| match change.id {
+                    1 => Err(std::io::Error::from(std::io::ErrorKind::WouldBlock).into()),
+                    id if id < stop_id => anyhow::bail!("closed"),
+                    id if id == stop_id => {
+                        Err(anyhow::anyhow!("state unreadable").context(GlobalState))
+                    }
+                    _ => panic!("processed change after watcher stop"),
+                },
+            );
+        CONTROLLER.with(|id| *id.borrow_mut() = Some("fixture".into()));
+        let error = super::super::finish_watch_pass(root, counts, watched, result).unwrap_err();
+        let dir = directory(root, false).unwrap().unwrap();
+        let report = pass_report(&dir).unwrap().unwrap();
+        let superseded = super::super::finish_watch_pass(
+            root,
+            PassCounts::default(),
+            super::super::Watched::default(),
+            Err(anyhow::Error::new(ImageSuperseded).context(GlobalState)),
+        )
+        .unwrap_err();
+        CONTROLLER.with(|id| *id.borrow_mut() = None);
+        assert!(superseded.is::<ImageSuperseded>());
+        assert_eq!(pass_report(&dir).unwrap().unwrap(), report);
+        assert_eq!(report.busy, 1);
+        assert_eq!(report.refused, PASS_REPORT_ERRORS + 1);
+        assert_eq!(report.errors.len(), PASS_REPORT_ERRORS);
+        assert_eq!(report.errors[0], "PR-2: refused: closed");
+        let stop = format!("{error:#}");
+        assert!(stop.contains(&format!("processing PR-{stop_id}")));
+        assert!(stop.contains("state unreadable"));
+        assert_eq!(report.stopped.as_deref(), Some(stop.as_str()));
+    }
+
     // Foreign process coordinates are uncertainty, never deputy death evidence.
     // trace:STORY-2571 | ai:codex
     #[test]
