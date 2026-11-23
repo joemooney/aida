@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T20:38:55.917640968Z
+modified_at: 2026-11-23T20:41:08.267206241Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -156,6 +156,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T20:38:55.767036401Z
   modified_at: 2026-11-23T20:38:55.767036401Z
+- id: 01a20a24-51fa-7022-b2d5-dfb1b63b98a8
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:41):
+    # TASK-3115 / PR #4432 rework (advisor-122 ruling 2026-11-23 13:42; relayed by product-15). Lane: CODEX. SMALL; scoped to the BLOCKING findings.
+
+    ADVISOR RULING: r3: close the remaining write path (preview_ship_cover -> collect_mandate_cover -> resolve_ex...) with the read-only/preview flag, and EXTEND the byte-identical config/ledger test to cover that path. STRICT.
+
+    CR at 53a2b50e. Fix each BLOCKING finding with a test that fails if the fix is removed. Leave deferred/non-blocking findings alone.
+
+    - [p2] TASK-3115 — The plain --check mandate path still writes persistent gate evidence. pr_train.rs:2268 enters preview_ship_cover, whose collect_mandate_cover calls resolve_exclusion_specs. That function uses StoreHistoryBatch::read at gate/mandate_ship.rs:201 (and the same index for missing-spec aliases). mandate.rs:265 calls HistoryIndex::current, which opens or creates the permanent lock with write access at mandate_history_index.rs:157–167 and publishes mandate-history-index.json at :250–254 on a cold or stale index. This runs even for the settled refusal in the new fixture, which compares the config and four evidence files but omits the index and lock. Make preview collect current history and alias evidence without creating the lock or publishing an index, while preserving the existing history semantics, and extend the plain report fixture to assert absence or byte identity of those files with a cold or stale index.
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: these findings plus the diff.
+  created_at: 2026-11-23T20:41:08.267206241Z
+  modified_at: 2026-11-23T20:41:08.267206241Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1db72-e217-7620-9b69-8b1ad0d07eee
   author: joe
