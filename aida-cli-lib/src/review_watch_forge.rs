@@ -459,7 +459,10 @@ impl Repository {
             let overlap = paths_overlap(&names(&base)?, &names(&head)?);
             // trace:STORY-2821 | ai:claude
             // trace:BUG-2725 | ai:codex
-            let verify_merge = overlap || super::landing_clean_merge(root, change);
+            let verify_merge = overlap
+                || (!change.gitlab
+                    && change.base == "main"
+                    && crate::landing_policy::load(root).clean_merge_train());
             let conflict = verify_merge
                 .then(|| merge_conflicts(root, &base, &head))
                 .flatten();

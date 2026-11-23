@@ -63,7 +63,7 @@ fn approval() -> Approval {
 
 /// Evidence snapshots; every reader is a value or an error.
 struct Fake {
-    freshness: crate::landing_policy::CiBaseFreshness,
+    landing: crate::landing_policy::LandingPolicy,
     stale_policy: crate::pr_rebase::StaleBasePolicy,
     approval: std::result::Result<Approval, String>,
     review: Option<String>,
@@ -76,7 +76,7 @@ impl Fake {
     fn ready() -> Self {
         let head = format!("{HEAD:040x}");
         Self {
-            freshness: Default::default(),
+            landing: Default::default(),
             stale_policy: Default::default(),
             approval: Ok(approval()),
             review: None,
@@ -88,11 +88,11 @@ impl Fake {
 }
 
 impl Evidence for Fake {
-    fn ci_workflow_id(&self) -> Result<String> {
-        Ok("ci".into())
+    fn latest_ci_run(&self, _: &str) -> Result<(String, String, u64)> {
+        Ok(("ci".into(), "23".into(), 1))
     }
-    fn ci_base_freshness(&self) -> crate::landing_policy::CiBaseFreshness {
-        self.freshness
+    fn clean_merge_train(&self) -> bool {
+        self.landing.clean_merge_train()
     }
     fn approval(&self, _: &forge::Change) -> std::result::Result<Approval, String> {
         self.approval.clone()
@@ -1720,7 +1720,7 @@ fn bug_2725_ready_only_with_clean_merge_and_full_head_ci() {
         ready::evaluate(&c, &evidence).0,
         Readiness::ReadyAfterUpdateBranch { behind: 2 }
     );
-    evidence.freshness = crate::landing_policy::CiBaseFreshness::CleanMerge;
+    evidence.landing.ci_base_freshness = crate::landing_policy::CiBaseFreshness::CleanMerge;
     assert!(not_ready_with(&evidence, &c).contains("full-tier"));
     c.gitlab = true;
     assert_eq!(
@@ -1745,6 +1745,7 @@ fn bug_2725_ready_only_with_clean_merge_and_full_head_ci() {
     rows.push(check("ci-tier: full", CheckOutcome::Passed));
     for row in rows {
         row.run_id = Some("23".into());
+        row.run_attempt = Some(1);
     }
     for overlap in [true, false] {
         c.overlap = Some(overlap);
@@ -1757,4 +1758,11 @@ fn bug_2725_ready_only_with_clean_merge_and_full_head_ci() {
         c.conflict = Some(true);
         assert!(not_ready_with(&evidence, &c).contains("conflict"));
     }
+    c.overlap = Some(true);
+    c.conflict = Some(false);
+    evidence.ci.as_mut().unwrap().checks[1].run_in_progress = true;
+    assert!(not_ready_with(&evidence, &c).contains("unsettled"));
+    evidence.ci.as_mut().unwrap().checks[1].run_in_progress = false;
+    evidence.landing.mode = crate::landing_policy::LandingMode::ReviewGated;
+    assert!(not_ready_with(&evidence, &c).contains("overlapping paths"));
 }

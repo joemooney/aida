@@ -114,10 +114,10 @@ pub(super) trait Evidence {
         Ok(false)
     }
     // trace:BUG-2725 | ai:codex
-    fn ci_base_freshness(&self) -> crate::landing_policy::CiBaseFreshness {
-        Default::default()
+    fn clean_merge_train(&self) -> bool {
+        false
     }
-    fn ci_workflow_id(&self) -> Result<String> {
+    fn latest_ci_run(&self, _head: &str) -> Result<(String, String, u64)> {
         anyhow::bail!("CI workflow identity unavailable")
     }
     /// The change's head, re-read from the forge.
@@ -144,7 +144,8 @@ pub(super) fn evaluate(
         Err(error) => return not(format!("base evidence unknown: {error:#}")),
     };
     // trace:TASK-3108 | ai:codex
-    let clean_policy = behind > 0 && clean_merge_policy(change, || evidence.ci_base_freshness());
+    let clean_policy =
+        behind > 0 && !change.gitlab && change.base == "main" && evidence.clean_merge_train();
     let clean_stale_overlap = if clean_policy {
         match conflict {
             Some(false) => true,
@@ -180,25 +181,32 @@ pub(super) fn evaluate(
         ));
     }
     if clean_policy {
-        let workflow = match evidence.ci_workflow_id() {
-            Ok(id) => id,
-            Err(error) => return not(format!("CI workflow unknown: {error:#}")),
+        let (workflow, run, attempt) = match evidence.latest_ci_run(&change.head) {
+            Ok(run) => run,
+            Err(error) => return not(format!("latest FULL CI unavailable: {error:#}")),
         };
-        if crate::landing_policy::full_ci_run(
-            checks
-                .checks
-                .iter()
-                .filter(|row| row.workflow_id.as_ref() == Some(&workflow))
-                .map(|row| {
-                    (
-                        row.name.as_str(),
-                        row.outcome == crate::forge::CheckOutcome::Passed,
-                        row.run_id.as_deref().and_then(|id| id.parse().ok()),
-                    )
-                }),
-        )
-        .is_none()
-        {
+        let mut aggregate = false;
+        let mut full = false;
+        for row in checks.checks.iter().filter(|row| {
+            row.workflow_id.as_ref() == Some(&workflow) && row.run_id.as_ref() == Some(&run)
+        }) {
+            if row.run_in_progress || row.run_attempt != Some(attempt) {
+                return not("latest full-tier CI attempt is unsettled".into());
+            }
+            let marker = match row.name.as_str() {
+                crate::forge::CI_AGGREGATOR_CHECK => &mut aggregate,
+                "ci-tier: full" => &mut full,
+                name if name.starts_with("ci-tier: ") => {
+                    return not("latest CI has a non-full-tier marker".into());
+                }
+                _ => continue,
+            };
+            if *marker || row.outcome != crate::forge::CheckOutcome::Passed {
+                return not("latest full-tier CI evidence is ambiguous or unsuccessful".into());
+            }
+            *marker = true;
+        }
+        if !(aggregate && full) {
             return not("stale base requires successful full-tier CI on the exact head".into());
         }
     }
@@ -341,7 +349,7 @@ impl Live<'_> {
 }
 
 impl Evidence for Live<'_> {
-    fn ci_workflow_id(&self) -> Result<String> {
+    fn latest_ci_run(&self, head: &str) -> Result<(String, String, u64)> {
         let slug = self
             .repo
             .github_slug()
@@ -354,13 +362,33 @@ impl Evidence for Live<'_> {
             workflow["path"] == ".github/workflows/ci.yml",
             "unexpected CI workflow path"
         );
-        Ok(workflow["id"]
-            .as_u64()
-            .context("missing CI workflow ID")?
-            .to_string())
+        // TODO(BUG-2723): share latest_runs_at when available on the protected base.
+        anyhow::ensure!(valid_sha(head), "invalid CI head");
+        let id = workflow["id"].as_u64().context("missing CI workflow ID")?;
+        let path =
+            format!("repos/{project}/actions/workflows/{id}/runs?head_sha={head}&per_page=1");
+        let body = crate::forge::landing_ci_api(self.root, self.repo, &path)?;
+        let listing: serde_json::Value = serde_json::from_slice(&body)?;
+        let run = &listing["workflow_runs"][0];
+        anyhow::ensure!(
+            run["workflow_id"].as_u64() == Some(id)
+                && run["head_sha"] == head
+                && run["path"] == ".github/workflows/ci.yml"
+                && run["status"] == "completed"
+                && run["conclusion"] == "success",
+            "latest project CI run is missing, unsettled or unsuccessful"
+        );
+        Ok((
+            id.to_string(),
+            run["id"].as_u64().context("missing run ID")?.to_string(),
+            run["run_attempt"]
+                .as_u64()
+                .filter(|n| *n > 0)
+                .context("missing run attempt")?,
+        ))
     }
-    fn ci_base_freshness(&self) -> crate::landing_policy::CiBaseFreshness {
-        crate::landing_policy::load(self.root).ci_base_freshness
+    fn clean_merge_train(&self) -> bool {
+        crate::landing_policy::load(self.root).clean_merge_train()
     }
     fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         live_approval(self.root, change)

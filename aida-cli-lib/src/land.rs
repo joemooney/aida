@@ -39,7 +39,7 @@ const MAX_CONTENT_ROUNDS: usize = 3;
 /// The branch whose changes the integration seat lands.
 pub(crate) const INTEGRATION_BRANCH: &str = "integration";
 /// The branch trains land on.
-pub(crate) const MAIN_BRANCH: &str = "main";
+const MAIN_BRANCH: &str = "main";
 const TRAIN_PREFIX: &str = "train/";
 /// A promotion of integration to main. It is reviewed and boards a train
 /// like any change, and no lane ever reworks it.
@@ -74,7 +74,6 @@ pub(crate) enum Ci {
     None,
     Pending,
     Green,
-    NeedsFull,
     StaleBase(String),
     /// The failed checks, named.
     Red(String),
@@ -85,7 +84,6 @@ impl Ci {
         match self {
             Ci::None => "none".into(),
             Ci::Pending => "pending".into(),
-            Ci::NeedsFull => "needs-full".into(),
             Ci::Green => "green".into(),
             Ci::StaleBase(_) => "stale-base".into(),
             Ci::Red(names) => format!("red: {names}"),
@@ -541,14 +539,6 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
     let refusal = match evidence.approval(pr) {
         Err(why) => return unknown("approval", why),
         Ok(Approval::Approved(approval)) => {
-            if ci == Ci::NeedsFull {
-                return row(
-                    State::Blocked,
-                    Action::Wait,
-                    None,
-                    format!("{approval}; awaiting successful FULL CI on the head"),
-                );
-            }
             return match evidence.hold(pr) {
                 // A change stacked on another change's branch is reviewed
                 // like any other, and lands only once its base has: a train
@@ -1170,9 +1160,7 @@ impl Evidence for Live {
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
         if let Some(rollup) = self.github_checks.get(&pr.id) {
             let (_, base) = self.pinned(pr)?;
-            let clean_merge =
-                pr.base == MAIN_BRANCH && self.merge_trees.borrow().contains_key(&pr.id);
-            return ci_base::observe(&self.root, &self.repo, rollup, pr, base, clean_merge);
+            return ci_base::observe(&self.root, &self.repo, rollup, pr, base);
         }
         pr.ci
             .clone()

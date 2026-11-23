@@ -161,35 +161,11 @@ fn owned(names: &[&str]) -> Vec<String> {
     names.iter().map(|s| s.to_string()).collect()
 }
 
-/// The latest aggregate and tier marker must agree on one successful FULL run.
-// trace:BUG-2725 | ai:codex
-pub(crate) fn full_ci_run<'a>(
-    rows: impl Iterator<Item = (&'a str, bool, Option<u64>)>,
-) -> Option<u64> {
-    let mut latest = 0;
-    let (mut build, mut full, mut refused) = (false, false, false);
-    for (name, passed, run) in rows {
-        if name != crate::forge::CI_AGGREGATOR_CHECK && !name.starts_with("ci-tier: ") {
-            continue;
-        }
-        let run = run.filter(|id| *id > 0)?;
-        if run < latest {
-            continue;
-        }
-        if run > latest {
-            latest = run;
-            (build, full, refused) = (false, false, false);
-        }
-        match name {
-            crate::forge::CI_AGGREGATOR_CHECK if passed => build = true,
-            "ci-tier: full" if passed => full = true,
-            _ => refused = true,
-        }
-    }
-    (build && full && !refused).then_some(latest)
-}
-
 impl LandingPolicy {
+    pub(crate) fn clean_merge_train(&self) -> bool {
+        self.mode == LandingMode::CiGated && self.ci_base_freshness == CiBaseFreshness::CleanMerge
+    }
+
     /// Parse the `[landing]` section of a config body. Never fails: a bad
     /// value keeps its default and records a warning.
     // trace:STORY-2897 | ai:claude
