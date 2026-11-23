@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T07:16:12.290504084Z
+modified_at: 2026-11-23T07:16:16.059849611Z
 req_type: Bug
 tags:
 - ci
@@ -210,6 +210,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T07:16:12.115700964Z
   modified_at: 2026-11-23T07:16:12.115700964Z
+- id: 01a20743-6c14-7103-ad0d-bf1cb51653e7
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:16):
+    # BUG-2723 / PR #4408 r3, round 3 of 4 (advisor-122 ruling 2026-11-23 00:20 MST; relayed by product-15). Lane: CODEX. Landing gate, so strict.
+
+    The counting CR at 037bd499 (r2): the helper design is in place. Four fixes remain; the reviewer scope is these four plus the diff.
+    1. It DOESN'T COMPILE against main: at forge_tier_runs.rs:331, CommitCheck now has cancelled/job_id/run_attempt/run_in_progress (E0063). MERGE origin/main (a16f3592f01 or newer; no rebase or force-push) and fill them. Run the fast compile BEFORE pushing.
+    2. forge_tier_runs.rs:178-185: a cancelled run with NO jobs (GitHub's shape for #4391's run 45099765934) must count as a cancelled run of its tier, supersedable under rule 1, not abort selection. Add that exact fixture.
+    3. forge_tier_runs.rs:123-149/201-228: SCOPE the selection to the PR. Filter runs by event=pull_request AND pull_requests[].number == N (or head_branch == the PR head ref), so a promotion or integration run on the same SHA never counts as this PR's evidence. Test two PRs sharing a head.
+    4. forge_tier_runs.rs:315-340: annotate untiered failed or cancelled checks with their run id too.
+    The amended selection rules from r2 (FULL success supersedes an older FAST; an older FULL never supersedes a newer FAST; a cancelled or failed FULL supersedes nothing) all stay.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    `cargo check` plus one targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T07:16:16.059849611Z
+  modified_at: 2026-11-23T07:16:16.059849611Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
