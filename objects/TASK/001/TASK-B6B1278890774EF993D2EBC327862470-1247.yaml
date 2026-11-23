@@ -1,0 +1,31 @@
+id: 01a207fa-70ef-71c0-bcfb-a3cce04276ec
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1247
+agreed_id: TASK-3844
+title: 'main_watch pass budget includes watch_root git calls; per-notice full mailbox read (deferred from #4422 TASK-3209)'
+description: |
+  Deferred from PR #4422 (TASK-3209) r1 CR at bb5f778f (advisor-122 ruling 2026-11-23 03:24; filed by product-15). r2 fixes only the two checkpoint-correctness findings.
+
+  ## Findings
+  1. The scheduler's 120s pass timer includes watch_root's two 30s git calls (land.rs:1838 / review_watch_forge.rs:115), so the time budget for real work is smaller than intended.
+  2. The per-notice FULL mailbox read in the watch pass is a perf cost that grows with mailbox size.
+
+  ## Acceptance
+  - AC1: The watch-root git calls either don't count against the pass budget or are bounded and accounted, and a test shows the work budget is preserved.
+  - AC2: A notice no longer triggers a full mailbox read (incremental or bounded), with a test or measurement.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T10:36:23.151754810Z
+modified_at: 2026-11-23T10:36:23.151754810Z
+req_type: Task
+tags:
+- main-watch
+- review-follow-up
+filed_at:
+  code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 55f63f38008
+  vendor: claude
