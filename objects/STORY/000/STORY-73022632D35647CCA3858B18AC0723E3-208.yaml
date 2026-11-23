@@ -1,5 +1,6 @@
 id: 01a206c2-fad2-7c70-818b-4928d9ed4aba
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-208
+agreed_id: STORY-3017
 title: 'Review PR-4407: [AI:codex] fix(landing): accept clean merges with head-exact FULL CI (BUG-2725)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2067f`) for branch `bug-b6b1278890774ef993d2ebc327862470-486`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T04:56:29.005959569Z
   session_id: 01a2067fd0d9
+  changes: []
+- id: 01a206e9-d1aa-7ea3-8499-58f69c337abd
+  author: joe
+  timestamp: 2026-11-23T05:38:36.586718427Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 5470336db35805f5b13a85d8a2fff124ec69f557

@@ -1,5 +1,6 @@
 id: 01a206ca-1fe4-79b1-97c4-1a953a02acb5
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-209
+agreed_id: STORY-3015
 title: 'Review PR-4408: [AI:codex] fix(train): ignore superseded CI runs at the pinned head (BUG-2723)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20683`) for branch `bug-b6b1278890774ef993d2ebc327862470-484`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T05:04:09.043502829Z
   session_id: 01a206837516
+  changes: []
+- id: 01a206e9-58a3-7083-947b-6df6b7b871c5
+  author: joe
+  timestamp: 2026-11-23T05:38:05.603749787Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 5470336db35805f5b13a85d8a2fff124ec69f557
