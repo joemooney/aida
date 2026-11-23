@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.702364545Z
-modified_at: 2026-11-23T08:39:05.018755442Z
+modified_at: 2026-11-23T08:52:20.955170304Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -37,6 +37,17 @@ comments:
   modified_at: 2026-11-23T08:32:35.292065024Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2079b-3434-7201-a217-48049cc39850
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 55f63f3800861fee8b80ae3046c104290baf7fbf plus the native working-tree diff. The merge-base diff is empty and there are no untracked additions.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/admission_owner.rs:1170, :1220 and :1663 cover handoff, current-holder refusal and expiry during registration. Lane job j20261123T083947355-2-0 executed 18 tests, all passed. Fast source gates passed (48).
+    Checked wait_secs configuration against diagnostic text, holder replacement, intent cleanup, before/after deadline ordering and the shortest-bound poll interval. Removed incidental fixture edits during review. No production grant or refusal code changed. Residual risk: extreme process stalls can still exceed real-time bounds. Baseline timing windows confirmed by inspection; original flake not observed.
+  created_at: 2026-11-23T08:52:20.955170304Z
+  modified_at: 2026-11-23T08:52:20.955170304Z
+  session_id: 01a2078e7236
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fcf0-ccab-7c51-aaa4-eaba556471cb
   author: joe
