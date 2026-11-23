@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T03:44:46.674138819Z
+modified_at: 2026-11-23T04:19:25.064728413Z
 req_type: Bug
 tags:
 - recovery
@@ -120,6 +120,13 @@ comments:
     Lane job j20261123T033312891-2-0 passed both filtered tests. Checked exact NUL-delimited fields, empty grants, independent holders, missing start identity and unreadable environ. Proc enumeration in the fixture is limited to selected kernel entries. The portability gate identified a missing Linux cfg on the wrapper entry and it was added. Full FAST rerun in progress. Host publication creates the round-two commit.
   created_at: 2026-11-23T03:44:46.674138819Z
   modified_at: 2026-11-23T03:44:46.674138819Z
+  session_id: 01a2067395e9
+  harness_version: codex-cli 0.167.0
+- id: 01a206a1-5351-78e3-8766-026aa2326b36
+  author: dirtlab
+  content: Round-two validation update for working changes over 81a84bab0748. The final BUG-2721 lane run passed both tests (j20261123T041336209-14-0). The final structural guard run passed all 51 tests (j20261123T041421883-64-0). The fixture uses the repository executable writer, executable resolver and environment snapshot. The new UUID is classified as an operation-local environment input, and the writer inventory follows the actual receipt rename. The no-build guard in make check-ci-fast refuses the native launcher invocation during its Cargo step. Running the Rust ratchets through lane jobs separately.
+  created_at: 2026-11-23T04:19:25.064728413Z
+  modified_at: 2026-11-23T04:19:25.064728413Z
   session_id: 01a2067395e9
   harness_version: codex-cli 0.167.0
 history:

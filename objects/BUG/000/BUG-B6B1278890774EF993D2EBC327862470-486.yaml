@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T04:00:21.576910596Z
+modified_at: 2026-11-23T04:22:59.522353427Z
 req_type: Bug
 tags:
 - knob
@@ -48,6 +48,13 @@ comments:
     Deep-pass fixes: require affirmative full-tier evidence even for zero checks on a behind head, and retain conflict evidence returned by readiness's fallback probe. Checked malformed and absent config, changing run IDs and missing merge evidence. No existing tests weakened. Final-edits repeat and FAST ratchets in progress; exact PR-head CI awaits publication.
   created_at: 2026-11-23T04:00:21.576910596Z
   modified_at: 2026-11-23T04:00:21.576910596Z
+  session_id: 01a2067fd0d9
+  harness_version: codex-cli 0.167.0
+- id: 01a206a4-9836-7450-a428-47016c0ff504
+  author: dirtlab
+  content: 'Final validation on the reviewed working tree: launcher job j20261123T035255643-2-0 executed both BUG-2725 regressions (2 passed, 0 failed). make check-ci-fast passed including the compiled manual audit. git diff --check passed. No outstanding findings from self-review.'
+  created_at: 2026-11-23T04:22:59.522353427Z
+  modified_at: 2026-11-23T04:22:59.522353427Z
   session_id: 01a2067fd0d9
   harness_version: codex-cli 0.167.0
 history:
