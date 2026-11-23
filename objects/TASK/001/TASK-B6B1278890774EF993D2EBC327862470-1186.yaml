@@ -14,12 +14,12 @@ description: |
 
   - Align the finding-disposition section and the review prompt's unset-list explanation with the recorder's effective policy. With the list unset, a complete explicit deferral uses text, severity, disposition deferred, and a nonempty one-line rationale. The configured-list and invalid-policy branches must remain accurately described.
   - Exercise the documented example without blocking_tier through the validator and the recorder's policy rule. Keep the implementation to guidance and regression coverage. Preserve the recorder's classification and approval rules.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:15:41.463610485Z
-modified_at: 2026-11-23T12:14:44.738954891Z
+modified_at: 2026-11-23T12:37:44.621382692Z
 req_type: Task
 tags:
 - carried-from:BUG-2707
@@ -60,6 +60,12 @@ comments:
   modified_at: 2026-11-23T12:14:44.738954891Z
   session_id: 01a20829584b
   harness_version: codex-cli 0.167.0
+- id: 01a20869-8c2d-7b81-a6b5-3fc736460c0f
+  author: aida-publication-done
+  content: Implementer push 6dd14e16f170 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T12:37:44.621382093Z
+  modified_at: 2026-11-23T12:37:44.621382093Z
+  session_id: 01a20829584b
 history:
 - id: 01a1fd63-39c8-7d92-8c87-3edb915acbf2
   author: joe
@@ -111,6 +117,14 @@ history:
   session_id: 01a20829584b
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a20869-8c2d-7b81-a6b5-3fb5ac7e11b6
+  author: aida-publication-done
+  timestamp: 2026-11-23T12:37:44.621380199Z
+  session_id: 01a20829584b
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: acb62fdfa138cdb6c736d49d4b6ef3f8be4b4886
   branch: pr-4385
