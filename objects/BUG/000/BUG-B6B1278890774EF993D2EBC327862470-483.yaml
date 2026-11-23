@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-483
 agreed_id: BUG-2722
 title: 'doctor: release a repair-journal conflict reservation whose lane is provably over'
 description: 'Minimal slice split from BUG-2688 (#4388 parked 2026-11-22). Today a stale entry in dell1 .aida/repair-journal.json (entry 48: PR-4376 @660c0e87, lane 01a2053df3e6, tree …-433) blocks every conflict-repair relaunch with ''retained conflicts require their host journal evidence before a resume'', even though the lane''s lease is ended and its tree has been salvaged and moved aside. There is no doctor heal for it, and hand-editing the journal is forbidden. AC1: an `aida doctor heal` category (for example repair-reservations) lists journal reservations whose lease is ended AND whose tree is absent or salvaged, with evidence. With --id it releases exactly one, recording who released it and why. AC2: it refuses when the lease is live, the tree exists with unmerged files, or evidence is missing, naming the reason and the evidence command. AC3: a regression test for the dell1 shape (ended lease, moved tree, reservation for the current PR head), after which a conflict lane can reserve. Keep it small. Everything else from #4388 stays in deferred BUG-2688.'
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T03:38:41.362420876Z
+modified_at: 2026-11-23T03:43:28.768245496Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -157,6 +157,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20680-6a00-7502-9120-282e72cd7b72
+  author: aida-session-start
+  timestamp: 2026-11-23T03:43:28.768243393Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
