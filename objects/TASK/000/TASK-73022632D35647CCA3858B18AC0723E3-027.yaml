@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-23T01:45:33.490378100Z
+modified_at: 2026-11-23T02:00:20.953385129Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -698,6 +698,13 @@ comments:
     One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
   created_at: 2026-11-23T01:45:33.490378100Z
   modified_at: 2026-11-23T01:45:33.490378100Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20622-30ae-7be0-922e-daa1a563de63
+  author: joe
+  content: 'EVIDENCE for the record (product-15, 2026-11-22 19:00 MST) at #4387 head f41a18b09f4, now superseded by r3. Same required-live command on BOTH hosts: AIDA_CARGO_FORCE_BUILD=1 AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_TEST_AIDA_BIN=<aida built at f41a18b09f> cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::bwrap_tests::linux::task_2712_codex_sandbox_live_seat_commit_and_denials --exact. dell1 host (disrad-dvp98b3puw, 18:30-18:34) ran 1 test: FAILED. imac host (18:30-19:00) ran 1 test: FAILED. Identical panic at bug_2169_contained_clone_bwrap_tests.rs:2276 on both: ''Codex :workspace denied a configured extra writable root: cannot create /var/tmp/.tmpXXXX/codex-control-extra/probe: Read-only file system''. Host-independent, so it''s the /var/tmp fixture root itself; r3 moves it to a dedicated $HOME/.cache scratch root.'
+  created_at: 2026-11-23T02:00:20.953385129Z
+  modified_at: 2026-11-23T02:00:20.953385129Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 history:
