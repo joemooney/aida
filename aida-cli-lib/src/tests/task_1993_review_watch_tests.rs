@@ -5654,3 +5654,73 @@ fn bug2703_probe_refs_are_swept_the_first_time_the_claim_is_taken() {
     assert_eq!(sweep_on_first_claim(root, claim.is_some(), &mut swept), 0);
     assert!(!leaked().is_empty());
 }
+
+// trace:BUG-2735 | ai:codex
+#[test]
+fn bug2735_watchers_yield_core_budget_to_train_ci() {
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    let gh = root.join("gh");
+    crate::test_exec::write_executable(
+        &gh,
+        r#"#!/bin/sh
+[ "$1" = --version ] || echo "$*" >> calls
+case "$*" in
+    'api rate_limit --cache 60s') cat budget ;;
+    --version) echo 'gh version 2.60.0' ;;
+    *check-runs*) echo '{"total_count":0,"check_runs":[]}' ;;
+    *'/status?'*) cat status ;;
+    'pr list '*) echo '[]' ;;
+    *) exit 1 ;;
+esac
+"#,
+    );
+    let path = format!("{}:/usr/bin:/bin", root.display());
+    let _env = crate::test_env::AmbientGuard::hermetic_and(
+        root,
+        None,
+        &[("PATH", Some(&path)), ("AIDA_TEST_GH_BINARY", gh.to_str())],
+    );
+    for args in [
+        vec!["init", "-q"],
+        vec!["remote", "add", "origin", "https://github.com/org/repo.git"],
+    ] {
+        assert!(crate::test_git::git_command()
+            .current_dir(root)
+            .args(args)
+            .status()
+            .unwrap()
+            .success());
+    }
+    let repo = forge::Repository::load(root).unwrap();
+    let budget = |remaining| {
+        std::fs::write(
+            root.join("budget"),
+            format!(r#"{{"resources":{{"core":{{"limit":5000,"remaining":{remaining}}}}}}}"#),
+        )
+        .unwrap()
+    };
+    budget(999);
+    assert!(repo
+        .discover_for_watch(root)
+        .unwrap_err()
+        .to_string()
+        .contains("999/5000"));
+    assert!(crate::main_watch::live_pass(root).unwrap()[0].contains("backing off"));
+    assert!(!std::fs::read_to_string(root.join("calls"))
+        .unwrap()
+        .contains("pr list"));
+    let sha = "a".repeat(40);
+    std::fs::write(
+        root.join("status"),
+        serde_json::json!({"sha":sha,"statuses":[],"total_count":0}).to_string(),
+    )
+    .unwrap();
+    let train_forge = crate::forge::forge_for_kind(root, crate::forge::ForgeKind::GitHub);
+    assert_eq!(train_forge.commit_checks(&sha).unwrap().sha, sha);
+    budget(1000);
+    assert!(repo.discover_for_watch(root).unwrap().is_empty());
+}

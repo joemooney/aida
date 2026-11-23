@@ -1,4 +1,6 @@
 // trace:TASK-3428 | ai:codex
+use std::time::{Duration, Instant};
+
 use crate::{
     ci_probe_with_forge, detect_open_pr_for_branch, find_project_root, first_run_id_from_gh_json,
     resolve_forge_cli, wait_for_ci_terminal, CiProbe, Colorize, PrLookup, RetryEtxtbsy,
@@ -11,11 +13,18 @@ use crate::{
 /// loop when `gh` is missing or no run id resolves. trace:TASK-233
 // trace:TASK-1165 | ai:claude
 pub(crate) fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: &str) -> CiProbe {
+    let root = project_root.unwrap_or_else(|| std::path::Path::new("."));
+    if let Some(reason) = crate::forge::watcher_backoff(root, crate::forge::ForgeKind::GitHub, None)
+    {
+        eprintln!("CI watcher: {reason}");
+        return wait_for_ci_terminal(project_root, branch);
+    }
     let Some(gh) = resolve_forge_cli(crate::forge::ForgeKind::GitHub) else {
         return wait_for_ci_terminal(project_root, branch);
     };
     // Resolve the latest workflow run id for this branch.
     let run_id = std::process::Command::new(&gh)
+        .current_dir(root)
         .args([
             "run",
             "list",
@@ -43,9 +52,27 @@ pub(crate) fn watch_ci_terminal(project_root: Option<&std::path::Path>, branch: 
     // Inherit stdio so gh's live-updating display renders straight to
     // the user's terminal. `gh run watch` returns when the run reaches
     // a terminal state.
-    let _ = std::process::Command::new(&gh)
+    if let Ok(mut stream) = std::process::Command::new(&gh)
+        .current_dir(root)
         .args(["run", "watch", &run_id])
-        .status_retrying_etxtbsy();
+        .spawn_retrying_etxtbsy()
+    {
+        let mut checked = Instant::now();
+        while matches!(stream.try_wait(), Ok(None)) {
+            std::thread::sleep(Duration::from_secs(1));
+            if checked.elapsed() >= Duration::from_secs(60) {
+                if let Some(reason) =
+                    crate::forge::watcher_backoff(root, crate::forge::ForgeKind::GitHub, None)
+                {
+                    eprintln!("CI watcher: {reason}");
+                    let _ = stream.kill();
+                    let _ = stream.wait();
+                    return wait_for_ci_terminal(project_root, branch);
+                }
+                checked = Instant::now();
+            }
+        }
+    }
     // Re-probe to classify Green/Red for the end-session decision tree.
     // Keep the re-probe on the caller-injected root. Re-deriving from the
     // process cwd can silently route a GitLab branch through GitHub when the

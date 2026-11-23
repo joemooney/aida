@@ -772,6 +772,11 @@ pub(crate) fn check(root: &Path) -> Result<()> {
     if lock.try_lock_exclusive().is_err() {
         return Ok(());
     }
+    if let Some(reason) = crate::forge::watcher_backoff(root, crate::forge::ForgeKind::GitHub, None)
+    {
+        eprintln!("CI startup monitor: {reason}");
+        return Ok(());
+    }
     let path = dir.join("ci-startup.json");
     let mut state: State = match std::fs::read(&path) {
         Ok(bytes) => serde_json::from_slice(&bytes)?,

@@ -658,6 +658,19 @@ pub(crate) fn wait_for_ci_terminal(
         // the process cwd can silently switch a GitLab wait to GitHub when the
         // driven worktree is not the agent's cwd. trace:TASK-1273 | ai:codex
         let forge_kind = crate::forge::resolve_forge_kind(git_root);
+        if let Some(reason) = crate::forge::watcher_backoff(git_root, forge_kind, None) {
+            eprintln!("CI watcher: {reason}");
+            if ci_wait_verdict(
+                started.elapsed().as_secs(),
+                last_progress.elapsed().as_secs(),
+                idle_window,
+                absolute_ceiling,
+            ) != CiWaitVerdict::Continue
+            {
+                return CiProbe::NoSignal(reason);
+            }
+            continue;
+        }
         let probe = ci_probe_with_forge(git_root, forge_kind, branch);
         let total_elapsed = started.elapsed().as_secs();
 

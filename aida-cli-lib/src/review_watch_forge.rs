@@ -261,6 +261,13 @@ impl Repository {
         );
         serde_json::from_slice(&out.stdout).context("invalid forge discovery JSON")
     }
+    // trace:BUG-2735 | ai:codex
+    pub fn discover_for_watch(&self, root: &Path) -> Result<Vec<Change>> {
+        if let Some(reason) = crate::forge::watcher_backoff(root, self.kind, Some(self)) {
+            anyhow::bail!("{reason}");
+        }
+        self.discover(root)
+    }
     pub fn discover(&self, root: &Path) -> Result<Vec<Change>> {
         let mut changes = Vec::new();
         let mut ids = BTreeSet::new();

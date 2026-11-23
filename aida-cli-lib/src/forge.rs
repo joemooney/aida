@@ -2313,6 +2313,44 @@ impl GitHubForge {
     }
 }
 
+/// gh caches the authenticated GET across processes for one minute. A missing
+/// budget observation preserves the poller's existing forge error handling.
+/// Apply only at watcher boundaries so a train can still read exact-head CI.
+// trace:BUG-2735 | ai:codex
+pub(crate) fn watcher_backoff(
+    root: &Path,
+    kind: ForgeKind,
+    pinned: Option<&crate::review_watch::forge::Repository>,
+) -> Option<String> {
+    use crate::bounded_process::{command_output_with_timeout_capped, BoundedCommandOutput};
+    if kind != ForgeKind::GitHub {
+        return None;
+    }
+    let mut command = Command::new("gh");
+    command
+        .current_dir(root)
+        .args(["api", "rate_limit", "--cache", "60s"])
+        .stdin(std::process::Stdio::null());
+    if let Some(repo) = pinned {
+        repo.pin_command(&mut command);
+    }
+    let BoundedCommandOutput::Completed(out) =
+        command_output_with_timeout_capped(command, std::time::Duration::from_secs(5), 65536)
+    else {
+        return None;
+    };
+    if !out.status.success() {
+        return None;
+    }
+    let value: serde_json::Value = serde_json::from_slice(&out.stdout).ok()?;
+    let core = value.pointer("/resources/core")?;
+    let limit = core.get("limit")?.as_u64()?;
+    let remaining = core.get("remaining")?.as_u64()?;
+    (u128::from(remaining) * 5 < u128::from(limit)).then(|| format!(
+        "backing off: GitHub core budget {remaining}/{limit} remaining (below 20%); reserving requests for train CI"
+    ))
+}
+
 // trace:BUG-2690 | ai:codex
 fn landing_github_call(
     root: &Path,
