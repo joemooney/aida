@@ -13,13 +13,30 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T22:13:37.813791727Z
-modified_at: 2026-11-23T22:13:58.935454218Z
+modified_at: 2026-11-23T23:15:45.431251077Z
 req_type: Task
 tags:
 - doctor
 - forge
 - small
 - track:integration
+comments:
+- id: 01a20ab1-df8b-7062-8c22-df570f6a1aa6
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 16:15):
+    # TASK-3847: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3847` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3847 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3847)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    INTEGRATION BUNDLE p29 (product-15 16:15): branch `int29-task-3847`, cut from origin/integration 13bcf6bd671. PR base MUST be `integration`. STRICT-PATH STOP: do not touch gate/*, leases, claims, grants, containment, session_reap, admission or the CI gate runner; if needed, STOP and punt.
+  created_at: 2026-11-23T23:15:45.431251077Z
+  modified_at: 2026-11-23T23:15:45.431251077Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a79-1c6c-7522-9c98-d2c929e0aa8c
   author: joe
