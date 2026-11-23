@@ -1608,3 +1608,68 @@ fn host_lines_measure_local_memory_and_say_why_a_foreign_hosts_is_unknown() {
         render(&report).contains("Host other: 1 lane(s); memory unknown (no remote memory source)")
     );
 }
+
+// trace:BUG-2730 | ai:codex
+#[test]
+fn bug_2730_slow_approval_forge_reports_partial_before_ceiling() {
+    use std::time::{Duration as StdDuration, Instant};
+    if crate::test_env::run_path_isolated_test() {
+        return;
+    }
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path();
+    std::fs::create_dir(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[forge]\nprovider = \"github\"\n",
+    )
+    .unwrap();
+    let gh = root.join("gh");
+    crate::test_exec::write_executable(&gh, "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'gh version 2'; exit 0; fi\ntouch reading\nexec sleep 12\n");
+    let _env = crate::test_env::EnvVarsGuard::apply(&[("AIDA_TEST_GH_BINARY", gh.to_str())]);
+    let _transport = crate::review_pr_transport_fixture();
+    let changes: Vec<_> = (1..=3).map(|n| change(n, "main", "feature")).collect();
+    for (run_secs, pr_secs, expected) in [
+        (
+            2,
+            5,
+            "PARTIAL: covered PRs [1], skipped PRs [2, 3] (deadline)",
+        ),
+        (
+            8,
+            2,
+            "PARTIAL: covered PRs [1, 3], skipped PRs [2] (deadline)",
+        ),
+    ] {
+        let start = Instant::now();
+        let (_, (prs, partial)) = guard_rows(
+            &changes,
+            start + StdDuration::from_secs(run_secs),
+            StdDuration::from_secs(pr_secs),
+            |pr| {
+                if pr.id == 2 {
+                    let (_, _, _, answered) =
+                        crate::gate::approval::merge_approval_subject_observed(
+                            &[root],
+                            root,
+                            pr.id,
+                            &[],
+                            None,
+                            Some(&pr.head),
+                        );
+                    assert!(!answered);
+                }
+                assert!(pr.id != 3 || run_secs > pr_secs);
+                observed(pr.id, &Fake::default())
+            },
+        );
+        std::fs::remove_file(root.join("reading")).expect("the fake forge ran");
+        let mut memory = Memory::default();
+        let mut report = build_report(&facts(prs), &Policy::default(), &mut memory, now());
+        report.partial = partial;
+        assert!(render(&report).contains(expected));
+        record_run(&mut memory, &report);
+        assert!(snapshot_line(memory.runs.last().unwrap()).contains(expected));
+        assert!(start.elapsed() < StdDuration::from_secs(7));
+    }
+}

@@ -891,6 +891,8 @@ pub(crate) struct RunSnapshot {
     pub landings: Landings,
     pub hosts: Vec<HostLine>,
     pub changes: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub partial: Option<String>,
     pub stuck: usize,
 }
 
@@ -899,6 +901,8 @@ pub(crate) struct RunSnapshot {
 pub(crate) struct Report {
     pub at: DateTime<Utc>,
     pub changes: Vec<PrLine>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partial: Option<String>,
     pub stuck: Vec<Item>,
     pub landings: Landings,
     pub hosts: Vec<HostLine>,
@@ -1019,6 +1023,7 @@ pub(crate) fn build_report(
     let escalate = dry && !stuck.is_empty();
     Report {
         at: now,
+        partial: None,
         changes,
         stuck,
         landings: Landings {
@@ -1043,6 +1048,7 @@ pub(crate) fn record_run(memory: &mut Memory, report: &Report) {
         landings: report.landings.clone(),
         hosts: report.hosts.clone(),
         changes: report.changes.len(),
+        partial: report.partial.clone(),
         stuck: report.stuck.len(),
     });
     let extra = memory.runs.len().saturating_sub(MAX_RUNS);
@@ -1062,19 +1068,24 @@ fn snapshot_line(run: &RunSnapshot) -> String {
         .collect::<Vec<_>>()
         .join("; ");
     format!(
-        "{}: {} landing(s) in {} min; {} open change(s), {} stuck; {}",
+        "{}: {} landing(s) in {} min; {} {} change(s), {} stuck; {}{}",
         run.at.format("%Y-%m-%d %H:%M UTC"),
         run.landings
             .count
             .map_or("unknown".to_string(), |n| n.to_string()),
         run.landings.window_mins,
         run.changes,
+        run.partial.as_ref().map_or("open", |_| "covered"),
         run.stuck,
         if hosts.is_empty() {
             "no lanes".to_string()
         } else {
             hosts
-        }
+        },
+        run.partial
+            .as_deref()
+            .map(|s| format!("; {s}"))
+            .unwrap_or_default()
     )
 }
 
@@ -1096,12 +1107,19 @@ pub(crate) fn render(report: &Report) -> String {
             line.title
         ));
     }
-    if report.changes.is_empty() {
+    if let Some(partial) = &report.partial {
+        out.push_str(partial);
+        out.push('\n');
+    } else if report.changes.is_empty() {
         out.push_str("(no open changes)\n");
     }
     out.push('\n');
     if report.stuck.is_empty() {
-        out.push_str("Nothing is stuck.\n");
+        out.push_str(if report.partial.is_some() {
+            "No stalls found among covered changes.\n"
+        } else {
+            "Nothing is stuck.\n"
+        });
     } else {
         out.push_str(&format!("Stuck ({}):\n", report.stuck.len()));
         for item in &report.stuck {
@@ -1278,7 +1296,15 @@ pub(crate) fn read_red_details(
     order.sort_by_key(|(key, _)| memory.red_detail.get(key).map(|detail| detail.at));
     let mut logs_read = 0;
     for (key, head) in order {
-        let listed = budget
+        // One red head may use at most 55s of the 75s detail window.
+        // trace:BUG-2730 | ai:codex
+        let head_budget = Budget {
+            limit: budget
+                .limit
+                .min((budget.elapsed)() + std::time::Duration::from_secs(55)),
+            elapsed: budget.elapsed,
+        };
+        let listed = head_budget
             .call_timeout()
             .and_then(|timeout| ci.check_runs(head, timeout));
         let runs = match listed {
@@ -1313,7 +1339,7 @@ pub(crate) fn read_red_details(
                 logs_read += 1;
                 for check in checks.iter_mut().filter(|check| check.tests.is_err()) {
                     let id = check.id;
-                    check.tests = budget
+                    check.tests = head_budget
                         .call_timeout()
                         .and_then(|timeout| ci.job_tests(id, timeout));
                 }
@@ -1472,29 +1498,71 @@ fn save_memory(root: &Path, memory: &Memory) {
     }
 }
 
+// trace:BUG-2730 | ai:codex
+fn guard_rows(
+    changes: &[super::Pr],
+    end: std::time::Instant,
+    per_pr: std::time::Duration,
+    mut read: impl FnMut(&super::Pr) -> (super::Row, PrFact),
+) -> (Vec<super::Row>, (Vec<PrFact>, Option<String>)) {
+    use std::time::Instant;
+    let mut rows = Vec::new();
+    let mut facts = Vec::new();
+    let mut skipped = Vec::new();
+    for pr in changes {
+        let started = Instant::now();
+        let budget = end.saturating_duration_since(started).min(per_pr);
+        if !budget.is_zero() {
+            let (row, fact) = crate::forge_lookup::with_forge_lookup_deadline(budget, || read(pr));
+            if started.elapsed() < budget {
+                rows.push(row);
+                facts.push(fact);
+                continue;
+            }
+        }
+        skipped.push(pr.id);
+    }
+    rows.sort_by_key(|row| row.pr);
+    facts.sort_by_key(|fact| fact.number);
+    let partial = (!skipped.is_empty()).then(|| {
+        let covered: Vec<_> = rows.iter().map(|row| row.pr).collect();
+        format!("PARTIAL: covered PRs {covered:?}, skipped PRs {skipped:?} (deadline)")
+    });
+    (rows, (facts, partial))
+}
+
 /// One live observation: the reconciler's pass, the same evidence read fact
 /// by fact, and CI detail for the red approved heads. Returns the report and
 /// the memory to keep (a scheduled run saves it; `aida land stalls` does
 /// not).
 fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report, Memory, PathBuf)> {
-    let (pass, mut prs) = super::live_pass_with(start, |changes, rows, evidence| {
-        rows.iter()
-            .filter_map(|row| {
-                let pr = changes.iter().find(|pr| pr.id == row.pr)?;
-                Some(pr_fact(pr, row, evidence))
+    use std::time::{Duration as StdDuration, Instant};
+    let started = Instant::now();
+    let end = started + StdDuration::from_secs(220);
+    let mut setup_time = StdDuration::ZERO;
+    let (pass, (mut prs, partial)) = crate::forge_lookup::with_forge_lookup_deadline(
+        end.saturating_duration_since(Instant::now()),
+        || {
+            super::live_pass_with(start, |changes, evidence| {
+                setup_time = started.elapsed();
+                guard_rows(changes, end, GH_TIMEOUT, |pr| {
+                    let row = super::derive(pr, evidence);
+                    let fact = pr_fact(pr, &row, evidence);
+                    (row, fact)
+                })
             })
-            .collect::<Vec<PrFact>>()
-    })?;
-    let started = std::time::Instant::now();
-    let elapsed = move || started.elapsed();
+        },
+    )?;
+    let observed = Instant::now();
+    let elapsed = || observed.elapsed();
     let budget = Budget {
-        limit: DETAIL_BUDGET,
+        limit: DETAIL_BUDGET.min(end.saturating_duration_since(observed)),
         elapsed: &elapsed,
     };
     let root = pass.root.clone();
     let mut memory = load_memory(&root);
     let mut unknown = pass.warnings.clone();
-    let branch = crate::forge::default_branch_of(&root);
+    let branch = (Instant::now() < end).then(|| crate::forge::default_branch_of(&root));
     let red_heads: Vec<(String, String)> = prs
         .iter()
         .filter(|fact| fact.wants_red_detail())
@@ -1515,7 +1583,7 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
         read_red_details(
             &Gh(&root),
             &budget,
-            &branch,
+            branch.as_deref().unwrap_or_default(),
             &red_heads,
             &mut memory,
             policy,
@@ -1528,7 +1596,10 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
             continue;
         };
         let changed_paths = match pass.changes.iter().find(|pr| pr.id == fact.number) {
-            Some(pr) => super::changed_paths(&root, &super::base_ref(&pr.base), &pr.head),
+            Some(pr) => crate::forge_lookup::with_forge_lookup_deadline(
+                end.saturating_duration_since(Instant::now()),
+                || super::changed_paths(&root, &super::base_ref(&pr.base), &pr.head),
+            ),
             None => Err("the change left the pass".to_string()),
         };
         fact.red = Some(RedFact {
@@ -1540,7 +1611,13 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
     }
     let dry_since =
         now - Duration::minutes(policy.escalate_after_mins.max(policy.landings_window_mins));
-    let (landings, last_landing) = landing_times(&root, &branch, dry_since);
+    let (landings, last_landing) = match branch {
+        Some(branch) if Instant::now() < end => crate::forge_lookup::with_forge_lookup_deadline(
+            end.saturating_duration_since(Instant::now()),
+            || landing_times(&root, &branch, dry_since),
+        ),
+        _ => (Err("guard deadline reached".into()), None),
+    };
     let facts = Facts {
         prs,
         landings: Some(landings),
@@ -1548,7 +1625,13 @@ fn observe(start: &Path, policy: &Policy, now: DateTime<Utc>) -> Result<(Report,
         hosts: host_lines(&pass),
         unknown,
     };
-    let report = build_report(&facts, policy, &mut memory, now);
+    let mut report = build_report(&facts, policy, &mut memory, now);
+    report.partial = partial;
+    eprintln!(
+        "throughput-guard timings: setup={setup_time:?} observations={:?} details/report={:?}",
+        observed.duration_since(started).saturating_sub(setup_time),
+        observed.elapsed()
+    );
     Ok((report, memory, root))
 }
 
@@ -1772,15 +1855,19 @@ pub(crate) fn route_with(
         crate::detect_distributed_store_from(root).unwrap_or_else(|| root.join(".aida-store"));
     // A stall that is gone is forgotten, so its return routes again.
     let current = |key: &String| report.stuck.iter().any(|item| &item.key == key);
-    memory.routed.retain(|key, _| current(key));
-    memory.mail_pending.retain(current);
+    if report.partial.is_none() {
+        memory.routed.retain(|key, _| current(key));
+        memory.mail_pending.retain(current);
+    }
     let plan = plan_routes(report, memory, policy, now);
     let open: BTreeSet<String> = report
         .changes
         .iter()
         .map(|line| format!("PR-{}@{}", line.pr, line.head))
         .collect();
-    memory.reruns.retain(|key, _| open.contains(key));
+    if report.partial.is_none() {
+        memory.reruns.retain(|key, _| open.contains(key));
+    }
     for (seat, plan) in &plan.seats {
         // The due job is raised for a new stall only; a failed mail alone
         // never raises it a second time.
@@ -1822,7 +1909,7 @@ pub(crate) fn route_with(
             }
         }
     }
-    if !report.landings.dry {
+    if report.landings.count.is_some() && !report.landings.dry {
         memory.escalated_at = None;
     }
     if plan.escalate {
@@ -1874,6 +1961,9 @@ pub(crate) fn scan_and_route(
     }
     let now = Utc::now();
     let (report, mut memory, root) = observe(project_root, &policy, now)?;
+    if let Some(partial) = &report.partial {
+        eprintln!("throughput-guard: {partial}");
+    }
     if route_findings {
         route(&root, &report, &mut memory, &policy, now);
         record_run(&mut memory, &report);

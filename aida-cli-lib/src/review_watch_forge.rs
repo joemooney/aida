@@ -246,8 +246,9 @@ impl Repository {
         }
         command.current_dir(root).stdin(Stdio::null());
         self.pin_command(&mut command);
-        let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
-            .with_context(|| {
+        let timeout =
+            crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(30))?;
+        let out = crate::command_output_with_timeout(command, timeout).with_context(|| {
             format!("{program} discovery timed out or failed to spawn; ensure {program} is on PATH")
         })?;
         anyhow::ensure!(
@@ -262,6 +263,16 @@ impl Repository {
         serde_json::from_slice(&out.stdout).context("invalid forge discovery JSON")
     }
     pub fn discover(&self, root: &Path) -> Result<Vec<Change>> {
+        self.discover_with(root, |change, _| Ok(change))
+    }
+
+    // Keep the title already returned in the GitLab listing for landing reads.
+    // trace:BUG-2730 | ai:codex
+    pub(crate) fn discover_with<T>(
+        &self,
+        root: &Path,
+        project: impl Fn(Change, &serde_json::Value) -> Result<T>,
+    ) -> Result<Vec<T>> {
         let mut changes = Vec::new();
         let mut ids = BTreeSet::new();
         for page in 1..=10 {
@@ -277,7 +288,7 @@ impl Repository {
             for row in rows {
                 if let Some(change) = parse_change(row, self.kind == ForgeKind::GitLab)? {
                     anyhow::ensure!(ids.insert(change.id), "duplicate change in forge discovery");
-                    changes.push(change);
+                    changes.push(project(change, row)?);
                 }
             }
             if rows.len() < cap {

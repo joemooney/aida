@@ -2327,7 +2327,8 @@ fn landing_github_call(
         .current_dir(root)
         .stdin(std::process::Stdio::null());
     repo.pin_command(&mut command);
-    match command_output_with_timeout_capped(command, std::time::Duration::from_secs(10), CAP) {
+    let timeout = crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(10))?;
+    match command_output_with_timeout_capped(command, timeout, CAP) {
         BoundedCommandOutput::Completed(out)
             if out.stdout.len() as u64 <= CAP && out.stderr.len() as u64 <= CAP =>
         {

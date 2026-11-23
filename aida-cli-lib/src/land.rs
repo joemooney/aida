@@ -717,8 +717,11 @@ fn git(root: &Path, args: &[&str], timeout_secs: u64) -> Result<std::process::Ou
         .args(args)
         .stdin(std::process::Stdio::null());
     crate::review_watch::forge::clear_routing(&mut command);
-    crate::command_output_with_timeout(command, std::time::Duration::from_secs(timeout_secs))
-        .with_context(|| format!("`git {}` failed to run or timed out", args.join(" ")))
+    crate::command_output_with_timeout(
+        command,
+        crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(timeout_secs))?,
+    )
+    .with_context(|| format!("`git {}` failed to run or timed out", args.join(" ")))
 }
 
 /// A git command in `root` that contacts origin: routing cleared first,
@@ -844,8 +847,12 @@ fn fetch(
         .write(true)
         .open(&lock_path)
         .with_context(|| format!("opening {}", lock_path.display()))?;
-    lock.lock_exclusive()
-        .with_context(|| format!("locking {}", lock_path.display()))?;
+    if crate::forge_lookup::forge_lookup_deadline().is_some() {
+        lock.try_lock_exclusive()
+    } else {
+        lock.lock_exclusive()
+    }
+    .with_context(|| format!("locking {}", lock_path.display()))?;
     // Released when `lock` drops, on every return below.
     let mut specs: BTreeSet<String> = BTreeSet::new();
     for pr in changes {
@@ -888,8 +895,11 @@ fn fetch(
         ],
     );
     command.args(&specs);
-    let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(120))
-        .context("the fetch of open changes failed to run or timed out")?;
+    let out = crate::command_output_with_timeout(
+        command,
+        crate::forge_lookup::remaining_call_budget(std::time::Duration::from_secs(120))?,
+    )
+    .context("the fetch of open changes failed to run or timed out")?;
     anyhow::ensure!(
         out.status.success(),
         "the fetch of open changes failed: {}",
@@ -1679,16 +1689,14 @@ pub(crate) fn open_change_count(start: &Path) -> Result<usize> {
 
 /// Discover the open changes and derive a row for each.
 pub(crate) fn live_pass(start: &Path) -> Result<Pass> {
-    live_pass_with(start, |_, _, _| ()).map(|(pass, ())| pass)
+    live_pass_with(start, |changes, evidence| (pass(changes, evidence), ())).map(|(pass, ())| pass)
 }
 
-/// [`live_pass`], with a second reader of the same pass: `also` sees the
-/// changes, their rows and the evidence the rows were derived from, each
-/// fact read once.
+/// Discover changes once and derive rows and optional observations from shared evidence.
 // trace:STORY-2906 | ai:claude
 pub(crate) fn live_pass_with<T>(
     start: &Path,
-    also: impl FnOnce(&[Pr], &[Row], &dyn Evidence) -> T,
+    read: impl FnOnce(&[Pr], &dyn Evidence) -> (Vec<Row>, T),
 ) -> Result<(Pass, T)> {
     // Every change's approval reads verdicts under several keys, and each
     // read used to rediscover the whole gate ledger: minutes for twenty open
@@ -1702,20 +1710,12 @@ pub(crate) fn live_pass_with<T>(
     let (changes, github_checks) = match discover_rich(&root, &repo)? {
         Some(discovered) => discovered,
         None => {
-            // The watcher's discovery carries no title; the specs a change
-            // ships are read from it, so each is asked for.
-            let forge = crate::forge::forge_for(&root);
-            let changes = repo
-                .discover(&root)?
-                .into_iter()
-                .map(|change| {
-                    let title = forge
-                        .change_title_and_body(change.id)
-                        .map(|(title, _)| title)
-                        .unwrap_or_default();
-                    plain_change(change, title)
-                })
-                .collect();
+            let changes = repo.discover_with(&root, |change, row| {
+                let title = row["title"]
+                    .as_str()
+                    .context("forge listing row has no title")?;
+                Ok(plain_change(change, title.to_owned()))
+            })?;
             (changes, BTreeMap::new())
         }
     };
@@ -1748,12 +1748,14 @@ pub(crate) fn live_pass_with<T>(
     // trace:STORY-2906 | ai:claude
     let (rows, extra) = {
         let memo = Memo::new(&live);
-        let rows = pass(&changes, &memo);
-        let extra = also(&changes, &rows, &memo);
-        (rows, extra)
+        read(&changes, &memo)
     };
     // trace:TASK-3813 | ai:codex
-    metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
+    // A partial guard pass cannot establish that an omitted change closed.
+    // trace:BUG-2730 | ai:codex
+    if rows.len() == changes.len() {
+        metrics::record(&root, &changes, &rows, chrono::Utc::now())?;
+    }
     // Lanes that could not be read are said to be missing, never shown as
     // "no lanes".
     let (local_lanes, warnings) = match live.local_leases() {
