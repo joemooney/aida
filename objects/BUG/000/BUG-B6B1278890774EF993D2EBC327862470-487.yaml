@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-487
 agreed_id: BUG-2726
 title: 'Rework pickup pushes a merge-only head before the fix: remove the pickup publication (BUG-2714 AC1 slice only)'
 description: 'Minimal slice. Rework pickup publishes the local base merge to the PR before the implementer''s fix, so review-watch reviews a merge-only head while the lane runs (dozens of wasted reviews on 2026-11-22: #4382, #4373, #4387, #4391, #4385). The broader fixes are parked: BUG-2706 (#4382, review-time deferral) and BUG-2714 (#4395, a ship-time merge-only guard), and neither converged. #4395 r1 and r2 reviewers VERIFIED this slice: ''AC1 — verified by the removal of the production pickup publication callback and the queue pickup assertion that origin still names the original PR head after local preparation.'' AC1: rework pickup prepares the base merge LOCALLY only, and origin still names the original PR head after pickup; take the AC1 diff from #4395 (branch kept). AC2: the existing ship path publishes merge plus fix together (unchanged behaviour). AC3: a regression test that origin is unchanged after pickup. OUT OF SCOPE: every merge-only, NoChange, ancestry or tree-equality guard (parked BUG-2714). Target <=100 changed lines.'
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T04:29:42.519542146Z
-modified_at: 2026-11-23T05:38:25.211594956Z
+modified_at: 2026-11-23T08:26:32.708632629Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -90,6 +90,22 @@ history:
   timestamp: 2026-11-23T05:37:13.176091252Z
   session_id: 01a206b1e725
   changes: []
+- id: 01a20783-90ea-7000-9963-8e7364cb4e0b
+  author: aida-auto-bump
+  timestamp: 2026-11-23T08:26:32.554024323Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20783-9184-72e0-840f-bc0a0fc57f23
+  timestamp: 2026-11-23T08:26:32.708628098Z
+  agent: aida
+  commit_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
+  summary: BUG-2726 passes on the supplied landed tree 2d2e9121 against main ca95624c. The intervening base commit changes only .aida/config.toml and does not affect the finding. AC1 — verified by prepare_host_repair_with ending clean preparation after the local Git merge, and by the queue fixture observing a changed local HEAD while origin retains its original SHA. AC2 — verified by source inspection of the existing ship path and the clone regression in bug_home_038_seat_publish_tests.rs, which checks that the fix is a child of the local merge and that ship moves origin to the fix. The bwrap-dependent case was compiled according to the implementer; execution was not reported. AC3 — verified by the exact ls-remote SHA and ref assertion across interactive and headless queue fixtures. The implementer reported one focused queue test passed in job j20261123T044255976-2-0. BUG-2726 (bug protocol) — met. The PR changes three test files. The landed diff totals 89 added and deleted lines. CI pending at review time; fast gates passed and fast compile was running.
+  review_verdict: approved
 filed_at:
   code_sha: 5470336db35805f5b13a85d8a2fff124ec69f557
   branch: main
@@ -99,3 +115,7 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T08:26:32.554016826Z
+  completion_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
