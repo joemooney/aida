@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working STORY-2824.
   Branch: story-b6b1278890774ef993d2ebc327862470-747  ·  Commit: e9bb21309e  (PR link added on merge)
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T16:13:04.133132050Z
+modified_at: 2026-11-23T16:26:40.113428124Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -223,6 +223,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2093b-2271-7983-8371-9c3a6e55df3d
+  author: aida-orchestrator
+  timestamp: 2026-11-23T16:26:40.113436285Z
+  session_id: 01a20937c288
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: e9bb21309e01c37cfe23a8261191309446adc0a0
   branch: story-b6b1278890774ef993d2ebc327862470-747
@@ -232,3 +240,11 @@ filed_at:
   vendor: claude
   session: 01a1db50989e
   harness_version: 2.1.319 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'TASK-3115 on protected main 6708d633cf3a and landed tree 1dcd1dbad4074. PASS for invoking the shared coverage decision for held and supervised PRs and avoiding stale forge-config repair. FAIL for the claimed read-only behavior: mandate collection can still create or refresh the persistent exclusion-history index and its lock. The new stale-config fixture verifies the config and selected gate evidence files but misses these writes. The draft also includes a deferred JSON evidence-classification follow-up. Hosted fast gates passed and fast compile was pending at review time. Review used source and existing evidence, with no local builds or tests.'
+  recovery_hint: address the review findings, move TASK-3115 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T16:26:40.113428124Z
