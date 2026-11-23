@@ -11,12 +11,12 @@ description: |
   - AC1: New setting `[landing] ci_base_freshness = "strict" | "clean-merge"`, default "strict" (today's behaviour, unchanged, with a test). With "clean-merge", a PR whose update from main would be a CLEAN merge (`git merge-tree --write-tree` reports no conflict) is NOT held STALE-CI-BASE and NOT sent to update-branch. It may board the train, whose own main+squash CI is the gate. Head-exact full-tier CI on the PR is still required. A PR whose update would CONFLICT is still held.
   - AC2: review_watch_ready's "ready to ship after its branch is updated" follows the same setting. Tests cover strict (unchanged), clean-merge with a clean merge (ready, no update-branch), and clean-merge with a conflict (held).
   Size: target <=300 changed lines (small-PR rule). Strict tier? No: it's landing policy, standard tier.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T04:57:35.004778138Z
+modified_at: 2026-11-23T05:11:28.668114475Z
 req_type: Bug
 tags:
 - knob
@@ -102,6 +102,14 @@ history:
   timestamp: 2026-11-23T04:56:32.472867298Z
   session_id: 01a2067fd0d9
   changes: []
+- id: 01a206d0-fa9c-7831-90a4-faf7d45135ce
+  author: aida-orchestrator
+  timestamp: 2026-11-23T05:11:28.668124462Z
+  session_id: 01a206cc323f
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -109,3 +117,15 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 215313b8d3a
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    Reviewed the complete landed diff on protected base 5470336db358. None of the findings depends on the intervening base edit to the shared test file. CI pending at review time (FAST compile).
+    BUG-b6b1278890774ef993d2ebc327862470-486.AC1: unverified. The strict default and stale FULL decision have helper coverage. The live landing path can strand clean heads before review and lacks a regression exercising actual row selection with the knob enabled.
+    BUG-b6b1278890774ef993d2ebc327862470-486.AC2: unverified. The readiness unit test covers strict, clean and conflict decisions with fake evidence. The live watcher can credit the wrong workflow and its ready notification directs a behind head to direct ship.
+    BUG-2725 (bug protocol): met. The PR changes test files and adds both behavioral tests. Both new tests carry spec-level traces. The worksheet's previously untraced criteria have partial behavioral coverage in this diff.
+  recovery_hint: address the review findings, move BUG-2725 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T05:11:28.668114475Z
