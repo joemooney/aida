@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-23T11:17:54.656856530Z
+modified_at: 2026-11-23T11:18:01.575965951Z
 req_type: Bug
 tags:
 - ci
@@ -70,6 +70,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: FAIL — BUG-2729. The standalone recorder uses the same FULL requester as manual review after verifying the canonical verdict, but the request can still cancel pending FAST or leave an approved head without FULL. The generated worksheet treats this as a completing spec.. No triage reason was given.'
   created_at: 2026-11-23T11:17:54.656846104Z
   modified_at: 2026-11-23T11:17:54.656846104Z
+- id: 01a20820-8fcd-7690-8f18-12c93fb9243e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2729):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: f2f2903d70c9
+    Recorded: 2026-11-23T11:16:34.621174157+00:00
+    Findings:
+    1. AC1 (.github/workflows/ci.yml:31–35; aida-cli-lib/src/full_tier.rs:225–240): The unlabeled path applies ci:full immediately even with FAST outstanding. cancel-in-progress: false protects the running slot, but the FULL event still replaces the group's pending run by default. For example, when an earlier run is still shutting down and the reviewed head's synchronize FAST run is pending in CI-<PR>, the labeled FULL event can cancel that FAST run. Defer the request until the reviewed head's FAST run has settled, including the period before its checks register, or use scheduling that preserves pending FAST. Cover both pending and running FAST; tests/test_ci_tiers.py:118 checks expression values only.
+    2. AC1 (aida-cli-lib/src/full_tier.rs:216–240, 330–374; aida-cli-lib/src/queue_cmd/work.rs:7968): A synchronize event runs FAST even if ci:full remains from the previous head. If review-watch approves the new head while FAST is visible and active, label_plan returns Leave and this one-shot approval never requests FULL when FAST settles. If approval instead lands before FAST registers any checks, Reapply can remove ci:full while FAST is active, and the unlabeled event still has cancel-in-progress enabled. Persist or retry the exact-head request through FAST settlement, and cover early approval of a head inheriting ci:full.
+    3. AC2 (aida-cli-lib/src/review_draft.rs:1594–1607): The new assertion manually calls finish_recorded_draft with a closure that records the PR number and returns Ok(true). It provides no GitHub state with ci:full absent, observes no label edit, and still passes if the production standalone approval path reverts to calling verify_recorded_draft directly. The existing unlabeled-PR test starts at the label requester and cannot catch removed launcher wiring either. Add a regression that drives the production review-watch/standalone approval path with a fake forge reporting no ci:full and observes the FULL request.
+    4. aida-cli-lib/src/queue_cmd/work.rs:7968–7973 and aida-cli-lib/src/full_tier.rs:292–300: The new approval hook runs synchronously before standalone handoff completion and calls an unbounded gh pr edit through merge_hold::run_forge_cli. A stalled forge edit can leave the queue-work owner alive and hold review-watch capacity even though the verdict is durable. Give label edits a deadline or move the best-effort request off the handoff's critical path.
+    5. aida-cli-lib/src/queue_cmd/work.rs:8405–8417 and aida-cli-lib/src/full_tier.rs:324–326, 365–374: The verified reviewed SHA is discarded at the new request boundary. If the author pushes after verification and before the forge lookup, the request can read the replacement head's empty rollup and start FULL on that unreviewed head. Pass the verified SHA into the requester and fence the request against head movement. The merge verdict remains SHA-bound; the defect is unintended CI and label changes on the replacement head.
+    6. docs/internal/testing/ci-test-shards.md:18 and docs/advanced/landing.md:113 still describe label addition as canceling the running workflow, which contradicts the changed labeled-event expression. Update the operator guidance to describe the final scheduling behavior and the approval path used by review-watch.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T11:18:01.421435449Z
+  modified_at: 2026-11-23T11:18:01.421435449Z
 history:
 - id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
   author: aida-session-start
