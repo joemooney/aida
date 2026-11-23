@@ -892,18 +892,11 @@ SessionStart and statusline warnings remain available. See
 For a single-spec pickup with an open PR, `queue work` selects that PR's
 head branch even when the spec is Approved and has no Rework hold. Each such
 pickup performs a forge PR lookup unless an explicit branch was selected. Before
-launching an implementer, the host fetches `origin/main` and attempts its
-merge into the seated PR branch. A clean merge is committed with the host's
-identity and pushed to the trusted host's `origin` before the vendor starts.
-Clone commits are imported through the sandboxed bundle boundary; clone Git
-runs inside AIDA's sandbox with hooks disabled. Pre-launch publication requires
-that the seat started at the fetched PR head and produced a new merge whose
-parents are that head and the fetched main tip, in that order. Existing local
-lane commits and unchanged heads skip this push and retain the gated post-exit
-publication path. Temporary import refs are removed on success or refusal.
-Publication failures (including a non-fast-forward rejection) stop
-the launch.
-<!-- trace:BUG-2456 | ai:codex -->
+launching an implementer, the host fetches the PR's base and merges it locally
+into the seated PR branch. Origin still names the original PR head at launch.
+Ship publishes the prepared merge together with the implementer's fix. Clone
+publication uses the sandboxed bundle boundary and the trusted host origin.
+<!-- trace:BUG-2726 | ai:codex -->
 
 Conflicts at the exact PR head retain `MERGE_HEAD`, the unmerged index and
 working-tree markers. A locked version-1 `.aida/repair-journal.json` records

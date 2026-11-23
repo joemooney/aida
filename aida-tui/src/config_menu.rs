@@ -51,6 +51,11 @@ pub enum EditKind {
     /// opens an inline text input; a valid in-range integer is written, an
     /// out-of-range or non-numeric entry is rejected (the row is unchanged).
     Integer { min: i64, max: i64 },
+    /// A duration knob (`2h`, `90m`, `1h30m`) — Enter opens the inline text
+    /// input; the caller validates the typed duration and its range, and a
+    /// rejected entry leaves the row unchanged.
+    // trace:STORY-2897 | ai:claude
+    Duration,
     /// Not editable from the menu (env-shadowed, separate-file, or
     /// dangerous-live knobs). Enter explains where to edit it instead.
     #[default]
@@ -207,14 +212,25 @@ pub fn run(
                     KeyCode::Backspace => {
                         buf.pop();
                     }
-                    KeyCode::Char(ch) if ch.is_ascii_digit() || (ch == '-' && buf.is_empty()) => {
+                    KeyCode::Char(ch)
+                        if ch.is_ascii_digit()
+                            || (ch == '-'
+                                && buf.is_empty()
+                                && items[*i].edit != EditKind::Duration)
+                            || (items[*i].edit == EditKind::Duration
+                                && matches!(ch, 'h' | 'm' | 's')) =>
+                    {
                         buf.push(ch);
                     }
                     KeyCode::Enter => {
                         let idx = *i;
                         let entered = buf.clone();
                         int_input = None;
-                        flash = Some(commit_integer(&mut items, idx, &entered, &mut on_edit));
+                        flash = Some(if items[idx].edit == EditKind::Duration {
+                            commit_duration(&mut items, idx, &entered, &mut on_edit)
+                        } else {
+                            commit_integer(&mut items, idx, &entered, &mut on_edit)
+                        });
                     }
                     _ => {}
                 }
@@ -267,7 +283,7 @@ pub fn run(
                         table_state_selected.and_then(|d| rows.get(d))
                     {
                         match &items[*i].edit {
-                            EditKind::Integer { .. } => {
+                            EditKind::Integer { .. } | EditKind::Duration => {
                                 flash = None;
                                 int_input = Some((*i, String::new()));
                             }
@@ -304,12 +320,30 @@ fn edit_selected(
         }
         // Integer is opened through the inline-input path in `run`; reaching
         // here means a programmatic call — nudge toward the input flow.
-        EditKind::Integer { .. } => format!("{} — press Enter to type a value", items[i].name),
+        EditKind::Integer { .. } | EditKind::Duration => {
+            format!("{} — press Enter to type a value", items[i].name)
+        }
         EditKind::ReadOnly => format!(
             "{} is read-only here — edit it in config.toml or via `aida config <set>`",
             items[i].name
         ),
     }
+}
+
+/// Commit a typed duration for the `Duration` knob at `items[i]`: the caller
+/// validates it (format and range) and writes it, or explains the refusal.
+// trace:STORY-2897 | ai:claude
+fn commit_duration(
+    items: &mut [ConfigMenuItem],
+    i: usize,
+    entered: &str,
+    on_edit: &mut impl FnMut(&ConfigMenuItem, Option<&str>) -> EditOutcome,
+) -> String {
+    let trimmed = entered.trim();
+    if trimmed.is_empty() {
+        return "edit cancelled (no value entered)".to_string();
+    }
+    apply_outcome(items, i, on_edit(&items[i], Some(trimmed)))
 }
 
 /// Commit a typed integer for the `Integer` knob at `items[i]`: validate it is
@@ -429,9 +463,10 @@ fn draw(
 /// only ever holds an optional leading `-` and digits (enforced on input).
 /// trace:STORY-677 | ai:claude
 fn draw_int_input(f: &mut Frame, area: Rect, item: &ConfigMenuItem, buf: &str) {
-    let (min, max) = match item.edit {
-        EditKind::Integer { min, max } => (min, max),
-        _ => (i64::MIN, i64::MAX),
+    let range = match item.edit {
+        EditKind::Integer { min, max } => format!("[{min}..{max}]"),
+        EditKind::Duration => "duration, e.g. 2h or 90m".to_string(),
+        _ => String::new(),
     };
     let prompt = Paragraph::new(Line::from(vec![
         Span::styled(
@@ -447,7 +482,7 @@ fn draw_int_input(f: &mut Frame, area: Rect, item: &ConfigMenuItem, buf: &str) {
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
-            format!("   [{min}..{max}]  Enter=apply  Esc=cancel"),
+            format!("   {range}  Enter=apply  Esc=cancel"),
             Style::default().fg(Color::DarkGray),
         ),
     ]));
@@ -740,6 +775,7 @@ fn valid_values_text(edit: &EditKind) -> String {
         EditKind::Bool => "true / false".to_string(),
         EditKind::Enum(allowed) => allowed.join(" / "),
         EditKind::Integer { min, max } => format!("integer, {min}..={max}"),
+        EditKind::Duration => "a duration such as 2h, 90m or 1h30m".to_string(),
         EditKind::ReadOnly => "not editable from this menu".to_string(),
     }
 }
