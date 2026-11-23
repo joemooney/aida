@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3209",
+  "publishes": [
+    {
+      "at": "2026-11-23T22:10:15.119125854Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T10:20:11.106137847Z",
+      "spec": "TASK-3209",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4422,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "bb5f778f679f84d7e19ebd52b6986d597cd43aea"
+      }
+    },
+    {
+      "ts": "2026-11-23T10:20:31.185052672Z",
+      "spec": "TASK-3209",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "Round 1 full sweep for completing TASK-3209 (TASK-b6b1278890774ef993d2ebc327862470-1165). Reviewed the entire pinned diff from protected main 55f63f3800861fee8b80ae3046c104290baf7fbf to landed tree 629aa4ccb616be2c1dce882bdbea152122c316c1 and confirmed that tree matches the original head. The generated worksheet linked the completing task and directed review to its description because the acceptance bullets lack a standard section heading. Reviewed all three bullets in the canonical description.\n\nAC1 (headroom, partial progress, and one deadline across fetch, Git, forge and rescans) — unverified. The live-port deadline is shared, but the scheduled entry does root Git work before it is armed, Git expiry can bypass the partial-pass epilogue, and optional mailbox scans can consume the checkpoint reserve.\nAC2 (controlled slow pass, diagnostic, safe retry, and time-based transitions) — unverified. The implementer reported a passing focused test, cargo test -p aida-cli-lib exhausted_pass_confirms_verified_red_and_retries_unresolved_commit (lane job j20261123T092520473-2-0). The fixture covers a stalled later CI query, time-based confirmation of verified red, and cursor retry. The production Git expiry branches bypass that behavior and the fixture only uses in-memory Git ports.\nAC3 (observational only; keep S3b effects gated) — verified by source inspection of pass, open, advance, close, and the production Ports implementation. Effects remain local watch state, journal and advisor notifications. The diff adds no spec filing, rerun initiation, or store-mutating escalation.\n\nCI pending at review time on the attested head. FAST source gates and merge-hold-gate passed and fast compile was running. Local builds and tests were not run under the reviewer policy. Request changes for the two incomplete acceptance criteria. The draft includes all four findings.",
+        "recovery_hint": "address the review findings, move TASK-3209 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T11:22:28.176264997Z",
+      "spec": "TASK-3209",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4422,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "5b8dee179f677e9a3c18ed36ee8ac2b9eb477549"
+      }
+    },
+    {
+      "ts": "2026-11-23T11:22:31.397391627Z",
+      "spec": "TASK-3209",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3209 review against protected main 8018c42f8d5fed626fca38472d134bd12cf4b259 and landed tree 2a0259626f827378cfa5f5d4e507ecf91e888d21. The extra base commit leaves both reviewed files unchanged and the finding also applies to the original PR head. Checkpointing and attribution retry are partial. A correctly typed deadline takes the resumable path, and the slow-check fixture covers confirmation with an unchanged cursor, but the production Git timeout boundary can still bypass checkpoint reporting or permanently record an unattributed close. Observational scope passes. The advisor previously deferred checkout-root discovery and per-notice mailbox scan costs. Git diff --check passed. The implementer reported 46 targeted tests and FAST checks passing. Forge CI was pending at review time. No local build or tests were run under reviewer policy.",
+        "recovery_hint": "address the review findings, move TASK-3209 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T12:44:06.982267304Z",
+      "spec": "TASK-3209",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4422,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b110faa49a509f9378294de3d50792314cf00b28"
+      }
+    },
+    {
+      "ts": "2026-11-23T21:00:00.193620562Z",
+      "spec": "TASK-3209",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4422,
+        "verdict": "APPROVED",
+        "reviewed_sha": "f12ba7db3fddc8e3a0ff3d508949c9d2f9c5238c"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:04:36.629208772Z",
+      "spec": "TASK-3209",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4422
+      }
+    },
+    {
+      "ts": "2026-11-23T22:10:14.909708756Z",
+      "spec": "TASK-3209",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "4e140498bc8d425330633234bec803e5f8584ca0",
+        "pr": 4422,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
