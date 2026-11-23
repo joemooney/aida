@@ -133,6 +133,11 @@ pub enum ReviewCommand {
         #[clap(long, value_name = "TEXT", allow_hyphen_values = true)]
         summary: Option<String>,
 
+        /// Dependency for this verdict. Repeat for multiple dependencies.
+        // trace:STORY-2897 | ai:codex
+        #[clap(long, value_name = "KIND:DETAIL")]
+        needs: Vec<crate::gate::review_verdict::ReviewNeed>,
+
         /// Concrete review finding to hand to the rework implementer. Repeat
         /// for multiple findings; omitted findings preserve any existing
         /// findings[] in the verdict record. Pass --finding "" to clear

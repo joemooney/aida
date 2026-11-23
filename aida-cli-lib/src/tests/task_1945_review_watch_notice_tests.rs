@@ -372,6 +372,7 @@ impl Evidence for CarriedOver {
         Ok(Approval {
             reviewed: sha(0xb),
             identity: "operator at 2026-10-23".into(),
+            ci_info: None,
             carried: Some(format!("carried over clean merges of `{}`", change.base)),
         })
     }

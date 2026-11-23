@@ -174,6 +174,51 @@ pub fn canonical_verdict_word(raw: &str) -> String {
         .unwrap_or_else(|| raw.trim().to_string())
 }
 
+// trace:STORY-2897 | ai:codex
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum NeedKind {
+    Test,
+    Artifact,
+    Check,
+    Actor,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ReviewNeed {
+    pub kind: NeedKind,
+    pub detail: String,
+}
+
+impl std::str::FromStr for ReviewNeed {
+    type Err = String;
+
+    fn from_str(raw: &str) -> Result<Self, String> {
+        let (kind, detail) = raw.split_once(':').ok_or("--needs requires KIND:DETAIL")?;
+        let kind = match kind {
+            "test" => NeedKind::Test,
+            "artifact" => NeedKind::Artifact,
+            "check" => NeedKind::Check,
+            "actor" => NeedKind::Actor,
+            _ => return Err("--needs kind must be test, artifact, check or actor".into()),
+        };
+        let detail = detail.trim();
+        if detail.is_empty() {
+            return Err("--needs requires a non-empty detail".into());
+        }
+        Ok(Self {
+            kind,
+            detail: detail.into(),
+        })
+    }
+}
+
+#[derive(Default, serde::Deserialize)]
+struct VerdictDependencies {
+    #[serde(default)]
+    needs: Vec<ReviewNeed>,
+}
+
 /// The recorded verdict for one spec — the queryable state the gate reads.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct RecordedVerdict {
@@ -181,6 +226,7 @@ pub struct RecordedVerdict {
     pub kind: VerdictKind,
     /// The verdict word exactly as recorded.
     pub raw: String,
+    pub needs: Vec<ReviewNeed>,
     /// The commit the reviewer examined, when recorded.
     pub reviewed_sha: Option<String>,
     /// The branch the reviewer examined, when recorded.
@@ -893,6 +939,9 @@ pub fn parse_recorded_verdict(body: &str) -> Option<RecordedVerdict> {
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     Some(RecordedVerdict {
+        needs: <VerdictDependencies as serde::Deserialize>::deserialize(&value)
+            .unwrap_or_default()
+            .needs,
         kind: disposition_verdict(obj),
         raw,
         reviewed_sha,
@@ -3251,6 +3300,7 @@ pub(crate) struct DraftFacts<'a> {
     pub(crate) verdict: &'a str,
     pub(crate) reviewed_sha: &'a str,
     pub(crate) findings: &'a [String],
+    pub(crate) needs: &'a [ReviewNeed],
 }
 
 /// This launch's handoff identity: its draft launch stamp and the reviewer
@@ -3303,6 +3353,9 @@ fn draft_matches_record(draft: &DraftFacts<'_>, obj: &JsonObj) -> bool {
             .cloned()
             .unwrap_or_default()
             == texts
+        && obj.get("needs").map_or(draft.needs.is_empty(), |value| {
+            *value == serde_json::json!(draft.needs)
+        })
         && recorded_meta == metadata
 }
 
@@ -4763,6 +4816,7 @@ mod bug2564_own_handoff_tests {
             verdict: "approved",
             reviewed_sha: head,
             findings: &findings,
+            needs: &[],
         };
         let barrier = serde_json::json!({"verdict":"request-changes","sweep_pending":true,
             "reviewed_sha":head,"findings":["P3"],

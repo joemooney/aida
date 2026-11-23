@@ -1270,3 +1270,25 @@ fn live_pass_preserves_stale_pure_git_configuration() {
         .any(|n| n.contains("skipped")));
     assert_eq!(std::fs::read_to_string(config).unwrap(), original);
 }
+
+// trace:STORY-2897 | ai:codex
+#[test]
+fn story_2897_s1b_episode_accessor_is_read_only_and_refuses_invalid_state() {
+    let (dir, _) = confirmed();
+    let root = dir.path();
+    crate::test_git::commit_fixture(root);
+    let (red, names) = open_episode(root).unwrap();
+    assert_eq!(red, sha(2));
+    assert!(names.contains(&BUILD.to_string()));
+    assert!(names.contains(&"CI (lib-0)".to_string()));
+    let path = root.join(".aida/land").join(STATE_FILE);
+    std::fs::write(&path, "invalid").unwrap();
+    assert!(open_episode(root).is_none());
+    std::fs::remove_file(&path).unwrap();
+    assert!(open_episode(root).is_none());
+    assert!(!path.exists());
+    assert_eq!(
+        crate::landing_policy::load(root).mode,
+        crate::landing_policy::LandingMode::CiGated
+    );
+}

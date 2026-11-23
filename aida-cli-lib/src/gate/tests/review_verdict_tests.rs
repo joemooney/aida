@@ -67,6 +67,7 @@ fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
     RecordedVerdict {
         kind: VerdictKind::parse(kind_raw),
         raw: kind_raw.to_string(),
+        needs: Vec::new(),
         reviewed_sha: sha.map(str::to_string),
         reviewed_branch: Some("task-5".to_string()),
         recorded_at: Some("2026-07-21T10:00:00Z".to_string()),

@@ -57,12 +57,15 @@ fn approval() -> Approval {
     Approval {
         reviewed: format!("{HEAD:040x}"),
         identity: "reviewer seat at 2026-10-22".into(),
+        ci_info: None,
         carried: None,
     }
 }
 
 /// Evidence snapshots; every reader is a value or an error.
 struct Fake {
+    mode: crate::landing_policy::LandingMode,
+    episode: Option<(String, Vec<String>)>,
     stale_policy: crate::pr_rebase::StaleBasePolicy,
     approval: std::result::Result<Approval, String>,
     review: Option<String>,
@@ -75,6 +78,8 @@ impl Fake {
     fn ready() -> Self {
         let head = format!("{HEAD:040x}");
         Self {
+            mode: Default::default(),
+            episode: None,
             stale_policy: Default::default(),
             approval: Ok(approval()),
             review: None,
@@ -86,6 +91,17 @@ impl Fake {
 }
 
 impl Evidence for Fake {
+    fn landing_mode(&self) -> crate::landing_policy::LandingPolicy {
+        crate::landing_policy::LandingPolicy {
+            mode: self.mode,
+            ci_gated_checks: vec!["Build".into()],
+            ..Default::default()
+        }
+    }
+    fn red_main_episode(&self) -> Option<(String, Vec<String>)> {
+        self.episode.clone()
+    }
+
     fn approval(&self, _: &forge::Change) -> std::result::Result<Approval, String> {
         self.approval.clone()
     }
@@ -1243,6 +1259,7 @@ fn carried_approval_suppresses_both_dispatch_checks_but_not_ci_readiness() {
     evidence.approval = Ok(Approval {
         reviewed: approved,
         identity: "reviewer".into(),
+        ci_info: None,
         carried: Some(description),
     });
     evidence.ci = Ok(CommitChecks {
@@ -1696,4 +1713,107 @@ fn stale_overlap_live_evidence_reads_project_policy() {
     )
     .unwrap();
     assert!(live.clean_stale_overlap(&c).is_err());
+}
+
+// trace:STORY-2897 | ai:codex
+#[test]
+fn story_2897_s1b_readiness_uses_the_mode_and_complete_episode_coverage() {
+    use crate::landing_policy::{LandingMode, MERGE_HOLD_GATE};
+    let change = change(0, false);
+    let mut f = Fake::ready();
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    for (mode, build, extra, hold, episode, expected) in [
+        (
+            LandingMode::ReviewGated,
+            CheckOutcome::Pending,
+            false,
+            CheckOutcome::Passed,
+            false,
+            "CI at head: Build pending",
+        ),
+        (
+            LandingMode::ReviewGated,
+            CheckOutcome::Passed,
+            false,
+            CheckOutcome::Passed,
+            false,
+            "CI at head: Build green",
+        ),
+        (
+            LandingMode::ReviewGated,
+            CheckOutcome::Failed,
+            false,
+            CheckOutcome::Passed,
+            false,
+            "CI failed: Build",
+        ),
+        (
+            LandingMode::ReviewGated,
+            CheckOutcome::Failed,
+            false,
+            CheckOutcome::Passed,
+            true,
+            "main red since 0123456789ab, episode open",
+        ),
+        (
+            LandingMode::ReviewGated,
+            CheckOutcome::Failed,
+            true,
+            CheckOutcome::Passed,
+            true,
+            "CI failed:",
+        ),
+        (
+            LandingMode::ReviewGated,
+            CheckOutcome::Passed,
+            false,
+            CheckOutcome::Pending,
+            true,
+            "has not reported success",
+        ),
+        (
+            LandingMode::CiGated,
+            CheckOutcome::Passed,
+            false,
+            CheckOutcome::Pending,
+            false,
+            "CI pending",
+        ),
+        (
+            LandingMode::CiGated,
+            CheckOutcome::Pending,
+            false,
+            CheckOutcome::Passed,
+            false,
+            "CI pending",
+        ),
+        (
+            LandingMode::CiGated,
+            CheckOutcome::Failed,
+            false,
+            CheckOutcome::Passed,
+            false,
+            "CI failed",
+        ),
+    ] {
+        f.mode = mode;
+        f.episode = episode.then(|| (sha.into(), vec!["Build".into()]));
+        let rows = &mut f.ci.as_mut().unwrap().checks;
+        *rows = vec![check("Build", build), check(MERGE_HOLD_GATE, hold)];
+        if extra {
+            rows.push(check("X", CheckOutcome::Failed));
+        }
+        let (r, a) = ready::evaluate(&change, &f);
+        if expected.starts_with("CI at head") || expected.contains("episode open") {
+            assert_eq!(r, Readiness::Ready);
+            assert!(ready::wake_message("repo", &change, &r, &a.unwrap())
+                .body
+                .contains(expected));
+        } else {
+            assert!(
+                matches!(r, Readiness::NotReady(ref reason) if reason.contains(expected)),
+                "{r:?}"
+            );
+        }
+    }
 }

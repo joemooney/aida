@@ -1338,6 +1338,7 @@ pub(crate) mod tests {
                     },
                     None,
                     Some(&snapshot),
+                    &[],
                 )
             })
         })

@@ -8,6 +8,7 @@ use tempfile::TempDir;
 
 fn rc(kind_raw: &str, sha: Option<&str>) -> RecordedVerdict {
     RecordedVerdict {
+        needs: Vec::new(),
         kind: VerdictKind::parse(kind_raw),
         raw: kind_raw.to_string(),
         reviewed_sha: sha.map(str::to_string),

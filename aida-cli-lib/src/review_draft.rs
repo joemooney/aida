@@ -21,6 +21,8 @@ pub(crate) struct ReviewerDraft {
     pub(crate) reviewed_sha: String,
     pub(crate) verdict: String,
     pub(crate) summary: String,
+    #[serde(default)]
+    pub(crate) needs: Vec<rv::ReviewNeed>,
     pub(crate) findings: Vec<String>,
 }
 
@@ -33,6 +35,7 @@ impl ReviewerDraft {
             verdict: &self.verdict,
             reviewed_sha: &self.reviewed_sha,
             findings: &self.findings,
+            needs: &self.needs,
         }
     }
 
@@ -86,7 +89,7 @@ impl LaunchDraft {
     }
 
     pub(crate) fn prompt(&self, prompt: &str) -> String {
-        format!("{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording): write UTF-8 JSON data to the absolute path `{}` before exiting, on fresh and resumed reviews alike. Do not run `aida review record`. If a legacy record attempt was refused, still write this draft. The parent validates and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{},\"reviewed_sha\":\"{}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Once the draft is written, give a brief final response and exit. Never claim the parent has recorded it.", self.path.display(), self.pr, self.head)
+        format!("{prompt}\n\nStandalone reviewer handoff (supersedes in-sandbox recording): write UTF-8 JSON data to the absolute path `{}` before exiting, on fresh and resumed reviews alike. Do not run `aida review record`. If a legacy record attempt was refused, still write this draft. The parent validates and records it under this launch's reviewer grant. Contract: {{\"version\":1,\"pr\":{},\"reviewed_sha\":\"{}\",\"verdict\":\"approved|request-changes|rejected|waiting\",\"summary\":\"complete summary\",\"findings\":[\"complete finding text\"]}}. Include every finding. For a dependency, add the optional \"needs\" array of objects with \"kind\" (test, artifact, check or actor) and non-empty \"detail\". Review-gated WAITING needs a specific dependency beyond aggregate CI. No additional fields, recorder identity, grant, attestation, receipt, covered specs, commands or ledger paths. Review exactly the named full SHA. Once the draft is written, give a brief final response and exit. Never claim the parent has recorded it.", self.path.display(), self.pr, self.head)
     }
 
     pub(crate) fn read(&self) -> Result<ReviewerDraft> {
@@ -1089,6 +1092,7 @@ mod standalone_review_verdict_parent_tests {
         let path = dir.join("STORY-77.json");
         let draft = ReviewerDraft {
             version: 1,
+            needs: Vec::new(),
             pr: 59,
             reviewed_sha: f.head.clone(),
             verdict: "approved".into(),
@@ -1162,6 +1166,48 @@ mod standalone_review_verdict_parent_tests {
         assert!(!launch.path.exists());
         assert!(launch.path.with_file_name("recorded.json").exists());
     }
+    // trace:STORY-2897 | ai:codex
+    #[test]
+    fn story_2897_s1b_waiting_dependencies_reach_both_verdict_records() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let fixture = Fixture::new();
+        let reviewer = fixture.reviewer().unwrap();
+        let needs = [
+            "test:foo::bar".parse().unwrap(),
+            "actor:advisor".parse().unwrap(),
+        ];
+        crate::handle_review_record_context_with_policy_at(
+            fixture.root.clone(),
+            "STORY-77",
+            "waiting",
+            Some(&fixture.head),
+            Some("feature"),
+            Some("advisor supplies the named test result"),
+            &[],
+            &[],
+            Some(59),
+            false,
+            |_, _| Ok(fixture.head.clone()),
+            Some(&reviewer),
+            None,
+            &needs,
+        )
+        .unwrap();
+        for key in ["STORY-77", "PR-59"] {
+            let (record, projection, _) = crate::review_verdict_show_body_with_coverage(
+                &fixture.root,
+                key,
+                |_| rv::TipRelation::Unknown,
+                |_| None,
+            )
+            .unwrap();
+            assert_eq!(record.needs, needs);
+            assert_eq!(projection["needs"], serde_json::json!(needs));
+        }
+    }
+
     #[test]
     fn standalone_review_verdict_parent_waiting_draft_clears_findings_and_retains_hold() {
         if crate::test_env::run_path_isolated_test() {
@@ -1173,6 +1219,7 @@ mod standalone_review_verdict_parent_tests {
             .unwrap();
         let draft = ReviewerDraft {
             version: 1,
+            needs: Vec::new(),
             pr: 59,
             reviewed_sha: f.head.clone(),
             verdict: "waiting".into(),
