@@ -13,13 +13,19 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:48:18.423378315Z
-modified_at: 2026-11-23T17:46:31.454525399Z
+modified_at: 2026-11-23T17:47:15.792475567Z
 req_type: Bug
 tags:
 - admission
 - landing
 - small
 - train
+relationships:
+- rel_type:
+    custom: implemented-by
+  target_id: 01a20984-c6d8-7de3-b728-e33f854b9595
+  created_at: 2026-11-23T17:47:15.792455917Z
+  created_by: dirtlab
 comments:
 - id: 01a20919-95c3-7760-806d-7d98ebd383d0
   author: joe
@@ -72,6 +78,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20984-f37f-74a0-accb-729bfac47067
+  author: dirtlab
+  timestamp: 2026-11-23T17:47:17.759411176Z
+  session_id: 01a2093e9403
+  changes: []
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
   branch: main
