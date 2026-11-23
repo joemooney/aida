@@ -9,12 +9,12 @@ description: |
   - AC1: recover-launch judges an attempt alive only from evidence bound to that attempt (its recorded launcher/worker PID plus start identity, or a process whose cmdline/env carries the attempt token), not from any process whose cwd is the attempt's path, and never from cwd alone when that path is the primary checkout.
   - AC2: When it refuses, it names the PID, command and why that PID was treated as the attempt's holder.
   - AC3: A regression test: a dead launcher's attempt whose recorded worktree is the primary, with an unrelated live shell in the primary, is recoverable.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T04:29:13.952087270Z
+modified_at: 2026-11-23T05:01:33.478914488Z
 req_type: Bug
 tags:
 - recovery
@@ -136,6 +136,12 @@ comments:
   modified_at: 2026-11-23T04:29:13.952087270Z
   session_id: 01a2067395e9
   harness_version: codex-cli 0.167.0
+- id: 01a206c7-e5a6-7291-a638-bebd80b63b72
+  author: aida-publication-done
+  content: Implementer push 281f415ef3ad declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T05:01:33.478913905Z
+  modified_at: 2026-11-23T05:01:33.478913905Z
+  session_id: 01a2067395e9
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
@@ -185,6 +191,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a206c7-e5a6-7291-a638-bea572ac0f86
+  author: aida-publication-done
+  timestamp: 2026-11-23T05:01:33.478912365Z
+  session_id: 01a2067395e9
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
