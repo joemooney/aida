@@ -11,12 +11,12 @@ description: |
   - AC1: New setting `[landing] ci_base_freshness = "strict" | "clean-merge"`, default "strict" (today's behaviour, unchanged, with a test). With "clean-merge", a PR whose update from main would be a CLEAN merge (`git merge-tree --write-tree` reports no conflict) is NOT held STALE-CI-BASE and NOT sent to update-branch. It may board the train, whose own main+squash CI is the gate. Head-exact full-tier CI on the PR is still required. A PR whose update would CONFLICT is still held.
   - AC2: review_watch_ready's "ready to ship after its branch is updated" follows the same setting. Tests cover strict (unchanged), clean-merge with a clean merge (ready, no update-branch), and clean-merge with a conflict (held).
   Size: target <=300 changed lines (small-PR rule). Strict tier? No: it's landing policy, standard tier.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T06:03:42.577304584Z
+modified_at: 2026-11-23T06:04:18.537831355Z
 req_type: Bug
 tags:
 - knob
@@ -128,6 +128,11 @@ comments:
   modified_at: 2026-11-23T05:40:53.323657881Z
   session_id: 01a206d62de5
   harness_version: codex-cli 0.167.0
+- id: 01a20701-58e9-7d20-ba71-707bdcb4c4c7
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Reviewed the full landing diff against protected main ca95624cadfe896abf34e36cde0e98ad40c847e8. BUG-2725 AC1 and AC2 are partial. The default remains strict, and clean-merge has a conflict refusal, but missing FULL evidence stalls review and rework, and the watcher can misclassify CI, recommend direct ship, or update a clean branch. All six prior findings still apply to the published tree. The implementer’s reported working-tree corrections are absent from the reviewed head. Exact-head FAST passed and merge-hold-gate was pending clearance.. No triage reason was given.'
+  created_at: 2026-11-23T06:04:18.537820323Z
+  modified_at: 2026-11-23T06:04:18.537820323Z
 history:
 - id: 01a20680-0f23-7a31-87b8-f2996b5ab36a
   author: aida-session-start
@@ -185,6 +190,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a20701-58e9-7d20-ba71-7062c09aa61a
+  author: joe
+  timestamp: 2026-11-23T06:04:18.537806108Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -192,11 +204,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 215313b8d3a
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: Reviewed the full landing diff against protected main ca95624cadfe896abf34e36cde0e98ad40c847e8. BUG-2725 AC1 and AC2 are partial. The default remains strict, and clean-merge has a conflict refusal, but missing FULL evidence stalls review and rework, and the watcher can misclassify CI, recommend direct ship, or update a clean branch. All six prior findings still apply to the published tree. The implementer’s reported working-tree corrections are absent from the reviewed head. Exact-head FAST passed and merge-hold-gate was pending clearance.
-  recovery_hint: address the review findings, move BUG-2725 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T06:03:42.577304584Z
