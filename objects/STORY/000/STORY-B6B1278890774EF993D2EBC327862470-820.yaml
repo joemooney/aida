@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T16:44:57.494217417Z
+modified_at: 2026-11-23T17:27:46.246681656Z
 req_type: Story
 tags:
 - autonomy
@@ -50,6 +50,13 @@ comments:
     Deep pass checked TOML comments, mixed case tags, multiple paths, missing evidence, explicit mode precedence and operator protection. Corrected the config trust inventory after the fast source guard flagged the new documentation string; all 12 trust guard tests then passed. Existing tests retain their assertions. Scope is the current Approved status and path-based merge policy. No PR head or CI result exists in this native lane.
   created_at: 2026-11-23T16:44:57.494217417Z
   modified_at: 2026-11-23T16:44:57.494217417Z
+  session_id: 01a20932bb10
+  harness_version: codex-cli 0.167.0
+- id: 01a20973-153e-7b92-8820-196114919685
+  author: dirtlab
+  content: Implementer validation addendum for HEAD 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c and the final native working tree. All 15 unset-mode tests passed. The gate dependency ratchet found a missing inventory entry for the Approved enum variant. Added that precise entry in gate/orchestrator_leaves.rs and reviewed the final diff. All 52 gate-path tests passed, and make check-ci-fast job j20261123T170020393-2-0 exited 0, including the CLI manual check.
+  created_at: 2026-11-23T17:27:46.246681656Z
+  modified_at: 2026-11-23T17:27:46.246681656Z
   session_id: 01a20932bb10
   harness_version: codex-cli 0.167.0
 history:
