@@ -1624,21 +1624,8 @@ pub(crate) fn session_end_with_discard_unpushed(
             DirtyGateOutcome::Proceed => false,
             DirtyGateOutcome::Salvage => true,
             DirtyGateOutcome::Refuse => {
-                let mut msg = if is_clone {
-                    // trace:TASK-2053 | ai:claude
-                    format!(
-                        "seat clone {} holds work origin does not have:\n",
-                        target.worktree_path.display()
-                    )
-                } else {
-                    format!(
-                        "worktree {} has uncommitted changes:\n",
-                        target.worktree_path.display()
-                    )
-                };
-                for line in &dirty_entries {
-                    msg.push_str(&format!("  {}\n", line));
-                }
+                let mut msg =
+                    session_dirty_summary(&target.worktree_path, is_clone, &dirty_entries);
                 if is_clone {
                     msg.push_str(
                         "\nPush the branch from inside the seat, or pass `--force` to `aida \
@@ -2561,6 +2548,27 @@ pub(crate) fn dirty_entries_ignoring_runtime_links(
         })
         .filter(|entry| !is_runtime_link(entry))
         .collect()
+}
+
+/// Agent-mode errors retain only the first line. Keep every path and any
+/// failed status check on that line, including multiline Git diagnostics.
+// trace:BUG-2713 | ai:codex
+pub(crate) fn session_dirty_summary(
+    worktree: &std::path::Path,
+    is_clone: bool,
+    entries: &[String],
+) -> String {
+    let location = worktree.to_string_lossy().escape_debug().to_string();
+    let evidence = entries
+        .iter()
+        .flat_map(|entry| entry.lines())
+        .collect::<Vec<_>>()
+        .join("; ");
+    if is_clone {
+        format!("seat clone {location} holds work origin does not have: {evidence}\n")
+    } else {
+        format!("worktree {location} could not be confirmed clean: {evidence}\n")
+    }
 }
 
 /// Every untracked file under `dir` in `worktree`, one porcelain entry each.

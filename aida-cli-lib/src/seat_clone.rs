@@ -2246,11 +2246,15 @@ pub(crate) fn unshipped_items(facts: &ProbeFacts) -> Vec<String> {
 /// not parse is shown as it is. The path is seat-written, so it is escaped.
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 pub(crate) fn describe_status_entry(line: &str) -> String {
+    // trace:BUG-2713 | ai:codex
+    if line.trim().is_empty() {
+        return "git status --porcelain=v2 reported an unnamed change".to_string();
+    }
     let field = |n: usize| line.splitn(n + 1, ' ').nth(n);
     let xy = line.split(' ').nth(1).unwrap_or("");
     let described = match line.as_bytes().first() {
-        Some(b'?') => field(1).map(|p| format!("untracked: {}", p.escape_debug())),
-        Some(b'!') => field(1).map(|p| format!("ignored: {}", p.escape_debug())),
+        Some(b'?') => field(1).map(|p| format!("untracked (?): {}", p.escape_debug())),
+        Some(b'!') => field(1).map(|p| format!("ignored (!): {}", p.escape_debug())),
         Some(b'1') => field(8).map(|p| format!("changed ({xy}): {}", p.escape_debug())),
         Some(b'2') => field(9).map(|p| match p.split_once('\t') {
             Some((to, from)) => format!(

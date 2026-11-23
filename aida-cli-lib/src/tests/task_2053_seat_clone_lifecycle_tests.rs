@@ -1897,7 +1897,10 @@ fn task_2053_bwrap_bug_023_an_orphaned_clone_lease_with_only_ignored_state_reads
 // trace:BUG-B6B1278890774EF993D2EBC327862470-051 | ai:claude
 #[test]
 fn bug_051_refusal_items_name_every_path_and_are_never_empty() {
-    assert_eq!(describe_status_entry("? notes.txt"), "untracked: notes.txt");
+    assert_eq!(
+        describe_status_entry("? notes.txt"),
+        "untracked (?): notes.txt"
+    );
     assert_eq!(
         describe_status_entry("1 .M N... 100644 100644 100644 0123abc 0123abc src/a b.rs"),
         "changed (.M): src/a b.rs"
@@ -1911,6 +1914,41 @@ fn bug_051_refusal_items_name_every_path_and_are_never_empty() {
         "unmerged (UU): conflict.rs"
     );
     assert_eq!(describe_status_entry("garbage"), "garbage");
+
+    // trace:BUG-2713 | ai:codex
+    let entries = ProbeFacts {
+        dirty: vec!["? local notes".into(), "  ".into()],
+        ..ProbeFacts::default()
+    };
+    assert_eq!(
+        unshipped_items(&entries),
+        [
+            "untracked (?): local notes",
+            "git status --porcelain=v2 reported an unnamed change",
+        ]
+    );
+
+    for is_clone in [false, true] {
+        let message = crate::session_end::session_dirty_summary(
+            std::path::Path::new("seat-658"),
+            is_clone,
+            &[
+                " M tracked".into(),
+                "?? new notes".into(),
+                "git status failed:\ncannot verify repository".into(),
+            ],
+        );
+        let error = anyhow::anyhow!(message.clone());
+        let rendered = crate::agent_error_block(&error, &message);
+        for expected in [
+            "seat-658",
+            " M tracked",
+            "?? new notes",
+            "cannot verify repository",
+        ] {
+            assert!(rendered.contains(expected), "{rendered}");
+        }
+    }
 
     let clean = ProbeFacts::default();
     assert!(!clean.unshipped());
@@ -1933,10 +1971,10 @@ fn bug_051_refusal_items_name_every_path_and_are_never_empty() {
         ..ProbeFacts::default()
     };
     let items = unshipped_items(&dirty);
-    assert_eq!(items[0], "untracked: scratch.txt");
+    assert_eq!(items[0], "untracked (?): scratch.txt");
     assert!(items.iter().any(|i| i.contains("refs/heads/feat")));
     let reason = unshipped_reason(&dirty);
-    assert!(reason.contains("untracked: scratch.txt"), "{reason}");
+    assert!(reason.contains("untracked (?): scratch.txt"), "{reason}");
     assert!(reason.contains("refs/heads/feat"), "{reason}");
 }
 
@@ -2296,7 +2334,7 @@ fn bug_051_bwrap_session_end_refusal_names_the_untracked_file() {
     let _ambient = crate::test_env::AmbientGuard::hermetic(&fx.main, None);
     let refused = format!("{:#}", end_session(id, false).unwrap_err());
     assert!(
-        refused.contains("untracked: scratch-notes.txt"),
+        refused.contains("untracked (?): scratch-notes.txt"),
         "{refused}"
     );
     assert!(clone.exists());
