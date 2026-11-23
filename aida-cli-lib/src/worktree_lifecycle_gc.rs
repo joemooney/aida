@@ -3007,6 +3007,18 @@ mod tests {
         git_ok(&clone, &["tag", "-d", "seat-only"]);
         assert!(!inspect_with(&main, &clone, true, "origin/main", &mut closed).eligible);
         git_ok(&clone, &["tag", "-d", "host-backup"]);
+        // trace:TASK-3122 | ai:codex
+        {
+            let _unknown = aida_core::mailbox_lifecycle::activation::test_writer_scan(false);
+            let refusal = remove_with(&main, &published, "origin/main", &[], &mut closed)
+                .unwrap_err()
+                .to_string();
+            assert!(
+                refusal.contains("fresh writer-admission scan could not verify every mail writer"),
+                "{refusal}"
+            );
+            assert!(clone.join("seed").is_file());
+        }
         assert!(remove_with(&main, &published, "origin/main", &[], &mut closed).unwrap());
         assert!(!clone.exists());
         assert!(target.join("cache").exists());
