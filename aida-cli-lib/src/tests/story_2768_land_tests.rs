@@ -904,8 +904,8 @@ fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
         &gh,
         format!(
             "#!/bin/sh\ncase \"$*\" in\n  \
-             'api --allow-escape-sequences repos/owner/repo/actions/jobs/202/logs') cat ../job.log ;;\n  \
-             'api --allow-escape-sequences repos/owner/repo/git/commits/{MERGE}') cat ../merge.json ;;\n  \
+             'api repos/owner/repo/actions/jobs/202/logs'|'api --allow-escape-sequences repos/owner/repo/actions/jobs/202/logs') cat ../job.log ;;\n  \
+             'api repos/owner/repo/git/commits/{MERGE}'|'api --allow-escape-sequences repos/owner/repo/git/commits/{MERGE}') cat ../merge.json ;;\n  \
              *) exit 99 ;;\nesac\n"
         ),
     );
