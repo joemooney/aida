@@ -1,0 +1,31 @@
+id: 01a20a5e-be46-71c1-8a6c-0fe902cdffa0
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1266
+agreed_id: TASK-3846
+title: 'Seat messages hidden for a missing delivery sidecar are never silent: aida mailbox and a doctor check count and name them'
+description: |
+  Follow-up condition from advisor-122's 14:47 ruling on #4460 (STORY-2767 slice 1: fail-closed ACCEPTED). With slice 1, a seat message whose delivery sidecar is missing is HIDDEN from the reader (fail closed). Hidden messages must never be silent.
+
+  ## Acceptance
+  - AC1: `aida mailbox` (and an `aida doctor` check) counts and names hidden messages: "N seat messages hidden: delivery sidecar missing", with the message ids and an inspection command.
+  - AC2: Test: a seat message without a sidecar is hidden from the reader AND reported by count plus id.
+
+  Pre-screen (integration-30): touches mailbox_logical.rs / mailbox_cmd and doctor; no ADR-76 strict paths.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T21:45:10.982103610Z
+modified_at: 2026-11-23T21:45:10.982103610Z
+req_type: Task
+tags:
+- doctor
+- mailbox
+- small
+- track:integration
+filed_at:
+  code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f1a50179e5a
+  vendor: claude
