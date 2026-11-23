@@ -3419,7 +3419,6 @@ fn prepare_rework_merge_with_base(
         &execute,
         branch,
         resume,
-        |tip| publish_rework_merge(main, tree, branch, tip),
         |base, restore_only| {
             let head = execute(&["rev-parse", "HEAD"])?;
             *repair_key.borrow_mut() = Some(crate::repair_journal::RepairKey {
@@ -3480,6 +3479,7 @@ fn prepare_rework_merge_with_base(
 /// Publish the prepared tip using only the trusted host origin. Clone objects
 /// cross the existing sandboxed bundle boundary; seat hooks never run.
 // trace:BUG-2456 | ai:codex
+#[cfg(test)]
 fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Result<()> {
     crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
     let imported = host_recorded_clone(main, tree)
@@ -3497,7 +3497,8 @@ fn publish_rework_merge(main: &Path, tree: &Path, branch: &str, tip: &str) -> Re
         crate::ship_from_seat::require_publication_branch(main, tree, branch)?;
         // trace:BUG-2618 | ai:codex — queue rework is a head publication too.
         crate::pr_head_guard::check_branch(main, branch)?;
-        let mut push = aida_core::git_ops::host_remote_git_command(main, "origin");
+        let mut push = crate::test_git::git_command();
+        push.current_dir(main);
         push.args([
             "-c",
             "core.hooksPath=/dev/null",
@@ -3910,7 +3911,6 @@ fn prepare_host_repair_with(
     execute: &dyn Fn(&[&str]) -> Result<String>,
     branch: &str,
     resume: bool,
-    publish: impl FnOnce(&str) -> Result<()>,
     regenerate: impl FnOnce(&str, bool) -> Result<()>,
     fetch_heads: impl FnOnce() -> Result<(String, String)>,
 ) -> Result<Vec<String>> {
@@ -4034,14 +4034,9 @@ fn prepare_host_repair_with(
             }
         }
     } else {
+        // Keep the prepared merge local until ship publishes the fix.
+        // trace:BUG-2726 | ai:codex
         execute(&["merge", "--no-edit", "--no-verify", &base])?;
-        let tip = execute(&["rev-parse", "HEAD"])?;
-        if tip != before && before == pr_head {
-            let parents = execute(&["show", "-s", "--format=%P", &tip])?;
-            if parents.split_whitespace().collect::<Vec<_>>() == [pr_head.as_str(), base.as_str()] {
-                publish(&tip)?;
-            }
-        }
         Ok(vec![])
     }
 }
@@ -4477,7 +4472,6 @@ mod rework_merge_tests {
                 &failed_probe,
                 "repair",
                 false,
-                |_| panic!("failed probe must not publish"),
                 |_, _| panic!("failed probe must not regenerate"),
                 || Ok((head.clone(), head.clone())),
             )
@@ -4493,7 +4487,6 @@ mod rework_merge_tests {
             &execute,
             "repair",
             false,
-            |_| panic!("unchanged tip must not publish"),
             |_, _| panic!("clean merge must not regenerate"),
             || Ok((head.clone(), head.clone())),
         )
@@ -4588,7 +4581,6 @@ mod rework_merge_tests {
                 &failed_probe,
                 "repair",
                 false,
-                |_| panic!("failed probe cannot publish"),
                 |_, _| panic!("failed probe cannot regenerate"),
                 || Ok((base.clone(), head.clone())),
             )
@@ -4607,7 +4599,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             false,
-            |_| panic!("conflicts must not publish"),
             |_, _| anyhow::bail!("generator timeout after partial write"),
             || Ok((base.clone(), head.clone())),
         );
@@ -4631,7 +4622,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             true,
-            |_| panic!("failed preparation cannot publish"),
             |_, _| anyhow::bail!("generator still fails"),
             || Ok((base.clone(), head.clone())),
         );
@@ -4650,7 +4640,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             true,
-            |_| panic!("unrelated lane cannot publish"),
             |_, _| panic!("unrelated lane cannot regenerate"),
             || Ok((base.clone(), head.clone())),
         )
@@ -4663,7 +4652,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             true,
-            |_| panic!("conflicts cannot publish"),
             |_, restore_only| {
                 assert!(restore_only);
                 Ok(())
@@ -4724,7 +4712,6 @@ mod rework_merge_tests {
             &git_execute,
             "repair",
             true,
-            |_| panic!("retry must not publish"),
             |_, _| panic!("retry must not overwrite evidence"),
             || Ok((base.clone(), head.clone())),
         )
