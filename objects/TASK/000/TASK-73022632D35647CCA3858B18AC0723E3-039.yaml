@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:17:59.300202085Z
-modified_at: 2026-11-23T13:07:33.734977085Z
+modified_at: 2026-11-23T13:39:56.120150033Z
 req_type: Task
 tags:
 - from-implementer:TASK-3823
@@ -51,6 +51,13 @@ comments:
     AC2: [evidence: manual-inspection] Deferred per small-slice rule. Actual queue work --dry-run on this implementer seat printed model but omitted effort and provenance. Queue model selection exports the vendor-wide model into the environment before routing into distinct launch paths (queue_cmd/work.rs:4891). A seat-specific value exported at that boundary could bleed into a later reviewer phase. Product split requested for faithful queue preview and launch-path tests. No vendor launch performed.
   created_at: 2026-11-23T13:07:33.734977085Z
   modified_at: 2026-11-23T13:07:33.734977085Z
+  session_id: 01a208741f50
+  harness_version: codex-cli 0.167.0
+- id: 01a208a2-7db5-7a41-8632-2c067932f83f
+  author: dirtlab
+  content: 'Self-review validation addendum: make check-ci-fast exited 0 on the final working tree. The config-trust inventory now accounts for the display-only provenance label. The rebuilt CLI showed the inherited model source and vendor-default effort on the reviewer row. With both override variables removed it reported vendor defaults for this checkout. The native publication declaration is Refs-only.'
+  created_at: 2026-11-23T13:39:56.120150033Z
+  modified_at: 2026-11-23T13:39:56.120150033Z
   session_id: 01a208741f50
   harness_version: codex-cli 0.167.0
 history:
