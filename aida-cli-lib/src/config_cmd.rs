@@ -1130,11 +1130,44 @@ fn render_effective_policy(project_root: &std::path::Path) {
         section.print();
     }
 
+    let environment = aida_core::exec_context::Environment::capture();
+    for profile in &aida_core::vendors::PROFILES {
+        println!(
+            "{}",
+            agent_tuning_section(project_root, profile.session_name, &environment)
+        );
+    }
+
     println!();
     println!(
         "  {}",
         "Override any AIDA_* env var per docs/environment-variables.md.".dimmed()
     );
+}
+
+// trace:TASK-3171 | ai:codex
+fn agent_tuning_section(
+    project_root: &std::path::Path,
+    vendor: &str,
+    environment: &aida_core::exec_context::Environment,
+) -> String {
+    use aida_core::agents_config::AgentSeat::*;
+    let tiers = aida_core::agents_config::resolve_agent_model_tiers(project_root, vendor);
+    let mut lines = vec![
+        format!("\n[agents.{vendor}]"),
+        format!("  tiers: {:?}", tiers.tiers),
+    ];
+    for seat in [Implementer, Reviewer, Advisor, Integrator, Product, Trivial] {
+        let (tuning, model_source, effort_source) =
+            crate::session::effective_agent_tuning(project_root, vendor, seat, environment);
+        lines.push(format!(
+            "  {}: model={} ({model_source}), effort={} ({effort_source})",
+            seat.as_str(),
+            tuning.model.as_deref().unwrap_or("default"),
+            tuning.effort.as_deref().unwrap_or("default")
+        ));
+    }
+    lines.join("\n")
 }
 
 // trace:STORY-1127 | ai:codex
@@ -5115,6 +5148,25 @@ mod bug_533_config_show_tests {
              by policy_registry — the SPIKE-67 knob regressed back to invisible \
              (STORY-671 acceptance #3)"
         );
+    }
+
+    // trace:TASK-3171 | ai:codex
+    #[test]
+    fn agent_tuning_section_reports_seat_and_independent_env_override() {
+        let env = aida_core::exec_context::Environment::from_pairs([
+            ("AIDA_AGENT_MODEL".into(), " ".into()),
+            ("AIDA_AGENT_EFFORT".into(), "high".into()),
+        ]);
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join(".aida")).unwrap();
+        std::fs::write(dir.path().join(".aida/config.toml"),
+            "[agents.fixture]\nmodel = 'base'\ntiers = ['base', 'review']\n[agents.fixture.seats.reviewer]\nmodel = 'review'\neffort = 'low'").unwrap();
+        let section = agent_tuning_section(dir.path(), "fixture", &env);
+        assert!(section.contains(
+            "reviewer: model=review (.aida/config.toml), effort=high (AIDA_AGENT_EFFORT)"
+        ));
+        assert!(section.contains("implementer: model=base (.aida/config.toml)"));
+        assert!(section.contains(r#"tiers: ["base", "review"]"#));
     }
 
     #[test]

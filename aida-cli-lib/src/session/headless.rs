@@ -875,21 +875,55 @@ pub(crate) fn resolve_agent_tuning(
     vendor: HeadlessVendor,
     seat: aida_core::agents_config::AgentSeat,
 ) -> aida_core::agents_config::ResolvedAgentTuning {
-    let mut tuning =
-        aida_core::agents_config::resolve_agent_tuning(worktree_root, vendor.as_str(), seat);
-    if let Some(model) = std::env::var("AIDA_AGENT_MODEL")
+    effective_agent_tuning(
+        worktree_root,
+        vendor.as_str(),
+        seat,
+        &aida_core::exec_context::Environment::capture(),
+    )
+    .0
+}
+
+// trace:TASK-3171 | ai:codex
+pub(crate) fn effective_agent_tuning(
+    root: &Path,
+    vendor: &str,
+    seat: aida_core::agents_config::AgentSeat,
+    environment: &aida_core::exec_context::Environment,
+) -> (
+    aida_core::agents_config::ResolvedAgentTuning,
+    &'static str,
+    &'static str,
+) {
+    let (mut tuning, source) =
+        aida_core::agents_config::resolve_agent_tuning_with_source(root, vendor, seat);
+    let mut model_source = if tuning.model.is_some() {
+        source
+    } else {
+        "vendor default"
+    };
+    let mut effort_source = if tuning.effort.is_some() {
+        source
+    } else {
+        "vendor default"
+    };
+    if let Some(model) = environment
+        .var("AIDA_AGENT_MODEL")
         .ok()
         .filter(|s| !s.trim().is_empty())
     {
-        tuning.model = Some(model);
+        tuning.model = Some(model.to_owned());
+        model_source = "AIDA_AGENT_MODEL";
     }
-    if let Some(effort) = std::env::var("AIDA_AGENT_EFFORT")
+    if let Some(effort) = environment
+        .var("AIDA_AGENT_EFFORT")
         .ok()
         .filter(|s| !s.trim().is_empty())
     {
-        tuning.effort = Some(effort);
+        tuning.effort = Some(effort.to_owned());
+        effort_source = "AIDA_AGENT_EFFORT";
     }
-    tuning
+    (tuning, model_source, effort_source)
 }
 
 fn agent_selection_allows_vendor(
