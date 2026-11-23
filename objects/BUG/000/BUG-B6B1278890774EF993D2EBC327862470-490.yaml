@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-23T16:02:18.762599928Z
+modified_at: 2026-11-23T22:02:49.591745777Z
 req_type: Bug
 tags:
 - ci
@@ -139,6 +139,13 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-490` at head `unavailable`.'
   created_at: 2026-11-23T16:01:51.064421963Z
   modified_at: 2026-11-23T16:01:51.064421963Z
+- id: 01a20a6f-1bc0-71c3-90d0-fb59279a323b
+  author: joe
+  content: 'ADVISOR 2026-11-23 15:05 MST, scope addition: the MANUAL recorder has the same flaw in reverse. `aida review record … --verdict approved` immediately adds ci:full (''full-tier CI requested on PR-N''s head (label ci:full)''), cancelling an in-flight FAST run and leaving a BUG-2723 ghost red (repro: #4461 promotion 27 at 15:01 MST, FAST 45275378460 cancelled). The intent-then-scheduled-apply design from r2 must cover BOTH recorders: record the intent, and apply ci:full only once that head''s FAST has completed.'
+  created_at: 2026-11-23T22:02:49.591745777Z
+  modified_at: 2026-11-23T22:02:49.591745777Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
   author: aida-session-start
