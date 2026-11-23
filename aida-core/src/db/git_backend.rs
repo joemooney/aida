@@ -3353,6 +3353,41 @@ impl DatabaseBackend for GitBackend {
         Ok(users)
     }
 
+    /// Transform existing matching notes under the writer lock. Returns the number matched.
+    // trace:TASK-3155 | ai:codex
+    fn queue_update_notes(
+        &self,
+        user_id: &str,
+        requirement_ids: &std::collections::HashSet<uuid::Uuid>,
+        update: &dyn Fn(Option<&str>) -> String,
+    ) -> Result<usize> {
+        let _lock = self.lock_queue_write()?;
+        let user_id = self.resolve_queue_user(user_id);
+        let path = queue_file_path(&self.root, &user_id);
+        let mut entries = Self::read_queue_file(&path)?;
+        let mut matched = 0;
+        let mut changed = false;
+        for entry in entries
+            .iter_mut()
+            .filter(|e| requirement_ids.contains(&e.requirement_id))
+        {
+            matched += 1;
+            let note = update(entry.note.as_deref());
+            if entry.note.as_ref() != Some(&note) {
+                entry.note = Some(note);
+                changed = true;
+            }
+        }
+        if changed {
+            crate::fs_atomic::write_atomic(&path, serde_yaml::to_string(&entries)?)?;
+            self.auto_commit_paths(
+                "update queue note",
+                &[&queue_relative_path_for_file(&self.root, &path, &user_id)],
+            );
+        }
+        Ok(matched)
+    }
+
     fn queue_add(&self, entry: QueueEntry) -> Result<()> {
         // Held across the read-modify-write AND the commit below.
         // trace:BUG-1677 | ai:claude

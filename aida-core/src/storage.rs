@@ -1795,6 +1795,18 @@ impl Storage {
         Ok(matches)
     }
 
+    /// Transform existing matching notes under the writer lock. Returns the number matched.
+    // trace:TASK-3155 | ai:codex
+    pub fn queue_update_notes(
+        &self,
+        user_id: &str,
+        requirement_ids: &std::collections::HashSet<uuid::Uuid>,
+        update: &dyn Fn(Option<&str>) -> String,
+    ) -> Result<usize> {
+        self.queue_backend()?
+            .queue_update_notes(user_id, requirement_ids, update)
+    }
+
     /// Add an entry to a user's queue
     pub fn queue_add(&self, entry: crate::models::QueueEntry) -> Result<()> {
         self.queue_backend()?.queue_add(entry)

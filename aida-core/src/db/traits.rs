@@ -515,6 +515,17 @@ pub trait DatabaseBackend: Send + Sync {
         Ok(Vec::new())
     }
 
+    /// Transform existing matching notes under the writer lock. Returns the number matched.
+    // trace:TASK-3155 | ai:codex
+    fn queue_update_notes(
+        &self,
+        _user_id: &str,
+        _requirement_ids: &std::collections::HashSet<uuid::Uuid>,
+        _update: &dyn Fn(Option<&str>) -> String,
+    ) -> Result<usize> {
+        anyhow::bail!("Updating queue notes is not supported for this backend")
+    }
+
     /// Adds an entry to a user's queue
     fn queue_add(&self, _entry: QueueEntry) -> Result<()> {
         anyhow::bail!("Queue not supported for this backend")

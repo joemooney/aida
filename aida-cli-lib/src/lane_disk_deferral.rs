@@ -64,8 +64,13 @@ pub(crate) fn deferral_note(prior: Option<&str>, reason: &str) -> String {
     for part in prior
         .unwrap_or_default()
         .split(NOTE_SEPARATOR)
-        .map(str::trim)
-        .filter(|part| !part.is_empty() && !part.starts_with(NOTE_PREFIX))
+        .filter(|part| {
+            let text = part.trim();
+            !text.is_empty()
+                && !text
+                    .strip_prefix(NOTE_PREFIX)
+                    .is_some_and(|at| chrono::DateTime::parse_from_rfc3339(at).is_ok())
+        })
     {
         note.push_str(NOTE_SEPARATOR);
         note.push_str(part);
@@ -81,17 +86,27 @@ pub(crate) fn annotate_queue_rows(
     requirement_ids: &[uuid::Uuid],
     reason: &str,
 ) -> Result<usize> {
+    if requirement_ids.is_empty() {
+        return Ok(0);
+    }
+    annotate_selected(storage, storage.queue_users()?, requirement_ids, reason)
+}
+
+// Discover queue owners only. The backend reads and transforms the current
+// row under the same lock used for queue edits and removals.
+// trace:TASK-3155 | ai:codex
+fn annotate_selected(
+    storage: &aida_core::Storage,
+    users: Vec<String>,
+    requirement_ids: &[uuid::Uuid],
+    reason: &str,
+) -> Result<usize> {
+    let requirement_ids = requirement_ids.iter().copied().collect();
     let mut annotated = 0;
-    for id in requirement_ids {
-        for (_, mut entry) in storage.queue_entries_for_requirement(id)? {
-            let note = deferral_note(entry.note.as_deref(), reason);
-            if entry.note.as_deref() == Some(note.as_str()) {
-                continue;
-            }
-            entry.note = Some(note);
-            storage.queue_add(entry)?;
-            annotated += 1;
-        }
+    for user in users {
+        annotated += storage.queue_update_notes(&user, &requirement_ids, &|prior| {
+            deferral_note(prior, reason)
+        })?;
     }
     Ok(annotated)
 }
@@ -132,6 +147,62 @@ pub(crate) fn defer(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // trace:TASK-3155 | ai:codex
+    #[test]
+    fn task_3155_interleaved_queue_edit_and_removal() {
+        let root = tempfile::tempdir().unwrap();
+        for path in [root.path().to_owned(), root.path().join("queue.db")] {
+            check_interleaved_annotation(aida_core::Storage::new(path));
+        }
+    }
+
+    fn check_interleaved_annotation(storage: aida_core::Storage) {
+        let id = uuid::Uuid::new_v4();
+        let entry = aida_core::models::QueueEntry {
+            user_id: "alice".into(),
+            requirement_id: id,
+            position: 1000,
+            added_by: "alice".into(),
+            note: Some(format!("{NOTE_PREFIX}2026-11-19T05:00:00Z")),
+            added_at: chrono::Utc::now(),
+            for_role: None,
+            for_scope: None,
+            for_session: None,
+            added_by_machine: None,
+        };
+        storage.queue_add(entry.clone()).unwrap();
+        let mut removed = entry.clone();
+        removed.user_id = "bob".into();
+        storage.queue_add(removed).unwrap();
+        let users = storage.queue_users().unwrap();
+
+        let mut edited = entry;
+        edited.position = 42;
+        edited.added_by = "operator".into();
+        if !storage.is_sqlite() {
+            edited.for_role = Some("reviewer".into());
+        }
+        edited.note = Some(format!("{NOTE_PREFIX}2026-11-19T05:00:00Z ·  keep me  "));
+        storage.queue_add(edited.clone()).unwrap();
+        storage.queue_remove("bob", &id).unwrap();
+
+        let reason = &format!("{NOTE_PREFIX}2026-11-19T06:00:00Z");
+        assert_eq!(
+            annotate_selected(&storage, users, &[id], reason).unwrap(),
+            1
+        );
+        edited.note = Some(format!("{reason} ·  keep me  "));
+        let remaining = storage.queue_entries_for_requirement(&id).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].1, edited);
+        let absent = uuid::Uuid::new_v4();
+        assert_eq!(annotate_queue_rows(&storage, &[absent], reason).unwrap(), 0);
+        assert!(storage
+            .queue_entries_for_requirement(&absent)
+            .unwrap()
+            .is_empty());
+    }
 
     fn refused() -> anyhow::Error {
         anyhow::Error::new(LaneSpaceRefused {
