@@ -1,0 +1,28 @@
+id: 01a20737-9b05-7ee3-a52c-b8319d3e0e34
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-488
+agreed_id: BUG-2727
+title: 'Fire-fighting mandate refuses a supervised PR: "what the PR ships could not be resolved to specs" though its trailer specs exist under agreed_id labels'
+description: |
+  Found 2026-11-23 00:0x (advisor-122; filed by product-15). The fire-fighting mandate refuses supervised PR #4414 (docs: TASK-3835 TASK-3841) with "what the PR ships could not be resolved to specs in the store", even though both trailer specs exist on origin/aida-store at 0c294c6cae6 (objects TASK-...-1217 and TASK-...-1229, under agreed_id labels TASK-3835 and TASK-3841). The same shape hit #4391 (BUG-2711), which needed the operator's terminal `aida pr train`. The advisor's `aida pull` also timed out at 60s (cache writer busy), so it's unknown whether the cover reads a STALE local store/cache or fails to map agreed_id labels to objects.
+
+  ## Acceptance
+  - AC1: The mandate's spec resolution for a PR's trailer IDs maps agreed_id labels (e.g. TASK-3835) to their store objects, using the store at (or refreshed to) origin/aida-store. A test: a PR whose trailer names agreed_id labels present only via the label map resolves.
+  - AC2: When resolution fails, the refusal names each unresolved ID and the store head it read (so stale-cache cases are distinguishable from missing specs).
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T07:03:34.405855777Z
+modified_at: 2026-11-23T07:03:34.405855777Z
+req_type: Bug
+tags:
+- agreed-id
+- landing
+- mandate
+filed_at:
+  code_sha: a16f3592f015e06580a94c1f7879ea9c877c088e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ca95624cadf
+  vendor: claude
