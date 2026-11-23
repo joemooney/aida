@@ -147,6 +147,35 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T05:56:42.218700443Z
   modified_at: 2026-11-23T05:56:42.218700443Z
+- id: 01a206fa-b407-7112-9d80-c9ab87229601
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:56):
+    # BUG-2723 / PR #4408 r2 (advisor-122 ruling 2026-11-22 22:28 MST; relayed by product-15). Lane: CODEX. Landing gate, so strict.
+
+    CR at r1 (+209 lines, 4 files). The design is the problem: `gh pr checks` is a per-NAME view that hides superseded runs (p1, :846). RULING: ONE shared helper `latest_runs_at(head)`:
+    - It reads the Actions RUNS API for the head SHA: `repos/{o}/{r}/actions/runs?head_sha=<40-hex>`.
+    - Per (workflow path, tier), it keeps the run with the highest run_number/attempt, completed or in progress. Judge ONLY that run's jobs.
+    - A cancelled run counts as SUPERSEDED only if a newer run of the same workflow+tier exists. Otherwise it's CANCELLED, not success.
+    - Use it in ALL THREE evaluators: pr_train.rs, land.rs summarize_github_rollup, pr_train_verified.rs.
+    - Refusal text names the run id, attempt, tier and conclusion (no "supersession unproven" when both runs are identified).
+    - Forge, journal or JSON errors are ERRORS (refuse with the cause), never `.ok()?` → a stale green or red.
+    Tests: full 40-hex SHAs; the #4391 shape (a cancelled FAST, a passing FULL, a rerun FAST); two failures of the same tier; a different workflow sharing job names; the AC4 doc assertion.
+    AMENDED SELECTION RULING (advisor-122 2026-11-22 23:00 MST; it supersedes the "latest run per tier" wording above, for ALL THREE gates). Per (workflow, head):
+    1. A FAST-tier run is SUPERSEDED when a FULL-tier run of the SAME workflow at the SAME head has a HIGHER run id/created_at AND concluded SUCCESS (FULL runs every FAST gate). The FAST run's conclusion (cancelled or failed) is then ignored.
+    2. An OLDER FULL never supersedes a newer FAST: the newer FAST is judged.
+    3. Within a tier, the latest run (highest run id, latest attempt) is judged.
+    4. A cancelled run with nothing superseding it under (1) or (3) = CANCELLED, which BLOCKS with its run id.
+    5. A FULL run that is cancelled or failed never supersedes anything.
+    So #4391's shape (FAST run 10 cancelled, FULL run 11 green, no FAST rerun) = READY, and the existing bug2723_train_replaces_cancelled_fast_only_with_verified_full fixture stays Green. ADD fixtures for (2) and (5).
+    The previous r2 lane's partial work (tests/test_ci_tiers.py) is salvaged on dell1 at ~/salvage/BUG-2723-r2-punt-*; start fresh from the PR head.
+    NOTE: BUG-2725 (#4407) clean-merge also reads FULL evidence. 2723 lands first, and 2725 reuses this helper, so keep it public within the crate.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T05:56:48.482480615Z
+  modified_at: 2026-11-23T05:56:48.482480615Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
