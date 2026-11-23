@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: Each item is fixed or closed with evidence that main already handles it; warnings for these are gone in a normal build or test run.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:25:26.874188951Z
-modified_at: 2026-11-23T19:52:43.423070991Z
+modified_at: 2026-11-23T19:58:48.708163421Z
 req_type: Task
 tags:
 - from-work-ci
@@ -114,6 +114,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a209fd-5b84-7610-865b-63d0ec69171a
+  author: aida-session-start
+  timestamp: 2026-11-23T19:58:48.708162332Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
