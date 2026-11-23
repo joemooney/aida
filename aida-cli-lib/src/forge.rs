@@ -36,6 +36,8 @@ use std::process::Command;
 mod commit_ci;
 #[path = "forge_throughput.rs"]
 mod throughput;
+#[path = "forge_tier_runs.rs"]
+pub(crate) mod tier_runs;
 pub(crate) use commit_ci::*;
 
 /// A supervised merge-hold deliberately refused a merge.

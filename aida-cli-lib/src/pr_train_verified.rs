@@ -354,7 +354,13 @@ fn collect(
         180,
         || {
             live.dispatch_check()?;
-            live.forge.commit_checks(&ci_key.head_sha)
+            let checks = live.forge.commit_checks(&ci_key.head_sha)?;
+            let selection = if live.forge.kind() == crate::forge::ForgeKind::GitHub {
+                train_runs_at(&live.project_root, &ci_key.head_sha)?
+            } else {
+                Default::default()
+            };
+            Ok((checks, selection))
         },
         || clock.elapsed(),
         || clock.sleep(),
@@ -818,14 +824,17 @@ fn wait_exact_tip_ci(
     tip: &str,
     required: &[&str],
     limit_secs: u64,
-    mut snapshot: impl FnMut() -> Result<crate::forge::CommitChecks>,
+    mut snapshot: impl FnMut() -> Result<(
+        crate::forge::CommitChecks,
+        crate::forge::tier_runs::TierSelection,
+    )>,
     mut elapsed: impl FnMut() -> u64,
     mut sleep: impl FnMut(),
 ) -> Result<()> {
     loop {
-        let checks = snapshot()?;
+        let (checks, selection) = snapshot()?;
         anyhow::ensure!(checks.sha == tip, "train exact-tip CI SHA changed");
-        match crate::forge::judge_commit_checks(&checks, required) {
+        match selection.judge_commit_checks(checks, required)? {
             crate::forge::CommitCi::Green => return Ok(()),
             crate::forge::CommitCi::Pending(names) => {
                 let seconds = elapsed();

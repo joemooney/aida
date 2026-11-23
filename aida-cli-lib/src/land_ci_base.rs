@@ -19,12 +19,11 @@ pub(super) fn observe(
     let slug = repo.github_slug().ok_or("GitHub repository is unknown")?;
     let (_, project) = slug.split_once('/').ok_or("GitHub project is unknown")?;
     let api = |path: &str| landing_ci_api(root, repo, &format!("repos/{project}/{path}"));
-    let (ci, checks) = summarize_github_rollup(rollup, &pr.head, |run| {
-        Ok(serde_json::from_slice(&api(&format!(
-            "actions/runs/{run}"
-        ))?)?)
-    });
-    verify(ci, &checks, &slug, base, |job| {
+    let selection =
+        crate::forge::tier_runs::latest_runs_at(&pr.head, api).map_err(|e| format!("{e:#}"))?;
+    let (ci, checks) =
+        summarize_github_rollup(rollup, &selection, &slug).map_err(|e| format!("{e:#}"))?;
+    verify(ci, &checks.iter().collect::<Vec<_>>(), &slug, base, |job| {
         let bytes = api(&format!("actions/jobs/{job}/logs"))?;
         let log = String::from_utf8_lossy(&bytes);
         let merge =
@@ -46,13 +45,12 @@ pub(super) fn head_ci(
 ) -> Result<Ci, String> {
     let slug = repo.github_slug().ok_or("GitHub repository is unknown")?;
     let (_, project) = slug.split_once('/').ok_or("GitHub project is unknown")?;
-    let (ci, _) = summarize_github_rollup(rollup, &pr.head, |run| {
-        Ok(serde_json::from_slice(&landing_ci_api(
-            root,
-            repo,
-            &format!("repos/{project}/actions/runs/{run}"),
-        )?)?)
-    });
+    let selection = crate::forge::tier_runs::latest_runs_at(&pr.head, |path| {
+        landing_ci_api(root, repo, &format!("repos/{project}/{path}"))
+    })
+    .map_err(|e| format!("{e:#}"))?;
+    let (ci, _) =
+        summarize_github_rollup(rollup, &selection, &slug).map_err(|e| format!("{e:#}"))?;
     Ok(ci)
 }
 
@@ -409,8 +407,8 @@ mod tests {
             ),
             check("CI (gates)", "FAILURE", 20, 202, "2026-11-18T18:00:00Z"),
         ]);
-        let (head, checks) =
-            summarize_github_rollup(&rollup, HEAD, |_| anyhow::bail!("no run metadata"));
+        let (head, checks) = summarize_github_rollup(&rollup, &Default::default(), SLUG).unwrap();
+        let checks = checks.iter().collect::<Vec<_>>();
         let Ci::Red(names) = head.clone() else {
             panic!("the head's checks failed: {head:?}");
         };

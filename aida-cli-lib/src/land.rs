@@ -75,6 +75,7 @@ pub(crate) enum Ci {
     Pending,
     Green,
     StaleBase(String),
+    WaitingForRun(String),
     /// The failed checks, named.
     Red(String),
 }
@@ -84,6 +85,7 @@ impl Ci {
         match self {
             Ci::None => "none".into(),
             Ci::Pending => "pending".into(),
+            Ci::WaitingForRun(run) => format!("waiting for CI: {run}"),
             Ci::Green => "green".into(),
             Ci::StaleBase(_) => "stale-base".into(),
             Ci::Red(names) => format!("red: {names}"),
@@ -528,6 +530,9 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
             None,
             format!("{base}. Refresh CI with a clean update-branch"),
         );
+    }
+    if let (Ci::WaitingForRun(detail), true) = (&ci, evidence.ci_gates_landing()) {
+        return row(State::Blocked, Action::Wait, None, detail.clone());
     }
     if let (Ci::Red(failed), true) = (&ci, evidence.ci_gates_landing()) {
         return rework(
@@ -1459,13 +1464,16 @@ fn ci_of_checks<'a>(checks: impl IntoIterator<Item = &'a serde_json::Value>) -> 
             // A cancelled run did not test the head: CI is not green, and
             // it is not a failure of the change either.
             "CANCELLED" => pending = true,
-            _ => failed.push(name),
+            _ => failed.push(match check["selectionDetail"].as_str() {
+                Some(detail) => format!("{name} {detail}"),
+                None => name,
+            }),
         }
     }
     if !failed.is_empty() {
         failed.sort();
         failed.dedup();
-        return Ci::Red(one_line(&failed.join(", "), 80));
+        return Ci::Red(failed.join(", "));
     }
     if pending {
         Ci::Pending
@@ -1497,7 +1505,12 @@ fn newest_checks<'a>(
     // A check that ran more than once at this head counts once, by its
     // newest run: a cancelled run that a later run replaced says nothing.
     let mut newest: BTreeMap<(String, String), &serde_json::Value> = BTreeMap::new();
+    let mut selected = Vec::new();
     for check in checks {
+        if check["selectedRun"].is_u64() {
+            selected.push(check);
+            continue;
+        }
         let key = (check_text(check, "workflowName"), check_name(check));
         let started = |check: &serde_json::Value| check_text(check, "startedAt");
         match newest.get(&key) {
@@ -1507,55 +1520,63 @@ fn newest_checks<'a>(
             }
         }
     }
-    newest.into_values().collect()
+    selected.extend(newest.into_values());
+    selected
 }
 
-// trace:BUG-2692 | ai:codex
-#[cfg(test)]
-fn ci_of_github_rollup(
+// trace:BUG-2723 | ai:codex
+fn summarize_github_rollup(
     rollup: &serde_json::Value,
-    head: &str,
-    metadata: impl FnMut(u64) -> Result<serde_json::Value>,
-) -> Ci {
-    summarize_github_rollup(rollup, head, metadata).0
-}
-
-fn summarize_github_rollup<'a>(
-    rollup: &'a serde_json::Value,
-    head: &str,
-    metadata: impl FnMut(u64) -> Result<serde_json::Value>,
-) -> (Ci, Vec<&'a serde_json::Value>) {
-    let Some(rows) = rollup.as_array() else {
-        return (Ci::None, Vec::new());
-    };
-    let run_id = |row: &serde_json::Value| {
-        crate::ci_gate::run_id_from_check_link(row["detailsUrl"].as_str()?)
-    };
-    let candidates: Vec<_> = rows
-        .iter()
-        .filter_map(|row| Some((row["name"].as_str()?, run_id(row)?)))
-        .collect();
-    let replaced = crate::forge::replaced_fast_runs(
-        candidates.iter().map(|(name, id)| (*name, id.as_str())),
-        Some(head),
-        metadata,
-    );
-    let kept: Vec<_> = rows
-        .iter()
-        .filter(|row| !crate::forge::is_replaced_run(&replaced, run_id(row).as_deref()))
-        .collect();
-    let aggregate_passed = replaced.values().all(|replacement| {
-        kept.iter().any(|row| {
-            row["name"] == crate::forge::CI_AGGREGATOR_CHECK
-                && row["conclusion"] == "SUCCESS"
-                && run_id(row).and_then(|id| id.parse::<u64>().ok()) == Some(*replacement)
-        })
-    });
-    let mut ci = ci_of_checks(kept.iter().copied());
-    if ci == Ci::Green && !aggregate_passed {
-        ci = Ci::Pending;
+    selection: &crate::forge::tier_runs::TierSelection,
+    slug: &str,
+) -> Result<(Ci, Vec<serde_json::Value>)> {
+    let mut kept = Vec::new();
+    for row in rollup.as_array().context("missing statusCheckRollup")? {
+        let id = row["detailsUrl"].as_str().and_then(|url| {
+            let (owner, _) = url.strip_prefix("https://")?.split_once("/actions/runs/")?;
+            if owner.eq_ignore_ascii_case(slug) {
+                crate::ci_gate::run_id_from_check_link(url)
+            } else {
+                None
+            }
+        });
+        selection.verify_marker(row["name"].as_str().unwrap_or_default(), id.as_deref())?;
+        if !id.is_some_and(|id| selection.owned.contains(&id)) {
+            kept.push(row.clone());
+        }
     }
-    (ci, kept)
+    for run in &selection.selected {
+        for row in run.rows()? {
+            let conclusion = match row.bucket.as_str() {
+                "pass" => "SUCCESS",
+                "cancel" => "CANCELLED",
+                "skipping" => "SKIPPED",
+                "pending" => "",
+                _ => "FAILURE",
+            };
+            let link = row
+                .job_id
+                .map(|id| format!("https://{slug}/actions/runs/{}/job/{id}", run.id));
+            kept.push(
+                serde_json::json!({"name":row.name, "conclusion":conclusion, "selectedRun":run.id,
+                "selectionDetail":run.detail(), "workflowName":row.workflow, "detailsUrl":link}),
+            );
+        }
+    }
+    let mut ci = ci_of_checks(&kept);
+    if ci == Ci::Pending {
+        if let Some(detail) = kept
+            .iter()
+            .find(|r| {
+                r["selectedRun"].is_u64()
+                    && matches!(r["conclusion"].as_str(), Some("" | "CANCELLED"))
+            })
+            .and_then(|r| r["selectionDetail"].as_str())
+        {
+            ci = Ci::WaitingForRun(detail.to_owned());
+        }
+    }
+    Ok((ci, kept))
 }
 
 /// A change from the watcher's discovery, which reports no checks. That is

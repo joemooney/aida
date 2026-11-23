@@ -2981,6 +2981,7 @@ case "$*" in
   'api repos/{owner}/{repo}/rules/branches/release%2Fnext?per_page=100&page='*)
     p=${2##*page=}
     if [ -f "rules-$p.json" ]; then cat "rules-$p.json"; elif [ "$p" = 1 ]; then cat rules.json; else echo '[]'; fi ;;
+  'api repos/{owner}/{repo}/actions/runs?head_sha='*) if [ -f runs.json ]; then cat runs.json; else echo '{"total_count":0,"workflow_runs":[]}'; fi ;;
   'pr checks '*) cat rows.json ;;
   'api repos/{owner}/{repo}/actions/jobs/17')
     if [ -f job-denied ]; then echo 'HTTP 403' >&2; exit 1; fi
@@ -3057,6 +3058,11 @@ esac
             _ => matches!(state, TrainCiReadiness::Red(_)),
         });
     }
+    // Unreadable pinned evidence cannot turn a stale failed Build into a bisection.
+    write(dir, "runs.json", "invalid JSON");
+    let error = host.train_ci_snapshot(&change, &tip, &[]).unwrap_err();
+    assert!(error.is::<TrainCiReadError>() && error.to_string().contains("invalid JSON"));
+    std::fs::remove_file(dir.join("runs.json")).unwrap();
     // trace:BUG-2671 | ai:codex
     let mut rows: Vec<serde_json::Value> = serde_json::from_str(&rows_json(None)).unwrap();
     rows.extend([
@@ -3483,6 +3489,7 @@ case "$*" in
   'pr view '*) cat head.json ;;
   'api repos/{owner}/{repo}/branches/main/protection') cat protection.json ;;
   'api repos/{owner}/{repo}/rules/branches/main?per_page=100&page='*) echo '[]' ;;
+  'api repos/{owner}/{repo}/actions/runs?head_sha='*) echo '{"total_count":0,"workflow_runs":[]}' ;;
   'pr checks '*) n=$(cat poll); cat "rows-$n.json" ;;
   *) echo "unexpected forge call: $*" >&2; exit 1 ;;
 esac
@@ -6491,44 +6498,72 @@ fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
 // trace:BUG-2723 | ai:codex
 #[test]
 fn bug2723_train_replaces_cancelled_fast_only_with_verified_full() {
-    let head = "a".repeat(40);
-    let mut source = Vec::new();
-    for (id, name, bucket) in [
-        (20, TRAIN_CI_AGGREGATE, "pass"),
-        (10, "ci-tier: fast", "pass"),
-        (10, TRAIN_CI_AGGREGATE, "fail"),
-        (20, "ci-tier: full", "pass"),
-    ] {
-        let mut row = bug2401_row(name, bucket);
-        row.run_id = Some(id.to_string());
-        source.push(row);
-    }
-    for (replacement_head, conclusion, ready) in [
-        (head.as_str(), "success", true),
-        (head.as_str(), "failure", false),
-        ("wrong-head", "success", false),
-    ] {
-        let mut rows = source.clone();
-        super::select_train_ci_runs(&mut rows, &head, |id| {
-            Some(serde_json::json!({
-                "id": id, "event": "pull_request", "workflow_id": 1, "head_branch": "feature",
-                "head_repository": {"id": 2}, "status": "completed",
-                "head_sha": if id == 10 { head.as_str() } else { replacement_head },
-                "conclusion": if id == 10 { "cancelled" } else { conclusion },
-            }))
-        });
+    use crate::forge::tier_runs::fixture::{read, run, HEAD};
+    let fast = run(10, "fast", "cancelled");
+    let full = run(11, "full", "success");
+    let judge = |runs: &[serde_json::Value]| {
+        let selection = read(runs).unwrap();
+        // The PR rollup omitted FULL Build and retained a stale FAST failure.
+        let mut row = bug2401_row(TRAIN_CI_AGGREGATE, "fail");
+        row.run_id = Some("10".into());
+        let mut rows = vec![row];
+        super::apply_train_selection(&mut rows, &selection).unwrap();
         let required = [TRAIN_CI_AGGREGATE.into()];
         let cfg = Default::default();
         let mut state = train_ci_readiness(&rows, &required, &cfg, false);
-        super::describe_train_ci_refusal(&mut state, &rows, &required, &cfg, false, |id| {
-            Some(id == 10)
-        });
-        if ready {
-            assert_eq!(state, TrainCiReadiness::Green);
-        } else {
-            assert!(
-                matches!(state, TrainCiReadiness::Red(reason) if reason.contains("run 10 (cancelled: yes, supersession unproven)"))
-            );
-        }
+        super::describe_train_ci_refusal(&mut state, &rows, &required, &cfg, false, &selection);
+        state
+    };
+    assert_eq!(
+        judge(&[fast.clone(), full.clone()]),
+        TrainCiReadiness::Green
+    );
+    let mut rerun = run(10, "fast", "failure");
+    rerun["run_attempt"] = 2.into();
+    assert_eq!(
+        judge(&[rerun.clone(), full.clone()]),
+        TrainCiReadiness::Green
+    );
+    assert!(
+        matches!(judge(&[rerun.clone(),run(12,"fast","cancelled")]),TrainCiReadiness::InfraRed(s) if s.contains("run 12 attempt 1 tier FAST conclusion cancelled"))
+    );
+    assert!(matches!(
+        judge(&[rerun.clone(), run(12, "fast", "in_progress")]),
+        TrainCiReadiness::Pending(_)
+    ));
+    assert!(
+        matches!(judge(&[rerun.clone(),run(12,"fast","failure")]), TrainCiReadiness::Red(reason)
+        if reason.contains("run 12 attempt 1") && !reason.contains("run 10"))
+    );
+    for cause in ["failure", "cancelled"] {
+        assert!(
+            matches!(judge(&[rerun.clone(),run(11,"full",cause)]),TrainCiReadiness::Red(s) if s.contains("run 10 attempt 2 tier FAST conclusion failure"))
+        );
     }
+    for (field, value) in [
+        ("path", serde_json::json!("another.yml")),
+        ("workflow_id", 2.into()),
+        ("head_repository", serde_json::json!({"id":2})),
+        ("head_branch", "another".into()),
+    ] {
+        let mut other = full.clone();
+        other[field] = value;
+        assert!(
+            matches!(judge(&[rerun.clone(), other]), TrainCiReadiness::Red(_)),
+            "{field}"
+        );
+    }
+    let mut wrong = full;
+    wrong["head_sha"] = "b".repeat(40).into();
+    assert!(read(&[fast, wrong]).is_err());
+    for bytes in [
+        b"broken".as_slice(),
+        br#"{"total_count":1,"workflow_runs":[]}"#,
+    ] {
+        assert!(crate::forge::tier_runs::latest_runs_at(HEAD, |_| Ok(bytes.to_vec())).is_err());
+    }
+    let err =
+        crate::forge::tier_runs::latest_runs_at(HEAD, |_| anyhow::bail!("checkpoint failure"))
+            .unwrap_err();
+    assert!(err.to_string().contains("checkpoint failure"));
 }

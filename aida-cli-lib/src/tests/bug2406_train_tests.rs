@@ -126,6 +126,7 @@ if a[0]=='api':
             repo['p'+n]=dict(headRefOid=v['headRefOid'],commits=dict(totalCount=1,nodes=[dict(commit=dict(oid=v['headRefOid'],message=message))]))
         emit(dict(data=dict(repository=repo)))
     endpoint=next((x for x in a[1:] if x.startswith('repos/')),a[1])
+    if '/actions/runs?head_sha=' in endpoint: emit(dict(total_count=0, workflow_runs=[]))
     if '/check-runs' in endpoint:
         # trace:STORY-2905 | ai:claude — a grant lapsing during the CI wait.
         if s.get('revoke_dir') and not s.get('revoke_on'):
@@ -1892,7 +1893,7 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
         180,
         || {
             reads.set(reads.get() + 1);
-            Ok(checks("tip", CheckOutcome::Pending))
+            Ok((checks("tip", CheckOutcome::Pending), Default::default()))
         },
         || time.elapsed(),
         || time.sleep(),
@@ -1912,7 +1913,7 @@ fn bug2528_exact_tip_ci_wait_is_bounded_and_fails_closed() {
             "tip",
             &["merge-hold-gate"],
             180,
-            || Ok(checks(sha, outcome)),
+            || Ok((checks(sha, outcome), Default::default())),
             || 0,
             || panic!("must refuse immediately"),
         )

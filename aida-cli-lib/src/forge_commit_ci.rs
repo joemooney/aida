@@ -230,7 +230,10 @@ pub(crate) fn latest_per_name(checks: &[CommitCheck]) -> Vec<&CommitCheck> {
 /// nothing ran is never green. A workflow run that executed nothing, or that
 /// a newer one on the commit superseded, does not count.
 pub(crate) fn judge_commit_checks(checks: &CommitChecks, required: &[&str]) -> CommitCi {
-    let latest = latest_per_name(&checks.checks);
+    judge_effective_checks(&latest_per_name(&checks.checks), required)
+}
+
+pub(super) fn judge_effective_checks(latest: &[&CommitCheck], required: &[&str]) -> CommitCi {
     let named = |outcome: CheckOutcome| -> Vec<String> {
         latest
             .iter()

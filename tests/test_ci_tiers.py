@@ -53,6 +53,11 @@ TIER_EVENTS = [('opened', None), ('synchronize', None), ('reopened', None),
 
 
 class CiTiers(unittest.TestCase):
+    def test_bug2723_wait_before_retoggling_full(self):
+        guide = (ROOT / 'docs/internal/testing/ci-test-shards.md').read_text()
+        self.assertIn('After `gh pr update-branch`, wait for its FAST run to finish '
+                      'before removing and re-adding `ci:full`.', ' '.join(guide.split()))
+
     def test_selection_and_check_name_agree_for_all_events(self):
         select = JOBS['tier']['steps'][0]
         expression = select['env']['FULL'].removeprefix('${{').removesuffix('}}').strip()

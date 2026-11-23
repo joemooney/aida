@@ -744,64 +744,64 @@ fn a_change_is_admitted_on_its_own_row_not_its_neighbours() {
 
 // trace:BUG-2692 | ai:codex
 #[test]
-fn bug_2692_land_ignores_verified_cancelled_fast_run() {
-    let head = "a".repeat(40);
-    let row = |run, name, conclusion| {
-        serde_json::json!({
-            "name": name, "conclusion": conclusion,
-            "detailsUrl": format!("https://github.com/o/r/actions/runs/{run}/job/1"),
-        })
-    };
-    let mut rows = vec![
-        row(10, "ci-tier: fast", "FAILURE"),
-        row(10, "CI (matrix)", "CANCELLED"),
-        row(10, "Build (ubuntu-latest)", "FAILURE"),
-        row(11, "ci-tier: full", "SUCCESS"),
-    ];
-    let metadata = |id, workflow, sha: &str| {
-        Ok(serde_json::json!({
-            "id":id, "workflow_id":workflow, "head_sha":sha, "event":"pull_request",
-            "head_branch":"feature", "head_repository":{"id":1},
-            "conclusion":if id == 10 { "cancelled" } else { "success" },
-        }))
-    };
-    let observe = |rows, workflow, sha: &str| {
-        ci_of_github_rollup(&serde_json::Value::Array(rows), &head, |id| {
-            metadata(
-                id,
-                if id == 10 { 1 } else { workflow },
-                if id == 10 { &head } else { sha },
-            )
-        })
-    };
-    assert_eq!(observe(rows.clone(), 1, &head), Ci::Pending);
-    let mut earlier_success = rows.clone();
-    earlier_success.push(row(9, "Build (ubuntu-latest)", "SUCCESS"));
-    assert_eq!(observe(earlier_success, 1, &head), Ci::Pending);
-    rows.push(row(11, "Build (ubuntu-latest)", "SUCCESS"));
-    assert_eq!(observe(rows.clone(), 1, &head), Ci::Green);
-    assert_eq!(
-        decided(Fake {
-            ci: Ok(observe(rows.clone(), 1, &head)),
-            ..approved()
-        }),
-        (State::Ready, Action::Train),
-    );
-    rows.reverse();
-    assert_eq!(observe(rows.clone(), 1, &head), Ci::Green);
-    assert!(matches!(observe(rows.clone(), 2, &head), Ci::Red(_)));
-    assert!(matches!(
-        observe(rows.clone(), 1, &"b".repeat(40)),
-        Ci::Red(_)
-    ));
-    assert!(matches!(
-        ci_of_github_rollup(&serde_json::Value::Array(rows.clone()), &head, |_| {
-            anyhow::bail!("metadata unavailable")
-        }),
-        Ci::Red(_)
-    ));
-    rows.push(row(11, "CI (lib-0)", "FAILURE"));
-    assert_eq!(observe(rows, 1, &head), Ci::Red("CI (lib-0)".into()));
+fn bug2723_land_and_exact_tip_judge_both_tier_orders() {
+    use crate::forge::tier_runs::fixture::{read, run};
+    let rollup = serde_json::json!([{"name":"FAST-only failure","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/actions/runs/10/job/1"}]);
+    for status in ["cancelled", "in_progress"] {
+        let selection = read(&[run(10, "fast", status)]).unwrap();
+        let (ci, _) = summarize_github_rollup(&rollup, &selection, "github.com/o/r").unwrap();
+        assert!(
+            matches!(&ci,Ci::WaitingForRun(detail) if detail.contains("run 10 attempt 1 tier FAST"))
+        );
+        assert_eq!(
+            decided(Fake {
+                ci: Ok(ci),
+                ci_gates: true,
+                ..approved()
+            }),
+            (State::Blocked, Action::Wait)
+        );
+    }
+    for (runs, green) in [
+        (
+            vec![run(10, "fast", "failure"), run(11, "full", "success")],
+            true,
+        ),
+        (
+            vec![run(10, "full", "failure"), run(11, "fast", "success")],
+            false,
+        ),
+        (
+            vec![run(10, "full", "success"), run(11, "fast", "failure")],
+            false,
+        ),
+    ] {
+        let selection = read(&runs).unwrap();
+        let (ci, _) = summarize_github_rollup(&rollup, &selection, "github.com/o/r").unwrap();
+        assert_eq!(ci == Ci::Green, green);
+        if green {
+            assert_eq!(
+                decided(Fake {
+                    ci: Ok(ci),
+                    ..approved()
+                }),
+                (State::Ready, Action::Train)
+            );
+        }
+        let checks = crate::forge::CommitChecks {
+            sha: crate::forge::tier_runs::fixture::HEAD.into(),
+            checks: vec![],
+        };
+        let verdict = selection
+            .judge_commit_checks(checks, &[crate::forge::CI_AGGREGATOR_CHECK])
+            .unwrap();
+        assert_eq!(verdict == crate::forge::CommitCi::Green, green);
+        if !green {
+            assert!(
+                matches!(verdict,crate::forge::CommitCi::Failed(names) if names.iter().any(|s| s.contains("attempt 1 tier") && s.contains("conclusion failure")))
+            );
+        }
+    }
 }
 
 // trace:BUG-2690 | ai:codex
