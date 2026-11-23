@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T02:49:24.887784887Z
+modified_at: 2026-11-23T03:07:24.472530087Z
 req_type: Bug
 comments:
 - id: 01a20639-b01d-7f20-bca0-6cd50f5e0501
@@ -36,6 +36,13 @@ comments:
     Deep-pass: checked ID construction and lookup, timestamp parsing and JSON/TOML compatibility, zero/one/multiple reservations, missing evidence, symlinks, dry-run and lock scope. The explicit heal is the only release route. It uses the permanent repair lock shared by reservation and adoption. Added a pre-write size check to prevent an unreadable oversized audit. Fixed two fixture portability findings and reran the test. No tests weakened. Fast gate rerun j20261123T024722358-2-0 in progress. No published head CI yet.
   created_at: 2026-11-23T02:49:24.887784887Z
   modified_at: 2026-11-23T02:49:24.887784887Z
+  session_id: 01a2063cc951
+  harness_version: codex-cli 0.167.0
+- id: 01a2065f-64f1-71c2-a2e9-24456e19fc03
+  author: dirtlab
+  content: Implementer self-review validation update for HEAD 215313b8d3a8089240cc87b0210136d9d5831fb1 plus native working tree. Regenerated and reviewed scripts/store-writers.toml after the inventory gate identified six new sink/caller sites and the cli:doctor mapping. Final make check-ci-fast job j20261123T025252858-2-0 passed (exit 0). Final focused regression job j20261123T024212576-2-0 executed one passing test.
+  created_at: 2026-11-23T03:07:24.472530087Z
+  modified_at: 2026-11-23T03:07:24.472530087Z
   session_id: 01a2063cc951
   harness_version: codex-cli 0.167.0
 history:
