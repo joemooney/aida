@@ -1,5 +1,6 @@
 id: 01a20924-010f-7fb1-934c-c17ae0c0fa56
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-229
+agreed_id: STORY-3040
 title: 'Review PR-4437: [AI:codex] fix(worktree): cover writer-scan refusal and retry in clone GC (TASK-3122)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a208e9`) for branch `int26-task-3122`.
@@ -48,6 +49,10 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Completed
+- id: 01a20949-81be-7632-a64f-2026107c4562
+  author: joe
+  timestamp: 2026-11-23T16:42:22.014853190Z
+  changes: []
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
   branch: main
