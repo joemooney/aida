@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:48:18.423378315Z
-modified_at: 2026-11-23T20:38:38.380379140Z
+modified_at: 2026-11-23T20:38:45.346700298Z
 req_type: Bug
 tags:
 - admission
@@ -67,6 +67,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2732 (BUG-b6b1278890774ef993d2ebc327862470-493) — PARTIAL. The test covers pruning and the live-holder refusal. It leaves immediate admission with stale receipts present unverified.. No triage reason was given.'
   created_at: 2026-11-23T20:38:38.380370162Z
   modified_at: 2026-11-23T20:38:38.380370162Z
+- id: 01a20a21-eccd-7c32-9765-1cf2d11fffdc
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2732):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 7a751a02a101
+    Recorded: 2026-11-23T17:57:40.222497811+00:00
+    Findings:
+    1. aida-cli-lib/src/admission_owner.rs:1277–1293 (PR head), BUG-2732.AC1 and AC2: the failing manual admission call prunes both stale receipts while a live auto-train remains. The only successful admission is after the stale receipts are already gone and the live claim is dropped. A regression that deletes a stale receipt but returns AdmissionBusy for that attempt would pass this test while refusing a stale-only admission at wait_secs = 0. Exercise a fresh stale-only fixture and assert success on the first call, retain a separate live-holder refusal, and add criterion-level traces for both ACs.
+    2. PR #4449 description: the BUG-2732 implementer brief asks the PR body to explain when main already behaves correctly and the patch only adds regression coverage. The current body contains publication metadata. Add the existing receipt-pruning behavior and the scope of the regression coverage to the PR description.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T20:38:45.197806896Z
+  modified_at: 2026-11-23T20:38:45.197806896Z
 history:
 - id: 01a2093e-d2c2-7a22-853a-170847668364
   author: aida-session-start
