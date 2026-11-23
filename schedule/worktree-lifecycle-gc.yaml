@@ -1,5 +1,5 @@
 job: worktree-lifecycle-gc
-last_run: 2026-11-16T03:10:51.557666396Z
+last_run: 2026-11-23T03:23:07.793281126Z
 last_by:
   seat: substrate
   vendor: tick
@@ -10,4 +10,7 @@ failure_trips:
   status: 127
 - trip_id: worktree-lifecycle-gc@2026-11-16T03:10:51.557666396Z
   at: 2026-11-16T03:10:51.557666396Z
+  status: 1
+- trip_id: worktree-lifecycle-gc@2026-11-23T03:23:07.793281126Z
+  at: 2026-11-23T03:23:07.793281126Z
   status: 1
