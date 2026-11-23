@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-23T19:57:04.873350579Z
+modified_at: 2026-11-23T19:57:06.963767564Z
 req_type: Bug
 comments:
 - id: 01a209ea-ce0b-7581-b40a-6fbcbb2f8e9e
@@ -50,6 +50,11 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: design-fork: The scheduler calls synchronous reap_quiet, which exposes only a final count. Per-session progress, blocking probes and multi-step cleanup are internal to session_reap. A scheduler-only timeout cannot identify the active session or safely yield an in-flight mutation.. No triage reason was given.'
   created_at: 2026-11-23T19:57:04.873346618Z
   modified_at: 2026-11-23T19:57:04.873346618Z
+- id: 01a209fb-ce13-7b91-b1da-77bdd4e70355
+  author: joe
+  content: 'advisor-122 ruling 12:56: MAIN track, STRICT review, mode drive. Cooperative per-session deadline inside session_reap, checked between sessions only; partial result names the next unvisited session; reap decisions unchanged; tests: between-session deadline with no partial mutation, plus decision equivalence.'
+  created_at: 2026-11-23T19:57:06.963767564Z
+  modified_at: 2026-11-23T19:57:06.963767564Z
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
