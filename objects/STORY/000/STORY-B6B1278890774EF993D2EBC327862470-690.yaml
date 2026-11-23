@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:35:54.395394278Z
-modified_at: 2026-11-23T20:47:30.858449459Z
+modified_at: 2026-11-23T21:43:51.090616034Z
 req_type: Story
 tags:
 - mailbox
@@ -61,6 +61,13 @@ comments:
   modified_at: 2026-11-23T20:47:30.858449459Z
   session_id: 01a20a05ec1a
   harness_version: codex-cli 0.167.0
+- id: 01a20a5d-bf0b-7552-a3b8-ec70b639ee17
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 14:50): PR-4460 @ 84dfdac3a57 PASSES for slice 1 (AC1/F4; Refs, partial), with ONE judgment point for the advisor. Base integration; one commit ''[AI:codex] fix(mailbox): ... (Refs STORY-2767)''; +117/-9 (a 27-line production change in aida-core/src/mailbox_logical.rs::delivery_gates, plus a 98-line regression and one structural-exclusion line). It''s not on an ADR-76 strict path: mail visibility, no leases/claims/grants/containment/gate. AC1 is met: direct seat-addressed mail is now delivery-bearing, so retained-sidecar discovery applies (test: the sender worktree is removed, the retained sidecar keeps ''for the original cohort'' with the original reader, the successor doesn''t see it, and the successor''s binding read takes the queued ''for the next holder''). Missing sidecar is fail-closed (the ''missing sidecar'' message is hidden from both). JUDGMENT POINT: the PR is STRICTER than role keys. Role mail without a sidecar is hidden only while the sidecar search is incomplete (unsighted); after a complete search it''s served as legacy role mail. Seat mail without a sidecar is hidden ALWAYS. I checked that this can''t hide legacy mail: every seat: resolution yields a cohort (mailbox_resolver resolve_seat / queued_for_seat), so CLI (mailbox_cmd.rs:467) and MCP (mcp.rs:3118) seat sends always write a sidecar, and seat addressing (#4083, 11-15) postdates sidecars (#3042, 10-28). So only seat mail whose sidecar was genuinely lost becomes invisible, by design (better than misdelivering). Plain write_message senders never address seat:. Lane fast_gate=pass.'
+  created_at: 2026-11-23T21:43:51.090616034Z
+  modified_at: 2026-11-23T21:43:51.090616034Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e0f7-a8a4-7ca2-bd96-9443fc5daf0f
   author: joe
