@@ -12,11 +12,28 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:25:26.874188951Z
-modified_at: 2026-11-23T13:08:11.467460014Z
+modified_at: 2026-11-23T13:10:20.632539451Z
 req_type: Task
 tags:
 - from-work-ci
 - hygiene
+comments:
+- id: 01a20887-99f2-7941-873c-5277470f9202
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 06:10):
+    # TASK-3840: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3840` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3840 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3840)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    INTEGRATION BUNDLE (advisor-122 ruling 2026-11-23 06:10): this lane works on branch `int26-task-3840`, created from origin/integration 06b95f8a1e5. Your PR MUST target base `integration`, not main. The integration seat checks your head against this brief, the advisor merges it into integration, and it lands on main in promotion 26. Standard tier only: if the fix needs an ADR-76 strict path (leases, claims, grants, containment, gate/guard), STOP and punt naming it.
+  created_at: 2026-11-23T13:10:20.632539451Z
+  modified_at: 2026-11-23T13:10:20.632539451Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20885-6c4b-7c10-9c86-3824c13d73d1
   author: joe
