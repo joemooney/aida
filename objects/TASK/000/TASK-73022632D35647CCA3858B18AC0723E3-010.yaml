@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working STORY-2824.
   Branch: story-b6b1278890774ef993d2ebc327862470-747  ·  Commit: e9bb21309e  (PR link added on merge)
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T13:34:15.552196828Z
+modified_at: 2026-11-23T13:34:47.802882143Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -70,6 +70,11 @@ comments:
   created_at: 2026-11-23T13:22:53.917665229Z
   modified_at: 2026-11-23T13:22:53.917665229Z
   session_id: 01a20870e95b
+- id: 01a2089d-c7fa-7423-a3ac-44cb5bd3560e
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: Full-sweep review of TASK-3115 (TASK-73022632d35647cca3858b18ac0723e3-010). The generated worksheet has no formal Acceptance or Verify block. The two criteria below come from its cited requirement description, corroborated by the implementer self-review. The PR claims completion.. No triage reason was given.'
+  created_at: 2026-11-23T13:34:47.802874563Z
+  modified_at: 2026-11-23T13:34:47.802874563Z
 history:
 - id: 01a1db72-e217-7620-9b69-8b1ad0d07eee
   author: joe
@@ -114,6 +119,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a2089d-c7fa-7423-a3ac-44b99e8d4e92
+  author: joe
+  timestamp: 2026-11-23T13:34:47.802868110Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: e9bb21309e01c37cfe23a8261191309446adc0a0
   branch: story-b6b1278890774ef993d2ebc327862470-747
@@ -123,15 +135,3 @@ filed_at:
   vendor: claude
   session: 01a1db50989e
   harness_version: 2.1.319 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    Full-sweep review of TASK-3115 (TASK-73022632d35647cca3858b18ac0723e3-010). The generated worksheet has no formal Acceptance or Verify block. The two criteria below come from its cited requirement description, corroborated by the implementer self-review. The PR claims completion.
-    - AC1, evaluate active mandate coverage using train rules for held and supervised PRs: verified by the shared ship decision and by source inspection of the held and unheld admission comparisons in bug2406_train_tests.rs (with the implementer's reported before/after runs).
-    - AC2, evaluate coverage without evidence or other project writes: unverified (the source shows a reachable forge configuration write even though the preview suppresses exclusion and carry-over recording).
-    Reviewed every file in the pinned landed diff. The report also regresses the command's deadline and evidence classification, and the changed gate caller lacks a write-sensitive regression. CI fast gates and merge-hold gate passed. Fast compile was pending at review time. No local tests were run.
-  recovery_hint: address the review findings, move TASK-3115 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T13:34:15.552196828Z
