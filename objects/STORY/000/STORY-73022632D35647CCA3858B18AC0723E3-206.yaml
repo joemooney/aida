@@ -1,0 +1,32 @@
+id: 01a20663-0bb2-74d2-be77-41c01c56b7d5
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-206
+title: 'Review PR-4402: [AI:codex] fix(agent): bind launch recovery to attempt identity (BUG-2721)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2063b`) for branch `bug-b6b1278890774ef993d2ebc327862470-482`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4402>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-482` → `main`
+
+  ## Covers
+
+  - BUG-2721
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4402` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T03:11:24.082457223Z
+modified_at: 2026-11-23T03:11:24.082457223Z
+req_type: Story
+filed_at:
+  code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 215313b8d3
+  session: 01a2063bce96
