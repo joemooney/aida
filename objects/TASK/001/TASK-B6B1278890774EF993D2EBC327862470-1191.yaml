@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   aida-cli-lib/src/review_watch_pause.rs:247-251 with aida-cli-lib/src/gate/test_support.rs:171-179: human_operator requires both stdin and stderr to be terminals, but AmbientGuard::set_terminal switches stdin, stdout and stderr together, so no test distinguishes the two checks (removing either one leaves every test passing). The documented refusals are tested for drain, resume and pause: no terminal at all, an agent identity or session id or headless marker, and a seated session without a grant. Add a case with only one of the two streams a terminal so the conjunction is pinned.
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.943423106Z
-modified_at: 2026-11-23T11:22:34.628582161Z
+modified_at: 2026-11-23T11:28:59.042855852Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -49,6 +49,13 @@ history:
   author: joe
   timestamp: 2026-11-22T20:32:39.574126150Z
   changes: []
+- id: 01a2082a-98a2-7061-aa23-0706e8d0cb3e
+  author: aida-session-start
+  timestamp: 2026-11-23T11:28:59.042853859Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
