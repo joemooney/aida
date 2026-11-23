@@ -1,0 +1,31 @@
+id: 01a2081b-8efb-7020-9c11-ec6e1d96d09e
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1248
+title: 'Review follow-up: aida-cli-lib/src/gate/mandate_ship.rs:689-709. The production collector now rejects every '
+description: |-
+  From BUG-2727
+  Reviewed sha: f27ab17356dd9ce6e2b72a4eef782b5cb2d531f2
+
+  aida-cli-lib/src/gate/mandate_ship.rs:689-709. The production collector now rejects every dirty object and any HEAD advance before the scoped stability rule can accept unrelated activity. This reintroduces BUG-2647's fleet-write refusal at the final train gate and discards the existing allowance for unrelated committed changes. Keep the full coverage inputs stable while excluding unrelated evidence from the retry condition, or hold a coherent store read across the collection. Exercise unrelated object writes through the collector instead of only testing the isolated snapshot predicate.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T11:12:33.531333510Z
+modified_at: 2026-11-23T11:12:33.531333510Z
+req_type: Task
+tags:
+- carried-from:BUG-2727
+- finding-hash:312f7435
+- from-review:BUG-2727
+relationships:
+- rel_type: References
+  target_id: 01a20737-9b05-7ee3-a52c-b8319d3e0e34
+  created_at: 2026-11-23T11:12:47.032560868Z
+filed_at:
+  code_sha: f27ab17356dd9ce6e2b72a4eef782b5cb2d531f2
+  branch: pr-4419
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 55f63f38008
+  vendor: claude
+  session: 01a208161029
