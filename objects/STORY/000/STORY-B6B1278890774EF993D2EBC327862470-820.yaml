@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T21:30:18.297783321Z
+modified_at: 2026-11-23T21:59:06.232718171Z
 req_type: Story
 tags:
 - autonomy
@@ -122,6 +122,18 @@ comments:
   modified_at: 2026-11-23T20:42:30.921732267Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a6b-8468-7511-8194-42c9c88215a4
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 9791cd51762e45e720ac761ca68b7930c4d90014 plus the native lane working diff. Reviewed origin/main...HEAD and untracked additions (none).
+    AC1: [evidence: behavioral-test] The publication writer records Approved to Done. The train and direct-ship policy fixture checks continued eligibility, a role_cmd.rs change, removal of the small tag, Planned to Done, and disappearance of a previously admitted spec. Direct ship rechecks under the merge lease after the final wait at pr_cmd/mod.rs:2035.
+    AC2: [evidence: behavioral-test] The unset-mode matrix in story_2884_unset_mode_tests.rs:570 covers off/on, explicit Guided, strict tags, unknown paths, and a Shift-key title. Initial targeted run passed all 16. Configuration guide and regenerated showcase agree on drain_types. FAST identified a test-layer dependency, so the publication regression now lives in story_1690_train_tests.rs and reads changed paths from Git. The dependency ratchet passes against origin/main.
+    Probe findings: path comparisons use repository components, malformed unused drain_types is ignored only outside drain mode, missing current records refuse, and the same SHA cannot preserve a removed small tag. Residual risk: new authority surfaces require maintenance of the explicit path inventory. The native host owns the publication commit.
+  created_at: 2026-11-23T21:59:06.232718171Z
+  modified_at: 2026-11-23T21:59:06.232718171Z
+  session_id: 01a20a50c62f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
