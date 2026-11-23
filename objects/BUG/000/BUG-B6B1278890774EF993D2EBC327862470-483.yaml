@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728Z
-modified_at: 2026-11-23T10:40:20.984302525Z
+modified_at: 2026-11-23T10:40:37.326986799Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -259,6 +259,19 @@ comments:
   modified_at: 2026-11-23T07:16:15.478687Z
   session_id: 01a2073bf4a4
   harness_version: codex-cli 0.167.0
+- id: 01a207fe-86af-7d41-93b7-02bbab0fbab4
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 03:40):
+    # BUG-2722 / PR #4403: TINY CI-FIX lane (advisor-122 ruling 2026-11-23 03:48 MST; relayed by product-15). Lane: CODEX. FIRST priority: critical path for #4376 and #4401. Test-only/mechanical.
+
+    #4403 is APPROVED, but full CI at cb4bc39 is RED: CI (gates) "Live bwrap OS-wrap confinement gate" fails with "only 56 of 55 live bwrap tests ran ok" (run 45147180234). .github/workflows/ci.yml:723-736 computes EXPECTED by grepping `fn (bug_2169|task_2053|…)_bwrap_…` in aida-cli-lib/src plus the presenter test, and RAN from the libtest results. So ONE test now runs under a bwrap prefix, but its `fn` isn't found by that grep (likely a test new in this PR whose name starts with one of those prefixes but is macro-generated, defined outside the grepped paths, or doesn't match the literal `fn name` pattern).
+    Fix: reproduce the gate's two lists locally exactly as ci.yml builds them, find the extra test with `comm -13 expected ran`, then EITHER make it greppable (a literal `fn <name>` under aida-cli-lib/src) OR rename it out of the prefix set. Do NOT touch the gate's logic in ci.yml. Make no other changes.
+    `make check-ci-fast`, then push on the existing branch. In the PR body, say what the extra test was and which fix you chose. COMMIT your work.
+  created_at: 2026-11-23T10:40:37.326986799Z
+  modified_at: 2026-11-23T10:40:37.326986799Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
