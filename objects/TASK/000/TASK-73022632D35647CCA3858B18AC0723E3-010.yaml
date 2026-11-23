@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working STORY-2824.
   Branch: story-b6b1278890774ef993d2ebc327862470-747  ·  Commit: e9bb21309e  (PR link added on merge)
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T12:40:53.145518467Z
+modified_at: 2026-11-23T12:45:59.401327141Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -56,6 +56,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a20871-18e9-7ce0-a3f4-aac3604033b3
+  author: aida-session-start
+  timestamp: 2026-11-23T12:45:59.401325353Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: e9bb21309e01c37cfe23a8261191309446adc0a0
   branch: story-b6b1278890774ef993d2ebc327862470-747
