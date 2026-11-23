@@ -7,18 +7,17 @@ description: |
 
   Raised by the implementer while working BUG-2587.
   Branch: bug-b6b1278890774ef993d2ebc327862470-352  ·  Commit: d5a6c3a62c  (PR link added on merge)
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:18:12.614142Z
-modified_at: 2026-11-23T17:32:41.833577493Z
+modified_at: 2026-11-23T19:32:29.406399476Z
 req_type: Task
 tags:
 - from-implementer:BUG-2587
 - kind:bug-spotted
 - severity:minor
-- track:integration
 relationships:
 - rel_type:
     custom: implemented-by
@@ -161,6 +160,22 @@ history:
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
   changes: []
+- id: 01a209e5-4215-7f02-af6b-e4b5db4a25b3
+  author: aida-auto-bump
+  timestamp: 2026-11-23T19:32:29.333504635Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a209e5-425e-7a32-93e5-8df7885e0ca8
+  timestamp: 2026-11-23T19:32:29.406395259Z
+  agent: aida
+  commit_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
+  summary: 'Advisor re-approval of promotion 26 after the linear rebuild: 2dbaac35 is exactly 3 cherry-picked commits (079b7da8cc4 TASK-3122, 1a99806b290 BUG-2592, 2dbaac350dd BUG-2700) on main ef906ec7464, with no integration history. The diff from that base has the same stable patch-id 5237a1c0 as the e65378fe content the advisor approved (and as the three individually reviewed integration squashes). Main has since advanced by one unrelated commit (88d5e179851); the train merges it.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: d5a6c3a62c8c2fc22ff68d224530cd2f88a05c34
@@ -171,3 +186,7 @@ filed_at:
   vendor: claude
   session: 01a1dbd7ade0
   harness_version: 2.1.319 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T19:32:29.333496205Z
+  completion_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
