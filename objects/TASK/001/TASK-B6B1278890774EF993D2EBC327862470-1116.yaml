@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-23T20:39:26.559179790Z
+modified_at: 2026-11-23T20:41:57.319248237Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -129,6 +129,27 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T20:39:26.412150166Z
   modified_at: 2026-11-23T20:39:26.412150166Z
+- id: 01a20a25-0ff1-7050-b0cf-30f801d40eff
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:41):
+    # TASK-3155 / PR #4443 rework (advisor-122 ruling 2026-11-23 13:42; relayed by product-15). Lane: CODEX. SMALL; scoped to the BLOCKING findings.
+
+    ADVISOR RULING: Fix all 3 blockers.
+
+    CR at 88676489. Fix each BLOCKING finding with a test that fails if the fix is removed. Leave deferred/non-blocking findings alone.
+
+    - [minor] TASK-b6b1278890774ef993d2ebc327862470-1116.ac26a714 — aida-cli-lib/src/lane_disk_deferral.rs:66-76: Splitting the entire note and dropping whitespace-only segments changes unrelated text. For example, an existing note 'ops ·  · later' becomes 'ops · later' after stripping the new marker. Preserve the unrelated note bytes while replacing a recognized marker and cover a note with consecutive separators.
+
+    - [major] TASK-b6b1278890774ef993d2ebc327862470-1116.ac26a714 — aida-core/src/db/git_backend.rs:3364-3367: The update resolves an already-discovered persisted owner as an alias again. With two existing queue files whose owners are subsequently linked, resolve_queue_user returns the first alias match it encounters (lines 435-452), even when the exact named file comes later. Both iterations can update the first file and miss the matching row in the second. Carry the exact file identity through the locked update and exercise persisted alias sibling queues.
+
+    - [major] TASK-b6b1278890774ef993d2ebc327862470-1116.acedb911 — aida-cli-lib/src/lane_disk_deferral.rs:174-198: The regression applies the edit and removal after discovering owner names, before annotation reads any queue row. A regression that lists the current rows inside annotate_selected, then writes those snapshots back with queue_add, would still pass every assertion. Make the fixture contend at the row read/write boundary and demonstrate that an unlocked snapshot/upsert path fails while the current edit survives and the removed row remains absent.
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: these findings plus the diff.
+  created_at: 2026-11-23T20:41:57.319248237Z
+  modified_at: 2026-11-23T20:41:57.319248237Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f2f2-2680-7612-be8c-5bbed93131af
   author: joe
