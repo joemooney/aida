@@ -19,11 +19,12 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-17T17:55:38.467134Z
-modified_at: 2026-11-23T02:09:22.747103912Z
+modified_at: 2026-11-23T02:10:12.558965826Z
 req_type: Bug
 tags:
 - from-advisor:BUG-2564
 - linked:BUG-2564
+- operator-held
 relationships:
 - rel_type:
     custom: implemented-by
@@ -888,6 +889,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2062b-062b-7a50-a36b-de144d9a748c
+  author: joe
+  timestamp: 2026-11-23T02:10:12.651603758Z
+  changes: []
+deferred: true
+deferred_at: 2026-11-23T02:10:12.558965826Z
+deferred_until: date:2026-12-15
+deferred_reason: needs a sketched recorder write-path redesign
 execution_mode: drain
 filed_at:
   code_sha: 10e85b9e277e9fd087b922c0979e17161b7923a2
