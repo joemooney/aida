@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T11:13:34.391985546Z
+modified_at: 2026-11-23T11:13:38.303834154Z
 req_type: Bug
 tags:
 - agreed-id
@@ -151,6 +151,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T11:13:34.234451881Z
   modified_at: 2026-11-23T11:13:34.234451881Z
+- id: 01a2081c-c18d-7270-ab36-27da6648b29b
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 04:13):
+    # BUG-2727 / PR #4419 r3, round 3 of 4 (advisor-122 ruling 2026-11-23 04:16 MST; relayed by product-15). Lane: CODEX. TARGET <=40 changed lines net of the revert.
+
+    CR at f27ab173 (r2). The PR GREW to +361/-209 despite the <=120 scope cut, and it REGRESSED: the read-only preview now pulls and rebases the canonical store, and BUG-2647's fleet-write refusal is back. Fixing this inside the mandate collector doesn't converge. RULING:
+    1. REVERT every change to gate/mandate_ship.rs, mandate_traces.rs and the pr_train.rs coverage ordering BACK TO MAIN (`git checkout origin/main -- <files>`, then re-check the diff).
+    2. The ONLY change: at the START of a REAL (non-dry-run, non-preview) train pass, BEFORE coverage and the mandate call, run the normal bounded store refresh (the same function `aida pull` / `aida db sync --pull` uses, with a timeout). On failure, log it and continue with the local store (no change to refusals). The cause of #4414 was a STALE local store, not the resolver.
+    Tests: a train fixture where the trailer label exists only on origin/aida-store resolves after the pre-pass refresh; and dry-run/preview never writes the store.
+    The reviewer scope is the revert plus the refresh hook. A blocking CR after this parks the PR.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T11:13:38.303834154Z
+  modified_at: 2026-11-23T11:13:38.303834154Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
