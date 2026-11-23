@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-23T05:23:21.673580582Z
+modified_at: 2026-11-23T05:23:25.781372426Z
 req_type: Bug
 tags:
 - containment
@@ -137,6 +137,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T05:23:21.487189857Z
   modified_at: 2026-11-23T05:23:21.487189857Z
+- id: 01a206dc-21f9-7b03-8f26-d0071e379e86
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:23):
+    # BUG-2717 / PR #4398 r3: TEST-ONLY (advisor-122 ruling 2026-11-22 22:31 MST; relayed by product-15). Lane: CODEX. Small.
+
+    CR at 08c0bc45 (r2). The reviewer ACCEPTS both fixes (the receive is bounded across a listener hangup, and the hangup is reported when the wrapper's exit is also observable). ONE finding remains, a [mutation-kill], which blocks because containment is ADR-76 strict: the open-listener positive control (contained_host.py:457 / tests/test_store_mutation.py:816) stubs broker_connect_contained with `service`, so the REAL function is never exercised.
+    Fix, TEST-ONLY: drive the REAL broker_connect_contained in the positive control, with a stub listener at the fd level only, so that mutating its receive path FAILS the test. No production code changes.
+    The reviewer scope is that test plus the diff.
+    One targeted pytest run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T05:23:25.781372426Z
+  modified_at: 2026-11-23T05:23:25.781372426Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2052b-ec01-7e52-b8ec-fc4cd8951a76
   author: joe
