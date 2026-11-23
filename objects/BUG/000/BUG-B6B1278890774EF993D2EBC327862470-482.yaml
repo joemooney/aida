@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T04:19:25.064728413Z
+modified_at: 2026-11-23T04:29:13.952087270Z
 req_type: Bug
 tags:
 - recovery
@@ -127,6 +127,13 @@ comments:
   content: Round-two validation update for working changes over 81a84bab0748. The final BUG-2721 lane run passed both tests (j20261123T041336209-14-0). The final structural guard run passed all 51 tests (j20261123T041421883-64-0). The fixture uses the repository executable writer, executable resolver and environment snapshot. The new UUID is classified as an operation-local environment input, and the writer inventory follows the actual receipt rename. The no-build guard in make check-ci-fast refuses the native launcher invocation during its Cargo step. Running the Rust ratchets through lane jobs separately.
   created_at: 2026-11-23T04:19:25.064728413Z
   modified_at: 2026-11-23T04:19:25.064728413Z
+  session_id: 01a2067395e9
+  harness_version: codex-cli 0.167.0
+- id: 01a206aa-4ea9-7fe1-88dc-1d3ccc92f835
+  author: dirtlab
+  content: 'Final validation: all 143 selected Rust ratchet tests passed through the native lane runner. The complete manual verifier passed against the freshly built CLI in the lane overlay, covering 85 commands, 14 interface-change specifications, subcommands and flags. The aggregate make command itself exited nonzero at the no-build gate because the lane uses aida to launch Cargo. Its Rust structural checks and downstream ratchets were run separately. Native completion declaration recorded for host publication.'
+  created_at: 2026-11-23T04:29:13.952087270Z
+  modified_at: 2026-11-23T04:29:13.952087270Z
   session_id: 01a2067395e9
   harness_version: codex-cli 0.167.0
 history:
