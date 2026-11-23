@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-23T01:35:55.826128882Z
+modified_at: 2026-11-23T01:43:52.795634795Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -659,6 +659,11 @@ comments:
   modified_at: 2026-11-23T00:48:18.408753878Z
   session_id: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+- id: 01a20612-eadb-7900-89ad-478096907c7c
+  author: joe
+  content: 'Product: r3 queued per advisor-122 18:42. It absorbs TASK-3838; brief .aida/tmp/brief-TASK-3133-r3-1845.md. Evidence that drove it: the dell1-host required-live run at f41a18b0 (FORCE_BUILD, REQUIRE_CODEX_SANDBOX_LIVE, REQUIRE_BWRAP_LIVE, AIDA_TEST_AIDA_BIN = aida built at f41a18b09f) ran exactly 1 test, which FAILED at bug_2169_contained_clone_bwrap_tests.rs:2276: Codex :workspace denied the /var/tmp extra writable root (Read-only file system).'
+  created_at: 2026-11-23T01:43:52.795634795Z
+  modified_at: 2026-11-23T01:43:52.795634795Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
