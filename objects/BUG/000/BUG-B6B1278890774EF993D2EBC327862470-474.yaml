@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-23T08:28:09.656815646Z
+modified_at: 2026-11-23T08:28:15.606953688Z
 req_type: Bug
 tags:
 - hygiene
@@ -80,6 +80,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T08:28:09.482165774Z
   modified_at: 2026-11-23T08:28:09.482165774Z
+- id: 01a20785-5671-77d2-9858-6ac8dce493a6
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 01:28):
+    # BUG-2713 / PR #4416 r2 (advisor-122 ruling 2026-11-23 01:30 MST; relayed by product-15). Lane: CODEX. SMALL.
+
+    CR at 071f6ade (r1, +71 lines, 3 files). Both findings ARE the bug's core (naming the dirty paths), so don't defer them even under mass-change. Fix both; the reviewer scope is the two plus the diff.
+    1. session_end.rs:1189: route Probe::Unknown through the SAME formatter, and collapse embedded newlines from git stderr (seat_clone.rs:1504 / :2110) into one line.
+    2. git_ops.rs:4826-4829 / :5046-5051: the status call must list INDIVIDUAL untracked and dirty paths (`--untracked-files=all`, porcelain -z), so the refusal names EVERY file. Add a test against the -658 seat shape, and include the DU.txt-style untracked-only case.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T08:28:15.606953688Z
+  modified_at: 2026-11-23T08:28:15.606953688Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2073c-6e5f-7031-b70d-e97f0123548f
   author: aida-session-start
