@@ -10,12 +10,12 @@ description: |
   - AC2: When the train refuses on a check-run, it names the run id and whether that run was cancelled or superseded.
   - AC3: A regression test: a head with a cancelled fast run (failed aggregate) plus a later successful full run is ready.
   - AC4: Docs or CLI note: after `gh pr update-branch`, wait for its FAST run to finish before removing and re-adding ci:full (interim rule).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T05:23:40.711376334Z
+modified_at: 2026-11-23T05:35:37.099278384Z
 req_type: Bug
 tags:
 - ci
@@ -162,6 +162,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a206e7-1740-7410-8b1a-47969a741a94
+  author: dirtlab
+  timestamp: 2026-11-23T05:35:37.792745204Z
+  session_id: 01a206dbce35
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -169,3 +178,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 215313b8d3a
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: Disputing finding 3 cross-tier retirement and stored AC3 under the advisor ruling. At one head, FAST run 10 cancelled with a failed Build and FULL run 11 passed, with no second FAST. AC3 explicitly requires ready. The ruling keeps the latest run of each workflow+tier and says cancellation without a newer same-tier run is CANCELLED, so this same head must block. The existing bug2723_train_replaces_cancelled_fast_only_with_verified_full fixture requires Green. Resolve this two-run case for all three landing gates.
+  lean: Use the advisor same-tier-only rule and revise AC1, AC3 and the two-run expectation. Keep the three-run rerun case as the ready regression.
+  raised_by: implementer
+  raised_at: 2026-11-23T05:35:37.099278384Z
