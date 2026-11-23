@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. Make disk-floor annotation update the current queue entry's note while preserving its order, owner, routing, and any unrelated note text added by another writer. Replace the prior disk-floor marker if present.
   2. Add a deterministic regression for an interleaved edit and removal. The edit survives annotation, and a removed row stays absent. Requirements without an existing queue entry acquire none.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-23T20:41:57.319248237Z
+modified_at: 2026-11-23T21:20:04.402208754Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -240,6 +240,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20a47-c132-7b93-93be-51cc03cadc59
+  author: aida-session-start
+  timestamp: 2026-11-23T21:20:04.402206594Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
