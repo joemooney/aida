@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T05:17:28.146835928Z
+modified_at: 2026-11-23T05:17:34.955513529Z
 req_type: Bug
 tags:
 - ci
@@ -92,6 +92,27 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T05:17:27.948746507Z
   modified_at: 2026-11-23T05:17:27.948746507Z
+- id: 01a206d6-eafd-7620-8b34-c5d227f2fecf
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:17):
+    # BUG-2723 / PR #4408 r2 (advisor-122 ruling 2026-11-22 22:28 MST; relayed by product-15). Lane: CODEX. Landing gate, so strict.
+
+    CR at r1 (+209 lines, 4 files). The design is the problem: `gh pr checks` is a per-NAME view that hides superseded runs (p1, :846). RULING: ONE shared helper `latest_runs_at(head)`:
+    - It reads the Actions RUNS API for the head SHA: `repos/{o}/{r}/actions/runs?head_sha=<40-hex>`.
+    - Per (workflow path, tier), it keeps the run with the highest run_number/attempt, completed or in progress. Judge ONLY that run's jobs.
+    - A cancelled run counts as SUPERSEDED only if a newer run of the same workflow+tier exists. Otherwise it's CANCELLED, not success.
+    - Use it in ALL THREE evaluators: pr_train.rs, land.rs summarize_github_rollup, pr_train_verified.rs.
+    - Refusal text names the run id, attempt, tier and conclusion (no "supersession unproven" when both runs are identified).
+    - Forge, journal or JSON errors are ERRORS (refuse with the cause), never `.ok()?` → a stale green or red.
+    Tests: full 40-hex SHAs; the #4391 shape (a cancelled FAST, a passing FULL, a rerun FAST); two failures of the same tier; a different workflow sharing job names; the AC4 doc assertion.
+    NOTE: BUG-2725 (#4407) clean-merge also reads FULL evidence. 2723 lands first, and 2725 will reuse this helper. Keep it public within the crate.
+    The reviewer scope is these plus the diff. Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T05:17:34.955513529Z
+  modified_at: 2026-11-23T05:17:34.955513529Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
