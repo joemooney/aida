@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   aida-cli-lib/src/admission_owner.rs tests: three new tests depend on sub-second scheduling margins and can fail on a loaded full-suite shard. bug2703_one_second_bound_acquires_a_holder_released_after_registration requires the whole acquisition inside a 1 s bound after a helper thread polls for the intent, sleeps 150 ms and drops the claim; bug2703_registration_wait_does_not_extend_the_bound relies on 300 ms and 500 ms windows around a 3 s deadline; bug2703_one_second_bound_refusal_names_the_current_holder shares the 1 s bound. The CI run at this head was the fast tier (test shards skipped), so none of these has run in CI yet. Widen the margins (a longer bound with the same proportions) or make the handoff event-driven.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.702364545Z
-modified_at: 2026-11-23T08:52:20.955170304Z
+modified_at: 2026-11-23T09:37:41.688604912Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -48,6 +48,12 @@ comments:
   modified_at: 2026-11-23T08:52:20.955170304Z
   session_id: 01a2078e7236
   harness_version: codex-cli 0.167.0
+- id: 01a207c4-b538-77a2-aa75-74e49fd61c76
+  author: aida-publication-done
+  content: Implementer push d7b559f9c47a declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T09:37:41.688604207Z
+  modified_at: 2026-11-23T09:37:41.688604207Z
+  session_id: 01a2078e7236
 history:
 - id: 01a1fcf0-ccab-7c51-aaa4-eaba556471cb
   author: joe
@@ -73,6 +79,14 @@ history:
   session_id: 01a2078e7236
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a207c4-b538-77a2-aa75-74d58b07ce03
+  author: aida-publication-done
+  timestamp: 2026-11-23T09:37:41.688601543Z
+  session_id: 01a2078e7236
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
