@@ -1,5 +1,6 @@
 id: 01a206e8-327b-79e3-9629-cfabdfd37c4f
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-210
+agreed_id: STORY-3019
 title: 'Review PR-4409: [AI:codex] fix(rework): keep the pickup base merge local (BUG-2726)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a206b1`) for branch `bug-b6b1278890774ef993d2ebc327862470-487`.
@@ -38,6 +39,12 @@ history:
 - id: 01a206e9-9370-7990-8f86-da0710d95414
   author: joe
   timestamp: 2026-11-23T05:38:20.656992590Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
+- id: 01a2071d-2527-71b3-9429-716851c2bd81
+  author: joe
+  timestamp: 2026-11-23T06:34:40.295393077Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
   changes: []

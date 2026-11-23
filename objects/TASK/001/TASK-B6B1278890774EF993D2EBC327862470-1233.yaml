@@ -1,5 +1,6 @@
 id: 01a206ff-ad3e-77a3-86f4-acb04f82eb39
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1233
+agreed_id: TASK-3264
 title: 'Review follow-up: aida-cli-lib/src/review_watch_ready.rs:140: The exception applies to GitLab MRs targeting '
 description: |-
   From BUG-2725
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20677-5d2f-7d72-a29f-a485e55633df
   created_at: 2026-11-23T06:03:05.017336686Z
+history:
+- id: 01a2071c-2118-7011-8455-82549f8f9acd
+  author: joe
+  timestamp: 2026-11-23T06:33:33.720676852Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: c7354092b2ad3ec5567007143150cf75bf8036d4
   branch: pr-4407

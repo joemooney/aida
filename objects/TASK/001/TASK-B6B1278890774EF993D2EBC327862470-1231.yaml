@@ -1,5 +1,6 @@
 id: 01a206f4-eb5a-7462-8084-b55c7cc96157
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1231
+agreed_id: TASK-3266
 title: 'Review follow-up: BUG-2723 AC4 coverage, docs/internal/testing/ci-test-shards.md:39. The docs include the re'
 description: |-
   From BUG-2723
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20665-c8ff-7311-969e-f9d8ec1451a1
   created_at: 2026-11-23T05:51:24.371419797Z
+history:
+- id: 01a2071c-8b66-75f2-98fd-ab422d5a332a
+  author: joe
+  timestamp: 2026-11-23T06:34:00.934297739Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: d8e61bb30d20e8750e32b7ba4f3f383ab5152fd1
   branch: pr-4408

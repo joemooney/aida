@@ -1,5 +1,6 @@
 id: 01a2070c-3848-77b3-a71b-3a833c703f82
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1234
+agreed_id: TASK-3265
 title: 'Review follow-up: doctor_cmd.rs:490 and :2038–2041. An unfiltered doctor holds the permanent journal lock wh'
 description: |-
   From BUG-2722
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20637-3865-75e2-add6-0c87270d0c56
   created_at: 2026-11-23T06:16:48.568487008Z
+history:
+- id: 01a2071c-570a-7b12-b4ee-a42a93f8db81
+  author: joe
+  timestamp: 2026-11-23T06:33:47.530650637Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 6ddf368bc30d2de62c6f025816880b1d0ba219c5
   branch: pr-4403

@@ -1,5 +1,6 @@
 id: 01a20713-249c-7023-b978-c5bc7497fe42
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-211
+agreed_id: STORY-3018
 title: 'Review PR-4411: [AI:codex] fix(merge-hold): resolve change-keyed rework approvals (Refs BUG-2718)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a206d3`) for branch `bug-b6b1278890774ef993d2ebc327862470-479`.
@@ -36,6 +37,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T06:24:01.631327790Z
   session_id: 01a206d3e491
+  changes: []
+- id: 01a2071c-f31f-7952-8cb3-b67411d34ccf
+  author: joe
+  timestamp: 2026-11-23T06:34:27.487960615Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ca95624cadfe896abf34e36cde0e98ad40c847e8
