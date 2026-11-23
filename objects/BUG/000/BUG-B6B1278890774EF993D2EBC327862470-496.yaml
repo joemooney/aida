@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-23T22:13:36.325003739Z
+modified_at: 2026-11-23T22:15:26.193124800Z
 req_type: Bug
 tags:
 - forge
@@ -31,6 +31,19 @@ comments:
   content: 'advisor-122 ruling 15:13: MAIN, strict review, mode drive. Scope = AC1 only (shared cached rate_limit check, non-train pollers back off below 20%, train CI reads keep priority). AC2 split to a standard-tier follow-up.'
   created_at: 2026-11-23T22:13:36.325003739Z
   modified_at: 2026-11-23T22:13:36.325003739Z
+- id: 01a20a7a-a5bd-75f2-96e0-a65f9179ae58
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 15:15):
+    # BUG-2735: GitHub core-budget back-off (advisor-122 ruling 2026-11-23 15:13; product-15). Lane: CODEX. Track: MAIN. STRICT review (landing-loop forge polling). Mode drive. New branch, new PR. SMALL.
+
+    AC1 ONLY: one SHARED budget check via `gh api rate_limit`, cached ~60s. Below 20% remaining, NON-train pollers (review-watch discovery, main-watch, other watchers) BACK OFF, while TRAIN CI reads (the landing path) keep priority. The back-off is reported (a log/status line), not silent. Test with a fake rate_limit below the threshold: a watcher backs off and the train CI read still proceeds.
+    OUT OF SCOPE: showing the budget in doctor/land status (split to a follow-up spec).
+    <=300 changed lines. Add `// trace:BUG-2735 | ai:codex`. Commit `[AI:codex] fix(...): ... (BUG-2735)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T22:15:26.193124800Z
+  modified_at: 2026-11-23T22:15:26.193124800Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
