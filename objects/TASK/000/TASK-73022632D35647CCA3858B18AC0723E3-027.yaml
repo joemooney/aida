@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-23T05:22:17.630859541Z
+modified_at: 2026-11-23T05:23:24.060531824Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -743,6 +743,13 @@ comments:
   content: 'MAIN evidence (product-15, 2026-11-22 22:21 MST), for advisor-122''s 21:52 decision: the exact required-live command at MAIN tip 5470336db35 on imac (aida built at 5470336db35) ran 1 test and FAILED the SAME way at bug_2169_contained_clone_bwrap_tests.rs:2213: ''Codex :workspace denied a configured extra writable root: cannot create .../target/worktrees/evidence-main-5470336db35/bug-2169-bwrap/fx-XXXX/codex-control-extra/probe: Read-only file system''. Main''s target/worktrees placement fails too, so #4387 does not regress live coverage. It''s a Codex tool/host gap: the ''fails on main'' branch applies (waive the live requirement for #4387; follow-up spec filed).'
   created_at: 2026-11-23T05:22:17.630859541Z
   modified_at: 2026-11-23T05:22:17.630859541Z
+- id: 01a206dc-1901-7101-a7c8-d3e31079818a
+  author: joe
+  content: 'ADVISOR RULING 2026-11-22 22:30 MST: LIVE REQUIREMENT WAIVED for #4387. Decisive fact (product, 22:24): the exact required-live command for task_2712_codex_sandbox_live_seat_commit_and_denials FAILS THE SAME WAY ON MAIN 5470336db35 (imac): Codex :workspace denies a configured extra writable root even under target/worktrees. So the installed Codex ignores --add-dir extra roots at any location. That''s a tool/host gap, not a regression from #4387. Reviewer of 58cb2188: judge the code and the rest of the suite. The live test''s preflight SKIP for ''Codex :workspace denied a configured extra writable root'' is the accepted outcome on current hosts; do not request required-live evidence. The live-control gap is tracked by the new needs-host-repro spec (''Find a Codex :workspace config that honours extra writable roots, or replace the TASK-2712 live control'').'
+  created_at: 2026-11-23T05:23:24.060531824Z
+  modified_at: 2026-11-23T05:23:24.060531824Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
