@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1fb83-8b0b-7491-b154-6bd8598e48f6
+  position: -1031000
+  added_by: role:implementer
+  added_at: 2026-11-23T08:06:19.155720360Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1f2e4-2e49-7053-b35a-0d432f76ac3c
   position: -1030000
   added_by: role:implementer
@@ -307,14 +313,6 @@
   added_by: role:implementer
   note: Preserve busy and refusal evidence on a whole-watcher stop. Implement and test the pass sequence in the spec against the current watcher.
   added_at: 2026-11-21T07:06:47.361295807Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1fb83-8b0b-7491-b154-6bd8598e48f6
-  position: 629000
-  added_by: role:implementer
-  note: Inventory the existing admission.wait_secs branch-local reader as policy in scripts/config-trust.toml. Do not change its runtime semantics.
-  added_at: 2026-11-21T07:07:03.628070320Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
