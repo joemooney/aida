@@ -164,6 +164,19 @@ impl AmbientGuard {
     pub(crate) fn unset_key(&mut self, key: &'static str) {
         self._env.unset_key(key);
     }
+
+    /// Pin stdin, stdout and stderr to "a terminal" (or back to "not one")
+    /// for the rest of this guard: the positive control of a
+    /// human-at-a-terminal check. Hermetic contexts start without one.
+    // trace:BUG-2703 | ai:claude
+    pub(crate) fn set_terminal(&mut self, terminal: bool) {
+        let mut ambient =
+            crate::test_ambient::replace(None).expect("the guard pinned an ambient context");
+        ambient.stdin_is_terminal = terminal;
+        ambient.stdout_is_terminal = terminal;
+        ambient.stderr_is_terminal = terminal;
+        crate::test_ambient::replace(Some(ambient));
+    }
 }
 
 impl Drop for AmbientGuard {

@@ -2337,12 +2337,34 @@ fn landing_github_call(
     }
 }
 
+// trace:BUG-2711 | ai:codex
+pub(crate) fn landing_ci_args<'a>(
+    root: &Path,
+    repo: &crate::review_watch::forge::Repository,
+    path: &'a str,
+) -> Vec<&'a str> {
+    const FLAG: &str = "--allow-escape-sequences";
+    static SUPPORTS_FLAG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    if *SUPPORTS_FLAG.get_or_init(|| {
+        landing_github_call(root, repo, &["api", "--help"]).is_ok_and(|out| {
+            out.status.success()
+                && String::from_utf8_lossy(&out.stdout)
+                    .split_whitespace()
+                    .any(|word| word.split(['[', '=']).next() == Some(FLAG))
+        })
+    }) {
+        vec!["api", FLAG, path]
+    } else {
+        vec!["api", path]
+    }
+}
+
 pub(crate) fn landing_ci_api(
     root: &Path,
     repo: &crate::review_watch::forge::Repository,
     path: &str,
 ) -> Result<Vec<u8>> {
-    let out = landing_github_call(root, repo, &["api", "--allow-escape-sequences", path])
+    let out = landing_github_call(root, repo, &landing_ci_args(root, repo, path))
         .with_context(|| format!("reading {path}"))?;
     anyhow::ensure!(
         out.status.success(),
