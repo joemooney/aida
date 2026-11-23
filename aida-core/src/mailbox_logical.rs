@@ -394,6 +394,7 @@ impl ResolvedAudience {
 // Private policy input shared by own-reader and diagnostic paths. This type
 // cannot be passed to ACK, binding, or any identity constructor.
 struct PolicySubject<'a> {
+    inspect_all_seat_sidecars: bool,
     private: &'a [String],
     human: &'a [String],
     shared: &'a [String],
@@ -403,6 +404,7 @@ struct PolicySubject<'a> {
 impl<'a> PolicySubject<'a> {
     fn own(a: &'a ResolvedAudience) -> Self {
         Self {
+            inspect_all_seat_sidecars: false,
             private: &a.private,
             human: &a.human,
             shared: &a.shared,
@@ -463,16 +465,22 @@ pub struct MailInspection {
 /// Source coverage when there are no verified live inspection subjects.
 /// Even an empty recipient directory cannot turn an unreadable source clear.
 pub fn inspection_sources_complete(ctx: &MailboxContext, limits: &ReadLimits) -> bool {
+    inspect_seat_sidecars(ctx, limits).0
+}
+
+/// Inventory confirmed missing seat sidecars without projecting messages or granting ACK access.
+/// trace:TASK-3846 | ai:codex
+pub fn inspect_seat_sidecars(ctx: &MailboxContext, limits: &ReadLimits) -> (bool, Vec<String>) {
     let policy = PolicySubject {
+        inspect_all_seat_sidecars: true,
         private: &[],
         human: &[],
         shared: &[],
         roles: &[],
         recipient: None,
     };
-    snapshot_for_policy(ctx, &policy, &Query::Inbox, limits)
-        .0
-        .complete()
+    let snapshot = snapshot_for_policy(ctx, &policy, &Query::Inbox, limits).0;
+    (snapshot.complete(), snapshot.missing_seat_sidecars)
 }
 
 /// Observe delivery eligibility using exactly the own-inbox policy, without
@@ -490,6 +498,7 @@ pub fn inspect_mail(
 ) -> MailInspection {
     let private = vec![subject.handle.clone()];
     let policy = PolicySubject {
+        inspect_all_seat_sidecars: false,
         private: &private,
         human: &[],
         shared: &subject.role,
@@ -857,6 +866,9 @@ pub struct LogicalSnapshot {
     pub anchor_error: Option<SourceErrorCode>,
     /// Queued role deliveries this reader may bind (slice D1).
     pub pending_deliveries: Vec<PendingDelivery>,
+    /// Direct seat messages for which a complete delivery search found no sidecar.
+    // trace:TASK-3846 | ai:codex
+    pub missing_seat_sidecars: Vec<String>,
     /// Records whose delivery or receipt evidence could not be determined.
     /// Readers must not project these as unread or cleared mail. The raw
     /// records remain available for explicit ID resolution; coverage and ACK
@@ -1085,15 +1097,16 @@ fn snapshot_for_policy(
         Query::Thread(want) => thread == want,
     };
     let mut anchor = AnchorEvidence::new(ctx.repository.as_ref().map(|r| r.path()));
-    let (delivered, pending_deliveries, delivery_conflicts, mut unknown_ids) = delivery_gates(
-        ctx,
-        &observed,
-        salvaged,
-        unsighted,
-        audience,
-        &mut anchor,
-        &mut budget,
-    );
+    let (delivered, pending_deliveries, delivery_conflicts, mut unknown_ids, missing_seat_sidecars) =
+        delivery_gates(
+            ctx,
+            &observed,
+            salvaged,
+            unsighted,
+            audience,
+            &mut anchor,
+            &mut budget,
+        );
     let (mut records, mut conflicts) = reconcile(
         &observed,
         local_count,
@@ -1193,6 +1206,7 @@ fn snapshot_for_policy(
         retention: RetentionCoverage::Unestablished,
         exact_found: None,
         anchor_error: anchor.error,
+        missing_seat_sidecars,
         inspection_unknown_ids: unknown_ids.clone(),
         pending_deliveries: pending_deliveries
             .into_iter()
@@ -2191,6 +2205,7 @@ fn delivery_gates(
     Vec<PendingDelivery>,
     Conflicts,
     Vec<String>,
+    Vec<String>,
 ) {
     let mut sidecars: BTreeMap<String, Vec<DeliverySidecar>> = BTreeMap::new();
     let mut handovers: HashMap<&str, Vec<&DeliveryRecord>> = HashMap::new();
@@ -2198,6 +2213,7 @@ fn delivery_gates(
     let mut addressed: HashSet<&str> = HashSet::new();
     let mut delivery_addressed = BTreeSet::new();
     let mut seat_addressed = HashSet::new();
+    let mut deleted = HashSet::new();
     for sidecar in salvaged {
         sidecars
             .entry(sidecar.message_id.clone())
@@ -2222,6 +2238,9 @@ fn delivery_gates(
                 .entry(&m.message.id)
                 .or_default()
                 .insert(m.message.thread_id.clone());
+            if m.message.deleted {
+                deleted.insert(m.message.id.as_str());
+            }
             let undeleted = Message {
                 deleted: false,
                 ..m.message.clone()
@@ -2233,7 +2252,7 @@ fn delivery_gates(
             // Seat sends always write delivery records. Match the actual envelope
             // so a broadcast reaching a seat keeps its ordinary shared visibility.
             // trace:STORY-2767 | ai:codex
-            if !keys.is_empty()
+            if (!keys.is_empty() || audience.inspect_all_seat_sidecars)
                 && matches!(&m.message.to, Recipient::Agent(to) if to.starts_with("seat:"))
             {
                 seat_addressed.insert(m.message.id.as_str());
@@ -2277,8 +2296,18 @@ fn delivery_gates(
             }
         }
     }
+    let mut missing_seat_sidecars = Vec::new();
     for id in wanted {
         if (unsighted || seat_addressed.contains(id)) && !sidecars.contains_key(id) {
+            // Retained lookup failures and unread sources are unknown, not confirmed absences.
+            // trace:TASK-3846 | ai:codex
+            if !unsighted
+                && seat_addressed.contains(id)
+                && !unknown_ids.contains(id)
+                && !deleted.contains(id)
+            {
+                missing_seat_sidecars.push(id.to_string());
+            }
             unknown_ids.insert(id.to_string());
             gates.insert(id.to_string(), DeliveryGate::NotOwned);
         }
@@ -2336,7 +2365,13 @@ fn delivery_gates(
         };
         gates.insert(id.to_string(), gate);
     }
-    (gates, pending, conflicts, unknown_ids.into_iter().collect())
+    (
+        gates,
+        pending,
+        conflicts,
+        unknown_ids.into_iter().collect(),
+        missing_seat_sidecars,
+    )
 }
 
 /// Where retired sources' mailboxes are kept, below the common Git dir:

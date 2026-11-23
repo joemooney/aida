@@ -241,6 +241,19 @@ pub(crate) fn scan_and_route(project_root: &Path, route: bool) -> Vec<DoctorFind
         .into_iter()
         .map(Backlog::into_doctor_finding)
         .collect();
+    // trace:TASK-3846 | ai:codex
+    if let Some(summary) =
+        crate::mailbox_view::missing_seat_sidecar_note(&unknown.missing_seat_sidecars)
+    {
+        findings.push(DoctorFinding {
+            category: CATEGORY.into(),
+            id: format!("{CATEGORY}:missing-seat-sidecars"),
+            summary,
+            action: "Inspect the named messages in their source checkout or canonical store."
+                .into(),
+            safe_heal: false,
+        });
+    }
     if unknown.any() {
         findings.push(unknown_finding(&unknown));
     }
@@ -254,6 +267,7 @@ pub(crate) fn scan_and_route(project_root: &Path, route: bool) -> Vec<DoctorFind
 // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:claude
 #[derive(Debug, Default)]
 pub(crate) struct Unknown {
+    missing_seat_sidecars: Vec<String>,
     all: bool,
     keys: BTreeSet<String>,
 }
@@ -266,7 +280,7 @@ impl Unknown {
     fn whole() -> Self {
         Self {
             all: true,
-            keys: BTreeSet::new(),
+            ..Self::default()
         }
     }
 
@@ -329,8 +343,10 @@ fn inspect_backlog(
     let mut unknown = Unknown::default();
     let mut grouped: BTreeMap<String, (Backlog, Vec<&AgentRegistryEntry>)> = BTreeMap::new();
     let readers = directory.inspection_readers();
+    let (complete, missing) = aida_core::mailbox_logical::inspect_seat_sidecars(&ctx, limits);
+    unknown.missing_seat_sidecars = missing;
     if readers.is_empty() {
-        unknown.all = !aida_core::mailbox_logical::inspection_sources_complete(&ctx, limits);
+        unknown.all = !complete;
     }
     for (entry, subject) in readers {
         let subject = match subject {

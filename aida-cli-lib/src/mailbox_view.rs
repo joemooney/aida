@@ -156,6 +156,12 @@ impl OwnMail {
             .collect()
     }
 
+    // trace:TASK-3846 | ai:codex
+    pub(crate) fn missing_sidecar_note(&self) -> Option<String> {
+        let ids = &self.ack_basis.as_ref()?.1.missing_seat_sidecars;
+        missing_seat_sidecar_note(ids)
+    }
+
     /// One line naming why the view is partial, or `None` when complete.
     pub fn partial_note(&self) -> Option<String> {
         let Coverage::Partial { codes, conflicts } = &self.coverage else {
@@ -211,6 +217,14 @@ impl OwnMail {
             parts.join(", ")
         ))
     }
+}
+
+// trace:TASK-3846 | ai:codex
+pub(crate) fn missing_seat_sidecar_note(ids: &[String]) -> Option<String> {
+    (!ids.is_empty()).then(|| format!(
+            "{} seat messages hidden: delivery sidecar missing ({}) — inspect with aida mailbox inbox --all",
+            ids.len(), ids.join(", ")
+        ))
 }
 
 /// The audience this process's verified identity facts grant.

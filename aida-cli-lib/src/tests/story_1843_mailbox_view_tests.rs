@@ -1444,6 +1444,12 @@ fn story2767_retired_sender_preserves_seat_delivery_ownership() {
     std::fs::create_dir_all(&retained).unwrap();
     let sent = crate::mailbox_store::read_local_messages(&r.sib).unwrap();
     assert_eq!(sent.len(), 3);
+    let missing_id = sent
+        .iter()
+        .find(|m| m.body == "missing sidecar")
+        .unwrap()
+        .id
+        .clone();
     for m in sent {
         put_canonical(&r.store, &m);
         if m.body != "missing sidecar" {
@@ -1474,9 +1480,15 @@ fn story2767_retired_sender_preserves_seat_delivery_ownership() {
         bodies(view_from(&r.main, &r.store, &original)),
         ["for the original cohort"]
     );
-    assert!(view_from(&r.main, &r.store, &successor)
-        .records()
-        .is_empty());
+    // trace:TASK-3846 | ai:codex
+    let view = view_from(&r.main, &r.store, &successor);
+    assert!(view.records().is_empty());
+    assert_eq!(view.missing_sidecar_note().unwrap(), format!(
+        "1 seat messages hidden: delivery sidecar missing ({missing_id}) — inspect with aida mailbox inbox --all"
+    ));
+    assert!(crate::mail_backlog::scan(&r.main)
+        .iter()
+        .any(|finding| Some(&finding.summary) == view.missing_sidecar_note().as_ref()));
     let bound = read_own_mail_binding(
         &r.main,
         &r.store,
