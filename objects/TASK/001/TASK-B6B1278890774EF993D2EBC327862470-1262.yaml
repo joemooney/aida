@@ -1,0 +1,31 @@
+id: 01a20998-c50a-7ac1-9396-2eeaf6531d65
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1262
+title: 'Review follow-up: The standalone wording check in `tests/test_closeout_audit_wording.py:9` is not selected b'
+description: |-
+  From BUG-2731
+  Reviewed sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
+
+  The standalone wording check in `tests/test_closeout_audit_wording.py:9` is not selected by the repository CI workflow or its local CI gate targets. Reverting the verdict line in both guide copies would preserve mirror parity and leave the check unexecuted. Add this test to an existing documentation check run by CI, or put the assertion in an existing test suite that CI runs.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T18:08:56.586388162Z
+modified_at: 2026-11-23T18:08:56.586388162Z
+req_type: Task
+tags:
+- carried-from:BUG-2731
+- finding-hash:0061a46e
+- from-review:BUG-2731
+relationships:
+- rel_type: References
+  target_id: 01a208f5-2928-7921-9dff-50aa746498fb
+  created_at: 2026-11-23T18:09:14.377736864Z
+filed_at:
+  code_sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
+  branch: pr-4450
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef906ec7464
+  vendor: claude
+  session: 01a20994e923

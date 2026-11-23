@@ -1,0 +1,31 @@
+id: 01a20998-56b0-7a32-857d-498146cd4b2a
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1261
+title: 'Review follow-up: The supplied untraced-criteria list still applies to the added assertions. `tests/test_clo'
+description: |-
+  From BUG-2731
+  Reviewed sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
+
+  The supplied untraced-criteria list still applies to the added assertions. `tests/test_closeout_audit_wording.py:8` and `aida-cli-lib/src/tests/task_492_brief_tests.rs:693` use bare spec traces, so the criterion-to-test map cannot credit AC1 or AC2. Attach criterion-qualified traces to the wording check and to the test covering the actual pickup path, using the criterion IDs recognized by AIDA.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T18:08:28.336222661Z
+modified_at: 2026-11-23T18:08:28.336222661Z
+req_type: Task
+tags:
+- carried-from:BUG-2731
+- finding-hash:8f6b2ba2
+- from-review:BUG-2731
+relationships:
+- rel_type: References
+  target_id: 01a208f5-2928-7921-9dff-50aa746498fb
+  created_at: 2026-11-23T18:08:56.278711743Z
+filed_at:
+  code_sha: 3b11b9a6091119d7513adf6dc3a74dd1542acc3b
+  branch: pr-4450
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef906ec7464
+  vendor: claude
+  session: 01a20994e923
