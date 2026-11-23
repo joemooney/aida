@@ -14,12 +14,12 @@ description: |
 
   - Route a failed red-main-watch invocation to the advisor seat with the failed job name and existing trip evidence. Include scheduler timeouts through the same route. Point the recipient to the failed step and preserve its diagnostic within the existing display bounds.
   - Check that the route qualifies exactly for red-main-watch failures and that a successful pass produces no failure item. Use existing scheduler cadence and deduplication, and preserve other jobs' routes.
-status: Approved
+status: InProgress
 priority: Medium
-owner: joe
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:05.173596810Z
-modified_at: 2026-11-23T08:43:27.202761064Z
+modified_at: 2026-11-23T09:36:05.628120462Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -107,6 +107,13 @@ history:
   author: joe
   timestamp: 2026-11-23T08:40:57.623493209Z
   changes: []
+- id: 01a207c3-3dfc-7162-a560-9eade339104d
+  author: aida-session-start
+  timestamp: 2026-11-23T09:36:05.628119091Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362
