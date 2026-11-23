@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:08:06.984078687Z
-modified_at: 2026-11-23T08:38:38.478908685Z
+modified_at: 2026-11-23T08:47:32.559483493Z
 req_type: Bug
 tags:
 - hygiene
@@ -101,6 +101,15 @@ comments:
     Reviewed HEAD: 1aeb11bc70dc72c92cbc7377a3dd90c78f91a3ce plus native working diff. AC1: [evidence: behavioral-test] Both bug_2713_session_end tests passed in lane job j20261123T083319049-2-0. Actual clone status failure preserves warning and fatal text and the lease. An untracked-only worktree reports both nested paths and retains its lease. Reviewed merge-base diff, working diff and untracked inventory. Checked status column preservation, byte quoting, NUL boundaries, rename source order, empty and multiple records, clone isolation and submodule fail-closed checks. Formatting and diff checks passed. FAST stopped at test-speed tooling because cargo metadata cannot run through the lane runner. Scope remains AC1. No live hygiene run or exact future publication-head CI evidence.
   created_at: 2026-11-23T08:38:38.478908685Z
   modified_at: 2026-11-23T08:38:38.478908685Z
+  session_id: 01a207870c47
+  harness_version: codex-cli 0.167.0
+- id: 01a20796-cd32-7d22-b396-033bba582f83
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 85a141b56bc837dc1c528c07514e24976438f73f plus the uncommitted fast-gate fix. AC1: [evidence: behavioral-test] Both session-end regressions passed in lane job j20261123T084314432-2-0. The clone test now reads PATH through Environment::capture. All 19 ExecContext ratchet tests and git diff --check passed. Full fast-gate rerun remains with the host.
+  created_at: 2026-11-23T08:47:32.559483493Z
+  modified_at: 2026-11-23T08:47:32.559483493Z
   session_id: 01a207870c47
   harness_version: codex-cli 0.167.0
 history:
