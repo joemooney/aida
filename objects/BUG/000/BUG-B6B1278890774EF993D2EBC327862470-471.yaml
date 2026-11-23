@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-471
 agreed_id: BUG-2710
 title: night-shift tick hangs in the reap phase and is killed at the 120 s budget on every run
 description: 'Since 2026-11-22 ~17:30 UTC, every night-shift tick is killed at 120 s (exit 124). All earlier phases finish within ~2 s (events 68ms, wave-progress ~1s, mailbox ~0.8s); last-phase=reap@~1990ms, then nothing for 118 s. Context: after a ~40h token outage there are 17 orphaned and 35 stale sessions (aida ps), plus a dead seat clone holding a staged, uncommitted merge (session-hygiene also fails on it). Probable cause: reap blocks on (or walks without a bound) one of these sessions or its worktree. Fix: give reap its own sub-budget, report which item it was on when the budget ran out, and skip or yield it rather than starving the whole tick. Evidence: scheduled job night-shift failures 2026-11-22 17:31 and 17:46 UTC (phases=[...] last-phase=reap).'
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-23T21:18:47.072904442Z
+modified_at: 2026-11-23T21:38:08.951498135Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -209,6 +209,14 @@ history:
   timestamp: 2026-11-23T21:17:31.679085850Z
   session_id: 01a20a01840f
   changes: []
+- id: 01a20a58-4db7-7ee0-9c58-22f9c63df56a
+  author: aida-orchestrator
+  timestamp: 2026-11-23T21:38:08.951820745Z
+  session_id: 01a20a554371
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drive
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
@@ -219,3 +227,20 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    BUG-2710 completion review (request changes), against protected main f1a50179e5a3640451b4232e08f2e589df93e7d5 and landed tree 857f87802541a54bf71df6e217d0a4c39ad06524. The generated worksheet has no formal Acceptance or Verify section. Criteria below come from the requirement description and the latest authoritative main-track brief.
+
+    - Reap uses the tick's remaining budget and returns control instead of repeating the scheduled reap timeout — unverified
+    - Expiry between sessions finishes the current mutation and leaves the next session untouched — verified by cargo test -p aida-cli-lib bug_2710_deadline_finishes_one_session_before_yield_and_resume for the missing-worktree path, with the pass reported by the implementer
+    - A partial result exposes the completed count and next unvisited session in the scheduled run — unverified
+    - The next tick resumes at the first unvisited session — verified by the focused resume test for the reap cursor and source inspection of ShiftState loading, cursor forwarding and saving
+    - With ample time, budgeted and unbounded reap keep and remove the same sessions — unverified
+
+    Exact-head FAST compile, FAST gates, aggregate Build (ubuntu-latest), and merge-hold-gate passed. FAST skipped the test shards. The implementer reported two focused tests passed in lane job j20261123T203042277-2-0. No local builds or tests were run for this review.
+  recovery_hint: address the review findings, move BUG-2710 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T21:38:08.951498135Z
