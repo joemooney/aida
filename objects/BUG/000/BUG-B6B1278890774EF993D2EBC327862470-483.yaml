@@ -3,12 +3,12 @@ spec_id: BUG-b6b1278890774ef993d2ebc327862470-483
 agreed_id: BUG-2722
 title: 'doctor: release a repair-journal conflict reservation whose lane is provably over'
 description: 'Minimal slice split from BUG-2688 (#4388 parked 2026-11-22). Today a stale entry in dell1 .aida/repair-journal.json (entry 48: PR-4376 @660c0e87, lane 01a2053df3e6, tree …-433) blocks every conflict-repair relaunch with ''retained conflicts require their host journal evidence before a resume'', even though the lane''s lease is ended and its tree has been salvaged and moved aside. There is no doctor heal for it, and hand-editing the journal is forbidden. AC1: an `aida doctor heal` category (for example repair-reservations) lists journal reservations whose lease is ended AND whose tree is absent or salvaged, with evidence. With --id it releases exactly one, recording who released it and why. AC2: it refuses when the lease is live, the tree exists with unmerged files, or evidence is missing, naming the reason and the evidence command. AC3: a regression test for the dell1 shape (ended lease, moved tree, reservation for the current PR head), after which a conflict lane can reserve. Keep it small. Everything else from #4388 stays in deferred BUG-2688.'
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T06:17:21.766602710Z
+modified_at: 2026-11-23T06:17:56.741533329Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -185,6 +185,11 @@ comments:
   modified_at: 2026-11-23T05:33:23.661945874Z
   session_id: 01a206dc9122
   harness_version: codex-cli 0.167.0
+- id: 01a2070d-d505-7062-9010-752f5ff93a41
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 fails review on the landed tree 3ba03480cdd8 against protected main ca95624cadfe. The published head still has the round-two automatic release implementation. AC1 lacks the required direct-human attestation, preview and typed confirmation. AC2 refuses an extant lease but the unlink fallback can misclassify an active worker as ended. AC3 does not release the historical moved-tree reservation without a newly supplied receipt or stamp. Salvage can also omit unpushed history, and lease cleanup can lose the only terminal evidence. Exact-head fast CI passed and merge-hold clearance was pending. The judgment follows from source and the current BUG-2722 acceptance criteria.. No triage reason was given.'
+  created_at: 2026-11-23T06:17:56.741529416Z
+  modified_at: 2026-11-23T06:17:56.741529416Z
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
@@ -279,6 +284,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a2070d-d505-7062-9010-751ccd2df465
+  author: joe
+  timestamp: 2026-11-23T06:17:56.741516318Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -288,11 +300,3 @@ filed_at:
   vendor: claude
   session: 01a20440-982d-7872-93de-fff272d8657c
   harness_version: 2.1.329 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: BUG-2722 fails review on the landed tree 3ba03480cdd8 against protected main ca95624cadfe. The published head still has the round-two automatic release implementation. AC1 lacks the required direct-human attestation, preview and typed confirmation. AC2 refuses an extant lease but the unlink fallback can misclassify an active worker as ended. AC3 does not release the historical moved-tree reservation without a newly supplied receipt or stamp. Salvage can also omit unpushed history, and lease cleanup can lose the only terminal evidence. Exact-head fast CI passed and merge-hold clearance was pending. The judgment follows from source and the current BUG-2722 acceptance criteria.
-  recovery_hint: address the review findings, move BUG-2722 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T06:17:21.766602710Z
