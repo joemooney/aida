@@ -9,12 +9,18 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-23T19:38:35.105892681Z
+modified_at: 2026-11-23T19:38:37.311498813Z
 req_type: Bug
 tags:
 - bwrap
 - linked:TASK-3133
 - tests
+comments:
+- id: 01a209ea-df7f-7bc2-a380-9ec43b70c525
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-23 12:40. MAIN track, supervised (mode unset), STRICT review: containment-test adjacent. Adapt fixtures (no skip); any remaining skip must be an explicit host-capability SKIP that live-required gates still count as failure.'
+  created_at: 2026-11-23T19:38:37.311498813Z
+  modified_at: 2026-11-23T19:38:37.311498813Z
 history:
 - id: 01a1f595-4519-7252-b0f5-0a81b10611f6
   author: joe
