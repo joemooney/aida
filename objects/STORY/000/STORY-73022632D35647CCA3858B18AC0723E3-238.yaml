@@ -1,5 +1,6 @@
 id: 01a2098c-a606-7281-beb8-01392f68295a
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-238
+agreed_id: STORY-3048
 title: 'Review PR-4450: [AI:codex] fix(brief): clarify closeout audits and current lane instructions (BUG-2731)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2095b`) for branch `int26-bug-2731`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T17:55:59.237561263Z
   session_id: 01a2095b139f
+  changes: []
+- id: 01a20992-9916-7240-9296-f5c561281ea3
+  author: joe
+  timestamp: 2026-11-23T18:02:12.118271621Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ef906ec7464cf1b3100c4383085280c203722941

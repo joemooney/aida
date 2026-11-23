@@ -1,5 +1,6 @@
 id: 01a2098d-2872-7250-883f-fd329cb9854c
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-239
+agreed_id: STORY-3046
 title: 'Review PR-4451: [AI:codex] fix(queue): preserve the disk-floor refusal through deferral (TASK-3154)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20953`) for branch `task-b6b1278890774ef993d2ebc327862470-1115`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T17:56:23.795025965Z
   session_id: 01a20953a0aa
+  changes: []
+- id: 01a20992-2b6e-7773-9628-432ec0dc6bbd
+  author: joe
+  timestamp: 2026-11-23T18:01:44.046995170Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ef906ec7464cf1b3100c4383085280c203722941

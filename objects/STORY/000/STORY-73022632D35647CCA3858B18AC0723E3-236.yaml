@@ -1,5 +1,6 @@
 id: 01a20983-e33b-7792-9635-81e97657f5c9
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-236
+agreed_id: STORY-3049
 title: 'Review PR-4448: [AI:codex] fix(gate): default approved small standard-tier specs to drain on opt-in (STORY-3038)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20932`) for branch `story-b6b1278890774ef993d2ebc327862470-820`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T17:46:24.025712734Z
   session_id: 01a20932bb10
+  changes: []
+- id: 01a20992-cf16-7aa3-a56a-256069f22815
+  author: joe
+  timestamp: 2026-11-23T18:02:25.942367468Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ef906ec7464cf1b3100c4383085280c203722941

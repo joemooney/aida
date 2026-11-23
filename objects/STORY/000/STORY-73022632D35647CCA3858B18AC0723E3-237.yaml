@@ -1,5 +1,6 @@
 id: 01a20984-c6d8-7de3-b728-e33f854b9595
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-237
+agreed_id: STORY-3047
 title: 'Review PR-4449: [AI:codex] fix(admission): cover stale legacy holders during manual train admission (BUG-2732)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2093e`) for branch `bug-b6b1278890774ef993d2ebc327862470-493`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T17:47:14.337362263Z
   session_id: 01a2093e9403
+  changes: []
+- id: 01a20992-62d8-7c40-bafb-3bbb19c1b213
+  author: joe
+  timestamp: 2026-11-23T18:01:58.232624861Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: ef906ec7464cf1b3100c4383085280c203722941

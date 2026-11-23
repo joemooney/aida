@@ -1,5 +1,6 @@
 id: 01a20973-d70e-7c80-a678-20f5beeb7dbc
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-234
+agreed_id: STORY-3050
 title: 'Review PR-4444: [AI:codex] fix(resume): cover contained transcript recovery refusal (TASK-3151)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20930`) for branch `task-b6b1278890774ef993d2ebc327862470-1111`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T17:28:53.098811709Z
   session_id: 01a209303cc3
+  changes: []
+- id: 01a20993-07eb-7401-9028-963b2090f8ad
+  author: joe
+  timestamp: 2026-11-23T18:02:40.491963494Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
