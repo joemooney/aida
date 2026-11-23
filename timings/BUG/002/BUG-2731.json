@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2731",
+  "publishes": [
+    {
+      "at": "2026-11-23T23:11:42.330963765Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T18:09:17.755472333Z",
+      "spec": "BUG-2731",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4450,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "3b11b9a6091119d7513adf6dc3a74dd1542acc3b"
+      }
+    },
+    {
+      "ts": "2026-11-23T18:09:31.136086778Z",
+      "spec": "BUG-2731",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "BUG-2731 (origin BUG-b6b1278890774ef993d2ebc327862470-492) — FAIL. Reviewed all five changed files against the generated worksheet.\nBUG-b6b1278890774ef993d2ebc327862470-492.AC1: verified by source inspection of the exact standalone verdict in both advisor-role.md copies and the exact-line assertion in `python3 -m unittest tests/test_closeout_audit_wording.py`. The implementer reported a pass for both copies. The check has no CI invocation.\nBUG-b6b1278890774ef993d2ebc327862470-492.AC2: unverified\nThe diff's generated-file assertion (`cargo test -p aida-cli-lib create_brief_writes_frontmatter_sections_and_relationships`) covers `aida brief create`. Source inspection confirms that fresh lanes launched with an explicit handwritten pickup brief still receive no precedence rule. Both criteria were listed as untraced in the launch prompt.\nThe head is three commits behind integration at 4c64d9e19a40e2661ab8b3f7cf96ec1bb1b53432. Those commits leave the paths implicated in these findings unchanged. Exact-head FAST source gates and the merge-hold check passed, and FAST compilation was pending. No local tests or builds were run.",
+        "recovery_hint": "address the review findings, move BUG-2731 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T21:27:10.117247790Z",
+      "spec": "BUG-2731",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4450,
+        "verdict": "APPROVED",
+        "reviewed_sha": "34ad335365c88b34e52ca6f62ef383ed9004a6a2"
+      }
+    },
+    {
+      "ts": "2026-11-23T21:28:47.413090217Z",
+      "spec": "BUG-2731",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4450,
+        "verdict": "APPROVED",
+        "reviewed_sha": "34ad335365c88b34e52ca6f62ef383ed9004a6a2"
+      }
+    },
+    {
+      "ts": "2026-11-23T22:01:27.650016266Z",
+      "spec": "BUG-2731",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4461,
+        "verdict": "APPROVED",
+        "reviewed_sha": "ecdc44f41c5c0ae7940895132be36c1346d7daf8"
+      }
+    },
+    {
+      "ts": "2026-11-23T23:04:09.588114614Z",
+      "spec": "BUG-2731",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4461
+      }
+    },
+    {
+      "ts": "2026-11-23T23:11:42.118477663Z",
+      "spec": "BUG-2731",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "5db0b2b1b17127b5b06d80dfc5f697f832b64e43",
+        "pr": 4461,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
