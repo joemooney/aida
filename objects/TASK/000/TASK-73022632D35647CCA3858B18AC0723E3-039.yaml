@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:17:59.300202085Z
-modified_at: 2026-11-23T20:39:29.086554249Z
+modified_at: 2026-11-23T20:39:40.716635065Z
 req_type: Task
 tags:
 - from-implementer:TASK-3823
@@ -66,6 +66,22 @@ comments:
   created_at: 2026-11-23T13:56:27.685457705Z
   modified_at: 2026-11-23T13:56:27.685457705Z
   session_id: 01a208741f50
+- id: 01a20a22-c51a-72e1-ac8a-2b191a86b4cb
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4435):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 8c1cc59f7402
+    Recorded: 2026-11-23T14:09:51.936062361+00:00
+    Findings:
+    1. TASK-3171 at config_cmd.rs:128 and :1137: the per-seat display gets its root from storage.path().parent(). In a linked worktree without a local .aida-store, canonical discovery returns the primary checkout's store (aida-core/src/store_locate.rs:613–659). The renderer therefore reads the primary checkout's model, effort, and tiers while headless launch resolves the linked checkout (session/headless.rs:685–694). A seat override present only in the linked checkout is silently omitted. Resolve tuning from the selected project/worktree root independently of the store location and cover distinct worktree and store-root settings through the CLI entry point.
+    2. TASK-3171 at config_cmd.rs:1134–1137 and :1162–1167: the Antigravity row displays a configured model or AIDA_AGENT_MODEL as effective even though Antigravity's headless argv receives only effort (aida-cli-lib/src/vendors/headless.rs:50; aida-core/src/vendors/headless.rs:78–90). For example, an inherited model override appears in every agy seat while the launcher omits it. Make the display reflect vendor capabilities and label the Antigravity model as unmanaged by this launch path. Add a regression for a configured or inherited override.
+    3. TASK-3171 at session/headless.rs:898–909: explicit empty seat model or effort strings select the vendor default and shadow lower files, but the new source reporting replaces the selected file with vendor default whenever the value is None. For example, a reviewer model reset in project agents.toml that masks a model in project config.toml displays the same source as an entirely absent value. Preserve per-field provenance for explicit resets while keeping launch arguments unchanged. Cover a reset that shadows a lower-file setting.
+    4. TASK-3171 at config_cmd.rs:1164–1167: model and effort are opaque strings from worktree TOML or the environment and are emitted verbatim. Embedded newlines can forge additional rows and terminal control characters can manipulate the display. Escape control characters on output while keeping the values passed to launch unchanged.
+    5. TASK-3171 at config_cmd.rs:1129–1138: the new display bypasses policy_registry, so config menu omits the new effective values despite the documented shared surface in docs/cli/07-project-setup.md:122. The registry coverage tests also cannot see the new rows. Integrate the read-only tuning rows into the shared registry or update the documented menu coverage and add a display-level check.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T20:39:40.570649967Z
+  modified_at: 2026-11-23T20:39:40.570649967Z
 history:
 - id: 01a1fa0a-7e13-70a3-bf75-3feea2dbb0fa
   author: joe
