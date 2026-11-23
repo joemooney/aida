@@ -60,6 +60,8 @@ struct Receipt {
 enum Event {
     Drain(Receipt),
     Resume { actor: String, at: DateTime<Utc> },
+    // trace:TASK-3246 | ai:codex
+    RecoveryResume { actor: String, at: DateTime<Utc> },
     Expired { at: DateTime<Utc> },
 }
 
@@ -119,7 +121,8 @@ fn load(root: &Path) -> Result<Journal> {
                         && receipt.expires_at > receipt.issued_at
                         && receipt.expires_at - receipt.issued_at
                             <= Duration::seconds(MAX_SECONDS as i64),
-                Event::Resume { actor, .. } => valid_text(actor),
+                Event::Resume { actor, .. } | Event::RecoveryResume { actor, .. } =>
+                    valid_text(actor),
                 Event::Expired { .. } => true,
             }),
         "invalid advisor loops drain journal"
@@ -199,8 +202,7 @@ fn try_lock(root: &Path) -> Result<Locked> {
 }
 
 // Callers hold the drain lock. Expiry is recorded once, at its deadline.
-fn observe_locked(root: &Path, now: DateTime<Utc>) -> Result<Journal> {
-    let mut journal = load(root)?;
+fn observe_locked(root: &Path, mut journal: Journal, now: DateTime<Utc>) -> Result<Journal> {
     if let Some(receipt) = journal.active().filter(|r| r.expires_at <= now) {
         journal.push(Event::Expired {
             at: receipt.expires_at,
@@ -233,7 +235,7 @@ fn active_at(root: &Path, now: DateTime<Utc>) -> Result<Option<Drained>> {
     // Best effort and never a wait: admission callers carry a bound, so a
     // busy drain lock defers the audit to a later reader (BUG-2703 round 2).
     // trace:BUG-2703 | ai:claude
-    if let Err(error) = try_lock(root).and_then(|_lock| observe_locked(root, now)) {
+    if let Err(error) = try_lock(root).and_then(|_lock| observe_locked(root, load(root)?, now)) {
         eprintln!("advisor loops drain expiry not yet recorded: {error:#}");
     }
     Ok(None)
@@ -281,7 +283,22 @@ fn change(
     let _lock = lock(root)?;
     let (actor, now) = authority()?;
     anyhow::ensure!(valid_text(&actor), "invalid advisor loops control actor");
-    let mut journal = observe_locked(root, now)?;
+    // Only an explicit, authorized resume may replace unreadable history.
+    // trace:TASK-3246 | ai:codex
+    let mut journal = match load(root) {
+        Ok(journal) => observe_locked(root, journal, now)?,
+        Err(error) if drain.is_none() => {
+            let mut replacement = Journal {
+                version: 1,
+                events: vec![Event::RecoveryResume { actor, at: now }],
+            };
+            save(root, &mut replacement).context("could not replace unreadable drain journal")?;
+            return Ok(format!(
+                "Advisor loops resumed. Replaced unreadable drain journal: {error:#}"
+            ));
+        }
+        Err(error) => return Err(error),
+    };
     let message = match drain {
         Some((reason, seconds)) => {
             let reason = reason.trim();
@@ -681,5 +698,22 @@ mod tests {
         drain(&root, "land #4324", None).unwrap();
         let drained = active(&root).unwrap().unwrap();
         assert!(drained.actor.contains("(advisor "), "{}", drained.actor);
+
+        // trace:TASK-3246 | ai:codex
+        for damaged in [&b"{broken"[..], &[0xff][..]] {
+            let path = directory(&root).join(FILE);
+            std::fs::write(&path, damaged).unwrap();
+            assert!(active(&root).is_err());
+            env.unset_key(GRANT_ENV);
+            assert!(resume(&root).is_err());
+            assert_eq!(std::fs::read(&path).unwrap(), damaged);
+            env.set_key(GRANT_ENV, &advisor);
+            assert!(resume(&root).unwrap().contains("Replaced unreadable"));
+            assert_eq!(active(&root).unwrap(), None);
+            assert!(matches!(
+                load(&root).unwrap().events.as_slice(),
+                [Event::RecoveryResume { actor, .. }] if actor == &drained.actor
+            ));
+        }
     }
 }

@@ -1183,7 +1183,9 @@ resume and expiry events, with actor, reason, issue time and expiry. It is
 also kept under 256 KiB: with long reasons the oldest events are dropped
 sooner. A drain or resume checks its caller's authority once it holds the
 journal lock, so a grant revoked while the command waited is refused. An
-unreadable journal counts as drained. `aida advisor loops status` and
+unreadable journal counts as drained. An authorized `aida advisor loops resume`
+can replace it and resume both loops. The new journal records who recovered
+it and when. <!-- trace:TASK-3246 | ai:codex --> `aida advisor loops status` and
 `train-status` show both workers' claims (review-watch and auto-train) with
 their ages, the active drain, and any waiting land, ship or train. A claim
 taken by an older build shows an unknown age. In `--json` output this is the
