@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:51:17.240362338Z
-modified_at: 2026-11-23T16:22:50.683242925Z
+modified_at: 2026-11-23T16:24:01.904505488Z
 req_type: Bug
 tags:
 - track:integration
@@ -55,6 +55,12 @@ comments:
   content: Implementer push 5b7bccceb504 declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-23T16:21:49.258772118Z
   modified_at: 2026-11-23T16:21:49.258772118Z
+  session_id: 01a208ea8277
+- id: 01a20938-b870-7421-a041-bc30d96c43cf
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int26-bug-2592` at head `5b7bccceb504ba5e0c893ddf16b53402c33adc8b`.'
+  created_at: 2026-11-23T16:24:01.904496868Z
+  modified_at: 2026-11-23T16:24:01.904496868Z
   session_id: 01a208ea8277
 history:
 - id: 01a1f2f2-610f-7cd2-8d02-d615becc78ba
