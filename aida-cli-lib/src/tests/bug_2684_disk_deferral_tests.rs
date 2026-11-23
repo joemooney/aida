@@ -165,6 +165,18 @@ fn refusal() -> anyhow::Error {
         .context("queue work BUG-926843")
 }
 
+// trace:TASK-3154 | ai:codex
+fn assert_persisted_reason(error: anyhow::Error, expected: &str) {
+    let main = tempfile::tempdir().unwrap();
+    let attempt = crate::lane_result::Attempt::begin(main.path(), "BUG-926843", None).unwrap();
+    attempt.finish_result(&Err(error)).unwrap();
+    let mut receipts = std::fs::read_dir(main.path().join(".aida/lane-results")).unwrap();
+    let path = receipts.next().unwrap().unwrap().path();
+    assert!(receipts.next().is_none());
+    let receipt: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    assert_eq!(receipt["reason_code"], expected);
+}
+
 #[test]
 fn bug_2684_disk_refusal_keeps_the_spec_queued_with_its_reason() {
     let (_tmp, store_root) = store();
@@ -181,13 +193,19 @@ fn bug_2684_disk_refusal_keeps_the_spec_queued_with_its_reason() {
         anyhow::anyhow!("cannot measure lane disk headroom"),
     );
     assert_eq!(crate::exit_code_for_error(&other), 1);
+    assert_persisted_reason(other, "admission-refused");
     let row = &storage.queue_list(USER, true).unwrap()[0];
     assert_eq!(row.note.as_deref(), Some("operator note"));
 
     // The disk refusal: the row stays, in place, routed as before, with the
     // reason first and the operator's note kept.
-    let deferred =
-        crate::lane_disk_deferral::defer(&storage, "BUG-926843", &[queued.id], refusal());
+    let error = refusal();
+    let at = crate::lane_disk_deferral::refusal(&error).unwrap().at;
+    let deferred = crate::lane_disk_deferral::defer(&storage, "BUG-926843", &[queued.id], error);
+    assert_eq!(
+        crate::lane_disk_deferral::refusal(&deferred).unwrap().at,
+        at
+    );
     assert_eq!(
         crate::exit_code_for_error(&deferred),
         crate::lane_disk_deferral::EXIT_CODE
@@ -211,6 +229,8 @@ fn bug_2684_disk_refusal_keeps_the_spec_queued_with_its_reason() {
         message.contains(note.split(" · ").next().unwrap()),
         "{message}"
     );
+
+    assert_persisted_reason(deferred, "disk-deferred");
 
     // A second refusal replaces the reason rather than stacking it.
     crate::lane_disk_deferral::defer(&storage, "BUG-926843", &[queued.id], refusal());
