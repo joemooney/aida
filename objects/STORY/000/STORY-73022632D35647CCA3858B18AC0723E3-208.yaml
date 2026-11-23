@@ -1,0 +1,32 @@
+id: 01a206c2-fad2-7c70-818b-4928d9ed4aba
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-208
+title: 'Review PR-4407: [AI:codex] fix(landing): accept clean merges with head-exact FULL CI (BUG-2725)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2067f`) for branch `bug-b6b1278890774ef993d2ebc327862470-486`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4407>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-486` → `main`
+
+  ## Covers
+
+  - BUG-2725
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4407` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T04:56:11.218695946Z
+modified_at: 2026-11-23T04:56:11.218695946Z
+req_type: Story
+filed_at:
+  code_sha: 5470336db35805f5b13a85d8a2fff124ec69f557
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 5470336db3
+  session: 01a2067fd0d9
