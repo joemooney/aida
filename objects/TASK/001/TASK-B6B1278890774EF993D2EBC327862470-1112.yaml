@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. Exercise Claude transcript fallback in an isolated fixture where the expected transcript is missing and the only matching transcript belongs to a private clone in the seat inventory.
   2. With valid host registration, recover that clone's canonical cwd. With missing host registration and otherwise identical evidence, refuse recovery before launching Claude. Assert both results through the same recovery entry point.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:40.147235551Z
-modified_at: 2026-11-23T16:46:08.337507585Z
+modified_at: 2026-11-23T18:02:45.335461251Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -189,6 +189,20 @@ history:
   timestamp: 2026-11-23T16:44:42.791941106Z
   session_id: 01a209092577
   changes: []
+- id: 01a20993-1a8e-78e1-9b43-eb9f00e415d3
+  author: aida-auto-bump
+  timestamp: 2026-11-23T18:02:45.262704523Z
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20993-1ad7-7813-bc28-7dfa3525f6bb
+  timestamp: 2026-11-23T18:02:45.335457333Z
+  agent: aida
+  commit_sha: 88d5e17985196b6f8540654cc8d4e882076b6cdc
+  summary: PASS for completing spec TASK-3149 (TASK-b6b1278890774ef993d2ebc327862470-1112). The full pinned diff adds one traced regression covering both criteria identified in the launch worksheet. TASK-b6b1278890774ef993d2ebc327862470-1112.ac3e92f8 — verified by cargo test -p aida-cli-lib bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript (implementer-reported pass, lane job j20261123T160720196-2-0) and source inspection at aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs:425–459. With the recorded project's transcript absent, the fixture moves the sole matching transcript into a real private clone and asserts that the clone enters the seat inventory. TASK-b6b1278890774ef993d2ebc327862470-1112.ac8e4e32 — verified by the same regression and source inspection at aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs:435–466. The same latest-resume entry point refuses with no lease and refuses without launching when the inventoried clone lacks its marker. Restoring only the marker permits the resume and the mock records the clone's canonical cwd, --resume, and the expected session ID. Reviewed PR head 717beee630c50758e1ed51a0c0a27632d336dd87 as it would land on pinned main 79989f9a27da2d3f372332c04927ca08ae0ed377. Main is three commits ahead. The changed test and the recovery and registration code reviewed here are identical in the head and landed tree. No actionable findings. CI pending at review time (FAST compile); FAST source gates and merge-hold checks passed. Behavioral execution evidence is from the implementer's recorded lane result; no reviewer test run was performed. The standalone lane's claim command returned a refusal.
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
@@ -199,3 +213,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T18:02:45.262696725Z
+  completion_sha: 88d5e17985196b6f8540654cc8d4e882076b6cdc
