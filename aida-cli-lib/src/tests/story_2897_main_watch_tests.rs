@@ -62,6 +62,10 @@ struct Fake {
     mails: Vec<(String, String, String)>,
     fail_mail: bool,
     fail_range: bool,
+    deadline_recent: bool,
+    deadline_range: bool,
+    after_until_deadline: Option<usize>,
+    stall_check: Option<String>,
 }
 
 impl Fake {
@@ -90,9 +94,18 @@ impl Ports for Fake {
         self.now.unwrap_or_else(t0)
     }
     fn recent(&mut self, max: usize) -> Result<Vec<Commit>> {
+        if self.deadline_recent {
+            return Err(PassDeadline.into());
+        }
         Ok(self.commits.iter().rev().take(max).cloned().collect())
     }
     fn after(&mut self, cursor: &str, max: usize) -> Result<Option<Vec<Commit>>> {
+        if let Some(left) = self.after_until_deadline.as_mut() {
+            if *left == 0 {
+                return Err(PassDeadline.into());
+            }
+            *left -= 1;
+        }
         let Some(i) = self.commits.iter().position(|c| c.sha == cursor) else {
             return Ok(None);
         };
@@ -101,12 +114,30 @@ impl Ports for Fake {
         ))
     }
     fn range(&mut self, from: &str, to: &str) -> Result<Vec<Commit>> {
+        if self.deadline_range {
+            return Err(PassDeadline.into());
+        }
         anyhow::ensure!(!self.fail_range, "git log failed");
         let a = self.commits.iter().position(|c| c.sha == from).unwrap();
         let b = self.commits.iter().position(|c| c.sha == to).unwrap();
         Ok(self.commits[a + 1..=b].to_vec())
     }
     fn checks(&mut self, sha: &str) -> Result<CommitChecks> {
+        if self.stall_check.as_deref() == Some(sha) {
+            let deadline = crate::forge_lookup::forge_lookup_deadline().unwrap();
+            let mut child = std::process::Command::new("sleep");
+            child.arg("10");
+            assert!(matches!(
+                crate::command_output_with_timeout_capped(
+                    child,
+                    deadline.saturating_duration_since(std::time::Instant::now()),
+                    1024
+                ),
+                crate::BoundedCommandOutput::TimedOut
+            ));
+            self.at(31);
+            anyhow::bail!("check deadline reached");
+        }
         let checks = self
             .checks
             .get(sha)
@@ -1306,4 +1337,88 @@ fn live_pass_preserves_stale_pure_git_configuration() {
         .iter()
         .any(|n| n.contains("skipped")));
     assert_eq!(std::fs::read_to_string(config).unwrap(), original);
+}
+
+// trace:TASK-3209 | ai:codex
+#[test]
+fn exhausted_pass_confirms_verified_red_and_retries_unresolved_commit() {
+    use std::time::{Duration as StdDuration, Instant};
+    assert!(
+        PASS_BUDGET + StdDuration::from_secs(30)
+            <= crate::maintenance_schedule::SCHEDULED_COMMAND_TIMEOUT
+    );
+    let (dir, mut fake) = red_on_green();
+    run(dir.path(), &mut fake);
+    fake.at(29);
+    fake.push(3, "repair", green("300"));
+    fake.stall_check = Some(sha(3));
+    let started = Instant::now();
+    let notes = crate::forge_lookup::with_forge_lookup_deadline(StdDuration::from_secs(1), || {
+        run(dir.path(), &mut fake)
+    });
+    assert!(started.elapsed() < StdDuration::from_secs(8));
+    assert!(notes.iter().any(|n| n.contains("resuming next pass")));
+    assert_eq!(state(dir.path()).cursor, Some(sha(2)));
+    assert_eq!(count(dir.path(), "confirmed"), 1);
+    fake.stall_check = None;
+    run(dir.path(), &mut fake);
+    assert_eq!(state(dir.path()).cursor, Some(sha(3)));
+    assert!(state(dir.path()).episode.is_none());
+}
+
+// trace:TASK-3209 | ai:codex
+#[test]
+fn history_deadlines_checkpoint_and_resume() {
+    for stage in 0..3 {
+        let (dir, mut fake) = confirmed();
+        fake.checks.insert(sha(2), green("200"));
+        fake.push(3, "next", green("300"));
+        fake.deadline_recent = stage == 0;
+        fake.after_until_deadline = match stage {
+            1 => Some(0),
+            2 => Some(1),
+            _ => None,
+        };
+        let notes = run(dir.path(), &mut fake);
+        assert!(notes.iter().any(|n| n.contains("resuming next pass")));
+        assert_eq!(state(dir.path()).episode.is_none(), stage == 2);
+        fake.deadline_recent = false;
+        fake.after_until_deadline = None;
+        run(dir.path(), &mut fake);
+        assert_eq!(state(dir.path()).cursor, Some(sha(3)));
+        assert_eq!(count(dir.path(), "red_end"), 1);
+    }
+}
+
+// trace:TASK-3209 | ai:codex
+#[test]
+fn closing_range_deadline_retries_same_green() {
+    let (dir, mut fake) = confirmed();
+    fake.push(3, "repair", green("300"));
+    fake.deadline_range = true;
+    run(dir.path(), &mut fake);
+    let held = state(dir.path());
+    assert!(held.episode.is_some());
+    assert_eq!(held.cursor, Some(sha(2)));
+    assert_eq!(held.last_green, Some(sha(1)));
+    assert_eq!(count(dir.path(), "red_end"), 0);
+    fake.deadline_range = false;
+    run(dir.path(), &mut fake);
+    assert_eq!(outcomes(dir.path()), vec!["recovered"]);
+}
+
+// trace:TASK-3209 | ai:codex
+#[test]
+fn git_timeout_at_call_ceiling_observes_pass_deadline() {
+    let end = std::time::Instant::now() + CALL_TIMEOUT;
+    let tick = std::time::Duration::from_nanos(1);
+    for (deadline, observed, retry) in [
+        (Some(end), end - tick, false),
+        (Some(end), end, true),
+        (Some(end), end + tick, true),
+        (None, end, false),
+    ] {
+        let error = git_timeout_error(&["log"], CALL_TIMEOUT, deadline, observed);
+        assert_eq!(error.is::<PassDeadline>(), retry);
+    }
 }
