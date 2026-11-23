@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The guard's output includes per-phase timings, and its forge work has a bounded per-PR budget, so one slow PR or forge call can't consume the whole run.
   - AC2: At the deadline the guard reports its PARTIAL results (which PRs it covered and which it skipped) and exits normally instead of being killed. A test drives a slow fake forge and asserts partial output before the ceiling.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T12:02:54.001310690Z
-modified_at: 2026-11-23T19:48:32.300472636Z
+modified_at: 2026-11-23T19:53:30.594610448Z
 req_type: Bug
 tags:
 - doctor
@@ -160,6 +160,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a209f8-80e2-7200-9fb6-db693628fc5c
+  author: aida-session-start
+  timestamp: 2026-11-23T19:53:30.594606302Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drive
 filed_at:
   code_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
