@@ -11,7 +11,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-23T23:24:38.953973714Z
+modified_at: 2026-11-23T23:27:07.776133272Z
 req_type: Story
 tags:
 - docs
@@ -43,6 +43,16 @@ comments:
   modified_at: 2026-11-23T20:02:51.304507211Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20abc-1705-75f1-b9b9-fa5ab22396a9
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 54e9220e1db9175dbb2c284241aed674328067f6, including the native worktree diff. The origin/main merge-base diff is empty. No untracked additions.
+    AC1: [evidence: documentation-inspection] The ten explicitly named concepts appear in the template from aida-core/templates/.aida/discipline/product-glossary.md:21 and in docs/showcase/glossary.html:19. Checked train, landing-mode and authority wording against the operator docs. ProductGlossaryTests.test_delivery_terms_have_searchable_definitions (tests/test_showcase_build.py:16) passed. Cross-reference, punctuation, duplicate-entry and missing-anchor probes passed; the template copies match and build.py --check passed. No executable authority paths changed. The book generator consumed the edited product template directly because the installed binary embeds the previous version. Broader vocabulary, field guide, themed figures and workflow/authority refresh deferred under the small-PR rule. No reviewer verdict.
+  created_at: 2026-11-23T23:27:07.776133272Z
+  modified_at: 2026-11-23T23:27:07.776133272Z
+  session_id: 01a20ab97aac
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f9-2fcf-7663-b676-65c77ff26880
   author: joe
