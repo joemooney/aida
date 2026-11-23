@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T05:17:24.341824736Z
+modified_at: 2026-11-23T05:17:28.146835928Z
 req_type: Bug
 tags:
 - ci
@@ -74,6 +74,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2723 (origin BUG-b6b1278890774ef993d2ebc327862470-484), completing spec. Reviewed all four landed-diff files against 5470336db358. None of the findings depends on the intervening base change to landing API argument compatibility. CI pending at review time. Used source, existing test evidence and read-only forge observations.. No triage reason was given.'
   created_at: 2026-11-23T05:17:24.341821870Z
   modified_at: 2026-11-23T05:17:24.341821870Z
+- id: 01a206d6-760c-7131-bb3c-230330df3469
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2723):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: dac2ffda63a2
+    Recorded: 2026-11-23T05:14:43.171862118+00:00
+    Findings:
+    1. [p1, unmet-claimed-ac] AC1, pr_train.rs:846–873. check_rows uses gh pr checks, a per-name view. On the motivating PR #4391 after its FAST rerun, it returns both tier markers but only the FAST Build from 45098448471, although the jobs endpoint confirms successful FULL Build job 137454500342 in 45099774496 on the same SHA. If the visible older Build is red, rows.iter().any cannot prove the green replacement and the train still refuses. Same-tier repeats can also collapse to a single marker and take the early return. Read complete, pinned run/job evidence for the selected candidates and test a rollup with the replacement Build omitted.
+    2. [p2, unmet-claimed-ac] AC1, pr_train.rs:850–875. Only successful runs enter newest. With two completed same-tier failures, old rows remain actionable. For example, a stale test failure can turn a newer infrastructure-only cancellation into a code-red bisection. Select the latest completed run per identity and tier even when it is red, retaining its own blocking result. Cover this ordering with distinct failed jobs.
+    3. [p2, unmet-claimed-ac] AC1, land.rs:1523 and pr_train_verified.rs:828. Neither landing evaluator uses the new selection rule. summarize_github_rollup only retires FAST when its run conclusion is cancelled, so a superseded failed FAST-only job can still make land report red after FULL passes. The final exact-tip judge uses latest_per_name, which can discard an older FULL run when a newer FAST run shares its Build name. Apply consistent tier-aware selection through landing and the final recheck and exercise both tier orders.
+    4. [p2, unmet-claimed-ac] AC2, pr_train.rs:988–995 and pr_train_verified.rs:843. Every described blocker says 'supersession unproven', even with two identified completed runs of the same tier. The final exact-tip failure only prints Failed(check names). Carry the actual run ID, cancellation and supersession evidence through both refusal paths, distinguishing known outcomes from unavailable metadata. Add refusal assertions for both paths.
+    5. [p1] pr_train.rs:3463–3473. gh_stdout(...).ok()? swallows both forge failures and train-journal checkpoint errors, and JSON parse failures also become None. A temporary metadata failure leaves the stale red row active, returning a CI verdict that can trigger bisection/ejection instead of wait_train_ci's read-error retry. Propagate checkpoint failures and return TrainCiReadError for unreadable selection evidence. Exercise the failed-read path.
+    6. [untested-path] pr_train.rs:854 and tests/story_1690_train_tests.rs:6506. The wrong-head fixture is not a 40-digit SHA, so the test still passes if expected-head matching is removed. Both candidate metadata records always share workflow, repository and branch. Add well-formed different-SHA and independent identity mismatch cases that retain the older red result, plus a newer FAST that cannot retire FULL.
+    7. [test-gap] AC4 is on the supplied untraced list. The documentation change satisfies the wording, but the diff adds no check for the interim sequence. Add a focused documentation assertion for waiting for FAST before toggling ci:full.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T05:17:27.948746507Z
+  modified_at: 2026-11-23T05:17:27.948746507Z
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
