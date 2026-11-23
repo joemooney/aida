@@ -9,12 +9,12 @@ description: |
   - AC1: An attempt that exited because of a transient pickup blocker (worktree or branch held, lock busy) is retried automatically once the blocker is gone, bounded with backoff, not left as a permanent exited reservation.
   - AC2: The pass summary counts heads it skipped because of a prior exited attempt (e.g. "N held by exited attempts"), naming the PRs, so "0 dispatched, 0 refused" can never hide stuck changes.
   - AC3: A regression test: an attempt exits on a held worktree, the worktree is removed, and the next pass dispatches the same head.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T23:48:41.877431556Z
-modified_at: 2026-11-23T05:51:57.497201136Z
+modified_at: 2026-11-23T06:33:37.664146319Z
 req_type: Bug
 tags:
 - review-watch
@@ -52,6 +52,12 @@ comments:
   modified_at: 2026-11-23T05:51:57.497201136Z
   session_id: 01a206d328f6
   harness_version: codex-cli 0.167.0
+- id: 01a2071c-3080-7511-88d7-415d3b6b71f3
+  author: aida-publication-done
+  content: Implementer push 2fcffa998759 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T06:33:37.664145263Z
+  modified_at: 2026-11-23T06:33:37.664145263Z
+  session_id: 01a206d328f6
 history:
 - id: 01a206d3-578e-7762-a596-c22bf46a234d
   author: aida-session-start
@@ -66,6 +72,14 @@ history:
   session_id: 01a206d328f6
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a2071c-3080-7511-88d7-414e9f0b1af2
+  author: aida-publication-done
+  timestamp: 2026-11-23T06:33:37.664141506Z
+  session_id: 01a206d328f6
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
   branch: main
