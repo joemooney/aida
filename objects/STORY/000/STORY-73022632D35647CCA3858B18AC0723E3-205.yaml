@@ -1,0 +1,91 @@
+id: 01a205ff-dba9-72b0-aa8a-70d0b86549f3
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-205
+title: 'Review PR-4401: [AI:codex] feat(land): readiness and WAITING follow the landing mode (S1b) (Refs STORY-2897)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a205d7`) for branch `story-2897-s1b`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4401>
+  - Branch: `story-2897-s1b` → `main`
+
+  ## Covers
+
+  - STORY-2897
+  - STORY-2737
+  - TASK-3818
+  - BUG-2564
+  - BUG-2647
+  - BUG-2585
+  - BUG-2531
+  - BUG-2635
+  - BUG-2588
+  - TASK-3123
+  - BUG-2603
+  - TASK-3797
+  - TASK-3796
+  - TASK-3795
+  - STORY-2768
+  - BUG-2555
+  - STORY-2745
+  - BUG-2579
+  - BUG-2580
+  - BUG-2583
+  - STORY-2772
+  - BUG-2565
+  - BUG-2576
+  - BUG-2554
+  - BUG-2571
+  - BUG-2569
+  - STORY-2775
+  - BUG-2543
+  - BUG-2551
+  - BUG-2563
+  - BUG-2570
+  - STORY-2771
+  - STORY-2749
+  - BUG-2559
+  - BUG-2556
+  - BUG-2550
+  - BUG-2545
+  - BUG-2539
+  - BUG-2540
+  - BUG-2534
+  - TASK-3790
+  - BUG-2537
+  - TASK-3789
+  - BUG-2538
+  - TASK-3448
+  - BUG-2533
+  - BUG-2522
+  - BUG-2521
+  - BUG-2525
+
+  ## Slice of (Refs only — not completed by this PR)
+
+  Commit subjects carry `(Refs SPEC-ID)`: this PR is one slice of a spec that a later PR completes. Review this slice against that spec's acceptance criteria.
+
+  - STORY-2903
+  - STORY-2905
+  - BUG-2626
+  - STORY-2833
+  - BUG-2544
+  - STORY-2732
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4401` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T01:23:03.721474770Z
+modified_at: 2026-11-23T01:23:03.721474770Z
+req_type: Story
+filed_at:
+  code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6be38166be
+  session: 01a205d752af
