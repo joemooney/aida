@@ -111,40 +111,48 @@ pub(crate) fn force_claim_clone_owner(
     // A parsing/binding failure is normalized to a refusal by lease_holder_record.
     // Only an originally recorded refusal is eligible for the legacy PID check.
     // trace:BUG-2715 | ai:codex
-    use aida_core::proc_identity::{recorded_holder, HolderRecord};
     let unknown = |why: String| OwnerVerdict::Unknown {
         why: format!(
             "{why}; inspect {} with `aida session leases --all`",
             crate::lease_path(Path::new(""), &lease.id).display()
         ),
     };
-    let explicit_refusal = match lease.holder_record.as_deref() {
-        Some(raw) => match serde_json::from_str::<HolderRecord>(raw) {
-            Ok(original) if original.refusal().is_some() => {
-                if original.identity().is_some()
-                    || uuid::Uuid::parse_str(original.generation()).is_err()
-                    || !serde_json::to_value(&original)
-                        .is_ok_and(|v| v["version"] == 1 && v["node_id"] == "")
-                {
-                    return unknown("invalid holder refusal".into());
-                }
-                true
-            }
-            Ok(_) => {
-                if let Err(reason) = recorded_holder(
-                    raw,
-                    lease.active_pid,
-                    lease.active_pid_start_time.as_deref(),
-                    lease.pid_namespace,
-                ) {
-                    return unknown(format!("invalid holder binding: {reason:?}"));
-                }
-                false
-            }
-            Err(error) => return unknown(format!("invalid holder record: {error}")),
-        },
-        None => false,
+    let Some(raw) = lease.holder_record.as_deref() else {
+        return unknown("missing holder record".into());
     };
+    let original = match crate::leases::bound_lease_holder(lease, raw) {
+        Ok(record) => record,
+        Err(reason) => return unknown(format!("invalid holder binding: {reason:?}")),
+    };
+    let Some(holder) = &record.holder else {
+        return unknown("missing ownership holder".into());
+    };
+    let [witness] = holder.witnesses.as_slice() else {
+        return unknown("ambiguous ownership witness".into());
+    };
+    let super::WitnessKind::Process { host, id, pid_ns } = &witness.kind else {
+        return unknown("missing process witness".into());
+    };
+    let process_matches = match original.identity() {
+        Some(process) => id == &process.legacy() && *pid_ns == Some(process.pidns_inode),
+        None => {
+            let ticks = id
+                .start
+                .strip_prefix("linux-starttime:")
+                .and_then(|value| value.parse::<u64>().ok());
+            Some(id.start.as_str()) == lease.active_pid_start_time.as_deref()
+                && ticks.is_some_and(|ticks| id.start == format!("linux-starttime:{ticks}"))
+                && *pid_ns == lease.pid_namespace
+        }
+    };
+    if holder.session != lease.id
+        || witness.admission.as_ref() != Some(&original)
+        || host != &lease.hostname
+        || Some(id.pid) != lease.active_pid
+        || !process_matches
+    {
+        return unknown("ownership witness does not match the current lease worker".into());
+    }
     let verdict = owner(record);
     let OwnerVerdict::Unknown { why } = verdict else {
         return verdict;
@@ -153,17 +161,10 @@ pub(crate) fn force_claim_clone_owner(
     // observable recorded worker PID to be absent; never infer death
     // from a changed start identity or an expired heartbeat here.
     // trace:BUG-2552 | ai:codex
-    let refused_holder = record.holder.as_ref().is_some_and(|holder| {
-        matches!(holder.witnesses.as_slice(), [witness]
-            if matches!(&witness.kind, crate::ownership::WitnessKind::Process { host, id, .. }
-                if host == &lease.hostname && Some(id.pid) == lease.active_pid)
-                && witness.admission.as_ref().is_some_and(|record| record.refusal().is_some()))
-    });
-    let dead = refused_holder
+    let dead = original.refusal().is_some()
         && lease.tree_kind == crate::seat_clone::TreeKind::Clone
         && lease.hostname == crate::coordination::hostname()
         && aida_core::pid_observer::PidObserver::current().can_observe(lease.pid_namespace)
-        && explicit_refusal
         && lease.active_pid.is_some_and(|pid| {
             (2..=i32::MAX as u32).contains(&pid)
                 && matches!(
@@ -792,6 +793,22 @@ hostname = "test"
         let check = |lease: &crate::SessionLease| force_claim_clone_owner(&ownership(lease), lease);
         lease.holder_record = Some(valid.clone());
         assert!(matches!(check(&lease), OwnerVerdict::Dead { .. }));
+        let predecessor = ownership(&lease);
+        let mut command = std::process::Command::new("sleep");
+        command.arg("30");
+        let capture = aida_core::proc_identity::prepare_command(&mut command).unwrap();
+        let mut successor = command.spawn().unwrap();
+        let successor_record = capture.finish(&mut successor);
+        let mut handoff = lease.clone();
+        handoff.active_pid = Some(successor.id());
+        handoff.active_pid_start_time =
+            crate::process_probe::process_start_identity(successor.id());
+        handoff.holder_record = Some(serde_json::to_string(&successor_record).unwrap());
+        assert!(matches!(check(&handoff), OwnerVerdict::Alive { .. }));
+        let verdict = force_claim_clone_owner(&predecessor, &handoff);
+        successor.kill().unwrap();
+        successor.wait().unwrap();
+        assert!(matches!(verdict, OwnerVerdict::Unknown { .. }));
         let mut wrong_pid = serde_json::to_value(&admission).unwrap();
         wrong_pid["identity"]["pid"] = serde_json::json!("wrong-type");
         let refusal = aida_core::proc_identity::HolderRecord::refused(
@@ -806,11 +823,16 @@ hostname = "test"
             force_claim_clone_owner(&ambiguous, &lease),
             OwnerVerdict::Unknown { .. }
         ));
-        let mut wrong_version = serde_json::to_value(refusal).unwrap();
+        let mut wrong_version = serde_json::to_value(&refusal).unwrap();
         wrong_version["version"] = serde_json::json!(2);
         let start = lease.active_pid_start_time.clone();
+        let mut incomplete = serde_json::to_value(&refusal).unwrap();
+        incomplete.as_object_mut().unwrap().remove("node_id");
         for (raw, stamp) in [
-            ("pid = [".into(), start.clone()),
+            ("{".into(), start.clone()),
+            (incomplete.to_string(), start.clone()),
+            (serde_json::to_string(&refusal).unwrap(), None),
+            (format!("{valid}{}", " ".repeat(65536)), start.clone()),
             (wrong_version.to_string(), start.clone()),
             (wrong_pid.to_string(), start),
             (valid, None),

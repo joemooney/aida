@@ -226,9 +226,9 @@ pub(crate) fn holder_for_lease(
                     .map(|id| id.legacy())
                     .unwrap_or(ProcessIdentity {
                         pid: lease.active_pid.unwrap_or(0),
-                        start: String::new(),
+                        start: lease.active_pid_start_time.clone().unwrap_or_default(),
                     }),
-                pid_ns: record.identity().map(|id| id.pidns_inode),
+                pid_ns: lease.pid_namespace,
             },
             admission: Some(record),
             recorded_at: now,

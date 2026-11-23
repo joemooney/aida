@@ -4170,7 +4170,8 @@ pub(crate) fn check_exited_branch_clone(
     branch: &str,
     path: &std::path::Path,
 ) -> Result<SessionLease> {
-    let leases: Vec<_> = list_leases(root)
+    let leases: Vec<_> = crate::leases::list_leases_for_clone_reclaim(root)
+        .map_err(anyhow::Error::msg)?
         .into_iter()
         .filter(|l| {
             crate::worktree::canonical_or_self(&l.worktree_path)
@@ -4256,6 +4257,31 @@ pub(crate) fn reclaim_exited_branch_clone(
 #[cfg(test)]
 mod force_claim_ownership_tests {
     use super::*;
+
+    // trace:BUG-2715 | ai:codex
+    #[test]
+    fn bug_2715_truncated_session_refuses_even_with_readable_match() {
+        let root = tempfile::tempdir().unwrap();
+        let clone = root.path().join("clone");
+        let broken = crate::lease_path(root.path(), "broken.lease");
+        std::fs::create_dir_all(broken.parent().unwrap()).unwrap();
+        std::fs::write(&broken, "id = \"broken").unwrap();
+        for readable in [false, true] {
+            if readable {
+                std::fs::write(crate::lease_path(root.path(), "owner"), format!(
+                    "id = \"owner\"\nscope = \"BUG-2715\"\nslug = \"test\"\nowner = \"test\"\nworktree_path = {}\nbranch = \"rework\"\nstarted_at = \"2026-11-05T00:00:00Z\"\nhostname = \"h\"\ntree_kind = \"clone\"",
+                    aida_core::toml_quote::toml_string(&clone.display().to_string())
+                )).unwrap();
+            }
+            let err = check_exited_branch_clone(root.path(), "rework", &clone)
+                .unwrap_err()
+                .to_string();
+            assert!(
+                err.contains(&broken.display().to_string()) && err.contains("cat --"),
+                "{err}"
+            );
+        }
+    }
 
     // Admission must refuse before touching an orphan or an ambiguous clone.
     // trace:BUG-2455 | ai:codex

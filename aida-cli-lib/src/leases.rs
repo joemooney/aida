@@ -1449,14 +1449,38 @@ pub(crate) fn lease_holder_record(
 ) -> Option<aida_core::proc_identity::HolderRecord> {
     use aida_core::proc_identity::HolderRecord;
     let raw = l.holder_record.as_ref()?;
-    Some(
-        aida_core::proc_identity::recorded_holder(
-            raw,
-            l.active_pid,
-            l.active_pid_start_time.as_deref(),
-            l.pid_namespace,
-        )
-        .unwrap_or_else(HolderRecord::refused),
+    Some(bound_lease_holder(l, raw).unwrap_or_else(HolderRecord::refused))
+}
+
+// trace:BUG-2715 | ai:codex
+pub(crate) fn bound_lease_holder(
+    lease: &SessionLease,
+    raw: &str,
+) -> Result<aida_core::proc_identity::HolderRecord, aida_core::proc_identity::HolderRefusal> {
+    use aida_core::proc_identity::{recorded_holder, HolderRecord, HolderRefusal};
+    let invalid = || HolderRefusal::EvidenceUnavailable("invalid holder envelope".into());
+    if raw.len() > 64 * 1024 {
+        return Err(HolderRefusal::EvidenceUnavailable(
+            "oversized holder record".into(),
+        ));
+    }
+    let original: HolderRecord = serde_json::from_str(raw).map_err(|_| invalid())?;
+    if original.refusal().is_some() {
+        let envelope: serde_json::Value = serde_json::from_str(raw).map_err(|_| invalid())?;
+        if envelope["version"] != 1
+            || envelope["node_id"] != ""
+            || envelope.get("identity") != Some(&serde_json::Value::Null)
+            || uuid::Uuid::parse_str(original.generation()).is_err()
+        {
+            return Err(invalid());
+        }
+        return Ok(original);
+    }
+    recorded_holder(
+        raw,
+        lease.active_pid,
+        lease.active_pid_start_time.as_deref(),
+        lease.pid_namespace,
     )
 }
 
@@ -2288,7 +2312,7 @@ pub(crate) fn list_leases_strict(
     project_root: &std::path::Path,
     spec_ids: &[&str],
 ) -> Result<Vec<SessionLease>, String> {
-    list_leases_strict_inner(project_root, spec_ids, false)
+    list_leases_strict_inner(project_root, spec_ids, false, false)
 }
 
 /// Lease listing for a branch-ownership judgement: like
@@ -2299,16 +2323,28 @@ pub(crate) fn list_leases_strict(
 pub(crate) fn list_leases_strict_all(
     project_root: &std::path::Path,
 ) -> Result<Vec<SessionLease>, String> {
-    list_leases_strict_inner(project_root, &[], true)
+    list_leases_strict_inner(project_root, &[], true, false)
+}
+
+/// Reclaim must cover the same candidate paths as list_leases, including dotted IDs.
+// trace:BUG-2715 | ai:codex
+pub(crate) fn list_leases_for_clone_reclaim(
+    root: &std::path::Path,
+) -> Result<Vec<SessionLease>, String> {
+    list_leases_strict_inner(root, &[], true, true)
 }
 
 fn list_leases_strict_inner(
     project_root: &std::path::Path,
     spec_ids: &[&str],
     any_unparseable_is_unknown: bool,
+    include_dotted_ids: bool,
 ) -> Result<Vec<SessionLease>, String> {
     let dir = leases_dir(project_root);
-    if !dir.exists() {
+    if dir
+        .symlink_metadata()
+        .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+    {
         return Ok(Vec::new());
     }
     let entries = std::fs::read_dir(&dir)
@@ -2317,10 +2353,14 @@ fn list_leases_strict_inner(
     for entry in entries {
         let entry = entry.map_err(|e| format!("reading {}: {e}", dir.display()))?;
         let p = entry.path();
-        let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
-            continue;
+        let filename = entry.file_name();
+        let name = filename.to_string_lossy();
+        let candidate = if include_dotted_ids {
+            name.ends_with(".toml") && !is_lease_companion(&name)
+        } else {
+            is_session_lease_file(&name)
         };
-        if !is_session_lease_file(name) {
+        if !candidate {
             continue;
         }
         // An `aida lock` lock-only entry is not a session lease and names no
@@ -2335,22 +2375,32 @@ fn list_leases_strict_inner(
             continue;
         }
         let label = p.display().to_string();
+        let inspect = || {
+            format!(
+                "inspect with `cat -- {}`",
+                crate::session_end::shell_single_quote(&label)
+            )
+        };
         match read_lease_file_for_gate(&label, || std::fs::read_to_string(&p), spec_ids) {
             LeaseFileRead::Lease(lease) => out.push(*lease),
             LeaseFileRead::OtherScope if !any_unparseable_is_unknown => {}
             LeaseFileRead::OtherScope => {
-                if !p.exists() {
+                if p.symlink_metadata()
+                    .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+                {
                     continue;
                 }
-                return Err(format!("the lease {label} does not parse"));
+                return Err(format!("the lease {label} does not parse; {}", inspect()));
             }
             LeaseFileRead::Unknown(why) => {
                 // A lease removed between the listing and the read is gone,
                 // not unknown.
-                if !p.exists() {
+                if p.symlink_metadata()
+                    .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+                {
                     continue;
                 }
-                return Err(why);
+                return Err(format!("{why}; {}", inspect()));
             }
         }
     }
