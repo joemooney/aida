@@ -764,7 +764,8 @@ while True:
 def preflight_helper(mode):
     """Exercise the production preflight through its exec release, after privileged setup."""
     import contextlib
-    from unittest.mock import Mock
+    import ctypes as C
+    import errno
 
     tree = ast.parse((SOURCE / 'containment/contained_host.py').read_text())
     host = next(node for node in tree.body if getattr(node, 'name', '') == 'host_contained')
@@ -790,19 +791,30 @@ def preflight_helper(mode):
 
         entered = threading.Event()
 
-        def receive_one(fd):
-            if mode == 'withdrawn':
-                # Last task exits after readiness and before RECV dequeues.
+        request = ns['Notification']()
+        request.id = 41
+        request.data.arch = 0xc000003e
+        request.data.nr = 42
+        # A zero-length sockaddr gets a denial without accessing tracee memory.
+        def listener_ioctl(fd, operation, pointer):
+            if operation.value == ns['RECV']:
+                assert not entered.is_set(), 'broker attempted a second notification receive'
                 entered.set()
-                sender.close()
-                threading.Event().wait()
-            return os.read(fd, 1)
+                assert os.read(fd, 1) == b'N'
+                if mode == 'withdrawn':
+                    # Last task exits after readiness and before RECV dequeues.
+                    sender.close()
+                    threading.Event().wait()
+                C.memmove(pointer, C.byref(request), C.sizeof(request))
+            else:
+                assert operation.value == ns['SEND']
+                assert fd == notification.fileno()
+                response = C.cast(pointer, C.POINTER(ns['Response'])).contents
+                assert (response.id, response.error, response.flags) == (request.id, -errno.EACCES, 0)
+                os.write(fd, b'R')
+            return 0
 
-        stack.enter_context(patch.dict(ns, receive_notification=receive_one))
-
-        def service(fd, *args, n):
-            assert n == b'N'
-            os.write(fd, b'R')
+        stack.enter_context(patch.object(ns['LIBC'], 'ioctl', listener_ioctl))
 
         receipt_r, receipt_w = os.pipe()
         acceptance, writer = os.pipe()
@@ -813,7 +825,7 @@ def preflight_helper(mode):
         context = dict(ns, notification=notification.fileno(), broker=broker, proxy=proxy,
                        end=time.monotonic() + 65, process=process,
                        mutation=None, state_fd=-1, state_prefix=b'', connector=None, port=0,
-                       lane_net=None, lane_user=None, broker_connect_contained=service,
+                       lane_net=None, lane_user=None,
                        identity=[line.split() for line in Path('/proc/self/uid_map').read_text().splitlines()],
                        namespaces={'net': os.readlink('/proc/self/ns/net')}, cfg={'policy_sha': 'fixture'},
                        receipt_fd=receipt_w, acceptance_fd=acceptance, credential_deadline=lambda: None)
