@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:03.028829868Z
-modified_at: 2026-11-23T16:02:49.820455230Z
+modified_at: 2026-11-23T16:02:54.336281625Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -188,6 +188,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T16:02:49.666794058Z
   modified_at: 2026-11-23T16:02:49.666794058Z
+- id: 01a20925-9804-7081-a707-454aa776b27c
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:02):
+    # TASK-3246 / PR #4430 r4 FINAL (advisor-122 ruling 2026-11-23 09:01; relayed by product-15). Lane: CODEX. Lock code, so strict. TINY. A blocking CR after this round = PARK.
+
+    CR at df02796d (r3). r3 raised the record limit, but already-running READERS on an older binary (dell1 vs imac mid-rollout) still validate Resume actors at 512 bytes, so a 513-544-byte field breaks them.
+    RULING (simplest compatible form): KEEP the version-1 Resume event and the 32-byte recovery prefix, REVERT the raised limit, and TRUNCATE the actor part so prefix + actor <= 512 bytes. Cut on a UTF-8 char boundary, ending with "…". Recovery only needs the marker plus a recognisable actor, not the full string.
+    TEST: a 512-byte actor yields a <=512-byte field that the OLD reader (512-byte validation) accepts, AND recovery is still recognised. Include a multi-byte UTF-8 actor at the cut point.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: that plus the diff.
+  created_at: 2026-11-23T16:02:54.336281625Z
+  modified_at: 2026-11-23T16:02:54.336281625Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fd0c-0321-7fb0-b25d-dca0962b2219
   author: joe
