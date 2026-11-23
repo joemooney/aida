@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T05:16:54.414404092Z
+modified_at: 2026-11-23T05:16:58.536968628Z
 req_type: Bug
 tags:
 - recovery
@@ -147,6 +147,20 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2721 AC2 and AC3 pass source review: positive holder matches identify PID, command and reason, and a traced wrapped-recovery regression keeps the unrelated primary-checkout shell alive through release. AC1 removes cwd-only recovery, but the required descendant protection still fails on three release paths. Reviewed the landed tree on 5470336db358. The intervening forge change affects none of the findings. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-23T05:16:54.414402415Z
   modified_at: 2026-11-23T05:16:54.414402415Z
+- id: 01a206d6-0268-73b1-ab56-377118fce89b
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2721):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 281f415ef3ad
+    Recorded: 2026-11-23T05:13:49.641926526+00:00
+    Findings:
+    1. [p1, security-authority-bypass] aida-cli-lib/src/agent_codex_background.rs:2234 — Known-receipt recovery can release a scope while a worker descendant is still in the recorded worker group or supervisor session. A helper launched with a clean environment carries neither UUID nor grant. If the supervisor dies while the helper is running and the worker exits, the old group/session checks would have retained the reservation. The new probe checks neither, treats the helper as unrelated, then revokes the grant and admits another driver. Preserve corroborating group/session evidence or equivalent durable descendant tracking while keeping cwd alone out of recovery. Cover a surviving helper with a clean environment.
+    2. [p1, security-authority-bypass] aida-cli-lib/src/codex_bg_receipt.rs:854 — For a pre-token launch with a partially readable receipt, loss of grant_id silently disables the only legacy descendant check. Even when that receipt still identifies the dead worker and its group, a living ordinary child in that group only carries the old grant, so --retire-unknown can archive the receipt and free the scope. Retain usable legacy group/session evidence or return Unknown when required legacy attribution is missing. Exercise a partial pre-token receipt with a surviving grant-only child.
+    3. [p1, security-authority-bypass] aida-cli-lib/src/agent_codex_background.rs:2146 — Normal supervisor exit never enables the new environment-token check. A surviving child that starts a new session and changes directory outside the worktree can retain the production worker UUID in its environment and still be invisible to exit_occupancy. The supervisor can mark the attempt Exited, after which recover-launch returns before checking the token. Include the attempt-bound environment evidence in the exit decision and cover that lifecycle path with an environment-only holder.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T05:16:58.344465461Z
+  modified_at: 2026-11-23T05:16:58.344465461Z
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
