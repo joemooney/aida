@@ -196,6 +196,8 @@ pub const DROPPED_AIDA_KEYS: &[&str] = &[
     "AIDA_BUG_1984_HOLDER_DIR",
     "AIDA_BUILD_GIT_DIRTY",
     "AIDA_BUILD_GIT_SHA",
+    // Compile-time build diagnostic only. trace:BUG-2728 | ai:codex
+    "AIDA_BUILD_GIT_STATUS",
     "AIDA_BUILD_UNIX_TIME",
     "AIDA_BURNDOWN_BG_WAIT_CEILING_MS",
     "AIDA_BURNDOWN_LOCK_HELD",
