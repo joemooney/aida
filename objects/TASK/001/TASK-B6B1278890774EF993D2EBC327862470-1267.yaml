@@ -1,0 +1,29 @@
+id: 01a20a78-c995-7b21-9027-9613acbeb45d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1267
+agreed_id: TASK-3847
+title: aida doctor and land status show the remaining GitHub core budget and top consumers (split from BUG-2735)
+description: |
+  Split from BUG-2735 (advisor-122 ruling 2026-11-23 15:13; product-15). BUG-2735 AC1 adds the shared core-budget check and back-off. This follow-up makes the budget visible.
+
+  ## Acceptance
+  - AC1: `aida doctor` (a check) and `aida land status` show the remaining GitHub core REST budget (remaining/limit, reset time), using the cached rate_limit reading, and warn below 20%.
+  - AC2: They name the top consumers since the last reset when known (review-watch, auto-train, main-watch, seat watchers), or say "unknown". Test with a fake rate_limit response below the threshold.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T22:13:37.813791727Z
+modified_at: 2026-11-23T22:13:37.813791727Z
+req_type: Task
+tags:
+- doctor
+- forge
+- small
+- track:integration
+filed_at:
+  code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f1a50179e5a
+  vendor: claude
