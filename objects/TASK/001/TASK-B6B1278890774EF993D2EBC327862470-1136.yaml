@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T17:17:45.032744607Z
-modified_at: 2026-11-23T00:06:51.792029567Z
+modified_at: 2026-11-23T00:06:54.345493533Z
 req_type: Task
 tags:
 - landing
@@ -519,6 +519,27 @@ comments:
   created_at: 2026-11-22T20:14:47.956291870Z
   modified_at: 2026-11-22T20:14:47.956291870Z
   session_id: 01a204b5f731
+- id: 01a205ba-21d9-7423-8206-8065e7825b9c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4381):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 0a5f3cd6b957
+    Recorded: 2026-11-23T00:05:54.782516842+00:00
+    Findings:
+    1. [p1, security-authority-bypass] coordination.rs:859, release_lock_claim and release_claim. During cleanup after another clone takes ownership, a valid successor record over 64 KiB now reads as None. Both release checks proceed when the path exists, including after refresh under the writer lock. Cleanup can therefore delete and publish removal of the successor’s drain, solo or session claim. Use the checked read at both ownership checks and retain the record on refusal. Cover release after a successor takes over, verifying the file and store tip survive.
+    2. [p1, security-authority-bypass] coordination.rs:1145. Reviewer admission skips implementer_claims and still passes read_claim returning None into decide_claim. A live foreign reviewer claim over the new size limit previously parsed and refused competing admission. The bounded reader now makes it look absent and the path-based write replaces it without force. Propagate checked-read failures before the reviewer decision and write, and cover preservation of an existing foreign reviewer claim.
+    3. [p2] land_stalls.rs:1005. A silent or invalid matching foreign lane leaves a conflict visible, but its summary declares nobody owns it and its action recommends routing another lane. Have the advisor confirm the existing lane’s ownership before dispatch. This prior finding is outside TASK-3829’s six filed items.
+    4. [p2] land_stalls.rs:1958. Before the capped lane-host scan, live_pass_with already parses and collects the directory through uncapped coordination::list_claims. Apply the aggregate limit on the first observation or share the bounded scan. This prior finding is outside TASK-3829’s six filed items.
+    5. Deferred follow-up TASK-3829 [unmet-claimed-ac]. leases.rs:812 still performs a blocking sibling-clone session lease read during the guard’s claim partition.
+    6. Deferred follow-up TASK-3829 [unmet-claimed-ac]. lane_hosts.rs drops an unreleased silent lane after 24 hours and allows a duplicate rework route.
+    7. Deferred follow-up TASK-3829 [unmet-claimed-ac]. land.rs branch_names matches a partial multipart ID and misses equivalent padded IDs.
+    8. Deferred follow-up TASK-3829 [unmet-claimed-ac]. lane_hosts.rs validates a trimmed heartbeat but judges the original string, so surrounding whitespace can make an expired lane appear live.
+    9. Deferred follow-up TASK-3829 [unmet-claimed-ac]. land_stalls.rs adds landing-history Git errors after sanitizing unknown lines, exposing multiline, unbounded diagnostics.
+    10. Deferred follow-up TASK-3829 [unmet-claimed-ac]. lane_hosts.rs omits default-ignorable characters including U+206A and U+034F from routed text filtering.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T00:06:54.169097482Z
+  modified_at: 2026-11-23T00:06:54.169097482Z
 history:
 - id: 01a1f9f8-1463-7951-b97b-2403e64ce72e
   author: joe
