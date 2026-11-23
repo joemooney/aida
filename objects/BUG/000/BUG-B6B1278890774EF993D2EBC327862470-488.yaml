@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The mandate's spec resolution for a PR's trailer IDs maps agreed_id labels (e.g. TASK-3835) to their store objects, using the store at (or refreshed to) origin/aida-store. A test: a PR whose trailer names agreed_id labels present only via the label map resolves.
   - AC2: When resolution fails, the refusal names each unresolved ID and the store head it read (so stale-cache cases are distinguishable from missing specs).
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T11:13:00.390677324Z
+modified_at: 2026-11-23T11:13:27.483089255Z
 req_type: Bug
 tags:
 - agreed-id
@@ -131,6 +131,11 @@ comments:
   created_at: 2026-11-23T10:53:05.860722518Z
   modified_at: 2026-11-23T10:53:05.860722518Z
   session_id: 01a207da9c5c
+- id: 01a2081c-61bb-77f2-bc69-9af4617967c8
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2727 AC1 PARTIAL: the direct mandate fixture resolves the origin-only padded agreed label after a refresh, but the train can discard an applicable title ID before that refresh. AC2 PASS in source review: the fixture checks the remaining ambiguous and missing IDs together with the refreshed store SHA. A refresh can also write from the read-only preview, and an unresolved ID can prevent sticky exclusion recording for other evidence. Reviewed all of the pinned landing diff against main 8018c42f8d5f and attested the original head. The head is one commit behind and none of the findings depends on code changed by that base commit. FAST build and source gates passed on the PR head. The merge-hold gate was awaiting clearance. No local tests were run.. No triage reason was given.'
+  created_at: 2026-11-23T11:13:27.483079542Z
+  modified_at: 2026-11-23T11:13:27.483079542Z
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
@@ -196,6 +201,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a2081c-61bb-77f2-bc69-9aef1dd2ba96
+  author: joe
+  timestamp: 2026-11-23T11:13:27.483067295Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: a16f3592f015e06580a94c1f7879ea9c877c088e
   branch: main
@@ -203,11 +215,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: ca95624cadf
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: 'BUG-2727 AC1 PARTIAL: the direct mandate fixture resolves the origin-only padded agreed label after a refresh, but the train can discard an applicable title ID before that refresh. AC2 PASS in source review: the fixture checks the remaining ambiguous and missing IDs together with the refreshed store SHA. A refresh can also write from the read-only preview, and an unresolved ID can prevent sticky exclusion recording for other evidence. Reviewed all of the pinned landing diff against main 8018c42f8d5f and attested the original head. The head is one commit behind and none of the findings depends on code changed by that base commit. FAST build and source gates passed on the PR head. The merge-hold gate was awaiting clearance. No local tests were run.'
-  recovery_hint: address the review findings, move BUG-2727 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T11:13:00.390677324Z
