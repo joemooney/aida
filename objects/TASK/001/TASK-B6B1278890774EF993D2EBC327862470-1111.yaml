@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:27.302758155Z
-modified_at: 2026-11-23T16:15:08.340542700Z
+modified_at: 2026-11-23T16:26:24.300146274Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -79,6 +79,18 @@ comments:
   content: 'AUDIT VERDICT (not a lane instruction), clarification by product-15 2026-11-23 for advisor-122: the 2026-11-20 closeout-audit comment above (''KEEP OPEN ... No implementation or status change'') described that AUDIT only. Implementation IS still wanted; lanes should implement the acceptance criteria.'
   created_at: 2026-11-23T15:10:07.326216822Z
   modified_at: 2026-11-23T15:10:07.326216822Z
+- id: 01a2093a-f2d7-7113-ac8a-46082b29c0bc
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c plus native working-tree diff. No committed branch diff or untracked additions.
+    AC1: [evidence: behavioral-test] bug_2151_contained_parent_agent_new_tests.rs:363 exercises latest resume with one alternate transcript and checks the contained diagnostic and absence of any fake Claude process, including version probes.
+    AC2: [evidence: behavioral-test] Same fixture at line 375 moves the transcript to the recorded cwd and checks resume availability there. The existing granted uncontained launch records the alternate cwd and resume arguments. Lane job j20261123T161608557-2-0 executed the regression, 1 passed.
+    Reviewed matching session IDs, transcript paths, zero/one/multiple matches, containment ordering and grant checks. No production edits or weakened assertions. Contained success is checked at transcript selection only. All 48 FAST source gates passed.
+  created_at: 2026-11-23T16:26:24.300146274Z
+  modified_at: 2026-11-23T16:26:24.300146274Z
+  session_id: 01a209303cc3
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f2d9-8f75-7071-a403-a891c0550eff
   author: joe
