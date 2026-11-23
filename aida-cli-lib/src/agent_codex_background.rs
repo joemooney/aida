@@ -1834,7 +1834,12 @@ pub(crate) fn supervise_until_exit(
     // proves the attempt over; anything left (or an
     // unreadable process) keeps the scope held for recovery.
     // trace:STORY-2254 | ai:claude
-    if let Some(why) = exit_occupancy(dir, &init.project_root, attempt) {
+    if let Some(why) = exit_occupancy(
+        dir,
+        &init.project_root,
+        attempt,
+        std::path::Path::new("/proc"),
+    ) {
         problems.push(why);
     }
     // TASK-2712 (advisor ruling F1): the native child cannot commit (Codex
@@ -1930,6 +1935,7 @@ pub(crate) fn exit_occupancy(
     dir: &std::path::Path,
     root: &std::path::Path,
     attempt: &str,
+    proc_root: &std::path::Path,
 ) -> Option<String> {
     let r = match receipt::read_receipt(dir, root, attempt) {
         ReceiptRead::Known(r) => r,
@@ -1938,12 +1944,13 @@ pub(crate) fn exit_occupancy(
         }
     };
     let own = own_process_chain();
+    let probe = attempt_probe(&r, root);
     let deadline = std::time::Instant::now() + EXIT_OCCUPANCY_GRACE;
     loop {
-        let why = match attempt_occupancy(&r, &own) {
+        let why = match receipt::scan_occupancy_in(proc_root, &probe, &own) {
             receipt::Occupancy::Clear => return None,
             receipt::Occupancy::Occupied(what) => format!("attempt not provably over: {what}"),
-            receipt::Occupancy::Unknown(why) => format!("attempt cannot be proven over ({why})"),
+            receipt::Occupancy::Unknown(why) => format!("attempt {attempt} is not provably over ({why}); inspect `aida agent launch-status {attempt}`"),
         };
         if std::time::Instant::now() >= deadline {
             return Some(why);
@@ -2139,21 +2146,19 @@ pub(crate) fn recover_launch(attempt: &str, retire_unknown: bool) -> Result<()> 
 /// before releasing an attempt's scope: every process in the worktree, in
 /// the worker's group or the supervisor's session, or naming the attempt.
 // trace:STORY-2254 | ai:claude
-pub(crate) fn attempt_occupancy(
-    r: &LaunchReceipt,
-    own: &std::collections::HashSet<u32>,
-) -> receipt::Occupancy {
-    let probe = receipt::OccupancyProbe {
-        worktree: Some(&r.worktree),
+fn attempt_probe<'a>(
+    r: &'a LaunchReceipt,
+    primary: &std::path::Path,
+) -> receipt::OccupancyProbe<'a> {
+    receipt::OccupancyProbe {
+        worktree: receipt::dedicated_worktree(&r.worktree, primary),
         group: r.worker.as_ref().map(|w| w.pid),
         session: r.supervisor.as_ref().map(|s| s.pid),
-        attempt: Some(&r.attempt),
-        // The launcher, supervisor and worker are the attempt's first
-        // processes; nothing started before all of them is its work.
+        recovery_token: Some(&r.attempt),
+        recovery_grant: r.grant_id.as_deref(),
+        require_grant: r.worker.is_some(),
         not_before: first_process_tick(r),
-        ..Default::default()
-    };
-    receipt::scan_occupancy(&probe, own)
+    }
 }
 
 // trace:BUG-2721 | ai:codex
@@ -2231,12 +2236,7 @@ pub(crate) fn recover_launch_at(
             ),
         }
     }
-    let probe = receipt::OccupancyProbe {
-        recovery_token: Some(attempt),
-        recovery_grant: r.grant_id.as_deref(),
-        not_before: first_process_tick(&r),
-        ..Default::default()
-    };
+    let probe = attempt_probe(&r, root);
     // Waiting wrappers also carry the recovery command and attempt in argv.
     match receipt::scan_occupancy_in(proc_root, &probe, &own_process_chain()) {
         receipt::Occupancy::Clear => {}
@@ -2244,7 +2244,7 @@ pub(crate) fn recover_launch_at(
             "attempt {attempt} is not provably over: {what}; nothing was changed"
         ),
         receipt::Occupancy::Unknown(why) => anyhow::bail!(
-            "attempt {attempt} cannot be proven over ({why}); its state is UNKNOWN and nothing was changed"
+            "attempt {attempt} is not provably over ({why}); its state is UNKNOWN; inspect `aida agent launch-status {attempt}`"
         ),
     }
     if let Some(w) = &r.worker {

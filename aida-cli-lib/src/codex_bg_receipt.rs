@@ -114,17 +114,27 @@ pub(crate) struct OccupancyProbe<'a> {
     pub group: Option<u32>,
     /// Every process in this session (the supervisor leads its own).
     pub session: Option<u32>,
-    /// Every process whose command line names this attempt id.
-    pub attempt: Option<&'a str>,
     /// Exact argv token or environment value identifying a known attempt.
     pub recovery_token: Option<&'a str>,
     /// The grant inherited by descendants of pre-token workers.
     pub recovery_grant: Option<&'a str>,
+    /// A worker may have executed before the attempt token was introduced.
+    pub require_grant: bool,
     /// Kernel start tick of the attempt's FIRST recorded process. A process
     /// of this user whose details are unreadable (a PAM helper, a process
     /// holding capabilities) and that started strictly before it cannot be
     /// the attempt's work; without this bound, unreadable means unknown.
     pub not_before: Option<u64>,
+}
+
+pub(crate) fn dedicated_worktree<'a>(tree: &'a Path, primary: &Path) -> Option<&'a Path> {
+    if tree == primary
+        || matches!((tree.canonicalize(), primary.canonicalize()), (Ok(a), Ok(b)) if a == b)
+    {
+        None
+    } else {
+        Some(tree)
+    }
 }
 
 impl ProcId {
@@ -140,6 +150,7 @@ impl ProcId {
 /// is present and unreadable makes the result `Unknown`. A process whose
 /// cwd was deleted but lay inside the tree still counts as occupying it.
 // trace:STORY-2254 | ai:claude
+#[cfg(test)]
 pub(crate) fn scan_occupancy(
     probe: &OccupancyProbe<'_>,
     exclude: &std::collections::HashSet<u32>,
@@ -248,21 +259,23 @@ pub(crate) fn scan_occupancy_in_with_owner(
             // An unrelated zombie holds no cwd and runs nothing.
             continue;
         }
+        let command = stat
+            .split_once('(')
+            .and_then(|(_, rest)| rest.rsplit_once(')'))
+            .map(|(comm, _)| comm)
+            .unwrap_or("unavailable");
         if probe.group == Some(pgrp) {
             return Occupancy::Occupied(format!(
-                "pid {pid} is in the worker's process group {pgrp}"
+                "pid {pid} command {command:?} is in the worker's process group {pgrp}"
             ));
         }
         if probe.session == Some(sid) {
-            return Occupancy::Occupied(format!("pid {pid} is in the supervisor's session {sid}"));
+            return Occupancy::Occupied(format!(
+                "pid {pid} command {command:?} is in the supervisor's session {sid}"
+            ));
         }
         // trace:BUG-2721 | ai:codex
         if let Some(token) = probe.recovery_token {
-            let command = stat
-                .split_once('(')
-                .and_then(|(_, rest)| rest.rsplit_once(')'))
-                .map(|(comm, _)| comm)
-                .unwrap_or("unavailable");
             for source in ["cmdline", "environ"] {
                 match std::fs::read(base.join(source)) {
                     Ok(raw) => {
@@ -309,21 +322,6 @@ pub(crate) fn scan_occupancy_in_with_owner(
                 }
             }
         }
-        if let Some(attempt) = probe.attempt {
-            match std::fs::read(base.join("cmdline")) {
-                Ok(raw) => {
-                    if String::from_utf8_lossy(&raw).contains(attempt) {
-                        return Occupancy::Occupied(format!("pid {pid} names attempt {attempt}"));
-                    }
-                }
-                Err(e) if gone(&e) || !ours || predates => {}
-                Err(e) => {
-                    return Occupancy::Unknown(format!(
-                        "process {pid}'s command line is unreadable: {e}"
-                    ))
-                }
-            }
-        }
         if let Some(tree) = &tree {
             match std::fs::read_link(base.join("cwd")) {
                 Ok(cwd) => {
@@ -331,7 +329,7 @@ pub(crate) fn scan_occupancy_in_with_owner(
                     let cwd = PathBuf::from(raw.strip_suffix(" (deleted)").unwrap_or(&raw));
                     if cwd == *tree || cwd.starts_with(tree) {
                         return Occupancy::Occupied(format!(
-                            "pid {pid} is running in {}",
+                            "pid {pid} command {command:?} is running in {}",
                             tree.display()
                         ));
                     }
@@ -345,6 +343,9 @@ pub(crate) fn scan_occupancy_in_with_owner(
     }
     if seen == 0 {
         return Occupancy::Unknown(format!("{} lists no processes", proc_root.display()));
+    }
+    if probe.require_grant && probe.recovery_grant.is_none_or(|g| g.trim().is_empty()) {
+        return Occupancy::Unknown("missing legacy descendant grant attribution".into());
     }
     Occupancy::Clear
 }
@@ -757,7 +758,7 @@ fn scope_blocker_except(
                 let blocks = match unknown_receipt_scope(dir, &attempt) {
                     Some(owned) => owned == *scope,
                     None => {
-                        unknown_attempt_occupancy(dir, &attempt, Path::new("/proc"))
+                        unknown_attempt_occupancy(dir, project_root, &attempt, Path::new("/proc"))
                             != Occupancy::Clear
                     }
                 };
@@ -777,16 +778,21 @@ fn scope_blocker_except(
 /// scope the receipt blocks, it never frees one.
 // trace:STORY-2254 | ai:claude
 pub(crate) fn unknown_receipt_scope(dir: &Path, attempt: &str) -> Option<ScopeKey> {
-    let path = receipt_path(dir, attempt).ok()?;
-    let meta = std::fs::symlink_metadata(&path).ok()?;
-    if !meta.file_type().is_file() || meta.len() > RECEIPT_MAX_BYTES {
-        return None;
-    }
-    let value: serde_json::Value = serde_json::from_slice(&std::fs::read(&path).ok()?).ok()?;
+    let value = partial_receipt(dir, attempt)?;
     let scope = value.get("scope")?;
     let role = scope.get("role")?.as_str()?;
     let spec = scope.get("spec")?.as_str()?;
     (!role.trim().is_empty() && !spec.trim().is_empty()).then(|| ScopeKey::new(role, spec))
+}
+
+// Partial fields are evidence for retirement. Read the bounded regular file
+// by handle so a link, FIFO or growing receipt cannot supply that evidence.
+fn partial_receipt(dir: &Path, attempt: &str) -> Option<serde_json::Value> {
+    let path = receipt_path(dir, attempt).ok()?;
+    let text =
+        aida_core::seat_clone_detect::read_regular_file_result_with_limit(&path, RECEIPT_MAX_BYTES)
+            .ok()?;
+    serde_json::from_str(&text).ok()
 }
 
 /// For a receipt with no readable identities: the boot tick of the
@@ -814,11 +820,13 @@ fn log_birth_tick(dir: &Path, attempt: &str) -> Option<u64> {
 /// Recover the usable identities from a partial receipt and check them before
 /// scanning for the attempt token or the grant inherited by older workers.
 // trace:STORY-2254 | ai:claude
-fn unknown_attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occupancy {
-    let lenient = receipt_path(dir, attempt)
-        .ok()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|raw| serde_json::from_slice::<serde_json::Value>(&raw).ok());
+fn unknown_attempt_occupancy(
+    dir: &Path,
+    project_root: &Path,
+    attempt: &str,
+    proc_root: &Path,
+) -> Occupancy {
+    let lenient = partial_receipt(dir, attempt);
     let tick = |v: Option<&serde_json::Value>| {
         v?.get("start")?
             .as_str()?
@@ -827,6 +835,8 @@ fn unknown_attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occ
             .ok()
     };
     let field = |name: &str| lenient.as_ref().and_then(|v| v.get(name));
+    let mut group = None;
+    let mut session = None;
     for name in ["owner", "worker", "supervisor"] {
         let Some(value) = field(name).filter(|v| !v.is_null()) else {
             continue;
@@ -837,6 +847,11 @@ fn unknown_attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occ
         let Ok(id) = serde_json::from_value::<ProcId>(value.clone()) else {
             return Occupancy::Unknown(format!("incomplete {name} identity"));
         };
+        match name {
+            "worker" => group = Some(id.pid),
+            "supervisor" => session = Some(id.pid),
+            _ => {}
+        }
         match id.state() {
             ProcState::Gone => {}
             ProcState::Live => {
@@ -852,8 +867,14 @@ fn unknown_attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occ
         }
     }
     let probe = OccupancyProbe {
+        group,
+        session,
+        worktree: field("worktree")
+            .and_then(|v| v.as_str())
+            .and_then(|tree| dedicated_worktree(Path::new(tree), project_root)),
         recovery_token: Some(attempt),
         recovery_grant: field("grant_id").and_then(|v| v.as_str()),
+        require_grant: true,
         not_before: [
             tick(field("owner")),
             tick(field("supervisor")),
@@ -863,7 +884,6 @@ fn unknown_attempt_occupancy(dir: &Path, attempt: &str, proc_root: &Path) -> Occ
         .flatten()
         .min()
         .or_else(|| log_birth_tick(dir, attempt)),
-        ..Default::default()
     };
     scan_occupancy_in(
         proc_root,
@@ -960,10 +980,10 @@ pub(super) fn retire_unknown_at(
             std::fs::symlink_metadata(&path).is_ok(),
             "attempt {attempt} has no receipt to retire"
         );
-        match unknown_attempt_occupancy(dir, attempt, proc_root) {
+        match unknown_attempt_occupancy(dir, project_root, attempt, proc_root) {
             Occupancy::Clear => {}
             Occupancy::Occupied(reason) | Occupancy::Unknown(reason) => anyhow::bail!(
-                "attempt {attempt} ({why}) cannot be proven dead: {reason}; nothing was changed"
+                "attempt {attempt} ({why}) cannot be proven dead (not provably over): {reason}; inspect `aida agent launch-status {attempt}`"
             ),
         }
         let retired = dir.join(RETIRED_DIR);

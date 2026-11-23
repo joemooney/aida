@@ -154,7 +154,15 @@ fn story_2254_bg_corrupt_receipt_never_frees_scope() {
     );
     let _ = running.kill();
     let _ = running.wait();
-    // Provably dead: no longer blocks, and retires out of admission.
+    // With neither scope nor legacy attribution, process exit alone cannot release admission.
+    assert!(scope_entry_blocker(f.project.path(), "implementer", "TASK-10").is_some());
+    assert!(retire_unknown(&dir, f.project.path(), &attempt).is_err());
+    // Restore the recorded grant before proving that it has no holder.
+    std::fs::write(
+        &path,
+        serde_json::json!({"version":99,"grant_id":uuid::Uuid::new_v4()}).to_string(),
+    )
+    .unwrap();
     assert!(scope_entry_blocker(f.project.path(), "implementer", "TASK-10").is_none());
     let kept = retire_unknown(&dir, f.project.path(), &attempt).unwrap();
     assert!(kept.starts_with(dir.join("retired")) && kept.exists());

@@ -605,9 +605,9 @@ fn story_2254_bg_lost_or_corrupt_receipt_is_unknown_not_acceptance() {
         recover_launch_at(&h.dir, h.root(), &h.attempt, std::path::Path::new("/proc")).unwrap_err();
     assert!(format!("{err:#}").contains("UNKNOWN"), "{err:#}");
     assert!(wait_gone(&worker));
-    receipt::retire_unknown(&h.dir, h.root(), &h.attempt).unwrap();
-    assert!(!path.exists());
-    assert!(receipt::scope_entry_blocker(h.root(), "implementer", "TASK-2259").is_none());
+    assert!(receipt::retire_unknown(&h.dir, h.root(), &h.attempt).is_err());
+    assert!(path.exists());
+    assert!(receipt::scope_entry_blocker(h.root(), "implementer", "TASK-2259").is_some());
 }
 
 /// A bootstrap killed before release is a failed launch, never acceptance.
@@ -808,8 +808,7 @@ fn bug_2721_recover_launch_fresh_scan_fails_closed() {
         "{err}"
     );
     assert!(h.grant().revoked_at.is_none());
-    let own = own_process_chain();
-    // A dead worker that left a descendant in its process group.
+    // A dead worker left one child in its group and another in a new session.
     // Enumerate only the fixture processes. Each entry exposes the live kernel
     // files for that PID; unrelated host credential helpers may deny environ.
     let processes = tempfile::tempdir().unwrap();
@@ -847,7 +846,10 @@ fn bug_2721_recover_launch_fresh_scan_fails_closed() {
 case " $* " in
     *" --version "*) echo 'codex-cli fixture' ;;
     *" --probe-seat "*) echo 'seat_grant_valid=true expected_seat=true' ;;
-    *) sleep 30 & echo $! ;;
+    *) cd /
+       env -i sleep 60 & grouped=$!
+       unset AIDA_SESSION_GRANT
+       setsid sleep 60 & echo "$grouped $!" ;;
 esac
 "#,
     );
@@ -880,7 +882,9 @@ esac
     BufReader::new(leader.stdout.take().unwrap())
         .read_line(&mut out)
         .unwrap();
-    let escaped: u32 = out.trim().parse().unwrap();
+    let (grouped, escaped) = out.trim().split_once(' ').unwrap();
+    let grouped: u32 = grouped.parse().unwrap();
+    let escaped: u32 = escaped.parse().unwrap();
     leader.wait().unwrap();
     assert_eq!(leader_id.state(), receipt::ProcState::Gone);
     let set_worker = |w: ProcId| {
@@ -898,10 +902,40 @@ esac
         .unwrap();
     };
     set_worker(leader_id.clone());
+    // Both children must reach their final exec before inspecting kernel evidence.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    for pid in [grouped, escaped] {
+        while std::fs::read_to_string(format!("/proc/{pid}/comm"))
+            .unwrap()
+            .trim()
+            != "sleep"
+        {
+            assert!(std::time::Instant::now() < deadline);
+            std::thread::yield_now();
+        }
+    }
+    assert!(std::fs::read(format!("/proc/{grouped}/environ"))
+        .unwrap()
+        .is_empty());
+    expose(grouped);
+    let why = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path())
+        .unwrap_err()
+        .to_string();
     assert!(
-        matches!(attempt_occupancy(&h.receipt(), &own), receipt::Occupancy::Occupied(reason) if reason.contains("process group"))
+        why.contains("process group") && why.contains(&format!("pid {grouped} ")),
+        "{why}"
     );
+    let why = exit_occupancy(&h.dir, h.root(), &h.attempt, processes.path()).unwrap();
+    assert!(why.contains("process group"), "{why}");
+    assert!(h.grant().revoked_at.is_none());
+    // SAFETY: only the fixture child reported by the worker is signalled.
+    unsafe {
+        libc::kill(grouped as libc::pid_t, libc::SIGKILL);
+    }
+    std::fs::remove_file(processes.path().join(grouped.to_string())).unwrap();
     expose(escaped);
+    let why = exit_occupancy(&h.dir, h.root(), &h.attempt, processes.path()).unwrap();
+    assert!(why.contains("in environ"), "{why}");
     let why = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path())
         .unwrap_err()
         .to_string();
@@ -925,6 +959,7 @@ esac
     {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
+    std::fs::remove_file(processes.path().join(escaped.to_string())).unwrap();
     // A missing start identity is unknown, never gone.
     set_worker(ProcId {
         pid: leader_id.pid,
@@ -932,7 +967,39 @@ esac
     });
     let err = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path()).unwrap_err();
     assert!(format!("{err:#}").contains("UNKNOWN"), "{err:#}");
-    set_worker(leader_id);
+    // A clean-environment helper can still hold the group, session, or dedicated cwd.
+    let fixture = processes.path().join("4194303");
+    std::fs::create_dir(&fixture).unwrap();
+    std::fs::write(fixture.join("cmdline"), b"helper\0").unwrap();
+    std::fs::write(fixture.join("environ"), []).unwrap();
+    std::os::unix::fs::symlink(&h.worktree, fixture.join("cwd")).unwrap();
+    set_worker(leader_id.clone());
+    receipt::compare_update(
+        &h.dir,
+        h.root(),
+        &h.attempt,
+        |_| Ok(()),
+        |r| r.supervisor = Some(leader_id.clone()),
+    )
+    .unwrap();
+    for (group, sid, evidence) in [
+        (leader_id.pid, 1, "process group"),
+        (1, leader_id.pid, "session"),
+        (1, 1, "running in"),
+    ] {
+        std::fs::write(
+            fixture.join("stat"),
+            format!("4194303 (helper) S 1 {group} {sid}"),
+        )
+        .unwrap();
+        let why = recover_launch_at(&h.dir, h.root(), &h.attempt, processes.path())
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains(evidence) && why.contains("helper"), "{why}");
+        assert!(h.grant().revoked_at.is_none());
+    }
+    std::fs::remove_dir_all(fixture).unwrap();
+    set_worker(leader_id.clone());
     // trace:BUG-2721 | ai:codex
     // The dispatcher died after recording the primary checkout as its worktree.
     receipt::compare_update(
@@ -1032,6 +1099,35 @@ esac
     );
     holder.kill().unwrap();
     holder.wait().unwrap();
+    let mut partial = serde_json::json!({"version":99, "worker": leader_id, "worktree":h.root()});
+    std::fs::write(&path, partial.to_string()).unwrap();
+    let helper = processes.path().join("4194302");
+    std::fs::create_dir(&helper).unwrap();
+    std::fs::write(
+        helper.join("stat"),
+        format!("4194302 (legacy) S 1 {} 1", leader_id.pid),
+    )
+    .unwrap();
+    std::fs::write(helper.join("cmdline"), b"legacy\0").unwrap();
+    std::fs::write(
+        helper.join("environ"),
+        format!("{GRANT_ENV}={}\0", h.grant_id),
+    )
+    .unwrap();
+    let why = receipt::retire_unknown_at(&h.dir, h.root(), &h.attempt, processes.path())
+        .unwrap_err()
+        .to_string();
+    assert!(why.contains("process group") && path.exists(), "{why}");
+    std::fs::remove_dir_all(helper).unwrap();
+    let why = receipt::retire_unknown_at(&h.dir, h.root(), &h.attempt, processes.path())
+        .unwrap_err()
+        .to_string();
+    assert!(
+        why.contains("launch-status") && why.contains("not provably over") && path.exists(),
+        "{why}"
+    );
+    partial["grant_id"] = serde_json::json!(h.grant_id);
+    std::fs::write(&path, partial.to_string()).unwrap();
     receipt::retire_unknown_at(&h.dir, h.root(), &h.attempt, processes.path()).unwrap();
     drop(shell.stdin.take());
     shell.wait().unwrap();
@@ -1541,7 +1637,7 @@ fn bug_2511_occupancy_unreadable_foreign_cwd() {
     let none = std::collections::HashSet::new();
     let mut probe = receipt::OccupancyProbe {
         worktree: Some(tmp.path()),
-        attempt: Some("our-attempt"),
+        recovery_token: Some("our-attempt"),
         ..Default::default()
     };
     let scan = |probe: &receipt::OccupancyProbe<'_>, ours| {
