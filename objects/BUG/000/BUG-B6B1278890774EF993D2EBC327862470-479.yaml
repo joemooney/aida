@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-23T05:15:22.859681035Z
+modified_at: 2026-11-23T05:30:16.419457066Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -45,6 +45,19 @@ comments:
   modified_at: 2026-11-23T03:39:41.269439325Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a206e2-3303-77c3-96bb-1e71ca51c7c0
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5470336db35805f5b13a85d8a2fff124ec69f557 plus native working-tree diff. Merge-base diff empty, seven modified files, no untracked additions.
+    AC1: [evidence: behavioral-test] Both PR-key directions passed in lane job j20261123T052532501-2-0 (bug_2403_alias_release_tests.rs:394 and :432). The first test also proves a moved head refuses and the marker remains without clearance. MR key routing inspected, no live GitLab test.
+    AC3: [evidence: behavioral-test] The first test writes a spec-None PR verdict and checks recorded clearance identifies that key. The fixture substitutes forge, comment, label and approval-policy I/O.
+    Probes: inspected literal change/forge identity, exact SHA and timestamp handling, absent and composed references, closed and undelivered approvals, and repeated checks under the hold lock. Self-review fixes require the selected change approval to pass authority itself and preserve the old refusal’s inline rounds. Existing tests keep their assertions.
+    Refs-only AC1 slice. AC2 diagnostics, AC4 train acceptance of auto-clearance, AC5 human clearance after historical release and AC6 exact recovery command are deferred. The train currently requires independent human-clearance corroboration. Its policy and locked recovery tests require a separate slice. Formatting and diff checks passed.
+  created_at: 2026-11-23T05:30:16.419457066Z
+  modified_at: 2026-11-23T05:30:16.419457066Z
+  session_id: 01a206d3e491
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a206d4-2e73-71c3-b41a-2e45c4ca59d7
   author: aida-session-start

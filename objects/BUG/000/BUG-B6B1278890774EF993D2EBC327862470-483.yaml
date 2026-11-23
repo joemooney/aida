@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T05:24:31.539167313Z
+modified_at: 2026-11-23T05:33:23.661945874Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -172,6 +172,19 @@ comments:
   modified_at: 2026-11-23T05:18:02.394370493Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a206e5-0ec9-7881-84ad-255fdc854d56
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6ddf368bc30d2de62c6f025816880b1d0ba219c5 plus native worktree changes. Reviewed the merge-base diff, working diff and untracked listing under the round-3 operator-attestation ruling.
+    AC1: [evidence: behavioral-test] repair_journal.rs::bug_2722_ended_lane_moved_tree_releases_only_selected_head covers typed PTY release, single selection, persisted UID/time/reason and successor reservation.
+    AC2: [evidence: behavioral-test] the same fixture exercises a live stamped PID without a receipt, non-TTY and wrong confirmation. doctor_cmd.rs requires a direct human, rejects headless/orchestrated contexts and --yes, and enforces the merge-hold integrity floor.
+    AC3: [evidence: behavioral-test] the moved-tree fixture has neither a lease stamp nor a worker receipt. Under the authorized scope cut the operator attests historical release. Automatic salvage qualification and unlink-time journaling are removed.
+    Deep-pass: audited composed IDs, malformed lease reads, absent observations, duplicate selectors, successor identity and post-confirmation recheck. Count is informational and bounded to HEAD; a side branch named complete has no argument role. Journal writes audit and state together. File-change review found no untracked additions. Validation so far: diff --check and writer inventory pass; launcher jobs for focused tests and fast gate pending.
+  created_at: 2026-11-23T05:33:23.661945874Z
+  modified_at: 2026-11-23T05:33:23.661945874Z
+  session_id: 01a206dc9122
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
