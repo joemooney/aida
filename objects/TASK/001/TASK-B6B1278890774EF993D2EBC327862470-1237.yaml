@@ -1,0 +1,31 @@
+id: 01a2072e-9ec0-7011-aa40-1c5b9d43ac33
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1237
+title: 'Review follow-up: Attempt denies unknown fields and the state remains version 1. pickup_retries is serialize'
+description: |-
+  From BUG-2720
+  Reviewed sha: 2fcffa9987591527cab7610b758675e6fe3844a7
+
+  Attempt denies unknown fields and the state remains version 1. pickup_retries is serialized even at zero, so after any ordinary reservation write the previous watcher binary can no longer load the shared state during rollback or mixed-version use. Omit the zero value for unaffected receipts and define a safe compatibility or migration path for receipts with active pickup retry metadata.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T06:53:45.536315202Z
+modified_at: 2026-11-23T06:53:45.536315202Z
+req_type: Task
+tags:
+- carried-from:BUG-2720
+- finding-hash:b3a00eae
+- from-review:BUG-2720
+relationships:
+- rel_type: References
+  target_id: 01a205a9-7715-7ce3-a532-cf8c3ffde338
+  created_at: 2026-11-23T06:53:59.412062155Z
+filed_at:
+  code_sha: 2fcffa9987591527cab7610b758675e6fe3844a7
+  branch: pr-4413
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ca95624cadf
+  vendor: claude
+  session: 01a20729dabd

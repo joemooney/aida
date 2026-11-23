@@ -1,0 +1,31 @@
+id: 01a2072e-62b3-7133-b614-3926c1aca09d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1236
+title: 'Review follow-up: apply_pr_state_snapshot reads only no_verdict_retry_at and no_verdict_blocker. Pickup retr'
+description: |-
+  From BUG-2720
+  Reviewed sha: 2fcffa9987591527cab7610b758675e6fe3844a7
+
+  apply_pr_state_snapshot reads only no_verdict_retry_at and no_verdict_blocker. Pickup retries use pickup_retry_at instead, so a permanently capped pickup with no verdict continues to project retry_backoff=true, retry_exhausted=false. PR state tells the reconciler to reobserve indefinitely when an operator is required. Project the pickup deadline and exhausted state into the PR facts and cover a capped pickup.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T06:53:30.163421045Z
+modified_at: 2026-11-23T06:53:30.163421045Z
+req_type: Task
+tags:
+- carried-from:BUG-2720
+- finding-hash:1396146c
+- from-review:BUG-2720
+relationships:
+- rel_type: References
+  target_id: 01a205a9-7715-7ce3-a532-cf8c3ffde338
+  created_at: 2026-11-23T06:53:45.089645498Z
+filed_at:
+  code_sha: 2fcffa9987591527cab7610b758675e6fe3844a7
+  branch: pr-4413
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ca95624cadf
+  vendor: claude
+  session: 01a20729dabd
