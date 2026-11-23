@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T22:12:11.073407530Z
-modified_at: 2026-11-23T22:20:51.382593845Z
+modified_at: 2026-11-23T22:34:48.247107343Z
 req_type: Bug
 tags:
 - forge
@@ -44,6 +44,18 @@ comments:
   modified_at: 2026-11-23T22:15:26.193124800Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a8c-353b-7211-9327-03cb49b0585a
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 4e140498bc8d425330633234bec803e5f8584ca0 plus the native working tree. The merge-base diff was empty. Inspected all nine changed files and checked for untracked additions (none).
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/tests/task_1993_review_watch_tests.rs:5660 passed in launcher job j20261123T222236086-2-0 (1 executed). At 999/5000 the review and main watchers yield and report the budget, while the same commit-check reader used by train full-tier admission succeeds. At exactly 1000/5000 discovery proceeds.
+    AC2: N/A per pickup ruling. Doctor/land reporting is separate.
+    Probe findings: verified the pinned review host, bounded JSON read, integer threshold, both sides of the threshold and independent train reads. Back-off skips discovery before pruning. Main-watch settles pending notices before yielding. CI waits retain disabled-timeout semantics, and interactive streams recheck during a run. No new authority or merge decision. Unavailable budget data preserves existing polling. Cross-process cache reuse depends on gh sharing its cache and credentials. Diff whitespace check passed. Exact published-head CI is pending host publication.
+  created_at: 2026-11-23T22:34:48.247107343Z
+  modified_at: 2026-11-23T22:34:48.247107343Z
+  session_id: 01a20a7e7a2a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a78-bbf7-76a2-852d-7c265ff5570e
   author: joe
