@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. Exercise the normal pickup deferral path with a structured LaneSpaceRefused. Assert that the returned error still exposes the original typed refusal and that the persisted launch outcome identifies disk-floor deferral.
   2. Keep exit code 36, setup rollback, and queue-note behavior. An unrelated launch or measurement error retains its own classification.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:19:49.568395128Z
-modified_at: 2026-11-23T21:54:01.927922397Z
+modified_at: 2026-11-23T22:14:22.815124922Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -156,6 +156,12 @@ comments:
   modified_at: 2026-11-23T21:54:01.927922397Z
   session_id: 01a20a3b80b7
   harness_version: codex-cli 0.167.0
+- id: 01a20a79-795f-7fa3-8039-c8384c02e895
+  author: aida-publication-done
+  content: Implementer push a7db72d69851 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T22:14:22.815124109Z
+  modified_at: 2026-11-23T22:14:22.815124109Z
+  session_id: 01a20a3b80b7
 history:
 - id: 01a1f2f1-eaea-7102-a425-f572a21135ad
   author: joe
@@ -253,6 +259,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20a79-795f-7fa3-8039-c824893b8255
+  author: aida-publication-done
+  timestamp: 2026-11-23T22:14:22.815121843Z
+  session_id: 01a20a3b80b7
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
