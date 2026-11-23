@@ -1,0 +1,18 @@
+{
+  "id": "7dd5d96c-7b41-41a8-97bf-1d755eb032de",
+  "thread_id": "7dd5d96c-7b41-41a8-97bf-1d755eb032de",
+  "from": "aida-throughput-guard",
+  "to": {
+    "kind": "agent",
+    "agent": "advisor"
+  },
+  "timestamp": 1795428379257,
+  "body": "- [STUCK-MERGE] #4417 is approved at 5109ea61 and has not landed for 29 min (approved at 5109ea61e7b9)\n  -> land #4417 (the reconciler shows READY: add to next train)\n- [STUCK-MERGE-RED] #4403 is approved at cb4bc39b but its CI is red (Build (ubuntu-latest), CI (gates)), for 53 min; failing tests: not named; cause undetermined: the log of `Build (ubuntu-latest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `CI (gates)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway); the log of `Build (ubuntu-latest)` was not read (the response contains terminal escape sequences; pass --allow-escape-sequences to output it anyway)\n  -> read the failed job on #4403: rerun it once if the failure is unrelated to the change, otherwise route rework\n\n17 stall(s) in all are listed in `aida schedule due --seat advisor`; `aida land stalls` prints the current picture. When done: `aida schedule done throughput-guard-route-advisor`.",
+  "subject": "Throughput guard: 2 new stall(s) for the advisor seat",
+  "urgent": false,
+  "intent": "fyi",
+  "retracted": false,
+  "deleted": false,
+  "archived": false,
+  "from_source": "explicit"
+}
