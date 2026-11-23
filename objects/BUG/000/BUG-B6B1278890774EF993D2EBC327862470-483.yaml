@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T03:36:27.954495486Z
+modified_at: 2026-11-23T03:36:30.816891576Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -68,6 +68,24 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 reviewed as landed on protected base 215313b8.. No triage reason was given.'
   created_at: 2026-11-23T03:36:27.954491582Z
   modified_at: 2026-11-23T03:36:27.954491582Z
+- id: 01a2067a-08b8-7e10-a5b3-162a031958ae
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2722):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 9c8f6309535e
+    Recorded: 2026-11-23T03:32:45.445082874+00:00
+    Findings:
+    1. AC1: release_evidence requires a headless child receipt for every ended lease. queue_cmd/work.rs prepares and reserves before vendor launch, so a preparation failure can leave a reservation without ever creating that receipt. finish_headless_lane_for_child also deletes the receipt after some normal lease releases. Even with positive host lease-release evidence and a moved tree these cases stay wedged. Accept corroborated terminal evidence for the exact lease generation through these paths and test the producer-to-doctor flow. Continue refusing unknown state.
+    2. AC1: release_evidence accepts only an absent leaf under an existing canonical parent. A verified salvaged tree still at its path (with no unmerged files), or a removed parent directory, can never qualify. Handle verified salvage and safely establish absence when a parent was removed. Preserve the refusal for unresolved work and ambiguous or redirected paths.
+    3. AC2: repair_lane_exit accepts any exit_status beginning with “exited with ”, even the prefix alone, and ignores conflicting process identity evidence. A parseable record for the lane/path can therefore authorize release with a malformed status or a still-live recorded worker once the lease file and tree disappear. Validate positive termination evidence and reject contradictory live or indeterminate process identity, consistent with claim_worker_has_exited. Exercise those refusals.
+    4. The explicit repair-reservations --id path calls heal_reservation(..., true) solely on --yes. Its own findings are safe_heal=false, but this early return skips the unattended/orchestrated refusal that doctor_heal_disposition applies to that classification. Enforce the applicable operator sign-off at the explicit mutation boundary and cover an unattended invocation and an authorized release.
+    5. release_evidence calls read_exact_lease, which reads the entire TOML into a String while holding the shared repair lock. This also runs in unfiltered doctor. A large malformed lease can exhaust memory or stall other repair operations even though any existing file disqualifies the reservation. Check presence fail-closed without consuming the file, or bound any diagnostic read.
+    6. repair_findings drops every release_evidence error via .ok()?, including corrupt or unreadable evidence. The advertised check can report zero findings and success while an outstanding reservation remains blocked on a missing receipt. Surface indeterminate reservations as non-actionable diagnostics with their ID, failed evidence source and inspection command so the operator can diagnose them without reconstructing an ID from the journal.
+    7. An unfiltered doctor now propagates RepairGuard::lock errors before printing the rest of its findings. A malformed journal or busy sidecar thus suppresses unrelated diagnostics and safe heals. Report the journal as unavailable in a general run while preserving the other categories and keeping release fail-closed.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T03:36:30.648077414Z
+  modified_at: 2026-11-23T03:36:30.648077414Z
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
