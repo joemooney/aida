@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1f2e3-fac0-7142-943e-e50044b243ad
+  position: -1024000
+  added_by: role:implementer
+  added_at: 2026-11-23T06:57:05.906242827Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1fb4e-f4ff-7300-bc46-c8e72a28ccc8
   position: -1023000
   added_by: role:implementer
@@ -299,14 +305,6 @@
   added_by: role:implementer
   note: Test stdin-only and stderr-only TTY cases for the existing operator conjunction, with both-stream control. Test-only; no authority changes.
   added_at: 2026-11-21T07:07:19.913806465Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1f2e3-fac0-7142-943e-e50044b243ad
-  position: 631000
-  added_by: role:implementer
-  note: Independent BUG-2684 follow-up. Preserve the typed disk refusal in the normal pickup path and launch outcome while retaining exit 36 and rollback. Serialize with TASK-3155.
-  added_at: 2026-11-21T07:09:33.457168493Z
   for_role: implementer
   added_by_machine: imac
 - user_id: role:implementer
