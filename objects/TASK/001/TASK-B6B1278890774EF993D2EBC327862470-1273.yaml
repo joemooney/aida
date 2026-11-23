@@ -13,12 +13,13 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T23:19:15.482224561Z
-modified_at: 2026-11-23T23:22:47.779107560Z
+modified_at: 2026-11-23T23:22:49.753476622Z
 req_type: Task
 tags:
 - ci
 - from-bug-2734
 - tests
+- track:integration
 history:
 - id: 01a20ab8-154e-7660-9b6c-b3bf520e2e62
   author: joe
@@ -31,6 +32,13 @@ history:
   author: joe
   timestamp: 2026-11-23T23:22:47.909933855Z
   changes: []
+- id: 01a20ab8-2419-7073-8d33-1feea23debd7
+  author: joe
+  timestamp: 2026-11-23T23:22:49.753475888Z
+  changes:
+  - field_name: tags
+    old_value: ci, from-bug-2734, tests
+    new_value: ci, from-bug-2734, tests, track:integration
 execution_mode: drain
 filed_at:
   code_sha: 5db0b2b1b17127b5b06d80dfc5f697f832b64e43
