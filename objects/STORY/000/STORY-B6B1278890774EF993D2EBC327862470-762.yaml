@@ -11,12 +11,13 @@ priority: High
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-15T04:11:01.618782904Z
-modified_at: 2026-11-15T20:49:55.577709166Z
+modified_at: 2026-11-23T20:01:17.929327275Z
 req_type: Story
 tags:
 - docs
 - glossary
 - showcase
+- track:integration
 - ux
 comments:
 - id: 01a1e0f9-4779-7690-9688-bb3e04d24f20
@@ -42,6 +43,13 @@ history:
   - field_name: status
     old_value: Draft
     new_value: Approved
+- id: 01a209ff-a269-7c90-84e8-663080f40889
+  author: joe
+  timestamp: 2026-11-23T20:01:17.929326657Z
+  changes:
+  - field_name: tags
+    old_value: docs, glossary, showcase, ux
+    new_value: docs, glossary, showcase, track:integration, ux
 filed_at:
   code_sha: e351be429570bde045d975f8a19c733d65360ded
   branch: main
