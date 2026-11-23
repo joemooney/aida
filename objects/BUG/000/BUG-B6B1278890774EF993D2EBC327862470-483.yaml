@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T05:17:14.017831159Z
+modified_at: 2026-11-23T05:18:02.394370493Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -152,6 +152,26 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T05:17:13.819075241Z
   modified_at: 2026-11-23T05:17:13.819075241Z
+- id: 01a206d7-57e3-7183-a7e7-b9879f177844
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 22:18):
+    # BUG-2722 / PR #4403 r3 = SCOPE CUT, round 3 of 4 (advisor-122 ruling 2026-11-22 22:24 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier.
+
+    CR at 939d3ee5 (r2). Killer finding 3: a pre-upgrade ended lease (exactly dell1's entry 48, and #4401's -797) has no lease_ended_at stamp, so release_evidence REFUSES the very cases we need, and automatic "provably over" evidence keeps growing. RULING: replace automatic release with an OPERATOR-ATTESTED release, the same integrity model as `aida merge-hold clear`:
+    - `aida doctor heal repair-reservations --id <entry> --attest "<reason>"` runs ONLY for a human at an interactive terminal: no --yes, no orchestrated or unattended path.
+    - It shows the entry, lease state, tree path and status, and the unpushed count (informational only: `git rev-list --count <tree-head> --not --remotes` with NO extra args, which fixes finding 1).
+    - It requires TYPED confirmation, then releases exactly that one entry, with an audit record of who, when and why.
+    - REMOVE the unlink-fallback ProvenDead path and the lease_ended_at requirement (findings 2, 3, 4 become moot).
+    - KEEP: refuse if the recorded lease file still exists AND its pid is alive.
+    Tests: the entry-48 shape releases WITH an attestation at a TTY, and refuses without a TTY.
+    The reviewer scope is the scope cut plus the diff. Keep it small.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T05:18:02.394370493Z
+  modified_at: 2026-11-23T05:18:02.394370493Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
