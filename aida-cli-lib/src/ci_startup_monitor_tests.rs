@@ -412,7 +412,7 @@ fn story2856_ac1_queued_and_mixed_history_report_earliest_failure() {
     // Fresh state looks past the full page for a started run to map jobs
     // (BUG-2689); none exists, so the first failure stays partial.
     forge.set(
-        &format!("repos/{{owner}}/{{repo}}/actions/workflows/{GATE}/runs?per_page=100&page=2"),
+        &format!("repos/{{owner}}/{{repo}}/actions/workflows/{GATE}/runs?per_page=99&page=2"),
         json!({"workflow_runs": []}),
     );
     let mut state = State::new();
@@ -854,7 +854,7 @@ fn bug2689_maps_jobs_from_older_runs_when_first_page_never_started() {
         })
         .collect();
     forge.runs(7, page1);
-    let older = "repos/{owner}/{repo}/actions/workflows/7/runs?per_page=100&page=2";
+    let older = "repos/{owner}/{repo}/actions/workflows/7/runs?per_page=99&page=2";
     forge.set(
         older,
         json!({"workflow_runs": [sf(800, -500), api_run(799, "push", "completed", Some("success"), -600)]}),
@@ -896,7 +896,7 @@ fn bug2689_paginates_open_prs_past_100() {
     );
     // PR 100 shifted onto page 2 while the inventory was read.
     forge.set(
-        "repos/{owner}/{repo}/pulls?state=open&per_page=100&page=2",
+        "repos/{owner}/{repo}/pulls?state=open&per_page=99&page=2",
         json!([pr(100, "release"), pr(101, "main")]),
     );
     forge.set(
@@ -976,26 +976,33 @@ fn bug2694_retries_only_unaccepted_recovery_channels_after_reload() {
 // trace:BUG-2694 | ai:codex
 #[test]
 fn bug2694_both_paginated_discovery_scans_resume_after_reload() {
+    check_paginated_discovery(false);
+}
+
+// trace:BUG-2592 | ai:codex
+#[test]
+fn bug2592_discovers_boundary_pr_and_run_after_deletions_between_passes() {
+    check_paginated_discovery(true);
+}
+
+fn check_paginated_discovery(remove_rows: bool) {
     let mut forge = Forge::new(&["build"], json!([{"id": 7, "name": "ci"}]));
-    let runs = "repos/{owner}/{repo}/actions/workflows/7/runs?per_page=100";
-    let pulls = "repos/{owner}/{repo}/pulls?state=open&per_page=100";
-    forge.runs(7, (901..=1000).rev().map(|id| sf(id, id as i64)).collect());
-    forge.set(
-        &paged(runs, 2),
-        json!({"workflow_runs": (801..=900).rev().map(|id| sf(id, id as i64)).collect::<Vec<_>>()}),
-    );
-    forge.set(&paged(runs, 3), json!({"workflow_runs": [ok(800, 800)]}));
+    let runs = "repos/{owner}/{repo}/actions/workflows/7/runs";
+    let pulls = "repos/{owner}/{repo}/pulls?state=open";
+    let mut history: Vec<_> = (803..=1000).rev().map(|id| sf(id, id as i64)).collect();
+    history.push(ok(800, 800));
+    forge.runs(7, history[..100].to_vec());
+    forge.set(&paged(runs, 2), json!({"workflow_runs": &history[99..198]}));
+    forge.set(&paged(runs, 3), json!({"workflow_runs": &history[196..]}));
     forge.set(
         "repos/{owner}/{repo}/actions/runs/800/jobs?per_page=100",
         json!({"total_count": 1, "jobs": [{"name": "build"}]}),
     );
     let pr = |number, branch| json!({"number": number, "base": {"ref": branch}, "head": {"sha": format!("s{number}")}});
-    forge.set(
-        pulls,
-        json!((1..=100)
-            .map(|n| pr(n, if n == 1 { "main" } else { "release" }))
-            .collect::<Vec<_>>()),
-    );
+    let mut live_prs: Vec<_> = (1..=101).map(|n| pr(n, "release")).collect();
+    live_prs[0] = pr(1, "main");
+    live_prs[100] = pr(101, "main");
+    forge.set(&paged(pulls, 1), json!(&live_prs[..100]));
     forge.set(&paged(pulls, 2), json!([pr(1, "main"), pr(101, "main")]));
     for n in [1, 101] {
         forge.set(
@@ -1014,6 +1021,30 @@ fn bug2694_both_paginated_discovery_scans_resume_after_reload() {
     let mut calls = Vec::new();
     for pass in 0..12 {
         let result = forge.pass(&mut state, &Config::default(), T0 + 1100 + pass);
+        if remove_rows && forge.calls.contains(&paged(runs, 2)) {
+            // A started run at index 198 moves to 197 when a newer run is
+            // deleted. Derive both possible page-three responses by offset.
+            history.remove(120);
+            for size in [98, 100] {
+                let offset = (2 * size).min(history.len());
+                forge.set(
+                    &format!("{runs}?per_page={size}&page=3"),
+                    json!({"workflow_runs": &history[offset..]}),
+                );
+            }
+        }
+        // Delete an excluded PR after the inventory checkpoint. Model the
+        // forge offsets independently so fixed-size pagination misses PR 101.
+        // trace:BUG-2592 | ai:codex
+        if remove_rows && forge.calls.contains(&paged(pulls, 1)) && live_prs.len() == 101 {
+            live_prs.remove(1);
+            for size in [99, 100] {
+                forge.set(
+                    &format!("{pulls}&per_page={size}&page=2"),
+                    json!(&live_prs[size..]),
+                );
+            }
+        }
         calls.extend(forge.calls.clone());
         state = reload(&state);
         if !forge.sent.is_empty() {
@@ -1025,7 +1056,7 @@ fn bug2694_both_paginated_discovery_scans_resume_after_reload() {
     for endpoint in [
         &paged(runs, 2),
         &paged(runs, 3),
-        &pulls.to_owned(),
+        &paged(pulls, 1),
         &paged(pulls, 2),
     ] {
         assert_eq!(
