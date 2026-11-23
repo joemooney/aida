@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3126",
+  "publishes": [
+    {
+      "at": "2026-11-23T15:30:23.795594645Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T12:45:35.993316904Z",
+      "spec": "TASK-3126",
+      "kind": {
+        "event": "GateHeld",
+        "gate": "wip-limit-override",
+        "reason": "25 changes are open and the limit is 10; TASK-3126 is started anyway (--over-wip)",
+        "actor": "dirtlab"
+      }
+    },
+    {
+      "ts": "2026-11-23T15:30:23.636380692Z",
+      "spec": "TASK-3126",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "6708d633cf3a620ece9cdf4104e8982ccb4b4c9c",
+        "pr": 4433,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
