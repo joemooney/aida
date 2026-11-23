@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.729374870Z
-modified_at: 2026-11-23T08:50:04.976526463Z
+modified_at: 2026-11-23T09:03:46.780410384Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -64,6 +64,15 @@ comments:
   modified_at: 2026-11-23T08:42:41.124541270Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a207a5-ab2c-7aa3-aaea-3c08b1598104
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 55f63f3800861fee8b80ae3046c104290baf7fbf plus the two uncommitted native-lane edits. AC1: [evidence: manual-inspection] origin/main already syncs temporary state data, renames, and syncs the pinned directory with error propagation (main_watch.rs:503-509). AC2: [evidence: behavioral-test] story_2897_main_watch_tests.rs:645 injects the post-rename failure, verifies the new cursor, episode and pending event, then recovers exactly one journal entry with the same ID. One executed test passed via the lane runner. Checked failpoint spelling, JSON readback, zero/one event counts, retry identity and the existing lock and directory boundaries. No new authority path or actionable defect. The failpoint models a visible rename before directory sync, not physical power loss.
+  created_at: 2026-11-23T09:03:46.780410384Z
+  modified_at: 2026-11-23T09:03:46.780410384Z
+  session_id: 01a20795b177
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fb7e-3363-7680-855c-25ffe7cdf61a
   author: joe

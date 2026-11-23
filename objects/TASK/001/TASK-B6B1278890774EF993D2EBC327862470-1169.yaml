@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.340242990Z
-modified_at: 2026-11-23T08:54:52.456254329Z
+modified_at: 2026-11-23T09:06:04.252471505Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -65,6 +65,18 @@ comments:
   modified_at: 2026-11-23T08:42:56.149205230Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a207a7-c44d-7871-9c31-4f2c351ecbbd
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 55f63f3800861fee8b80ae3046c104290baf7fbf plus the native working diff and untracked CLI test. The origin/main merge-base diff was empty.
+    AC1: [evidence: behavioral-test] Reproduced exit 1 with one committed invalid line. aida-cli/tests/task_3228_land_metrics.rs:60 compares independent metrics against the baseline and verifies human and JSON diagnostics, including an unreadable journal at line 83. Targeted lane test passed (1 executed).
+    AC2: [evidence: behavioral-test] Same test at line 55 exercises missing and torn journals. aida-cli-lib/src/land_metrics.rs:588 passes successful reads to the existing metrics function with the original window. State and transition readers are unchanged.
+    Probe findings: both renderers share one fixed diagnostic. Invalid input cannot expand the diagnostic. The CLI fixture covers empty, torn, invalid committed and non-file inputs. Pinned the report window to avoid hour-boundary drift in baseline comparisons. No authority change. Hosted CI pending publication.
+  created_at: 2026-11-23T09:06:04.252471505Z
+  modified_at: 2026-11-23T09:06:04.252471505Z
+  session_id: 01a20796dd39
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fd65-88f9-7f90-ab34-7efd0c59fec7
   author: joe

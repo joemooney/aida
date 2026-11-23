@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T08:36:51.674300739Z
+modified_at: 2026-11-23T09:00:49.597484935Z
 req_type: Bug
 tags:
 - agreed-id
@@ -34,6 +34,18 @@ comments:
   modified_at: 2026-11-23T08:32:01.004953508Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a207a2-f75d-75a2-a6a9-1f13d331ca35
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 55f63f3800861fee8b80ae3046c104290baf7fbf plus native working-tree diff. No committed branch delta or untracked additions.
+    AC1: [evidence: behavioral-test] gate/tests/task_2067_trace_resolution_tests.rs:248 exercises a forged PR subject fixture on a stale checkout. The agreed label resolves to the canonical object at the pinned origin tracking commit. Missing origin, divergence and duplicate labels refuse. No network fetch is performed.
+    AC2: [evidence: behavioral-test] The same fixture exercises a mixed trailer with two missing IDs and checks both IDs and the pinned SHA in the refusal. gate/mandate_ship.rs:100 aggregates named misses.
+    Probes: reviewed casing, YAML object identity, regular Git blobs, batch framing, zero/one/multiple labels, duplicate UUIDs, missing refs and concurrent changes. Fixed mixed-revision trailer coverage during self-review. Existing approval, hold and exclusion checks still apply. Final lane job j20261123T085416111-2-0 executed 1 test, 1 passed. rustfmt and git diff --check passed. FAST stopped on cargo metadata, unsupported by the lane runner. No PR-head CI yet.
+  created_at: 2026-11-23T09:00:49.597484935Z
+  modified_at: 2026-11-23T09:00:49.597484935Z
+  session_id: 01a2078c2fd0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
