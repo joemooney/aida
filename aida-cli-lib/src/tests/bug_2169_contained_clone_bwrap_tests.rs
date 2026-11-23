@@ -1682,6 +1682,33 @@ true"#;
         }
     }
 
+    // trace:BUG-2700 | ai:codex
+    #[test]
+    fn contained_interactive_resume_prepares_the_fixture_mailbox() {
+        if crate::test_env::run_path_isolated_test() {
+            return;
+        }
+        let fx = fixture();
+        std::env::set_current_dir(&fx.other_wt).unwrap();
+        let _ambient = ambient(&fx.main);
+        let mailbox = fx.main.join(".aida/mailbox");
+        assert!(!mailbox.exists());
+
+        // Leave os_wrap at its default so mailbox preparation runs even without bwrap.
+        crate::session::build_claude_resume_exec_command(
+            crate::seat_clone::launcher_main().as_deref(),
+            "sid-1",
+            None,
+            true,
+            None,
+        )
+        .unwrap();
+        assert!(
+            mailbox.is_dir(),
+            "contained resume missed the fixture mailbox"
+        );
+    }
+
     /// B3 (round 1): the interactive contained RESUME goes through os_wrap too.
     // trace:TASK-3133 BUG-2700 | ai:codex
     #[test]
