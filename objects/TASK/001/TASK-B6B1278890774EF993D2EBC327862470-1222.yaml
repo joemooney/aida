@@ -89,6 +89,13 @@ comments:
   created_at: 2026-11-23T21:05:53.727703798Z
   modified_at: 2026-11-23T21:05:53.727703798Z
   session_id: 01a209fd02d1
+- id: 01a20a3b-0755-73d1-ab0d-d85ba866819a
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 14:08): PR-4456 @ 85f7d9ecc40 PASSES the narrowed p27 brief (verify-manual handles + aida-term cfg(test); tomllib split to TASK-3845). Base integration; one commit ''[AI:codex] fix(hygiene): ... (TASK-3840)''; +18/-6 in 3 files; traces present. verify-manual.py now opens both manual reads with ''with'' and closes them. test_verify_manual.py (wired in CI at ci.yml:1081) records warnings and asserts no ResourceWarning. aida-term''s tracked print! macro is now #[cfg(test)] #[deny(unused_macros)]. That keeps behaviour: the only non-test print is the explicit ::std::print! inside print_tracked, and the bare print! uses are in the test module, which is why normal builds warned unused_macros. Lane fast_gate=pass; GitHub fast CI pending.'
+  created_at: 2026-11-23T21:05:56.676180395Z
+  modified_at: 2026-11-23T21:05:56.676180395Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20885-6c4b-7c10-9c86-3824c13d73d1
   author: joe
