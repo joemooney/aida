@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. Make disk-floor annotation update the current queue entry's note while preserving its order, owner, routing, and any unrelated note text added by another writer. Replace the prior disk-floor marker if present.
   2. Add a deterministic regression for an interleaved edit and removal. The edit survives annotation, and a removed row stays absent. Requirements without an existing queue entry acquire none.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-23T22:36:21.488016087Z
+modified_at: 2026-11-23T22:46:41.903634952Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -279,6 +279,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20a97-0fef-7643-92a6-6ed699756767
+  author: aida-orchestrator
+  timestamp: 2026-11-23T22:46:41.903649124Z
+  session_id: 01a20a94a31a
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
@@ -289,3 +297,11 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: TASK-3155 AC1 PARTIAL — the note transform preserves unrelated text and the matching-row update uses the Git writer lock or SQLite immediate transaction, but Git discovery can still lose a persisted file's identity. AC2 PARTIAL — the regression checks the surviving metadata, absence of removed or never-queued rows, and exclusion of a competing writer during the callback, but allows a stale preflight snapshot to be reused under lock. Reviewed the full landed diff against pinned main 4e140498bc8d425330633234bec803e5f8584ca0 (tree cbcb86b5587bc9a1e4020366b275e87904e8f49f). The PR head is one commit behind that base. The intervening main-watch change is unrelated to both findings. GitHub FAST gates passed and FAST compile was pending at review time. Source review and existing evidence only.
+  recovery_hint: address the review findings, move TASK-3155 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T22:46:41.903634952Z
