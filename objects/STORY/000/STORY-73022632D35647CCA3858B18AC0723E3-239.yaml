@@ -1,0 +1,32 @@
+id: 01a2098d-2872-7250-883f-fd329cb9854c
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-239
+title: 'Review PR-4451: [AI:codex] fix(queue): preserve the disk-floor refusal through deferral (TASK-3154)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20953`) for branch `task-b6b1278890774ef993d2ebc327862470-1115`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4451>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1115` → `main`
+
+  ## Covers
+
+  - TASK-3154
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4451` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T17:56:15.602081684Z
+modified_at: 2026-11-23T17:56:15.602081684Z
+req_type: Story
+filed_at:
+  code_sha: ef906ec7464cf1b3100c4383085280c203722941
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef906ec746
+  session: 01a20953a0aa
