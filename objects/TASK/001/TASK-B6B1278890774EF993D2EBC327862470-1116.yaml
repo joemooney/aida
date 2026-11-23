@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-23T21:20:04.402208754Z
+modified_at: 2026-11-23T21:41:31.280871910Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -150,6 +150,18 @@ comments:
   modified_at: 2026-11-23T20:41:57.319248237Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a5b-68d3-7192-a3dc-116a60b4268e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 7eb444c3416402249a956e64da53cdaa5081e50e plus native working tree for host publication. Reviewed origin/main...HEAD, git diff HEAD and untracked files.
+    AC1: [evidence: behavioral-test] lane_disk_deferral.rs:286 checks marker replacement and consecutive separators. git_backend.rs:3358 uses the persisted owner path for discovery and locked re-read. sqlite_backend.rs:1878 updates existing rows inside an immediate transaction. The sibling alias fixture inspects both persisted files.
+    AC2: [evidence: behavioral-test] lane_disk_deferral.rs:151 exercises both backends, current metadata, removal, absent IDs and competing writers during note transformation. The negative control replays stale row upserts. Lane job j20261123T212641818-2-0 executed three tests, all passed.
+    Deep pass covered marker syntax, empty and multiple segments, linked owners, zero/one/multiple matching rows, refusal of matching writes and backend lock contention. Scanner reconciled 3862 sites, and store writer mutation fixtures passed. Updates remain per queue; concurrent changes after a queue is processed are outside its observation. Full head CI belongs to host publication.
+  created_at: 2026-11-23T21:41:31.280871910Z
+  modified_at: 2026-11-23T21:41:31.280871910Z
+  session_id: 01a20a4763f9
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f2f2-2680-7612-be8c-5bbed93131af
   author: joe
