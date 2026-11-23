@@ -893,6 +893,10 @@ fn lane_only() -> Result<crate::forge::CommitChecks> {
             outcome: crate::forge::CheckOutcome::Passed,
             run_id: None,
             workflow_id: Some("ci".to_string()),
+            cancelled: false,
+            job_id: None,
+            run_attempt: None,
+            run_in_progress: false,
         }],
     })
 }
