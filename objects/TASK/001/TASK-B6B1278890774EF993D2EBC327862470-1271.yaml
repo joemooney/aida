@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:18:34.370466098Z
-modified_at: 2026-11-23T23:29:10.754179834Z
+modified_at: 2026-11-23T23:31:20.928633637Z
 req_type: Task
 tags:
 - ci
@@ -45,6 +45,15 @@ comments:
   modified_at: 2026-11-23T23:23:58.708528853Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20abf-f737-7cc1-9cf2-689c1c00d464
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 13bcf6bd6715439e9fdb4769e36b0551f2d27921 plus native worktree diff in tests/test_cache_refresh_outputs.py. AC1: [evidence: behavioral-test] Direct Python entry point passed against the installed CLI. Lines 93–98 match the generated YAML by unique UUID. Lines 119–182 exercise three refresh states across eight commands and three formats, including request cleanup between cases. Lines 216–227 exercise inline TTY refresh. Checked display-ID casing, shape and label consistency, request isolation, lock contention and worker recursion. The prior main-relative mailbox diff is inherited from integration. AC2: [evidence: configuration-validation] No BUG-2734 discovery runner or known-failing entry found at the pinned integration base. Discovery and exact-head CI remain unverified.
+  created_at: 2026-11-23T23:31:20.928633637Z
+  modified_at: 2026-11-23T23:31:20.928633637Z
+  session_id: 01a20abd4e9d
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20ab7-9583-7983-9b8f-0454fad3a798
   author: joe
