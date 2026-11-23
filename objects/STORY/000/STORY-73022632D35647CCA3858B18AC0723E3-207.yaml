@@ -1,0 +1,32 @@
+id: 01a2066c-a424-7bb2-b043-eb5c58c56277
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-207
+title: 'Review PR-4403: [AI:codex] feat(doctor): release an ended lane’s conflict reservation (BUG-2722)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a2063c`) for branch `bug-b6b1278890774ef993d2ebc327862470-483`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4403>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-483` → `main`
+
+  ## Covers
+
+  - BUG-2722
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4403` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T03:21:52.932368912Z
+modified_at: 2026-11-23T03:21:52.932368912Z
+req_type: Story
+filed_at:
+  code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 215313b8d3
+  session: 01a2063cc951
