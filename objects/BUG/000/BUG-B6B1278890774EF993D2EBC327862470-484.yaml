@@ -124,6 +124,11 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-484` at head `unavailable`.'
   created_at: 2026-11-23T05:54:35.881866704Z
   modified_at: 2026-11-23T05:54:35.881866704Z
+- id: 01a206fa-4f28-7291-84f0-7a45024587fb
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2723: AC1 FAIL. The train still relies on a per-name rollup that omits the successful FULL aggregate on incident PR #4391, and the landing and final exact-tip evaluators do not share a tier-aware selector. AC2 PARTIAL. The train reports the run ID and cancellation state, but the attempt, tier, conclusion and supersession evidence are incomplete and the exact-tip refusal has no run ID. AC3 PARTIAL. The regression covers a synthetic cancelled FAST plus passing FULL with both aggregates visible, but misses the production evidence shape and has a non-discriminating wrong-head fixture. AC4 PASS for the documented sequence, with the requested documentation assertion missing. The original PR head matches the pinned landed tree. Exact-head FAST gates, compile and Build passed; merge-hold-gate was pending at review time. No local builds or tests were run.. It was punted on: design-fork: Disputing finding 3 cross-tier retirement and stored AC3 under the advisor ruling. At one head, FAST run 10 cancelled with a failed Build and FULL run 11 passed, with no second FAST. AC3 explicitly requires ready. The ruling keeps the latest run of each workflow+tier and says cancellation without a newer same-tier run is CANCELLED, so this same head must block. The existing bug2723_train_replaces_cancelled_fast_only_with_verified_full fixture requires Green. Resolve this two-run case for all three landing gates.. No triage reason was given.'
+  created_at: 2026-11-23T05:56:37.288457936Z
+  modified_at: 2026-11-23T05:56:37.288457936Z
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
@@ -187,6 +192,13 @@ history:
   timestamp: 2026-11-23T05:52:30.300950620Z
   session_id: 01a206f1c086
   changes: []
+- id: 01a206fa-4f28-7291-84f0-7a31de7200a8
+  author: joe
+  timestamp: 2026-11-23T05:56:37.288435258Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
