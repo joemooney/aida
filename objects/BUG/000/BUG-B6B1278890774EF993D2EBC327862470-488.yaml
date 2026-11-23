@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The mandate's spec resolution for a PR's trailer IDs maps agreed_id labels (e.g. TASK-3835) to their store objects, using the store at (or refreshed to) origin/aida-store. A test: a PR whose trailer names agreed_id labels present only via the label map resolves.
   - AC2: When resolution fails, the refusal names each unresolved ID and the store head it read (so stale-cache cases are distinguishable from missing specs).
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T08:32:01.004953508Z
+modified_at: 2026-11-23T08:36:09.638509849Z
 req_type: Bug
 tags:
 - agreed-id
@@ -34,6 +34,14 @@ comments:
   modified_at: 2026-11-23T08:32:01.004953508Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
+  author: aida-session-start
+  timestamp: 2026-11-23T08:36:09.638508340Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: a16f3592f015e06580a94c1f7879ea9c877c088e
   branch: main
