@@ -9,12 +9,12 @@ description: |
   - AC1: A malformed or invalid holder record is classified Unknown, never Dead, and is never reclaimed. A unit test covers truncated TOML, a wrong-type pid and a missing start identity.
   - AC2: A valid record whose holder is provably dead is still classified Dead (positive control).
   - AC3: The refusal for an Unknown holder names the record path and the read-only command that inspects it.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-23T02:19:58.833250588Z
+modified_at: 2026-11-23T02:28:59.494668709Z
 req_type: Bug
 tags:
 - authority
@@ -283,6 +283,14 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a2063c-37e6-7191-9a3a-4402d9bbaede
+  author: aida-orchestrator
+  timestamp: 2026-11-23T02:28:59.494681401Z
+  session_id: 01a20639e38f
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -290,3 +298,11 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: BUG-2715 AC2 passes by source inspection. The exited-worker controls are present, and the mixed lock/session case now counts both claimants. AC1 and AC3 remain incomplete at initial clone discovery. Reviewed against protected base 215313b8d3a8. The intervening base commit changes unrelated files. CI pending at review time.
+  recovery_hint: address the review findings, move BUG-2715 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T02:28:59.494668709Z
