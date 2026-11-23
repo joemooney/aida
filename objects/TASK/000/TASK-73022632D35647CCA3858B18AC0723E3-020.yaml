@@ -87,6 +87,13 @@ comments:
   created_at: 2026-11-23T16:00:51.960568945Z
   modified_at: 2026-11-23T16:00:51.960568945Z
   session_id: 01a208e98c21
+- id: 01a20925-0f71-7713-8cd6-7539f86ce564
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 09:03): PR-4437 @ 545e5259287 PASSES the p26 brief. Base integration; one commit ''[AI:codex] fix(worktree): ... (TASK-3122)''; +12 lines, all inside worktree_lifecycle_gc.rs mod tests, so test-only as the brief requires; trace present. Main already injects the admitting writer scan (test_writer_scan(true) at :2872), so the PR adds the regression the brief asks for in that case: a scoped test_writer_scan(false) guard asserts the refusal text and that the clone survives, then the guard drops (it restores the earlier verdict) and the retry removes the clone. No production change. Fast CI is pending (run 45211729290).'
+  created_at: 2026-11-23T16:02:19.658934799Z
+  modified_at: 2026-11-23T16:02:19.658934799Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1dc01-cb10-7712-bd85-1df9a58bab3c
   author: joe
