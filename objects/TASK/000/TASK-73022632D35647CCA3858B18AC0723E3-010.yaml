@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T13:34:55.549579471Z
+modified_at: 2026-11-23T13:34:59.303340427Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -90,6 +90,22 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T13:34:55.379979689Z
   modified_at: 2026-11-23T13:34:55.379979689Z
+- id: 01a2089e-2a19-73a3-a7e4-03f3380b8a00
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 06:34):
+    # TASK-3115 / PR #4432 r2 (advisor-122 ruling 2026-11-23 06:37; relayed by product-15). Lane: CODEX. train/mandate is gate code, so strict. SMALL.
+
+    CR at 5d329935 (r1, +31/-34). One theme: `aida pr train --check` must stay READ-ONLY.
+    1. pr_train.rs:2251 → mandate_ship.rs:814-829: the --check path must not reach code that can rewrite .aida/config.toml (the forge-kind resolver) or write gate evidence. Call the mandate evaluation in a read-only / preview mode (no config rewrite, no evidence recording); add that flag if it doesn't exist.
+    2. Test: a --check run with a STALE [forge] config and a write-producing mandate path, asserting .aida/config.toml and the gate ledger are BYTE-IDENTICAL afterwards.
+    Deferred (do NOT fix): the timeout overrun and error labelling in --json p2s.
+    NOTE: overlaps BUG-2727 (#4419, mandate store refresh); whichever lands second rebases.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: the two blockers plus the diff.
+  created_at: 2026-11-23T13:34:59.303340427Z
+  modified_at: 2026-11-23T13:34:59.303340427Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1db72-e217-7620-9b69-8b1ad0d07eee
   author: joe
