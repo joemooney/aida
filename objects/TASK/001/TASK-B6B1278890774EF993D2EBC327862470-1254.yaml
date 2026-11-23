@@ -1,0 +1,31 @@
+id: 01a208a8-ef1b-77c0-8e6b-5a9c2f77337d
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1254
+title: 'Review follow-up: tests/test_duration_cap_inventory.py:9 adds a standalone regression that neither GitHub CI'
+description: |-
+  From TASK-3126
+  Reviewed sha: 9af5afb76bd7628acba2280bba7f642a33952305
+
+  tests/test_duration_cap_inventory.py:9 adds a standalone regression that neither GitHub CI nor make check-ci-fast runs. The existing config-trust ratchet checks the classes of entries that are present and does not require these two specific entries, so removing either duration-cap entry can leave the normal checks green. Register the Python test with a routine gate or add the two assertions to the existing config-trust ratchet.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T13:46:58.715415909Z
+modified_at: 2026-11-23T13:46:58.715415909Z
+req_type: Task
+tags:
+- carried-from:TASK-3126
+- finding-hash:7dd307bb
+- from-review:TASK-3126
+relationships:
+- rel_type: References
+  target_id: 01a1dbde-c245-7ed1-b86b-daaa48159ead
+  created_at: 2026-11-23T13:47:12.382335767Z
+filed_at:
+  code_sha: 9af5afb76bd7628acba2280bba7f642a33952305
+  branch: pr-4433
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ff524ebd21f
+  vendor: claude
+  session: 01a208a677fe
