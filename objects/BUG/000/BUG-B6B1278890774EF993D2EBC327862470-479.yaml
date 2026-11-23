@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-23T14:54:55.026429797Z
+modified_at: 2026-11-23T15:13:04.060784504Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -111,6 +111,19 @@ comments:
   content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-479` at head `unavailable`.'
   created_at: 2026-11-23T14:52:40.446919109Z
   modified_at: 2026-11-23T14:52:40.446919109Z
+- id: 01a208f7-c372-78a0-acd9-2eeeae590f41
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e603d055a6ce991f45f999ec323f7ecc72e18e67 plus the native working-tree diff. Inspected the merge-base diff, working tree and untracked-file list.
+    AC1: [evidence: behavioral-test] Both directions release in bug_2403_alias_release_tests.rs:394 and :443. PR/MR isolation at the same number and head is exercised at :481 and in story_2492_publication_tests.rs:1407, including a signed PR refusal. The receipt test validates the signed and local authorities and rejects a changed local act.
+    AC2: [evidence: behavioral-test] Wrong-head and conflicting publication paths refuse. rework_hold_release.rs:1386 identifies the refusal and approval keys on an eligibility failure. The focused tests assert refusal and the successful clearance key; the exact diagnostic wording was inspected.
+    AC3: [evidence: behavioral-test] bug_2403_alias_release_tests.rs:394 appends a spec-less change approval after a stale spec approval and checks the recorded clearance. The unrelated terminal annotation must not replace the approval.
+    Authority probes included an absent but otherwise valid candidate, an included unattested candidate beside a newer valid one, and a symlinked ledger. See story_1697_attested_release_tests.rs:653 and bug_2403_alias_release_tests.rs:501. No reviewer verdict recorded. Focused lane job j20261123T150611754-2-0 passed all 6 tests after correcting the findings and authorship fixtures. All 48 FAST source gates passed. Host publication and exact-head CI are pending.
+  created_at: 2026-11-23T15:13:04.060784504Z
+  modified_at: 2026-11-23T15:13:04.060784504Z
+  session_id: 01a208e6d3f2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a206d4-2e73-71c3-b41a-2e45c4ca59d7
   author: aida-session-start

@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T14:54:48.143715639Z
+modified_at: 2026-11-23T15:12:43.440150824Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -106,6 +106,17 @@ comments:
   modified_at: 2026-11-23T13:34:59.303340427Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a208f7-7388-7302-917d-224c68eed1cc
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fd52125026c966d6dc8377cc901a398642dd3eed plus the uncommitted native-lane changes. Reviewed origin/main...HEAD, git diff HEAD and untracked additions.
+    AC2: [evidence: behavioral-test] Held and unheld supervised train fixtures admit the same member as the recording path. The report rejects a settled mandate policy refusal as read, a failed trace read as unavailable and a stalled mandate-only Git child as not-checked within the shared timeout. A separate hold-only fixture exercises unavailable evidence with the hold reason retained (bug2406_train_tests.rs:1539, story_1690_train_tests.rs:2170).
+    AC3: [evidence: behavioral-test] The stale pure-git config and the PR gate ledger, exclusion ledger, hold and event files retain their original bytes or absence across the refusal. The recording path then emits an audit event (bug2406_train_tests.rs:1591). Inspected carry-over and label lookup, typed refusal propagation, expired budgets, store refresh contention and retry paths. Updated the snapshot stdin writer inventory after its ratchet flagged the helper change. No grant, mandate scope or hold-release rule added. Final lane job j20261123T150426685-2-0 executed all three targeted tests, all passed. No published round-two head or hosted CI result yet.
+  created_at: 2026-11-23T15:12:43.440150824Z
+  modified_at: 2026-11-23T15:12:43.440150824Z
+  session_id: 01a208e6d14f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1db72-e217-7620-9b69-8b1ad0d07eee
   author: joe
