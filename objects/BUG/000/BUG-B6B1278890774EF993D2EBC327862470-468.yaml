@@ -20,11 +20,12 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-23T00:00:40.078914047Z
+modified_at: 2026-11-23T04:30:31.324665119Z
 req_type: Bug
 tags:
 - lanes
 - linked:STORY-2705
+- operator-held
 - review-watch
 - throughput
 relationships:
@@ -708,6 +709,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a206ab-7c03-7fb0-9083-a8e362b3e5aa
+  author: joe
+  timestamp: 2026-11-23T04:30:31.427686221Z
+  changes: []
+deferred: true
+deferred_at: 2026-11-23T04:30:31.324665119Z
+deferred_until: date:2026-12-15
+deferred_reason: review-time deferral didn't converge in 8 rounds; the source fix is BUG-2726
 execution_mode: drain
 filed_at:
   code_sha: 719aa4947d0673e6507e823e43e47b20b07422c8
