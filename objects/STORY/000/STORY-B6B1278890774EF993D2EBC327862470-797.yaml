@@ -17,12 +17,12 @@ description: |
   4. Live-binary guard: in review-gated mode, `aida dev build` promotion refuses a main SHA without green CI and names the last green SHA. Activation in a worktree is unaffected.
   5. Docs: the two-seat protocol and the landing docs describe both modes and when to choose each.
   6. Tests: the ship gate in each mode, the required-check reconcile (forge mocked), the red-main alert routing, and the promotion refusal.
-status: InProgress
+status: NeedsAttention
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-23T02:33:42.210311859Z
+modified_at: 2026-11-23T02:36:25.724611998Z
 req_type: Story
 tags:
 - landing
@@ -1600,6 +1600,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20643-0828-7fa2-9083-4f681d927dab
+  author: dirtlab
+  timestamp: 2026-11-23T02:36:26.024324945Z
+  session_id: 01a206405299
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
@@ -1609,6 +1618,12 @@ filed_at:
   vendor: claude
   session: 01a1ebd2-751f-78d1-a49d-ace9c085cdb9
   harness_version: 2.1.326 (Claude Code)
+attention_reason:
+  category: other
+  detail: 'PR #4401 host merge has a behavioral overlap in aida-cli-lib/src/review_draft.rs. Both parents change LaunchDraft::prompt. S1b instructs reviewers to exit after writing and adds structured WAITING needs, while integration requires submit-draft acceptance before exit. Conflict-only pickup requires punting overlapping behavior.'
+  lean: Keep integration's submit-before-exit lifecycle and incorporate S1b's structured needs and WAITING wording into its single prompt.
+  raised_by: implementer
+  raised_at: 2026-11-23T02:36:25.724611998Z
 failure_reason:
   phase: reviewer
   phase_index: 3
