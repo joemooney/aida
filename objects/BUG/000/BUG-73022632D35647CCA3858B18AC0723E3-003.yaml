@@ -96,6 +96,13 @@ comments:
   created_at: 2026-11-23T16:38:20.770524304Z
   modified_at: 2026-11-23T16:38:20.770524304Z
   session_id: 01a208ec91ef
+- id: 01a20947-49bc-73f1-9562-1f1e14f96123
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 09:41): PR-4440 @ e8731e032b6 PASSES the p26 brief. Base integration; one commit ''[AI:codex] fix(tests): ... (BUG-2700)''; +27 lines, one new test in tests/bug_2169_contained_clone_bwrap_tests.rs, so test-only as the guard requires; trace present. Main already isolates the existing resume test (#4365, TASK-3133: contained_cwd_seam::pin plus set_current_dir to fx.other_wt under run_path_isolated_test), so the PR adds a regression in that case: with cwd in the fixture worktree and os_wrap at its default, a contained resume prepares the FIXTURE''s .aida/mailbox. Nit: the PR body doesn''t state that main already behaved, as the brief asks. Lane fast_gate=pass; GitHub fast CI pending.'
+  created_at: 2026-11-23T16:39:43.029914243Z
+  modified_at: 2026-11-23T16:39:43.029914243Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20947-49aa-7130-8020-12f706da6b31
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int26-bug-2700` at head `e8731e032b6cfa9412ebe13c49193cafcd78608e`.'
