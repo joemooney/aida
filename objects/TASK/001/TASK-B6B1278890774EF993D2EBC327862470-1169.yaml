@@ -14,12 +14,12 @@ description: |
 
   - With a corrupt committed red-main journal line or an unreadable journal, keep merge, readiness, and review-round metrics available. Show that red-main metrics are unavailable in both human and JSON output, with a bounded diagnostic. Preserve the available red-main result shape for existing JSON callers.
   - Keep the existing valid-journal and absent-journal behavior. A truncated trailing line retains the journal reader's current handling. Exercise the CLI report with one corrupt committed line and assert independent metrics survive. Keep strict journal reads on paths that use it as state or transition evidence.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.340242990Z
-modified_at: 2026-11-23T09:57:12.237295588Z
+modified_at: 2026-11-23T11:49:08.240035801Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -171,6 +171,22 @@ history:
   timestamp: 2026-11-23T09:56:03.992759550Z
   session_id: 01a20796dd39
   changes: []
+- id: 01a2083d-0bc3-7840-bf48-5dd6231404d4
+  author: aida-auto-bump
+  timestamp: 2026-11-23T11:49:08.163214023Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2083d-0c10-77c0-a89a-8a198a05ccf3
+  timestamp: 2026-11-23T11:49:08.240032103Z
+  agent: aida
+  commit_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
+  summary: TASK-3228 — PASS. Reviewed the full landed diff against protected main 55f63f3800861fee8b80ae3046c104290baf7fbf. The pinned landed tree matches the original PR head’s tree. The generated worksheet linked the task by origin ID and directed review against its description, which contains the two acceptance criteria below. AC1 — verified by aida-cli-lib/src/land_metrics.rs:585–638 and the CLI regression at aida-cli/tests/task_3228_land_metrics.rs:60–85. The report computes independent merge, readiness and review-round metrics before reading the watch journal. Journal errors preserve those metrics and show red-main as unavailable in both formats with a fixed, bounded diagnostic. Successful reads keep the existing red-main JSON shape. AC2 — verified by the unchanged successful-read call and strict reader/transition paths in aida-cli-lib/src/main_watch.rs:556–604, plus the CLI regression at aida-cli/tests/task_3228_land_metrics.rs:54–85. Valid, absent and unterminated-tail inputs retain the original behavior. The regression checks the independent metrics against a baseline after writing an invalid newline-terminated event. The implementer reported a passing targeted run in the TASK-3228 self-review. This review used source and existing evidence. No actionable findings. CI pending at review time. Fast gates and merge-hold-gate passed while fast compile was running.
+  review_verdict: approved
 filed_at:
   code_sha: f037b9d28788d3673950b9986e88d91d0d0e42af
   branch: pr-4362
@@ -179,3 +195,7 @@ filed_at:
   aida_build_sha: 719aa4947d0
   vendor: claude
   session: 01a1faec8fa5
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T11:49:08.163206767Z
+  completion_sha: 1960d246c4badcb6227bb1d4ecee808e3087665b
