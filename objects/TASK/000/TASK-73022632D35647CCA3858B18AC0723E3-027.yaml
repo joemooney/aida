@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-23T01:44:06.546287014Z
+modified_at: 2026-11-23T01:45:33.490378100Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -681,6 +681,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T01:44:06.397474510Z
   modified_at: 2026-11-23T01:44:06.397474510Z
+- id: 01a20614-c238-7021-b80e-5b19248c94c1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 18:45):
+    # TASK-3133 / PR #4387 r3 (advisor-122 ruling 2026-11-22 18:42 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier (containment). This round ABSORBS TASK-3838.
+
+    The CR at f41a18b0 comes from product's dell1-host required-live run. `task_2712_codex_sandbox_live_seat_commit_and_denials` FAILED (not skipped) at bug_2169_contained_clone_bwrap_tests.rs:2276: "Codex :workspace denied a configured extra writable root: cannot create /var/tmp/.tmpXXXX/codex-control-extra/probe: Read-only file system". So the /var/tmp fixture root can't be a Codex extra writable root, because :workspace mounts /var/tmp read-only.
+    Fix: give the live test (and the fixtures TASK-3838 names) a DEDICATED disposable scratch root outside /tmp, /var/tmp and target/worktrees, e.g. $HOME/.cache/aida-test-scratch/<unique>, created 0700 and removed on drop.
+    - A one-time probe proves Codex can write it AND that the ambient /tmp write grant doesn't cover it.
+    - Under AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1, any probe failure FAILS LOUDLY (never a skip).
+    - Also cover TASK-3838's ACs: the shared helper is used by the bwrap fixtures; under CI=true it refuses to fall back into CARGO_TARGET_DIR; no fixture directories are left behind; and the scratch is exec-capable for copied test binaries (TASK-3832 item 2, noexec /tmp).
+    Keep finding 1 (the mutation-proof fixture regression) passing.
+    Approval evidence, which product runs on BOTH imac and dell1 hosts at the new head: AIDA_CARGO_FORCE_BUILD=1 AIDA_REQUIRE_CODEX_SANDBOX_LIVE=1 AIDA_REQUIRE_BWRAP_LIVE=1 AIDA_TEST_AIDA_BIN=<aida built at head> cargo test --profile agent -p aida-cli-lib --lib -- seat_clone::bwrap_tests::linux::task_2712_codex_sandbox_live_seat_commit_and_denials --exact
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T01:45:33.490378100Z
+  modified_at: 2026-11-23T01:45:33.490378100Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
