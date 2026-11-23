@@ -1,0 +1,21 @@
+id: 01a206aa-bcf7-7a53-bc68-07bc9914a280
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-487
+agreed_id: BUG-2726
+title: 'Rework pickup pushes a merge-only head before the fix: remove the pickup publication (BUG-2714 AC1 slice only)'
+description: 'Minimal slice. Rework pickup publishes the local base merge to the PR before the implementer''s fix, so review-watch reviews a merge-only head while the lane runs (dozens of wasted reviews on 2026-11-22: #4382, #4373, #4387, #4391, #4385). The broader fixes are parked: BUG-2706 (#4382, review-time deferral) and BUG-2714 (#4395, a ship-time merge-only guard), and neither converged. #4395 r1 and r2 reviewers VERIFIED this slice: ''AC1 — verified by the removal of the production pickup publication callback and the queue pickup assertion that origin still names the original PR head after local preparation.'' AC1: rework pickup prepares the base merge LOCALLY only, and origin still names the original PR head after pickup; take the AC1 diff from #4395 (branch kept). AC2: the existing ship path publishes merge plus fix together (unchanged behaviour). AC3: a regression test that origin is unchanged after pickup. OUT OF SCOPE: every merge-only, NoChange, ancestry or tree-equality guard (parked BUG-2714). Target <=100 changed lines.'
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T04:29:42.519542146Z
+modified_at: 2026-11-23T04:29:42.519542146Z
+req_type: Bug
+filed_at:
+  code_sha: 5470336db35805f5b13a85d8a2fff124ec69f557
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 215313b8d3a
+  vendor: claude
+  session: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
