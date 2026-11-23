@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T05:51:57.305479631Z
+modified_at: 2026-11-23T06:43:29.429769379Z
 req_type: Bug
 tags:
 - ci
@@ -176,6 +176,20 @@ comments:
   modified_at: 2026-11-23T05:56:48.482480615Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20725-39de-79c3-b702-cc722453e111
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: d8e61bb30d20e8750e32b7ba4f3f383ab5152fd1 plus the native round-three working tree and new forge_tier_runs.rs. Reviewed the merge-base diff and working changes.
+    AC1: [evidence: behavioral-test] forge_tier_runs.rs:112 reads the pinned run list and attempt-specific jobs. story_1690_train_tests.rs:6500 and story_2768_land_tests.rs:747 cover replacement in train, landing and exact-tip evaluation, both tier orders, reruns, pending and terminal states, and independent identity mismatches.
+    AC2: [evidence: behavioral-test] pr_train.rs:917 and forge_tier_runs.rs:303 retain selected-run diagnostics. The tests assert run, attempt, tier and conclusion on refusal.
+    AC3: [evidence: behavioral-test] The train fixture provides a stale FAST rollup aggregate and gets FULL Build only from Actions jobs. Both final bug2723 Rust tests executed and passed.
+    AC4: [evidence: documentation-inspection] docs/internal/testing/ci-test-shards.md:39 states the wait-before-retoggle instruction. tests/test_ci_tiers.py:56 passed.
+    Deep pass covered identity matching, malformed and incomplete JSON, duplicate and missing evidence, both tier orders and attempt changes during job reads. Selection rechecks the inventory and refuses inconsistent evidence. The documentation assertion, rustfmt and diff whitespace checks passed. Full FAST validation is outstanding: the native lane runner refused cargo metadata in four shard-planner tests. No hosted CI result exists for these uncommitted changes.
+  created_at: 2026-11-23T06:43:29.429769379Z
+  modified_at: 2026-11-23T06:43:29.429769379Z
+  session_id: 01a20719751c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start
