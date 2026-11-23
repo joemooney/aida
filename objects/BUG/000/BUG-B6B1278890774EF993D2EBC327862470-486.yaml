@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T06:56:53.180017934Z
+modified_at: 2026-11-23T07:06:03.839202284Z
 req_type: Bug
 tags:
 - knob
@@ -185,6 +185,18 @@ comments:
   modified_at: 2026-11-23T06:54:31.815499628Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20739-e3ed-76b3-8643-0b562926ea9d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f431ee262dc4448ea3ecf845cb0a032fb30ddfad plus the native working tree. Inspected the merge-base diff, final edits and untracked inventory (empty).
+    AC1: [evidence: behavioral-test] Scoped to watcher train admission per the round-three ruling. Findings 1 and 2 resolved by restoring land.rs and land_ci_base.rs exactly to origin/main, including hold and train fallback ordering. Advisory STALE-CI-BASE is deferred by ruling. Finding 3: review_watch_ready.rs:352 selects the canonical workflow by path, pins its ID and latest exact-head successful run, then binds marker plus aggregate to that run and attempt.
+    AC2: [evidence: behavioral-test] Findings 4 and 5: review_watch_ready.rs:147 and :183 restrict the exception to CI-gated GitHub main, verify clean merge and reject stale or in-progress rows. tests/task_1945_review_watch_ready_tests.rs:1715 passed in the launcher (1 executed), including strict, conflict, overlapping review-gated, GitLab, foreign CI and attempted rerun. Report and wake only, underlying train approval and merge gates still apply.
+    Deep pass: checked workflow URL/JSON identity against the reader, empty/multiple rows, superseded runs, ambiguous markers, head change, unreadable sources, wake key persistence and existing review/update routing. Reverted obsolete land and update-policy fixtures with the removed behavior. The live GitHub API was not exercised. The latest-run selector is local until BUG-2723 is available. Hosted CI on the future publication SHA is pending.
+  created_at: 2026-11-23T07:06:03.839202284Z
+  modified_at: 2026-11-23T07:06:03.839202284Z
+  session_id: 01a2073147d2
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20680-0f23-7a31-87b8-f2996b5ab36a
   author: aida-session-start
