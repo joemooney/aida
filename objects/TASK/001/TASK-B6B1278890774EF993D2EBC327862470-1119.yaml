@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. In a review-watch pass, observe a busy change, a refused change, then a whole-watcher stop. Assert that the final pass report retains the earlier busy count and refusal evidence and records the stop separately with its diagnostic.
   2. Processing stops at the whole-watcher failure. Preserve the bounded refusal sample, total refusal count, and existing suppression of a superseded image's report.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T09:43:03.058201739Z
-modified_at: 2026-11-23T16:04:44.863117477Z
+modified_at: 2026-11-23T16:33:43.885474057Z
 req_type: Task
 tags:
 - carried-from:BUG-2674
@@ -134,6 +134,13 @@ history:
   author: joe
   timestamp: 2026-11-23T16:04:44.998296986Z
   changes: []
+- id: 01a20941-99cd-7102-a61e-987ca3beee84
+  author: aida-session-start
+  timestamp: 2026-11-23T16:33:43.885468397Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
