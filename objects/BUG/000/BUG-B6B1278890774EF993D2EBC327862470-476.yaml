@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-23T02:32:10.206855201Z
+modified_at: 2026-11-23T02:32:14.131438195Z
 req_type: Bug
 tags:
 - authority
@@ -206,6 +206,24 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T02:32:10.033341087Z
   modified_at: 2026-11-23T02:32:10.033341087Z
+- id: 01a2063f-5fd5-7fa2-8f69-1c8982287197
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:32):
+    # BUG-2715 / PR #4397 r4 FINAL, the cap round (advisor-122 ruling 2026-11-22 19:38 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier.
+
+    CR at e1dd1ce4 (r3). AC2 passes and the mixed lock/session case is fixed. ONE finding remains, the same defect class one layer up: queue_cmd/work.rs:4110 → clone_seat_trees → list_leases uses a BLOCKING read_to_string and SILENTLY DROPS parse failures, so the FIFO and corrupt-lease protections are bypassed at initial discovery.
+    Fix: route list_leases (or the discovery path's call to it) through the SAME non-blocking, no-follow, regular-file open used in r3. An unreadable or unparseable lease surfaces as Unknown with its path and an inspection command, NEVER dropped.
+    BLAST RADIUS: list_leases has many callers. If changing it globally is risky, change ONLY the discovery path and list the other callers in the PR body (product will file the follow-up spec).
+    Tests: a FIFO named *.toml and a corrupt lease, both exercised through queue work discovery.
+    The reviewer scope is that finding plus the diff. A further blocking CR parks the PR.
+    Fail-closed constraint: oversized or unreadable means refusal, never absence.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T02:32:14.131438195Z
+  modified_at: 2026-11-23T02:32:14.131438195Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
