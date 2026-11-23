@@ -19,6 +19,7 @@ use std::path::{Path, PathBuf};
 // directory, which every admission reads as a holder.
 const FILE: &str = "loops-drain.journal";
 const LOCK: &str = "drain.lock";
+const RECOVERY_PREFIX: &str = "recovered unreadable journal by ";
 const MAX_EVENTS: usize = 256;
 const LIMIT: u64 = 256 * 1024;
 /// A drain without `--for` lasts an hour; none may outlast a day.
@@ -119,7 +120,9 @@ fn load(root: &Path) -> Result<Journal> {
                         && receipt.expires_at > receipt.issued_at
                         && receipt.expires_at - receipt.issued_at
                             <= Duration::seconds(MAX_SECONDS as i64),
-                Event::Resume { actor, .. } => valid_text(actor),
+                Event::Resume { actor, .. } => {
+                    valid_text(actor) || actor.strip_prefix(RECOVERY_PREFIX).is_some_and(valid_text)
+                }
                 Event::Expired { .. } => true,
             }),
         "invalid advisor loops drain journal"
@@ -286,9 +289,8 @@ fn change(
         Ok(journal) => observe_locked(root, journal, now)?,
         Err(error) if drain.is_none() => {
             // Version 1 rejects extra event kinds and fields. Qualify the
-            // actor in the existing resume audit and enforce its wire limit.
-            let actor = format!("recovered unreadable journal by {actor}");
-            anyhow::ensure!(valid_text(&actor), "recovery audit actor exceeds 512 bytes");
+            // already validated actor in the existing resume audit.
+            let actor = format!("{RECOVERY_PREFIX}{actor}");
             let mut replacement = Journal {
                 version: 1,
                 events: vec![Event::Resume { actor, at: now }],
@@ -392,6 +394,29 @@ mod tests {
         std::fs::create_dir_all(directory(temp.path())).unwrap();
         std::fs::write(directory(temp.path()).join(FILE), b"{broken").unwrap();
         assert!(active(temp.path()).is_err());
+    }
+
+    // trace:TASK-3246 | ai:codex
+    #[test]
+    fn recovery_preserves_a_maximum_length_actor() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let actor = "é".repeat(256);
+        assert_eq!(actor.len(), 512);
+        fixture_drain(root, &actor, "maintenance", 60, Utc::now()).unwrap();
+        assert_eq!(active(root).unwrap().unwrap().actor, actor);
+
+        std::fs::write(directory(root).join(FILE), b"{broken").unwrap();
+        assert!(active(root).is_err());
+        assert!(fixture_resume(root, &actor)
+            .unwrap()
+            .contains("Replaced unreadable"));
+        assert_eq!(active(root).unwrap(), None);
+        assert!(matches!(
+            load(root).unwrap().events.as_slice(),
+            [Event::Resume { actor: audit, .. }]
+                if audit == &format!("recovered unreadable journal by {actor}")
+        ));
     }
 
     /// Review round 4, finding 4: every journal the writer emits is one the
