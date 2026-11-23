@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T03:26:23.657227918Z
+modified_at: 2026-11-23T03:27:03.761997435Z
 req_type: Bug
 tags:
 - recovery
@@ -92,6 +92,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T03:26:23.502040772Z
   modified_at: 2026-11-23T03:26:23.502040772Z
+- id: 01a20671-9466-7281-b001-8f65a031c130
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:26):
+    # BUG-2721 / PR #4402 r2 (advisor-122 ruling 2026-11-22 20:28 MST; relayed by product-15). Lane: CODEX. Launch-attempt ownership is lease-like, so ADR-76 strict.
+
+    CR at 81a84bab (r1, 4 files). All four findings are valid. Fix all four. The reviewer scope is these four plus the r2 diff.
+    (a) Pass the attempt UUID into build_worker_exec's environment, so surviving worker DESCENDANTS are still detected. Recovery must NOT release a scope while any descendant lives.
+    (b) --retire-unknown: a partial receipt with worktree=primary must NOT fall back to cwd alone. Detect env-only holders via the attempt token.
+    (c) Exclude the whole INVOKING ANCESTRY (timeout and other wrappers) from "holder", not just the current PID.
+    (d) Add per-AC test traces for AC1-3.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T03:27:03.761997435Z
+  modified_at: 2026-11-23T03:27:03.761997435Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
