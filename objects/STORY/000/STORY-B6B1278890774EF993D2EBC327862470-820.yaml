@@ -13,7 +13,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T16:09:22.591156482Z
+modified_at: 2026-11-23T16:10:38.190731087Z
 req_type: Story
 tags:
 - autonomy
@@ -26,6 +26,20 @@ comments:
   content: 'Draft to Approved: advisor-122 disposition 2026-11-23 09:09 (small, standard tier); set by product-15 deputy, with --mode drain.'
   created_at: 2026-11-23T16:09:22.591156482Z
   modified_at: 2026-11-23T16:09:22.591156482Z
+- id: 01a2092c-a936-7e23-8023-4c09183f4d9f
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 09:10):
+    # STORY-3038: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show STORY-3038` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:STORY-3038 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (STORY-3038)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T16:10:38.190731087Z
+  modified_at: 2026-11-23T16:10:38.190731087Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
