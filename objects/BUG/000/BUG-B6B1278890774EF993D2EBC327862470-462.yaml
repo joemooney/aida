@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:01:08.400632766Z
-modified_at: 2026-11-23T15:25:24.517996178Z
+modified_at: 2026-11-23T15:26:00.187532930Z
 req_type: Bug
 tags:
 - track:integration
@@ -50,6 +50,12 @@ comments:
   content: 'Lane exit evidence: retained branch `int26-bug-2698` at head `06b95f8a1e5d57a1f8210a2da787874292aeaf5e`.'
   created_at: 2026-11-23T15:25:24.517991160Z
   modified_at: 2026-11-23T15:25:24.517991160Z
+  session_id: 01a208eb986f
+- id: 01a20903-97fb-7101-96b8-3e64e5bf7b42
+  author: lane-recovery
+  content: 'Lane recovery: no open PR; retained branch `int26-bug-2698` at head `06b95f8a1e5d57a1f8210a2da787874292aeaf5e`.'
+  created_at: 2026-11-23T15:26:00.187521781Z
+  modified_at: 2026-11-23T15:26:00.187521781Z
   session_id: 01a208eb986f
 history:
 - id: 01a20885-7dbc-7893-863c-34ed6a75a6ce
