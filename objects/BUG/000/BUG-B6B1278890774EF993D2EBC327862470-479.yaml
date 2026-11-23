@@ -9,12 +9,12 @@ description: |
   - AC1: An approval recorded under a change key (PR-N / MR-N) releases a rework hold recorded under the change's spec key, and vice versa, when both name the same change and head.
   - AC2: merge-hold auto-release reports which key it read and why it refused, naming the approval it found under the other key if there is one.
   - AC3: A regression test records an approval with spec None under PR-N while the hold sits under SPEC, and asserts the hold auto-releases.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-23T03:39:41.269439325Z
+modified_at: 2026-11-23T05:14:58.547756604Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -45,6 +45,14 @@ comments:
   modified_at: 2026-11-23T03:39:41.269439325Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a206d4-2e73-71c3-b41a-2e45c4ca59d7
+  author: aida-session-start
+  timestamp: 2026-11-23T05:14:58.547755968Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
