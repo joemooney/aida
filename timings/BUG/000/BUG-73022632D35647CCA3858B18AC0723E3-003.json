@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-73022632D35647CCA3858B18AC0723E3-003",
+  "publishes": [
+    {
+      "at": "2026-11-23T19:32:57.577945841Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-20T04:25:55.080439462Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-003",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-11-20T04:26:21.221585378Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-003",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-20T04:33:49.786901061Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-003",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Draft"
+      }
+    },
+    {
+      "ts": "2026-11-20T06:55:45.297138411Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-003",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "before": "drain",
+        "after": "decide"
+      }
+    },
+    {
+      "ts": "2026-11-23T13:08:20.300440278Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-003",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Draft",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-23T14:42:05.869015534Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-003",
+      "seat": "advisor",
+      "kind": {
+        "event": "DispositionChanged",
+        "before": "Approved",
+        "after": "Approved"
+      }
+    },
+    {
+      "ts": "2026-11-23T16:05:01.388181270Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-003",
+      "seat": "advisor",
+      "kind": {
+        "event": "ExecutionModeChanged",
+        "before": "decide",
+        "after": "drain"
+      }
+    },
+    {
+      "ts": "2026-11-23T19:32:57.343900909Z",
+      "spec": "BUG-73022632d35647cca3858b18ac0723e3-003",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f1a50179e5a3640451b4232e08f2e589df93e7d5",
+        "pr": 4446,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
