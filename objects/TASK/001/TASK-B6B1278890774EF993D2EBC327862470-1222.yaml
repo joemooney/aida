@@ -7,12 +7,12 @@ description: |
 
   ## Acceptance
   - AC1: Each item is fixed or closed with evidence that main already handles it; warnings for these are gone in a normal build or test run.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:25:26.874188951Z
-modified_at: 2026-11-23T19:52:39.796407076Z
+modified_at: 2026-11-23T19:52:43.423070991Z
 req_type: Task
 tags:
 - from-work-ci
@@ -57,6 +57,11 @@ comments:
   content: 'NARROWED (product-15 12:55): the tomllib fallback is split to TASK-3845 (gate path, strict, main). TASK-3840 now covers only the verify-manual handle warnings and the aida-term cfg(test) warning; relaunched into the p27 integration bundle.'
   created_at: 2026-11-23T19:52:39.796407076Z
   modified_at: 2026-11-23T19:52:39.796407076Z
+- id: 01a209f7-c89f-71c0-8d9b-12ef63dea18b
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was punted on: blocked-dependency: The CI-tier fixture copies and executes scripts/check-ci-gates.py and scripts/check-exec-context.py. Both unconditionally import tomllib. With tomllib unavailable the gate runner stops at line 36 before reading scripts/ci-gate-tiers.toml. Making that path run with tomli changes the parser dependency used by the FAST gate runner and the exec-context guard. The integration brief explicitly stops this standard-tier lane at gate/guard paths. The two manual handle warnings were also reproduced at docs/cli/verify-manual.py:848 and :867.. No triage reason was given.'
+  created_at: 2026-11-23T19:52:43.423063024Z
+  modified_at: 2026-11-23T19:52:43.423063024Z
 history:
 - id: 01a20885-6c4b-7c10-9c86-3824c13d73d1
   author: joe
@@ -102,6 +107,13 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a209f7-c89f-71c0-8d9b-12d45d0fb962
+  author: joe
+  timestamp: 2026-11-23T19:52:43.423049977Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
@@ -110,9 +122,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
-attention_reason:
-  category: blocked-dependency
-  detail: The CI-tier fixture copies and executes scripts/check-ci-gates.py and scripts/check-exec-context.py. Both unconditionally import tomllib. With tomllib unavailable the gate runner stops at line 36 before reading scripts/ci-gate-tiers.toml. Making that path run with tomli changes the parser dependency used by the FAST gate runner and the exec-context guard. The integration brief explicitly stops this standard-tier lane at gate/guard paths. The two manual handle warnings were also reproduced at docs/cli/verify-manual.py:848 and :867.
-  lean: Route the CI parser change for gate/guard review or split it from the manual and aida-term hygiene.
-  raised_by: implementer
-  raised_at: 2026-11-23T16:52:44.112053571Z
