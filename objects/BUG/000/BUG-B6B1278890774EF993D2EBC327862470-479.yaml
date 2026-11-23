@@ -9,12 +9,12 @@ description: |
   - AC1: An approval recorded under a change key (PR-N / MR-N) releases a rework hold recorded under the change's spec key, and vice versa, when both name the same change and head.
   - AC2: merge-hold auto-release reports which key it read and why it refused, naming the approval it found under the other key if there is one.
   - AC3: A regression test records an approval with spec None under PR-N while the hold sits under SPEC, and asserts the hold auto-releases.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-23T15:13:04.060784504Z
+modified_at: 2026-11-23T16:11:42.289498339Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -124,6 +124,12 @@ comments:
   modified_at: 2026-11-23T15:13:04.060784504Z
   session_id: 01a208e6d3f2
   harness_version: codex-cli 0.167.0
+- id: 01a2092d-6f51-7733-b9e9-4932c316854a
+  author: aida-publication-done
+  content: Implementer push c871fba3c570 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T16:11:42.289497548Z
+  modified_at: 2026-11-23T16:11:42.289497548Z
+  session_id: 01a208e6d3f2
 history:
 - id: 01a206d4-2e73-71c3-b41a-2e45c4ca59d7
   author: aida-session-start
@@ -170,6 +176,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2092d-6f51-7733-b9e9-492e4375242c
+  author: aida-publication-done
+  timestamp: 2026-11-23T16:11:42.289495848Z
+  session_id: 01a208e6d3f2
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
