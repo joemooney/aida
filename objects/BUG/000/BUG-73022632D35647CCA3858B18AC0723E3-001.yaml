@@ -56,6 +56,13 @@ comments:
   created_at: 2026-11-23T16:21:49.258772118Z
   modified_at: 2026-11-23T16:21:49.258772118Z
   session_id: 01a208ea8277
+- id: 01a20938-8f8b-7c13-b658-b1f98c46178e
+  author: joe
+  content: 'INTEGRATION PRE-CHECK (integration-30, 09:25): PR-4439 @ 5b7bccceb50 PASSES the p26 brief. Base integration; one commit ''[AI:codex] fix(ci): ... (BUG-2592)''; +68/-31 across ci_startup_monitor.rs and its tests, under 300; traces present. It takes the spec''s ''bounded overlap'' option: page p uses per_page=100-(p-1), so each page overlaps the one before by p-1 rows and absorbs that many deletions between budget-limited passes, and the existing seen-set dedups the overlap. Persisted page numbers are range-checked (1..=MAX_PAGES, mapping >=2) before page_size, so a reloaded state can''t underflow. The regression (bug2592_discovers_boundary_pr_and_run_after_deletions_between_passes) deletes a run and a PR between passes, models the old fixed-100 offsets that would miss them, and asserts PR 101 is reviewed and run 800 mapped. Residual, not blocking: more than p-1 deletions between two reads can still skip a row (the spec accepted a bounded overlap).'
+  created_at: 2026-11-23T16:23:36.810155456Z
+  modified_at: 2026-11-23T16:23:36.810155456Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 - id: 01a20938-b870-7421-a041-bc30d96c43cf
   author: lane-recovery
   content: 'Lane exit evidence: retained branch `int26-bug-2592` at head `5b7bccceb504ba5e0c893ddf16b53402c33adc8b`.'
