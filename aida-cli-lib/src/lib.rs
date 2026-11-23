@@ -33,6 +33,8 @@ macro_rules! println {
     };
 }
 
+// trace:BUG-2703 | ai:claude
+mod admission_drain;
 // trace:STORY-2857 | ai:codex
 mod admission_owner;
 // trace:STORY-1741 | ai:claude

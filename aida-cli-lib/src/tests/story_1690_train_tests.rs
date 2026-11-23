@@ -3272,6 +3272,19 @@ fn bug2671_only_pinned_pre_test_infrastructure_failure_retries() {
         readiness(&rows, &job),
         TrainCiReadiness::InfraRed(why) if why.contains("Install Linux dependencies")
     ));
+    // The dell1 setup steps fail before any test runs. trace:STORY-2695 | ai:claude
+    for step in [
+        "Adopt host-prepared exact source",
+        "Verify self-hosted cargo-nextest location",
+    ] {
+        job["steps"][0] = serde_json::json!({
+            "name": step, "status": "completed", "conclusion": "failure"
+        });
+        assert!(
+            matches!(readiness(&rows, &job), TrainCiReadiness::InfraRed(why) if why.contains(step)),
+            "{step}"
+        );
+    }
     job["steps"][0] = serde_json::json!({
         "name": "Run actions/checkout@v5", "status": "completed", "conclusion": "failure"
     });

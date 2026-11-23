@@ -44,16 +44,6 @@ mirror_remotes = ["gitlab"]
 [agents]
 vendor = "codex"
 
-# TEMPORARY (TASK-3823, 2026-11-20): reviewer seats run on stronger models to
-# move faster until the ~2026-11-22 token reset. Revert task: TASK-3824
-# (deferred to 2026-11-22) removes both reviewer entries below unless the boost
-# is extended. Key shape: docs/advanced/autonomous-drain.md "Tuning model per seat".
-[agents.codex.seats]
-reviewer = { model = "gpt-6.2-astra" }
-
-[agents.claude.seats]
-reviewer = { model = "claude-fable-5-2", effort = "high" }
-
 [drain]
 # STORY-975: retry a transient phase failure before parking NeedsAttention.
 # BUG-1485 (2026-09-20): raised 1 -> 2 as an interim mitigation. The orchestrator's
@@ -562,6 +552,10 @@ stale_base = "refuse-on-conflict"
 # trace:STORY-2763 | ai:codex
 freshness = "fast"
 freshness_strict_paths = []
+mass_change_mode = "on"
+mass_change_started_at = "2026-11-22T19:10:29Z"
+mass_change_started_by = "joe"
+mass_change_expires_at = "2026-11-25T19:10:29Z"
 
 [review_watch]
 # trace:TASK-3472 BUG-2644 | ai:codex
