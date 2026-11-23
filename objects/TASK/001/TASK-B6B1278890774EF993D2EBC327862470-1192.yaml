@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:05.182124737Z
-modified_at: 2026-11-23T11:26:09.393202876Z
+modified_at: 2026-11-23T11:37:08.818005059Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -37,6 +37,19 @@ comments:
   modified_at: 2026-11-23T11:21:48.582213186Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20832-149d-7ea0-8168-b3ef19a3872d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8018c42f8d5fed626fca38472d134bd12cf4b259 plus native working diff. Merge-base diff empty, one modified file, no untracked additions.
+    AC1: [evidence: manual-inspection] Checked callers with rg. admission_owner.rs:519 and :527 now compile both zero-bound helpers only for tests. Updated production rustdoc links.
+    AC2: [evidence: behavioral-test] Reproduced minor 4294967553 for device 4096:257. admission_owner.rs:136 fixes the mask. Both flock_holders tests executed and passed, including the libc::makedev regression at :1847.
+    AC3: [evidence: documentation-inspection] New PR handoff wording matches docs/cli/06-roles-sessions.md:1173 and :1187. A granted advisor or an operator at an interactive terminal outside any agent session can drain. Status shows both review-watch and auto-train claims. Host publication pending.
+    Deep pass checked hex major/minor and decimal inode parsing, empty/nonmatching and multiple lock rows, blocked waiters, and the high-bit boundary. The changed lookup supplies holder diagnostics only. Existing refusal coverage includes bug2703_one_second_bound_refusal_names_the_current_holder and bug2650_cooperative_trains_serialize_and_refuse_orphan_runs. No grant decision or existing test changed. No actionable residual findings.
+  created_at: 2026-11-23T11:37:08.818005059Z
+  modified_at: 2026-11-23T11:37:08.818005059Z
+  session_id: 01a208276704
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fd0a-bfba-7891-a348-aacfe3d0272d
   author: joe

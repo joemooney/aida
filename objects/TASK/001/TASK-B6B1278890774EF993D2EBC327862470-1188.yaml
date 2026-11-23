@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:03.028829868Z
-modified_at: 2026-11-23T11:27:13.338493706Z
+modified_at: 2026-11-23T11:35:44.445517503Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -37,6 +37,17 @@ comments:
   modified_at: 2026-11-23T11:22:03.838048161Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20830-c9f0-7a33-b9c2-e8b77b879d06
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 8018c42f8d5fed626fca38472d134bd12cf4b259 plus native working-tree diff. Empty origin/main...HEAD diff and no untracked additions.
+    AC1: [evidence: behavioral-test] Reproduced invalid journal refusal using the installed CLI in a temporary repository. admission_drain.rs:286 and :703 implement and exercise resume after malformed JSON and invalid UTF-8. Lane job j20261123T112744446-2-0 ran bug2703_drain_and_resume_refuse_without_advisor_authority, 1 passed. Unauthorized attempts preserve the exact damaged bytes. The recovered journal has one validated event naming the advisor and an inactive state. docs/cli/06-roles-sessions.md:1186 describes recovery.
+    Probes checked event encoding and reader agreement, missing and populated journals, authority after lock acquisition, atomic replacement and expiry write error propagation. Older binaries reject the new recovery event and remain drained until upgraded or the event ages out. No actionable defects found.
+  created_at: 2026-11-23T11:35:44.445517503Z
+  modified_at: 2026-11-23T11:35:44.445517503Z
+  session_id: 01a208282bb5
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fd0c-0321-7fb0-b25d-dca0962b2219
   author: joe
