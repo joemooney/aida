@@ -11,12 +11,12 @@ description: |
   - AC1: New setting `[landing] ci_base_freshness = "strict" | "clean-merge"`, default "strict" (today's behaviour, unchanged, with a test). With "clean-merge", a PR whose update from main would be a CLEAN merge (`git merge-tree --write-tree` reports no conflict) is NOT held STALE-CI-BASE and NOT sent to update-branch. It may board the train, whose own main+squash CI is the gate. Head-exact full-tier CI on the PR is still required. A PR whose update would CONFLICT is still held.
   - AC2: review_watch_ready's "ready to ship after its branch is updated" follows the same setting. Tests cover strict (unchanged), clean-merge with a clean merge (ready, no update-branch), and clean-merge with a conflict (held).
   Size: target <=300 changed lines (small-PR rule). Strict tier? No: it's landing policy, standard tier.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T05:13:33.934361783Z
+modified_at: 2026-11-23T05:17:23.526771436Z
 req_type: Bug
 tags:
 - knob
@@ -158,6 +158,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a206d6-64c6-7472-92f2-fefeb41dcd66
+  author: aida-session-start
+  timestamp: 2026-11-23T05:17:23.526769294Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
