@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The build stamp's dirty flag reflects TRACKED modifications only (`git status --porcelain --untracked-files=no`), with a test: an untracked file alone yields a clean stamp, and a modified tracked file yields dirty.
   - AC2: When a build is dirty, `aida dev status` (or the promote output) names the dirty paths, so the cause is visible without hunting.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T08:02:21.413386524Z
-modified_at: 2026-11-23T19:36:20.690573220Z
+modified_at: 2026-11-23T19:39:22.082980184Z
 req_type: Bug
 tags:
 - build
@@ -63,6 +63,13 @@ history:
   author: joe
   timestamp: 2026-11-23T19:35:17.906292186Z
   changes: []
+- id: 01a209eb-8e62-73a1-b6a0-039c6b942622
+  author: aida-session-start
+  timestamp: 2026-11-23T19:39:22.082978526Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 execution_mode: drain
 filed_at:
   code_sha: a16f3592f015e06580a94c1f7879ea9c877c088e
