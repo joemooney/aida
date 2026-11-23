@@ -16,7 +16,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-19T07:40:40.147235551Z
-modified_at: 2026-11-21T07:06:17.524470211Z
+modified_at: 2026-11-23T12:41:47.186310207Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -32,6 +32,20 @@ comments:
   content: 'Advisor closeout audit 2026-11-20: KEEP OPEN. At main aa567732958, claude_agent_resume_cwd still filters private clones through seat_clone::host_recorded_clone (agent_launch.rs:1830). The BUG-2619 regression creates an ordinary linked git worktree and exercises transcript/grant checks; it does not construct a private clone or toggle host-registration evidence. Therefore the reported private-clone boundary coverage is not established by the existing test. No implementation or status change.'
   created_at: 2026-11-21T03:02:41.052043268Z
   modified_at: 2026-11-21T03:02:41.052043268Z
+- id: 01a2086d-769a-7b03-aa4c-183e3dd98e77
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 05:41):
+    # TASK-3149: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show TASK-3149` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3149 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3149)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T12:41:47.186310207Z
+  modified_at: 2026-11-23T12:41:47.186310207Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f2d9-26ac-7ba2-b8de-c777621359c5
   author: joe
