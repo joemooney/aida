@@ -54,8 +54,9 @@ pub(crate) const NO_CI_GRACE_HOURS: i64 = 2;
 pub(crate) const COMPILE_STEPS: &[&str] = &["Build ", "Check aida-cli"];
 /// The ceiling on one git call the live watch makes.
 pub(crate) const CALL_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
-/// The ceiling on a whole live pass (the TASK-3792 scoped deadline).
-pub(crate) const PASS_BUDGET: std::time::Duration = std::time::Duration::from_secs(120);
+/// Leave the scheduler 30 seconds for checkpointing and process cleanup.
+// trace:TASK-3209 | ai:codex
+pub(crate) const PASS_BUDGET: std::time::Duration = std::time::Duration::from_secs(90);
 
 /// One default-branch commit.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -632,7 +633,11 @@ fn notify(state: &mut State, key: String, title: String, body: String) {
     state.outbox.push(Notice { key, title, body });
 }
 
-/// Try every outstanding mail once; delivered ones leave the outbox.
+fn pass_budget_spent() -> bool {
+    crate::forge_lookup::forge_lookup_deadline().is_some_and(|d| std::time::Instant::now() >= d)
+}
+
+/// Try outstanding mail while time remains; delivered notices leave the outbox.
 fn deliver(
     land: &Path,
     state: &mut State,
@@ -644,6 +649,10 @@ fn deliver(
     }
     let mut kept = Vec::new();
     for notice in std::mem::take(&mut state.outbox) {
+        if pass_budget_spent() {
+            kept.push(notice);
+            continue;
+        }
         if let Err(e) = ports.mail(&notice.key, &notice.title, &notice.body) {
             notes.push(format!(
                 "red-main watch: mail `{}` not delivered yet; retried next pass: {e:#}",
@@ -721,7 +730,12 @@ pub(crate) fn pass(
     let mut judged = |ports: &mut dyn Ports, commit: &Commit| -> Verdict {
         verdicts
             .entry(commit.sha.clone())
-            .or_insert_with(|| judge(ports.checks(&commit.sha), required, commit.at, now))
+            .or_insert_with(|| {
+                if pass_budget_spent() {
+                    return Verdict::Pending("pass deadline reached".into());
+                }
+                judge(ports.checks(&commit.sha), required, commit.at, now)
+            })
             .clone()
     };
 
@@ -874,7 +888,7 @@ pub(crate) fn pass(
         write_state(&land, &state)?;
     }
     // The tip, reported apart from the last green commit.
-    if let Some(tip) = recent.first() {
+    if let Some(tip) = recent.first().filter(|_| !pass_budget_spent()) {
         let text = verdict_text(&judged(ports, tip));
         if state.tip.as_ref() != Some(&(tip.sha.clone(), text.clone())) {
             state.tip = Some((tip.sha.clone(), text));
@@ -888,6 +902,9 @@ pub(crate) fn pass(
         .is_some_and(|ep| matches!(verdicts.get(&ep.red_sha), Some(Verdict::Red { .. })))
     {
         advance(&land, &mut state, window, now, ports, &mut notes)?;
+    }
+    if pass_budget_spent() {
+        notes.push("red-main watch: pass deadline reached; resuming next pass".into());
     }
     deliver(&land, &mut state, ports, &mut notes)?;
     Ok(notes)
@@ -925,6 +942,9 @@ fn probe(
         .cloned()
         .collect();
     for f in jobs {
+        if pass_budget_spent() {
+            break;
+        }
         let (Some(key), Some(run), Some(id), Some(attempt)) =
             (f.key(), f.run_id.clone(), f.job_id, f.attempt)
         else {
@@ -1122,7 +1142,7 @@ fn advance(
     let Some(mut episode) = state.episode.clone() else {
         return Ok(());
     };
-    let (read, late) = if episode.opened_at == now {
+    let (read, late) = if episode.opened_at == now || pass_budget_spent() {
         (false, Vec::new())
     } else {
         probe(&mut episode, ports, notes)
@@ -1159,6 +1179,7 @@ fn advance(
         state.episode = Some(episode.clone());
         write_state(land, state)?;
     }
+    let now = ports.now();
     if episode.confirmed_at.is_none() {
         // Confirmed by a required check failing again at a newer, finished
         // attempt of its run, or by time.
@@ -1499,11 +1520,7 @@ impl Live {
                 String::from_utf8_lossy(&out.stderr).trim()
             ),
             crate::BoundedCommandOutput::TimedOut => {
-                anyhow::bail!(
-                    "git {} timed out after {:?}",
-                    args.join(" "),
-                    self.call_timeout
-                )
+                anyhow::bail!("git {} timed out after {:?}", args.join(" "), timeout)
             }
             crate::BoundedCommandOutput::SpawnFailed => anyhow::bail!("git could not start"),
         }
