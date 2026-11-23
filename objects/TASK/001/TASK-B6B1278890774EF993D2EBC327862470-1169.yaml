@@ -19,7 +19,7 @@ priority: Medium
 owner: joe
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.340242990Z
-modified_at: 2026-11-23T08:39:47.366938263Z
+modified_at: 2026-11-23T08:39:54.841569195Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -44,6 +44,11 @@ comments:
   modified_at: 2026-11-23T07:00:25.159420568Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2078f-ced9-7723-a677-264a689717df
+  author: joe
+  content: 'Advisor-122 ruling 2026-11-23 01:40 (recorded by product-15): blocked-by STORY-2897 REMOVED. S3a is on main (a16f3592f01); this follow-up is independent of S1b/S3b. It targets main, and keeps out of review_draft.rs and land readiness (S1b #4401''s files).'
+  created_at: 2026-11-23T08:39:54.841569195Z
+  modified_at: 2026-11-23T08:39:54.841569195Z
 history:
 - id: 01a1fd65-88f9-7f90-ab34-7efd0c59fec7
   author: joe
