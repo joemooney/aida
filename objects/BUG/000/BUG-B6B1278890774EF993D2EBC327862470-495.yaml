@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: CI runs every tests/test_*.py, either via one discovery step ('python3 -m unittest discover -s tests -p "test_*.py"') or a ratchet that fails when a tests/test_*.py file is not referenced by a CI step. Tests that need tools CI lacks are skipped explicitly with a reason, not left unwired.
   - AC2: Any currently-unwired test that fails when wired is fixed, or skipped with a linked follow-up spec, in the same PR (the small-PR rule applies; split the fix-ups if over 300 lines).
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-23T21:19:55.324622298Z
+modified_at: 2026-11-23T21:23:34.594536892Z
 req_type: Bug
 tags:
 - ci
@@ -55,6 +55,17 @@ comments:
   modified_at: 2026-11-23T21:19:55.324622298Z
   session_id: 01a20a3ea6a7
   harness_version: codex-cli 0.167.0
+- id: 01a20a4a-ae0c-73c0-a74d-9997e72452cd
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 54e9220e1db9175dbb2c284241aed674328067f6; origin/main...HEAD empty. Reviewed git diff HEAD plus both untracked additions.
+    AC1: [evidence: behavioral-test] tests/test_python_discovery.py:13 passed, covering empty inventory, one new passing suite, multiple files, a named zero-test file and an actual test failure. Workflow invokes discovery at ci.yml:623 and binary suites at ci.yml:799. Checked workflow matching, literal filename patterns, import errors and zero-test refusal. ExecContext ratchet reported zero additions. Existing tests unchanged.
+    AC2: [evidence: behavioral-test] PARTIAL. 19 of 22 candidate suites passed with installed CLI where required, three script fixtures failed. scripts/discover-python-tests.py:25 records date and cause for each. Product-issued IDs outstanding, mailbox delivery refused. make check-ci-fast exited 2 at discovery. No PR-head CI available. Post-land confirmation of the two integration regressions belongs to integration.
+  created_at: 2026-11-23T21:23:15.368079123Z
+  modified_at: 2026-11-23T21:23:15.368079123Z
+  session_id: 01a20a3ea6a7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a38-f431-7762-bd6e-9fbe1e3c42bb
   author: joe
@@ -74,6 +85,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20a4a-f91f-72f1-a548-c53be0b0f911
+  author: dirtlab
+  timestamp: 2026-11-23T21:23:35.327337615Z
+  session_id: 01a20a3ea6a7
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 execution_mode: drain
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
@@ -84,3 +104,8 @@ filed_at:
   vendor: claude
   session: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+attention_reason:
+  category: blocked-dependency
+  detail: AC2 requires product-filed follow-up IDs for test_cache_refresh_outputs.py, test_pr_ship_preflight.py and test_seat_takeover_lifecycle.py. Product mailbox refused delivery. Missing IDs fail discovery. Edits and test evidence are preserved for resume.
+  raised_by: implementer
+  raised_at: 2026-11-23T21:23:34.594536892Z
