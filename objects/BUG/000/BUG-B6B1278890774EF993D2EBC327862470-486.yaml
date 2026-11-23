@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T05:12:49.257709188Z
+modified_at: 2026-11-23T05:13:18.524076838Z
 req_type: Bug
 tags:
 - knob
@@ -80,6 +80,23 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: Reviewed the complete landed diff on protected base 5470336db358. None of the findings depends on the intervening base edit to the shared test file. CI pending at review time (FAST compile).. No triage reason was given.'
   created_at: 2026-11-23T05:12:49.257704792Z
   modified_at: 2026-11-23T05:12:49.257704792Z
+- id: 01a206d2-a734-73e1-bbae-60178323937a
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2725):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: a3a9e44651f3
+    Recorded: 2026-11-23T05:11:20.962707143+00:00
+    Findings:
+    1. [p1; blocking_tier=p1] land_ci_base.rs:162: For every clean behind head, the FULL check returns an error before derive reaches approval, review dispatch or CI-failure routing. A new FAST-green head becomes UNKNOWN/Wait indefinitely in the landing loop: approval normally starts FULL, but land cannot launch its reviewer. A failed FULL run assessed on the current base also becomes UNKNOWN instead of CI-FAILED/rework. Keep ordinary lifecycle decisions available and enforce the FULL requirement when selecting the landing action. Cover both states.
+    2. [p2; blocking_tier=unmet-claimed-ac] review_watch_ready.rs:177: The watcher feeds all commit checks into full_ci_run without their workflow identity. A separate workflow on the exact SHA with same-named aggregate and tier jobs can satisfy this check while the project CI workflow has only FAST evidence. The landing reader restricts these rows to CI, so the two disagree. Bind the watcher proof to the intended CI workflow and add a same-head, two-workflow regression.
+    3. [p2; blocking_tier=unmet-claimed-ac] review_watch_ready.rs:215: A behind head admitted under clean-merge becomes ordinary Ready. Its advisor wake tells the recipient to run aida pr ship, which refuses a behind head in CI-gated mode. Carry the train-specific decision through to the wake, recommend aida pr train for this case, and assert the actual message.
+    4. [p2; blocking_tier=unmet-claimed-ac] review_watch.rs:3543 and review_watch_forge.rs:463: The existing stale_follow_up update path still uses only review.stale_base. With refuse-on-overlap and landing.clean-merge enabled via ci_base_freshness, a previously notified overlapping head whose author has left can be sent to the forge updater before this pass probes whether the merge is clean. Preserve the independent review refusal where applicable, but check the landing freshness evidence before mutating a clean head. Exercise this path with an updater spy.
+    5. [p2; blocking_tier=p2] review_watch_ready.rs:141: The watcher enables the exception for GitLab MRs too. parse_glab_commit_statuses supplies no run IDs, so the required FULL proof always fails, replacing a usable update-branch notification with perpetual NotReady on a clean behind MR. The train currently supports GitHub only. Preserve GitLab readiness behavior until a supported admission path exists.
+    6. [p2; blocking_tier=untested-path] land_ci_base.rs:271: The landing regression supplies the allowance directly to verify_policy and never executes observe with the clean-merge setting, the pinned merge-tree proof, or the ancestry check. Both modified observe calls in the landing fixture explicitly pass false. Disabling the live exception would leave these tests green. Exercise the real landing decision on behind clean and conflicting histories and assert Train versus UpdateBranch/rework, with default strict as a control.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T05:13:18.388990542Z
+  modified_at: 2026-11-23T05:13:18.388990542Z
 history:
 - id: 01a20680-0f23-7a31-87b8-f2996b5ab36a
   author: aida-session-start
