@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:03.028829868Z
-modified_at: 2026-11-23T16:18:12.240720097Z
+modified_at: 2026-11-23T16:45:03.899575426Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -202,6 +202,15 @@ comments:
   modified_at: 2026-11-23T16:02:54.336281625Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2094b-fd40-76d2-843e-4da47033af3d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: df02796d124302b201279d1e87e6890d4187b306 plus the native working-tree diff. AC1: [evidence: behavioral-test] admission_drain.rs:408 recovery_with_maximum_length_actor_fits_v1_resume_limit passed (1 executed). A damaged journal recovered with a 512-byte actor yields one recognizable 511-byte v1 Resume audit, satisfying the original validator at line 126. Inspected exact-fit, over-limit, and split UTF-8 cases. Existing authority checks run under the lock before replacement; bug2703_drain_and_resume_refuse_without_advisor_authority covers unauthorized resume and drain against damaged history. Inspected the merge-base diff, docs, working-tree diff and untracked list. The original store-writer ratchet flagged String::truncate; slicing before formatting fixed it and check-store-writers.py passed. No live old deputy was exercised.
+  created_at: 2026-11-23T16:45:03.899575426Z
+  modified_at: 2026-11-23T16:45:03.899575426Z
+  session_id: 01a2093324ac
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fd0c-0321-7fb0-b25d-dca0962b2219
   author: joe
