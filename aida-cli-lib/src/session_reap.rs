@@ -1625,7 +1625,9 @@ pub(crate) fn release_lease_files(project_root: &std::path::Path, lease_id: &str
     // BUG-2139: a reaped lease takes its headless child's grant with it.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(&lease_path(project_root, lease_id));
-    if std::fs::remove_file(lease_path(project_root, lease_id)).is_ok() {
+    if crate::repair_journal::unlink_session_lease(&lease_path(project_root, lease_id), lease_id)
+        .is_ok()
+    {
         // trace:BUG-2651 | ai:codex
         crate::seat_target_overlay::cleanup_ended(project_root, lease_id);
     }

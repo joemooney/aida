@@ -327,6 +327,7 @@ fn story_2710_actual_orphan_adoption_transfers_pending_repair() {
             key: key.clone(),
             dispatched_by: "direct-rework".into(),
             reserved_at: "now".into(),
+            lease_ended_at: None,
             lane_id: orphan.id.clone(),
             tree_path: tree.clone(),
             branch: orphan.branch.clone(),

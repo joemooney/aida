@@ -332,7 +332,13 @@ pub(crate) fn handle_doctor_command(
                 let root = main_worktree_root_from(&find_project_root()?);
                 let mut journal = crate::repair_journal::RepairGuard::lock(&root)?;
                 if let Some(id) = id {
-                    let reason = journal.heal_reservation(id, *yes)?;
+                    let reason = explicit_repair_heal(
+                        &mut journal,
+                        id,
+                        *force,
+                        *yes,
+                        doctor_running_autonomously(&root),
+                    )?;
                     println!(
                         "{}",
                         serde_json::json!({"id": id, "released": *yes, "evidence": reason})
@@ -482,12 +488,7 @@ pub(crate) fn doctor_multi_agent(opts: DoctorRunOptions) -> Result<()> {
     // Keep the locked journal scan out of routine status reads.
     // trace:BUG-2722 | ai:codex
     if doctor_category_selected(opts.category.as_deref(), "repair-reservations")? {
-        match std::fs::symlink_metadata(project_root.join(".aida/repair-journal.json")) {
-            Ok(_) => findings
-                .extend(crate::repair_journal::RepairGuard::lock(&project_root)?.repair_findings()),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
-        }
+        collect_repair_findings(&project_root, opts.category.is_none(), &mut findings)?;
     }
     // The tolerant loader leaves bad objects out; report each one separately
     // while retaining the other categories and safe heals.
@@ -2014,6 +2015,65 @@ fn doctor_heal_disposition(
     }
     // Destructive + --force --yes + interactive TTY = explicit human sign-off.
     HealDisposition::Proceed
+}
+
+// trace:BUG-2722 | ai:codex
+pub(crate) fn explicit_repair_heal(
+    journal: &mut crate::repair_journal::RepairGuard,
+    id: &str,
+    force: bool,
+    yes: bool,
+    autonomous: bool,
+) -> Result<String> {
+    anyhow::ensure!(!yes || doctor_heal_disposition(false, force, yes, autonomous) == HealDisposition::Proceed,
+        "repair release requires an interactive operator with --force --yes outside an orchestrated run");
+    journal.heal_reservation(id, yes)
+}
+
+fn collect_repair_findings(
+    project_root: &std::path::Path,
+    general: bool,
+    findings: &mut Vec<DoctorFinding>,
+) -> Result<()> {
+    let scan = match std::fs::symlink_metadata(project_root.join(".aida/repair-journal.json")) {
+        Ok(_) => {
+            crate::repair_journal::RepairGuard::lock(project_root).map(|j| j.repair_findings())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(e) => Err(e.into()),
+    };
+    match scan {
+        Ok(rows) => findings.extend(rows),
+        Err(e) if general => findings.push(DoctorFinding {
+            category: "repair-reservations".into(),
+            id: "journal".into(),
+            summary: format!("repair journal unavailable: {e:#}"),
+            action: "aida doctor check repair-reservations".into(),
+            safe_heal: false,
+        }),
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn bug_2722_general_doctor_keeps_other_findings_on_invalid_journal() {
+    let root = tempfile::tempdir().unwrap();
+    std::fs::create_dir(root.path().join(".aida")).unwrap();
+    std::fs::write(root.path().join(".aida/repair-journal.json"), "{").unwrap();
+    let mut findings = vec![DoctorFinding {
+        category: "other".into(),
+        id: "safe".into(),
+        summary: String::new(),
+        action: String::new(),
+        safe_heal: true,
+    }];
+    collect_repair_findings(root.path(), true, &mut findings).unwrap();
+    assert_eq!(findings.len(), 2);
+    assert!(findings[0].safe_heal);
+    assert!(findings[1].summary.contains("invalid repair journal") && !findings[1].safe_heal);
+    assert!(collect_repair_findings(root.path(), false, &mut findings).is_err());
 }
 
 /// Heal status of a finding left alone because the run's deadline passed.

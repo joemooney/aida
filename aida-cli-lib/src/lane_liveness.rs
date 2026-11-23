@@ -544,9 +544,7 @@ pub(crate) fn route_findings(
     findings: &[LaneLivenessFinding],
     now: DateTime<Utc>,
 ) {
-    for path in &snapshot.stale_lane_records {
-        let _ = std::fs::remove_file(path);
-    }
+    prune_lane_receipts(project_root, &snapshot.stale_lane_records);
 
     let previous = load_routed(project_root);
     let is_new = |f: &LaneLivenessFinding| !previous.contains_key(&f.id);
@@ -747,6 +745,8 @@ struct HeadlessLaneRecord {
     vendor: String,
     pid: u32,
     #[serde(default)]
+    pid_namespace: Option<u64>,
+    #[serde(default)]
     pid_start_time: Option<String>,
     log_path: PathBuf,
     started_at: DateTime<Utc>,
@@ -838,33 +838,110 @@ pub(crate) fn repair_lane_exit(
     root: &Path,
     id: &str,
     tree: &Path,
-) -> anyhow::Result<DateTime<Utc>> {
+) -> anyhow::Result<Option<DateTime<Utc>>> {
     let dir = lanes_dir(root);
-    anyhow::ensure!(
-        std::fs::symlink_metadata(&dir)?.is_dir(),
-        "invalid lane directory"
-    );
-    let bytes = crate::observation_envelope::read_bounded(&headless_record_path(root, id), 65536)?;
+    let path = headless_record_path(root, id);
+    for (p, directory) in [(&dir, true), (&path, false)] {
+        match std::fs::symlink_metadata(p) {
+            Ok(m) => anyhow::ensure!(
+                if directory { m.is_dir() } else { m.is_file() },
+                "invalid exit receipt path {}",
+                p.display()
+            ),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(e.into()),
+        }
+    }
+    let bytes = crate::observation_envelope::read_bounded(&path, 65536)?;
     let record: HeadlessLaneRecord = serde_json::from_slice(&bytes)?;
     anyhow::ensure!(
-        record.lease_id == id && record.seat_path.as_deref() == Some(tree),
+        record.lease_id == id
+            && record.seat_path.as_deref() == Some(tree)
+            && record
+                .claim
+                .as_ref()
+                .is_none_or(|c| c.lease_id.as_deref() == Some(id)
+                    && c.host == crate::coordination::hostname()
+                    && Path::new(&c.clone_path) == root
+                    && c.pid_namespace
+                        .zip(record.pid_namespace)
+                        .is_none_or(|(a, b)| a == b)),
         "exit receipt does not match the recorded lane and tree"
     );
     let exit = record
         .exited_at
         .filter(|t| *t >= record.started_at && *t <= Utc::now());
     anyhow::ensure!(
-        record
-            .exit_status
-            .as_deref()
-            .is_some_and(|s| s.starts_with("exited with ")),
+        record.exit_status.as_deref().is_some_and(|s| {
+            use std::os::unix::process::ExitStatusExt;
+            let raw = if let Some(code) = s
+                .strip_prefix("exited with exit status: ")
+                .and_then(|s| s.parse::<u8>().ok())
+            {
+                i32::from(code) << 8
+            } else if let Some(signal) = s
+                .strip_prefix("exited with signal: ")
+                .and_then(|s| s.split_whitespace().next())
+                .and_then(|s| s.parse::<i32>().ok())
+                .filter(|n| (1..=64).contains(n))
+            {
+                signal
+                    | if s.ends_with(" (core dumped)") {
+                        128
+                    } else {
+                        0
+                    }
+            } else {
+                return false;
+            };
+            s == format!("exited with {}", std::process::ExitStatus::from_raw(raw))
+        }),
         "worker has no confirmed exit"
     );
-    exit.ok_or_else(|| anyhow::anyhow!("missing or invalid worker exit time"))
+    anyhow::ensure!(
+        record.pid <= i32::MAX as u32
+            && crate::ownership::reader::local_claim_process_is_dead(
+                record.pid,
+                record.pid_start_time.as_deref(),
+                record
+                    .claim
+                    .as_ref()
+                    .and_then(|c| c.pid_namespace)
+                    .or(record.pid_namespace)
+            ),
+        "worker process is live or its identity is indeterminate"
+    );
+    exit.map(Some)
+        .ok_or_else(|| anyhow::anyhow!("missing or invalid worker exit time"))
 }
 
 fn lanes_dir(project_root: &Path) -> PathBuf {
     project_root.join(".aida").join("lanes")
+}
+
+// Once a repair owns this generation, retain its process evidence until
+// release. In particular, a routing tick cannot erase a still-live worker.
+fn prune_lane_receipts(root: &Path, paths: &[PathBuf]) {
+    if paths.is_empty() {
+        return;
+    }
+    let journal = match std::fs::symlink_metadata(root.join(".aida/repair-journal.json")) {
+        Ok(_) => match crate::repair_journal::RepairGuard::lock(root) {
+            Ok(j) => Some(j),
+            Err(_) => return,
+        },
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => return,
+    };
+    for path in paths {
+        let id = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .and_then(|s| s.strip_prefix("headless-"));
+        if !id.is_some_and(|id| journal.as_ref().is_some_and(|j| j.reserves_lane(id))) {
+            let _ = std::fs::remove_file(path);
+        }
+    }
 }
 
 fn headless_record_path(project_root: &Path, lease_id: &str) -> PathBuf {
@@ -919,6 +996,7 @@ pub(crate) fn register_headless_lane_for_child(
         spec: lease.scope,
         vendor: vendor.to_string(),
         pid: child_pid,
+        pid_namespace: aida_core::pid_observer::PidObserver::current().namespace,
         pid_start_time: crate::process_probe::process_start_identity(child_pid),
         log_path: log_path.to_path_buf(),
         started_at: Utc::now(),
@@ -960,10 +1038,6 @@ pub(crate) fn finish_headless_lane_for_child(
     else {
         return;
     };
-    if !lease_held && record.claim.is_none() {
-        let _ = std::fs::remove_file(&path);
-        return;
-    }
     record.exited_at = Some(Utc::now());
     record.exit_status = Some(match status {
         Some(s) => format!("exited with {s}"),
@@ -971,6 +1045,10 @@ pub(crate) fn finish_headless_lane_for_child(
     });
     if let Ok(body) = serde_json::to_string_pretty(&record) {
         let _ = aida_core::write_atomic(&path, body.as_bytes());
+    }
+    if !lease_held && record.claim.is_none() {
+        prune_lane_receipts(&project_root, &[path]);
+        return;
     }
     // A failed or punted child has been reaped: retire only the generation
     // captured at registration, preserving its dirty work before release.

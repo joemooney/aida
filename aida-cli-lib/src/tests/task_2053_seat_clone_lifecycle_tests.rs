@@ -57,6 +57,46 @@ fn write_clone_lease(main: &Path, clone: &Path, id: &str) {
     .unwrap();
 }
 
+// trace:BUG-2722 | ai:codex
+#[test]
+fn bug_2722_task_2053_bwrap_repair_accepts_current_salvage_only() {
+    if !bwrap_live() {
+        return;
+    }
+    let fx = fixture();
+    let clone = seat(&fx, "salvaged", "01a2053df3e6");
+    let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+    let verify = || {
+        verified_repair_salvage(
+            &fx.main,
+            &clone,
+            head.trim(),
+            "feat",
+            chrono::DateTime::parse_from_rfc3339("2026-01-01T00:00:00Z").unwrap(),
+        )
+    };
+    std::fs::write(clone.join("saved"), "restore me").unwrap();
+    assert!(verify().is_err());
+    salvage_complete(&fx.main, &clone).unwrap();
+    verify().unwrap();
+    std::fs::write(clone.join("saved"), "later work").unwrap();
+    assert!(verify().is_err());
+    std::fs::write(clone.join("saved"), "restore me").unwrap();
+    let blob = git_ok(&clone, &["rev-parse", "HEAD:README.md"]);
+    let mut index = crate::test_git::git_command()
+        .arg("-C")
+        .arg(&clone)
+        .args(["update-index", "--index-info"])
+        .stdin(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    use std::io::Write;
+    writeln!(index.stdin.take().unwrap(), "100644 {blob} 2\tconflict").unwrap();
+    assert!(index.wait().unwrap().success());
+    assert!(!git_ok(&clone, &["ls-files", "-u"]).is_empty());
+    assert!(verify().is_err());
+}
+
 /// Commit a file in the clone (test-side git: the fixture plays the seat).
 fn seat_commit(clone: &Path, file: &str) {
     std::fs::write(clone.join(file), "seat work\n").unwrap();
