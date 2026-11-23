@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:27.302758155Z
-modified_at: 2026-11-23T20:39:08.472400470Z
+modified_at: 2026-11-23T20:39:15.365076293Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -113,6 +113,19 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-3151 (completing spec) — FAIL.. No triage reason was given.'
   created_at: 2026-11-23T20:39:08.472391710Z
   modified_at: 2026-11-23T20:39:08.472391710Z
+- id: 01a20a22-6213-7933-b412-fff2de59a746
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (TASK-3151):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: ca3c1b9e4f1f
+    Recorded: 2026-11-23T17:38:04.381959450+00:00
+    Findings:
+    1. TASK-b6b1278890774ef993d2ebc327862470-1111.acc246d2 — aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs:365–373. The new contained launch still depends on the invoking checkout. run_path_isolated_test preserves cwd, and agent_resume_launch_config calls claude_contained_flags_for_roots, which resolves trusted wrapper policy through headless_worktree_root. Running this fixture from a checkout whose trusted default branch sets Claude to the AIDA wrapper fails before transcript recovery, so the test can report an unrelated launch refusal. Pin the ambient project root to the temp repo or use the scratch-cwd isolation helper before exercising the contained path.
+    2. TASK-b6b1278890774ef993d2ebc327862470-1111.ac2584bd — aida-cli-lib/src/tests/bug_2151_contained_parent_agent_new_tests.rs:390–394. candidate.worktree_path is the original registry value, and resume_unavailable_reason discards the resolved cwd. A successful recovery that returned a different directory would still satisfy both assertions. Assert that the recovery result equals the recorded cwd, or observe the cwd at the contained launch boundary with a fake vendor. The existing uncontained launch receipt already checks the alternate worktree.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T20:39:15.219408516Z
+  modified_at: 2026-11-23T20:39:15.219408516Z
 history:
 - id: 01a1f2d9-8f75-7071-a403-a891c0550eff
   author: joe
