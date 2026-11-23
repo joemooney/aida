@@ -4698,14 +4698,14 @@ fn story_2710_preparation_failure_cannot_admit_a_launch() {
     .is_empty());
 }
 
-/// Real Git host preparation keeps the configured vendor/model and publishes a
-/// clean merge. A conflicted merge is retained, and its self-publishing
+/// Real Git host preparation keeps the configured vendor/model and prepares a
+/// clean merge locally. A conflicted merge is retained, and its self-publishing
 /// (uncontained) route is refused before launch in both launch modes.
 // trace:BUG-2553 | ai:codex
 // trace:STORY-2475 | ai:claude
 // trace:BUG-2456 | ai:codex
 #[test]
-fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
+fn bug_2726_host_keeps_clean_rework_local_or_retains_conflicts_before_launch() {
     use crate::session::HeadlessVendor;
     use std::cell::Cell;
     // HOME is pinned to the fixture, so the test runs in its own process.
@@ -4834,7 +4834,13 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                 .unwrap();
             assert_eq!(merging.status.success(), conflicts);
             // Remote evidence must agree before a vendor can be started.
-            let remote = git(&origin, &["rev-parse", &format!("refs/heads/{branch}")]);
+            let reference = format!("refs/heads/{branch}");
+            let remote = git(
+                &project,
+                &["ls-remote", "--exit-code", "origin", &reference],
+            );
+            // trace:BUG-2726 | ai:codex
+            assert_eq!(remote, format!("{head}\t{reference}"));
             if conflicts {
                 // An uncontained lane would commit and ship its own merge,
                 // skipping the host compile check: refused before launch.
@@ -4849,7 +4855,6 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
                     error.to_string().contains("nothing was published"),
                     "{error}"
                 );
-                assert_eq!(remote, head, "conflicts must not publish");
                 assert_eq!(mailed.get(), 0);
                 assert_eq!(git(&seat, &["rev-parse", "HEAD"]), head, "merge retained");
                 assert_eq!(prompt, "/aida-pickup STORY-2475", "no lane task appended");
@@ -4862,11 +4867,6 @@ fn story_2710_host_publishes_clean_rework_or_retains_conflicts_before_launch() {
             } else {
                 let vendor =
                     routed.unwrap_or_else(|e| panic!("{branch} interactive={interactive}: {e:#}"));
-                assert_eq!(
-                    remote,
-                    git(&seat, &["rev-parse", "HEAD"]),
-                    "host pushed before launch"
-                );
                 assert_eq!(vendor, HeadlessVendor::Codex);
                 assert_eq!(mailed.get(), 0);
                 assert_ne!(git(&seat, &["rev-parse", "HEAD"]), head, "merge committed");
