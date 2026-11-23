@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T16:30:02.870137534Z
+modified_at: 2026-11-23T16:44:57.494217417Z
 req_type: Story
 tags:
 - autonomy
@@ -40,6 +40,18 @@ comments:
   modified_at: 2026-11-23T16:10:38.190731087Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2094b-eaa3-7fc0-8bdc-ab772be5b6f7
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c plus the native working tree. The merge-base diff was empty and there were no untracked additions.
+    AC1: [evidence: behavioral-test] gate/unset_mode.rs:262 uses the trusted policy only for an unset mode. Approved plus the small tag qualifies after sensitive metadata checks. Ship, train and mandate use existing protected-path and head checks. Unknown changed files withdraw the default. The new approved_small_default_requires_approval_size_and_standard_tier regression executed and passed.
+    AC2: [evidence: behavioral-test] gate/tests/story_2884_unset_mode_tests.rs:569 covers off/on, draft/approved, missing size, strict metadata, explicit override, unknown files and a strict file among ordinary files. config_cmd.rs:907 registers the read-only knob. docs/configuration-guide.md:75 and the generated showcase agree; build.py --check passed.
+    Deep pass checked TOML comments, mixed case tags, multiple paths, missing evidence, explicit mode precedence and operator protection. Corrected the config trust inventory after the fast source guard flagged the new documentation string; all 12 trust guard tests then passed. Existing tests retain their assertions. Scope is the current Approved status and path-based merge policy. No PR head or CI result exists in this native lane.
+  created_at: 2026-11-23T16:44:57.494217417Z
+  modified_at: 2026-11-23T16:44:57.494217417Z
+  session_id: 01a20932bb10
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
   author: joe
