@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working STORY-2824.
   Branch: story-b6b1278890774ef993d2ebc327862470-747  ·  Commit: e9bb21309e  (PR link added on merge)
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T21:22:48.889471238Z
+modified_at: 2026-11-23T22:13:36.292761525Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -182,6 +182,12 @@ comments:
   modified_at: 2026-11-23T21:22:48.889471238Z
   session_id: 01a20a3a8bfc
   harness_version: codex-cli 0.167.0
+- id: 01a20a78-c3a4-7ac1-840e-79be6a662545
+  author: aida-publication-done
+  content: Implementer push 4848978e584a declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T22:13:36.292756822Z
+  modified_at: 2026-11-23T22:13:36.292756822Z
+  session_id: 01a20a3a8bfc
 history:
 - id: 01a1db72-e217-7620-9b69-8b1ad0d07eee
   author: joe
@@ -289,6 +295,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20a78-c3a4-7ac1-840e-79ab99048390
+  author: aida-publication-done
+  timestamp: 2026-11-23T22:13:36.292754753Z
+  session_id: 01a20a3a8bfc
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: e9bb21309e01c37cfe23a8261191309446adc0a0
   branch: story-b6b1278890774ef993d2ebc327862470-747
