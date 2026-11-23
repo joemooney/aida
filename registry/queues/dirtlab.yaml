@@ -460,7 +460,7 @@
   requirement_id: 01a20963-b76b-7691-9dec-d664b8224649
   position: 1041000
   added_by: dirtlab
-  note: auto-queued by `aida pr` (01a20932); covers 1 spec
-  added_at: 2026-11-23T17:11:43.888172158Z
+  note: auto-queue retry reused canonical review story; covers 1 spec
+  added_at: 2026-11-23T17:16:17.668482560Z
   for_role: reviewer
   added_by_machine: disrad-dvp98b3puw
