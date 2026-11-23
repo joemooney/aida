@@ -2,17 +2,20 @@ id: 01a1dbec-d086-7ab2-92c2-4b66067fb057
 spec_id: TASK-73022632d35647cca3858b18ac0723e3-020
 agreed_id: TASK-3122
 title: task_1222_ended_clone_requires_origin_coverage_and_closed_pr fails inside the lane job sandbox on unmodified main
-description: |
-  `aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- task_1222_ended_clone_requires_origin_coverage` fails on main at d5f90aedd3 with no local changes (job j20261114T210749786-56-0), at the final `remove_with` of the seat clone: "mail retention refused ...: the fresh writer-admission scan could not verify every mail writer". The writer-admission scan cannot be trusted inside the lane sandbox, so a contained implementer cannot get a green run of aida-cli-lib/src/worktree_lifecycle_gc.rs tests. Either the test should inject the admission verdict or the lane sandbox should satisfy the scan.
+description: '`aida lane job run -- cargo test --profile agent -p aida-cli-lib --lib -- task_1222_ended_clone_requires_origin_coverage` fails on main at d5f90aedd3 with no local changes (job j20261114T210749786-56-0), at the final `remove_with` of the seat clone: "mail retention refused ...: the fresh writer-admission scan could not verify every mail writer". The writer-admission scan cannot be trusted inside the lane sandbox, so a contained implementer cannot get a green run of aida-cli-lib/src/worktree_lifecycle_gc.rs tests. Either the test should inject the admission verdict or the lane sandbox should satisfy the scan.
+
 
   Raised by the implementer while working BUG-2587.
+
   Branch: bug-b6b1278890774ef993d2ebc327862470-352  ·  Commit: d5a6c3a62c  (PR link added on merge)
+
+  '
 status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
-created_at: 2026-11-14T21:18:12.614142400Z
-modified_at: 2026-11-23T16:01:54.232859030Z
+created_at: 2026-11-14 21:18:12.614142+00:00
+modified_at: 2026-11-23 16:01:54.232859+00:00
 req_type: Task
 tags:
 - from-implementer:BUG-2587
@@ -23,85 +26,102 @@ relationships:
 - rel_type:
     custom: implemented-by
   target_id: 01a20924-010f-7fb1-934c-c17ae0c0fa56
-  created_at: 2026-11-23T16:01:54.232820250Z
+  created_at: 2026-11-23 16:01:54.232820+00:00
   created_by: dirtlab
 comments:
 - id: 01a1e0f6-fd67-7610-87c0-2568812a2567
   author: joe
   content: 'Advisor 13:50: APPROVED (product seat burndown batch, rank 8: task_1222 fails inside the lane job sandbox; track integration).'
-  created_at: 2026-11-15T20:47:25.543978454Z
-  modified_at: 2026-11-15T20:47:25.543978454Z
+  created_at: 2026-11-15 20:47:25.543978+00:00
+  modified_at: 2026-11-15 20:47:25.543978+00:00
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
 - id: 01a1f580-45fa-7d60-8d80-832014f4360a
   author: joe
   content: 'advisor-121 13:30: execution mode set to drain (lane-sized, no authority/grant/containment/landing-gate change); dell1 fill.'
-  created_at: 2026-11-19T20:29:30.759802030Z
-  modified_at: 2026-11-19T20:29:30.759802030Z
+  created_at: 2026-11-19 20:29:30.759802+00:00
+  modified_at: 2026-11-19 20:29:30.759802+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
 - id: 01a1f591-120d-7701-b0aa-c2cf29a2910e
   author: joe
-  content: |-
-    Product 13:48: codex fresh-start lane queued on dell1 (TASK-2688/2689/2690 are blocked by STORY-2238), brief:
+  content: 'Product 13:48: codex fresh-start lane queued on dell1 (TASK-2688/2689/2690 are blocked by STORY-2238), brief:
+
     # Brief: TASK-3122 (fresh start; advisor-121 set drain 2026-11-19 13:29)
 
+
     Implement ONLY the acceptance criteria that are still unmet on origin/main. Check each AC against main first.
+
     Trailer: (TASK-3122) only if your PR plus main meets every AC; otherwise (Refs TASK-3122).
+
     If every AC is already met, make no change: punt with per-AC evidence.
-    Before pushing, run `python3 scripts/check-store-writers.py`.
-  created_at: 2026-11-19T20:47:55.247107203Z
-  modified_at: 2026-11-19T20:47:55.247107203Z
+
+    Before pushing, run `python3 scripts/check-store-writers.py`.'
+  created_at: 2026-11-19 20:47:55.247107+00:00
+  modified_at: 2026-11-19 20:47:55.247107+00:00
   session_id: 01a1f471-9bd0-7870-bb5b-40e0ed6e3409
   harness_version: 2.1.328 (Claude Code)
 - id: 01a20887-5d1a-7380-95d4-721c4aef3171
   author: joe
-  content: |-
-    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 06:10):
+  content: 'AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 06:10):
+
     # TASK-3122: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
 
+
     Read `aida show TASK-3122` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
-    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can''t fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+
     Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+
     Add `// trace:TASK-3122 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3122)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
 
-    INTEGRATION BUNDLE (advisor-122 ruling 2026-11-23 06:10): this lane works on branch `int26-task-3122`, created from origin/integration 06b95f8a1e5. Your PR MUST target base `integration`, not main. The integration seat checks your head against this brief, the advisor merges it into integration, and it lands on main in promotion 26. Standard tier only: if the fix needs an ADR-76 strict path (leases, claims, grants, containment, gate/guard), STOP and punt naming it.
-  created_at: 2026-11-23T13:10:05.245032776Z
-  modified_at: 2026-11-23T13:10:05.245032776Z
+
+    INTEGRATION BUNDLE (advisor-122 ruling 2026-11-23 06:10): this lane works on branch `int26-task-3122`, created from origin/integration 06b95f8a1e5. Your PR MUST target base `integration`, not main. The integration seat checks your head against this brief, the advisor merges it into integration, and it lands on main in promotion 26. Standard tier only: if the fix needs an ADR-76 strict path (leases, claims, grants, containment, gate/guard), STOP and punt naming it.'
+  created_at: 2026-11-23 13:10:05.245032+00:00
+  modified_at: 2026-11-23 13:10:05.245032+00:00
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
 - id: 01a208f9-0d27-7b13-9892-0491222f7cac
   author: dirtlab
-  content: |-
-    ## Implementer self-review
+  content: '## Implementer self-review
+
     Reviewed HEAD: 06b95f8a1e5d57a1f8210a2da787874292aeaf5e plus the uncommitted native-seat diff. The origin/main merge-base diff was empty and there were no untracked additions.
+
     AC1: [evidence: behavioral-test] aida-cli-lib/src/worktree_lifecycle_gc.rs:3010 exercises unknown writer admission on an otherwise eligible clone, checks the specific refusal and surviving seed file, then retries successfully under restored admission. Lane job j20261123T151403121-2-0 executed the named test: 1 passed. Main already supplies the per-thread writer verdict.
-    Deep-pass: matched the diagnostic against WriterAdmissionUnknown, checked guard nesting and drop on scope exit, retained the existing origin/PR and successful removal assertions. No production authority path or test weakening. No actionable findings. Store writer inventory and diff whitespace checks passed. Full FAST gate belongs to the host launcher.
-  created_at: 2026-11-23T15:14:28.410927766Z
-  modified_at: 2026-11-23T15:14:28.410927766Z
+
+    Deep-pass: matched the diagnostic against WriterAdmissionUnknown, checked guard nesting and drop on scope exit, retained the existing origin/PR and successful removal assertions. No production authority path or test weakening. No actionable findings. Store writer inventory and diff whitespace checks passed. Full FAST gate belongs to the host launcher.'
+  created_at: 2026-11-23 15:14:28.410927+00:00
+  modified_at: 2026-11-23 15:14:28.410927+00:00
   session_id: 01a208e98c21
   harness_version: codex-cli 0.167.0
 - id: 01a20923-82f8-7871-879e-889c46f3dba8
   author: aida-publication-done
   content: Implementer push 545e5259287e declared this spec complete for its scope; Done until it lands.
-  created_at: 2026-11-23T16:00:51.960568945Z
-  modified_at: 2026-11-23T16:00:51.960568945Z
+  created_at: 2026-11-23 16:00:51.960568+00:00
+  modified_at: 2026-11-23 16:00:51.960568+00:00
   session_id: 01a208e98c21
 - id: 01a20925-0f71-7713-8cd6-7539f86ce564
   author: joe
   content: 'INTEGRATION PRE-CHECK (integration-30, 09:03): PR-4437 @ 545e5259287 PASSES the p26 brief. Base integration; one commit ''[AI:codex] fix(worktree): ... (TASK-3122)''; +12 lines, all inside worktree_lifecycle_gc.rs mod tests, so test-only as the brief requires; trace present. Main already injects the admitting writer scan (test_writer_scan(true) at :2872), so the PR adds the regression the brief asks for in that case: a scoped test_writer_scan(false) guard asserts the refusal text and that the clone survives, then the guard drops (it restores the earlier verdict) and the retry removes the clone. No production change. Fast CI is pending (run 45211729290).'
-  created_at: 2026-11-23T16:02:19.658934799Z
-  modified_at: 2026-11-23T16:02:19.658934799Z
+  created_at: 2026-11-23 16:02:19.658934+00:00
+  modified_at: 2026-11-23 16:02:19.658934+00:00
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20925-bc2b-7f12-ab8d-5b57a3e90886
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int26-task-3122` at head `545e5259287ea244c37166f303dcd3965e792e22`.'
+  created_at: 2026-11-23 16:03:17.675755+00:00
+  modified_at: 2026-11-23 16:03:17.675755+00:00
+  session_id: 01a208e98c21
 history:
 - id: 01a1dc01-cb10-7712-bd85-1df9a58bab3c
   author: joe
-  timestamp: 2026-11-14T21:41:07.472363350Z
+  timestamp: 2026-11-14 21:41:07.472363+00:00
   changes: []
 - id: 01a1e0f7-0910-7de0-9014-613ecaecda1b
   author: joe
-  timestamp: 2026-11-15T20:47:28.528381815Z
+  timestamp: 2026-11-15 20:47:28.528381+00:00
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes:
@@ -110,30 +130,30 @@ history:
     new_value: Approved
 - id: 01a1e0f7-0fcf-7ef0-a709-3e5c7084d2e3
   author: joe
-  timestamp: 2026-11-15T20:47:30.255886221Z
+  timestamp: 2026-11-15 20:47:30.255886+00:00
   session_id: 01a1e03d-c6d9-7c61-8d35-47020bb6f858
   harness_version: 2.1.325 (Claude Code)
   changes: []
 - id: 01a1f57f-fd79-79e1-a750-8e0d35e2e4ad
   author: joe
-  timestamp: 2026-11-19T20:29:28.313965898Z
+  timestamp: 2026-11-19 20:29:28.313965+00:00
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
   changes: []
 - id: 01a208db-3278-7750-a4f0-414d73df22e3
   author: joe
-  timestamp: 2026-11-23T14:41:52.760413790Z
+  timestamp: 2026-11-23 14:41:52.760413+00:00
   changes: []
 - id: 01a208e9-bb51-72f3-ac46-7164aacbe63e
   author: aida-session-start
-  timestamp: 2026-11-23T14:57:45.297501671Z
+  timestamp: 2026-11-23 14:57:45.297501+00:00
   changes:
   - field_name: status
     old_value: Approved
     new_value: InProgress
 - id: 01a20923-82f8-7871-879e-88855f9e8a19
   author: aida-publication-done
-  timestamp: 2026-11-23T16:00:51.960565784Z
+  timestamp: 2026-11-23 16:00:51.960565+00:00
   session_id: 01a208e98c21
   changes:
   - field_name: status
@@ -141,7 +161,7 @@ history:
     new_value: Done
 - id: 01a20924-95d7-7d23-8fe2-107ef9371380
   author: dirtlab
-  timestamp: 2026-11-23T16:02:02.327151365Z
+  timestamp: 2026-11-23 16:02:02.327151+00:00
   session_id: 01a208e98c21
   changes: []
 execution_mode: drain
