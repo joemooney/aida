@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:20:02.761478421Z
-modified_at: 2026-11-23T16:17:40.101777234Z
+modified_at: 2026-11-23T16:38:28.658550401Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -79,6 +79,18 @@ comments:
   modified_at: 2026-11-23T15:12:56.074914284Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20945-f3cf-7a53-bb53-d547694b8e96
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c with native working-tree edits. The merge-base diff is empty. Reviewed the working diff and checked for untracked additions.
+    AC1: [evidence: behavioral-test] Git updates the latest matching rows under lock_queue_write (aida-core/src/db/git_backend.rs:3358). SQLite reads and updates notes under an immediate transaction (aida-core/src/db/sqlite_backend.rs:1878).
+    AC2: [evidence: behavioral-test] task_3155_interleaved_queue_edit_and_removal (aida-cli-lib/src/lane_disk_deferral.rs:153) reproduced two annotated rows instead of one on the snapshot path. The fixed run passed all three lane_disk_deferral tests, checking the surviving row and absent rows on Git and SQLite.
+    Probes covered UUID identity, duplicate inputs, timestamp markers, untouched whitespace, no-op updates and removed rows. No new launch authority. Writer inventory reconciled and git diff --check passed. FAST source checks stopped in test_ci_test_shards because the lane job runner refuses cargo metadata. Host FAST validation outstanding.
+  created_at: 2026-11-23T16:38:28.658550401Z
+  modified_at: 2026-11-23T16:38:28.658550401Z
+  session_id: 01a2093299c0
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f2f2-2680-7612-be8c-5bbed93131af
   author: joe
