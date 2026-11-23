@@ -500,3 +500,64 @@ fn missing_session_id_is_reported_as_an_id_not_a_branch() {
         .to_string();
     assert!(err.contains("No lease found for branch"), "{err}");
 }
+
+// trace:BUG-2710 | ai:codex
+#[test]
+fn bug_2710_deadline_finishes_one_session_before_yield_and_resume() {
+    let repo = committed_repo();
+    let holder = tempfile::tempdir().unwrap();
+    let mut ids = Vec::new();
+    for n in 1..=2 {
+        let branch = format!("deadline-{n}");
+        let tree = deleted_worktree(repo.path(), holder.path(), &branch);
+        let lease = lease_at(
+            &format!("dead{n}"),
+            "PR-6",
+            &tree,
+            &branch,
+            Some(reaped_pid()),
+        );
+        write_lease(repo.path(), &lease);
+        ids.push(lease.id);
+    }
+    // Model a first session consuming the entire allowance. Advance the
+    // clock only once its lease file has actually been released.
+    let first = super::reap_quiet(repo.path(), None, || {
+        !lease_path(repo.path(), &ids[0]).exists()
+    });
+    assert_eq!((first.visited, first.reaped), (1, 1));
+    assert_eq!(first.next_session.as_ref(), Some(&ids[1]));
+    assert!(lease_path(repo.path(), &ids[1]).exists());
+    let listing = git(repo.path(), &["worktree", "list", "--porcelain"]);
+    let listing = String::from_utf8(listing.stdout).unwrap();
+    assert!(!listing.contains("refs/heads/deadline-1"));
+    assert!(listing.contains("refs/heads/deadline-2"));
+    let rest = super::reap_quiet(repo.path(), first.next_session.as_deref(), || false);
+    assert_eq!((rest.visited, rest.reaped, rest.next_session), (1, 1, None));
+}
+
+// trace:BUG-2710 | ai:codex
+#[test]
+fn bug_2710_ample_budget_matches_unbounded_reap_decisions() {
+    for budgeted in [false, true] {
+        let repo = committed_repo();
+        let holder = tempfile::tempdir().unwrap();
+        for (id, pid) in [("dead1", reaped_pid()), ("live2", std::process::id())] {
+            let tree = deleted_worktree(repo.path(), holder.path(), id);
+            write_lease(repo.path(), &lease_at(id, "PR-6", &tree, id, Some(pid)));
+        }
+        if budgeted {
+            let progress = super::reap_quiet(repo.path(), None, || false);
+            assert_eq!(
+                (progress.visited, progress.reaped, progress.next_session),
+                (2, 1, None)
+            );
+        } else {
+            let outcomes = super::reap_quiet_outcomes(repo.path());
+            assert_eq!(outcomes.leases.len(), 1);
+            assert_eq!(outcomes.leases[0].0, "dead1");
+        }
+        assert!(!lease_path(repo.path(), "dead1").exists());
+        assert!(lease_path(repo.path(), "live2").exists());
+    }
+}
