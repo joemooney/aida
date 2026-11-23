@@ -9,12 +9,12 @@ description: |
   - AC1: Requests carrying a negative sender pidfd (-1, -2 and INT_MIN-like values) are refused before any dispatch, with a clear error.
   - AC2: close() is called only on fds that were validly received. A test asserts no close on the refused values.
   - AC3: A valid pidfd request still dispatches (positive control).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:50.241345704Z
-modified_at: 2026-11-23T00:05:07.768889054Z
+modified_at: 2026-11-23T00:32:18.510502965Z
 req_type: Bug
 tags:
 - authority
@@ -80,6 +80,12 @@ comments:
   modified_at: 2026-11-23T00:05:07.768889054Z
   session_id: 01a205b6876e
   harness_version: codex-cli 0.167.0
+- id: 01a205d1-644e-7100-88e1-e6862af9e4e3
+  author: aida-publication-done
+  content: Implementer push 70f98919ef87 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T00:32:18.510486638Z
+  modified_at: 2026-11-23T00:32:18.510486638Z
+  session_id: 01a205b6876e
 history:
 - id: 01a2052b-d43c-7761-9620-191b4708745f
   author: joe
@@ -131,6 +137,14 @@ history:
   session_id: 01a205b6876e
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a205d1-644e-7100-88e1-e67043ae39ee
+  author: aida-publication-done
+  timestamp: 2026-11-23T00:32:18.510485090Z
+  session_id: 01a205b6876e
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
