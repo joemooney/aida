@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T02:30:30.668509017Z
+modified_at: 2026-11-23T02:49:24.887784887Z
 req_type: Bug
 comments:
 - id: 01a20639-b01d-7f20-bca0-6cd50f5e0501
@@ -25,6 +25,19 @@ comments:
   modified_at: 2026-11-23T02:26:01.252602664Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a2064e-ebe6-7513-a616-74b9f44224f2
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 215313b8d3a8089240cc87b0210136d9d5831fb1 plus native working tree. Compared origin/main...HEAD, inspected git diff HEAD and checked untracked additions (none).
+    AC1: [evidence: behavioral-test] repair_journal.rs:702 verifies listing, preview, one persisted audited release and preservation of a sibling. doctor_cmd.rs:331 binds application to one --id and --yes.
+    AC2: [evidence: behavioral-test] The same test exercises a missing exit receipt, malformed and present leases, and a retained tree. repair_journal.rs:122 requires an accessible canonical parent and positive absence. lane_liveness.rs:837 matches the host exit record to lane and path. Existing trees, including trees with an unverified salvage patch, retain the reservation.
+    AC3: [evidence: behavioral-test] Job j20261123T024212576-2-0 executed the PR-4376 moved-tree regression: 1 passed. It reopens the journal and reserves the same PR/head, using the normal conflict reservation API.
+    Deep-pass: checked ID construction and lookup, timestamp parsing and JSON/TOML compatibility, zero/one/multiple reservations, missing evidence, symlinks, dry-run and lock scope. The explicit heal is the only release route. It uses the permanent repair lock shared by reservation and adoption. Added a pre-write size check to prevent an unreadable oversized audit. Fixed two fixture portability findings and reran the test. No tests weakened. Fast gate rerun j20261123T024722358-2-0 in progress. No published head CI yet.
+  created_at: 2026-11-23T02:49:24.887784887Z
+  modified_at: 2026-11-23T02:49:24.887784887Z
+  session_id: 01a2063cc951
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe

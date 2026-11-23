@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T02:29:16.015869838Z
+modified_at: 2026-11-23T02:55:42.998199375Z
 req_type: Bug
 tags:
 - recovery
@@ -41,6 +41,19 @@ comments:
   modified_at: 2026-11-23T02:25:46.538958793Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20654-b0c0-7a73-9427-127f4e711b80
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 215313b8d3a8089240cc87b0210136d9d5831fb1 plus the four uncommitted native-lane files. The merge-base diff is empty and there are no untracked additions.
+    AC1: [evidence: behavioral-test] agent_codex_background.rs:2231 selects only exact tokens after recorded identities are checked. bug_2721_recover_launch_fresh_scan_fails_closed passed, including live launcher, argv and env holders, missing identity, unreadable environment and grant retention.
+    AC2: [evidence: behavioral-test] story_2254_codex_bg_supervisor_tests.rs:802 and :905 check holder PID, command and matching reason.
+    AC3: [evidence: behavioral-test] story_2254_codex_bg_supervisor_tests.rs:934 recovers with the unrelated shell still live in the recorded primary. The fixture enumerates real child proc entries through a controlled directory.
+    Probes covered exact NUL-delimited byte comparisons, argv option spelling, zero/one/multiple processes, non-holder cwd, and incomplete evidence. Self-review narrowed scan exclusion to the recovery command. Known-receipt recovery releases existing bookkeeping only after evidence checks. Supervisor exit and corrupt-receipt retirement retain their conservative scans. A newer same-user process denying environment access can still yield UNKNOWN, observed on the initial test with host gh. Fixed test nondeterminism and added explicit refusal coverage. Targeted lane job j20261123T023236608-2-0 executed 1 passing test. make check-ci-fast passed in j20261123T023111888-4-0. No published PR-head CI yet.
+  created_at: 2026-11-23T02:55:42.998199375Z
+  modified_at: 2026-11-23T02:55:42.998199375Z
+  session_id: 01a2063bce96
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2063b-fe70-76a3-b92f-fa82ee901b7f
   author: aida-session-start
