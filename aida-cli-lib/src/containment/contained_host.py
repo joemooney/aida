@@ -8,6 +8,7 @@
 # Rust built. trace:TASK-2707 | ai:claude
 import fcntl
 import collections
+from concurrent.futures import Future, wait
 import signal
 
 ECONNREFUSED_ERR = -errno.ECONNREFUSED
@@ -407,20 +408,56 @@ def broker_send(listener, n, lane_net, lane_user, dup=None, deadline=None, reser
             os.close(fd)
 
 
-def broker_connect_contained(listener, state_fd, state_prefix, connector, port, lane_net, lane_user, mutation=None):
-    """F-a broker: read the sockaddr ONCE, never CONTINUE. A lane-netns
-    stream socket naming the relay port on 127.0.0.1 gets a relay-connected
-    socket; a pathname beneath the private state root gets the pinned private
-    endpoint; an inet socket the kernel places in a nested netns (never the
-    lane's) is connected as-is by the broker; everything else refuses.
-    trace:TASK-2708 | ai:claude"""
+def receive_notification(listener):
     n = Notification()
     if LIBC.ioctl(listener, C.c_ulonglong(RECV), C.byref(n)) < 0:
         # ENOENT: the trapped task was interrupted or every filtered task is
         # gone (the listener reports hang-up). Nothing to answer.
         require(C.get_errno() in (errno.ENOENT, errno.EINTR),
                 'seccomp notification facility unavailable')
-        return False
+        return None
+    return n
+
+
+def preflight_notification(listener, end):
+    # POLLIN can go stale before RECV. Only the receive runs in this daemon.
+    # The supervisor retains all service and exec authority. Host exit
+    # reclaims a receive stranded after the last filtered task exits.
+    result = Future()
+    owned = os.dup(listener)
+
+    def receive_one():
+        try:
+            result.set_result(receive_notification(owned))
+        except BaseException as error:
+            result.set_exception(error)
+        finally:
+            os.close(owned)
+
+    try:
+        threading.Thread(target=receive_one, daemon=True).start()
+    except BaseException:
+        os.close(owned)
+        raise
+    while True:
+        require(not _hung_up(listener), 'preflight notification listener hung up')
+        remaining = end - time.monotonic()
+        require(remaining > 0, 'contained requested-seat preflight did not complete')
+        if wait([result], timeout=min(0.1, remaining)).done:
+            return result.result()
+
+
+def broker_connect_contained(listener, state_fd, state_prefix, connector, port, lane_net, lane_user, mutation=None, *, n=None):
+    """F-a broker: read the sockaddr ONCE, never CONTINUE. A lane-netns
+    stream socket naming the relay port on 127.0.0.1 gets a relay-connected
+    socket; a pathname beneath the private state root gets the pinned private
+    endpoint; an inet socket the kernel places in a nested netns (never the
+    lane's) is connected as-is by the broker; everything else refuses.
+    trace:TASK-2708 | ai:claude"""
+    if n is None:
+        n = receive_notification(listener)
+        if n is None:
+            return False
     require(n.data.arch == 0xc000003e and n.data.nr in (42, 44, 46) and n.flags == 0,
             'unexpected socket broker notification')
     if n.data.nr in (44, 46):
@@ -722,7 +759,9 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
         # supplies its host PID via SCM_CREDENTIALS (never an env/JSON claim).
         end = time.monotonic() + 65
         while True:
-            require(time.monotonic() < end and process.poll() is None,
+            exited = process.poll() is not None
+            require(not _hung_up(notification), 'preflight notification listener hung up')
+            require(time.monotonic() < end and not exited,
                     'contained requested-seat preflight did not complete')
             drain_pending_sends()
             if mutation is not None:
@@ -731,8 +770,11 @@ def host_contained(cfg, receipt_fd, acceptance_fd):
             if notification in ready:
                 # trace:BUG-2717 | ai:codex
                 require(not _hung_up(notification), 'preflight notification listener hung up')
-                broker_connect_contained(notification, state_fd, state_prefix, connector, port,
-                                         lane_net, lane_user, mutation)
+                n = preflight_notification(notification, end)
+                require(not _hung_up(notification), 'preflight notification listener hung up')
+                if n is not None:
+                    broker_connect_contained(notification, state_fd, state_prefix, connector,
+                                             port, lane_net, lane_user, mutation, n=n)
             if proxy in ready:
                 data, got = receive(proxy)
                 require(data, 'proxy died during preflight')

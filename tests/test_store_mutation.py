@@ -57,7 +57,7 @@ class ContainedHostShutdownTests(unittest.TestCase):
 class ContainedHostPreflightTests(unittest.TestCase):
     # trace:BUG-2717 | ai:codex
     def test_notification_listener_before_exec(self):
-        for mode in ('open', 'hangup'):
+        for mode in ('open', 'hangup', 'exit-hangup', 'withdrawn'):
             with self.subTest(mode=mode):
                 result = subprocess.run(
                     [sys.executable, '-m', 'tests.test_store_mutation', '--preflight-helper', mode],
@@ -783,21 +783,35 @@ def preflight_helper(mode):
         proxy, _ = pair()
         broker.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
         shim.send(b'preflight-v1')
-        if mode == 'hangup':
+        if mode in ('hangup', 'exit-hangup'):
             sender.close()
         else:
             sender.send(b'N')
 
-        def service(fd, *args):
-            assert fd.recv(1) == b'N', 'entered receive on a hung-up listener'
-            fd.send(b'R')
+        entered = threading.Event()
+
+        def receive_one(fd):
+            if mode == 'withdrawn':
+                # Last task exits after readiness and before RECV dequeues.
+                entered.set()
+                sender.close()
+                threading.Event().wait()
+            return os.read(fd, 1)
+
+        stack.enter_context(patch.dict(ns, receive_notification=receive_one))
+
+        def service(fd, *args, n):
+            assert n == b'N'
+            os.write(fd, b'R')
 
         receipt_r, receipt_w = os.pipe()
         acceptance, writer = os.pipe()
         os.write(writer, b'R')
         os.close(writer)
-        context = dict(ns, notification=notification, broker=broker, proxy=proxy,
-                       end=time.monotonic() + 65, process=Mock(pid=1, poll=lambda: None),
+        process = Mock(pid=1)
+        process.poll.return_value = 0 if mode == 'exit-hangup' else None
+        context = dict(ns, notification=notification.fileno(), broker=broker, proxy=proxy,
+                       end=time.monotonic() + 65, process=process,
                        mutation=None, state_fd=-1, state_prefix=b'', connector=None, port=0,
                        lane_net=None, lane_user=None, broker_connect_contained=service,
                        identity=[line.split() for line in Path('/proc/self/uid_map').read_text().splitlines()],
@@ -814,6 +828,7 @@ def preflight_helper(mode):
                 assert 'hung up' in str(error), error
             else:
                 raise AssertionError('hung-up listener passed preflight')
+            assert mode != 'withdrawn' or entered.is_set()
             shim.setblocking(False)
             try:
                 released = shim.recv(32)
