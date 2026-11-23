@@ -326,12 +326,13 @@ pub(crate) fn handle_doctor_command(
             yes: sub_yes,
             force,
             all: sub_all,
-            json,
+            json: heal_json,
         } => {
             // trace:BUG-2722 | ai:codex
             if normalize_doctor_category(category)? == "repair-reservations" {
                 let root = main_worktree_root_from(&find_project_root()?);
                 anyhow::ensure!(!yes && !sub_yes, "repair release refuses --yes");
+                anyhow::ensure!(!json && !heal_json, "repair release refuses --json");
                 let id = id.as_deref().context("repair release requires one --id")?;
                 let reason = attest
                     .as_deref()
@@ -345,13 +346,18 @@ pub(crate) fn handle_doctor_command(
                         && !doctor_running_autonomously(&root),
                     "repair release requires a human operator"
                 );
-                let mut journal = crate::repair_journal::RepairGuard::lock(&root)?;
-                journal.attest_reservation(id, reason, std::io::stdin().lock())?;
+                crate::repair_journal::RepairGuard::attest_reservation(
+                    &root,
+                    id,
+                    reason,
+                    std::io::stdin().lock(),
+                )?;
                 println!("Released {id}");
                 return Ok(());
             }
             anyhow::ensure!(attest.is_none(), "--attest requires repair-reservations");
             let yes = sub_yes;
+            let json = heal_json;
             if let Some(id) = id {
                 let root = main_worktree_root_from(&find_project_root()?);
                 let category = normalize_doctor_category(category)?;

@@ -24,14 +24,14 @@ pub(crate) enum SpawnOutcome {
     Started,
     ProvenDead,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Validation {
     pub tree: String,
     pub command: Vec<String>,
     pub success: bool,
     pub recorded_at: String,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct RefusalNotice {
     pub reason: String,
     pub accepted_delivery: Option<String>,
@@ -41,7 +41,7 @@ pub(crate) struct RefusalNotice {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivery_unknown: Option<String>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct RepairEntry {
     pub key: RepairKey,
     pub dispatched_by: String,
@@ -101,10 +101,30 @@ struct Journal {
 
 #[derive(Serialize, Deserialize)]
 struct ReservationRelease {
+    #[serde(default)]
+    merge: Option<ReleasedMerge>,
     id: String,
     uid: u32,
     at: String,
     reason: String,
+}
+#[derive(Serialize, Deserialize)]
+struct ReleasedMerge {
+    branch: String,
+    head: String,
+    base: String,
+    pr: u64,
+}
+
+impl From<&RepairEntry> for ReleasedMerge {
+    fn from(entry: &RepairEntry) -> Self {
+        Self {
+            branch: entry.branch.clone(),
+            head: entry.key.original_head.clone(),
+            base: entry.base.clone(),
+            pr: entry.key.pr,
+        }
+    }
 }
 pub(crate) struct RepairGuard {
     _lock: File,
@@ -191,9 +211,19 @@ fn reservation_lease(entry: &RepairEntry) -> Result<&'static str> {
     Ok("present without a live recorded owner")
 }
 
+impl Journal {
+    fn reservation(&self, id: &str) -> Result<&RepairEntry> {
+        let mut matches = self.entries.iter().filter(|e| reservation_id(e) == id);
+        let entry = matches
+            .next()
+            .context("unknown reservation; inspect aida doctor check repair-reservations")?;
+        anyhow::ensure!(matches.next().is_none(), "ambiguous reservation ID");
+        Ok(entry)
+    }
+}
+
 impl RepairGuard {
     pub fn lock(main: &Path) -> Result<Self> {
-        use std::os::unix::fs::OpenOptionsExt;
         let dir = main.join(".aida");
         std::fs::create_dir_all(&dir)?;
         anyhow::ensure!(
@@ -202,10 +232,23 @@ impl RepairGuard {
         );
         let path = dir.join("repair-journal.json");
         let lock = lock_file(&dir.join("repair-journal.lock"))?;
+        let journal = Self::read(main, &path)?;
+        Ok(Self {
+            _lock: lock,
+            path,
+            journal,
+        })
+    }
+    fn read(main: &Path, path: &Path) -> Result<Journal> {
+        use std::os::unix::fs::OpenOptionsExt;
+        anyhow::ensure!(
+            std::fs::symlink_metadata(main.join(".aida"))?.is_dir(),
+            "invalid repair journal directory"
+        );
         let journal = match std::fs::OpenOptions::new()
             .read(true)
             .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-            .open(&path)
+            .open(path)
         {
             Ok(mut f) => {
                 use std::io::Read;
@@ -237,11 +280,7 @@ impl RepairGuard {
                 "invalid or duplicate repair journal key"
             );
         }
-        Ok(Self {
-            _lock: lock,
-            path,
-            journal,
-        })
+        Ok(journal)
     }
     // trace:BUG-2722 | ai:codex
     pub(crate) fn repair_findings(&self) -> Vec<crate::DoctorFinding> {
@@ -270,7 +309,7 @@ impl RepairGuard {
     }
 
     pub(crate) fn attest_reservation(
-        &mut self,
+        main: &Path,
         id: &str,
         reason: &str,
         input: impl std::io::Read + std::io::IsTerminal,
@@ -279,15 +318,8 @@ impl RepairGuard {
             input.is_terminal() && !reason.trim().is_empty(),
             "release requires a terminal and attestation"
         );
-        let mut matches = self
-            .journal
-            .entries
-            .iter_mut()
-            .filter(|e| reservation_id(e) == id);
-        let entry = matches
-            .next()
-            .context("unknown reservation; inspect aida doctor check repair-reservations")?;
-        anyhow::ensure!(matches.next().is_none(), "ambiguous reservation ID");
+        let snapshot = Self::read(main, &main.join(".aida/repair-journal.json"))?;
+        let entry = snapshot.reservation(id)?;
         anyhow::ensure!(
             entry.spawn != SpawnOutcome::ProvenDead,
             "reservation already released"
@@ -308,15 +340,27 @@ impl RepairGuard {
             answer.trim_end_matches(['\r', '\n']) == id,
             "confirmation did not match"
         );
-        reservation_lease(entry)?;
+        let mut guard = Self::lock(main)?;
+        anyhow::ensure!(
+            guard.journal.reservation(id)? == entry,
+            "reservation changed during confirmation"
+        );
+        anyhow::ensure!(
+            reservation_lease(entry)? == lease && path_absent(&entry.tree_path)? == absent,
+            "lease or tree changed during confirmation"
+        );
+        let merge = ReleasedMerge::from(entry);
+        let entry = guard.entry_mut(&entry.key)?;
+        entry.validation = None;
         entry.spawn = SpawnOutcome::ProvenDead;
-        self.journal.releases.push(ReservationRelease {
+        guard.journal.releases.push(ReservationRelease {
+            merge: Some(merge),
             id: id.into(),
             uid: unsafe { libc::geteuid() },
             at: chrono::Utc::now().to_rfc3339(),
             reason: reason.into(),
         });
-        self.save()
+        guard.save()
     }
 
     fn entry_mut(&mut self, key: &RepairKey) -> Result<&mut RepairEntry> {
@@ -330,6 +374,20 @@ impl RepairGuard {
     pub fn reserve(&mut self, mut entry: RepairEntry) -> Result<()> {
         if let Some(previous) = self.journal.entries.iter().find(|e| e.key == entry.key) {
             anyhow::ensure!(previous.spawn == SpawnOutcome::ProvenDead, "repair head already reserved; unknown spawn outcomes require proof that the prior lane is dead");
+            // Upgrade releases written before merge inputs were included in the audit.
+            for release in self
+                .journal
+                .releases
+                .iter_mut()
+                .filter(|r| r.merge.is_none() && r.id == reservation_id(previous))
+            {
+                release.merge = Some(ReleasedMerge::from(previous));
+            }
+            // A successor starts from its own observed paths, head and base.
+            entry.preparation_success = None;
+            entry.regeneration_success = None;
+            entry.regenerated_tree = None;
+            entry.validation = None;
             entry.refusal_notice = previous.refusal_notice.clone();
         }
         self.journal.entries.retain(|e| e.key != entry.key);
@@ -361,17 +419,35 @@ impl RepairGuard {
     // trace:TASK-3804 | ai:claude
     pub fn require_validated_merges(&self, branch: &str, merges: &[[String; 3]]) -> Result<()> {
         for [tree, first, second] in merges {
+            let mut current_validation = false;
             for entry in self.journal.entries.iter().filter(|entry| {
                 entry.branch == branch && &entry.key.original_head == first && &entry.base == second
             }) {
-                let validated = entry
-                    .validation
-                    .as_ref()
-                    .is_some_and(|validation| validation.success && &validation.tree == tree);
+                let validated = entry.spawn != SpawnOutcome::ProvenDead
+                    && entry
+                        .validation
+                        .as_ref()
+                        .is_some_and(|validation| validation.success && &validation.tree == tree);
                 if !validated {
                     return Err(UnvalidatedRepairPublication {
                         pr: entry.key.pr,
                         route: "seat-committed conflict merge".into(),
+                    }
+                    .into());
+                }
+                current_validation = true;
+            }
+            if !current_validation {
+                if let Some(merge) = self
+                    .journal
+                    .releases
+                    .iter()
+                    .filter_map(|r| r.merge.as_ref())
+                    .find(|m| m.branch == branch && &m.head == first && &m.base == second)
+                {
+                    return Err(UnvalidatedRepairPublication {
+                        pr: merge.pr,
+                        route: "released conflict merge".into(),
                     }
                     .into());
                 }
@@ -806,36 +882,67 @@ mod tests {
             writeln!(master, "{answer}").unwrap();
             (master, unsafe { File::from_raw_fd(slave) })
         }
+        drop(journal);
         let reason = "verified moved checkout";
         std::fs::create_dir(&entry.tree_path).unwrap();
         std::fs::rename(&entry.tree_path, main.join("moved")).unwrap();
-        assert!(journal
-            .attest_reservation(&id, reason, File::open("/dev/null").unwrap())
-            .is_err());
+        assert!(RepairGuard::attest_reservation(
+            main,
+            &id,
+            reason,
+            File::open("/dev/null").unwrap()
+        )
+        .is_err());
         let (_master, input) = terminal("wrong");
-        assert!(journal.attest_reservation(&id, reason, input).is_err());
+        assert!(RepairGuard::attest_reservation(main, &id, reason, input).is_err());
         let dir = crate::leases::leases_dir(main);
         std::fs::create_dir(&dir).unwrap();
         let lease = crate::leases::lease_path(main, &entry.lane_id);
         let live = serde_json::json!({"id":entry.lane_id,"scope":"BUG-2669","slug":"bug-2669","owner":"implementer","worktree_path":entry.tree_path,"branch":entry.branch,"started_at":entry.reserved_at,"hostname":"host","pid_namespace":aida_core::pid_observer::PidObserver::current().namespace,"active_pid":std::process::id()});
         std::fs::write(&lease, toml::to_string(&live).unwrap()).unwrap();
         let (_master, input) = terminal(&id);
-        assert!(journal
-            .attest_reservation(&id, reason, input)
+        assert!(RepairGuard::attest_reservation(main, &id, reason, input)
             .unwrap_err()
             .to_string()
             .contains("live or unverified"));
         std::fs::remove_file(lease).unwrap();
         let (_master, input) = terminal(&id);
-        journal.attest_reservation(&id, reason, input).unwrap();
-        drop(journal);
+        RepairGuard::attest_reservation(main, &id, reason, input).unwrap();
         let mut journal = RepairGuard::lock(main).unwrap();
         assert_eq!(journal.journal.releases[0].reason, reason);
         assert_eq!(journal.journal.releases[0].id, id);
         assert_eq!(journal.journal.releases[0].uid, unsafe { libc::geteuid() });
         chrono::DateTime::parse_from_rfc3339(&journal.journal.releases[0].at).unwrap();
         entry.lane_id = "successor".into();
-        journal.reserve(entry).unwrap();
+        let old_merge = [
+            String::from("old-tree"),
+            entry.key.original_head.clone(),
+            entry.base.clone(),
+        ];
+        entry.base = "new-base".into();
+        entry.spawn = SpawnOutcome::Unknown;
+        journal.reserve(entry.clone()).unwrap();
+        assert!(journal
+            .for_tree(
+                &entry.tree_path,
+                &entry.branch,
+                &entry.key.original_head,
+                &old_merge[2]
+            )
+            .is_err());
+        assert!(journal
+            .require_validated_merges(&entry.branch, &[old_merge])
+            .is_err());
+        let successor = journal
+            .for_tree(
+                &entry.tree_path,
+                &entry.branch,
+                &entry.key.original_head,
+                "new-base",
+            )
+            .unwrap();
+        assert!(successor.require_prepared().is_err());
+        assert!(successor.validation.is_none());
         assert_eq!(
             journal.entry_mut(&other).unwrap().spawn,
             SpawnOutcome::Started

@@ -3926,8 +3926,12 @@ fn prepare_host_repair_with(
         let guard = RepairGuard::lock(main)?;
         let entry = guard.for_tree(tree, branch, &head, &merge)?;
         anyhow::ensure!(
-            resume && entry.lane_id == lane_id && pr_head == head,
-            "pending repair belongs to a different lane or head"
+            resume
+                && entry.lane_id == lane_id
+                && entry.key.pr == pr
+                && pr_head == head
+                && merge == base,
+            "pending repair belongs to a different lane, PR, head or base"
         );
         let paths = entry.original_conflict_paths.clone();
         let key = entry.key.clone();
