@@ -1,0 +1,10 @@
+job: red-main-watch
+last_run: 2026-11-23T06:45:10.888502022Z
+last_by:
+  seat: substrate
+  vendor: tick
+result: failed:127
+failure_trips:
+- trip_id: red-main-watch@2026-11-23T06:45:10.888502022Z
+  at: 2026-11-23T06:45:10.888502022Z
+  status: 127
