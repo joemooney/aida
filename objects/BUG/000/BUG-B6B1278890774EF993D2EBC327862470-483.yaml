@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T07:04:45.017686797Z
+modified_at: 2026-11-23T07:05:49.589363359Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -229,6 +229,23 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T07:04:44.698975698Z
   modified_at: 2026-11-23T07:04:44.698975698Z
+- id: 01a20739-f80d-7b72-bcf2-dbd0210f25d1
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 00:05):
+    # BUG-2722 / PR #4403 r4 FINAL (advisor-122 ruling 2026-11-23 00:08 MST; relayed by product-15). Lane: CODEX. ADR-76 strict tier. Critical path for #4376 and #4401. SMALL.
+
+    The counting CR at d038ab6e (r3): the core WORKS (interactive preview, typed confirmation, audited single-entry release, the moved-tree release without a historical receipt, i.e. the entry-48 shape). Four small fixes remain; the reviewer scope is these four plus the diff. A blocking CR after this parks the PR, and the operator hand-releases the journal entries.
+    1. repair_journal.rs:312/330-377: after an attested release, a new reserve() for the same repo+PR must NOT reuse the old entry's merge state. Bind the replacement to the CURRENT base and PR head, and treat any retained old merge as unvalidated (refuse to resume it). Test: release, then reserve on a different base.
+    2. doctor_cmd.rs:332-349: the PTY regression must drive the REAL CLI path (`aida doctor heal repair-reservations --id ... --attest ...`), so that removing the managed-agent, orchestrated or integrity-floor checks makes it fail.
+    3. doctor_cmd.rs:348 + repair_journal.rs:295-319/546-553: do NOT hold the project-wide repair lock across the git probe and the human prompt. Read and preview UNLOCKED, then take the lock, RE-VALIDATE that the entry is unchanged, and release.
+    4. --json: refuse it explicitly for this interactive command (simplest).
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T07:05:49.589363359Z
+  modified_at: 2026-11-23T07:05:49.589363359Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
