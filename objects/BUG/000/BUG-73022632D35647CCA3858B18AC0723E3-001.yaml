@@ -3,12 +3,12 @@ spec_id: BUG-73022632d35647cca3858b18ac0723e3-001
 agreed_id: BUG-2592
 title: CI startup monitoring can skip items when a paginated forge collection shrinks
 description: Follow-up from BUG-2694 self-review. GitHub page numbers index a live collection. If an item on a previously read page is closed or deleted before the next page is fetched, an unseen boundary item can shift onto the already-read page. PR-number deduplication handles overlap but cannot detect such a gap. The same issue can skip a started run in historical job mapping after a run deletion. Evaluate stable cursor-based or bounded overlap discovery and add a regression that removes an item between budget-limited passes.
-status: InProgress
+status: Done
 priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:51:17.240362338Z
-modified_at: 2026-11-23T16:04:57.363547308Z
+modified_at: 2026-11-23T16:21:49.258773031Z
 req_type: Bug
 tags:
 - track:integration
@@ -44,6 +44,12 @@ comments:
   modified_at: 2026-11-23T15:18:49.359268771Z
   session_id: 01a208ea8277
   harness_version: codex-cli 0.167.0
+- id: 01a20936-b24a-7080-be6f-88da1a033596
+  author: aida-publication-done
+  content: Implementer push 5b7bccceb504 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T16:21:49.258772118Z
+  modified_at: 2026-11-23T16:21:49.258772118Z
+  session_id: 01a208ea8277
 history:
 - id: 01a1f2f2-610f-7cd2-8d02-d615becc78ba
   author: joe
@@ -86,6 +92,14 @@ history:
   author: joe
   timestamp: 2026-11-23T16:04:57.496931730Z
   changes: []
+- id: 01a20936-b24a-7080-be6f-88c949173cac
+  author: aida-publication-done
+  timestamp: 2026-11-23T16:21:49.258769200Z
+  session_id: 01a208ea8277
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   aida_version: 0.16.0
