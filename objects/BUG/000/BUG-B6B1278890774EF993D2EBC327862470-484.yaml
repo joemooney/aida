@@ -10,12 +10,12 @@ description: |
   - AC2: When the train refuses on a check-run, it names the run id and whether that run was cancelled or superseded.
   - AC3: A regression test: a head with a cancelled fast run (failed aggregate) plus a later successful full run is ready.
   - AC4: Docs or CLI note: after `gh pr update-branch`, wait for its FAST run to finish before removing and re-adding ci:full (interim rule).
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T05:05:19.384958349Z
+modified_at: 2026-11-23T05:14:56.032952931Z
 req_type: Bug
 tags:
 - ci
@@ -96,6 +96,14 @@ history:
   timestamp: 2026-11-23T05:04:13.023580859Z
   session_id: 01a206837516
   changes: []
+- id: 01a206d4-24a0-7591-9a4f-81390cc90425
+  author: aida-orchestrator
+  timestamp: 2026-11-23T05:14:56.032963926Z
+  session_id: 01a206d09319
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -103,3 +111,16 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 215313b8d3a
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    BUG-2723 (origin BUG-b6b1278890774ef993d2ebc327862470-484), completing spec. Reviewed all four landed-diff files against 5470336db358. None of the findings depends on the intervening base change to landing API argument compatibility. CI pending at review time. Used source, existing test evidence and read-only forge observations.
+    AC1: unverified — live train and landing paths can retain superseded failures or disagree about the selected run.
+    AC2: unverified — the poll gives a run ID for Actions rows but hard-codes supersession uncertainty, and the exact-tip refusal still drops run identity.
+    AC3: verified by source inspection of cargo test -p aida-cli-lib bug2723_train_replaces_cancelled_fast_only_with_verified_full and the implementer's recorded one-test pass. This exercises the helper with both aggregates present.
+    AC4: verified by docs/internal/testing/ci-test-shards.md:39, which gives the requested sequence. Automated coverage of the note remains absent.
+  recovery_hint: address the review findings, move BUG-2723 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T05:14:56.032952931Z
