@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-23T04:44:45.037553928Z
+modified_at: 2026-11-23T05:22:17.630859541Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -738,6 +738,11 @@ comments:
   modified_at: 2026-11-23T04:44:45.037553928Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a206da-e19e-7561-b73a-91d4134ed9f6
+  author: joe
+  content: 'MAIN evidence (product-15, 2026-11-22 22:21 MST), for advisor-122''s 21:52 decision: the exact required-live command at MAIN tip 5470336db35 on imac (aida built at 5470336db35) ran 1 test and FAILED the SAME way at bug_2169_contained_clone_bwrap_tests.rs:2213: ''Codex :workspace denied a configured extra writable root: cannot create .../target/worktrees/evidence-main-5470336db35/bug-2169-bwrap/fx-XXXX/codex-control-extra/probe: Read-only file system''. Main''s target/worktrees placement fails too, so #4387 does not regress live coverage. It''s a Codex tool/host gap: the ''fails on main'' branch applies (waive the live requirement for #4387; follow-up spec filed).'
+  created_at: 2026-11-23T05:22:17.630859541Z
+  modified_at: 2026-11-23T05:22:17.630859541Z
 history:
 - id: 01a1e1a8-ee2d-70a3-a8e5-1e740fd54b10
   author: joe
