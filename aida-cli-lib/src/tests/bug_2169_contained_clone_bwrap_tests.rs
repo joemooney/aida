@@ -20,7 +20,7 @@
 //! proves the harness detects the bypass at all.
 //!
 //! Gating: the `bug_2169_bwrap_` tests need bubblewrap and an unprivileged
-//! user namespace. Without them each prints `SKIP (bwrap unavailable)` and
+//! user namespace. Without them each reports the missing capability and
 //! passes, unless `AIDA_REQUIRE_BWRAP_LIVE=1` is set (the CI gate), where a
 //! skip fails the test.
 //! trace:BUG-2169 | ai:claude
@@ -52,21 +52,49 @@ mod linux {
     /// Whether the live bubblewrap tests can run here. Fails the test instead of
     /// skipping when `AIDA_REQUIRE_BWRAP_LIVE` is set.
     fn bwrap_live() -> bool {
-        let ok = Command::new("bwrap")
+        let probe = Command::new("bwrap")
             .args(["--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc"])
             .arg("true")
-            .output()
-            .is_ok_and(|o| o.status.success());
-        if !ok {
-            assert!(
-                std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_none(),
-                "AIDA_REQUIRE_BWRAP_LIVE=1 but bwrap cannot create an unprivileged user namespace \
-             here, so the BUG-2169 sandbox gate could not run. Install bubblewrap and/or \
-             `sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0`."
-            );
-            eprintln!("SKIP (bwrap unavailable)");
-        }
-        ok
+            .env("LC_ALL", "C")
+            .output();
+        let reason = match probe {
+            Ok(out) if out.status.success() => return true,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                "bwrap executable missing from PATH".to_owned()
+            }
+            Err(err) => panic!("failed to start bwrap capability probe: {err}"),
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr);
+                assert!(
+                    stderr.contains("Creating new namespace failed: Operation not permitted")
+                        || stderr.contains("No permissions to create new namespace")
+                        || stderr.contains("No permissions to creating new namespace"),
+                    "unexpected bwrap probe failure ({}): {stderr}",
+                    out.status
+                );
+                format!(
+                    "unprivileged namespace creation unavailable: {}",
+                    stderr.trim()
+                )
+            }
+        };
+        missing_bwrap_capability(
+            &reason,
+            std::env::var_os("AIDA_REQUIRE_BWRAP_LIVE").is_some(),
+        )
+    }
+
+    // trace:BUG-2701 | ai:codex
+    fn missing_bwrap_capability(reason: &str, required: bool) -> bool {
+        assert!(!required, "AIDA_REQUIRE_BWRAP_LIVE: {reason}");
+        eprintln!("SKIP (BUG-2169 live bubblewrap: {reason})");
+        false
+    }
+
+    #[test]
+    #[should_panic(expected = "AIDA_REQUIRE_BWRAP_LIVE: bwrap executable missing from PATH")]
+    fn bug_2169_bwrap_required_gate_fails_on_missing_capability() {
+        missing_bwrap_capability("bwrap executable missing from PATH", true);
     }
 
     /// Use the workspace's ignored target when it is outside a seat.
