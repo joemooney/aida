@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T16:06:54.851399517Z
-modified_at: 2026-11-23T22:42:55.133643433Z
+modified_at: 2026-11-23T22:44:08.946858785Z
 req_type: Story
 tags:
 - autonomy
@@ -139,6 +139,12 @@ comments:
   content: Implementer push 227141c50e4a declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-23T22:42:55.133642901Z
   modified_at: 2026-11-23T22:42:55.133642901Z
+  session_id: 01a20a50c62f
+- id: 01a20a94-ba72-7922-80df-0e665c1bd2de
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `story-b6b1278890774ef993d2ebc327862470-820` at head `227141c50e4a96073cb82304889afe6987b28d38`.'
+  created_at: 2026-11-23T22:44:08.946852542Z
+  modified_at: 2026-11-23T22:44:08.946852542Z
   session_id: 01a20a50c62f
 history:
 - id: 01a2092b-397b-75d2-9d45-da763d052c7b
