@@ -1,0 +1,32 @@
+id: 01a20aa5-b2d4-71c3-927d-ce13ad95b082
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-246
+title: 'Review PR-4463: [AI:codex] fix(mailbox): report seat messages hidden by missing delivery sidecars (TASK-3846)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20a73`) for branch `int29-task-3846`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4463>
+  - Branch: `int29-task-3846` → `integration`
+
+  ## Covers
+
+  - TASK-3846
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4463` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T23:02:41.108598312Z
+modified_at: 2026-11-23T23:02:41.108598312Z
+req_type: Story
+filed_at:
+  code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4e140498bc
+  session: 01a20a73aa39
