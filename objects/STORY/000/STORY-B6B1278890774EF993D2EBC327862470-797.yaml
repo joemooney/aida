@@ -17,12 +17,12 @@ description: |
   4. Live-binary guard: in review-gated mode, `aida dev build` promotion refuses a main SHA without green CI and names the last green SHA. Activation in a worktree is unaffected.
   5. Docs: the two-seat protocol and the landing docs describe both modes and when to choose each.
   6. Tests: the ship gate in each mode, the required-check reconcile (forge mocked), the red-main alert routing, and the promotion refusal.
-status: InProgress
+status: Approved
 priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-23T00:04:22.108116025Z
+modified_at: 2026-11-23T00:25:37.479744513Z
 req_type: Story
 tags:
 - landing
@@ -1512,6 +1512,13 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a205cb-4642-7cd2-be40-ebe992e98b7d
+  author: joe
+  timestamp: 2026-11-23T00:25:37.602942474Z
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Approved
 filed_at:
   code_sha: ffd2af9f2f6f4ef92f64bb4f77170d8b6a3fa6da
   branch: main
