@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:27.302758155Z
-modified_at: 2026-11-23T14:59:15.226129445Z
+modified_at: 2026-11-23T14:59:46.883645123Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -58,6 +58,22 @@ comments:
   created_at: 2026-11-23T13:42:31.932892846Z
   modified_at: 2026-11-23T13:42:31.932892846Z
   session_id: 01a208739540
+- id: 01a208eb-cc7a-7750-a806-7c20756f262d
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 07:59):
+    # TASK-3151 RELAUNCH (product-15 08:05; advisor-122 throughput plan). Lane: CODEX. New branch, new PR. IMPLEMENT.
+
+    READ THIS FIRST: the previous lane (06:xx) read the 2026-11-20 "Advisor closeout audit ... KEEP OPEN ... No implementation or status change" comment as a binding instruction and produced nothing. That sentence described THE AUDIT (it changed nothing). It does NOT forbid implementation. THIS brief is the binding one: IMPLEMENT the acceptance criteria (they are TESTS: write the missing behavioral coverage), commit, and ship a PR.
+
+    Read `aida show TASK-3151` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:TASK-3151 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (TASK-3151)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T14:59:46.883645123Z
+  modified_at: 2026-11-23T14:59:46.883645123Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1f2d9-8f75-7071-a403-a891c0550eff
   author: joe
