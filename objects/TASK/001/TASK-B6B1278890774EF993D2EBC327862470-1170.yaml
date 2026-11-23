@@ -18,7 +18,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T21:52:06.729374870Z
-modified_at: 2026-11-23T09:46:55.277202792Z
+modified_at: 2026-11-23T09:53:41.925456980Z
 req_type: Task
 tags:
 - carried-from:STORY-2897
@@ -126,6 +126,19 @@ comments:
   modified_at: 2026-11-23T09:44:09.300345091Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a207d3-5d77-73f2-9f13-751fd88f76c3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: bf941b3731f0c2ec9bcccd494f97e52be7a0d83b plus the native-seat working diff. No untracked additions.
+    AC1: [evidence: behavioral-test] main_watch.rs:722 retries the same pinned-directory sync as write_state before startup flush under the watch lock. The state_dir_sync_failure_preserves_the_pending_transition_for_restart test passed (1 executed). Repeated sync failure leaves the journal empty, then recovery preserves the cursor and episode and clears pending.
+    AC2: [evidence: behavioral-test] story_2897_main_watch_tests.rs:670 checks the newline boundary and counts parsed physical JSONL records for the original UUID. Duplicate copies would fail the count.
+    AC3: [evidence: documentation-inspection] Updated and re-read PR #4418 body for main's existing file and directory syncs and this PR's replay change and regression coverage.
+    Deep pass checked shared failpoint spelling, JSONL termination, empty and nonempty pending lists, repeated failure, and pinned-directory identity. All three review findings addressed. The injected I/O failure exercises ordering without simulating hardware power loss.
+  created_at: 2026-11-23T09:53:41.925456980Z
+  modified_at: 2026-11-23T09:53:41.925456980Z
+  session_id: 01a207ccd7ca
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fb7e-3363-7680-855c-25ffe7cdf61a
   author: joe
