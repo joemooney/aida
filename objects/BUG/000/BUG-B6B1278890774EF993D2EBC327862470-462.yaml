@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:01:08.400632766Z
-modified_at: 2026-11-23T15:26:00.187532930Z
+modified_at: 2026-11-23T15:41:29.817119320Z
 req_type: Bug
 tags:
 - track:integration
@@ -57,6 +57,13 @@ comments:
   created_at: 2026-11-23T15:26:00.187521781Z
   modified_at: 2026-11-23T15:26:00.187521781Z
   session_id: 01a208eb986f
+- id: 01a20911-fc91-7010-83f1-58a00a2c5392
+  author: joe
+  content: 'INTEGRATION SEAT (integration-30, 08:43): the p26 lane punted correctly under the advisor''s guard. AC1 (name each blocker''s lease file) needs leases.rs to keep the enumerated path, which it currently discards when collecting parsed SessionLeases and which feeds list_leases_strict_all, consumed by the canonical-branch guard in queue_cmd/work.rs. That is an ADR-76 lease path, so this needs the strict tier and is out of the p26 bundle. Evidence: dell1 lane-BUG-2698.log, attempt be80138d. Route it as a strict-tier spec on the main track.'
+  created_at: 2026-11-23T15:41:29.817119320Z
+  modified_at: 2026-11-23T15:41:29.817119320Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20885-7dbc-7893-863c-34ed6a75a6ce
   author: joe
