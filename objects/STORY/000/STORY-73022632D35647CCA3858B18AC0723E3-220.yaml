@@ -1,0 +1,32 @@
+id: 01a20802-3cf5-7ca0-9259-48bf55ca024f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-220
+title: 'Review PR-4424: [AI:codex] fix(config): classify the admission wait bound as worktree policy (TASK-3241)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a207d3`) for branch `task-b6b1278890774ef993d2ebc327862470-1189`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4424>
+  - Branch: `task-b6b1278890774ef993d2ebc327862470-1189` → `main`
+
+  ## Covers
+
+  - TASK-3241
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4424` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T10:44:54.133547069Z
+modified_at: 2026-11-23T10:44:54.133547069Z
+req_type: Story
+filed_at:
+  code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 55f63f3800
+  session: 01a207d3a400
