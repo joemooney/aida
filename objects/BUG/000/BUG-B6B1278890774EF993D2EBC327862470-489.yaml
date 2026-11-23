@@ -1,0 +1,28 @@
+id: 01a2076d-6c65-73b0-afbc-67157b3446e2
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-489
+agreed_id: BUG-2728
+title: build_git_stamp marks a build +dirty on UNTRACKED files, which silently disables mail-retention re-recording (5 days on dell1 from one stray DU.txt)
+description: |
+  Found 2026-11-23 (product-15; advisor-122 asked for it). aida-cli-lib/build_git_stamp.rs:22-32 marks a build dirty when `git --no-optional-locks status --porcelain` prints anything, and porcelain INCLUDES untracked files. On dell1, one stray untracked DU.txt in the primary checkout (a du listing left by the 2026-11-18 disk-freeing session) made every dell1 build "+dirty" for 5 days. A dirty build silently skips mail-retention re-recording ("the new build names no exact source (it was built from uncommitted changes)"), so ending sessions whose mailbox held mail was refused all along. That was a likely root cause of many "mail must be retained" refusals and hand salvages.
+
+  ## Acceptance
+  - AC1: The build stamp's dirty flag reflects TRACKED modifications only (`git status --porcelain --untracked-files=no`), with a test: an untracked file alone yields a clean stamp, and a modified tracked file yields dirty.
+  - AC2: When a build is dirty, `aida dev status` (or the promote output) names the dirty paths, so the cause is visible without hunting.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T08:02:21.413386524Z
+modified_at: 2026-11-23T08:02:21.413386524Z
+req_type: Bug
+tags:
+- build
+- mail-retention
+- small
+filed_at:
+  code_sha: a16f3592f015e06580a94c1f7879ea9c877c088e
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a16f3592f01
+  vendor: claude
