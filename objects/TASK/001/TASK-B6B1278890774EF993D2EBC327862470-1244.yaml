@@ -1,0 +1,31 @@
+id: 01a207c8-cde3-76d0-82bc-98f9f2e7f751
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1244
+title: 'Review follow-up: TASK-3195 — PR #4418 description. The advisor brief asks the PR body to say when main alre'
+description: |-
+  From TASK-3195
+  Reviewed sha: bf941b3731f0c2ec9bcccd494f97e52be7a0d83b
+
+  TASK-3195 — PR #4418 description. The advisor brief asks the PR body to say when main already handles directory sync and the change adds regression coverage. The published body has only seat publication and fast-gate metadata. Add the baseline behavior and the scope of the added coverage to the description.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T09:42:10.147691442Z
+modified_at: 2026-11-23T09:42:10.147691442Z
+req_type: Task
+tags:
+- carried-from:TASK-3195
+- finding-hash:6d681768
+- from-review:TASK-3195
+relationships:
+- rel_type: References
+  target_id: 01a1faf2-0249-74f3-8855-d051a75e6344
+  created_at: 2026-11-23T09:42:23.193407501Z
+filed_at:
+  code_sha: bf941b3731f0c2ec9bcccd494f97e52be7a0d83b
+  branch: pr-4418
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 55f63f38008
+  vendor: claude
+  session: 01a207c64e61
