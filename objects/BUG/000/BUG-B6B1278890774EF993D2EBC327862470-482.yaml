@@ -9,12 +9,12 @@ description: |
   - AC1: recover-launch judges an attempt alive only from evidence bound to that attempt (its recorded launcher/worker PID plus start identity, or a process whose cmdline/env carries the attempt token), not from any process whose cwd is the attempt's path, and never from cwd alone when that path is the primary checkout.
   - AC2: When it refuses, it names the PID, command and why that PID was treated as the attempt's holder.
   - AC3: A regression test: a dead launcher's attempt whose recorded worktree is the primary, with an unrelated live shell in the primary, is recoverable.
-status: Approved
+status: InProgress
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T03:27:03.761997435Z
+modified_at: 2026-11-23T03:29:49.638147479Z
 req_type: Bug
 tags:
 - recovery
@@ -151,6 +151,13 @@ history:
   - field_name: status
     old_value: NeedsAttention
     new_value: Approved
+- id: 01a20673-ea46-7462-87cd-e829188bc63c
+  author: aida-session-start
+  timestamp: 2026-11-23T03:29:49.638145276Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
