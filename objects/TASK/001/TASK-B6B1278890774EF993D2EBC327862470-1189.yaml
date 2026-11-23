@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   scripts/config-trust.toml: the new branch-local key `[admission] wait_secs` (read in aida-cli-lib/src/admission_owner.rs wait_bound/parse_wait_bound through review_helpers::project_config_text) is not listed. The inventory header says every key parsed from the branch-local copy is enumerated under [keys.worktree.<section>]; the guard test only counts quoted `config.toml` sites, so it does not catch the omission. Add `[keys.worktree.admission] wait_secs = "policy"`.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.459882548Z
-modified_at: 2026-11-23T10:45:41.797120087Z
+modified_at: 2026-11-23T12:24:40.140979633Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -101,6 +101,22 @@ history:
   timestamp: 2026-11-23T10:45:12.472488318Z
   session_id: 01a207d3a400
   changes: []
+- id: 01a2085d-9388-70c2-9d32-a9b890a3a106
+  author: aida-auto-bump
+  timestamp: 2026-11-23T12:24:40.072250653Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a2085d-93cc-70f2-8335-e4f39619a4fb
+  timestamp: 2026-11-23T12:24:40.140976774Z
+  agent: aida
+  commit_sha: ff524ebd21fa22d5744dedb7f4dff6c3c37fad22
+  summary: 'PASS — TASK-3241. The generated worksheet has no formal Acceptance or Verify section. Its requirement description specifies one criterion. AC1 — Classify the branch-local [admission] wait_secs key as policy: verified by the sole inventory entry at scripts/config-trust.toml:574–575 in the landed tree, matched to the branch-local read in review_helpers.rs:42–43 and the bounded integer duration parser in admission_owner.rs:610–632. The entry carries the TASK-3241 trace. The implementer recorded a TOML assertion that failed before the entry and passed after it. Reviewed the complete pinned landed diff. The PR head is one commit behind main at 8018c42f8d5fed626fca38472d134bd12cf4b259. That base change touches two unrelated test sources and does not affect this criterion. GitHub reports successful FAST gates, FAST compile, Build (ubuntu-latest), and merge-hold-gate for the reviewed PR head. No local builds or tests were run. No actionable defects found.'
+  review_verdict: approved
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
@@ -109,3 +125,7 @@ filed_at:
   aida_build_sha: 29e77b85236
   vendor: claude
   session: 01a1fb77a5cf
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T12:24:40.072242315Z
+  completion_sha: ff524ebd21fa22d5744dedb7f4dff6c3c37fad22
