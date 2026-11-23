@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T05:17:09.519870683Z
+modified_at: 2026-11-23T05:17:14.017831159Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -137,6 +137,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 requires changes. The explicit operator gate, existing-lease check and selected release audit are present. Salvage verification can omit unpushed history, the unlink fallback can release a live worker, and termination evidence can be unavailable for historical or interrupted cleanup. All findings apply to the landed tree on pinned main 5470336d and are independent of its intervening forge changes. CI fast compile pending at review time.. No triage reason was given.'
   created_at: 2026-11-23T05:17:09.519868930Z
   modified_at: 2026-11-23T05:17:09.519868930Z
+- id: 01a206d6-3edb-7d30-8992-6c0e6b15785c
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2722):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 939d3ee50d12
+    Recorded: 2026-11-23T05:14:42.539689808+00:00
+    Findings:
+    1. verified_repair_salvage passes the literal complete as a second argument to UNPUSHED_COUNT_SCRIPT at line 3147. That script treats arguments after the base as commits to exclude. If a local ref named complete holds the only unpushed history, the verifier counts zero and skips checking the bundle. A patch with a missing or stale bundle then qualifies even though it cannot restore the ref. Match salvage_capped's argument list for each script and cover an unpushed side branch named complete with the bundle removed.
+    2. The host-unlink fallback at line 182 can mark a still-running worker ProvenDead. Headless launch stamps the child PID into the lease before best-effort lane registration. If registration is skipped or its write fails, unlink_session_lease ignores the lease's active_pid and holder identity and stamps termination anyway. Once the tree is moved, the absent receipt plus that timestamp suffices for release. Distinguish positively pre-spawn cleanup from a process-backed lease, and require corroborated termination for the latter. Cover a live stamped PID with no lane receipt.
+    3. AC1/AC3: an already-ended pre-upgrade lease cannot acquire the new lease_ended_at stamp. With a moved tree and a pre-launch failure or a receipt pruned by the old supervisor, release_evidence refuses even if historical host release evidence exists for that generation. The entry-48 test manufactures a worker exit receipt, and its receipt-free case performs a new unlink with the upgraded writer. Neither exercises recovery of the historical receipt-free shape. Verify the actual historical evidence and support an exact-generation terminal record from that path, while continuing to reject absence alone.
+    4. AC1: unlink_session_lease deletes the lease before acquiring RepairGuard, then logs a lock or save error and returns success. A concurrent doctor salvage check can hold the guard longer than the 10-second lock timeout. For a pre-launch reservation there is no worker receipt, so the sole evidence of release is permanently lost and retry cannot recreate it. Make removal recoverable across journal contention, failed persistence and interruption, and exercise a retry without a worker receipt.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T05:17:13.819075241Z
+  modified_at: 2026-11-23T05:17:13.819075241Z
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
