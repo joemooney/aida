@@ -1,0 +1,31 @@
+id: 01a20abc-3c9e-7a00-8212-178527b762a3
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1275
+title: 'Review follow-up: ci_probe.rs:661-670 counts the intentional budget pause toward the no-progress timer and r'
+description: |-
+  From BUG-2735
+  Reviewed sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
+
+  ci_probe.rs:661-670 counts the intentional budget pause toward the no-progress timer and returns NoSignal on idle expiry. A running check that normally re-arms that timer can complete during the pause and still cause phase 2 to stop with CiUnavailable (phase_driver_trait.rs:1776-1783) before the next budget reset. Keep the absolute deadline and distinguish throttled time from observed CI inactivity so the waiter can resume after the budget recovers.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T23:27:18.174762195Z
+modified_at: 2026-11-23T23:27:18.174762195Z
+req_type: Task
+tags:
+- carried-from:BUG-2735
+- finding-hash:1aca2c48
+- from-review:BUG-2735
+relationships:
+- rel_type: References
+  target_id: 01a20a77-76c1-7890-aba9-3ea04973958e
+  created_at: 2026-11-23T23:27:31.681110320Z
+filed_at:
+  code_sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
+  branch: pr-4464
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4e140498bc8
+  vendor: claude
+  session: 01a20ab7770a

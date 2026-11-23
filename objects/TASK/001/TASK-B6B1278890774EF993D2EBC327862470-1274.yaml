@@ -1,0 +1,31 @@
+id: 01a20abc-074f-7643-9f9d-01f990316ca9
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1274
+title: 'Review follow-up: ci_watch.rs:64-70 kills the interactive gh child with SIGKILL after printing the budget me'
+description: |-
+  From BUG-2735
+  Reviewed sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
+
+  ci_watch.rs:64-70 kills the interactive gh child with SIGKILL after printing the budget message. On terminals where gh enabled the alternate screen, that bypasses its screen restoration and leaves subsequent AIDA output on the alternate screen. Use bounded graceful cancellation that restores the terminal before printing the back-off. GitHub CLI handles SIGINT for that purpose. https://github.com/cli/cli/blob/v2.105.0/pkg/iostreams/iostreams.go#L361-L388
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T23:27:04.527642481Z
+modified_at: 2026-11-23T23:27:04.527642481Z
+req_type: Task
+tags:
+- carried-from:BUG-2735
+- finding-hash:a998c878
+- from-review:BUG-2735
+relationships:
+- rel_type: References
+  target_id: 01a20a77-76c1-7890-aba9-3ea04973958e
+  created_at: 2026-11-23T23:27:18.073073671Z
+filed_at:
+  code_sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
+  branch: pr-4464
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4e140498bc8
+  vendor: claude
+  session: 01a20ab7770a

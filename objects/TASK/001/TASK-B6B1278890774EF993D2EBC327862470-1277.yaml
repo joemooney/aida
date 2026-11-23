@@ -1,0 +1,31 @@
+id: 01a20abc-a714-78c2-9a7c-b5dc42ca63d6
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1277
+title: 'Review follow-up: The fake budget fixture at lines 5660-5725 covers the repository discovery helper, a main-'
+description: |-
+  From BUG-2735
+  Reviewed sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
+
+  The fake budget fixture at lines 5660-5725 covers the repository discovery helper, a main-watch pass, and a direct commit_checks call. It does not run the review-watch worker, auto-train discovery or startup monitor, the seat CI waits, or supervisor recovery. The direct commit reader also does not prove that an active train still reaches that reader under low budget. Add low-budget entry-point coverage which checks the reported skip, absence of watcher requests, and continued CI reads for an active train.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T23:27:45.428304564Z
+modified_at: 2026-11-23T23:27:45.428304564Z
+req_type: Task
+tags:
+- carried-from:BUG-2735
+- finding-hash:15da6582
+- from-review:BUG-2735
+relationships:
+- rel_type: References
+  target_id: 01a20a77-76c1-7890-aba9-3ea04973958e
+  created_at: 2026-11-23T23:27:58.953599011Z
+filed_at:
+  code_sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
+  branch: pr-4464
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4e140498bc8
+  vendor: claude
+  session: 01a20ab7770a
