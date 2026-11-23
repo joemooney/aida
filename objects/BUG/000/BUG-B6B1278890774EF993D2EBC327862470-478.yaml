@@ -9,12 +9,12 @@ description: |
   - AC1: When the preflight listener has hung up, preflight refuses within 10 s and the model process never starts. A test asserts the bound.
   - AC2: An open listener still completes preflight normally (positive control).
   - AC3: The refusal names the hangup as the reason.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-23T05:15:35.337539585Z
+modified_at: 2026-11-23T05:23:18.787859849Z
 req_type: Bug
 tags:
 - containment
@@ -120,6 +120,11 @@ comments:
   modified_at: 2026-11-23T04:11:25.809046294Z
   session_id: 01a20691314f
   harness_version: codex-cli 0.167.0
+- id: 01a206db-d083-7550-a6c9-34ea208f1808
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The supervisor now checks for listener hangup while the receive is in flight, and reports hangup when wrapper exit is also observable. The watchdog covers both refusal paths and checks that the shim receives no exec release. One containment regression gap remains in the open-listener control for BUG-2717 AC2. CI pending at review time.. No triage reason was given.'
+  created_at: 2026-11-23T05:23:18.787851988Z
+  modified_at: 2026-11-23T05:23:18.787851988Z
 history:
 - id: 01a2052b-ec01-7e52-b8ec-fc4cd8951a76
   author: joe
@@ -189,6 +194,13 @@ history:
   timestamp: 2026-11-23T05:16:18.783566013Z
   session_id: 01a206d1a300
   changes: []
+- id: 01a206db-d083-7550-a6c9-34d51face018
+  author: joe
+  timestamp: 2026-11-23T05:23:18.787836157Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
@@ -196,11 +208,3 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: aa567732958
   vendor: claude
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: The supervisor now checks for listener hangup while the receive is in flight, and reports hangup when wrapper exit is also observable. The watchdog covers both refusal paths and checks that the shim receives no exec release. One containment regression gap remains in the open-listener control for BUG-2717 AC2. CI pending at review time.
-  recovery_hint: address the review findings, move BUG-2717 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T05:15:35.337539585Z
