@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T05:38:36.280945866Z
+modified_at: 2026-11-23T05:51:57.305479631Z
 req_type: Bug
 tags:
 - ci
@@ -177,6 +177,11 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: NeedsAttention
+- id: 01a206f6-8a5c-7143-b939-224e551e8773
+  author: joe
+  timestamp: 2026-11-23T05:52:30.300950620Z
+  session_id: 01a206f1c086
+  changes: []
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -190,3 +195,11 @@ attention_reason:
   lean: Use the advisor same-tier-only rule and revise AC1, AC3 and the two-run expectation. Keep the three-run rerun case as the ready regression.
   raised_by: implementer
   raised_at: 2026-11-23T05:35:37.099278384Z
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: 'BUG-2723: AC1 FAIL. The train still relies on a per-name rollup that omits the successful FULL aggregate on incident PR #4391, and the landing and final exact-tip evaluators do not share a tier-aware selector. AC2 PARTIAL. The train reports the run ID and cancellation state, but the attempt, tier, conclusion and supersession evidence are incomplete and the exact-tip refusal has no run ID. AC3 PARTIAL. The regression covers a synthetic cancelled FAST plus passing FULL with both aggregates visible, but misses the production evidence shape and has a non-discriminating wrong-head fixture. AC4 PASS for the documented sequence, with the requested documentation assertion missing. The original PR head matches the pinned landed tree. Exact-head FAST gates, compile and Build passed; merge-hold-gate was pending at review time. No local builds or tests were run.'
+  recovery_hint: address the review findings, move BUG-2723 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T05:51:57.305479631Z
