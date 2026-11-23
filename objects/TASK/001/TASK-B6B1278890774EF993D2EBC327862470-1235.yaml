@@ -1,5 +1,6 @@
 id: 01a2072e-244f-7fc0-b0da-af02d06282e7
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1235
+agreed_id: TASK-3269
 title: 'Review follow-up: pickup_retry invokes preflight_queue_work_branch inside Store::transaction while holding t'
 description: |-
   From BUG-2720
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a205a9-7715-7ce3-a532-cf8c3ffde338
   created_at: 2026-11-23T06:53:29.650365418Z
+history:
+- id: 01a20732-d589-7b13-9b38-c540fb9fb22a
+  author: joe
+  timestamp: 2026-11-23T06:58:21.705672474Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 2fcffa9987591527cab7610b758675e6fe3844a7
   branch: pr-4413

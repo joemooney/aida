@@ -1,5 +1,6 @@
 id: 01a20731-ecee-7922-bacd-9d9888f90ff0
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1238
+agreed_id: TASK-3270
 title: 'Review follow-up: The round-three brief asks for the accepted attribution limit in the PR body. The implemen'
 description: |-
   From BUG-2721
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a2062b-0fa3-75c1-90d4-87fb646e1eb1
   created_at: 2026-11-23T06:57:39.137607563Z
+history:
+- id: 01a20733-145b-7a51-b1b6-9b2298eecdde
+  author: joe
+  timestamp: 2026-11-23T06:58:37.787372940Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 707d29be1157e87dba031c3422dbd451fec7e00b
   branch: pr-4402
