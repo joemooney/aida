@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-13T16:35:54.395394278Z
-modified_at: 2026-11-23T20:08:32.115816684Z
+modified_at: 2026-11-23T20:47:30.858449459Z
 req_type: Story
 tags:
 - mailbox
@@ -50,6 +50,17 @@ comments:
   modified_at: 2026-11-23T20:03:07.800208372Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a2a-03ff-7411-9ccb-78883d95566f
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 54e9220e1db9175dbb2c284241aed674328067f6 plus native working-tree changes. The origin/main merge-base diff is empty. No untracked additions.
+    AC1: [evidence: behavioral-test] aida-cli-lib/src/tests/story_1843_mailbox_view_tests.rs:1394 passed in lane job j20261123T203929200-2-0 (1 executed). Real sends, retained fixtures, Git worktree removal and binding inbox read verify original UUID cohort ownership, successor queue binding and missing-sidecar refusal. Reproduced the pre-fix disclosure with an installed CLI send, sidecar removal and inbox --peek in a temporary project.
+    Probes: aida-core/src/mailbox_logical.rs:2233 matches a direct canonical seat envelope after audience matching; broadcast keeps existing behavior. Multiple messages and distinct recipient UUIDs exercise cross-delivery isolation. Existing bounded retained-sidecar lookup and durable binding govern the read. The regression simulates the retained layout; retirement admission is outside this slice. Fixed test registration at the main checkout and classified the runtime fixture in scripts/ci-structural-exclusions.json:375. Store-writer and structural-selection checks passed. AC2 MCP sender seat and AC3 thread provenance deferred by advisor. No reviewer verdict.
+  created_at: 2026-11-23T20:47:30.858449459Z
+  modified_at: 2026-11-23T20:47:30.858449459Z
+  session_id: 01a20a05ec1a
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1e0f7-a8a4-7ca2-bd96-9443fc5daf0f
   author: joe
