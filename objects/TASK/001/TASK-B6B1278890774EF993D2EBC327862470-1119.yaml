@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. In a review-watch pass, observe a busy change, a refused change, then a whole-watcher stop. Assert that the final pass report retains the earlier busy count and refusal evidence and records the stop separately with its diagnostic.
   2. Processing stops at the whole-watcher failure. Preserve the bounded refusal sample, total refusal count, and existing suppression of a superseded image's report.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T09:43:03.058201739Z
-modified_at: 2026-11-23T16:56:44.193012457Z
+modified_at: 2026-11-23T17:32:40.175755449Z
 req_type: Task
 tags:
 - carried-from:BUG-2674
@@ -91,6 +91,12 @@ comments:
   modified_at: 2026-11-23T16:56:44.193012457Z
   session_id: 01a209413d50
   harness_version: codex-cli 0.167.0
+- id: 01a20977-8f6f-7d92-b1bb-906abaa1e989
+  author: aida-publication-done
+  content: Implementer push 516232fa3191 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T17:32:40.175754887Z
+  modified_at: 2026-11-23T17:32:40.175754887Z
+  session_id: 01a209413d50
 history:
 - id: 01a1f33a-a6c2-7ee0-a721-a9fc4dbfdfd6
   author: joe
@@ -153,6 +159,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20977-8f6f-7d92-b1bb-9059ce880c4e
+  author: aida-publication-done
+  timestamp: 2026-11-23T17:32:40.175752116Z
+  session_id: 01a209413d50
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: d8460c9ac522f8f36a3a1f85e3d3f2adffcf0ad0
