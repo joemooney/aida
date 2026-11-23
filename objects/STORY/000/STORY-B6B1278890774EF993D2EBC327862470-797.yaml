@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-23T02:29:37.835655766Z
+modified_at: 2026-11-23T02:30:00.042331352Z
 req_type: Story
 tags:
 - landing
@@ -1278,6 +1278,18 @@ comments:
   created_at: 2026-11-23T01:32:59.903919530Z
   modified_at: 2026-11-23T01:32:59.903919530Z
   session_id: 01a205d752af
+- id: 01a2063d-55d3-7bd3-8d05-a0dcdbb62212
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 19:29):
+    # STORY-2897 S1b / PR #4401: CONFLICT REPAIR ONLY (advisor-122 ruling 2026-11-22 19:35 MST; relayed by product-15). Lane: CODEX. Integration track.
+
+    PR #4401 (base: integration) conflicts with integration. Merge origin/integration into story-2897-s1b and resolve the conflicts, keeping integration's changes plus S1b's intent per the S1b brief on STORY-2897. No rebase, no force-push, no new scope. The integration seat checks the merged head against the S1b brief before review.
+    cargo fmt; one targeted cargo run of the tests in the conflicted files; `make check-ci-fast`; push. COMMIT your work. The PR keeps "(Refs STORY-2897)" last.
+  created_at: 2026-11-23T02:30:00.042331352Z
+  modified_at: 2026-11-23T02:30:00.042331352Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1ec73-22b7-7990-bdb1-18cb268aa6a5
   author: joe
