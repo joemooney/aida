@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. In an isolated fixture, set contained mode, omit the transcript at the recorded cwd, and place the sole matching transcript at another eligible worktree. Assert that recovery reports that contained resume requires the recorded worktree and starts no vendor process.
   2. With the same transcript layout in uncontained mode, recover the eligible worktree. With the transcript at the recorded cwd in contained mode, accept the recorded cwd.
-status: NeedsAttention
+status: Approved
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:27.302758155Z
-modified_at: 2026-11-23T17:38:09.662507067Z
+modified_at: 2026-11-23T20:39:08.472400470Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -108,6 +108,11 @@ comments:
   created_at: 2026-11-23T17:29:57.109339427Z
   modified_at: 2026-11-23T17:29:57.109339427Z
   session_id: 01a209303cc3
+- id: 01a20a22-47b8-7973-b9f2-8cc1a4ad6f06
+  author: joe
+  content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: TASK-3151 (completing spec) — FAIL.. No triage reason was given.'
+  created_at: 2026-11-23T20:39:08.472391710Z
+  modified_at: 2026-11-23T20:39:08.472391710Z
 history:
 - id: 01a1f2d9-8f75-7071-a403-a891c0550eff
   author: joe
@@ -191,6 +196,13 @@ history:
   - field_name: status
     old_value: Done
     new_value: NeedsAttention
+- id: 01a20a22-47b8-7973-b9f2-8cba0032f3dd
+  author: joe
+  timestamp: 2026-11-23T20:39:08.472386187Z
+  changes:
+  - field_name: status
+    old_value: NeedsAttention
+    new_value: Approved
 execution_mode: drain
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
@@ -201,18 +213,3 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
-failure_reason:
-  phase: reviewer
-  phase_index: 3
-  kind: verdict:request-changes
-  detail: |-
-    TASK-3151 (completing spec) — FAIL.
-    TASK-b6b1278890774ef993d2ebc327862470-1111.acc246d2 — unverified
-    TASK-b6b1278890774ef993d2ebc327862470-1111.ac2584bd — unverified
-
-    Source review of cargo test -p aida-cli-lib bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript confirms the refusal diagnostic and vendor-start marker assertions, but the contained path still reads policy from the invoking checkout. The uncontained positive control checks the actual alternate launch cwd. The contained positive control only checks availability and the registry value.
-
-    The full landed diff was reviewed against protected main ef906ec7464cf1b3100c4383085280c203722941. The original PR head is four commits behind. Neither finding depends on code changed by those four commits. CI fast gates and merge-hold passed, fast compilation was pending, and the full test shard was skipped. Review used source and existing CI evidence.
-  recovery_hint: address the review findings, move TASK-3151 back to In Progress, and clear the PR hold only after approval
-  shelved_by: advisor
-  shelved_at: 2026-11-23T17:38:09.662507067Z
