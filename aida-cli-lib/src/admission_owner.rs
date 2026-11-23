@@ -1247,6 +1247,52 @@ mod tests {
         assert!(land.borrow().is_some());
     }
 
+    // trace:BUG-2732 | ai:codex
+    #[test]
+    fn bug2732_manual_train_releases_stale_legacy_receipts() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path();
+        let dir = directory(root);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            root.join(".aida/config.toml"),
+            "[admission]\nwait_secs = 0\n",
+        )
+        .unwrap();
+
+        let live = acquire(root, "legacy auto-train", true).unwrap();
+        let template: Receipt =
+            serde_json::from_slice(&std::fs::read(&live.receipt).unwrap()).unwrap();
+        for purpose in ["legacy review-watch", "legacy auto-train"] {
+            let mut stale = template.clone();
+            stale.token = uuid::Uuid::new_v4().to_string();
+            stale.purpose = purpose.into();
+            stale.identity.starttime += 1; // Same PID, different process lifetime.
+            write_atomic(
+                &dir.join(format!("{}.json", stale.token)),
+                &serde_json::to_vec(&stale).unwrap(),
+            )
+            .unwrap();
+        }
+        let error = manual_train_admission(root, false).err().unwrap();
+        assert!(error.downcast_ref::<AdmissionBusy>().is_some(), "{error}");
+        assert!(live.receipt.exists());
+        assert_eq!(
+            std::fs::read_dir(&dir)
+                .unwrap()
+                .filter(|e| e
+                    .as_ref()
+                    .unwrap()
+                    .path()
+                    .extension()
+                    .is_some_and(|x| x == "json"))
+                .count(),
+            1
+        );
+        drop(live);
+        assert!(manual_train_admission(root, false).unwrap().is_some());
+    }
+
     /// A waiting manual train asks only the auto-train to yield; review
     /// controllers keep their claim and coexist with it.
     // trace:BUG-2703 | ai:claude
