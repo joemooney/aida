@@ -69,8 +69,12 @@ impl Evidence for Unapproved {
     fn required_checks(&self) -> Result<Vec<String>> {
         Ok(Vec::new())
     }
-    fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
-        Ok((change.behind.unwrap(), change.overlap.unwrap()))
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool, Option<bool>)> {
+        Ok((
+            change.behind.unwrap(),
+            change.overlap.unwrap(),
+            change.conflict,
+        ))
     }
     fn head(&self, change: &forge::Change) -> Result<String> {
         Ok(change.head.clone())
@@ -387,7 +391,7 @@ impl Evidence for CarriedOver {
     fn required_checks(&self) -> Result<Vec<String>> {
         Unapproved.required_checks()
     }
-    fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool, Option<bool>)> {
         Unapproved.base(change)
     }
     fn head(&self, change: &forge::Change) -> Result<String> {

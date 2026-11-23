@@ -103,11 +103,15 @@ pub(super) trait Evidence {
     fn required_checks(&self) -> Result<Vec<String>>;
     /// Commits behind the base, and whether the base's changes overlap the
     /// change's paths.
-    fn base(&self, change: &forge::Change) -> Result<(u64, bool)>;
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool, Option<bool>)>;
     /// Whether policy permits an overlapping stale head with a verified clean merge.
     // trace:TASK-3108 | ai:codex
     fn clean_stale_overlap(&self, _change: &forge::Change) -> Result<bool> {
         Ok(false)
+    }
+    // trace:BUG-2725 | ai:codex
+    fn ci_base_freshness(&self) -> crate::landing_policy::CiBaseFreshness {
+        Default::default()
     }
     /// The change's head, re-read from the forge.
     fn head(&self, change: &forge::Change) -> Result<String>;
@@ -128,12 +132,21 @@ pub(super) fn evaluate(
         Ok(None) => {}
         Err(error) => return not(format!("merge-hold evidence unreadable: {error:#}")),
     }
-    let (behind, overlap) = match evidence.base(change) {
+    let (behind, overlap, conflict) = match evidence.base(change) {
         Ok(base) => base,
         Err(error) => return not(format!("base evidence unknown: {error:#}")),
     };
     // trace:TASK-3108 | ai:codex
-    let clean_stale_overlap = if behind > 0 && overlap {
+    let clean_policy = behind > 0
+        && change.base == crate::land::MAIN_BRANCH
+        && evidence.ci_base_freshness() == crate::landing_policy::CiBaseFreshness::CleanMerge;
+    let clean_stale_overlap = if clean_policy {
+        match conflict {
+            Some(false) => true,
+            Some(true) => return not("merge-tree reports a conflict with the base".into()),
+            None => return not("base merge evidence unknown".into()),
+        }
+    } else if behind > 0 && overlap {
         match evidence.clean_stale_overlap(change) {
             Ok(clean) => clean,
             Err(error) => return not(format!("base merge evidence unknown: {error:#}")),
@@ -160,6 +173,18 @@ pub(super) fn evaluate(
             "CI evidence is for {}, not the head",
             short(&checks.sha)
         ));
+    }
+    if clean_policy
+        && crate::landing_policy::full_ci_run(checks.checks.iter().map(|row| {
+            (
+                row.name.as_str(),
+                row.outcome == crate::forge::CheckOutcome::Passed,
+                row.run_id.as_deref().and_then(|id| id.parse().ok()),
+            )
+        }))
+        .is_none()
+    {
+        return not("stale base requires successful full-tier CI on the exact head".into());
     }
     let required = match evidence.required_checks() {
         Ok(required) => required,
@@ -294,6 +319,9 @@ impl Live<'_> {
 }
 
 impl Evidence for Live<'_> {
+    fn ci_base_freshness(&self) -> crate::landing_policy::CiBaseFreshness {
+        crate::landing_policy::load(self.root).ci_base_freshness
+    }
     fn approval(&self, change: &forge::Change) -> std::result::Result<Approval, String> {
         live_approval(self.root, change)
     }
@@ -365,14 +393,15 @@ impl Evidence for Live<'_> {
     fn required_checks(&self) -> Result<Vec<String>> {
         required_checks(self.root)
     }
-    fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool, Option<bool>)> {
         if let (Some(behind), Some(overlap)) = (change.behind, change.overlap) {
-            return Ok((behind, overlap));
+            return Ok((behind, overlap, change.conflict));
         }
         let probed = self.probe_base(change)?;
         Ok((
             probed.behind.context("behind count unknown")?,
             probed.overlap.context("overlap unknown")?,
+            probed.conflict,
         ))
     }
     // trace:TASK-3108 | ai:codex

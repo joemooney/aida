@@ -933,7 +933,7 @@ fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
     let repo = crate::review_watch::forge::Repository::load(&root).unwrap();
     let change = pr("main", "feature");
 
-    let observed = ci_base::observe(&root, &repo, &rollup, &change, TIP).unwrap();
+    let observed = ci_base::observe(&root, &repo, &rollup, &change, TIP, false).unwrap();
     assert!(
         matches!(&observed, Ci::StaleBase(detail) if detail.contains("CI run 20")),
         "{observed:?}"
@@ -949,7 +949,7 @@ fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
     assert_eq!(row.action, Action::UpdateBranch);
 
     // The run tested the current base: its failure is the change's own.
-    let observed = ci_base::observe(&root, &repo, &rollup, &change, OLD).unwrap();
+    let observed = ci_base::observe(&root, &repo, &rollup, &change, OLD, false).unwrap();
     assert!(matches!(observed, Ci::Red(_)), "{observed:?}");
     let row = derive(
         &change,

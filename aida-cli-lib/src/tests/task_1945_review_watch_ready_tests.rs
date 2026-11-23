@@ -59,6 +59,7 @@ fn approval() -> Approval {
 
 /// Evidence snapshots; every reader is a value or an error.
 struct Fake {
+    freshness: crate::landing_policy::CiBaseFreshness,
     stale_policy: crate::pr_rebase::StaleBasePolicy,
     approval: std::result::Result<Approval, String>,
     review: Option<String>,
@@ -71,6 +72,7 @@ impl Fake {
     fn ready() -> Self {
         let head = format!("{HEAD:040x}");
         Self {
+            freshness: Default::default(),
             stale_policy: Default::default(),
             approval: Ok(approval()),
             review: None,
@@ -82,6 +84,9 @@ impl Fake {
 }
 
 impl Evidence for Fake {
+    fn ci_base_freshness(&self) -> crate::landing_policy::CiBaseFreshness {
+        self.freshness
+    }
     fn approval(&self, _: &forge::Change) -> std::result::Result<Approval, String> {
         self.approval.clone()
     }
@@ -97,8 +102,12 @@ impl Evidence for Fake {
     fn required_checks(&self) -> Result<Vec<String>> {
         Ok(vec![CI_AGGREGATOR_CHECK.to_string()])
     }
-    fn base(&self, change: &forge::Change) -> Result<(u64, bool)> {
-        Ok((change.behind.unwrap(), change.overlap.unwrap()))
+    fn base(&self, change: &forge::Change) -> Result<(u64, bool, Option<bool>)> {
+        Ok((
+            change.behind.unwrap(),
+            change.overlap.unwrap(),
+            change.conflict,
+        ))
     }
     fn clean_stale_overlap(&self, change: &forge::Change) -> Result<bool> {
         if self.stale_policy == crate::pr_rebase::StaleBasePolicy::RefuseOnOverlap {
@@ -882,7 +891,7 @@ impl Evidence for Required {
     fn required_checks(&self) -> Result<Vec<String>> {
         self.1.clone().map_err(|e| anyhow::anyhow!(e))
     }
-    fn base(&self, c: &forge::Change) -> Result<(u64, bool)> {
+    fn base(&self, c: &forge::Change) -> Result<(u64, bool, Option<bool>)> {
         self.0.base(c)
     }
     fn head(&self, c: &forge::Change) -> Result<String> {
@@ -1692,4 +1701,30 @@ fn stale_overlap_live_evidence_reads_project_policy() {
     )
     .unwrap();
     assert!(live.clean_stale_overlap(&c).is_err());
+}
+
+// trace:BUG-2725 | ai:codex
+#[test]
+fn bug_2725_ready_only_with_clean_merge_and_full_head_ci() {
+    let mut evidence = Fake::ready();
+    let mut c = change(2, false);
+    c.conflict = Some(false);
+    assert_eq!(
+        ready::evaluate(&c, &evidence).0,
+        Readiness::ReadyAfterUpdateBranch { behind: 2 }
+    );
+    evidence.freshness = crate::landing_policy::CiBaseFreshness::CleanMerge;
+    assert!(not_ready_with(&evidence, &c).contains("full-tier"));
+    let rows = &mut evidence.ci.as_mut().unwrap().checks;
+    rows.push(check("ci-tier: full", CheckOutcome::Passed));
+    for row in rows {
+        row.run_id = Some("23".into());
+    }
+    for overlap in [true, false] {
+        c.overlap = Some(overlap);
+        c.conflict = Some(false);
+        assert_eq!(ready::evaluate(&c, &evidence).0, Readiness::Ready);
+        c.conflict = Some(true);
+        assert!(not_ready_with(&evidence, &c).contains("conflict"));
+    }
 }

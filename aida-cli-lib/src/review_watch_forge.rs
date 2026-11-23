@@ -458,7 +458,12 @@ impl Repository {
             };
             let overlap = paths_overlap(&names(&base)?, &names(&head)?);
             // trace:STORY-2821 | ai:claude
-            let conflict = overlap
+            // trace:BUG-2725 | ai:codex
+            let verify_merge = overlap
+                || (branch == crate::land::MAIN_BRANCH
+                    && crate::landing_policy::load(root).ci_base_freshness
+                        == crate::landing_policy::CiBaseFreshness::CleanMerge);
+            let conflict = verify_merge
                 .then(|| merge_conflicts(root, &base, &head))
                 .flatten();
             Ok((overlap, behind, conflict))

@@ -39,7 +39,7 @@ const MAX_CONTENT_ROUNDS: usize = 3;
 /// The branch whose changes the integration seat lands.
 pub(crate) const INTEGRATION_BRANCH: &str = "integration";
 /// The branch trains land on.
-const MAIN_BRANCH: &str = "main";
+pub(crate) const MAIN_BRANCH: &str = "main";
 const TRAIN_PREFIX: &str = "train/";
 /// A promotion of integration to main. It is reviewed and boards a train
 /// like any change, and no lane ever reworks it.
@@ -1160,7 +1160,9 @@ impl Evidence for Live {
     fn ci(&self, pr: &Pr) -> std::result::Result<Ci, String> {
         if let Some(rollup) = self.github_checks.get(&pr.id) {
             let (_, base) = self.pinned(pr)?;
-            return ci_base::observe(&self.root, &self.repo, rollup, pr, base);
+            let clean_merge =
+                pr.base == MAIN_BRANCH && self.merge_trees.borrow().contains_key(&pr.id);
+            return ci_base::observe(&self.root, &self.repo, rollup, pr, base, clean_merge);
         }
         pr.ci
             .clone()

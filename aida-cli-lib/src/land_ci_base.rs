@@ -15,6 +15,7 @@ pub(super) fn observe(
     rollup: &Value,
     pr: &Pr,
     base: &str,
+    clean_merge: bool,
 ) -> Result<Ci, String> {
     let slug = repo.github_slug().ok_or("GitHub repository is unknown")?;
     let (_, project) = slug.split_once('/').ok_or("GitHub project is unknown")?;
@@ -24,7 +25,25 @@ pub(super) fn observe(
             "actions/runs/{run}"
         ))?)?)
     });
-    verify(ci, &checks, &slug, base, |job| {
+    // The pinned merge-tree proof was produced by Live::conflict for this pass.
+    // trace:BUG-2725 | ai:codex
+    let allow_clean = clean_merge
+        && crate::landing_policy::load(root).ci_base_freshness
+            == crate::landing_policy::CiBaseFreshness::CleanMerge;
+    let require_full = if allow_clean {
+        let ancestry = super::git(root, &["merge-base", "--is-ancestor", base, &pr.head], 30)
+            .map_err(|e| format!("{e:#}"))?;
+        match ancestry.status.code() {
+            Some(0) => false,
+            Some(1) => true,
+            _ => {
+                return Err("could not determine whether the pinned head is behind its base".into())
+            }
+        }
+    } else {
+        false
+    };
+    verify_policy(ci, &checks, &slug, base, require_full, |job| {
         let bytes = api(&format!("actions/jobs/{job}/logs"))?;
         let log = String::from_utf8_lossy(&bytes);
         let merge =
@@ -82,11 +101,23 @@ fn checkout_job(check: &Value) -> bool {
     )
 }
 
+#[cfg(test)]
 fn verify(
     ci: Ci,
     checks: &[&Value],
     slug: &str,
     base: &str,
+    tested_base: impl FnMut(u64) -> Result<String>,
+) -> Result<Ci> {
+    verify_policy(ci, checks, slug, base, false, tested_base)
+}
+
+fn verify_policy(
+    ci: Ci,
+    checks: &[&Value],
+    slug: &str,
+    base: &str,
+    allow_clean: bool,
     mut tested_base: impl FnMut(u64) -> Result<String>,
 ) -> Result<Ci> {
     let mut runs = BTreeSet::new();
@@ -116,6 +147,24 @@ fn verify(
         }
     }
     ensure!(runs.len() <= MAX_RUNS, "too many active CI runs to verify");
+    if allow_clean {
+        let full = crate::landing_policy::full_ci_run(
+            checks
+                .iter()
+                .filter(|row| check_text(row, "workflowName") == "CI")
+                .map(|row| {
+                    (
+                        row["name"].as_str().unwrap_or(""),
+                        row["conclusion"] == "SUCCESS",
+                        check_link(row, slug).map(|(owner, _)| owner),
+                    )
+                }),
+        );
+        ensure!(
+            ci == Ci::Green && full.is_some_and(|id| runs.contains(&id)),
+            "stale base requires successful full-tier CI on the exact head"
+        );
+    }
     let mut missing = None;
     for run in runs {
         let result = checks
@@ -128,6 +177,9 @@ fn verify(
             .and_then(&mut tested_base);
         match result {
             Ok(parent) if !parent.eq_ignore_ascii_case(base) => {
+                if allow_clean {
+                    continue;
+                }
                 return Ok(Ci::StaleBase(format!(
                     "CI run {run} tested base {}, current base is {}",
                     short(&parent),
@@ -212,6 +264,47 @@ mod tests {
             "startedAt": start,
             "detailsUrl": format!("https://{SLUG}/actions/runs/{run}/job/{job}"),
         })
+    }
+
+    // trace:BUG-2725 | ai:codex
+    #[test]
+    fn bug_2725_only_verified_full_run_may_use_clean_merge() {
+        use crate::landing_policy::{from_body, CiBaseFreshness};
+        let rows = [
+            check(CI_AGGREGATOR_CHECK, "SUCCESS", 3, 1, "a"),
+            check("CI (gates)", "SUCCESS", 3, 2, "a"),
+            check("ci-tier: full", "SUCCESS", 3, 3, "a"),
+        ];
+        let checks: Vec<_> = rows.iter().collect();
+        for (setting, stale) in [
+            (None, true),
+            (Some("strict"), true),
+            (Some("invalid"), true),
+            (Some("clean-merge"), false),
+        ] {
+            let body = setting.map(|v| format!("[landing]\nci_base_freshness = '{v}'"));
+            let clean = from_body(body.as_deref()).ci_base_freshness == CiBaseFreshness::CleanMerge;
+            let ci =
+                verify_policy(Ci::Green, &checks, SLUG, BASE, clean, |_| Ok(OLD.into())).unwrap();
+            assert_eq!(matches!(ci, Ci::StaleBase(_)), stale);
+            if !stale {
+                assert_eq!(ci, Ci::Green);
+            }
+        }
+        assert!(verify_policy(Ci::None, &[], SLUG, BASE, true, |_| unreachable!()).is_err());
+        let newer_fast = check("ci-tier: fast", "SUCCESS", 4, 4, "b");
+        let mut mixed = checks.clone();
+        mixed.push(&newer_fast);
+        assert!(verify_policy(Ci::Green, &mixed, SLUG, BASE, true, |_| Ok(OLD.into())).is_err());
+        assert!(verify_policy(
+            Ci::Green,
+            &checks[..2],
+            SLUG,
+            BASE,
+            true,
+            |_| Ok(OLD.into())
+        )
+        .is_err());
     }
 
     #[test]
