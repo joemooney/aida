@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:45:10.982103610Z
-modified_at: 2026-11-23T22:08:46.790050698Z
+modified_at: 2026-11-23T22:13:29.535918366Z
 req_type: Task
 tags:
 - doctor
@@ -44,6 +44,15 @@ comments:
   modified_at: 2026-11-23T21:47:47.990611216Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a78-aadf-7a71-8022-e814714e4dd5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 77e36a0a3ccb50aa43acd328ce3277ff71b3b409 plus native worktree diff. Integration base includes #4460. AC1: [evidence: behavioral-test] mailbox_cmd.rs:695 and mail_backlog.rs:246 use the same report. AC2: [evidence: behavioral-test] story_1843_mailbox_view_tests.rs:1486 verifies hidden body, count, exact ID, inspection command and doctor finding after sender retirement. Targeted run in progress. Probes: sorted unique IDs from bounded lookup, safe ID alphabet, deleted replicas suppressed, retained successes and failed lookups excluded. Doctor inventories IDs without reader keys or a recipient UUID. No ownership or ACK behavior changed. No untracked additions. Operator inspection command covers the current checkout and canonical store; run it in the source checkout for local-only mail.
+  created_at: 2026-11-23T22:13:29.535918366Z
+  modified_at: 2026-11-23T22:13:29.535918366Z
+  session_id: 01a20a73aa39
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a5f-1ffd-7a60-89c4-efc8c7468411
   author: joe
