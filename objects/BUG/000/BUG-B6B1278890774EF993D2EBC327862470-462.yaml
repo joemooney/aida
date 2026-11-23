@@ -14,7 +14,7 @@ priority: Low
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-19T03:01:08.400632766Z
-modified_at: 2026-11-23T13:12:45.619264477Z
+modified_at: 2026-11-23T13:12:53.387786530Z
 req_type: Bug
 comments:
 - id: 01a20888-147b-7db2-9ad5-b34d4c43378d
@@ -38,6 +38,11 @@ comments:
   content: Draft to Approved disposition RATIFIED by advisor-122 at 06:15 (2026-11-23); routed into the promotion-26 integration bundle (product-15).
   created_at: 2026-11-23T13:12:45.619264477Z
   modified_at: 2026-11-23T13:12:45.619264477Z
+- id: 01a20889-b98b-7120-aec9-442b6d1a4019
+  author: joe
+  content: 'GUARD (advisor-122 06:15): this bundle fix changes lease refusal TEXT only. If the lane needs to change lease/claim LOGIC, it punts (that is strict tier, not bundle material).'
+  created_at: 2026-11-23T13:12:53.387786530Z
+  modified_at: 2026-11-23T13:12:53.387786530Z
 history:
 - id: 01a20885-7dbc-7893-863c-34ed6a75a6ce
   author: joe
