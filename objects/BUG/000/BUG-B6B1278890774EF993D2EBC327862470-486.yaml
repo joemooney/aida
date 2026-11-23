@@ -1,0 +1,32 @@
+id: 01a20677-5d2f-7d72-a29f-a485e55633df
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-486
+agreed_id: BUG-2725
+title: '[landing] ci_base_freshness = strict|clean-merge knob: a clean-merge-behind PR is not held STALE-CI-BASE or sent to update-branch (default strict)'
+description: |
+  P1 throughput knob (advisor-122 ruling 2026-11-22 20:40 MST under the operator's "do anything and everything to increase throughput" direction; filed by product-15). Main landed 30/30/48 on Nov 17-19, 12 on Nov 20 and 4 on Nov 22. BUG-2690 (#4301, Nov 19) rejects CI on a stale base, which SERIALIZES landings: every landing re-stales every open PR (STALE-CI-BASE), and each then needs update-branch, a fresh FAST run, a ci:full relabel and a full CI run before the train boards it. On 2026-11-22 all 12 open PRs sat STALE-CI-BASE, and the relabel dance created ghost reds (BUG-2723). Code: aida-cli-lib/src/land.rs and land_run.rs (STALE-CI-BASE), review_watch_ready.rs ("ready to ship after its branch is updated").
+
+  Per project policy (process changes ship as per-project knobs, default = old behaviour):
+
+  ## Acceptance
+  - AC1: New setting `[landing] ci_base_freshness = "strict" | "clean-merge"`, default "strict" (today's behaviour, unchanged, with a test). With "clean-merge", a PR whose update from main would be a CLEAN merge (`git merge-tree --write-tree` reports no conflict) is NOT held STALE-CI-BASE and NOT sent to update-branch. It may board the train, whose own main+squash CI is the gate. Head-exact full-tier CI on the PR is still required. A PR whose update would CONFLICT is still held.
+  - AC2: review_watch_ready's "ready to ship after its branch is updated" follows the same setting. Tests cover strict (unchanged), clean-merge with a clean merge (ready, no update-branch), and clean-merge with a conflict (held).
+  Size: target <=300 changed lines (small-PR rule). Strict tier? No: it's landing policy, standard tier.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T03:33:35.663826229Z
+modified_at: 2026-11-23T03:33:35.663826229Z
+req_type: Bug
+tags:
+- knob
+- landing
+- p1
+- throughput
+filed_at:
+  code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 215313b8d3a
+  vendor: claude
