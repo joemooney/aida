@@ -11,12 +11,12 @@ description: |
   ## Acceptance
   1. In an isolated fixture, set contained mode, omit the transcript at the recorded cwd, and place the sole matching transcript at another eligible worktree. Assert that recovery reports that contained resume requires the recorded worktree and starts no vendor process.
   2. With the same transcript layout in uncontained mode, recover the eligible worktree. With the transcript at the recorded cwd in contained mode, accept the recorded cwd.
-status: Done
+status: Completed
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:27.302758155Z
-modified_at: 2026-11-23T22:07:16.837486688Z
+modified_at: 2026-11-23T23:46:56.024486998Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -274,6 +274,24 @@ history:
   - field_name: status
     old_value: InProgress
     new_value: Done
+- id: 01a20ace-3552-7652-b616-8a9f4e9c68d9
+  author: aida-auto-bump
+  timestamp: 2026-11-23T23:46:55.954855402Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: Completed
+processing_record:
+- id: 01a20ace-3598-7833-a2a6-dc6738f53c5f
+  timestamp: 2026-11-23T23:46:56.024484672Z
+  agent: aida
+  commit_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
+  summary: 'TASK-3151 — PASS. AC1: The isolated scratch-cwd fixture exercises latest resume in contained mode with the sole transcript in an eligible alternate worktree. It asserts the recorded-worktree refusal and checks that the fake Claude executable never starts, including for a version probe. AC2: With the transcript at the recorded cwd, the production resolver returns that exact cwd in contained mode. With the alternate-only layout restored in uncontained mode, the granted resume receipt confirms the alternate cwd and resume arguments. Both prior findings are resolved. Reviewed the landed diff on pinned main 4e140498bc8d425330633234bec803e5f8584ca0 (landed tree f34c27c9e48b6a727be23534fab3e2a55bba434f). The intervening main-watch commit does not touch these paths. The implementer reported a passing focused run. CI pending at review time.'
+  punted:
+  - 'punted: TASK-3151 (completing spec) — FAIL. TASK-b6b1278890774ef993d2ebc327862470-1111.acc246d2 — unverified TASK-b6b1278890774ef993d2ebc327862470-1111.ac2584bd — unverified Source review of cargo test -p aida-cli-lib bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript confirms the refusal diagnostic and vendor-start marker assertions, but the contained path still reads policy from the invoking checkout. The uncontained positive control checks the actual alternate launch cwd. The contained positive control only checks availability and the registry value. The full landed diff was reviewed against protected main ef906ec7464cf1b3100c4383085280c203722941. The original PR head is four commits behind. Neither finding depends on code changed by those four commits. CI fast gates and merge-hold passed, fast compilation was pending, and the full test shard was skipped. Review used source and existing CI evidence.'
+  review_verdict: approved
 execution_mode: drain
 filed_at:
   code_sha: cfbc140e9ee323c5889f1c8fb93c93ba43fecbb0
@@ -284,3 +302,7 @@ filed_at:
   vendor: claude
   session: 01a1ef34-1ce2-7c60-b875-1d93f9457c72
   harness_version: 2.1.327 (Claude Code)
+implementation_info:
+  implemented: false
+  completed_at: 2026-11-23T23:46:55.954848001Z
+  completion_sha: c78b5f8acd2b0eafdc5236b2ea0c4f87a7bc3a89
