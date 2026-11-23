@@ -70,6 +70,30 @@ pub(crate) const CI_AGGREGATOR_CHECK: &str = "Build (ubuntu-latest)";
 // trace:STORY-2809 | ai:claude
 const LABEL_EVENT_MARKER: &str = "label event (CI tier unchanged)";
 
+// trace:BUG-2723 | ai:codex
+pub(crate) fn ci_run_identity(
+    run: &serde_json::Value,
+    id: u64,
+    expected_head: Option<&str>,
+) -> Option<(u64, String, u64, String)> {
+    if run["id"].as_u64()? != id || run["event"].as_str()? != "pull_request" {
+        return None;
+    }
+    let sha = run["head_sha"].as_str()?;
+    if sha.len() != 40
+        || !sha.bytes().all(|byte| byte.is_ascii_hexdigit())
+        || expected_head.is_some_and(|head| !sha.eq_ignore_ascii_case(head))
+    {
+        return None;
+    }
+    Some((
+        run["workflow_id"].as_u64()?,
+        sha.to_ascii_lowercase(),
+        run["head_repository"]["id"].as_u64()?,
+        run["head_branch"].as_str()?.to_owned(),
+    ))
+}
+
 /// Map cancelled FAST runs to their newest FULL replacement on the same head.
 /// Check names nominate candidates; Actions metadata establishes ownership.
 // trace:BUG-2692 | ai:codex
@@ -96,23 +120,8 @@ pub(crate) fn replaced_fast_runs<'a>(
     }
     let mut identity = |id| {
         let run = metadata(id).ok()?;
-        if run["id"].as_u64()? != id || run["event"].as_str()? != "pull_request" {
-            return None;
-        }
-        let sha = run["head_sha"].as_str()?;
-        if sha.len() != 40
-            || !sha.bytes().all(|byte| byte.is_ascii_hexdigit())
-            || expected_head.is_some_and(|head| !sha.eq_ignore_ascii_case(head))
-        {
-            return None;
-        }
         Some((
-            (
-                run["workflow_id"].as_u64()?,
-                sha.to_ascii_lowercase(),
-                run["head_repository"]["id"].as_u64()?,
-                run["head_branch"].as_str()?.to_owned(),
-            ),
+            ci_run_identity(&run, id, expected_head)?,
             match run.get("conclusion")? {
                 serde_json::Value::Null => false,
                 value => value.as_str()? == "cancelled",

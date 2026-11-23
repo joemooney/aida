@@ -817,7 +817,68 @@ enum TrainCiReadiness {
 }
 
 /// The CI workflow's aggregate check: red whenever any lane is red or cancelled.
-const TRAIN_CI_AGGREGATE: &str = "Build (ubuntu-latest)";
+const TRAIN_CI_AGGREGATE: &str = crate::forge::CI_AGGREGATOR_CHECK;
+
+/// Retire a settled CI run only against a successful aggregate from a newer
+/// completed run of its tier, or FULL replacing FAST, at the pinned identity.
+// trace:BUG-2723 | ai:codex
+fn select_train_ci_runs(
+    rows: &mut Vec<crate::ci_gate::CheckRow>,
+    head: &str,
+    mut metadata: impl FnMut(u64) -> Option<serde_json::Value>,
+) {
+    use std::collections::{BTreeMap, BTreeSet};
+    let mut tiers = BTreeMap::new();
+    for row in rows.iter().filter(|row| row.workflow == "CI") {
+        let full = match row.name.as_str() {
+            "ci-tier: fast" => false,
+            "ci-tier: full" => true,
+            _ => continue,
+        };
+        if let Some(id) = row.run_id.as_deref().and_then(|id| id.parse::<u64>().ok()) {
+            tiers.entry(id).or_insert_with(BTreeSet::new).insert(full);
+        }
+    }
+    if tiers.len() < 2 {
+        return;
+    }
+    let mut newest = BTreeSet::new();
+    let mut superseded = BTreeSet::new();
+    for (id, tiers) in tiers.into_iter().rev() {
+        if tiers.len() != 1 {
+            continue;
+        }
+        let full = tiers.contains(&true);
+        let Some(run) = metadata(id) else { continue };
+        let Some(key) = crate::forge::ci_run_identity(&run, id, Some(head)) else {
+            continue;
+        };
+        if run["status"] != "completed" || run["conclusion"].as_str().is_none() {
+            continue;
+        }
+        let id_text = id.to_string();
+        if newest.contains(&(key.clone(), full)) || (!full && newest.contains(&(key.clone(), true)))
+        {
+            superseded.insert(id_text);
+        } else if run["conclusion"] == "success"
+            && rows.iter().any(|row| {
+                row.workflow == "CI"
+                    && row.name == TRAIN_CI_AGGREGATE
+                    && row.bucket == "pass"
+                    && row.run_id.as_deref() == Some(id_text.as_str())
+            })
+        {
+            newest.insert((key, full));
+        }
+    }
+    rows.retain(|row| {
+        row.workflow != "CI"
+            || !row
+                .run_id
+                .as_ref()
+                .is_some_and(|id| superseded.contains(id))
+    });
+}
 
 // trace:BUG-2401 | ai:codex
 fn train_ci_readiness(
@@ -878,6 +939,61 @@ fn train_ci_readiness(
         refined,
         tolerate_hold,
     ))
+}
+
+// trace:BUG-2723 | ai:codex
+fn describe_train_ci_refusal(
+    state: &mut TrainCiReadiness,
+    rows: &[crate::ci_gate::CheckRow],
+    required: &[String],
+    cfg: &crate::ci_gate::CiGateConfig,
+    admitted: bool,
+    mut cancelled: impl FnMut(u64) -> Option<bool>,
+) {
+    let (reason, blocking) = match state {
+        TrainCiReadiness::Red(reason) | TrainCiReadiness::InfraRed(reason) => (
+            reason,
+            crate::ci_gate::classify_red(rows, required, cfg, admitted, false).real,
+        ),
+        TrainCiReadiness::Refused(reason) => (
+            reason,
+            rows.iter()
+                .filter(|row| {
+                    row.bucket == "skipping"
+                        && required
+                            .iter()
+                            .any(|name| crate::ci_gate::check_name_eq(name, &row.name))
+                        && !(admitted
+                            && crate::ci_gate::check_name_eq(
+                                &row.name,
+                                crate::ci_gate::HOLD_GATE_CHECK,
+                            ))
+                })
+                .cloned()
+                .collect(),
+        ),
+        _ => return,
+    };
+    let mut runs = std::collections::BTreeMap::<_, Vec<_>>::new();
+    for row in blocking {
+        runs.entry(row.run_id).or_default().push(row.name);
+    }
+    for (id, names) in runs {
+        let status = match id
+            .as_deref()
+            .and_then(|id| id.parse().ok())
+            .and_then(&mut cancelled)
+        {
+            Some(true) => "yes",
+            Some(false) => "no",
+            None => "unknown",
+        };
+        reason.push_str(&format!(
+            "; {}: run {} (cancelled: {status}, supersession unproven)",
+            names.join(", "),
+            id.as_deref().unwrap_or("unknown")
+        ));
+    }
 }
 
 fn train_ci_red(refined: &crate::ci_gate::RedRefinement) -> TrainCiReadiness {
@@ -3340,7 +3456,19 @@ impl LiveTrainForge<'_> {
         };
         // trace:BUG-2423 | ai:codex
         journal::before("read CI rows")?;
-        let rows = self.forge.check_rows(change).map_err(TrainCiReadError)?;
+        let mut rows = self.forge.check_rows(change).map_err(TrainCiReadError)?;
+        let mut metadata = std::collections::BTreeMap::new();
+        let mut run_metadata = |id: u64| {
+            metadata
+                .entry(id)
+                .or_insert_with(|| {
+                    let path = format!("repos/{{owner}}/{{repo}}/actions/runs/{id}");
+                    let json = gh_stdout(&self.project_root, &["api", &path]).ok()?;
+                    serde_json::from_str::<serde_json::Value>(&json).ok()
+                })
+                .clone()
+        };
+        select_train_ci_runs(&mut rows, tip, &mut run_metadata);
         if rows.is_empty() {
             assert_head()?;
             self.dispatch_check()?;
@@ -3354,9 +3482,14 @@ impl LiveTrainForge<'_> {
         // Green (BUG-2214's tolerance, decided once the others settle).
         // trace:BUG-2401 | ai:claude
         let admitted = hold_release_admitted(&rows, cars, labels);
-        let state = train_ci_readiness(&rows, required, &cfg, admitted, |row| {
+        let mut state = train_ci_readiness(&rows, required, &cfg, admitted, |row| {
             read_train_infrastructure_failure(&self.project_root, tip, row)
         })?;
+        describe_train_ci_refusal(&mut state, &rows, required, &cfg, admitted, |id| {
+            run_metadata(id)
+                .filter(|run| run["id"] == id && run["head_sha"] == tip)
+                .and_then(|run| run["conclusion"].as_str().map(|c| c == "cancelled"))
+        });
         // Detail is informational and cannot replace the pinned readiness proof.
         // trace:TASK-3782 | ai:codex
         if matches!(

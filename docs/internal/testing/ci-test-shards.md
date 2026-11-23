@@ -36,6 +36,9 @@ selection and every selected job; failed, cancelled or unexpectedly skipped
 selected jobs fail Build. Only the unselected tier may be skipped. Merge-hold
 checks retain their existing policy.
 
+After `gh pr update-branch`, wait for its FAST run to finish before removing
+and re-adding `ci:full`.
+
 Direct `aida pr ship` refuses FAST CI: use `aida pr train`, or add `ci:full`
 and wait for a successful FULL Build. The guard matches the FULL marker to
 Build's workflow run, so an earlier FULL result cannot authorize a newer FAST

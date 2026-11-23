@@ -6487,3 +6487,48 @@ fn bug_2635_comma_claim_groups_preserve_refs_and_policy_evidence() {
         );
     }
 }
+
+// trace:BUG-2723 | ai:codex
+#[test]
+fn bug2723_train_replaces_cancelled_fast_only_with_verified_full() {
+    let head = "a".repeat(40);
+    let mut source = Vec::new();
+    for (id, name, bucket) in [
+        (20, TRAIN_CI_AGGREGATE, "pass"),
+        (10, "ci-tier: fast", "pass"),
+        (10, TRAIN_CI_AGGREGATE, "fail"),
+        (20, "ci-tier: full", "pass"),
+    ] {
+        let mut row = bug2401_row(name, bucket);
+        row.run_id = Some(id.to_string());
+        source.push(row);
+    }
+    for (replacement_head, conclusion, ready) in [
+        (head.as_str(), "success", true),
+        (head.as_str(), "failure", false),
+        ("wrong-head", "success", false),
+    ] {
+        let mut rows = source.clone();
+        super::select_train_ci_runs(&mut rows, &head, |id| {
+            Some(serde_json::json!({
+                "id": id, "event": "pull_request", "workflow_id": 1, "head_branch": "feature",
+                "head_repository": {"id": 2}, "status": "completed",
+                "head_sha": if id == 10 { head.as_str() } else { replacement_head },
+                "conclusion": if id == 10 { "cancelled" } else { conclusion },
+            }))
+        });
+        let required = [TRAIN_CI_AGGREGATE.into()];
+        let cfg = Default::default();
+        let mut state = train_ci_readiness(&rows, &required, &cfg, false);
+        super::describe_train_ci_refusal(&mut state, &rows, &required, &cfg, false, |id| {
+            Some(id == 10)
+        });
+        if ready {
+            assert_eq!(state, TrainCiReadiness::Green);
+        } else {
+            assert!(
+                matches!(state, TrainCiReadiness::Red(reason) if reason.contains("run 10 (cancelled: yes, supersession unproven)"))
+            );
+        }
+    }
+}
