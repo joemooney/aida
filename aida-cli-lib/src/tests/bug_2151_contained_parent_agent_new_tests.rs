@@ -406,6 +406,64 @@ printf '%s\n' "$PWD" "$1" "$2" > "${0%/*}/../launch"
         std::fs::read_to_string(&receipt).unwrap(),
         format!("{}\n--resume\n018f-session\n", worktree.display())
     );
+
+    // trace:TASK-3149 | ai:codex
+    // Keep the same recorded cwd, grant, and resume entry point. Move the
+    // only transcript to a private clone and vary its registration evidence.
+    std::fs::remove_file(&receipt).unwrap();
+    let origin = crate::test_git::git_command()
+        .current_dir(&root)
+        .args(["remote", "add", "origin"])
+        .arg(&root)
+        .output()
+        .unwrap();
+    assert!(
+        origin.status.success(),
+        "{}",
+        String::from_utf8_lossy(&origin.stderr)
+    );
+    let clone = tmp.path().join("aida-seat-resume");
+    crate::seat_clone::create(&root, &clone, "resume-seat", "HEAD").unwrap();
+    let clone = clone.canonicalize().unwrap();
+    let clone_project = crate::session::claude_project_dir(&clone).unwrap();
+    std::fs::create_dir_all(&clone_project).unwrap();
+    std::fs::rename(
+        transcript_dir.join("018f-session.jsonl"),
+        clone_project.join("018f-session.jsonl"),
+    )
+    .unwrap();
+    let refused = || {
+        let error = launch().unwrap_err().to_string();
+        assert!(error.contains("cannot uniquely recover"), "{error}");
+        assert!(
+            error.contains(&clone_project.display().to_string()),
+            "{error}"
+        );
+        assert!(!receipt.exists(), "refusal must precede Claude launch");
+    };
+    refused();
+
+    let lease = crate::lease_path(&root, "c0ffee003149");
+    std::fs::create_dir_all(lease.parent().unwrap()).unwrap();
+    std::fs::write(lease, format!(
+        "id = \"c0ffee003149\"\nscope = \"TASK-3149\"\nslug = \"resume\"\nowner = \"test\"\nworktree_path = {}\nbranch = \"resume-seat\"\nstarted_at = \"2026-11-20T00:00:00Z\"\nhostname = \"test\"\ntree_kind = \"clone\"\n",
+        aida_core::toml_quote::toml_string(clone.to_str().unwrap()),
+    )).unwrap();
+    // A lease alone puts the clone in the inventory. Without its marker,
+    // recovery must still reject this candidate inside the inventory loop.
+    let marker = clone.join(crate::seat_clone::MARKER_RELATIVE);
+    let marker_bytes = std::fs::read(&marker).unwrap();
+    std::fs::remove_file(&marker).unwrap();
+    assert!(crate::seat_trees(&root)
+        .iter()
+        .any(|tree| tree.clone && tree.path == clone));
+    refused();
+    std::fs::write(marker, marker_bytes).unwrap();
+    assert!(launch().unwrap());
+    assert_eq!(
+        std::fs::read_to_string(receipt).unwrap(),
+        format!("{}\n--resume\n018f-session\n", clone.display())
+    );
 }
 
 #[test]

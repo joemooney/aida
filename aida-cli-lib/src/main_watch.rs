@@ -505,6 +505,12 @@ fn write_state(land: &Path, state: &State) -> Result<()> {
     drop(file);
     // rename replaces whatever is at the target; it never follows a link.
     std::fs::rename(&temp, land.join(STATE_FILE)).with_context(|| format!("writing {STATE}"))?;
+    sync_state_dir(land)
+}
+
+// trace:TASK-3195 | ai:codex
+fn sync_state_dir(land: &Path) -> Result<()> {
+    failpoint("state_dir_sync")?;
     std::fs::File::open(land)?.sync_all()?;
     Ok(())
 }
@@ -734,7 +740,11 @@ pub(crate) fn pass(
     };
     let mut state = read_state(&land)?;
     let mut notes = Vec::new();
-    flush(&land, &mut state)?;
+    if !state.pending.is_empty() {
+        // A previous rename may be visible even though its directory sync failed.
+        sync_state_dir(&land)?;
+        flush(&land, &mut state)?;
+    }
     deliver(&land, &mut state, ports, &mut notes)?;
     let scan = scan_history(&land, &mut state, required, window, ports, &mut notes);
     let deadline = scan.as_ref().is_err_and(|error| error.is::<PassDeadline>());
