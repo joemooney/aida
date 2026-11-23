@@ -1,5 +1,6 @@
 id: 01a20aab-f177-7fc1-9513-27bd6c320359
 spec_id: STORY-73022632d35647cca3858b18ac0723e3-247
+agreed_id: STORY-3058
 title: 'Review PR-4464: [AI:codex] fix(forge): back off GitHub watchers to reserve train CI budget (BUG-2735)'
 description: |
   Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20a7e`) for branch `bug-b6b1278890774ef993d2ebc327862470-496`.
@@ -34,6 +35,12 @@ history:
   author: dirtlab
   timestamp: 2026-11-23T23:09:45.980787922Z
   session_id: 01a20a7e7a2a
+  changes: []
+- id: 01a20acb-10cb-7500-ac5e-ed33b2e2fd0c
+  author: joe
+  timestamp: 2026-11-23T23:43:29.995006526Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
   changes: []
 filed_at:
   code_sha: 4e140498bc8d425330633234bec803e5f8584ca0

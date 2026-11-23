@@ -1,5 +1,6 @@
 id: 01a20abc-074f-7643-9f9d-01f990316ca9
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1274
+agreed_id: TASK-3300
 title: 'Review follow-up: ci_watch.rs:64-70 kills the interactive gh child with SIGKILL after printing the budget me'
 description: |-
   From BUG-2735
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20a77-76c1-7890-aba9-3ea04973958e
   created_at: 2026-11-23T23:27:18.073073671Z
+history:
+- id: 01a20aca-3b7b-7e63-9ea7-abe734d3c431
+  author: joe
+  timestamp: 2026-11-23T23:42:35.387376034Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
   branch: pr-4464

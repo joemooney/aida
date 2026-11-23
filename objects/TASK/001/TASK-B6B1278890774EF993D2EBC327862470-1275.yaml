@@ -1,5 +1,6 @@
 id: 01a20abc-3c9e-7a00-8212-178527b762a3
 spec_id: TASK-b6b1278890774ef993d2ebc327862470-1275
+agreed_id: TASK-3301
 title: 'Review follow-up: ci_probe.rs:661-670 counts the intentional budget pause toward the no-progress timer and r'
 description: |-
   From BUG-2735
@@ -21,6 +22,13 @@ relationships:
 - rel_type: References
   target_id: 01a20a77-76c1-7890-aba9-3ea04973958e
   created_at: 2026-11-23T23:27:31.681110320Z
+history:
+- id: 01a20aca-7065-7e40-8db5-03f95c7b8613
+  author: joe
+  timestamp: 2026-11-23T23:42:48.933536052Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes: []
 filed_at:
   code_sha: 9b167d9eee8c1ac3c0200bf633a75d1b8f7a6c1f
   branch: pr-4464
