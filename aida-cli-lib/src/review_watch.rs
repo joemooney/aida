@@ -1525,7 +1525,10 @@ fn validate_state(state: &State, repository: &str) -> Result<()> {
                         // recorded before the key named the approval.
                         let (kind, digest) = rest.split_once(':').unwrap_or((rest, ""));
                         valid_sha(head)
-                            && matches!(kind, ready::WAKE_READY | ready::WAKE_AFTER_UPDATE)
+                            && matches!(
+                                kind,
+                                ready::WAKE_READY | ready::WAKE_TRAIN | ready::WAKE_AFTER_UPDATE
+                            )
                             && (digest.is_empty() || notice::valid_digest(digest))
                     }))
                 && entry
@@ -1618,12 +1621,24 @@ fn stale_refused(root: &Path, change: &forge::Change) -> Result<bool> {
     Ok(crate::review_helpers::read_stale_base_policy(root)?.refuses(overlap, change.conflict))
 }
 
-/// The stale-head follow-up (`update::follow_up`) for the heads the project's
-/// policy refuses, so the watcher never asks the forge to merge the base into
-/// a head that policy lets through. Under the default policy every notified
-/// head is refused and is settled before the base probe (`probed` false).
-/// Under `refuse-on-conflict` only a head the probe found conflicting is, so
-/// it is settled after the probe. Under `warn` no head is.
+// trace:BUG-2725 | ai:codex
+fn clean_merge_policy(
+    change: &forge::Change,
+    freshness: impl FnOnce() -> crate::landing_policy::CiBaseFreshness,
+) -> bool {
+    !change.gitlab
+        && change.base == crate::land::MAIN_BRANCH
+        && freshness() == crate::landing_policy::CiBaseFreshness::CleanMerge
+}
+
+fn landing_clean_merge(root: &Path, change: &forge::Change) -> bool {
+    clean_merge_policy(change, || {
+        crate::landing_policy::load(root).ci_base_freshness
+    })
+}
+
+/// Review policy decides which heads are refused. Where landing permits a clean
+/// merge, the updater also needs a probed conflict before it mutates the branch.
 // trace:STORY-2821 | ai:claude
 fn stale_follow_up(
     root: &Path,
@@ -1635,6 +1650,9 @@ fn stale_follow_up(
 ) -> Result<Option<String>> {
     use crate::pr_rebase::StaleBasePolicy;
     let due = match crate::review_helpers::read_stale_base_policy(root)? {
+        StaleBasePolicy::RefuseOnOverlap if landing_clean_merge(root, change) => {
+            probed && change.conflict == Some(true) && change.overlap == Some(true)
+        }
         StaleBasePolicy::RefuseOnOverlap => !probed,
         StaleBasePolicy::RefuseOnConflict => probed && stale_refused(root, change)?,
         StaleBasePolicy::Warn => false,
@@ -1874,7 +1892,8 @@ fn probe_unneeded_with_coverage(
     // others the head is probed, since an overlapping head may be reviewable.
     // trace:STORY-2821 | ai:claude
     let notice_settles = crate::review_helpers::read_stale_base_policy(&store.root)?
-        == crate::pr_rebase::StaleBasePolicy::RefuseOnOverlap;
+        == crate::pr_rebase::StaleBasePolicy::RefuseOnOverlap
+        && !landing_clean_merge(&store.root, change);
     let recorded = store.transaction(&key, |state| {
         let Some(entry) = state.entries.get(&key) else {
             return Ok(None);

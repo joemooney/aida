@@ -6,6 +6,7 @@ use super::*;
 
 /// Wakes of one kind for a head reach the advisor once.
 pub(super) const WAKE_READY: &str = "ready";
+pub(super) const WAKE_TRAIN: &str = "ready-for-train";
 pub(super) const WAKE_AFTER_UPDATE: &str = "ready-after-update-branch";
 
 /// A change's readiness to ship. Recomputed on every evaluation from the
@@ -13,6 +14,7 @@ pub(super) const WAKE_AFTER_UPDATE: &str = "ready-after-update-branch";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) enum Readiness {
     Ready,
+    ReadyForTrain,
     /// Behind its base only on paths it does not touch: ready once the
     /// branch is updated, which the watcher never does itself.
     ReadyAfterUpdateBranch {
@@ -24,6 +26,7 @@ pub(super) enum Readiness {
 impl Readiness {
     pub(super) fn line(&self, change: &forge::Change) -> String {
         match self {
+            Readiness::ReadyForTrain => "ready for the train".into(),
             Readiness::Ready => "ready".into(),
             Readiness::ReadyAfterUpdateBranch { behind } => format!(
                 "ready after its branch is updated ({behind} commit(s) behind `{}`, no overlapping paths): {}",
@@ -35,6 +38,7 @@ impl Readiness {
     }
     pub(super) fn wake(&self) -> Option<&'static str> {
         match self {
+            Readiness::ReadyForTrain => Some(WAKE_TRAIN),
             Readiness::Ready => Some(WAKE_READY),
             Readiness::ReadyAfterUpdateBranch { .. } => Some(WAKE_AFTER_UPDATE),
             Readiness::NotReady(_) => None,
@@ -113,6 +117,9 @@ pub(super) trait Evidence {
     fn ci_base_freshness(&self) -> crate::landing_policy::CiBaseFreshness {
         Default::default()
     }
+    fn ci_workflow_id(&self) -> Result<String> {
+        anyhow::bail!("CI workflow identity unavailable")
+    }
     /// The change's head, re-read from the forge.
     fn head(&self, change: &forge::Change) -> Result<String>;
 }
@@ -137,9 +144,7 @@ pub(super) fn evaluate(
         Err(error) => return not(format!("base evidence unknown: {error:#}")),
     };
     // trace:TASK-3108 | ai:codex
-    let clean_policy = behind > 0
-        && change.base == crate::land::MAIN_BRANCH
-        && evidence.ci_base_freshness() == crate::landing_policy::CiBaseFreshness::CleanMerge;
+    let clean_policy = behind > 0 && clean_merge_policy(change, || evidence.ci_base_freshness());
     let clean_stale_overlap = if clean_policy {
         match conflict {
             Some(false) => true,
@@ -174,17 +179,28 @@ pub(super) fn evaluate(
             short(&checks.sha)
         ));
     }
-    if clean_policy
-        && crate::landing_policy::full_ci_run(checks.checks.iter().map(|row| {
-            (
-                row.name.as_str(),
-                row.outcome == crate::forge::CheckOutcome::Passed,
-                row.run_id.as_deref().and_then(|id| id.parse().ok()),
-            )
-        }))
+    if clean_policy {
+        let workflow = match evidence.ci_workflow_id() {
+            Ok(id) => id,
+            Err(error) => return not(format!("CI workflow unknown: {error:#}")),
+        };
+        if crate::landing_policy::full_ci_run(
+            checks
+                .checks
+                .iter()
+                .filter(|row| row.workflow_id.as_ref() == Some(&workflow))
+                .map(|row| {
+                    (
+                        row.name.as_str(),
+                        row.outcome == crate::forge::CheckOutcome::Passed,
+                        row.run_id.as_deref().and_then(|id| id.parse().ok()),
+                    )
+                }),
+        )
         .is_none()
-    {
-        return not("stale base requires successful full-tier CI on the exact head".into());
+        {
+            return not("stale base requires successful full-tier CI on the exact head".into());
+        }
     }
     let required = match evidence.required_checks() {
         Ok(required) => required,
@@ -212,7 +228,9 @@ pub(super) fn evaluate(
         Ok(head) => return not(format!("head moved to {} during evaluation", short(&head))),
         Err(error) => return not(format!("head re-read refused: {error:#}")),
     }
-    let readiness = if behind > 0 && !clean_stale_overlap {
+    let readiness = if clean_policy {
+        Readiness::ReadyForTrain
+    } else if behind > 0 && !clean_stale_overlap {
         Readiness::ReadyAfterUpdateBranch { behind }
     } else {
         Readiness::Ready
@@ -250,6 +268,10 @@ pub(super) fn wake_message(
         .unwrap_or_default();
     let ship = format!("`aida pr ship {}`", change.id);
     let (state, next) = match readiness {
+        Readiness::ReadyForTrain => (
+            format!("behind `{}` with a verified clean merge", change.base),
+            format!("Run `aida pr train {}` to land it.", change.id),
+        ),
         Readiness::ReadyAfterUpdateBranch { behind } => (
             format!(
                 "{behind} commit(s) behind `{}` on paths it does not touch",
@@ -319,6 +341,24 @@ impl Live<'_> {
 }
 
 impl Evidence for Live<'_> {
+    fn ci_workflow_id(&self) -> Result<String> {
+        let slug = self
+            .repo
+            .github_slug()
+            .context("unknown GitHub repository")?;
+        let (_, project) = slug.split_once('/').context("unknown project")?;
+        let path = format!("repos/{project}/actions/workflows/ci.yml");
+        let body = crate::forge::landing_ci_api(self.root, self.repo, &path)?;
+        let workflow: serde_json::Value = serde_json::from_slice(&body)?;
+        anyhow::ensure!(
+            workflow["path"] == ".github/workflows/ci.yml",
+            "unexpected CI workflow path"
+        );
+        Ok(workflow["id"]
+            .as_u64()
+            .context("missing CI workflow ID")?
+            .to_string())
+    }
     fn ci_base_freshness(&self) -> crate::landing_policy::CiBaseFreshness {
         crate::landing_policy::load(self.root).ci_base_freshness
     }

@@ -74,6 +74,7 @@ pub(crate) enum Ci {
     None,
     Pending,
     Green,
+    NeedsFull,
     StaleBase(String),
     /// The failed checks, named.
     Red(String),
@@ -84,6 +85,7 @@ impl Ci {
         match self {
             Ci::None => "none".into(),
             Ci::Pending => "pending".into(),
+            Ci::NeedsFull => "needs-full".into(),
             Ci::Green => "green".into(),
             Ci::StaleBase(_) => "stale-base".into(),
             Ci::Red(names) => format!("red: {names}"),
@@ -539,6 +541,14 @@ pub(crate) fn derive(pr: &Pr, evidence: &dyn Evidence) -> Row {
     let refusal = match evidence.approval(pr) {
         Err(why) => return unknown("approval", why),
         Ok(Approval::Approved(approval)) => {
+            if ci == Ci::NeedsFull {
+                return row(
+                    State::Blocked,
+                    Action::Wait,
+                    None,
+                    format!("{approval}; awaiting successful FULL CI on the head"),
+                );
+            }
             return match evidence.hold(pr) {
                 // A change stacked on another change's branch is reviewed
                 // like any other, and lands only once its base has: a train

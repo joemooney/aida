@@ -855,7 +855,7 @@ fn bug_2690_stale_ci_neither_lands_nor_dispatches_rework() {
 /// base stays a real failure.
 // trace:BUG-2690 | ai:claude
 #[test]
-fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
+fn bug_2725_and_bug_2690_pinned_merge_and_tested_base_select_landing_action() {
     if crate::test_env::run_path_isolated_test() {
         return;
     }
@@ -959,4 +959,108 @@ fn bug_2690_red_run_on_an_old_merge_base_is_stale_not_failed() {
         },
     );
     assert_eq!(row.state, State::CiFailed);
+
+    let git = |args: &[&str]| {
+        let out = crate::test_git::git_command()
+            .current_dir(&root)
+            .args(args)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8(out.stdout).unwrap().trim().to_owned()
+    };
+    git(&["checkout", "-B", "main"]);
+    git(&["config", "user.name", "fixture"]);
+    git(&["config", "user.email", "fixture@example.org"]);
+    git(&["commit", "--allow-empty", "-qm", "fork"]);
+    let fork = git(&["rev-parse", "HEAD"]);
+    git(&["checkout", "-qb", "topic"]);
+    std::fs::write(root.join("topic"), "feature").unwrap();
+    git(&["add", "topic"]);
+    git(&["commit", "-qm", "topic"]);
+    let mut change = change;
+    change.head = git(&["rev-parse", "HEAD"]);
+    git(&["checkout", "main"]);
+    git(&["commit", "--allow-empty", "-qm", "base advances"]);
+    let decide = |checks, tested: &str, gates: Fake| {
+        std::fs::write(
+            temp.path().join("merge.json"),
+            serde_json::json!({"sha": MERGE, "parents": [{"sha": tested}, {"sha": change.head}]})
+                .to_string(),
+        )
+        .unwrap();
+        let live = Live {
+            root: root.clone(),
+            gitlab: false,
+            repo: crate::review_watch::forge::Repository::load(&root).unwrap(),
+            pins: Ok(Pins {
+                heads: [(change.id, change.head.clone())].into(),
+                bases: [(change.base.clone(), git(&["rev-parse", "main"]))].into(),
+            }),
+            github_checks: [(change.id, checks)].into(),
+            leases: Default::default(),
+            claims: vec![],
+            book: Default::default(),
+            merge_trees: Default::default(),
+            review_after_merge: crate::integration_cmd::review::Reader::new(&root),
+        };
+        let conflict = live.conflict(&change).unwrap();
+        let row = derive(
+            &change,
+            &Fake {
+                conflict: Ok(conflict),
+                ci: live.ci(&change),
+                ..gates
+            },
+        );
+        (row.state, row.action)
+    };
+    let mut fast = rollup.clone();
+    fast[1]["conclusion"] = "SUCCESS".into();
+    let mut full = fast.clone();
+    full.as_array_mut()
+        .unwrap()
+        .push(check("ci-tier: full", "SUCCESS", 203, ""));
+    assert_eq!(
+        decide(full.clone(), &fork, approved()),
+        (State::StaleCiBase, Action::UpdateBranch)
+    );
+    std::fs::create_dir_all(root.join(".aida")).unwrap();
+    std::fs::write(
+        root.join(".aida/config.toml"),
+        "[landing]\nci_base_freshness = 'clean-merge'",
+    )
+    .unwrap();
+    git(&["add", "-f", ".aida/config.toml"]);
+    git(&["commit", "-qm", "enable clean merges"]);
+    let tip = git(&["rev-parse", "main"]);
+    assert_eq!(
+        decide(full.clone(), &fork, approved()),
+        (State::Ready, Action::Train)
+    );
+    assert_eq!(
+        decide(fast.clone(), &fork, Fake::default()),
+        (State::NeedsReview, Action::LaunchReview)
+    );
+    assert_eq!(
+        decide(fast, &fork, approved()),
+        (State::Blocked, Action::Wait)
+    );
+    let mut failed = full.clone();
+    failed[1]["conclusion"] = "FAILURE".into();
+    assert_eq!(
+        decide(failed, &tip, approved()),
+        (State::CiFailed, Action::DispatchRework)
+    );
+    std::fs::write(root.join("topic"), "conflicting base").unwrap();
+    git(&["add", "topic"]);
+    git(&["commit", "-qm", "conflict"]);
+    assert_eq!(
+        decide(full, &fork, approved()),
+        (State::Conflict, Action::DispatchRework)
+    );
 }

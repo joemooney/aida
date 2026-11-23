@@ -84,6 +84,9 @@ impl Fake {
 }
 
 impl Evidence for Fake {
+    fn ci_workflow_id(&self) -> Result<String> {
+        Ok("ci".into())
+    }
     fn ci_base_freshness(&self) -> crate::landing_policy::CiBaseFreshness {
         self.freshness
     }
@@ -1715,7 +1718,26 @@ fn bug_2725_ready_only_with_clean_merge_and_full_head_ci() {
     );
     evidence.freshness = crate::landing_policy::CiBaseFreshness::CleanMerge;
     assert!(not_ready_with(&evidence, &c).contains("full-tier"));
+    c.gitlab = true;
+    assert_eq!(
+        ready::evaluate(&c, &evidence).0,
+        Readiness::ReadyAfterUpdateBranch { behind: 2 }
+    );
+    c.gitlab = false;
     let rows = &mut evidence.ci.as_mut().unwrap().checks;
+    rows.push(check("ci-tier: fast", CheckOutcome::Passed));
+    for row in rows.iter_mut() {
+        row.run_id = Some("22".into());
+    }
+    for name in [CI_AGGREGATOR_CHECK, "ci-tier: full"] {
+        let mut other = check(name, CheckOutcome::Passed);
+        other.workflow_id = Some("other".into());
+        other.run_id = Some("99".into());
+        rows.push(other);
+    }
+    assert!(not_ready_with(&evidence, &c).contains("full-tier"));
+    let rows = &mut evidence.ci.as_mut().unwrap().checks;
+    rows.retain(|row| row.workflow_id.as_deref() == Some("ci") && row.name != "ci-tier: fast");
     rows.push(check("ci-tier: full", CheckOutcome::Passed));
     for row in rows {
         row.run_id = Some("23".into());
@@ -1723,7 +1745,11 @@ fn bug_2725_ready_only_with_clean_merge_and_full_head_ci() {
     for overlap in [true, false] {
         c.overlap = Some(overlap);
         c.conflict = Some(false);
-        assert_eq!(ready::evaluate(&c, &evidence).0, Readiness::Ready);
+        let (decision, approval) = ready::evaluate(&c, &evidence);
+        assert_eq!(decision, Readiness::ReadyForTrain);
+        let wake = ready::wake_message("repo", &c, &decision, &approval.unwrap());
+        assert!(wake.body.contains("`aida pr train 7`"));
+        assert!(!wake.body.contains("aida pr ship"));
         c.conflict = Some(true);
         assert!(not_ready_with(&evidence, &c).contains("conflict"));
     }

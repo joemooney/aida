@@ -27,9 +27,9 @@ pub(super) fn observe(
     });
     // The pinned merge-tree proof was produced by Live::conflict for this pass.
     // trace:BUG-2725 | ai:codex
+    let policy = crate::landing_policy::load(root);
     let allow_clean = clean_merge
-        && crate::landing_policy::load(root).ci_base_freshness
-            == crate::landing_policy::CiBaseFreshness::CleanMerge;
+        && policy.ci_base_freshness == crate::landing_policy::CiBaseFreshness::CleanMerge;
     let require_full = if allow_clean {
         let ancestry = super::git(root, &["merge-base", "--is-ancestor", base, &pr.head], 30)
             .map_err(|e| format!("{e:#}"))?;
@@ -50,6 +50,13 @@ pub(super) fn observe(
             checkout_sha(&log, pr.id).context("checkout log has no merge commit for this PR")?;
         let commit: Value = serde_json::from_slice(&api(&format!("git/commits/{merge}"))?)?;
         merge_base_parent(&commit, merge, &pr.head).map(str::to_owned)
+    })
+    .map(|ci| {
+        if require_full && !policy.waits_for_ci() && matches!(ci, Ci::Red(_)) {
+            Ci::NeedsFull
+        } else {
+            ci
+        }
     })
     .map_err(|error| format!("{error:#}"))
 }
@@ -147,7 +154,7 @@ fn verify_policy(
         }
     }
     ensure!(runs.len() <= MAX_RUNS, "too many active CI runs to verify");
-    if allow_clean {
+    if allow_clean && !matches!(ci, Ci::Red(_)) {
         let full = crate::landing_policy::full_ci_run(
             checks
                 .iter()
@@ -160,10 +167,9 @@ fn verify_policy(
                     )
                 }),
         );
-        ensure!(
-            ci == Ci::Green && full.is_some_and(|id| runs.contains(&id)),
-            "stale base requires successful full-tier CI on the exact head"
-        );
+        if ci != Ci::Green || !full.is_some_and(|id| runs.contains(&id)) {
+            return Ok(Ci::NeedsFull);
+        }
     }
     let mut missing = None;
     for run in runs {
@@ -178,6 +184,9 @@ fn verify_policy(
         match result {
             Ok(parent) if !parent.eq_ignore_ascii_case(base) => {
                 if allow_clean {
+                    if matches!(ci, Ci::Red(_)) {
+                        return Ok(Ci::NeedsFull);
+                    }
                     continue;
                 }
                 return Ok(Ci::StaleBase(format!(
@@ -291,20 +300,29 @@ mod tests {
                 assert_eq!(ci, Ci::Green);
             }
         }
-        assert!(verify_policy(Ci::None, &[], SLUG, BASE, true, |_| unreachable!()).is_err());
+        assert_eq!(
+            verify_policy(Ci::None, &[], SLUG, BASE, true, |_| unreachable!()).unwrap(),
+            Ci::NeedsFull
+        );
         let newer_fast = check("ci-tier: fast", "SUCCESS", 4, 4, "b");
         let mut mixed = checks.clone();
         mixed.push(&newer_fast);
-        assert!(verify_policy(Ci::Green, &mixed, SLUG, BASE, true, |_| Ok(OLD.into())).is_err());
-        assert!(verify_policy(
-            Ci::Green,
-            &checks[..2],
-            SLUG,
-            BASE,
-            true,
-            |_| Ok(OLD.into())
-        )
-        .is_err());
+        assert_eq!(
+            verify_policy(Ci::Green, &mixed, SLUG, BASE, true, |_| Ok(OLD.into())).unwrap(),
+            Ci::NeedsFull
+        );
+        assert_eq!(
+            verify_policy(
+                Ci::Green,
+                &checks[..2],
+                SLUG,
+                BASE,
+                true,
+                |_| Ok(OLD.into())
+            )
+            .unwrap(),
+            Ci::NeedsFull
+        );
     }
 
     #[test]
