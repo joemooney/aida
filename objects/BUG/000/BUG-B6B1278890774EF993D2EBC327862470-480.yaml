@@ -14,12 +14,27 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T22:23:06.366822385Z
-modified_at: 2026-11-22T22:23:06.366822385Z
+modified_at: 2026-11-23T03:39:10.682500980Z
 req_type: Bug
 tags:
 - carry-over
 - review-watch
 - throughput
+comments:
+- id: 01a2067c-aaed-7f42-809d-ba040f75bdf5
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:39):
+    # BUG-2719: SMALL pipeline fix (advisor-122 throughput plan 2026-11-22 20:40 MST; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2719` and implement its acceptance criteria and nothing more. Code: aida-cli-lib/src/review_watch*.rs head dispatch. A merge-only head (a clean merge of the protected base over an approved head) carries the approval and gets no fresh full review.
+    SMALL-PR RULE: target <=300 changed lines. If the ACs can't be met in that budget, implement AC1 only plus its test, and say in the PR body which ACs remain, so product splits them.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2719 | ai:codex`. Commit `[AI:codex] fix(...): ... (BUG-2719)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T03:39:10.682500980Z
+  modified_at: 2026-11-23T03:39:10.682500980Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
   branch: main
