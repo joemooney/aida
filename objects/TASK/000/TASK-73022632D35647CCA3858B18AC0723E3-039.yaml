@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:17:59.300202085Z
-modified_at: 2026-11-23T20:39:40.716635065Z
+modified_at: 2026-11-23T20:42:13.881922076Z
 req_type: Task
 tags:
 - from-implementer:TASK-3823
@@ -82,6 +82,27 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T20:39:40.570649967Z
   modified_at: 2026-11-23T20:39:40.570649967Z
+- id: 01a20a25-514e-7470-9a45-3a8686cec5b6
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 13:42):
+    # TASK-3171 / PR #4435 rework (advisor-122 ruling 2026-11-23 13:42; relayed by product-15). Lane: CODEX. SMALL; scoped to the BLOCKING findings.
+
+    ADVISOR RULING: Fix all 3; for the linked-worktree root use the SAME main-checkout resolver the other commands use (not storage.path().parent()).
+
+    CR at 8c1cc59f. Fix each BLOCKING finding with a test that fails if the fix is removed. Leave deferred/non-blocking findings alone.
+
+    - [major] TASK-3171 at config_cmd.rs:128 and :1137: the per-seat display gets its root from storage.path().parent(). In a linked worktree without a local .aida-store, canonical discovery returns the primary checkout's store (aida-core/src/store_locate.rs:613–659). The renderer therefore reads the primary checkout's model, effort, and tiers while headless launch resolves the linked checkout (session/headless.rs:685–694). A seat override present only in the linked checkout is silently omitted. Resolve tuning from the selected project/worktree root independently of the store location and cover distinct worktree and store-root settings through the CLI entry point.
+
+    - [minor] TASK-3171 at config_cmd.rs:1134–1137 and :1162–1167: the Antigravity row displays a configured model or AIDA_AGENT_MODEL as effective even though Antigravity's headless argv receives only effort (aida-cli-lib/src/vendors/headless.rs:50; aida-core/src/vendors/headless.rs:78–90). For example, an inherited model override appears in every agy seat while the launcher omits it. Make the display reflect vendor capabilities and label the Antigravity model as unmanaged by this launch path. Add a regression for a configured or inherited override.
+
+    - [minor] TASK-3171 at session/headless.rs:898–909: explicit empty seat model or effort strings select the vendor default and shadow lower files, but the new source reporting replaces the selected file with vendor default whenever the value is None. For example, a reviewer model reset in project agents.toml that masks a model in project config.toml displays the same source as an entirely absent value. Preserve per-field provenance for explicit resets while keeping launch arguments unchanged. Cover a reset that shadows a lower-file setting.
+
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work. Reviewer scope: these findings plus the diff.
+  created_at: 2026-11-23T20:42:13.881922076Z
+  modified_at: 2026-11-23T20:42:13.881922076Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fa0a-7e13-70a3-bf75-3feea2dbb0fa
   author: joe
