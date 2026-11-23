@@ -1,0 +1,36 @@
+id: 01a2071e-0105-7552-aff5-95b17fe9522f
+spec_id: STORY-b6b1278890774ef993d2ebc327862470-819
+agreed_id: STORY-3020
+title: 'Review PR-4414: [AI:claude] docs(discipline): sandbox-safe git for Claude seats and the small-brief rule (TASK-3835 TASK-3841)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `(no-sess`) for branch `task-3835-3841-discipline-docs`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4414>
+  - Branch: `task-3835-3841-discipline-docs` → `main`
+
+  ## Covers
+
+  - TASK-3835
+  - TASK-3841
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4414` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T06:35:36.581456660Z
+modified_at: 2026-11-23T06:35:36.581456660Z
+req_type: Story
+filed_at:
+  code_sha: e49ba38f4e0c637dceba8a7075055eb87b8dd773
+  branch: task-3835-3841-discipline-docs
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ca95624cadf
+  vendor: claude
+  session: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)

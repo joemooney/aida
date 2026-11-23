@@ -1277,7 +1277,7 @@ blocks:
   type_prefix: STORY
   range_start: 2919
   range_end: 3018
-  next: 3017
+  next: 3019
   allocated_at: 2026-11-18T10:10:58.226270057Z
 - node_id: b6b1278890774ef993d2ebc327862470
   owner: redacted@node.invalid
@@ -1285,5 +1285,5 @@ blocks:
   type_prefix: STORY
   range_start: 3019
   range_end: 3118
-  next: 3019
+  next: 3021
   allocated_at: 2026-11-23T05:51:55.944270865Z
