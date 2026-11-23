@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-23T05:23:18.787859849Z
+modified_at: 2026-11-23T05:23:21.673580582Z
 req_type: Bug
 tags:
 - containment
@@ -125,6 +125,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: The supervisor now checks for listener hangup while the receive is in flight, and reports hangup when wrapper exit is also observable. The watchdog covers both refusal paths and checks that the shim receives no exec release. One containment regression gap remains in the open-listener control for BUG-2717 AC2. CI pending at review time.. No triage reason was given.'
   created_at: 2026-11-23T05:23:18.787851988Z
   modified_at: 2026-11-23T05:23:18.787851988Z
+- id: 01a206db-db0f-76f1-96d9-1d82c2653fd4
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2717):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 08c0bc451ff0
+    Recorded: 2026-11-23T05:15:24.086414405+00:00
+    Findings:
+    1. [mutation-kill, severity p2] aida-cli-lib/src/containment/contained_host.py:457 and tests/test_store_mutation.py:816. The positive control replaces broker_connect_contained with service, while the existing broker fixture calls the real function only without n. An unconditional second receive in the real broker would therefore pass both focused fixtures and could strand the supervisor on the already-consumed notification. Exercise the real broker with a supplied Notification, make any additional receive fail the test, and assert that the supplied notification is serviced. The existing broker fixture can cover this without privileged setup.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T05:23:21.487189857Z
+  modified_at: 2026-11-23T05:23:21.487189857Z
 history:
 - id: 01a2052b-ec01-7e52-b8ec-fc4cd8951a76
   author: joe
