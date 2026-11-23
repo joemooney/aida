@@ -1,0 +1,29 @@
+id: 01a207dd-4395-70a2-8265-932cc529c679
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-490
+agreed_id: BUG-2729
+title: Review-watch approvals do not request full-tier CI (no ci:full label), unlike manual review record
+description: |
+  Found 2026-11-23 (advisor-122; filed by product-15). Reviewer APPROVALS recorded by review-watch (e.g. #4417 TASK-3839, #4421 TASK-3228) leave the PR with NO ci:full label, though the train's refusal text says "approving the head … starts one". Manual `aida review record` approvals DO request full-tier CI. So review-watch approvals stall at "no full-tier CI run at <head>" until someone labels by hand.
+
+  ## Acceptance
+  - AC1: An approval recorded through review-watch requests full-tier CI exactly as a manual `aida review record` approval does: ci:full is applied, or the full workflow is triggered, after any in-flight FAST run finishes, so no FAST run is cancelled (avoiding the BUG-2723 ghost red).
+  - AC2: A regression test: a review-watch approval of a head without ci:full results in a full-tier request.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T10:04:30.997005861Z
+modified_at: 2026-11-23T10:04:30.997005861Z
+req_type: Bug
+tags:
+- ci
+- review-watch
+- small
+- throughput
+filed_at:
+  code_sha: 55f63f3800861fee8b80ae3046c104290baf7fbf
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 55f63f38008
+  vendor: claude
