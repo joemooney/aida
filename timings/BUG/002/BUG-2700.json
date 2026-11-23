@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "BUG-2700",
+  "publishes": [
+    {
+      "at": "2026-11-23T19:32:52.658847896Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T16:52:56.186571988Z",
+      "spec": "BUG-2700",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4440,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e8731e032b6cfa9412ebe13c49193cafcd78608e"
+      }
+    },
+    {
+      "ts": "2026-11-23T17:36:27.335501035Z",
+      "spec": "BUG-2700",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4446,
+        "verdict": "APPROVED",
+        "reviewed_sha": "e65378fe38d082a7e7eac228c9fbc86d18a80bf2"
+      }
+    },
+    {
+      "ts": "2026-11-23T18:23:34.363178958Z",
+      "spec": "BUG-2700",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4446,
+        "verdict": "APPROVED",
+        "reviewed_sha": "2dbaac350dd2ca1cae2b8fbd12114b0eab49d617"
+      }
+    },
+    {
+      "ts": "2026-11-23T19:28:15.879958972Z",
+      "spec": "BUG-2700",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4446
+      }
+    },
+    {
+      "ts": "2026-11-23T19:32:52.440502572Z",
+      "spec": "BUG-2700",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "f1a50179e5a3640451b4232e08f2e589df93e7d5",
+        "pr": 4446,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
