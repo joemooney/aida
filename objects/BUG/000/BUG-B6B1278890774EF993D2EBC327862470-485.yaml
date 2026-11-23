@@ -15,12 +15,12 @@ description: |
   - AC2: If any process lives in the seat, or the holder isn't provably dead, admission refuses exactly as today and names the evidence.
   - AC3: A stale seat pin whose clone is already gone and which is an ancestor of origin/<branch> is removed at admission (the TASK-3133/-027 and BUG-2688/-452 shapes).
   - AC4: Regression tests: a punted predecessor with an in-progress merge and unmerged paths (the -433/-473 shape) is auto-salvaged and the new lane starts; a live process in the seat refuses.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:29:16.458092613Z
-modified_at: 2026-11-23T03:34:16.248398579Z
+modified_at: 2026-11-23T03:37:05.709680047Z
 req_type: Bug
 tags:
 - admission
@@ -80,6 +80,21 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20678-727e-7392-a132-58c610d99921
+  author: dirtlab
+  timestamp: 2026-11-23T03:34:46.654955043Z
+  session_id: 01a20677b36e
+  harness_version: codex-cli 0.167.0
+  changes: []
+- id: 01a2067a-92d6-7062-b556-f4015d87a979
+  author: dirtlab
+  timestamp: 2026-11-23T03:37:06.006227934Z
+  session_id: 01a20677b36e
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
@@ -87,3 +102,9 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 215313b8d3a
   vendor: claude
+attention_reason:
+  category: design-fork
+  detail: 'Strict-tier data retention: after salvage moves the clone and ends its lease, release_orphan_pin (seat_clone.rs:6348) can delete the very uncovered pin AC1(d) requires keeping. The existing lifecycle regression explicitly requires release for gone, unleased clones. Legacy orphan pins encode only directory basename and OID, not predecessor branch or why they were kept. An admission-only implementation of the reference script cannot distinguish them during reap.'
+  lean: Persist a host-owned retention record keyed by pin and OID before moving the clone, honor it in reap and clone-name allocation, and coordinate admission and reap through the transition. Keep legacy orphan-reap semantics outside those recorded salvages.
+  raised_by: implementer
+  raised_at: 2026-11-23T03:37:05.709680047Z
