@@ -14,11 +14,19 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T02:10:15.075061734Z
-modified_at: 2026-11-23T02:10:15.075061734Z
+modified_at: 2026-11-23T02:22:44.104953130Z
 req_type: Bug
 tags:
 - recovery
 - review-watch
+comments:
+- id: 01a20636-afd4-7ff3-b3de-f13605b6e58f
+  author: joe
+  content: 'Data point (advisor-122 19:22, recorded by product-15): after the operator''s shell 411725 left, recover-launch for #4380''s attempt 346d4525 refused again, now on pid 511679 (another 5-day-old Terminator bash). About 30 live processes have cwd = /home/joe/ai/aida: every seat, deputy runner, product watcher, operator shell. The attempt''s recorded worktree IS the primary and its launcher pid is dead, so recover-launch can NEVER succeed for an attempt recorded against the primary. #4380''s final review waits on this fix. Priority: first lane when drain mode allows one.'
+  created_at: 2026-11-23T02:22:44.104953130Z
+  modified_at: 2026-11-23T02:22:44.104953130Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: 215313b8d3a8089240cc87b0210136d9d5831fb1
   branch: main
