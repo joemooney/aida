@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3243",
+  "publishes": [
+    {
+      "at": "2026-11-23T16:46:43.512485360Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T12:39:35.101967546Z",
+      "spec": "TASK-3243",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4429,
+        "verdict": "CHANGES REQUESTED",
+        "reviewed_sha": "b94c16532f9d2c456cf98c85df76d2a7ea63ab7a"
+      }
+    },
+    {
+      "ts": "2026-11-23T12:39:38.523937326Z",
+      "spec": "TASK-3243",
+      "kind": {
+        "event": "SpecShelved",
+        "phase": "reviewer",
+        "kind": "verdict:request-changes",
+        "detail": "TASK-3243 (TASK-b6b1278890774ef993d2ebc327862470-1192) — PARTIAL. The generated worksheet has no formal Acceptance section, so the three items in the canonical task description and implementer self-review were used as the criteria.\n\nAC1 — verified by pinned source and caller inspection. Both zero-bound wrappers are behind cfg(test), their callers are test-only, and ship and manual train still call the existing production admission entry points.\nAC2 — verified by comparing the minor mask with glibc's dev_t encoding and inspecting the regression for major 0x1000 and minor 0x101. The old mask decodes that minor as 0x100000101. The corrected mask decodes it as 0x101. The implementer reported passing cargo test -p aida-cli-lib flock_holders coverage. No local tests were run during review.\nAC3 — unverified. The live PR bodies show the correction is missing, as detailed in the finding.\n\nReviewed the full diff against protected base ff524ebd21fa22d5744dedb7f4dff6c3c37fad22 and landed tree e8798f411e6a963d0b0a52475493fd42c7916537. The PR head is two commits behind the pinned base. The finding does not depend on a change introduced by either base commit. CI fast gates passed and fast compile was pending at review time.",
+        "recovery_hint": "address the review findings, move TASK-3243 back to In Progress, and clear the PR hold only after approval"
+      }
+    },
+    {
+      "ts": "2026-11-23T12:44:32.452361190Z",
+      "spec": "TASK-3243",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4429,
+        "verdict": "APPROVED",
+        "reviewed_sha": "b94c16532f9d2c456cf98c85df76d2a7ea63ab7a"
+      }
+    },
+    {
+      "ts": "2026-11-23T16:42:00.522884440Z",
+      "spec": "TASK-3243",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4429
+      }
+    },
+    {
+      "ts": "2026-11-23T16:46:43.307382242Z",
+      "spec": "TASK-3243",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "b05b047c037e38a692f8f63b235210e3541045b7",
+        "pr": 4429,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
