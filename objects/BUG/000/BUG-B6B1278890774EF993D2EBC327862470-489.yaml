@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T08:02:21.413386524Z
-modified_at: 2026-11-23T19:39:48.165698433Z
+modified_at: 2026-11-23T20:15:51.552619673Z
 req_type: Bug
 tags:
 - build
@@ -51,6 +51,18 @@ comments:
   modified_at: 2026-11-23T19:36:20.690573220Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a0c-facf-7730-a9d6-81b6bf0e884e
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 54e9220e1db9175dbb2c284241aed674328067f6 plus the native working tree and untracked test. The origin/main merge-base diff is empty.
+    AC1: [evidence: behavioral-test] tests/test_build_git_stamp.py:37 reproduced the untracked DU.txt case with the actual stamp helper and verified clean, then dirty for staged and unstaged changes.
+    AC2: [evidence: behavioral-test] tests/test_build_git_stamp.py:45 verifies the embedded path list including whitespace and newline quoting. The rebuilt binary at aida-cli-lib/src/dev_cmd.rs:1197 printed all four tracked paths and omitted the untracked test.
+    Deep pass covered shared CLI/server stamping, status quoting, zero/one/multiple paths and large lists. Path detail is bounded at about 32 KiB with an omission marker. The build-only key was added to the dropped-key inventory after the first fast check identified it. Git probe failure and build-script cache triggers retain their existing behavior. Targeted launcher Cargo test executed and passed, standalone regression passed, make check-ci-fast and git diff --check passed. Host PR CI pending publication to integration.
+  created_at: 2026-11-23T20:15:51.552619673Z
+  modified_at: 2026-11-23T20:15:51.552619673Z
+  session_id: 01a209eb5f84
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a209e7-cb96-7671-a68a-e252bfa61608
   author: joe

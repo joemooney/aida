@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:10:14.312515448Z
-modified_at: 2026-11-23T19:57:28.709468517Z
+modified_at: 2026-11-23T20:26:38.543338421Z
 req_type: Bug
 tags:
 - briefs
@@ -91,6 +91,18 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida edit --status`. It was shelved on: reviewer/verdict:request-changes: BUG-2731 (origin BUG-b6b1278890774ef993d2ebc327862470-492) — FAIL. Reviewed all five changed files against the generated worksheet.. No triage reason was given.'
   created_at: 2026-11-23T19:52:46.066163539Z
   modified_at: 2026-11-23T19:52:46.066163539Z
+- id: 01a20a16-d7f2-7ce2-8f0d-41a8f9428692
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f15dd7d5733c0446ed948a4bcd2e1636a48a6a37 plus native working changes. Inspected both merge-base diffs, git diff HEAD and untracked inventory (empty).
+    AC1: [evidence: documentation-inspection] Both advisor guides carry the verdict at line 109. test_closeout_audit_wording.py passed.
+    AC2: [evidence: behavioral-test] queue_cmd/work.rs:6372 calls append_pickup_briefs. brief.rs:1277 emits the shared sentence for each attachment. session/inline_tests.rs:5247 pins the exact line for the explicit file path. Targeted launcher test executed once and passed.
+    Probes: Both renderers share the wording. The heading delimiter survives headless prompt expansion. Empty input adds nothing, multiple briefs retain separate headings and arbitrary body text stays intact. Scope and acknowledgement logic are untouched. The test covers prompt assembly and CLI parsing separately. git diff --check passed. Fast source checks passed and make check-ci-fast is running the final ratchet groups. Published-head CI is pending host publication.
+  created_at: 2026-11-23T20:26:38.543338421Z
+  modified_at: 2026-11-23T20:26:38.543338421Z
+  session_id: 01a209fb40a7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20912-4d56-73a3-bac7-f684e0f78f51
   author: joe

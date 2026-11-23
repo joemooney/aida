@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-23T20:08:13.804033175Z
+modified_at: 2026-11-23T20:25:39.759566640Z
 req_type: Bug
 comments:
 - id: 01a209ea-ce0b-7581-b40a-6fbcbb2f8e9e
@@ -69,6 +69,25 @@ comments:
   modified_at: 2026-11-23T19:59:02.668797786Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a11-fbe8-7b63-8628-c155aca9c315
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f1a50179e5a3640451b4232e08f2e589df93e7d5 plus native working-tree diff (six tracked files, empty merge-base diff and no untracked additions).
+    AC1: [evidence: behavioral-test] tests/bug_home_024_finished_lease_tests.rs:506 exercises deadline expiry at the first completed mutation, verifies both Git registrations and lease files, and resumes at the saved ID.
+    AC2: [evidence: behavioral-test] tests/bug_home_024_finished_lease_tests.rs:541 compares live/dead lease decisions with the existing unbounded implementation.
+    Probe findings: session_reap.rs:2600 and shift.rs:2545 use the same exact ID for reporting and continuation. Sorted lower-bound lookup tolerates a vanished cursor. Empty and exhausted passes have no next ID. Old shift-state files default to no cursor. The visitor reads exact lease evidence before mutation and retains the shared classifier, ownership checks and pinned-tip teardown. The equivalence fixture requires live owner refusal. Existing mock assertions retained. No PR-head CI exists in this seat. Targeted job and FAST recheck in progress. A single in-flight operation can still overrun the cooperative budget.
+  created_at: 2026-11-23T20:21:17.793490859Z
+  modified_at: 2026-11-23T20:21:17.793490859Z
+  session_id: 01a20a01840f
+  harness_version: codex-cli 0.167.0
+- id: 01a20a15-f3b3-73e1-82cb-5f7a808bd575
+  author: dirtlab
+  content: 'Validation update: the lane job executed both bug_2710 regressions successfully (2 passed, 0 failed). git diff --check passed. FAST source/ratchet validation is running.'
+  created_at: 2026-11-23T20:25:39.759566640Z
+  modified_at: 2026-11-23T20:25:39.759566640Z
+  session_id: 01a20a01840f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
