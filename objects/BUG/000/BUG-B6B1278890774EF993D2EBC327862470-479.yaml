@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-23T13:32:07.233564777Z
+modified_at: 2026-11-23T13:32:17.716500358Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -64,6 +64,23 @@ comments:
   created_at: 2026-11-23T06:25:03.225509195Z
   modified_at: 2026-11-23T06:25:03.225509195Z
   session_id: 01a206d3e491
+- id: 01a2089b-7d03-77e0-879a-21fe9c4d9e89
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (PR #4411):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: 53cc56ef24b5
+    Recorded: 2026-11-23T06:36:39.753384173+00:00
+    Findings:
+    1. change_approval requires the effective approval JSON to equal the raw ledger object. For the same successfully published review, current_verdict prefers the signed receipt projection, which rebuilds recorder_attestation and omits release_grant (review_publication::body). This refuses a legitimate approval. If the spec lookup itself selects that projection, check also fails on its missing grant. Correlate the effective act with its local grant-bearing origin and validate both authorities. Keep conflicting publications blocking.
+    2. The cross-key lookup at check_all is conditional on the current spec body still saying request-changes/rejected. A hold can survive a stale approval (for example after the head moved). A subsequent valid PR-only approval at the live head is then never considered, even with the original refusal in retained history. Resolve the arming refusal from its retained evidence and evaluate the effective current change approval in this case.
+    3. change_approval selects the last physical verdict before applying key-specific lifecycle semantics. A later terminal_wait_source annotation for a spec key can be ignored by current_verdict(PR-N) through terminal_annotation_matches, yet this lookup returns None for the very same PR. Use the effective change-key event selector for provenance and apply scope and head checks to its result.
+    4. GitLab with_live_io appends MR-N to readers that unconditionally include PR-N. A refusal under PR-N can therefore veto a valid MR-N approval at the same head even though the forge-qualified changes are distinct. Pass the actual ChangeKey to corpus and authority selection, including publication lookup, and verify isolation with both namespaces populated.
+    5. Both new regressions use ChangeKey::pr, stub coverage to None and replace approval_authority with unconditional success. Removing the selected-candidate membership and independent attestation checks would leave both tests green. Add a gate test with real authority selection where a different valid candidate cannot lend authority to the selected one, and cover GitLab routing.
+    6. A read failure from the new checked ledger lookup propagates outside with_live_io’s noted error handler. release_condition therefore reports Unmet for an unreadable change ledger instead of Unknown. Preserve the read-error distinction in the judge-only path.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T13:32:17.539986889Z
+  modified_at: 2026-11-23T13:32:17.539986889Z
 history:
 - id: 01a206d4-2e73-71c3-b41a-2e45c4ca59d7
   author: aida-session-start
