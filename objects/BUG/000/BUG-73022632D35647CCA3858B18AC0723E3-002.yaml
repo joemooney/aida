@@ -9,7 +9,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T18:05:11.273693085Z
-modified_at: 2026-11-23T20:58:02.644535616Z
+modified_at: 2026-11-23T20:59:17.514907561Z
 req_type: Bug
 tags:
 - bwrap
@@ -57,6 +57,12 @@ comments:
   content: Implementer push 9e251dbc1f5e declared this spec complete for its scope; Done until it lands.
   created_at: 2026-11-23T20:56:55.671217246Z
   modified_at: 2026-11-23T20:56:55.671217246Z
+  session_id: 01a209ef8404
+- id: 01a20a34-ba8a-7020-bbfc-5854d60d09f4
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-73022632d35647cca3858b18ac0723e3-002` at head `9e251dbc1f5e954a5c00168a701d703058ab62a1`.'
+  created_at: 2026-11-23T20:59:17.514895863Z
+  modified_at: 2026-11-23T20:59:17.514895863Z
   session_id: 01a209ef8404
 history:
 - id: 01a1f595-4519-7252-b0f5-0a81b10611f6
