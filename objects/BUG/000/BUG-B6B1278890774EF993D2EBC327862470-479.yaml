@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-23T05:30:16.419457066Z
+modified_at: 2026-11-23T06:25:03.225516139Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -58,6 +58,12 @@ comments:
   modified_at: 2026-11-23T05:30:16.419457066Z
   session_id: 01a206d3e491
   harness_version: codex-cli 0.167.0
+- id: 01a20714-56f9-79b0-b47a-fe4bca6a0003
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `bug-b6b1278890774ef993d2ebc327862470-479` at head `53cc56ef24b5daa3aa0749a592fffd3eae2a1a44`.'
+  created_at: 2026-11-23T06:25:03.225509195Z
+  modified_at: 2026-11-23T06:25:03.225509195Z
+  session_id: 01a206d3e491
 history:
 - id: 01a206d4-2e73-71c3-b41a-2e45c4ca59d7
   author: aida-session-start
