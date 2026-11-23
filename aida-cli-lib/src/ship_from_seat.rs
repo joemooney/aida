@@ -904,16 +904,17 @@ pub(crate) fn publish_queue_exit_with(
         return Ok(QueueExitOutcome::Continue);
     }
     let no_change = std::cell::Cell::new(false);
-    finish_queue_exit(commit(), &publish, || {
+    let publish_round = || match publish() {
+        Err(error) if error.is::<NoReworkFix>() => {
+            eprintln!("{error}");
+            no_change.set(true);
+            Ok(())
+        }
+        result => result,
+    };
+    finish_queue_exit(commit(), publish_round, || {
         match probe() {
-            crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => match publish() {
-                Err(error) if error.is::<NoReworkFix>() => {
-                    eprintln!("{error}");
-                    no_change.set(true);
-                    return Ok(());
-                }
-                result => return result,
-            },
+            crate::seat_clone::Probe::Known(facts) if facts.unpushed > 0 => return publish_round(),
             crate::seat_clone::Probe::Unknown(why)
             | crate::seat_clone::Probe::HasSubmodules(why) => {
                 anyhow::bail!("could not inspect clean lane for pending publication: {why}")
@@ -2550,47 +2551,88 @@ impl std::fmt::Display for NoReworkFix {
 }
 impl std::error::Error for NoReworkFix {}
 
-pub(crate) fn require_fix_after_preparation(
-    main: &Path,
-    lane: Option<&str>,
-    repo: &Path,
-    tip: &str,
-) -> Result<bool> {
-    let Some(lane) = lane else { return Ok(false) };
+pub(crate) struct ReworkRound {
+    head: String,
+    recorded_base: String,
+    pub(crate) base_branch: String,
+    base: RemoteBranchPin,
+}
+
+impl ReworkRound {
+    pub(crate) fn base(&self) -> &str {
+        &self.base.tip
+    }
+
+    pub(crate) fn require_fix(&self, repo: &Path, tip: &str) -> Result<()> {
+        for ancestor in [&self.head, &self.recorded_base, &self.base.tip] {
+            anyhow::ensure!(
+                aida_core::git_ops::is_ancestor(repo, ancestor, tip)?,
+                "rework tip must include PR head and base; merge {ancestor} before publication"
+            );
+        }
+        let args = [
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            "-z",
+            self.base(),
+            &self.head,
+        ];
+        let mut command = aida_core::git_ops::host_git_command(repo);
+        command.args(args);
+        let out = crate::command_output_with_timeout(command, std::time::Duration::from_secs(30))
+            .context("rework merge-tree timed out")?;
+        if crate::seat_clone::repair_merge_tree_conflict(&args, out.status.code(), &out.stdout) {
+            return Ok(());
+        }
+        anyhow::ensure!(
+            out.status.success(),
+            "rework merge-tree failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        let baseline = std::str::from_utf8(&out.stdout)?
+            .strip_suffix('\0')
+            .context("invalid merge tree")?;
+        anyhow::ensure!(
+            baseline.len() == self.head.len() && baseline.bytes().all(|b| b.is_ascii_hexdigit()),
+            "invalid merge tree"
+        );
+        if git_text(repo, &["rev-parse", "--verify", &format!("{tip}^{{tree}}")])? == baseline {
+            return Err(NoReworkFix.into());
+        }
+        Ok(())
+    }
+}
+
+pub(crate) fn publication_round(main: &Path, lane: Option<&str>) -> Result<Option<ReworkRound>> {
+    let Some(lane) = lane else { return Ok(None) };
     let path = crate::seat_clone::rework_round_path(main, lane)?;
     let bytes = match std::fs::symlink_metadata(&path) {
-        Ok(_) => crate::gate::dispatch_io::read_bounded_regular_file(&path, 256, true)?,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Ok(_) => crate::gate::dispatch_io::read_bounded_regular_file(&path, 8192, true)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            // Retirement unlinks the lease before removing its round record.
+            // A retired rework must never fall through to ordinary publication.
+            crate::leases::read_exact_lease(main, lane)?.context("publication lease retired")?;
+            return Ok(None);
+        }
         Err(error) => return Err(error.into()),
     };
-    let (head, base): (String, String) = serde_json::from_slice(&bytes)?;
-    for oid in [&head, &base] {
+    let (head, recorded_base, branch): (String, String, String) = serde_json::from_slice(&bytes)
+        .context("invalid or legacy rework round; resume pickup to refresh")?;
+    for oid in [&head, &recorded_base] {
         anyhow::ensure!(
             matches!(oid.len(), 40 | 64) && oid.bytes().all(|b| b.is_ascii_hexdigit()),
             "invalid rework round commit"
         );
     }
-    anyhow::ensure!(
-        git_text(repo, &["merge-base", &head, tip])? == head,
-        "rework tip lost the recorded PR head"
-    );
-    if git_text(
-        repo,
-        &[
-            "rev-list",
-            "--max-count=1",
-            "--no-merges",
-            tip,
-            "--not",
-            &head,
-            &base,
-        ],
-    )?
-    .is_empty()
-    {
-        return Err(NoReworkFix.into());
-    }
-    Ok(true)
+    crate::seat_clone::validate_rework_base(&branch)?;
+    let base = pin_remote_branch(main, &branch)?.context("rework base no longer exists")?;
+    Ok(Some(ReworkRound {
+        head,
+        recorded_base,
+        base_branch: branch,
+        base,
+    }))
 }
 
 /// Everything [`run_from`] checks on a staged import before it pushes: the
@@ -2599,7 +2641,9 @@ pub(crate) fn require_fix_after_preparation(
 // trace:BUG-HOME-038 trace:TASK-B6B1278890774EF993D2EBC327862470-138 | ai:claude
 fn check_staged(main: &Path, staged: &Staged, opts: &FromSeatOptions, lane: &str) -> Result<()> {
     let (quarantine, tip) = (&staged.reference, &staged.tip);
-    require_fix_after_preparation(main, Some(lane), &staged.repo, tip)?;
+    if let Some(round) = publication_round(main, Some(lane))? {
+        round.require_fix(&staged.repo, tip)?;
+    }
     eprintln!(
         "  {} bundle verified ({tip}){}",
         crate::glyph(crate::glyphs::Glyph::Check).green(),

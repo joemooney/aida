@@ -322,6 +322,26 @@ pub(crate) fn lease_path(project_root: &std::path::Path, id: &str) -> std::path:
     leases_dir(project_root).join(format!("{}.toml", id))
 }
 
+// trace:BUG-2714 | ai:codex
+pub(crate) fn retire_lease_file(path: &std::path::Path) -> std::io::Result<()> {
+    let removed = std::fs::remove_file(path);
+    if removed.is_ok()
+        || removed
+            .as_ref()
+            .is_err_and(|e| e.kind() == std::io::ErrorKind::NotFound)
+    {
+        if let Err(error) = std::fs::remove_file(path.with_extension("rework")) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                eprintln!(
+                    "could not retire rework record for {}: {error}",
+                    path.display()
+                );
+            }
+        }
+    }
+    removed
+}
+
 /// Exact evidence read: only a genuinely absent file means no lease.
 // trace:BUG-2655 | ai:codex
 pub(crate) fn read_exact_lease(
@@ -3409,7 +3429,7 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
         aggregate_session_activity_into_roles(project_root, &lease.id);
         // trace:BUG-2139 | ai:claude
         crate::session::revoke_lease_child_grant(&lease_path(project_root, &lease.id));
-        let _ = std::fs::remove_file(lease_path(project_root, &lease.id));
+        let _ = crate::leases::retire_lease_file(&lease_path(project_root, &lease.id));
         // trace:STORY-2325 | ai:claude
         crate::ownership::dual::lease_released(
             project_root,
@@ -3627,7 +3647,7 @@ pub(crate) fn force_cleanup_lease(project_root: &std::path::Path, lease: &Sessio
     // BUG-2139: a headless child's grant ends with its lease.
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(lease_target);
-    if std::fs::remove_file(lease_target).is_ok() {
+    if crate::leases::retire_lease_file(lease_target).is_ok() {
         // trace:BUG-2651 | ai:codex
         crate::seat_target_overlay::cleanup_ended(project_root, &lease.id);
     }
@@ -4983,7 +5003,7 @@ pub(crate) fn remove_session_lease_record_only(
     let lease_file = lease_path(project_root, lease_id);
     // trace:BUG-2139 | ai:claude
     crate::session::revoke_lease_child_grant(&lease_file);
-    let removed = match std::fs::remove_file(&lease_file) {
+    let removed = match crate::leases::retire_lease_file(&lease_file) {
         Ok(()) => true,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
         Err(_) => false,

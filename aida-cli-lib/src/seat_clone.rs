@@ -3240,7 +3240,7 @@ fn fixture_rework_metadata(
 }
 
 // trace:BUG-2603 | ai:codex
-fn validate_rework_base(base: &str) -> Result<()> {
+pub(crate) fn validate_rework_base(base: &str) -> Result<()> {
     crate::git_arg_guard::reject_option_like("rework base", base)?;
     let mut cmd = aida_core::git_ops::host_git_command(Path::new("."));
     cmd.args(["check-ref-format", &format!("refs/heads/{base}")]);
@@ -3411,7 +3411,9 @@ fn prepare_rework_merge_with_base(
         || {
             // trace:BUG-2603 | ai:codex
             let base = discover_base()?;
-            fetch_rework_heads(main, &base, branch)
+            let heads = fetch_rework_heads(main, &base, branch)?;
+            record_rework_round(main, lane_id, &heads.1, &heads.0, &base)?;
+            Ok(heads)
         },
     )
     .map_err(|error| {
@@ -3456,9 +3458,6 @@ fn prepare_rework_merge_with_base(
     })
 }
 
-// trace:BUG-2714 | ai:codex
-pub(crate) const REWORK_PREPARATION_SUBJECT: &str = "Merge rework base before implementing fix";
-
 // Host-side evidence is scoped to the lease minted for this pickup.
 pub(crate) fn rework_round_path(main: &Path, lane: &str) -> Result<PathBuf> {
     anyhow::ensure!(
@@ -3468,12 +3467,18 @@ pub(crate) fn rework_round_path(main: &Path, lane: &str) -> Result<PathBuf> {
     Ok(crate::lease_path(main, lane).with_extension("rework"))
 }
 
-fn record_rework_round(main: &Path, lane: &str, head: &str, base: &str) -> Result<()> {
+fn record_rework_round(
+    main: &Path,
+    lane: &str,
+    head: &str,
+    base: &str,
+    branch: &str,
+) -> Result<()> {
     let path = rework_round_path(main, lane)?;
     let dir = path.parent().context("missing lease directory")?;
     std::fs::create_dir_all(dir)?;
     let mut record = tempfile::NamedTempFile::new_in(dir)?;
-    serde_json::to_writer(record.as_file_mut(), &(head, base))?;
+    serde_json::to_writer(record.as_file_mut(), &(head, base, branch))?;
     record.persist(path)?;
     Ok(())
 }
@@ -3841,7 +3846,7 @@ fn repair_merge_tree_paths(output: &str) -> Option<Vec<String>> {
     )
 }
 
-fn repair_merge_tree_conflict(args: &[&str], code: Option<i32>, stdout: &[u8]) -> bool {
+pub(crate) fn repair_merge_tree_conflict(args: &[&str], code: Option<i32>, stdout: &[u8]) -> bool {
     args.starts_with(&["merge-tree", "--write-tree", "--name-only", "-z"])
         && code == Some(1)
         && std::str::from_utf8(stdout)
@@ -3915,7 +3920,6 @@ fn prepare_host_repair_with(
     if dirty {
         execute(&["merge-tree", "--write-tree", "HEAD", &base])
             .context("could not prove clean merge for dirty resume; edits preserved")?;
-        record_rework_round(main, lane_id, &pr_head, &base)?;
         return Ok(vec![]);
     }
     let before = execute(&["rev-parse", "HEAD"])?;
@@ -3986,15 +3990,7 @@ fn prepare_host_repair_with(
             }
         }
     } else {
-        record_rework_round(main, lane_id, &pr_head, &base)?;
-        execute(&[
-            "merge",
-            "--no-ff",
-            "--no-verify",
-            "-m",
-            REWORK_PREPARATION_SUBJECT,
-            &base,
-        ])?;
+        execute(&["merge", "--no-ff", "--no-edit", "--no-verify", &base])?;
         Ok(vec![])
     }
 }
@@ -4108,20 +4104,11 @@ mod rework_merge_tests {
         let remote = || tests::git_ok(&fx.origin, &["rev-parse", "refs/heads/rework"]);
         assert_eq!(remote(), before);
         assert_eq!(g(&["rev-parse", "HEAD^1"]), before);
-        // Another lease may legitimately ship a merge with the same subject.
-        let check = |lane| {
-            crate::ship_from_seat::require_fix_after_preparation(
-                &fx.main,
-                Some(lane),
-                &tree,
-                "HEAD",
-            )
-        };
+        // Ordinary publication has no rework tree gate.
         g(&["checkout", "-qb", "ordinary"]);
-        assert_eq!(g(&["log", "-1", "--format=%s"]), REWORK_PREPARATION_SUBJECT);
         crate::pr_cmd::finish::integrate_and_push(
             &fx.main,
-            Some("ordinary-lane"),
+            None,
             &tree,
             "ordinary",
             "origin/integration",
@@ -4132,20 +4119,22 @@ mod rework_merge_tests {
             g(&["rev-parse", "ordinary"])
         );
         g(&["checkout", "rework"]);
-        // Resume an old pickup that created Git's ordinary, unmarked merge.
-        g(&["commit", "--amend", "-qm", "Merge branch 'integration'"]);
-        let legacy = g(&["rev-parse", "HEAD"]);
-        prepare_rework_merge_with_base(
-            &fx.main,
-            &tree,
-            "rework",
-            true,
-            2603,
-            "integration-lane",
-            || Ok("integration".into()),
-        )
-        .unwrap();
-        assert_eq!(g(&["rev-parse", "HEAD"]), legacy);
+        g(&["checkout", "integration"]);
+        std::fs::write(tree.join("second-base"), "base only").unwrap();
+        g(&["add", "second-base"]);
+        g(&["commit", "-qm", "advance base"]);
+        g(&["push", "origin", "integration"]);
+        g(&["checkout", "rework"]);
+        g(&["merge", "--no-edit", "integration"]);
+        let ship = || {
+            crate::pr_cmd::finish::integrate_and_push(
+                &fx.main,
+                Some("integration-lane"),
+                &tree,
+                "rework",
+                "origin/integration",
+            )
+        };
         use crate::ship_from_seat::{
             publish_queue_exit_with, record_queue_exit, PostExitCommit, QueueExitOutcome,
         };
@@ -4160,7 +4149,7 @@ mod rework_merge_tests {
                         ..Default::default()
                     })
                 },
-                || check("integration-lane").map(|_| ()),
+                ship,
                 || panic!("unexpected unchanged-PR notification"),
             )
         })
@@ -4171,37 +4160,14 @@ mod rework_merge_tests {
             "integration-lane"
         ));
         assert_eq!(remote(), before);
-        let err = crate::ship_from_seat::require_fix_after_preparation(
-            &fx.main,
-            Some("integration-lane"),
-            &tree,
-            "HEAD",
-        )
-        .unwrap_err();
-        assert_eq!(err.to_string(), "no fix commits; nothing published");
-        g(&["commit", "--allow-empty", "-qm", "fix: round (BUG-2714)"]);
-        crate::ship_from_seat::require_fix_after_preparation(
-            &fx.main,
-            Some("integration-lane"),
-            &tree,
-            "HEAD",
-        )
-        .unwrap();
-        assert_eq!(remote(), before);
+        assert_eq!(
+            ship().unwrap_err().to_string(),
+            "no fix commits; nothing published"
+        );
+        std::fs::write(tree.join("fix"), "real fix").unwrap();
+        g(&["add", "fix"]);
+        g(&["commit", "-qm", "fix: round (BUG-2714)"]);
         let fix = g(&["rev-parse", "HEAD"]);
-        g(&["checkout", "integration"]);
-        g(&["commit", "--allow-empty", "-qm", "base advances again"]);
-        g(&["push", "origin", "integration"]);
-        g(&["checkout", "rework"]);
-        let ship = || {
-            crate::pr_cmd::finish::integrate_and_push(
-                &fx.main,
-                Some("integration-lane"),
-                &tree,
-                "rework",
-                "origin/integration",
-            )
-        };
         // A racer after pickup cannot be overwritten, even if its tracking ref is current.
         g(&["checkout", "-qb", "racer", &before]);
         g(&["commit", "--allow-empty", "-qm", "concurrent PR work"]);
@@ -4248,6 +4214,19 @@ mod rework_merge_tests {
         assert!(tree.join("integration-only").exists());
         assert!(!tree.join("main-only").exists());
         assert!(fetch_rework_heads(&fx.main, "missing-base", "rework").is_err());
+        let lease = crate::lease_path(&fx.main, "integration-lane");
+        let sibling = rework_round_path(&fx.main, "other-lane").unwrap();
+        std::fs::write(&sibling, "other round").unwrap();
+        std::fs::write(&lease, "").unwrap();
+        assert!(crate::leases::remove_session_lease_record_only(
+            &fx.main,
+            "integration-lane"
+        ));
+        assert!(!lease.with_extension("rework").exists());
+        assert!(sibling.exists());
+        assert!(
+            matches!(crate::ship_from_seat::publication_round(&fx.main, Some("integration-lane")), Err(error) if error.to_string().contains("lease retired"))
+        );
     }
 
     // Run the actual registered library renderer in a child selected by the

@@ -2546,6 +2546,18 @@ fn bug_2714_rework_publishes_merge_with_fix_and_never_runs_seat_hooks() {
                 .unwrap();
         let remote = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
         let head = git_ok(&clone, &["rev-parse", "HEAD"]);
+        let ship = || {
+            crate::ship_from_seat::run_from(
+                &fx.main,
+                opts(&clone, false, true),
+                &crate::ship_from_seat::Deps {
+                    bundle: &test_bundle,
+                    commit: &no_commit,
+                    forge: &|_| panic!("--no-pr must not open a PR"),
+                    after_open: &|_, _| {},
+                },
+            )
+        };
         if conflicts {
             assert_eq!(files, ["README.md"]);
             assert_eq!(head, before);
@@ -2555,18 +2567,6 @@ fn bug_2714_rework_publishes_merge_with_fix_and_never_runs_seat_hooks() {
             assert_ne!(head, before);
             // trace:BUG-2714 | ai:codex
             assert_eq!(remote, before);
-            let ship = || {
-                crate::ship_from_seat::run_from(
-                    &fx.main,
-                    opts(&clone, false, true),
-                    &crate::ship_from_seat::Deps {
-                        bundle: &test_bundle,
-                        commit: &no_commit,
-                        forge: &|_| panic!("--no-pr must not open a PR"),
-                        after_open: &|_, _| {},
-                    },
-                )
-            };
             let outcome = crate::ship_from_seat::publish_queue_exit_recorded(
                 &fx.main,
                 &clone,
@@ -2588,12 +2588,32 @@ fn bug_2714_rework_publishes_merge_with_fix_and_never_runs_seat_hooks() {
                 before
             );
             std::fs::write(clone.join("fix"), "round fix").unwrap();
+            std::fs::write(fx.main.join("base-only"), "advance during resume").unwrap();
+            git_ok(&fx.main, &["add", "base-only"]);
+            git_ok(&fx.main, &["commit", "-qm", "advance base"]);
+            git_ok(&fx.main, &["push", "origin", "main"]);
+            let base = git_ok(&fx.main, &["rev-parse", "HEAD"]);
+            prepare_leased_rework_merge(&fx.main, &clone, "feat", true, 3398, "c0ffee245600")
+                .unwrap();
             let fixed = commit_pending(&fx.main, &clone, "feat", "fix: round (BUG-1)")
                 .unwrap()
                 .unwrap();
             assert_eq!(git_ok(&clone, &["rev-parse", "HEAD^"]), head);
+            assert!(format!("{:#}", ship().unwrap_err()).contains("merge"));
+            assert_eq!(
+                git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]),
+                before
+            );
+            prepare_leased_rework_merge(&fx.main, &clone, "feat", true, 3398, "c0ffee245600")
+                .unwrap();
             ship().unwrap();
-            assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), fixed);
+            let published = git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]);
+            for ancestor in [base, fixed] {
+                git_ok(
+                    &fx.origin,
+                    &["merge-base", "--is-ancestor", &ancestor, &published],
+                );
+            }
         }
         assert!(!sentinel.exists(), "seat hooks must never execute");
         assert_eq!(
@@ -2619,6 +2639,8 @@ fn bug_2714_rework_publishes_merge_with_fix_and_never_runs_seat_hooks() {
                     .count(),
                 2
             );
+            ship().unwrap();
+            assert_eq!(git_ok(&fx.origin, &["rev-parse", "refs/heads/feat"]), tip);
             assert!(!sentinel.exists());
         }
     }

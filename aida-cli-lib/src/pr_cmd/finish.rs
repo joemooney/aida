@@ -452,8 +452,8 @@ pub(crate) fn integrate_and_push(
     origin_ref: &str,
 ) -> Result<()> {
     let original = aida_core::git_ops::head_sha(project_root)?;
-    let rework =
-        crate::ship_from_seat::require_fix_after_preparation(main, lane, project_root, &original)?;
+    let round = crate::ship_from_seat::publication_round(main, lane)?;
+    let rework = round.is_some();
     let remote_branch = origin_ref
         .strip_prefix("origin/")
         .unwrap_or(origin_ref)
@@ -463,20 +463,27 @@ pub(crate) fn integrate_and_push(
     crate::git_arg_guard::reject_option_like("PR base branch", &remote_branch)?;
     let action = if rework { "merge" } else { "rebase" };
     eprintln!("  step 2: git {action} {origin_ref}");
-    let fetch = std::process::Command::new("git")
-        .current_dir(project_root)
-        .args([
-            "fetch",
-            crate::git_arg_guard::END_OF_OPTIONS,
-            "origin",
-            &remote_branch,
-        ])
-        // trace:BUG-2181 | ai:claude
-        .remote_credentials(project_root, "origin")
-        .status()
-        .context("could not invoke `git fetch`")?;
-    if !fetch.success() {
-        anyhow::bail!("`git fetch origin {remote_branch}` failed — is the remote reachable?");
+    if let Some(round) = &round {
+        anyhow::ensure!(
+            round.base_branch == remote_branch,
+            "PR base changed; resume rework pickup before shipping"
+        );
+    } else {
+        let fetch = std::process::Command::new("git")
+            .current_dir(project_root)
+            .args([
+                "fetch",
+                crate::git_arg_guard::END_OF_OPTIONS,
+                "origin",
+                &remote_branch,
+            ])
+            // trace:BUG-2181 | ai:claude
+            .remote_credentials(project_root, "origin")
+            .status()
+            .context("could not invoke `git fetch`")?;
+        if !fetch.success() {
+            anyhow::bail!("`git fetch origin {remote_branch}` failed — is the remote reachable?");
+        }
     }
     let mut integrate = std::process::Command::new("git");
     integrate.current_dir(project_root).arg(action);
@@ -486,7 +493,10 @@ pub(crate) fn integrate_and_push(
         integrate.args(["--no-edit", "-m", &subject]);
     }
     if !integrate
-        .args([crate::git_arg_guard::END_OF_OPTIONS, origin_ref])
+        .args([
+            crate::git_arg_guard::END_OF_OPTIONS,
+            round.as_ref().map_or(origin_ref, |r| r.base()),
+        ])
         .status()?
         .success()
     {
@@ -502,19 +512,20 @@ pub(crate) fn integrate_and_push(
     // trace:BUG-2618 | ai:codex
     crate::pr_head_guard::check_branch(project_root, branch)?;
     // ---- Step 3: push (force-with-lease — the rebase may have rewritten history). ----
-    eprintln!("  step 3: pushing {} to origin", branch);
     // trace:TASK-2270 | ai:claude
     aida_core::git_ops::clear_sandbox_config_lock(project_root);
-    let destination = if rework {
+    let destination = if let Some(round) = round {
         let tip = aida_core::git_ops::head_sha(project_root)?;
         anyhow::ensure!(
             aida_core::git_ops::is_ancestor(project_root, &original, &tip)?,
             "ship tip lost the verified rework commits"
         );
+        round.require_fix(project_root, &tip)?;
         format!("{tip}:refs/heads/{branch}")
     } else {
         branch.to_string()
     };
+    eprintln!("  step 3: pushing {} to origin", branch);
     let push = std::process::Command::new("git")
         .current_dir(project_root)
         .arg("push")
