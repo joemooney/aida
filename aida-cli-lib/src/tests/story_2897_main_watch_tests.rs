@@ -640,6 +640,34 @@ fn transitions_survive_a_crash_at_each_boundary_once() {
     assert_eq!(count(dir.path(), "red_start"), 1);
 }
 
+// trace:TASK-3195 | ai:codex
+#[test]
+fn state_dir_sync_failure_preserves_the_pending_transition_for_restart() {
+    let (dir, mut fake) = red_on_green();
+    fail_at(Some("state_dir_sync"));
+    let result = try_run(dir.path(), &mut fake);
+    fail_at(None);
+    assert!(format!("{:#}", result.unwrap_err()).contains("injected failure at state_dir_sync"));
+
+    let published = state(dir.path());
+    assert_eq!(published.cursor, Some(sha(2)));
+    assert_eq!(published.episode.unwrap().red_sha, sha(2));
+    assert_eq!(published.pending.len(), 1);
+    let transition = &published.pending[0];
+    assert_eq!(transition.event, "red_start");
+    assert_eq!(count(dir.path(), "red_start"), 0);
+
+    run(dir.path(), &mut fake);
+    let recovered = state(dir.path());
+    assert_eq!(recovered.cursor, Some(sha(2)));
+    assert_eq!(recovered.episode.unwrap().red_sha, sha(2));
+    assert!(recovered.pending.is_empty());
+    assert_eq!(count(dir.path(), "red_start"), 1);
+    assert!(journal(dir.path())
+        .iter()
+        .any(|event| event.id == transition.id));
+}
+
 #[test]
 fn an_unterminated_or_torn_multibyte_tail_is_uncommitted() {
     let (dir, mut fake) = red_on_green();

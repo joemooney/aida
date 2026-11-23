@@ -504,6 +504,8 @@ fn write_state(land: &Path, state: &State) -> Result<()> {
     drop(file);
     // rename replaces whatever is at the target; it never follows a link.
     std::fs::rename(&temp, land.join(STATE_FILE)).with_context(|| format!("writing {STATE}"))?;
+    // trace:TASK-3195 | ai:codex
+    failpoint("state_dir_sync")?;
     std::fs::File::open(land)?.sync_all()?;
     Ok(())
 }
