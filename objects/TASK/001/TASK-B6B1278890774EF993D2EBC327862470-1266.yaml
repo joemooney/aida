@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:45:10.982103610Z
-modified_at: 2026-11-23T23:17:59.383681497Z
+modified_at: 2026-11-23T23:26:13.650121974Z
 req_type: Task
 tags:
 - doctor
@@ -90,6 +90,13 @@ comments:
   content: 'INTEGRATION PRE-CHECK (integration-30, 16:08): PR-4463 @ 213633ea4fc PASSES. Base integration (built on 77e36a0 with #4460 slice 1); one commit, traces present; +100/-19 in 5 files, standard tier (mailbox visibility diagnostics only; no ACK, binding or identity change). It meets the advisor''s 14:47 condition. delivery_gates now reports CONFIRMED missing seat sidecars only: a complete search (not unsighted), seat-addressed, not already unknown from a retained-lookup failure, and not deleted. The message stays gated NotOwned as before. Two surfaces: `aida mailbox inbox` prints ''N seat messages hidden: delivery sidecar missing (<ids>) — inspect with aida mailbox inbox --all'' on stderr for the reader''s own view, and doctor (mail_backlog::scan_and_route) adds a ''<CATEGORY>:missing-seat-sidecars'' finding from a diagnostic policy (inspect_all_seat_sidecars) that inventories every seat message without projecting records or granting ACK. The story2767 regression now asserts the exact note with the missing id and that the doctor scan carries the same summary. Notes, not blocking: (1) inspection_sources_complete now runs with the widened diagnostic policy, so its sidecar search covers all seat mail; on a very large retained set that could make the no-readers completeness check go partial sooner. (2) `aida mailbox read <id>` would be a more precise inspection hint than `inbox --all` (the operator-wide list).'
   created_at: 2026-11-23T23:04:29.353316961Z
   modified_at: 2026-11-23T23:04:29.353316961Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a20abb-78ba-78f0-bf28-a8d4e33898a7
+  author: joe
+  content: 'INTEGRATION SEAT CORRECTION (integration-30, 16:25): my 16:08 PASS was too lenient. Independent reviewer 2574ef32 recorded REQUEST CHANGES at 213633ea (gate ledger PR-4463, 16:17), and PR-4463 is merge-held. Of its 4 findings, two strengthen my non-blocking notes: F1, the ''inbox --all'' hint can''t find sibling-only IDs; F4, no deadline or budget on retained-lookup misses, which can exhaust doctor''s 2s deadline. Two I missed: F2, inspect_seat_sidecars returns snapshot.complete(), which ignores per-ID retained-lookup errors, and mail_backlog drops completeness whenever any live reader exists, so doctor can stay SILENT when discovery failed (this contradicts the advisor''s ''hidden must never be silent'' condition); F3, a registry load failure returns before the sidecar inventory. Recommendation to the advisor: one rework round for F2 + F4 (a false clean and a doctor-deadline risk; both small: report ''partial'' on lookup errors independently of reader coverage, and add a deadline/budget check on misses, each with a test); fold in F1''s cheap part (hint ''aida mailbox read <id>'' plus the source path); defer F3 to a follow-up.'
+  created_at: 2026-11-23T23:26:13.650121974Z
+  modified_at: 2026-11-23T23:26:13.650121974Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
