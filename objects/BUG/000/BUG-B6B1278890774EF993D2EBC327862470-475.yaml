@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-22T23:57:32.880321671Z
+modified_at: 2026-11-23T00:09:17.392161089Z
 req_type: Bug
 tags:
 - fasttrack
@@ -189,6 +189,20 @@ comments:
   modified_at: 2026-11-22T23:53:05.400074272Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a205bc-5684-7cf1-a65d-f6e0fd632683
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: f4749143d1a4b3188b7b30cc6f04bbb60fee55ad plus Round 3 native working-tree edits. Reviewed origin/main...HEAD, git diff HEAD and untracked paths (none).
+    AC1: [evidence: behavioral-test] seat_clone.rs:4035 checks the remote PR head after pickup.
+    AC2: [evidence: behavioral-test] tests/bug_home_038_seat_publish_tests.rs:2507 verifies dirty resume refuses a tip missing the advanced base, then clean resume publishes both base and fix. The validated conflict resolution also publishes.
+    AC3: [evidence: behavioral-test] seat_clone.rs:4035 checks a second base-only merge, the no-fix diagnostic, NoChange receipt and unchanged remote. Ordinary non-lane publication succeeds.
+    AC4: [evidence: behavioral-test] both fixtures exercise real Git pushes and observe the remote tip. Final lane job j20261123T000531194-3-0 executed both tests, 2 passed.
+    P1 dirty resume and P1 upstream-only sync addressed with ancestry checks and a pure-merge tree comparison. P3 addressed by retiring the matching sidecar. Strict-tier probes checked OID/ref formats, malformed and missing evidence, sibling records, concurrent remote changes, and lease retirement. Fixed an absent-record fallback after retirement and verified it refuses. Legacy round records require a fresh resume. All 48 FAST source gates passed. Hosted CI applies to the future host commit.
+  created_at: 2026-11-23T00:09:17.392161089Z
+  modified_at: 2026-11-23T00:09:17.392161089Z
+  session_id: 01a205b15c20
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
   author: aida-session-start
