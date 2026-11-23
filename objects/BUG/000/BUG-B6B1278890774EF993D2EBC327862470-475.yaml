@@ -19,7 +19,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T20:28:46.424573080Z
-modified_at: 2026-11-23T01:05:22.237191885Z
+modified_at: 2026-11-23T01:06:00.221942074Z
 req_type: Bug
 tags:
 - fasttrack
@@ -215,6 +215,13 @@ comments:
   created_at: 2026-11-23T00:50:32.612499885Z
   modified_at: 2026-11-23T00:50:32.612499885Z
   session_id: 01a205b15c20
+- id: 01a205f0-6e82-7563-8381-8373a0ef2a21
+  author: joe
+  content: 'ADVISOR RULING 2026-11-22 18:08 MST: parked; #4395 closed (branch kept). r3 final CR at 91414f02 has 3 P1s (merge operand order vs merge=union at ship_from_seat.rs:2578; base advance before auto-exit errors instead of NoChange at :2567; no PR-target check on the base refresh at :2629) plus a p3 dry-run text issue. Revisit only if early merge-only reviews still waste reviewers after BUG-2706 lands. If so, prefer the simplest form: the lane wrapper simply never pushes before its first fix commit.'
+  created_at: 2026-11-23T01:06:00.221942074Z
+  modified_at: 2026-11-23T01:06:00.221942074Z
+  session_id: 01a20440-982d-7872-93de-fff272d8657c
+  harness_version: 2.1.329 (Claude Code)
 history:
 - id: 01a20502-2124-7e30-a3eb-e4ec2c83842d
   author: aida-session-start
