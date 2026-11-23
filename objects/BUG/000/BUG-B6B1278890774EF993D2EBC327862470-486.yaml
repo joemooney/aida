@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:33:35.663826229Z
-modified_at: 2026-11-23T06:54:17.972874410Z
+modified_at: 2026-11-23T06:54:31.815499628Z
 req_type: Bug
 tags:
 - knob
@@ -166,6 +166,25 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T06:54:06.181280670Z
   modified_at: 2026-11-23T06:54:06.181280670Z
+- id: 01a2072f-8c37-7961-85bd-796193aa24fd
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:54):
+    # BUG-2725 / PR #4407 r3 = SCOPE CUT, round 3 of 4 (advisor-122 ruling 2026-11-22 23:58 MST; relayed by product-15). Lane: CODEX. Landing gate, so strict. Keep it SMALL.
+
+    The counting CR at b56b6581 (r2) has five more blockers, mostly the knob's interplay with land.rs derive (merge-hold Pending, approval FULL request, landing.mode review-gated, workflow identity, run_in_progress). It's spreading across two state machines. RULING: the knob changes ONE decision only, the auto-train ADMISSION in aida-cli-lib/src/review_watch_ready.rs:
+    - On GitHub with landing.mode != review-gated, a clean-behind head (merge-tree proof, as now) whose head-exact FULL evidence is green is Ready for the TRAIN, and the wake says `aida pr train N`.
+    - REVERT the land.rs / land_ci_base.rs derive changes. `aida land status` stays advisory and UNCHANGED (it may still SAY STALE-CI-BASE; display only).
+    - FULL evidence = BUG-2723's run selector: latest_runs_at(head) by workflow PATH, not display name, with in-progress = not green. Either rebase on #4408 (BUG-2723) if it has landed, or include the same rule locally with `// TODO(BUG-2723): share latest_runs_at`.
+    - Default stays "strict", so nothing changes until the setting is flipped.
+    Tests: clean-behind + FULL green = Ready-for-train; in-progress FULL = NotReady; review-gated mode = unchanged; GitLab = unchanged.
+    The reviewer scope is the scope cut plus the diff.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T06:54:31.815499628Z
+  modified_at: 2026-11-23T06:54:31.815499628Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a20680-0f23-7a31-87b8-f2996b5ab36a
   author: aida-session-start
