@@ -13,7 +13,6 @@ modified_at: 2026-11-23T05:40:57.617201668Z
 req_type: Task
 tags:
 - config
-- operator-held
 - review
 - temporary
 history:
@@ -54,6 +53,10 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a206f0-1970-7112-91c2-4b346b3f1963
+  author: joe
+  timestamp: 2026-11-23T05:45:28.176512521Z
+  changes: []
 processing_record:
 - id: 01a206eb-f891-7b02-b779-88b51c6d0116
   timestamp: 2026-11-23T05:40:57.617199443Z
@@ -66,10 +69,6 @@ processing_record:
   commit_sha: ca95624cadfe896abf34e36cde0e98ad40c847e8
   summary: 'Advisor review: the diff is the exact inverse of 012b95ef890''s config additions (TASK-3823 temporary reviewer-seat model boost), checked line by line. It''s config only, scheduled for revert on 2026-11-22. It restores default reviewer models and stops Claude reviewers using claude-fable-5-2 (Joe''s 11-22 lane ruling is codex, and the Fable window closed). The product seat authored it; reviewed independently by the advisor.'
   review_verdict: approved
-deferred: true
-deferred_at: 2026-11-20T15:40:58.170174220Z
-deferred_until: date:2026-11-22
-deferred_reason: revert after the weekly token reset unless Joe extends the boost
 execution_mode: drain
 filed_at:
   code_sha: 78b437097cbccc7025e7529f2f06ff0f092c8495
