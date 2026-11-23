@@ -1193,6 +1193,10 @@ fn handle_dev_deactivate() -> Result<()> {
 }
 
 fn handle_dev_status() -> Result<()> {
+    // trace:BUG-2728 | ai:codex
+    if crate::BUILD_GIT_DIRTY == "1" {
+        println!("Running build changes: {}", env!("AIDA_BUILD_GIT_STATUS"));
+    }
     let active = std::env::var("AIDA_DEV_ACTIVE").is_ok();
     let pinned_binary = std::env::var("AIDA_DEV_BIN")
         .ok()
