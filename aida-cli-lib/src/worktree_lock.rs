@@ -41,6 +41,7 @@ pub(crate) struct LockedWorktree {
 /// rather than as a `SessionLease`.
 // trace:TASK-b6b1278890774ef993d2ebc327862470-064 | ai:claude
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(crate) struct LockOnlyEntry {
     pub scope: String,
     pub worktree_path: String,

@@ -2334,6 +2334,30 @@ pub(crate) fn list_leases_for_clone_reclaim(
     list_leases_strict_inner(root, &[], true, true)
 }
 
+// trace:BUG-2715 | ai:codex
+fn read_gate_candidate(path: &std::path::Path) -> std::io::Result<String> {
+    use std::io::{Error, ErrorKind, Read};
+    use std::os::unix::fs::OpenOptionsExt;
+
+    const MAX_BYTES: u64 = 1024 * 1024;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "expected a regular lease file",
+        ));
+    }
+    let mut body = String::new();
+    file.take(MAX_BYTES + 1).read_to_string(&mut body)?;
+    if body.len() as u64 > MAX_BYTES {
+        return Err(Error::new(ErrorKind::InvalidData, "lease exceeds 1 MiB"));
+    }
+    Ok(body)
+}
+
 fn list_leases_strict_inner(
     project_root: &std::path::Path,
     spec_ids: &[&str],
@@ -2369,7 +2393,7 @@ fn list_leases_strict_inner(
         // trace:TASK-2813 | ai:claude
         if any_unparseable_is_unknown
             && name.starts_with(crate::worktree_lock::LOCK_ONLY_PREFIX)
-            && std::fs::read_to_string(&p)
+            && read_gate_candidate(&p)
                 .is_ok_and(|body| crate::worktree_lock::parse_lock_only_entry(&body).is_ok())
         {
             continue;
@@ -2377,11 +2401,11 @@ fn list_leases_strict_inner(
         let label = p.display().to_string();
         let inspect = || {
             format!(
-                "inspect with `cat -- {}`",
+                "inspect with `stat -- {}`",
                 crate::session_end::shell_single_quote(&label)
             )
         };
-        match read_lease_file_for_gate(&label, || std::fs::read_to_string(&p), spec_ids) {
+        match read_lease_file_for_gate(&label, || read_gate_candidate(&p), spec_ids) {
             LeaseFileRead::Lease(lease) => out.push(*lease),
             LeaseFileRead::OtherScope if !any_unparseable_is_unknown => {}
             LeaseFileRead::OtherScope => {

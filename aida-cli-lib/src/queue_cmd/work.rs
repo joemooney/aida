@@ -4277,9 +4277,70 @@ mod force_claim_ownership_tests {
                 .unwrap_err()
                 .to_string();
             assert!(
-                err.contains(&broken.display().to_string()) && err.contains("cat --"),
+                err.contains(&broken.display().to_string()) && err.contains("stat --"),
                 "{err}"
             );
+        }
+    }
+
+    // trace:BUG-2715 | ai:codex
+    #[test]
+    fn bug_2715_mixed_lock_and_session_counts_as_second_claim() {
+        let root = tempfile::tempdir().unwrap();
+        let clone = root.path().join("clone");
+        for id in ["owner", "lock-mixed"] {
+            let path = crate::lease_path(root.path(), id);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let mut body = format!(
+                r#"id = "{id}"
+scope = "BUG-2715"
+slug = "test"
+owner = "test"
+worktree_path = {}
+branch = "rework"
+started_at = "2026-11-05T00:00:00Z"
+hostname = "h"
+tree_kind = "clone"
+"#,
+                aida_core::toml_quote::toml_string(&clone.display().to_string())
+            );
+            if id == "lock-mixed" {
+                body.push_str("authorized_by = \"operator\"\naida_lock_only = true\n");
+            }
+            std::fs::write(path, body).unwrap();
+        }
+        let err = check_exited_branch_clone(root.path(), "rework", &clone).unwrap_err();
+        assert!(err.to_string().contains("several matching leases"), "{err}");
+    }
+
+    // trace:BUG-2715 | ai:codex
+    #[test]
+    fn bug_2715_fifo_refuses_without_waiting_for_writer() {
+        let root = tempfile::tempdir().unwrap();
+        for id in ["session", "lock-fifo"] {
+            let fifo = crate::lease_path(root.path(), id);
+            std::fs::create_dir_all(fifo.parent().unwrap()).unwrap();
+            assert!(std::process::Command::new("mkfifo")
+                .arg(&fifo)
+                .status()
+                .unwrap()
+                .success());
+            let path = root.path().to_owned();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let result = check_exited_branch_clone(&path, "rework", &path.join("clone"));
+                tx.send(result.unwrap_err().to_string()).unwrap();
+            });
+            let err = rx
+                .recv_timeout(std::time::Duration::from_secs(5))
+                .expect("FIFO read blocked");
+            assert!(
+                err.contains(&fifo.display().to_string())
+                    && err.contains("regular")
+                    && err.contains("stat --"),
+                "{err}"
+            );
+            std::fs::remove_file(fifo).unwrap();
         }
     }
 
