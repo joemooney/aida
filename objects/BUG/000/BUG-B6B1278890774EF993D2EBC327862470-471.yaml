@@ -8,10 +8,16 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-23T19:38:30.297569193Z
+modified_at: 2026-11-23T19:38:32.843404267Z
 req_type: Bug
 tags:
 - track:integration
+comments:
+- id: 01a209ea-ce0b-7581-b40a-6fbcbb2f8e9e
+  author: joe
+  content: 'Draft to Approved: advisor-122 disposition 2026-11-23 12:40 (p27 integration bundle, --mode drain). GUARD: reap sub-budget plus partial-result reporting in the shift scheduler ONLY; no change to any reap decision, else punt.'
+  created_at: 2026-11-23T19:38:32.843404267Z
+  modified_at: 2026-11-23T19:38:32.843404267Z
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
