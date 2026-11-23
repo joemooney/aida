@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T10:04:30.997005861Z
-modified_at: 2026-11-23T10:19:23.228849182Z
+modified_at: 2026-11-23T10:30:22.405873715Z
 req_type: Bug
 tags:
 - ci
@@ -35,6 +35,18 @@ comments:
   modified_at: 2026-11-23T10:06:32.304172360Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a207f4-f3f4-7ad1-8542-8628fa4e9f92
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 55f63f3800861fee8b80ae3046c104290baf7fbf plus native worktree diff. Merge-base diff empty, no untracked additions.
+    AC1: [evidence: behavioral-test] tests/test_ci_tiers.py:118 evaluates the workflow cancellation rule and shared PR group. Reproduced the old cancellation expression first. Seven workflow tests passed. The verified draft uses the manual recorder CI requester at queue_cmd/work.rs:7968 and review_commands.rs:2603.
+    AC2: [evidence: behavioral-test] review_draft.rs:1607 asserts that the launcher requests CI for PR 59 after verifying the approval. Targeted launcher test passed. Existing full_tier tests cover the unlabelled PR edit.
+    Probes: checked verdict normalization and deferred finding metadata, workflow actions, zero/multiple spec labels, retries and failed verification. Fixed a potential loss of finding disposition by using the canonical verdict kind. Request occurs once per verified handoff after all labels. Bad grant and unbound-child refusal tests retained. Forge errors remain best effort. Real GitHub scheduling awaits hosted CI. make check-ci-fast reached shard tests and stopped because the lane job runner refuses cargo metadata.
+  created_at: 2026-11-23T10:30:22.405873715Z
+  modified_at: 2026-11-23T10:30:22.405873715Z
+  session_id: 01a207e7f7cd
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a207e8-2f2d-7fa2-82e0-95c6d81ab2de
   author: aida-session-start

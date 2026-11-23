@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T09:53:17.311604809Z
+modified_at: 2026-11-23T10:30:37.162258099Z
 req_type: Bug
 tags:
 - agreed-id
@@ -107,6 +107,18 @@ comments:
   modified_at: 2026-11-23T09:53:17.311604809Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a207f5-2cb3-7e31-8e96-797fdf2450a8
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 1adec85046293952fdaa59229a70a5f61095a514 plus the native working-tree diff. Reviewed origin/main...HEAD and untracked additions (none).
+    AC1: [evidence: behavioral-test] story_1698_mandate_tests.rs:1532 exercises the production decision with no tracking ref, then a stale tracking ref and an origin-only padded agreed label on a claimed branch. Findings 1 and 8 follow the scope ruling: remove the pinned-tree reader and use the ordinary canonical store, refreshing once on a miss. A locally resolved label can be used without consulting origin. Local-ahead verification on every hit and a new graph-wide resource ceiling are outside the revised contract. Finding 2 uses the shared unambiguous resolver. Findings 3 and 4 use raw title, branch and range inputs in direct ship and apply coverage inside clean, equal-HEAD snapshots. Changes during selection retry or refuse.
+    AC2: [evidence: behavioral-test] The same test observes the actual MissingSpecs refusal for a numeric collision and an absent label, naming both labels and the refreshed SHA. Finding 5 preserves raw subject IDs, SHA and the strict loader error for unreadable objects. Findings 6 and 7 retain production trace assertions, seed TASK-1 and a supervised hold, and trace both regression cases to their criteria.
+    Probes covered padding, absent refs, collisions, multiple labels, unreadable YAML and concurrent graph changes. The refresh uses the existing locked pull with dirty-store refusal. Gate authority and hold checks remain in the decision path. Lane job j20261123T102139356-2-0 passed 1 test. Formatting, diff checks, writer inventory, dependency ratchet and all 48 FAST source gates passed. Stopped make during the Cargo ratchets because this native lane requires launcher-run Cargo. Full FAST and published-head CI remain unverified. The diff exceeds the 120-line target.
+  created_at: 2026-11-23T10:30:37.162258099Z
+  modified_at: 2026-11-23T10:30:37.162258099Z
+  session_id: 01a207da9c5c
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
