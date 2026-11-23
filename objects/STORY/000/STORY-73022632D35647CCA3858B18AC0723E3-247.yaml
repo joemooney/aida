@@ -1,0 +1,32 @@
+id: 01a20aab-f177-7fc1-9513-27bd6c320359
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-247
+title: 'Review PR-4464: [AI:codex] fix(forge): back off GitHub watchers to reserve train CI budget (BUG-2735)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20a7e`) for branch `bug-b6b1278890774ef993d2ebc327862470-496`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4464>
+  - Branch: `bug-b6b1278890774ef993d2ebc327862470-496` → `main`
+
+  ## Covers
+
+  - BUG-2735
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4464` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T23:09:30.359712617Z
+modified_at: 2026-11-23T23:09:30.359712617Z
+req_type: Story
+filed_at:
+  code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 4e140498bc
+  session: 01a20a7e7a2a
