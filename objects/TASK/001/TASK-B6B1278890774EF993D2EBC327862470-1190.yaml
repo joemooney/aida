@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:04.702364545Z
-modified_at: 2026-11-23T09:52:12.720845805Z
+modified_at: 2026-11-23T09:53:32.855929314Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -83,6 +83,20 @@ comments:
     Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
   created_at: 2026-11-23T09:52:12.567042070Z
   modified_at: 2026-11-23T09:52:12.567042070Z
+- id: 01a207d3-6aee-7541-a0af-2bfd73ceef83
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 02:53):
+    # TASK-3211 / PR #4420 r2 (advisor-122 ruling 2026-11-23 02:50 MST; relayed by product-15). Lane: CODEX. Admission is lock/gate code, so strict. SMALL.
+
+    CR at d7b559f9 (r1, +21/-22 lines of test margins). Both findings block but are small; the reviewer scope is the two plus the diff.
+    1. admission_owner.rs:1170 / :1220: don't trade coverage for margin. Keep ONE behavioural test at wait_secs=1 for BUG-2703 ac336622, using an injectable or fake clock (or a generous OUTER timeout with the 1s inner deadline asserted by elapsed bounds), so it isn't scheduling-flaky. The 10s fixtures may stay for the other tests.
+    2. admission_owner.rs:1663: assert the fixture actually REACHED the post-registration retry path (a hook or counter after registration) and returned at the ORIGINAL deadline.
+    One targeted cargo run, then `make check-ci-fast`, then push on the existing branch. COMMIT your work.
+  created_at: 2026-11-23T09:53:32.855929314Z
+  modified_at: 2026-11-23T09:53:32.855929314Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fcf0-ccab-7c51-aaa4-eaba556471cb
   author: joe
