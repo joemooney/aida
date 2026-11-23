@@ -8,7 +8,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:51:17.240362338Z
-modified_at: 2026-11-23T15:06:16.718468048Z
+modified_at: 2026-11-23T15:18:49.359268771Z
 req_type: Bug
 tags:
 - track:integration
@@ -34,6 +34,16 @@ comments:
   content: Draft to Approved disposition RATIFIED by advisor-122 at 06:15 (2026-11-23); routed into the promotion-26 integration bundle (product-15).
   created_at: 2026-11-23T13:12:43.337814013Z
   modified_at: 2026-11-23T13:12:43.337814013Z
+- id: 01a208fd-077a-7de3-9cc4-6aed1ebb6900
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 06b95f8a1e5d57a1f8210a2da787874292aeaf5e plus the two native worktree edits. The origin/main merge-base diff is empty and there are no untracked additions.
+    AC1: [evidence: behavioral-test] ci_startup_monitor_tests.rs:984 exercises both collections shrinking across checkpoint reloads. All 18 monitor tests passed, including the original overlap and deduplication case. ci_startup_monitor.rs:26 and both scan loops use matching page sizes for requests and exhaustion. Checked query separators, empty/short/full pages, legacy page counters and invalid lower bounds. No authority paths changed. Overlap tolerates p-1 deletions at boundary p and limits ten pages to 910 stable row positions. Larger shifts may still skip rows.
+  created_at: 2026-11-23T15:18:49.359268771Z
+  modified_at: 2026-11-23T15:18:49.359268771Z
+  session_id: 01a208ea8277
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f2f2-610f-7cd2-8d02-d615becc78ba
   author: joe

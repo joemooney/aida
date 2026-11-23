@@ -12,7 +12,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T19:01:24.778628762Z
-modified_at: 2026-11-23T15:12:43.440150824Z
+modified_at: 2026-11-23T15:27:52.914047722Z
 req_type: Task
 tags:
 - from-implementer:STORY-2824
@@ -115,6 +115,15 @@ comments:
     AC3: [evidence: behavioral-test] The stale pure-git config and the PR gate ledger, exclusion ledger, hold and event files retain their original bytes or absence across the refusal. The recording path then emits an audit event (bug2406_train_tests.rs:1591). Inspected carry-over and label lookup, typed refusal propagation, expired budgets, store refresh contention and retry paths. Updated the snapshot stdin writer inventory after its ratchet flagged the helper change. No grant, mandate scope or hold-release rule added. Final lane job j20261123T150426685-2-0 executed all three targeted tests, all passed. No published round-two head or hosted CI result yet.
   created_at: 2026-11-23T15:12:43.440150824Z
   modified_at: 2026-11-23T15:12:43.440150824Z
+  session_id: 01a208e6d14f
+  harness_version: codex-cli 0.167.0
+- id: 01a20905-539d-7312-a75b-6af40b0ad852
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: fd52125026c966d6dc8377cc901a398642dd3eed plus final native working diff. The fast target passed 48 source gates and then identified two missing gate dependency inventory entries/groups. Reviewed the actual forge lookup, deadline and process-group calls against the protected inventories and reconciled dispatch_deps.rs and orchestrator_leaves.rs. No test removed or relaxed. Lane job j20261123T152449666-2-0 passed the complete gate-path suite and the three mandate regressions, 55 tests total. Remaining application ratchet groups and published-head CI are unverified.
+  created_at: 2026-11-23T15:27:52.914047722Z
+  modified_at: 2026-11-23T15:27:52.914047722Z
   session_id: 01a208e6d14f
   harness_version: codex-cli 0.167.0
 history:
