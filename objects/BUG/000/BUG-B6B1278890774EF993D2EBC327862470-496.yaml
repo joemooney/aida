@@ -1,0 +1,29 @@
+id: 01a20a77-76c1-7890-aba9-3ea04973958e
+spec_id: BUG-b6b1278890774ef993d2ebc327862470-496
+agreed_id: BUG-2735
+title: Seat-side GitHub pollers share one 5000/h core budget with the auto-train; add a budget check and back off below 20% remaining
+description: |
+  Found 2026-11-23 15:06 MST (advisor-122; filed by product-15). The shared GitHub account hit its CORE REST rate limit (0/5000, reset 15:06). The auto-train and train dry-runs then FAIL CLOSED ("could not read full-tier CI … rate limit exceeded"), so nothing lands until the reset. Cause: seat-side GitHub pollers share the 5000/h core budget with the auto-train. Examples: product's one-shot PR watcher polled `gh pr list` every 30s (~120 calls/h), a ci:full labeler scanned every open PR every 3 min, per-PR waiters polled every 60s, plus the integration seat's 1-min watcher. Nothing budgets or backs off.
+
+  ## Acceptance
+  - AC1: AIDA's own forge pollers (review-watch, auto-train, main-watch, and any seat watcher AIDA ships) check the remaining core budget (`gh api rate_limit` or the response headers) and BACK OFF when below 20% remaining. Landing-critical calls (train CI reads) get priority over watchers. The back-off is reported, not silent.
+  - AC2: `aida doctor` (or `aida land status`) shows the remaining core budget and which pollers consumed it, so a seat can see when its own polling is starving the train. Test with a fake rate_limit response below the threshold.
+status: Approved
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T22:12:11.073407530Z
+modified_at: 2026-11-23T22:12:11.073407530Z
+req_type: Bug
+tags:
+- forge
+- landing
+- small
+- throughput
+filed_at:
+  code_sha: 4e140498bc8d425330633234bec803e5f8584ca0
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: f1a50179e5a
+  vendor: claude
