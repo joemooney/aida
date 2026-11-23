@@ -1,4 +1,10 @@
 - user_id: role:implementer
+  requirement_id: 01a1f9c0-1c04-72f1-8efa-7e549eec0f34
+  position: -1062000
+  added_by: role:implementer
+  added_at: 2026-11-23T12:40:02.116640384Z
+  for_role: implementer
+- user_id: role:implementer
   requirement_id: 01a1f2bf-ef26-7dd0-94fd-03a8a9744a06
   position: -1061000
   added_by: role:implementer
@@ -400,13 +406,5 @@
   position: 625000
   added_by: role:implementer
   added_at: 2026-11-14T20:39:44.990127764Z
-  for_role: implementer
-  added_by_machine: imac
-- user_id: role:implementer
-  requirement_id: 01a1f9c0-1c04-72f1-8efa-7e549eec0f34
-  position: 637000
-  added_by: role:implementer
-  note: Read-only model/effort diagnostics. For each vendor and effective seat, report the resolved values and their source in config show and reviewer pickup dry-run. Use the same resolver as the actual headless launch, including worktree-local config and explicit env precedence. Test a reviewer checkout with and without the temporary config and env overrides. Keep launch behavior and authority unchanged. Real vendor acceptance remains TASK-3173.
-  added_at: 2026-11-21T09:10:25.789356670Z
   for_role: implementer
   added_by_machine: imac
