@@ -12,12 +12,12 @@ description: |
   - AC2: Defense in depth: while the mode is active, the verdict recorder demotes an unmet-claimed-ac finding marked blocking (and not also p1, data-loss or security) to deferred, and records that the demotion happened.
   - AC3: With the mode off, prompt and recorder behaviour are unchanged (a test covers both states).
   - AC4: A regression test records a verdict with one unmet-claimed-ac blocking finding under the mode and asserts disposition deferred plus an approve-eligible verdict.
-status: InProgress
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T19:22:13.005269Z
-modified_at: 2026-11-23T01:54:03.374077062Z
+modified_at: 2026-11-23T01:54:53.993288594Z
 req_type: Bug
 tags:
 - mass-change
@@ -261,6 +261,15 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a2061d-040a-7f53-8815-360875bef090
+  author: dirtlab
+  timestamp: 2026-11-23T01:54:54.602334086Z
+  session_id: 01a2061be32a
+  harness_version: codex-cli 0.167.0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: NeedsAttention
 filed_at:
   code_sha: aa567732958f669b69ec5848863ea0b13c800db5
   branch: main
@@ -273,7 +282,6 @@ implementation_info:
   reopened_at_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
 attention_reason:
   category: design-fork
-  detail: AC5 requires every out-of-list finding to defer, including mutation-kill and untested-path. Approved operator ADR-76 requires those same findings to block in gate and sensitive code even when the configured list omits test-gap. The working patch defers ordinary gaps but preserves that path-scoped refusal. Please settle precedence for a finding with explicit sensitive file evidence.
-  lean: Keep the ADR-76 path-scoped floor and apply the configured list to ordinary gaps.
+  detail: 'PR #4396 host merge has behavioral overlap in aida-cli-lib/src/gate/kernel_deps.rs. With mass-change active, a finding with class unmet-claimed-ac and absent blocking_tier is Unclassified and blocks under main, but defers under the PR. Preserving the ADR-76 sensitive-code floor does not decide that ordinary class-only case. Confirm the rule for submission and recording. Both kernel_deps.rs and aida-cli-lib/src/review_draft.rs remain unresolved.'
   raised_by: implementer
-  raised_at: 2026-11-22T19:35:32.277952Z
+  raised_at: 2026-11-23T01:54:53.993288594Z
