@@ -1,0 +1,31 @@
+id: 01a2098f-9455-7761-a8e6-b7c3d59855ce
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1260
+title: 'Review follow-up: The new paragraph at line 75 says approved-small ignores drain_types, but line 85 says a m'
+description: |-
+  From STORY-3038
+  Reviewed sha: 4646e44fe43a97107e04d5f6b0b22c7601d7f397
+
+  The new paragraph at line 75 says approved-small ignores drain_types, but line 85 says a missing list or an unknown type keeps supervision. The parser also processes drain_types for approved-small and can accumulate a warning saying no type gets the drain default even while approved-small is active (unset_mode.rs:154–184, 252–255). Scope both the documentation and drain_types validation to the legacy default = "drain" mode, and regenerate the showcase.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T17:58:54.293521139Z
+modified_at: 2026-11-23T17:58:54.293521139Z
+req_type: Task
+tags:
+- carried-from:STORY-3038
+- finding-hash:4d637ccb
+- from-review:STORY-3038
+relationships:
+- rel_type: References
+  target_id: 01a20929-0c83-76f1-9a54-2d96d1a5a92c
+  created_at: 2026-11-23T17:59:08.662046243Z
+filed_at:
+  code_sha: 4646e44fe43a97107e04d5f6b0b22c7601d7f397
+  branch: pr-4448
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef906ec7464
+  vendor: claude
+  session: 01a2098be451

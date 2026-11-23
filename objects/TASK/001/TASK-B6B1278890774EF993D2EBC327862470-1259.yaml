@@ -1,0 +1,31 @@
+id: 01a2098f-5c63-72e2-8ede-67b92f3a1a05
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1259
+title: 'Review follow-up: The strict_terms check at lines 282–284 and 375–412 treats common words as strict metadata'
+description: |-
+  From STORY-3038
+  Reviewed sha: 4646e44fe43a97107e04d5f6b0b22c7601d7f397
+
+  The strict_terms check at lines 282–284 and 375–412 treats common words as strict metadata without regard to what they modify. An Approved small change titled 'Fix Shift key handling' in ordinary UI code is held solely because 'shift' was intended to catch night-shift guards. Use explicit tier metadata and scoped path classification, and test an ordinary title containing a colliding word.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T17:58:39.971726305Z
+modified_at: 2026-11-23T17:58:39.971726305Z
+req_type: Task
+tags:
+- carried-from:STORY-3038
+- finding-hash:59e797f2
+- from-review:STORY-3038
+relationships:
+- rel_type: References
+  target_id: 01a20929-0c83-76f1-9a54-2d96d1a5a92c
+  created_at: 2026-11-23T17:58:53.868842214Z
+filed_at:
+  code_sha: 4646e44fe43a97107e04d5f6b0b22c7601d7f397
+  branch: pr-4448
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ef906ec7464
+  vendor: claude
+  session: 01a2098be451
