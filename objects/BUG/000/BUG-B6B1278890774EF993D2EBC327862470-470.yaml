@@ -15,7 +15,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-20T23:33:38.175003298Z
-modified_at: 2026-11-20T23:35:43.633584733Z
+modified_at: 2026-11-23T06:59:50.581009617Z
 req_type: Bug
 tags:
 - cargo-wrapper
@@ -31,6 +31,20 @@ comments:
   modified_at: 2026-11-20T23:35:43.633584733Z
   session_id: 01a1f473-15f0-78f3-a8fd-19ec8b23ecc9
   harness_version: 2.1.328 (Claude Code)
+- id: 01a20734-69a3-7411-87f5-51ede5793250
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 23:59):
+    # BUG-2708: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2708` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2708 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2708)`. One targeted test run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T06:59:50.581009617Z
+  modified_at: 2026-11-23T06:59:50.581009617Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a1fb50-9cb2-7cb1-a49c-94ac147e2401
   author: joe
