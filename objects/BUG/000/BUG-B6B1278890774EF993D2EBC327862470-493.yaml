@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: A legacy review-watch/auto-train admission claim whose recorded pid+start-time is not live is treated as RELEASED immediately (the same liveness proof leases use: pid exists AND start time matches), so manual train admission proceeds without waiting out the bound.
   - AC2: Test: a claim recorded for a dead pid (or a reused pid with a different start time) does not block admission; a claim for a live pid+start-time still does.
-status: Approved
+status: InProgress
 priority: Medium
-owner: ''
+owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T15:48:18.423378315Z
-modified_at: 2026-11-23T15:49:46.380684047Z
+modified_at: 2026-11-23T16:30:41.858932054Z
 req_type: Bug
 tags:
 - admission
@@ -35,6 +35,14 @@ comments:
   modified_at: 2026-11-23T15:49:46.380684047Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+history:
+- id: 01a2093e-d2c2-7a22-853a-170847668364
+  author: aida-session-start
+  timestamp: 2026-11-23T16:30:41.858931177Z
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: InProgress
 filed_at:
   code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
   branch: main
