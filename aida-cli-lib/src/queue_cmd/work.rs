@@ -4106,10 +4106,18 @@ fn inspect_queue_work_branch(
     // it too. It is never offered for `git worktree remove` (not a linked
     // worktree); ending its session salvages and removes it.
     // trace:TASK-2053 | ai:claude
-    let clones: Vec<_> = clone_seat_trees(root)
-        .into_iter()
-        .filter(|wt| wt.branch.as_deref() == Some(branch) && !adopted(&wt.path))
-        .collect();
+    // trace:BUG-2715 | ai:codex
+    let leases = if force_claim {
+        crate::leases::list_leases_for_clone_reclaim(root).map_err(anyhow::Error::msg)?
+    } else {
+        list_leases(root)
+    };
+    let clones: Vec<_> = crate::status_prs::clone_trees_from_leases(
+        leases.iter().filter(|lease| lease.branch == branch),
+    )
+    .into_iter()
+    .filter(|wt| !adopted(&wt.path))
+    .collect();
     // Validate the entire set before retiring any clone. Teardown still
     // rechecks each owner and working tree to protect against later races.
     // trace:BUG-2455 | ai:codex
@@ -4137,7 +4145,7 @@ fn inspect_queue_work_branch(
         if wt.branch.as_deref() != Some(branch) || adopted(&wt.path) {
             continue;
         }
-        let leased = list_leases(root)
+        let leased = leases
             .iter()
             .any(|lease| lease.branch == branch || lease.worktree_path == wt.path);
         let live = aida_core::liveness::probe_live_agent_processes()
@@ -4262,6 +4270,12 @@ mod force_claim_ownership_tests {
     #[test]
     fn bug_2715_truncated_session_refuses_even_with_readable_match() {
         let root = tempfile::tempdir().unwrap();
+        assert!(crate::test_git::git_command()
+            .args(["init", "-q"])
+            .arg(root.path())
+            .status()
+            .unwrap()
+            .success());
         let clone = root.path().join("clone");
         let broken = crate::lease_path(root.path(), "broken.lease");
         std::fs::create_dir_all(broken.parent().unwrap()).unwrap();
@@ -4273,7 +4287,7 @@ mod force_claim_ownership_tests {
                     aida_core::toml_quote::toml_string(&clone.display().to_string())
                 )).unwrap();
             }
-            let err = check_exited_branch_clone(root.path(), "rework", &clone)
+            let err = inspect_queue_work_branch(root.path(), Some("rework"), None, true, true)
                 .unwrap_err()
                 .to_string();
             assert!(
@@ -4317,6 +4331,12 @@ tree_kind = "clone"
     #[test]
     fn bug_2715_fifo_refuses_without_waiting_for_writer() {
         let root = tempfile::tempdir().unwrap();
+        assert!(crate::test_git::git_command()
+            .args(["init", "-q"])
+            .arg(root.path())
+            .status()
+            .unwrap()
+            .success());
         for id in ["session", "lock-fifo"] {
             let fifo = crate::lease_path(root.path(), id);
             std::fs::create_dir_all(fifo.parent().unwrap()).unwrap();
@@ -4328,7 +4348,7 @@ tree_kind = "clone"
             let path = root.path().to_owned();
             let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
-                let result = check_exited_branch_clone(&path, "rework", &path.join("clone"));
+                let result = inspect_queue_work_branch(&path, Some("rework"), None, true, true);
                 tx.send(result.unwrap_err().to_string()).unwrap();
             });
             let err = rx

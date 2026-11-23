@@ -770,8 +770,15 @@ pub(crate) fn seat_trees(project_root: &std::path::Path) -> Vec<WorktreeRecord> 
 /// directory exists, deduplicated by path.
 // trace:TASK-2053 | ai:claude
 pub(crate) fn clone_seat_trees(project_root: &std::path::Path) -> Vec<WorktreeRecord> {
+    clone_trees_from_leases(&crate::list_leases(project_root))
+}
+
+// trace:BUG-2715 | ai:codex
+pub(crate) fn clone_trees_from_leases<'a>(
+    leases: impl IntoIterator<Item = &'a crate::SessionLease>,
+) -> Vec<WorktreeRecord> {
     let mut records: Vec<WorktreeRecord> = Vec::new();
-    for lease in crate::list_leases(project_root) {
+    for lease in leases {
         if lease.tree_kind != crate::seat_clone::TreeKind::Clone
             || !std::fs::symlink_metadata(&lease.worktree_path).is_ok_and(|m| m.is_dir())
             || records.iter().any(|r| r.path == lease.worktree_path)
@@ -780,7 +787,7 @@ pub(crate) fn clone_seat_trees(project_root: &std::path::Path) -> Vec<WorktreeRe
         }
         records.push(WorktreeRecord {
             branch: (!lease.branch.is_empty()).then(|| lease.branch.clone()),
-            path: lease.worktree_path,
+            path: lease.worktree_path.clone(),
             clone: true,
         });
     }

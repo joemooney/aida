@@ -17,7 +17,7 @@ use crate::{
     branch_commits_ahead_main, brief, build_integrate_rebase_args, build_queue_warn_subset,
     burndown, canonical_review_story, canonical_role_name, capture_interface_changes,
     capture_review_calibration_for_spec, capture_test_plan, change_lookup_for_branch, ci_failures,
-    classify_queue_move_target, cli, clone_seat_trees, collect_open_facts, collect_open_prs,
+    classify_queue_move_target, cli, collect_open_facts, collect_open_prs,
     commits_behind_origin_main, completion, complexity_calibration, config_path_for_project,
     confirm, current_role_instance_is_companion, current_user_id,
     default_queue_collision_fingerprint, derive_parent_epic_label, detect_default_branch_ref,
