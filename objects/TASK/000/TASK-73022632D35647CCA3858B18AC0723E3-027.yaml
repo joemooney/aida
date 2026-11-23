@@ -17,7 +17,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-15T23:55:22.866694Z
-modified_at: 2026-11-23T03:28:26.355431019Z
+modified_at: 2026-11-23T04:06:03.840949650Z
 req_type: Task
 tags:
 - from-advisor:BUG-2603
@@ -717,6 +717,18 @@ comments:
     TASK-3838: canonical scratch and Cargo target ancestry checked before private TempDir allocation, with no target fallback including in CI. The target scan found no matching fixture directories. Fast gate j20261123T031851954-2-0 in progress. Findings addressed in source; approval evidence pending. No production authority changes.
   created_at: 2026-11-23T03:28:26.355431019Z
   modified_at: 2026-11-23T03:28:26.355431019Z
+  session_id: 01a2066533d8
+  harness_version: codex-cli 0.167.0
+- id: 01a20695-1968-73e0-b719-17d92ebbc87d
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 03e561f08cbaaad63aa2dfb0125b456bf3dea185 plus final native working diff. Four test files changed, no untracked additions.
+    AC1: [evidence: behavioral-test] Final exact relocated-binary regression j20261123T034247906-3-0 passed (1 passed, 0 ignored). The roster refused the first cache/shm fixture outside the system temporary root. Exact-case child re-exec now pins TMPDIR to the private scratch before startup, preserving roster and synthetic-store validation. Direct-parent check excludes the old /tmp and target-based fixture implementations.
+    AC2: [evidence: behavioral-test] Codex control checks an ambient /tmp write, configured extra-root write and ungranted sibling denial. Required-live mode fails on unavailable prerequisites or failed probes. Unsandboxed imac and dell1 results at the host-published head are still required. BUG-2701 covers the waived nested-live lane.
+    TASK-3838: shared helper uses 0700 TempDir ownership, canonical temporary/target checks and no Cargo target fallback. Post-run target scan found no matching fixture directories. make check-ci-fast j20261123T034239512-2-0 passed. Publication declared Refs-only.
+  created_at: 2026-11-23T04:06:03.840949650Z
+  modified_at: 2026-11-23T04:06:03.840949650Z
   session_id: 01a2066533d8
   harness_version: codex-cli 0.167.0
 history:

@@ -15,7 +15,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T03:14:23.615774253Z
-modified_at: 2026-11-23T03:58:27.134554933Z
+modified_at: 2026-11-23T04:11:01.536742030Z
 req_type: Bug
 tags:
 - ci
@@ -37,6 +37,20 @@ comments:
   modified_at: 2026-11-23T03:38:56.005047390Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20699-a37e-7212-9b00-38774d60216c
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 215313b8d3a8089240cc87b0210136d9d5831fb1 plus native working tree. Merge-base diff empty, four modified files, zero untracked additions.
+    AC1: [evidence: behavioral-test] pr_train.rs:825 selects by completed run, tier, numeric run order and verified workflow/head/repository/branch. Missing metadata retains the blocking rows.
+    AC2: [evidence: behavioral-test] pr_train.rs:945 reports the blocking check, run ID, cancellation evidence and supersession status. Self-review narrowed diagnostics to the classified blocking rows.
+    AC3: [evidence: behavioral-test] tests/story_1690_train_tests.rs:6493 proves the cancelled FAST/green FULL case and refusal for failed or wrong-head replacements, including the run diagnostic. Launcher job j20261123T041040562-2-0 executed 1 test, 1 passed.
+    AC4: [evidence: documentation-inspection] docs/internal/testing/ci-test-shards.md:39 documents the FAST wait after updating the branch.
+    Deep pass covered identity comparisons, invalid/missing metadata, zero/one/multiple markers, out-of-order rows and cross-head evidence. Train head/base checks bracket the read, and hold/required-check gates still apply to selected rows. Missing conclusion on refusal displays unknown. Live PR CI awaits host publication.
+  created_at: 2026-11-23T04:11:01.536742030Z
+  modified_at: 2026-11-23T04:11:01.536742030Z
+  session_id: 01a206837516
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20683-a695-7782-a753-cf8eb465d9ca
   author: aida-session-start

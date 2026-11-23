@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:59.266972566Z
-modified_at: 2026-11-23T04:02:08.197673534Z
+modified_at: 2026-11-23T04:11:25.809046294Z
 req_type: Bug
 tags:
 - containment
@@ -98,6 +98,28 @@ comments:
   modified_at: 2026-11-23T03:58:52.026812651Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20693-7c7a-7f83-9d4f-23f992b70dbb
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c2b8be87c1108180ef8e204cc0291a1c859b4d18 plus both native-lane working changes. Reviewed origin/main...HEAD and git diff HEAD. No untracked additions.
+    AC1: [evidence: behavioral-test] tests/test_store_mutation.py:59 exercises hangup before receive and withdrawal between readiness and dequeue under a 10 s subprocess watchdog. Both refuse with no shim exec release.
+    AC2: [evidence: behavioral-test] The open-listener control receives the service reply and exec-v1.
+    AC3: [evidence: behavioral-test] The exit-hangup case observes wrapper exit and listener HUP together and requires the hangup diagnostic.
+    Strict-tier p1 receive race and p2 diagnostic finding fixed. Checked listener fd ownership, message matching, empty/cancelled receives, worker exceptions, and concurrent hangup. Only the supervisor handles notifications and releases exec after attestation and host acceptance. A stranded preflight receive can live until host-helper exit. Fixture substitutes the kernel receive and skips privileged setup. All 32 module tests passed via unittest.
+  created_at: 2026-11-23T04:04:17.998006082Z
+  modified_at: 2026-11-23T04:04:17.998006082Z
+  session_id: 01a20691314f
+  harness_version: codex-cli 0.167.0
+- id: 01a2069a-0240-7e31-83d6-1a793fad4b28
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c2b8be87c1108180ef8e204cc0291a1c859b4d18 plus final worktree diff. FAST identified a writer inventory mismatch from moving the existing broker service body. Kept that body in broker_connect_contained with the preflight notification supplied by keyword. The inventory now reconciles all 3842 sites, git diff --check passes, and the 32 module tests pass after the correction. AC1/AC2/AC3 evidence and authority analysis remain as recorded.
+  created_at: 2026-11-23T04:11:25.809046294Z
+  modified_at: 2026-11-23T04:11:25.809046294Z
+  session_id: 01a20691314f
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a2052b-ec01-7e52-b8ec-fc4cd8951a76
   author: joe
