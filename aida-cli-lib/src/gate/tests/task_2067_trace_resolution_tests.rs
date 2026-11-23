@@ -266,14 +266,18 @@ fn bug_2727_trailers_resolve_against_pinned_origin_objects() {
     let head = snapshot.resolution_head(root).unwrap();
     assert_eq!(head, published);
     let store = crate::gate::mandate_traces::resolution_store(root, head).unwrap();
-    let subject = crate::ReviewPrSubject {
-        head_ref: "docs".into(),
-        commit_subjects: vec!["docs (BUG-26)".into()],
+    let trailer_ids = |commit_subject: &str| {
+        let subject = crate::ReviewPrSubject {
+            head_ref: "docs".into(),
+            commit_subjects: vec![commit_subject.to_owned()],
+        };
+        let (ids, _, resolved, _) = crate::with_review_pr_subject(subject, || {
+            pr_gate_subject(root, 1, &[], None, Some(&store))
+        });
+        assert!(resolved);
+        ids
     };
-    let (trailer, _, resolved, _) = crate::with_review_pr_subject(subject, || {
-        pr_gate_subject(root, 1, &[], None, Some(&store))
-    });
-    assert!(resolved);
+    let trailer = trailer_ids("docs (BUG-26)");
     let specs = resolve_exclusion_specs(Some(&store), root, &trailer, Default::default());
     assert_eq!(specs.len(), 1);
     assert_eq!(
@@ -282,8 +286,7 @@ fn bug_2727_trailers_resolve_against_pinned_origin_objects() {
     );
     check_named_resolution(&specs, head).unwrap();
 
-    let trailer =
-        crate::pr_ship::extract_trailing_spec_ids_from_subject("docs (BUG-26 BUG-27 BUG-28)");
+    let trailer = trailer_ids("docs (BUG-26 BUG-27 BUG-28)");
     let specs = resolve_exclusion_specs(Some(&store), root, &trailer, Default::default());
     let why = check_named_resolution(&specs, head).unwrap_err().message(1);
     assert!(
