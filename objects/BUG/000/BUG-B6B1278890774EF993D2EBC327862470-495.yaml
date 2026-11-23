@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-23T21:10:21.808798276Z
+modified_at: 2026-11-23T21:19:55.324622298Z
 req_type: Bug
 tags:
 - ci
@@ -48,6 +48,13 @@ comments:
   modified_at: 2026-11-23T21:05:02.490256289Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a47-a0e0-72e0-8dea-23efbc07e782
+  author: dirtlab
+  content: Product follow-up IDs requested for test_cache_refresh_outputs.py (line 94 object filename), test_pr_ship_preflight.py (definition case exits 23 missing approval), test_seat_takeover_lifecycle.py (line 57 role current). These three failed of 22 newly wired suites.
+  created_at: 2026-11-23T21:19:55.324622298Z
+  modified_at: 2026-11-23T21:19:55.324622298Z
+  session_id: 01a20a3ea6a7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20a38-f431-7762-bd6e-9fbe1e3c42bb
   author: joe

@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T08:19:49.568395128Z
-modified_at: 2026-11-23T21:07:02.471200687Z
+modified_at: 2026-11-23T21:20:14.321239892Z
 req_type: Task
 tags:
 - carried-from:BUG-2684
@@ -135,6 +135,18 @@ comments:
   modified_at: 2026-11-23T20:41:24.909189845Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a47-eb38-7102-91f4-7a0984b1c5c3
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: c23f2fc2cdf2b8d995e9f4ca451a622c00b78ea1 plus the native lane working diff. Reviewed origin/main...HEAD, git diff HEAD and untracked additions.
+    AC1: [evidence: behavioral-test] bug_2451_pickup_entry_tests.rs:1919 calls the headless implementer queue-work entry, finds LaneSpaceRefused in its returned error and reads disk-deferred from its sole project receipt. The production deferral retains the cause via anyhow context.
+    AC2: [evidence: behavioral-test] The same test checks exit code 36, the refusal timestamp in the queue note, and lease rollback. bug_2684_disk_deferral_tests.rs covers setup recovery, repeat notes, an absent queue row and unrelated admission failure. Lane job j20261123T210859853-2-0 executed all nine matching tests successfully.
+    Probes covered exact receipt kind and reason, JSON decoding, zero or multiple receipts, and loss of the error chain. The disk fixture is thread-local and the host probe fixture runs in an isolated test process. No production authority change. Fast validation still running.
+  created_at: 2026-11-23T21:20:14.321239892Z
+  modified_at: 2026-11-23T21:20:14.321239892Z
+  session_id: 01a20a3b80b7
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f2f1-eaea-7102-a425-f572a21135ad
   author: joe
