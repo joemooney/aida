@@ -14,7 +14,7 @@ priority: Low
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T03:01:08.400632766Z
-modified_at: 2026-11-23T15:24:57.801225776Z
+modified_at: 2026-11-23T15:25:24.517996178Z
 req_type: Bug
 tags:
 - track:integration
@@ -45,6 +45,12 @@ comments:
   content: 'GUARD (advisor-122 06:15): this bundle fix changes lease refusal TEXT only. If the lane needs to change lease/claim LOGIC, it punts (that is strict tier, not bundle material).'
   created_at: 2026-11-23T13:12:53.387786530Z
   modified_at: 2026-11-23T13:12:53.387786530Z
+- id: 01a20903-0ca5-72b3-bb51-285f7ce23883
+  author: lane-recovery
+  content: 'Lane exit evidence: retained branch `int26-bug-2698` at head `06b95f8a1e5d57a1f8210a2da787874292aeaf5e`.'
+  created_at: 2026-11-23T15:25:24.517991160Z
+  modified_at: 2026-11-23T15:25:24.517991160Z
+  session_id: 01a208eb986f
 history:
 - id: 01a20885-7dbc-7893-863c-34ed6a75a6ce
   author: joe
