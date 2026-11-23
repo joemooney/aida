@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "spec": "TASK-3149",
+  "publishes": [
+    {
+      "at": "2026-11-23T18:02:57.858365656Z",
+      "closed_by": "auto-bump"
+    }
+  ],
+  "events": [
+    {
+      "ts": "2026-11-23T16:56:53.636523224Z",
+      "spec": "TASK-3149",
+      "seat": "advisor",
+      "kind": {
+        "event": "ReviewVerdictRecorded",
+        "pr": 4441,
+        "verdict": "APPROVED",
+        "reviewed_sha": "717beee630c50758e1ed51a0c0a27632d336dd87"
+      }
+    },
+    {
+      "ts": "2026-11-23T17:58:58.528301513Z",
+      "spec": "TASK-3149",
+      "seat": "advisor",
+      "kind": {
+        "event": "PrMerged",
+        "pr": 4441
+      }
+    },
+    {
+      "ts": "2026-11-23T18:02:57.607484338Z",
+      "spec": "TASK-3149",
+      "kind": {
+        "event": "SpecCompleted",
+        "commit": "88d5e17985196b6f8540654cc8d4e882076b6cdc",
+        "pr": 4441,
+        "closed_by": "auto-bump"
+      }
+    }
+  ]
+}
