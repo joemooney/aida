@@ -22,7 +22,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-18T02:18:01.642274037Z
-modified_at: 2026-11-23T00:03:02.480520458Z
+modified_at: 2026-11-23T00:04:22.108116025Z
 req_type: Story
 tags:
 - landing
@@ -1194,6 +1194,59 @@ comments:
     Open for the advisor: (1) Knob: I read "project knobs per landing-mode config; default = current behaviour" as both behaviours keyed on landing mode = review-gated, with no new setting (as in the sketch's 10:37 trim). Confirm, or name the knob. (2) Vendor: the signoff said Claude+Fable, but Joe's 11-22 ruling is codex for all lanes. Who implements S1b?
   created_at: 2026-11-23T00:03:02.480520458Z
   modified_at: 2026-11-23T00:03:02.480520458Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
+- id: 01a205b8-00a0-7590-a1e9-16350e7ac222
+  author: joe
+  content: |-
+    CODEX LANE BRIEF: STORY-2897 S1b (advisor rulings 2026-11-20 16:40 and 2026-11-22 17:03; Claude+Fable superseded by Joe's 11-22 codex ruling). AUTHORITATIVE for the S1b lane.
+
+    LAUNCH CONDITION: after S3a (#4389) merges into integration. S1b reads S3a's red-main episode state.
+    BASE / TRACK: a fresh branch story-2897-s1b from origin/integration (with S3a merged); PR -> integration (integration track, not main).
+    TITLE: "[AI:codex] feat(land): readiness and WAITING follow the landing mode (S1b) (Refs STORY-2897)". Use Refs because S3b remains open, and keep the parens last.
+    GATE: STRICT (the review-record authority path). Fresh independent review. Before pushing: cargo fmt --all -- --check, the targeted tests below through the lane job runner, make check-ci-fast, and make test-touched if shared test infra changes. After the push, relabel ci:full.
+    KNOB (state this in the PR body): no new setting. Both behaviours apply only when the effective landing mode (landing_policy::load, from the trusted default branch) is review-gated, which is already an opt-in `aida land mode` setting. Every other mode keeps today's readiness and WAITING semantics.
+
+    SCOPE
+    (a) Readiness wake: aida-cli-lib/src/review_watch_ready.rs, evaluate() (the judge_commit_checks block).
+     1. The Evidence port gains landing_mode() and red_main_episode() -> Option<{red_sha, failed check names}>. Keep the tests fixture-driven.
+     2. main_watch.rs gains a READ-ONLY accessor (e.g. open_episode(root)) that reads state through watch_directory(watch_root(root), create=false), the pinned, nonblocking, nlink-checked path that S3a established. It never creates or writes. If the state is unreadable or invalid it returns no episode, so readiness FAILS CLOSED (it blocks).
+     3. ci-gated or any non-review-gated mode: unchanged ([review_watch] required_checks, and every check green).
+     4. review-gated:
+        - The required set is policy.review_gated_checks (merge-hold-gate). Pending, absent or failed in that set BLOCKS.
+        - Other checks that are pending or absent do not block; they are reported as info on the wake line, e.g. "CI at head: Build pending".
+        - A FAILED check outside the set BLOCKS, unless an open red-main episode's failing checks cover EVERY failed name. Then it is info naming the episode ("failed: Build (main red since <short sha>, episode open)"). A PR-caused red never reads as ready.
+     5. Do not touch the under-review, hold, base/ready-after-update or head re-read logic. STORY-2914 is out of scope; leave room in the port for it.
+    (b) WAITING verdicts: aida-cli-lib/src/review_commands.rs, the WAITING branch (trace BUG-2500, about :3080), plus the verdict schema.
+     1. Add a repeatable flag `aida review record --needs <kind>:<detail>`. The kinds are a CLOSED set: test, artifact, check, actor. The detail is required and non-empty. There is no deny-list. The syntax is validated whenever the flag is given, in any mode; a malformed value is refused.
+     2. review-gated: WAITING is refused (non-zero exit, nothing recorded) when (i) no --needs is given, or (ii) every --needs is a check: naming only a generic aggregate: the policy's ci-gated required set (e.g. Build), any ci-tier:* marker, or forge::CI_AGGREGATOR_CHECK. The refusal says to record APPROVED or CHANGES REQUESTED on the code, with CI as info. A check: naming a specific non-aggregate job is accepted, and so are test:, artifact: and actor:.
+     3. Other modes: --needs stays optional (syntax-checked only), and a summary-only WAITING is accepted as today.
+     4. Schema: the verdict record gains needs: Vec<{kind, detail}> with serde default, so old records read as empty. Show it in `aida review verdict` and the JSON projection, so the throughput guard can show what a WAITING PR waits on.
+     5. Template master (aida-core/templates/, the aida-review contract text, i.e. the lines telling reviewers to approve a defect-free head while CI is pending): add the --needs form and the review-gated refusal. Then make sync-templates and make check-templates. Never edit a generated mirror.
+     6. Trace comments: // trace:STORY-2897 | ai:codex beside the new code.
+
+    TESTS (all required)
+    (a) Each of the following:
+     - review-gated with Build pending, then green: ready, with the info line.
+     - review-gated with Build failed and no episode: blocked.
+     - review-gated with Build failed and an episode that covers it: ready, with the info naming the episode.
+     - review-gated with Build and X failed, where the episode covers only Build: blocked.
+     - review-gated with an unreadable or invalid episode state: blocked.
+     - merge-hold-gate pending blocks in both modes.
+     - an unreadable policy behaves as ci-gated.
+     - NON-REVIEW-GATED UNCHANGED: ci-gated with Build pending or failed blocks exactly as before.
+     - the info line text.
+    (b) Each of the following:
+     - review-gated: no --needs is refused; check:Build is refused; check:ci-tier: full is refused; check:<CI_AGGREGATOR_CHECK> is refused; check:Build plus test:foo::bar is accepted; test:foo::bar is accepted; actor:advisor is accepted; check:CI (lib-0) is accepted.
+     - malformed values (no colon, an unknown kind, an empty detail) are refused in both modes.
+     - NON-REVIEW-GATED UNCHANGED: a summary-only WAITING is accepted.
+     - an old verdict record without needs deserialises.
+     - needs round-trips into `aida review verdict`.
+
+    OUT OF SCOPE: S3b store effects, STORY-2914, any new setting, the deferred S3a follow-ups (TASK-3834 and the follow-up spec).
+    After the push the implementer seat checks the head against this brief before review.
+  created_at: 2026-11-23T00:04:22.108116025Z
+  modified_at: 2026-11-23T00:04:22.108116025Z
   session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
   harness_version: 2.1.330 (Claude Code)
 history:
