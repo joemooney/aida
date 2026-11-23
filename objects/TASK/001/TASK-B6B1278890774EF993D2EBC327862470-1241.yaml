@@ -1,0 +1,31 @@
+id: 01a20761-2cc2-79a3-95ac-f55e4c674c75
+spec_id: TASK-b6b1278890774ef993d2ebc327862470-1241
+title: 'Review follow-up: PR body — The advisor''s final rework brief requires the accepted attribution limit in the '
+description: |-
+  From BUG-2721
+  Reviewed sha: b9364510fb871268e5500e28afc5a3959e36cf5d
+
+  PR body — The advisor's final rework brief requires the accepted attribution limit in the PR description. The body still contains only the publication notice and FAST marker. Record there that a descendant which creates a new session, clears its environment and runs outside the worktree can escape attribution, and that this case is accepted and deferred.
+status: Draft
+priority: Medium
+owner: joe
+feature: Uncategorized
+created_at: 2026-11-23T07:48:58.690061053Z
+modified_at: 2026-11-23T07:48:58.690061053Z
+req_type: Task
+tags:
+- carried-from:BUG-2721
+- finding-hash:deaa916d
+- from-review:BUG-2721
+relationships:
+- rel_type: References
+  target_id: 01a2062b-0fa3-75c1-90d4-87fb646e1eb1
+  created_at: 2026-11-23T07:49:11.976855596Z
+filed_at:
+  code_sha: b9364510fb871268e5500e28afc5a3959e36cf5d
+  branch: pr-4402
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: a16f3592f01
+  vendor: claude
+  session: 01a2075eb3b6
