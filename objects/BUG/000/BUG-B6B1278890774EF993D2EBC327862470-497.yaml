@@ -13,7 +13,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T23:05:21.609004102Z
-modified_at: 2026-11-23T23:18:58.216374851Z
+modified_at: 2026-11-23T23:31:14.806778573Z
 req_type: Bug
 tags:
 - integration
@@ -45,6 +45,15 @@ comments:
   modified_at: 2026-11-23T23:15:29.763344542Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20abf-e005-7320-b940-3c32913606d5
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 13bcf6bd6715439e9fdb4769e36b0551f2d27921 plus the native worktree diff. AC1: [evidence: behavioral-test] aida-cli-lib/src/tests/bug_2451_pickup_entry_tests.rs:2126 exercises lane reconciliation with an open integration-base PR. Targeted launcher run executed one test and passed. The production query at aida-cli-lib/src/pr_lookup.rs:474 filters by exact head and open state across bases. The incident did not reproduce on this integration tip. AC2: N/A per advisor scope. Inspected query flags, returned tab-separated fields, absence and presence, and unrelated-head behavior. The final fixture includes an unrelated-head control. No production authority or recovery paths changed. Corrected formatting reported by source validation. No live forge or historical binary replay.
+  created_at: 2026-11-23T23:31:14.806778573Z
+  modified_at: 2026-11-23T23:31:14.806778573Z
+  session_id: 01a20ab3f410
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a20aaf-b3fa-7001-9e7c-eb3d65ad567c
   author: joe
