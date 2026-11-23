@@ -1,0 +1,32 @@
+id: 01a20924-010f-7fb1-934c-c17ae0c0fa56
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-229
+title: 'Review PR-4437: [AI:codex] fix(worktree): cover writer-scan refusal and retry in clone GC (TASK-3122)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a208e9`) for branch `int26-task-3122`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4437>
+  - Branch: `int26-task-3122` → `integration`
+
+  ## Covers
+
+  - TASK-3122
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4437` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T16:01:24.239657931Z
+modified_at: 2026-11-23T16:01:24.239657931Z
+req_type: Story
+filed_at:
+  code_sha: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: 6708d633cf
+  session: 01a208e98c21
