@@ -1,0 +1,32 @@
+id: 01a2089e-7b58-7431-bbb5-c9c6cff74e9f
+spec_id: STORY-73022632d35647cca3858b18ac0723e3-227
+title: 'Review PR-4433: [AI:codex] fix(config): align duration cap signoff and guard trust inventory (TASK-3126)'
+description: |
+  Auto-filed by `aida pr auto-queue-review` (typically from /aida-pr) (session `01a20871`) for branch `task-73022632d35647cca3858b18ac0723e3-016`.
+
+  - PR: <https://github.com/joemooney/aida/pull/4433>
+  - Branch: `task-73022632d35647cca3858b18ac0723e3-016` → `main`
+
+  ## Covers
+
+  - TASK-3126
+
+  ## Acceptance
+
+  - Generate a structured review prompt with `aida review prompt --pr 4433` and verify each spec's acceptance criteria.
+  - Approve and merge, or request changes by spec id.
+  - Mark this story `completed` once the PR is merged.
+status: Draft
+priority: Medium
+owner: ''
+feature: Uncategorized
+created_at: 2026-11-23T13:35:33.720518641Z
+modified_at: 2026-11-23T13:35:33.720518641Z
+req_type: Story
+filed_at:
+  code_sha: ff524ebd21fa22d5744dedb7f4dff6c3c37fad22
+  branch: main
+  dirty: false
+  aida_version: 0.16.0
+  aida_build_sha: ff524ebd21
+  session: 01a208713720
