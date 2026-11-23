@@ -7,12 +7,12 @@ description: |-
   Reviewed sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
 
   Cleanups in aida-cli-lib/src/admission_owner.rs. (a) `train` and `cooperative_train` (lines 514-523) have no production caller after this change; only tests call them, and the STORY-2857 and BUG-2650 tests exercise these zero-bound entry points instead of ship_admission and manual_train_admission. Mark them test-only or move the tests to the production entry points. (b) flock_holders (line 133) decodes the minor number as `(dev >> 12) & !0xff`, which keeps high major bits for device majors of 4096 and above; the mask should be 0xffffff00. Diagnostic text only. (c) The opening section of the PR body still says the drain accepts an 'unseated operator' and that status shows 'the controller's claim'; the code and docs/cli/06-roles-sessions.md now require an operator at an interactive terminal outside any agent session and show both workers' claims.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-21T00:31:05.182124737Z
-modified_at: 2026-11-23T11:37:08.818005059Z
+modified_at: 2026-11-23T12:25:02.692823587Z
 req_type: Task
 tags:
 - carried-from:BUG-2703
@@ -50,6 +50,12 @@ comments:
   modified_at: 2026-11-23T11:37:08.818005059Z
   session_id: 01a208276704
   harness_version: codex-cli 0.167.0
+- id: 01a2085d-ebe4-7c90-b832-59455d008460
+  author: aida-publication-done
+  content: Implementer push b94c16532f9d declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T12:25:02.692822955Z
+  modified_at: 2026-11-23T12:25:02.692822955Z
+  session_id: 01a208276704
 history:
 - id: 01a1fd0a-bfba-7891-a348-aacfe3d0272d
   author: joe
@@ -75,6 +81,14 @@ history:
   session_id: 01a208276704
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a2085d-ebe4-7c90-b832-593ddd0c8d78
+  author: aida-publication-done
+  timestamp: 2026-11-23T12:25:02.692820779Z
+  session_id: 01a208276704
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 3299d3f57e360284ec651a031f1943cec6ef4be4
   branch: pr-4363
