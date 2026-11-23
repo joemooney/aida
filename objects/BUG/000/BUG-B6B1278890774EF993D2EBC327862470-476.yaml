@@ -9,12 +9,12 @@ description: |
   - AC1: A malformed or invalid holder record is classified Unknown, never Dead, and is never reclaimed. A unit test covers truncated TOML, a wrong-type pid and a missing start identity.
   - AC2: A valid record whose holder is provably dead is still classified Dead (positive control).
   - AC3: The refusal for an Unknown holder names the record path and the read-only command that inspects it.
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T21:24:40.221583815Z
-modified_at: 2026-11-23T02:45:35.000885775Z
+modified_at: 2026-11-23T03:12:06.947297856Z
 req_type: Bug
 tags:
 - authority
@@ -233,6 +233,12 @@ comments:
   modified_at: 2026-11-23T02:45:35.000885775Z
   session_id: 01a206420bef
   harness_version: codex-cli 0.167.0
+- id: 01a20663-b323-7d21-83ac-495daa0b1515
+  author: aida-publication-done
+  content: Implementer push 25068bcbcb24 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T03:12:06.947296983Z
+  modified_at: 2026-11-23T03:12:06.947296983Z
+  session_id: 01a206420bef
 history:
 - id: 01a2052b-e0ab-7ea0-a55b-c9fa67d0683a
   author: joe
@@ -349,6 +355,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20663-b323-7d21-83ac-494c3d934933
+  author: aida-publication-done
+  timestamp: 2026-11-23T03:12:06.947293239Z
+  session_id: 01a206420bef
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
