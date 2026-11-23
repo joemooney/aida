@@ -20,7 +20,7 @@ priority: High
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T20:43:55.025623Z
-modified_at: 2026-11-22T23:55:31.867914461Z
+modified_at: 2026-11-23T00:00:40.078914047Z
 req_type: Bug
 tags:
 - lanes
@@ -513,6 +513,19 @@ comments:
   modified_at: 2026-11-22T23:52:27.873933320Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a205b4-6dbc-79c2-8506-964f62b45801
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: e07f437c196992439334dadd494ec32582cf27bd plus the two native worktree edits. Reviewed the merge-base diff, working diff and untracked status. Partial scope per advisor cap exception.
+    AC1: [evidence: behavioral-test] Existing foreign-host regression at review_implementer_gate.rs:640. Finding 5 (non-UTF-8 sibling name) deferred per ruling.
+    AC2: [evidence: behavioral-test] Existing newest-head regression at task_1993_review_watch_tests.rs:3387. AC1 and AC2 tests were inspected only this round.
+    AC3: [evidence: behavioral-test] queue_cmd/work.rs:5241 returns success before setup on a positive deferral. bug_2187_reviewer_record_identity.rs:91 checks no worktree or verdict during grace and observes bounded release followed by an attested verdict with the snapshot still unavailable. Both integration tests executed and passed in lane job j20261122T235627849-2-0. Finding 3 addressed with a local published store ref and both identity assertions preserved.
+    Probes covered Git branch-specific URL rewriting, missing and readable refs, repeat pickup and pre-launch control flow. Gate errors still propagate and the implementer identity refusal preserves ledger bytes. Residual findings 1 (store disappears), 2 (zero-grace diagnostic), 4 (malformed record byte accounting) and 5 remain deferred to TASK-3833/3837 under the pickup brief.
+  created_at: 2026-11-23T00:00:40.078914047Z
+  modified_at: 2026-11-23T00:00:40.078914047Z
+  session_id: 01a205af84dc
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fab5-4cdf-7d90-8cae-173a80defcd1
   author: joe
