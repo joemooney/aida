@@ -166,6 +166,8 @@ fn refresh_guard(path: &Path) -> Result<std::fs::File, String> {
         .open(path.with_extension("lock"))
         .map_err(|e| format!("history refresh lock: {e}"))?;
     let deadline = std::time::Instant::now() + super::store_history_timeout();
+    let deadline =
+        crate::forge_lookup::forge_lookup_deadline().map_or(deadline, |d| d.min(deadline));
     loop {
         match file.try_lock_exclusive() {
             Ok(()) => return Ok(file),

@@ -349,7 +349,17 @@ fn collect_on_stable_store<S, T>(
                 }),
             );
         }
-        std::thread::sleep(backoff * attempt);
+        let delay = backoff * attempt;
+        if crate::forge_lookup::forge_lookup_deadline().is_some_and(|deadline| {
+            deadline.saturating_duration_since(std::time::Instant::now()) <= delay
+        }) {
+            return Err(
+                crate::gate::mandate::MandateRefusal::TraceEvidenceUnreadable(
+                    "insufficient time to retry mandate store collection".into(),
+                ),
+            );
+        }
+        std::thread::sleep(delay);
     }
 }
 
@@ -814,7 +824,7 @@ fn collect_mandate_cover(
             let labels = || {
                 crate::merge_hold::fetch_pinned_change(
                     project_root,
-                    crate::forge::resolve_forge_kind(project_root),
+                    crate::forge::peek_forge_kind(project_root),
                     pr,
                 )
                 .map_err(|e| e.to_string())
@@ -1123,27 +1133,20 @@ pub(crate) fn have_ship_refs_locally(
     head_oid: &str,
     base_ref: &str,
 ) -> bool {
-    let have_head = !head_oid.is_empty()
-        && std::process::Command::new("git")
-            .arg("-C")
-            .arg(main_worktree)
-            .args(["cat-file", "-e", &format!("{}^{{commit}}", head_oid)])
-            .status()
-            .map(|s| s.success())
-            .unwrap_or(false);
-    let have_base = std::process::Command::new("git")
-        .arg("-C")
-        .arg(main_worktree)
-        .args([
+    let exists = |args: &[&str]| {
+        let mut cmd = std::process::Command::new("git");
+        cmd.arg("-C").arg(main_worktree).args(args);
+        crate::forge_lookup::deadline_output(cmd, std::process::Command::output)
+            .is_ok_and(|out| out.status.success())
+    };
+    !head_oid.is_empty()
+        && exists(&["cat-file", "-e", &format!("{head_oid}^{{commit}}")])
+        && exists(&[
             "rev-parse",
             "--verify",
             "--quiet",
-            &format!("refs/remotes/origin/{}^{{commit}}", base_ref),
+            &format!("refs/remotes/origin/{base_ref}^{{commit}}"),
         ])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    have_head && have_base
 }
 
 #[cfg(test)]

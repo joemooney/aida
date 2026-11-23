@@ -267,6 +267,9 @@ pub(crate) const FACADE_EXTERNAL_LEAVES: &[(&str, &str)] = &[
     // trace:STORY-2492 | ai:codex — bounded execution transport, no decision authority.
     ("crate::command_output_with_timeout_capped", "existing bounded process transport for OpenSSH receipt signing/verification and Git blob reads"),
     ("crate::BoundedCommandOutput::Completed", "bounded process transport result; receipt trust decisions remain in gate/"),
+    // trace:TASK-3115 | ai:codex
+    ("crate::forge_lookup::forge_lookup_deadline", "shared caller deadline on mandate store snapshot subprocesses"),
+    ("crate::bounded_process::kill_process_group", "terminate the mandate dirt query and its descendants on timeout or overflow"),
     // ── this facade ──
     (
         "aida_core::liveness::process_start_identity",

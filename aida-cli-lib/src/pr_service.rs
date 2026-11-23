@@ -556,13 +556,13 @@ pub(crate) fn fetch_ship_refs(
         ));
     }
     // TASK-2143: through the host-git chokepoint, which refuses a seat clone.
-    let out = aida_core::git_ops::host_git_command(project_root)
-        .env("GIT_TERMINAL_PROMPT", "0")
+    let mut cmd = aida_core::git_ops::host_git_command(project_root);
+    cmd.env("GIT_TERMINAL_PROMPT", "0")
         .args(["fetch", "--quiet", "--no-tags", "origin"])
         .args(&refspecs)
         // trace:TASK-1952 | ai:claude
-        .remote_credentials(project_root, "origin")
-        .output()
+        .remote_credentials(project_root, "origin");
+    let out = crate::forge_lookup::deadline_output(cmd, std::process::Command::output)
         .map_err(|e| format!("git fetch: {e}"))?;
     if !out.status.success() {
         return Err(format!(

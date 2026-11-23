@@ -2342,9 +2342,9 @@ pub(crate) fn parse_authority_trailers(raw: &str) -> Option<EventAuthority> {
 // trace:STORY-1478 | ai:claude
 pub(crate) fn run_git(cwd: &Path, args: &[String]) -> Result<String> {
     // `cwd` is often the store. trace:BUG-1929 | ai:claude
-    let out = aida_core::git_ops::host_git_command(cwd)
-        .args(args)
-        .output()
+    let mut cmd = aida_core::git_ops::host_git_command(cwd);
+    cmd.args(args);
+    let out = crate::forge_lookup::deadline_output(cmd, std::process::Command::output)
         .with_context(|| format!("failed to run git in {}", cwd.display()))?;
     if !out.status.success() {
         anyhow::bail!(

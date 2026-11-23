@@ -1061,7 +1061,7 @@ struct FakeChecks {
     drive: Option<String>,
     records: Vec<crate::pr_cmd::ShipGateSpecRecord>,
     tty: bool,
-    mandate: std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>>,
+    mandate: std::result::Result<crate::gate::mandate_ship::MandateCover, Option<MemberGateError>>,
     /// BUG-2214: whether the gate defers a held member to the mandate cover.
     mandate_active: bool,
     /// The IDs the spec-policy gates were asked about.
@@ -1197,7 +1197,7 @@ impl MemberChecks for FakeChecks {
         _ids: &[String],
         _head_ref: &str,
         _head: &str,
-    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>> {
+    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<MemberGateError>> {
         self.calls.push("mandate");
         self.mandate.clone()
     }
@@ -2163,6 +2163,17 @@ fn bug_2214_gate_defers_a_held_member_to_the_mandate_cover() {
     let why = gate_member_with(&mut c, "main", 41).unwrap_err();
     assert!(why.contains("it is under a merge hold"), "{why}");
     assert!(why.contains("TASK-9 is in an excluded class"), "{why}");
+
+    c.mandate = Err(Some(MemberGateError::Unavailable(
+        "unreadable exclusion history".into(),
+    )));
+    let row = check::check_one(&mut c, "main", 41, Ok(None));
+    let json = check::render_json(Some("main"), &[row]);
+    assert_eq!(json["prs"][0]["evidence"], "unavailable");
+    assert!(json["prs"][0]["reason"]
+        .as_str()
+        .unwrap()
+        .contains("unreadable exclusion history"));
 }
 
 // trace:BUG-2214.ac2ec1b2 | ai:claude

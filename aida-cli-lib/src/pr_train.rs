@@ -1499,7 +1499,7 @@ pub(crate) trait MemberChecks {
         ids: &[String],
         head_ref: &str,
         head: &str,
-    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>>;
+    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<MemberGateError>>;
     /// BUG-2214: is a fire-fighting mandate active at this instant? Gates
     /// only whether a held member's judgment defers to the cover; the cover
     /// itself re-reads the mandate.
@@ -1689,15 +1689,18 @@ pub(crate) fn member_spec_ids(
 pub(crate) fn member_spec_policy_refusal(
     records: Vec<crate::pr_cmd::ShipGateSpecRecord>,
     interactive_tty: bool,
-    mandate_cover: impl FnOnce() -> std::result::Result<(), Option<String>>,
-) -> Option<String> {
+    mandate_cover: impl FnOnce() -> std::result::Result<(), Option<MemberGateError>>,
+) -> Option<MemberGateError> {
     let draft_only = crate::pr_cmd::draft_only_specs_in(&records);
     if !draft_only.is_empty() {
-        return Some(format!(
-            "{} tagged `{}`: a human reviews and merges it; the train does not",
-            draft_only.join(", "),
-            crate::gate::ship::DRAFT_ONLY_TAG
-        ));
+        return Some(
+            format!(
+                "{} tagged `{}`: a human reviews and merges it; the train does not",
+                draft_only.join(", "),
+                crate::gate::ship::DRAFT_ONLY_TAG
+            )
+            .into(),
+        );
     }
     // A human at a terminal needs no mandate; read one only when it matters.
     // A covering mandate is ship's `interactive_tty || mandate_cover.is_ok()`,
@@ -1706,23 +1709,22 @@ pub(crate) fn member_spec_policy_refusal(
     if holds.is_empty() {
         return None;
     }
-    let cover = mandate_cover();
-    if cover.is_ok() {
-        return None;
-    }
+    let refusal = mandate_cover().err()?;
     let marked: Vec<String> = holds
         .iter()
         .map(|(id, label)| format!("{id} is marked {label}"))
         .collect();
-    let mandate = match cover {
-        Err(Some(why)) => format!(" The mandate does not cover it: {why}."),
-        _ => String::new(),
-    };
-    Some(format!(
+    let reason = format!(
         "{}: its merge needs a human at a terminal or an active mandate; the train never \
-         auto-merges a supervised spec.{mandate}",
+         auto-merges a supervised spec.",
         marked.join(", ")
-    ))
+    );
+    Some(match refusal {
+        Some(error) => {
+            error.map_reason(|why| format!("{reason} The mandate does not cover it: {why}."))
+        }
+        None => reason.into(),
+    })
 }
 
 /// The member gate: everything `aida pr ship` checks before it merges a PR,
@@ -1731,10 +1733,15 @@ pub(crate) fn member_spec_policy_refusal(
 // trace:STORY-1690 | ai:claude
 // Settled policy refusals eject; failed evidence reads retain the train.
 // trace:STORY-2401 | ai:codex
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum MemberGateError {
     Refused(String),
     Unavailable(String),
+}
+impl From<&str> for MemberGateError {
+    fn from(why: &str) -> Self {
+        Self::Refused(why.to_owned())
+    }
 }
 impl From<String> for MemberGateError {
     fn from(why: String) -> Self {
@@ -1742,6 +1749,13 @@ impl From<String> for MemberGateError {
     }
 }
 impl MemberGateError {
+    fn map_reason(self, f: impl FnOnce(String) -> String) -> Self {
+        match self {
+            Self::Refused(why) => Self::Refused(f(why)),
+            Self::Unavailable(why) => Self::Unavailable(f(why)),
+        }
+    }
+
     fn reason(self) -> String {
         match self {
             Self::Refused(why) | Self::Unavailable(why) => why,
@@ -1887,7 +1901,7 @@ fn typed_gate_member_with(
     // BUG-2214: the cover is read at most once per gate run — the supervised
     // gate and the hold release share it. trace:BUG-2214 | ai:claude
     let mut cover_slot: Option<
-        std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>>,
+        std::result::Result<crate::gate::mandate_ship::MandateCover, Option<MemberGateError>>,
     > = None;
     if let Some(why) = member_spec_policy_refusal(records, tty, || {
         let cover = checks.mandate_cover(pr, &ids, &head_ref, &head);
@@ -1895,7 +1909,7 @@ fn typed_gate_member_with(
         cover_slot = Some(cover);
         outcome
     }) {
-        return Err(why.into());
+        return Err(why);
     }
     // BUG-2214: a held member is admitted exactly when ship's mandate cover
     // would release its hold; the release itself happens at land time, under
@@ -1914,9 +1928,9 @@ fn typed_gate_member_with(
             let cover = checks
                 .mandate_cover(pr, &ids, &head_ref, &head)
                 .map_err(|why| {
-                    MemberGateError::Refused(
-                        why.unwrap_or_else(|| "the release mandate is no longer active".into()),
-                    )
+                    why.unwrap_or_else(|| {
+                        MemberGateError::Refused("the release mandate is no longer active".into())
+                    })
                 })?;
             cover_slot = Some(Ok(cover));
         }
@@ -1934,11 +1948,14 @@ fn typed_gate_member_with(
             match cover {
                 Ok(cover) => Some(cover),
                 Err(why) => {
-                    return Err(MemberGateError::Refused(format!(
-                        "it is under a merge hold ({}); the mandate does not release it{}",
-                        reason.trim(),
-                        why.map(|w| format!(" — {w}")).unwrap_or_default(),
-                    )))
+                    let reason = format!(
+                        "it is under a merge hold ({}); the mandate does not release it",
+                        reason.trim()
+                    );
+                    return Err(match why {
+                        Some(error) => error.map_reason(|why| format!("{reason} — {why}")),
+                        None => reason.into(),
+                    });
                 }
             }
         }
@@ -2240,7 +2257,7 @@ impl MemberChecks for LiveChecks<'_> {
         ids: &[String],
         head_ref: &str,
         head: &str,
-    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<String>> {
+    ) -> std::result::Result<crate::gate::mandate_ship::MandateCover, Option<MemberGateError>> {
         // trace:STORY-2824 | ai:claude
         if self.read_only {
             if !self.mandate_active() {
@@ -2258,11 +2275,20 @@ impl MemberChecks for LiveChecks<'_> {
                 head,
             )
             .map_err(|refusal| {
+                use crate::gate::mandate::MandateRefusal::*;
                 let message = refusal.message(pr);
+                let error = match &refusal {
+                    TraceEvidenceUnreadable(_)
+                    | LedgerUnreadable(_)
+                    | HistoryUnreadable { .. }
+                    | SpecsUnresolved
+                    | ChangedPathsUnresolved => MemberGateError::Unavailable(message),
+                    _ => MemberGateError::Refused(message),
+                };
                 if let Some(probe) = &mut self.actor_probe {
                     probe.mandate_refusal = Some(refusal);
                 }
-                Some(message)
+                Some(error)
             });
         }
         if let Some(member) = self.released_member {
@@ -2284,7 +2310,7 @@ impl MemberChecks for LiveChecks<'_> {
                 ids,
                 head_ref,
             )
-            .map_err(|r| Some(r.message(pr)));
+            .map_err(|r| Some(r.message(pr).into()));
         }
         let hold_root = crate::pr_cmd::pr_ship_hold_root(self.project_root);
         crate::gate::mandate_ship::mandate_ship_cover_for_ship(
@@ -2312,7 +2338,7 @@ impl MemberChecks for LiveChecks<'_> {
                     &message,
                 );
                 crate::mandate_drive::ship_refused(self.main_worktree, pr, &message);
-                Some(message)
+                Some(message.into())
             }
         })
     }
