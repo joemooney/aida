@@ -45,12 +45,27 @@ history:
   - field_name: status
     old_value: Approved
     new_value: Completed
+- id: 01a206ed-adc7-7c90-a3cc-922c9b5e99a8
+  author: aida-auto-bump
+  timestamp: 2026-11-23T05:42:49.543938737Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
+  changes:
+  - field_name: status
+    old_value: Approved
+    new_value: Completed
 processing_record:
 - id: 01a206eb-f891-7b02-b779-88b51c6d0116
   timestamp: 2026-11-23T05:40:57.617199443Z
   agent: aida
   commit_sha: ca95624cadfe896abf34e36cde0e98ad40c847e8
   summary: Completed via merge ca95624c
+- id: 01a206ed-aee1-7aa0-8843-cf13fd2a06b9
+  timestamp: 2026-11-23T05:42:49.825190650Z
+  agent: aida
+  commit_sha: ca95624cadfe896abf34e36cde0e98ad40c847e8
+  summary: 'Advisor review: the diff is the exact inverse of 012b95ef890''s config additions (TASK-3823 temporary reviewer-seat model boost), checked line by line. It''s config only, scheduled for revert on 2026-11-22. It restores default reviewer models and stops Claude reviewers using claude-fable-5-2 (Joe''s 11-22 lane ruling is codex, and the Fable window closed). The product seat authored it; reviewed independently by the advisor.'
+  review_verdict: approved
 deferred: true
 deferred_at: 2026-11-20T15:40:58.170174220Z
 deferred_until: date:2026-11-22
