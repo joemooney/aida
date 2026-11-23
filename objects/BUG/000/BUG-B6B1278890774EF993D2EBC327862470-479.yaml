@@ -14,7 +14,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T21:26:49.060117976Z
-modified_at: 2026-11-23T03:26:27.465699095Z
+modified_at: 2026-11-23T03:39:41.269439325Z
 req_type: Bug
 tags:
 - gate-ledger
@@ -31,6 +31,20 @@ comments:
   content: 'DEADLOCK (advisor-122 20:28, recorded by product-15): #4391 is still refused by the train: ''merge-hold marker missing without a recorded clearance (tampering suspected); a human must run aida merge-hold clear''. But the operator''s `aida merge-hold clear 4391` answered ''No merge-hold on PR #4391: no marker, and the forge carries no aida:merge-hold label'' and recorded NOTHING. So the mandate''s requirement can never be satisfied. AC5: `merge-hold clear` on a PR with no label and no marker, whose ledger shows a past hold, RECORDS a clearance. AC6: the train''s ''tampering suspected'' path names the exact command that records the missing clearance. Workaround: the operator runs `aida pr train 4391` at a terminal.'
   created_at: 2026-11-23T03:26:27.465699095Z
   modified_at: 2026-11-23T03:26:27.465699095Z
+- id: 01a2067d-21a8-7713-8bea-88a4c2d1836a
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 20:39):
+    # BUG-2718: SMALL pipeline fix (advisor-122 throughput plan 2026-11-22 20:40 MST; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2718` and implement its acceptance criteria and nothing more. Code: merge-hold auto-release and `aida merge-hold clear` (aida-cli-lib/src/*merge_hold*.rs). Cross-key approval release; record a clearance on auto-release and on clear of a label-less, marker-less PR that has a past hold.
+    SMALL-PR RULE: target <=300 changed lines. If the ACs can't be met in that budget, implement AC1 only plus its test, and say in the PR body which ACs remain, so product splits them.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2718 | ai:codex`. Commit `[AI:codex] fix(...): ... (BUG-2718)`. One targeted cargo run, then `make check-ci-fast`, then ship a new PR. COMMIT your work.
+  created_at: 2026-11-23T03:39:41.269439325Z
+  modified_at: 2026-11-23T03:39:41.269439325Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: 452f36684d474f46b1b7556bcd8c6e9190ff7f8b
   branch: main
