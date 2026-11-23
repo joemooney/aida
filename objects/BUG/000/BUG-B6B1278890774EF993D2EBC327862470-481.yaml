@@ -9,12 +9,12 @@ description: |
   - AC1: An attempt that exited because of a transient pickup blocker (worktree or branch held, lock busy) is retried automatically once the blocker is gone, bounded with backoff, not left as a permanent exited reservation.
   - AC2: The pass summary counts heads it skipped because of a prior exited attempt (e.g. "N held by exited attempts"), naming the PRs, so "0 dispatched, 0 refused" can never hide stuck changes.
   - AC3: A regression test: an attempt exits on a held worktree, the worktree is removed, and the next pass dispatches the same head.
-status: Done
+status: NeedsAttention
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T23:48:41.877431556Z
-modified_at: 2026-11-23T06:35:07.037065433Z
+modified_at: 2026-11-23T06:54:19.126532863Z
 req_type: Bug
 tags:
 - review-watch
@@ -97,6 +97,14 @@ history:
   timestamp: 2026-11-23T06:34:41.485837854Z
   session_id: 01a206d328f6
   changes: []
+- id: 01a2072f-21f6-7112-bcbd-62f313e4e26d
+  author: aida-orchestrator
+  timestamp: 2026-11-23T06:54:19.126713336Z
+  session_id: 01a20729dabd
+  changes:
+  - field_name: status
+    old_value: Done
+    new_value: NeedsAttention
 filed_at:
   code_sha: 6be38166be85fb474a3c5ba8036c4b2eb853db5f
   branch: main
@@ -104,3 +112,17 @@ filed_at:
   aida_version: 0.16.0
   aida_build_sha: 6be38166be8
   vendor: claude
+failure_reason:
+  phase: reviewer
+  phase_index: 3
+  kind: verdict:request-changes
+  detail: |-
+    BUG-2720 (BUG-b6b1278890774ef993d2ebc327862470-481) — partial. Reviewed the complete landed diff on protected base a16f3592f015. No finding depends on the intervening readiness-test edit. CI pending at review time (fast compile). Source and existing evidence only.
+    AC1 — unverified. Worktree ownership is rechecked, but a persistent busy lock can consume the entire retry budget before it clears. The new test exercises the worktree case only.
+    AC2 — verified by the exited-attempt selection assertions, the pass accumulation in run_with_program and the shared status/log rendering exercised by cargo test -p aida-cli-lib bug2720_pass_summary_names_skipped_heads.
+    AC3 — verified by source inspection of cargo test -p aida-cli-lib bug2720_exited_pickup_retries_after_worktree_release. It produces an exited receipt from real Git worktree occupancy, substitutes a dead dispatcher identity, advances the deadline, removes the worktree and asserts dispatch for the original head.
+    Additional AC4 from the spec comment — verified by the round-cap skip classification in skipped_admission and select_with_coverage, plus the capped PR name assertion in the summary test.
+    BUG-2720 (bug protocol): the PR touches at least one test file — met.
+  recovery_hint: address the review findings, move BUG-2720 back to In Progress, and clear the PR hold only after approval
+  shelved_by: advisor
+  shelved_at: 2026-11-23T06:54:19.126532863Z
