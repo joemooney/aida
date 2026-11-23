@@ -8,12 +8,12 @@ description: |
   ## Acceptance
   - AC1: The mandate's spec resolution for a PR's trailer IDs maps agreed_id labels (e.g. TASK-3835) to their store objects, using the store at (or refreshed to) origin/aida-store. A test: a PR whose trailer names agreed_id labels present only via the label map resolves.
   - AC2: When resolution fails, the refusal names each unresolved ID and the store head it read (so stale-cache cases are distinguishable from missing specs).
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T07:03:34.405855777Z
-modified_at: 2026-11-23T09:00:49.597484935Z
+modified_at: 2026-11-23T09:37:19.282526580Z
 req_type: Bug
 tags:
 - agreed-id
@@ -46,6 +46,12 @@ comments:
   modified_at: 2026-11-23T09:00:49.597484935Z
   session_id: 01a2078c2fd0
   harness_version: codex-cli 0.167.0
+- id: 01a207c4-5db2-7013-aed7-0722804b650c
+  author: aida-publication-done
+  content: Implementer push 1adec8504629 declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T09:37:19.282525651Z
+  modified_at: 2026-11-23T09:37:19.282525651Z
+  session_id: 01a2078c2fd0
 history:
 - id: 01a2078c-5f26-7c70-bfdf-32017aad23c0
   author: aida-session-start
@@ -60,6 +66,14 @@ history:
   session_id: 01a2078c2fd0
   harness_version: codex-cli 0.167.0
   changes: []
+- id: 01a207c4-5db2-7013-aed7-071c55e88f42
+  author: aida-publication-done
+  timestamp: 2026-11-23T09:37:19.282524097Z
+  session_id: 01a2078c2fd0
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 filed_at:
   code_sha: a16f3592f015e06580a94c1f7879ea9c877c088e
   branch: main
