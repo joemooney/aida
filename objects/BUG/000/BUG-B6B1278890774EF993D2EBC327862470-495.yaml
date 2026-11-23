@@ -13,13 +13,21 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-23T21:02:15.607282278Z
-modified_at: 2026-11-23T21:02:15.607282278Z
+modified_at: 2026-11-23T21:03:36.653550017Z
 req_type: Bug
 tags:
 - ci
 - small
 - tests
 - track:integration
+comments:
+- id: 01a20a38-e7c0-78c2-b239-18c666cc63b8
+  author: joe
+  content: 'ADVISOR RULING (advisor-122 14:03, relayed by integration-30): APPROVED, p28, drain. SLICE (binding): AC1 = a CI discovery step over tests/test_*.py (unittest/pytest discovery) PLUS a ratchet that fails when a tests/test_*.py file is neither discovered nor explicitly excluded. AC2 = every newly-run file that FAILS today goes on an explicit, DATED known-failing list, each with a follow-up spec ID. Do NOT fix the failing suites in this PR. After it lands, the integration seat confirms that #4455''s test_build_git_stamp.py and #4450''s test_closeout_audit_wording.py actually run.'
+  created_at: 2026-11-23T21:03:36.653550017Z
+  modified_at: 2026-11-23T21:03:36.653550017Z
+  session_id: 01a20448-b751-7890-8e46-e4ec00a362d8
+  harness_version: 2.1.330 (Claude Code)
 filed_at:
   code_sha: f1a50179e5a3640451b4232e08f2e589df93e7d5
   branch: main
