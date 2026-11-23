@@ -14,7 +14,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-22T23:48:41.877431556Z
-modified_at: 2026-11-23T05:14:27.479890985Z
+modified_at: 2026-11-23T05:51:57.497201136Z
 req_type: Bug
 tags:
 - review-watch
@@ -39,6 +39,19 @@ comments:
   modified_at: 2026-11-23T03:39:26.104109803Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a206f6-0d5f-7823-b354-7cb3d418c5b6
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 5470336db35805f5b13a85d8a2fff124ec69f557 plus native working-tree diff across four files. Merge-base diff empty, no untracked additions.
+    AC1: [evidence: behavioral-test] review_watch.rs:1579 checks process and group exit, rechecks worktree ownership, persists backoff and limits extra pickups to three. bug2720_exited_pickup_retries_after_worktree_release exercised the live-process refusal, deadline, persistent ownership and cap.
+    AC2: [evidence: behavioral-test] advisor_loop_service.rs:1522 checks counts and PR/MR names for multiple held heads and a capped head. Selection supplies the exited category at the decision. Status and service log share skipped_summary.
+    AC3: [evidence: behavioral-test] tests/task_1993_review_watch_tests.rs:5657 reaches Exited with a real occupied Git branch, removes its worktree and verifies same-head dispatch. The test advances persisted deadlines explicitly.
+    Probes covered PR/MR branch spelling, legacy fields, zero/one/multiple skips, ambiguous children, live dispatchers, process groups and concurrent reservations. No new grant or reclamation path. Fixed fast-gate findings on summary classification and fixture Git maintenance. Three filtered tests executed successfully. Existing readiness assertions are preserved. Retry recognition depends on the stored queue diagnostic. Exact PR-head CI follows host publication.
+  created_at: 2026-11-23T05:51:57.497201136Z
+  modified_at: 2026-11-23T05:51:57.497201136Z
+  session_id: 01a206d328f6
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a206d3-578e-7762-a596-c22bf46a234d
   author: aida-session-start
