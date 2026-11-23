@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:40.147235551Z
-modified_at: 2026-11-23T15:32:30.137449484Z
+modified_at: 2026-11-23T15:49:22.050550331Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -79,6 +79,15 @@ comments:
   content: 'AUDIT VERDICT (not a lane instruction), clarification by product-15 2026-11-23 for advisor-122: the 2026-11-20 closeout-audit comment above (''KEEP OPEN ... No implementation or status change'') described that AUDIT only. Implementation IS still wanted; lanes should implement the acceptance criteria.'
   created_at: 2026-11-23T15:10:05.478089238Z
   modified_at: 2026-11-23T15:10:05.478089238Z
+- id: 01a20919-00c6-7203-80c8-31daf349a305
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 6708d633cf3a620ece9cdf4104e8982ccb4b4c9c plus the native working diff. AC1: [evidence: behavioral-test] bug_2151_contained_parent_agent_new_tests.rs:429 moves the only transcript into the private clone project. AC2: [evidence: behavioral-test] lines 435–465 check absent lease, inventoried clone without marker, and successful launch cwd with the marker restored. All use the same latest-resume entry point. Reviewed path encoding, lease TOML, candidate multiplicity, marker removal, and refusal before mock launch. Production code and original assertions are unchanged. git diff --check and all 48 FAST source gates passed. The targeted lane job timed out compiling after 900s; behavioral results remain unverified.
+  created_at: 2026-11-23T15:49:22.050550331Z
+  modified_at: 2026-11-23T15:49:22.050550331Z
+  session_id: 01a209092577
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f2d9-26ac-7ba2-b8de-c777621359c5
   author: joe
