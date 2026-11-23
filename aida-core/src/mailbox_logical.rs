@@ -233,8 +233,7 @@ pub struct ResolvedAudience {
     private: Vec<String>,
     human: Vec<String>,
     shared: Vec<String>,
-    /// The `shared` keys that are roles, not vendor groups (slice D1): only
-    /// role mail can carry a delivery sidecar.
+    /// Role keys may have legacy mail from before delivery sidecars existed.
     roles: Vec<String>,
     /// The verified session's recipient UUID (slice D1): the only key a
     /// role-cohort delivery is visible and acknowledged under.
@@ -2175,7 +2174,8 @@ enum DeliveryGate {
 /// was not read, so the snapshot is already partial), a
 /// role message with no sidecar found anywhere has unknown ownership and is
 /// hidden from every reader of this snapshot, never served as legacy role
-/// mail. Vendor-group mail never carries a sidecar and is never gated.
+/// mail. Direct seat mail always requires a sidecar, even after a complete
+/// search. Vendor-group mail never carries a sidecar and is never gated.
 // trace:STORY-1843 | ai:claude
 // trace:BUG-b6b1278890774ef993d2ebc327862470-178 | ai:codex
 fn delivery_gates(
@@ -2196,7 +2196,8 @@ fn delivery_gates(
     let mut handovers: HashMap<&str, Vec<&DeliveryRecord>> = HashMap::new();
     let mut threads: HashMap<&str, BTreeSet<String>> = HashMap::new();
     let mut addressed: HashSet<&str> = HashSet::new();
-    let mut role_addressed: BTreeSet<&str> = BTreeSet::new();
+    let mut delivery_addressed = BTreeSet::new();
+    let mut seat_addressed = HashSet::new();
     for sidecar in salvaged {
         sidecars
             .entry(sidecar.message_id.clone())
@@ -2229,17 +2230,25 @@ fn delivery_gates(
             if !keys.is_empty() {
                 addressed.insert(&m.message.id);
             }
-            if keys
+            // Seat sends always write delivery records. Match the actual envelope
+            // so a broadcast reaching a seat keeps its ordinary shared visibility.
+            // trace:STORY-2767 | ai:codex
+            if !keys.is_empty()
+                && matches!(&m.message.to, Recipient::Agent(to) if to.starts_with("seat:"))
+            {
+                seat_addressed.insert(m.message.id.as_str());
+                delivery_addressed.insert(m.message.id.as_str());
+            } else if keys
                 .iter()
                 .any(|k| audience.role_keys().iter().any(|s| s == k))
             {
-                role_addressed.insert(&m.message.id);
+                delivery_addressed.insert(m.message.id.as_str());
             }
         }
     }
     let mut unknown_ids = BTreeSet::new();
     let mut gates = HashMap::new();
-    let wanted: Vec<&str> = role_addressed
+    let wanted: Vec<&str> = delivery_addressed
         .into_iter()
         .filter(|id| !sidecars.contains_key(*id))
         .collect();
@@ -2268,8 +2277,8 @@ fn delivery_gates(
             }
         }
     }
-    if unsighted {
-        for id in wanted.into_iter().filter(|id| !sidecars.contains_key(*id)) {
+    for id in wanted {
+        if (unsighted || seat_addressed.contains(id)) && !sidecars.contains_key(id) {
             unknown_ids.insert(id.to_string());
             gates.insert(id.to_string(), DeliveryGate::NotOwned);
         }
