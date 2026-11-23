@@ -7,12 +7,12 @@ description: |
 
   Raised by the implementer while working BUG-2587.
   Branch: bug-b6b1278890774ef993d2ebc327862470-352  ·  Commit: d5a6c3a62c  (PR link added on merge)
-status: InProgress
+status: Done
 priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-14T21:18:12.614142400Z
-modified_at: 2026-11-23T15:14:28.410927766Z
+modified_at: 2026-11-23T16:00:51.960569968Z
 req_type: Task
 tags:
 - from-implementer:BUG-2587
@@ -75,6 +75,12 @@ comments:
   modified_at: 2026-11-23T15:14:28.410927766Z
   session_id: 01a208e98c21
   harness_version: codex-cli 0.167.0
+- id: 01a20923-82f8-7871-879e-889c46f3dba8
+  author: aida-publication-done
+  content: Implementer push 545e5259287e declared this spec complete for its scope; Done until it lands.
+  created_at: 2026-11-23T16:00:51.960568945Z
+  modified_at: 2026-11-23T16:00:51.960568945Z
+  session_id: 01a208e98c21
 history:
 - id: 01a1dc01-cb10-7712-bd85-1df9a58bab3c
   author: joe
@@ -112,6 +118,14 @@ history:
   - field_name: status
     old_value: Approved
     new_value: InProgress
+- id: 01a20923-82f8-7871-879e-88855f9e8a19
+  author: aida-publication-done
+  timestamp: 2026-11-23T16:00:51.960565784Z
+  session_id: 01a208e98c21
+  changes:
+  - field_name: status
+    old_value: InProgress
+    new_value: Done
 execution_mode: drain
 filed_at:
   code_sha: d5a6c3a62c8c2fc22ff68d224530cd2f88a05c34
