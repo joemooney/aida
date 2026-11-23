@@ -16,7 +16,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-19T07:40:27.302758155Z
-modified_at: 2026-11-23T21:19:07.324227252Z
+modified_at: 2026-11-23T21:35:34.415659550Z
 req_type: Task
 tags:
 - carried-from:BUG-2619
@@ -145,6 +145,18 @@ comments:
   modified_at: 2026-11-23T20:41:41.144909854Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a55-f580-70c3-b86e-bb2c5030ad45
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: 956ad241929c4544d226f46839198cafb638cd84 plus the two pending native-lane edits.
+    AC1: [evidence: behavioral-test] bug_2619_latest_resume_launches_in_the_worktree_with_the_transcript runs in a scratch cwd, checks the contained refusal text, and checks that the fake vendor never started.
+    AC2: [evidence: behavioral-test] The same fixture compares the resolved contained launch cwd with the recorded root and checks the uncontained alternate worktree via the launch receipt. Lane job j20261123T212523094-2-0 executed the test and passed.
+    Reviewed the merge-base and working diffs, including missing, sole and ambiguous transcripts, path handling and grant refusals. The sole resolver edit changes crate visibility for the test. No untracked additions. Fast validation remains incomplete because its tooling tests require cargo metadata, outside the lane job command set.
+  created_at: 2026-11-23T21:35:34.415659550Z
+  modified_at: 2026-11-23T21:35:34.415659550Z
+  session_id: 01a20a46a137
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1f2d9-8f75-7071-a403-a891c0550eff
   author: joe

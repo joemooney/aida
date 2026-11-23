@@ -21,7 +21,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-20T16:17:59.300202085Z
-modified_at: 2026-11-23T21:25:21.012810200Z
+modified_at: 2026-11-23T21:35:36.421987043Z
 req_type: Task
 tags:
 - from-implementer:TASK-3823
@@ -103,6 +103,17 @@ comments:
   modified_at: 2026-11-23T20:42:13.881922076Z
   session_id: 01a20440-f576-7051-ae10-3ab1f3514777
   harness_version: 2.1.330 (Claude Code)
+- id: 01a20a55-fd58-7661-bc84-925d1d259892
+  author: dirtlab
+  content: |-
+    ## Implementer self-review
+    Reviewed HEAD: de767a855f6c8cc308bbde3809ab621878197612 plus the native working diff, with no untracked additions. Reviewed the merge-base diff and the five round-two findings.
+    AC1: [evidence: behavioral-test] config_show_uses_linked_worktree_headless_tuning (aida-cli/tests/bug_1952_session_end_from_worktree.rs:451) executed in launcher job j20261123T213518106-2-0, 1 passed. Real CLI with a detached linked checkout and primary store verifies linked tiers, lower-file fallback, an explicit reviewer reset, independent escaped environment effort, and an unmanaged configured Antigravity model. Fixed the initial fixture omission of deployment.store_path. Checked file precedence and missing versus blank fields before flattening; all six seats use the launcher root and vendor config spelling. New formatting is display-only. No authority changes, existing tests removed or vendor launch attempted. docs/cli/07-project-setup.md:122 describes the show-only tuning report.
+    AC2: queue dry-run remains deferred under the original Refs-only slice.
+  created_at: 2026-11-23T21:35:36.421987043Z
+  modified_at: 2026-11-23T21:35:36.421987043Z
+  session_id: 01a20a4c4540
+  harness_version: codex-cli 0.167.0
 history:
 - id: 01a1fa0a-7e13-70a3-bf75-3feea2dbb0fa
   author: joe
