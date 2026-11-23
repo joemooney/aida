@@ -8,7 +8,7 @@ priority: Medium
 owner: ''
 feature: Uncategorized
 created_at: 2026-11-22T17:47:48.709352984Z
-modified_at: 2026-11-23T19:38:32.843404267Z
+modified_at: 2026-11-23T19:39:27.548646564Z
 req_type: Bug
 tags:
 - track:integration
@@ -18,6 +18,23 @@ comments:
   content: 'Draft to Approved: advisor-122 disposition 2026-11-23 12:40 (p27 integration bundle, --mode drain). GUARD: reap sub-budget plus partial-result reporting in the shift scheduler ONLY; no change to any reap decision, else punt.'
   created_at: 2026-11-23T19:38:32.843404267Z
   modified_at: 2026-11-23T19:38:32.843404267Z
+- id: 01a209eb-da8d-77e2-8681-7b29dbbcc873
+  author: joe
+  content: |-
+    AUTHORITATIVE BRIEF (advisor-122, relayed by product-15 12:39):
+    # BUG-2710: SMALL backlog fix (advisor-122 throughput plan 2026-11-22 20:40: fill dell1 with small Approved specs; relayed by product-15). Lane: CODEX. New branch, new PR.
+
+    Read `aida show BUG-2710` and implement its acceptance criteria and nothing more. Reproduce first. If main already behaves correctly, add the regression test and say so in the PR body.
+    SMALL-PR RULE: target <=300 changed lines and 1-2 ACs. If it can't fit, implement AC1 only plus its test, and list the rest in the PR body for product to split.
+    Under mass-change mode, classify every finding; unmet-AC defers (except strict-tier fail-open, race and data-loss).
+    Add `// trace:BUG-2710 | ai:codex` (`# trace:` for Python or shell). Commit `[AI:codex] fix(...): ... (BUG-2710)`. One targeted test run, then `make check-ci-fast`, then ship a PR INTO the `integration` branch (base: integration, NOT main). COMMIT your work.
+
+    INTEGRATION BUNDLE p27 (advisor-122 disposition 12:40): branch `int27-bug-2710`, cut from origin/integration 54e9220e1db. PR base MUST be `integration`.
+    GUARD (advisor): add a reap SUB-BUDGET plus partial-result reporting (which session it stopped at) in the shift scheduler ONLY. Do NOT change any reap DECISION (what gets reaped or kept). If the fix needs that, STOP and punt.
+  created_at: 2026-11-23T19:39:27.548646564Z
+  modified_at: 2026-11-23T19:39:27.548646564Z
+  session_id: 01a20440-f576-7051-ae10-3ab1f3514777
+  harness_version: 2.1.330 (Claude Code)
 history:
 - id: 01a209ea-b432-7412-af40-8c0b0afa88a2
   author: joe
