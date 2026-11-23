@@ -8,7 +8,7 @@ priority: Medium
 owner: joe.mooney@gmail.com
 feature: Uncategorized
 created_at: 2026-11-23T02:23:31.941728485Z
-modified_at: 2026-11-23T07:04:38.887161253Z
+modified_at: 2026-11-23T07:04:45.017686797Z
 req_type: Bug
 relationships:
 - rel_type:
@@ -214,6 +214,21 @@ comments:
   content: 'Returned from NeedsAttention to Approved via `aida queue rework`. It was shelved on: reviewer/verdict:request-changes: BUG-2722 round-three scope reviewed against protected main a16f3592f015e06580a94c1f7879ea9c877c088e and landed tree 00dbdcd668bf3bcd7b88be6a3c127dd2ec8c8326. The published head implements the interactive preview, typed confirmation and audited single-entry release. The moved-tree fixture demonstrates release without a historical receipt, refusal for a non-TTY input and a live recorded worker, and successful successor reservation. Changes are required because a successor reservation can erase the old merge''s host-validation evidence, and the CLI authority checks lack a command-level regression. The intervening base changes to help and writer inventory do not affect these findings. Fast gates passed and fast compile was pending at review time. No local builds or tests were run.. No triage reason was given.'
   created_at: 2026-11-23T07:04:38.887157074Z
   modified_at: 2026-11-23T07:04:38.887157074Z
+- id: 01a20738-ad9a-7f42-83e1-f61581ea736e
+  author: joe
+  content: |-
+    REVIEW FINDINGS TO ADDRESS (BUG-2722):
+    Verdict: CHANGES REQUESTED
+    Reviewed commit: d038ab6e1f80
+    Recorded: 2026-11-23T06:58:54.438333014+00:00
+    Findings:
+    1. aida-cli-lib/src/repair_journal.rs:312, :330–338 and :362–377: Attestation allows reserve() to replace the old entry by repository, PR and original head. The replacement can use a different base while the old unvalidated merge can still exist in retained history on the same branch. require_validated_merges() only checks merges whose branch and both parents match a current journal entry. As soon as the replacement drops the old base, the ordinary committed-merge publication route can admit that old tree without the TASK-3804 exact-tree host compile validation. Preserve the prior branch and parent-pair validation requirement across release and re-reservation. Add a regression that the old unvalidated merge still refuses after a successor reserves the same head against a newer base.
+    2. aida-cli-lib/src/doctor_cmd.rs:332–349: The BUG-2722 PTY regression invokes RepairGuard::attest_reservation directly. It would still pass if the CLI removed its managed-agent, headless/orchestrated or integrity-floor checks, since the helper only checks stdin for a TTY and a nonempty reason. Cover the actual doctor heal dispatch with a valid ID, reason and typed confirmation at a PTY. Assert the journal remains unchanged for unattended or managed callers even with a TTY, and that the authorized terminal path persists the release.
+    3. aida-cli-lib/src/doctor_cmd.rs:348–349 and aida-cli-lib/src/repair_journal.rs:295–319, :546–553: The project-wide exclusive repair journal lock is held across the Git count probe and the unbounded wait for human input. Leaving the prompt open causes unrelated conflict reservations, adoption and publication checks to time out after ten seconds. Take the preview from a snapshot, release the lock before prompting, then reacquire it and revalidate the selected reservation generation and lease before saving.
+    4. aida-cli-lib/src/doctor_cmd.rs:329–350: The repair-reservations branch accepts the documented --json flag but always emits a plain-text success line to stdout. Return a machine-readable release result when --json is requested or explicitly refuse the flag before changing the journal.
+    Contract: produce at least one commit, or punt explicitly naming the finding you dispute; never pass through silently with no changes.
+  created_at: 2026-11-23T07:04:44.698975698Z
+  modified_at: 2026-11-23T07:04:44.698975698Z
 history:
 - id: 01a20638-0cb4-7463-ae34-e13ad8fa46ca
   author: joe
